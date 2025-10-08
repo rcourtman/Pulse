@@ -27,6 +27,7 @@ type ExportData struct {
 	Webhooks      []notifications.WebhookConfig `json:"webhooks"`
 	System        SystemSettings                `json:"system"`
 	GuestMetadata map[string]*GuestMetadata     `json:"guestMetadata,omitempty"`
+	OIDC          *OIDCConfig                   `json:"oidc,omitempty"`
 }
 
 // ExportConfig exports all configuration with passphrase-based encryption
@@ -63,6 +64,14 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load system settings: %w", err)
 	}
+	if systemSettings == nil {
+		systemSettings = &SystemSettings{}
+	}
+
+	oidcConfig, err := c.LoadOIDCConfig()
+	if err != nil {
+		return "", fmt.Errorf("failed to load oidc configuration: %w", err)
+	}
 
 	// Load guest metadata (stored in data directory)
 	// Use PULSE_DATA_DIR if set, otherwise use /etc/pulse for backwards compatibility
@@ -83,6 +92,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		Webhooks:      webhooks,
 		System:        *systemSettings,
 		GuestMetadata: guestMetadata,
+		OIDC:          oidcConfig,
 	}
 
 	// Marshal to JSON
@@ -151,24 +161,27 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		return fmt.Errorf("failed to import system settings: %w", err)
 	}
 
-	// Import guest metadata if present
-	if exportData.GuestMetadata != nil && len(exportData.GuestMetadata) > 0 {
-		// Use PULSE_DATA_DIR if set, otherwise use /etc/pulse for backwards compatibility
-		dataPath := os.Getenv("PULSE_DATA_DIR")
-		if dataPath == "" {
-			dataPath = "/etc/pulse"
+	// Import OIDC configuration
+	if exportData.OIDC != nil {
+		if err := c.SaveOIDCConfig(*exportData.OIDC); err != nil {
+			return fmt.Errorf("failed to import oidc configuration: %w", err)
 		}
-		guestMetadataStore := NewGuestMetadataStore(dataPath)
+	} else {
+		// Remove existing OIDC config if backup did not include one
+		if err := os.Remove(c.oidcFile); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove existing oidc configuration: %w", err)
+		}
+	}
 
-		// Import each guest metadata entry
-		for guestID, metadata := range exportData.GuestMetadata {
-			if metadata != nil {
-				if err := guestMetadataStore.Set(guestID, metadata); err != nil {
-					// Log warning but don't fail entire import
-					fmt.Printf("Warning: Failed to import guest metadata for %s: %v\n", guestID, err)
-				}
-			}
-		}
+	// Import guest metadata if present
+	// Use PULSE_DATA_DIR if set, otherwise use /etc/pulse for backwards compatibility
+	dataPath := os.Getenv("PULSE_DATA_DIR")
+	if dataPath == "" {
+		dataPath = "/etc/pulse"
+	}
+	guestMetadataStore := NewGuestMetadataStore(dataPath)
+	if err := guestMetadataStore.ReplaceAll(exportData.GuestMetadata); err != nil {
+		fmt.Printf("Warning: Failed to import guest metadata: %v\n", err)
 	}
 
 	return nil
