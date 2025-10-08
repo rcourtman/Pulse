@@ -92,6 +92,8 @@ func enableMockMode(fromInit bool) {
 		Int("nodes", config.NodeCount).
 		Int("vms_per_node", config.VMsPerNode).
 		Int("lxcs_per_node", config.LXCsPerNode).
+		Int("docker_hosts", config.DockerHostCount).
+		Int("docker_containers_per_host", config.DockerContainersPerHost).
 		Bool("random_metrics", config.RandomMetrics).
 		Float64("stopped_percent", config.StoppedPercent).
 		Msg("Mock mode enabled")
@@ -186,6 +188,18 @@ func LoadMockConfig() MockConfig {
 		}
 	}
 
+	if val := os.Getenv("PULSE_MOCK_DOCKER_HOSTS"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+			config.DockerHostCount = n
+		}
+	}
+
+	if val := os.Getenv("PULSE_MOCK_DOCKER_CONTAINERS"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+			config.DockerContainersPerHost = n
+		}
+	}
+
 	if val := os.Getenv("PULSE_MOCK_RANDOM_METRICS"); val != "" {
 		config.RandomMetrics = val == "true"
 	}
@@ -214,6 +228,8 @@ func SetMockConfig(cfg MockConfig) {
 		Int("nodes", cfg.NodeCount).
 		Int("vms_per_node", cfg.VMsPerNode).
 		Int("lxcs_per_node", cfg.LXCsPerNode).
+		Int("docker_hosts", cfg.DockerHostCount).
+		Int("docker_containers_per_host", cfg.DockerContainersPerHost).
 		Bool("random_metrics", cfg.RandomMetrics).
 		Float64("stopped_percent", cfg.StoppedPercent).
 		Msg("Mock configuration updated")
@@ -280,6 +296,7 @@ func cloneState(state models.StateSnapshot) models.StateSnapshot {
 		Nodes:            append([]models.Node(nil), state.Nodes...),
 		VMs:              append([]models.VM(nil), state.VMs...),
 		Containers:       append([]models.Container(nil), state.Containers...),
+		DockerHosts:      append([]models.DockerHost(nil), state.DockerHosts...),
 		Storage:          append([]models.Storage(nil), state.Storage...),
 		CephClusters:     append([]models.CephCluster(nil), state.CephClusters...),
 		PhysicalDisks:    append([]models.PhysicalDisk(nil), state.PhysicalDisks...),

@@ -685,6 +685,11 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 				statuses[pbsInst.Host] = strings.ToLower(pbsInst.Status) != "offline"
 			}
 		}
+
+		for _, dockerHost := range state.DockerHosts {
+			key := dockerConnectionPrefix + dockerHost.ID
+			statuses[key] = strings.ToLower(dockerHost.Status) == "online"
+		}
 		return statuses
 	}
 
