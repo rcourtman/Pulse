@@ -1119,13 +1119,13 @@ const Settings: Component<SettingsProps> = (props) => {
             <div class="hidden lg:flex lg:flex-col w-72 relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top">
               <button
                 type="button"
-                class="hidden lg:flex absolute top-24 right-0 translate-x-1/2 transform z-20 h-6 w-6 items-center justify-center rounded-full border border-gray-300/80 dark:border-gray-600/80 bg-white/90 dark:bg-gray-900/90 shadow-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:border-blue-400/80 hover:shadow-md transition-all duration-150"
+                class="hidden lg:flex absolute top-6 right-0 translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
                 onClick={() => setSidebarCollapsed(true)}
                 aria-label="Collapse settings navigation"
                 aria-expanded="true"
                 aria-controls="settings-sidebar-menu"
               >
-                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </button>
@@ -1165,13 +1165,13 @@ const Settings: Component<SettingsProps> = (props) => {
           <Show when={sidebarCollapsed()}>
             <button
               type="button"
-              class="hidden lg:flex absolute top-24 left-0 -translate-x-1/2 transform z-20 h-6 w-6 items-center justify-center rounded-full border border-gray-300/80 dark:border-gray-600/80 bg-white/90 dark:bg-gray-900/90 shadow-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:border-blue-400/80 hover:shadow-md transition-all duration-150"
+              class="hidden lg:flex absolute top-6 left-0 -translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
               onClick={() => setSidebarCollapsed(false)}
               aria-label="Expand settings navigation"
               aria-expanded="false"
               aria-controls="settings-sidebar-menu"
             >
-              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 6l6 6-6 6" />
               </svg>
             </button>

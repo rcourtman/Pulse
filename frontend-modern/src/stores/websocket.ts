@@ -247,8 +247,6 @@ export function createWebSocketStore(url: string) {
               // Only update if dockerHosts is present and not null
               if (Array.isArray(message.data.dockerHosts)) {
                 const incomingHosts = message.data.dockerHosts;
-                const currentHosts = state.dockerHosts ?? [];
-
                 if (incomingHosts.length === 0) {
                   consecutiveEmptyDockerUpdates += 1;
 

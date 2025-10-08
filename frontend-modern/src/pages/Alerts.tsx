@@ -878,17 +878,6 @@ export function Alerts() {
   const [disableAllPBSOffline, setDisableAllPBSOffline] = createSignal(false);
   const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
 
-  const tabIcons: Record<AlertTab, string> = {
-    overview:
-      'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-    thresholds: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
-    destinations:
-      'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
-    schedule:
-      'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-    history: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
-  };
-
   const tabGroups: {
     id: 'status' | 'configuration';
     label: string;
@@ -1083,13 +1072,13 @@ export function Alerts() {
           <div class="hidden lg:flex lg:flex-col w-72 relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top">
             <button
               type="button"
-              class="hidden lg:flex absolute top-24 right-0 translate-x-1/2 transform z-20 h-6 w-6 items-center justify-center rounded-full border border-gray-300/80 dark:border-gray-600/80 bg-white/90 dark:bg-gray-900/90 shadow-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:border-blue-400/80 hover:shadow-md transition-all duration-150"
+              class="hidden lg:flex absolute top-6 right-0 translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
               onClick={() => setSidebarCollapsed(true)}
               aria-label="Collapse alerts navigation"
               aria-expanded="true"
               aria-controls="alerts-sidebar-menu"
             >
-              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
@@ -1129,13 +1118,13 @@ export function Alerts() {
         <Show when={sidebarCollapsed()}>
           <button
             type="button"
-            class="hidden lg:flex absolute top-24 left-0 -translate-x-1/2 transform z-20 h-6 w-6 items-center justify-center rounded-full border border-gray-300/80 dark:border-gray-600/80 bg-white/90 dark:bg-gray-900/90 shadow-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:border-blue-400/80 hover:shadow-md transition-all duration-150"
+            class="hidden lg:flex absolute top-6 left-0 -translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
             onClick={() => setSidebarCollapsed(false)}
             aria-label="Expand alerts navigation"
             aria-expanded="false"
             aria-controls="alerts-sidebar-menu"
           >
-            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 6l6 6-6 6" />
             </svg>
           </button>
