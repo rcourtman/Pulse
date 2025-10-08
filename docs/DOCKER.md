@@ -57,6 +57,7 @@ Then:
 1. Run: `docker compose up -d`
 2. Access: `http://your-server:7655`
 3. Complete the security setup wizard
+4. (Optional) Copy `.env.example` to `.env` if you want to pre-configure credentials later
 
 ### Pre-Configured Authentication (Advanced)
 
@@ -73,29 +74,30 @@ services:
       - pulse_data:/data
     environment:
       PULSE_AUTH_USER: 'admin'
-      # Generate hash: docker run --rm -it rcourtman/pulse:latest pulse hash-password
-      PULSE_AUTH_PASS: '$$2a$$12$$...'  # IMPORTANT: Use $$ in docker-compose.yml!
+      # Plain text values are auto-hashed on startup. To use a bcrypt hash,
+      # escape $ as $$ (e.g. $$2a$$12$$...) so docker compose does not treat it
+      # as variable expansion.
+      PULSE_AUTH_PASS: 'super-secret-password'
       API_TOKEN: 'your-48-char-hex-token'  # Generate: openssl rand -hex 24
-      # PULSE_PUBLIC_URL: 'http://192.168.1.100:7655'  # Strongly recommended: external URL for webhook links
+      PULSE_PUBLIC_URL: 'https://pulse.example.com'  # Used for webhooks/links
+      # TZ: 'UTC'
     restart: unless-stopped
 
 volumes:
   pulse_data:
 ```
 
-⚠️ **Critical for docker-compose.yml**: 
-- Bcrypt hashes contain `$` characters
-- Docker Compose treats `$` as variable expansion
-- **You MUST escape them as `$$`** in docker-compose.yml
-- Example: `$2a$12$abc...` becomes `$$2a$$12$$abc...`
+⚠️ **Important**: If you paste a bcrypt hash instead of a plain-text password, remember that Compose treats `$` as variable expansion. Escape each `$` as `$$`. Example: `$2a$12$...` becomes `$$2a$$12$$...`.
 
 ### Using External .env File (Cleaner Approach)
 
-Create `.env` file (no escaping needed here):
+Create `.env` file (no escaping needed here). You can copy `.env.example` from the repository as a starting point:
 ```env
 PULSE_AUTH_USER=admin
-PULSE_AUTH_PASS=your-password          # Plain text (auto-hashed) or bcrypt hash
-API_TOKEN=your-token                   # Plain text (auto-hashed) or SHA3-256 hash
+PULSE_AUTH_PASS=super-secret-password          # Plain text (auto-hashed) or bcrypt hash
+API_TOKEN=your-48-char-hex-token               # Generate with: openssl rand -hex 24
+PULSE_PUBLIC_URL=https://pulse.example.com     # Recommended for webhooks
+TZ=Asia/Kolkata                                # Optional: matches host timezone
 ```
 
 **Note**: Plain text credentials are automatically hashed for security. You can provide either plain text (simpler) or pre-hashed values (advanced).
@@ -116,6 +118,15 @@ services:
 volumes:
   pulse_data:
 ```
+
+### Updating Your Stack
+
+```bash
+docker compose pull        # Fetch the latest Pulse image
+docker compose up -d       # Recreate container with zero-downtime update
+```
+
+If you change anything in `.env`, run `docker compose up -d` again so the container picks up the new values.
 
 ## Generating Credentials (Optional)
 
@@ -226,26 +237,32 @@ Common problems:
 > **⚠️ Important**: Environment variables always override UI/system.json settings. If you set a value via env var (e.g., `DISCOVERY_SUBNET`), changes made in the UI for that setting will NOT take effect until you remove the env var. This follows standard container practices where env vars have highest precedence.
 
 ### Authentication
-| Variable | Description | Example |
-|----------|-------------|---------|
+| Variable | Description | Example / Default |
+|----------|-------------|-------------------|
 | `PULSE_AUTH_USER` | Admin username | `admin` |
-| `PULSE_AUTH_PASS` | Bcrypt password hash | `$2a$12$...` (60 chars) |
-| `API_TOKEN` | API access token | 48 hex characters |
+| `PULSE_AUTH_PASS` | Admin password (plain text auto-hashed or bcrypt hash) | `super-secret-password` or `$2a$12$...` |
+| `API_TOKEN` | API access token (plain text or SHA3-256 hash) | `openssl rand -hex 24` |
+| `DISABLE_AUTH` | Disable authentication entirely | `false` |
+| `PULSE_AUDIT_LOG` | Enable security audit logging | `false` |
 
 ### Network
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PORT` | Web UI port | `7655` |
-| `ALLOWED_ORIGINS` | CORS origins | Same-origin only |
-| `DISCOVERY_SUBNET` | Network to scan (rarely needed) | Auto-scans common networks |
-| `CONNECTION_TIMEOUT` | Connection timeout (seconds) | `10` |
-| `LOG_LEVEL` | Logging verbosity | `info` |
-| `PULSE_PUBLIC_URL` | Full URL to access Pulse (used in webhooks/notifications) | None (set explicitly when containerised) |
+| `FRONTEND_PORT` | Port exposed for the UI inside the container | `7655` |
+| `BACKEND_PORT` | API port (same as UI for the all-in-one container) | `7655` |
+| `BACKEND_HOST` | Bind address for the backend | `0.0.0.0` |
+| `PULSE_PUBLIC_URL` | External URL used in notifications/webhooks | *(unset)* |
+| `ALLOWED_ORIGINS` | Additional CORS origins (comma separated) | Same-origin only |
+| `DISCOVERY_SUBNET` | Override automatic network discovery CIDR | Auto-scans common networks |
+| `CONNECTION_TIMEOUT` | Proxmox/PBS API timeout (seconds) | `10` |
+| `PORT` | Legacy alias for `FRONTEND_PORT` | `7655` |
 
 ### System
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TZ` | Timezone | `UTC` |
+| `TZ` | Timezone inside the container | `UTC` |
+| `LOG_LEVEL` | Logging verbosity | `info` |
+| `METRICS_RETENTION_DAYS` | Days of metrics history to keep | `7` |
 
 ## Advanced Configuration
 
