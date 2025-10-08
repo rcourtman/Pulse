@@ -11,6 +11,7 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
+import { getNodeDisplayName } from '@/utils/nodes';
 
 const Storage: Component = () => {
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
@@ -736,11 +737,13 @@ const Storage: Component = () => {
                   <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                     <For
                       each={Object.entries(groupedStorage()).sort(([instanceIdA], [instanceIdB]) => {
-                        // Sort by node name for display when in node mode
+                        // Sort by friendly node name for display when in node mode
                         if (viewMode() === 'node') {
                           const nodeA = nodeByInstance()[instanceIdA];
                           const nodeB = nodeByInstance()[instanceIdB];
-                          return (nodeA?.name || '').localeCompare(nodeB?.name || '');
+                          const labelA = nodeA ? getNodeDisplayName(nodeA) : instanceIdA;
+                          const labelB = nodeB ? getNodeDisplayName(nodeB) : instanceIdB;
+                          return labelA.localeCompare(labelB);
                         }
                         // Sort by storage name when in storage mode
                         return instanceIdA.localeCompare(instanceIdB);

@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { isNodeOnline } from '@/utils/status';
+import { getNodeDisplayName } from '@/utils/nodes';
 
 interface DashboardProps {
   vms: VM[];
@@ -56,8 +57,10 @@ export function Dashboard(props: DashboardProps) {
         return (a.clusterName || '').localeCompare(b.clusterName || '');
       }
 
-      // Finally, sort by node name
-      return a.name.localeCompare(b.name);
+      // Finally, sort by node display name (falls back to hostname if unset)
+      const nameA = getNodeDisplayName(a);
+      const nameB = getNodeDisplayName(b);
+      return nameA.localeCompare(nameB);
     });
   });
 
@@ -952,12 +955,14 @@ export function Dashboard(props: DashboardProps) {
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                   <For
                     each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
-                      // Sort by node name for display, with instance ID as tiebreaker for duplicate hostnames
+                      // Sort by friendly node name first, falling back to instance ID for stability
                       const nodeA = nodeByInstance()[instanceIdA];
                       const nodeB = nodeByInstance()[instanceIdB];
-                      const nameCompare = (nodeA?.name || '').localeCompare(nodeB?.name || '');
+                      const labelA = nodeA ? getNodeDisplayName(nodeA) : instanceIdA;
+                      const labelB = nodeB ? getNodeDisplayName(nodeB) : instanceIdB;
+                      const nameCompare = labelA.localeCompare(labelB);
                       if (nameCompare !== 0) return nameCompare;
-                      // If names are equal (duplicate hostnames), sort by instance ID for stability
+                      // If labels match (unlikely), fall back to the instance IDs
                       return instanceIdA.localeCompare(instanceIdB);
                     })}
                     fallback={<></>}
