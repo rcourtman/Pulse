@@ -2529,6 +2529,13 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				alert.Level = AlertLevelCritical
 			}
 
+			log.Debug().
+				Str("alertID", alertID).
+				Time("alertStartTime", alertStartTime).
+				Time("now", time.Now()).
+				Dur("initialDuration", time.Since(alertStartTime)).
+				Msg("Creating new alert with start time")
+
 			m.preserveAlertState(alertID, alert)
 
 			m.activeAlerts[alertID] = alert
@@ -2834,6 +2841,8 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 
 	existing, exists := m.activeAlerts[alertID]
 	if exists && existing != nil {
+		// Preserve the original start time so duration calculations are correct
+		updated.StartTime = existing.StartTime
 		updated.Acknowledged = existing.Acknowledged
 		updated.AckUser = existing.AckUser
 		if existing.AckTime != nil {
@@ -2848,6 +2857,12 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 		} else {
 			updated.EscalationTimes = nil
 		}
+
+		log.Debug().
+			Str("alertID", alertID).
+			Time("originalStartTime", existing.StartTime).
+			Dur("currentDuration", time.Since(existing.StartTime)).
+			Msg("Preserving alert state including StartTime")
 		return
 	}
 
