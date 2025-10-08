@@ -148,6 +148,11 @@ Yes, ensure WebSocket support is enabled
 - **Docker**: Pull latest image, recreate container  
 - **Manual/systemd**: Run the install script again: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash`
 
+### How do I install an older release (downgrade)?
+- **Manual/systemd installs**: rerun the installer and pass the tag you want, e.g. `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.20.0`
+- **Proxmox LXC appliance**: `pct exec <ctid> -- bash -lc "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.20.0"`
+- **Docker**: launch with a versioned tag instead of `latest`, e.g. `docker run -d --name pulse -p 7655:7655 rcourtman/pulse:v4.20.0`
+
 ### Why can't I update from the UI?
 For security reasons, Pulse cannot self-update. The UI will notify you when updates are available and show the appropriate update command for your deployment type.
 
