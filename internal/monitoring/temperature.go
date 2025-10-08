@@ -78,9 +78,13 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 	sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", tc.sshUser, host), command)
 
 	cmd := exec.CommandContext(ctx, "ssh", sshArgs...)
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("ssh command failed: %w (output: %s)", err, string(output))
+		// On error, try to get stderr for debugging
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("ssh command failed: %w (stderr: %s)", err, string(exitErr.Stderr))
+		}
+		return "", fmt.Errorf("ssh command failed: %w", err)
 	}
 
 	return string(output), nil
