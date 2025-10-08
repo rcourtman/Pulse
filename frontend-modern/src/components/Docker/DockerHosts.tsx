@@ -507,7 +507,10 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
       .filter((group) => group.containers.length > 0);
   });
 
-  const hasContainers = createMemo(() => groupedContainers().some(g => g.containers.length > 0));
+  const hasContainers = createMemo(() => {
+    const groups = groupedContainers();
+    return groups && groups.length > 0 && groups.some(g => g.containers.length > 0);
+  });
 
   const toggleHostSelection = (hostId: string) => {
     setSelectedHostId((current) => (current === hostId ? null : hostId));
