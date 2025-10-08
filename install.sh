@@ -1291,7 +1291,7 @@ download_pulse() {
         fi
         
         # Check Go version and install newer version if needed
-        GO_MIN_VERSION="1.21"
+        GO_MIN_VERSION="1.24"
         GO_INSTALLED=false
         if command -v go >/dev/null 2>&1; then
             GO_VERSION=$(go version | grep -oE '[0-9]+\.[0-9]+' | head -1)
@@ -1302,7 +1302,7 @@ download_pulse() {
         fi
         
         if [[ "$GO_INSTALLED" != "true" ]]; then
-            print_info "Installing Go 1.23 (system Go is too old or missing)..."
+            print_info "Installing Go 1.24 (system Go is too old or missing)..."
             # Detect architecture for Go download
             ARCH=$(uname -m)
             case $ARCH in
@@ -1322,11 +1322,11 @@ download_pulse() {
             esac
             
             cd /tmp
-            wget -q "https://go.dev/dl/go1.23.4.linux-${GO_ARCH}.tar.gz"
+            wget -q "https://go.dev/dl/go1.24.7.linux-${GO_ARCH}.tar.gz"
             rm -rf /usr/local/go
-            tar -C /usr/local -xzf "go1.23.4.linux-${GO_ARCH}.tar.gz"
+            tar -C /usr/local -xzf "go1.24.7.linux-${GO_ARCH}.tar.gz"
             export PATH=/usr/local/go/bin:$PATH
-            rm "go1.23.4.linux-${GO_ARCH}.tar.gz"
+            rm "go1.24.7.linux-${GO_ARCH}.tar.gz"
         fi
         
         # Create temp directory for build
@@ -1384,6 +1384,20 @@ download_pulse() {
         fi
         
         chmod +x "$INSTALL_DIR/bin/pulse"
+
+        print_info "Building Docker agent from source..."
+        if ! go build -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
+            print_error "Failed to build Docker agent binary"
+            exit 1
+        fi
+
+        cp -f pulse-docker-agent "$INSTALL_DIR/pulse-docker-agent"
+        cp -f pulse-docker-agent "$INSTALL_DIR/bin/pulse-docker-agent"
+        chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+        chown -R pulse:pulse "$INSTALL_DIR"
+        ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
+
+        rm -f pulse-docker-agent
         
         # Update VERSION file to show it's from source
         echo "$SOURCE_BRANCH-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
@@ -1492,6 +1506,18 @@ download_pulse() {
             fi
             exit 1
         fi
+
+        # Install Docker agent binary for distribution
+        if [[ -f "$TEMP_EXTRACT/bin/pulse-docker-agent" ]]; then
+            cp -f "$TEMP_EXTRACT/bin/pulse-docker-agent" "$INSTALL_DIR/pulse-docker-agent"
+            cp -f "$TEMP_EXTRACT/bin/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+            chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+            chown pulse:pulse "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+            ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
+            print_success "Docker agent binary installed"
+        else
+            print_warn "Docker agent binary not found in archive; skipping installation"
+        fi
         
         chmod +x "$INSTALL_DIR/bin/pulse"
         chown -R pulse:pulse "$INSTALL_DIR"
@@ -1528,6 +1554,13 @@ download_pulse() {
                     cp -f "$TEMP_EXTRACT2/bin/pulse" "$INSTALL_DIR/bin/pulse"
                 elif [[ -f "$TEMP_EXTRACT2/pulse" ]]; then
                     cp -f "$TEMP_EXTRACT2/pulse" "$INSTALL_DIR/bin/pulse"
+                fi
+
+                if [[ -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" ]]; then
+                    cp -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" "$INSTALL_DIR/pulse-docker-agent"
+                    cp -f "$TEMP_EXTRACT2/bin/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+                    chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+                    ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
                 fi
                 
                 chmod +x "$INSTALL_DIR/bin/pulse"
@@ -1889,11 +1922,11 @@ main() {
             # Check for Go installation
             GO_INSTALLED=false
             if ! command -v go &> /dev/null; then
-                print_info "Go is not installed. Installing Go 1.23..."
+                print_info "Go is not installed. Installing Go 1.24..."
             else
                 GO_VERSION=$(go version | grep -oP 'go\K[0-9]+\.[0-9]+')
-                if awk "BEGIN {exit !($GO_VERSION < 1.23)}"; then
-                    print_info "Go version $GO_VERSION is too old. Installing Go 1.23..."
+                if awk "BEGIN {exit !($GO_VERSION < 1.24)}"; then
+                    print_info "Go version $GO_VERSION is too old. Installing Go 1.24..."
                 else
                     print_info "Go version $GO_VERSION is installed"
                     GO_INSTALLED=true
@@ -1911,7 +1944,7 @@ main() {
                         GO_ARCH="arm64"
                         ;;
                     armv7l)
-                        GO_ARCH="armv7"
+                        GO_ARCH="armv6l"
                         ;;
                     *)
                         print_error "Unsupported architecture: $ARCH"
@@ -1920,11 +1953,11 @@ main() {
                 esac
                 
                 cd /tmp
-                wget -q "https://go.dev/dl/go1.23.4.linux-${GO_ARCH}.tar.gz"
+                wget -q "https://go.dev/dl/go1.24.7.linux-${GO_ARCH}.tar.gz"
                 rm -rf /usr/local/go
-                tar -C /usr/local -xzf "go1.23.4.linux-${GO_ARCH}.tar.gz"
+                tar -C /usr/local -xzf "go1.24.7.linux-${GO_ARCH}.tar.gz"
                 export PATH=/usr/local/go/bin:$PATH
-                rm "go1.23.4.linux-${GO_ARCH}.tar.gz"
+                rm "go1.24.7.linux-${GO_ARCH}.tar.gz"
             fi
             
             # Clone and build
@@ -1978,8 +2011,21 @@ main() {
             cp pulse "$INSTALL_DIR/bin/pulse"
             chmod +x "$INSTALL_DIR/bin/pulse"
             chown pulse:pulse "$INSTALL_DIR/bin/pulse"
-            
-            # Create symlink for backward compatibility
+
+            print_info "Building Docker agent from source..."
+            if ! go build -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
+                print_error "Failed to build Docker agent binary"
+                cd /
+                rm -rf "$TEMP_BUILD_DIR"
+                exit 1
+            fi
+
+            cp -f pulse-docker-agent "$INSTALL_DIR/pulse-docker-agent"
+            cp -f pulse-docker-agent "$INSTALL_DIR/bin/pulse-docker-agent"
+            chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+            chown pulse:pulse "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+            ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
+            rm -f pulse-docker-agent
             ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
             
             # Setup update command and service

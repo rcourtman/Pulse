@@ -16,7 +16,7 @@ Data is pushed to Pulse over HTTPS using your existing API token – no inbound 
 
 ## Prerequisites
 
-- Pulse vX.Y.Z or newer with an API token enabled (`Settings → Security`)
+- Pulse v4.22.0 or newer with an API token enabled (`Settings → Security`)
 - Docker 20.10+ on Linux (the agent uses the Docker Engine API via the local socket)
 - Access to the Docker socket (`/var/run/docker.sock`) or a configured `DOCKER_HOST`
 - Go 1.24+ if you plan to build the binary from source
@@ -32,6 +32,15 @@ GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
 ```
 
 Copy the binary to your Docker host (e.g. `/usr/local/bin/pulse-docker-agent`) and make it executable.
+
+### Quick install from your Pulse server
+
+Use the bundled installation script (ships with Pulse v4.22.0+) to deploy and manage the agent. Replace the token placeholder with an API token generated in **Settings → Security**.
+
+```bash
+curl -fsSL http://pulse.example.com/install-docker-agent.sh \
+  | sudo bash -s -- --url http://pulse.example.com --token <api-token>
+```
 
 ## Running the agent
 
@@ -80,7 +89,7 @@ docker run -d \
   ghcr.io/rcourtman/pulse-docker-agent:latest
 ```
 
-> **Note**: The container image will be published starting with the first release that ships this agent. Build locally if you are testing main.
+> **Note**: The container image is published with the first release that includes the agent. Build locally if you are testing nightly builds.
 
 ## Configuration reference
 

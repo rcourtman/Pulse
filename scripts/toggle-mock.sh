@@ -21,6 +21,8 @@ PULSE_MOCK_MODE=false
 PULSE_MOCK_NODES=7
 PULSE_MOCK_VMS_PER_NODE=5
 PULSE_MOCK_LXCS_PER_NODE=8
+PULSE_MOCK_DOCKER_HOSTS=3
+PULSE_MOCK_DOCKER_CONTAINERS=12
 PULSE_MOCK_RANDOM_METRICS=true
 PULSE_MOCK_STOPPED_PERCENT=20
 EOF
@@ -83,11 +85,13 @@ restart_backend() {
 
 show_status() {
     source "$MOCK_ENV_FILE"
-    if [ "$PULSE_MOCK_MODE" = "true" ]; then
-        echo -e "${GREEN}Mock Mode: ENABLED${NC}"
-        echo "  Nodes: $PULSE_MOCK_NODES"
-        echo "  VMs per node: $PULSE_MOCK_VMS_PER_NODE"
-        echo "  LXCs per node: $PULSE_MOCK_LXCS_PER_NODE"
+	if [ "$PULSE_MOCK_MODE" = "true" ]; then
+		echo -e "${GREEN}Mock Mode: ENABLED${NC}"
+		echo "  Nodes: $PULSE_MOCK_NODES"
+		echo "  VMs per node: $PULSE_MOCK_VMS_PER_NODE"
+		echo "  LXCs per node: $PULSE_MOCK_LXCS_PER_NODE"
+		echo "  Docker hosts: ${PULSE_MOCK_DOCKER_HOSTS:-0}"
+		echo "  Docker containers/host: ${PULSE_MOCK_DOCKER_CONTAINERS:-0}"
     else
         echo -e "${BLUE}Mock Mode: DISABLED${NC} (using real Proxmox nodes)"
     fi
