@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal, createEffect, on } from 'solid-js';
-import type { DockerHost, DockerContainer } from '@/types/api';
+import type { DockerHost, DockerContainer, Alert } from '@/types/api';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
@@ -8,11 +8,13 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { CopyButton } from '@/components/shared/CopyButton';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { DockerFilter } from './DockerFilter';
+import { getAlertStyles } from '@/utils/alerts';
 // import type { DockerHostSummary } from './DockerHostSummaryTable';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
 
 interface DockerHostsProps {
   hosts: DockerHost[];
+  activeAlerts?: Record<string, Alert>;
 }
 
 interface ContainerEntry {
@@ -103,10 +105,21 @@ const buildContainerId = (container: DockerContainer, hostId: string) => {
 const DockerContainerRow: Component<{
   entry: ContainerEntry;
   onHostSelect: (hostId: string) => void;
+  activeAlerts?: Record<string, Alert>;
 }> = (props) => {
   const { container, host } = props.entry;
   const containerId = createMemo(() => buildContainerId(container, host.id));
   const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(containerId()) ?? false);
+
+  // Get alert styles for this container
+  const containerResourceId = createMemo(() => `docker-container-${host.id}-${container.id}`);
+  const alertStyles = createMemo(() =>
+    props.activeAlerts ? getAlertStyles(containerResourceId(), props.activeAlerts) : {
+      hasUnacknowledgedAlert: false,
+      hasAcknowledgedOnlyAlert: false,
+      severity: null as 'critical' | 'warning' | null,
+    }
+  );
 
   const cpuPercent = Math.max(0, Math.min(100, container.cpuPercent ?? 0));
   const memoryPercent = Math.max(0, Math.min(100, container.memoryPercent ?? 0));
@@ -159,19 +172,40 @@ const DockerContainerRow: Component<{
     drawerState.set(containerId(), drawerOpen());
   });
 
-  // Match GuestRow styling
+  // Match GuestRow styling with alert highlighting
+  const showAlertHighlight = createMemo(() => alertStyles().hasUnacknowledgedAlert);
+  const alertAccentColor = createMemo(() => {
+    if (!showAlertHighlight()) return undefined;
+    return alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
+  });
+
   const rowClass = () => {
     const base = 'transition-all duration-200 relative';
-    const hover = 'hover:bg-gray-50 dark:hover:bg-gray-700/30 hover:shadow-sm';
+    const hover = 'hover:shadow-sm';
+    const alertBg = showAlertHighlight()
+      ? alertStyles().severity === 'critical'
+        ? 'bg-red-50 dark:bg-red-950/30'
+        : 'bg-yellow-50 dark:bg-yellow-950/20'
+      : '';
+    const defaultHover = showAlertHighlight() ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
     const clickable = hasDrawerContent() ? 'cursor-pointer' : '';
-    const expanded = drawerOpen() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
-    return `${base} ${hover} ${stoppedDimming} ${clickable} ${expanded}`;
+    const expanded = drawerOpen() && !showAlertHighlight() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${expanded}`;
   };
+
+  const rowStyle = createMemo(() => {
+    if (!showAlertHighlight()) return {};
+    const color = alertAccentColor();
+    if (!color) return {};
+    return {
+      'box-shadow': `inset 4px 0 0 0 ${color}`,
+    };
+  });
 
   return (
     <>
-      <tr class={rowClass()} onClick={toggleDrawer} aria-expanded={drawerOpen()}>
+      <tr class={rowClass()} style={rowStyle()} onClick={toggleDrawer} aria-expanded={drawerOpen()}>
         {/* Container Name */}
         <td class="py-0.5 pr-2 pl-4 relative overflow-hidden">
           <div class="flex items-center gap-2 overflow-hidden">
@@ -628,7 +662,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                     </tr>
                                     {/* Host Containers */}
                                     <For each={group.containers}>
-                                      {(entry) => <DockerContainerRow entry={entry} onHostSelect={toggleHostSelection} />}
+                                      {(entry) => <DockerContainerRow entry={entry} onHostSelect={toggleHostSelection} activeAlerts={props.activeAlerts} />}
                                     </For>
                                   </>
                                 )}
@@ -716,6 +750,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                   <DockerContainerRow
                                     entry={entry}
                                     onHostSelect={toggleHostSelection}
+                                    activeAlerts={props.activeAlerts}
                                   />
                                 )}
                               </For>

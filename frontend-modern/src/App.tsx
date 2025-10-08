@@ -577,7 +577,7 @@ function App() {
       <Route path="/proxmox/backups" component={Backups} />
       <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
       <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
-      <Route path="/docker" component={() => <DockerHosts hosts={state().dockerHosts} />} />
+      <Route path="/docker" component={() => <DockerHosts hosts={state().dockerHosts} activeAlerts={activeAlerts()} />} />
       <Route path="/alerts/*" component={Alerts} />
       <Route
         path="/settings/*"
