@@ -1203,8 +1203,6 @@ export function Alerts() {
               setDockerDefaults={setDockerDefaults}
               storageDefault={storageDefault}
               setStorageDefault={setStorageDefault}
-              timeThreshold={timeThreshold}
-              setTimeThreshold={setTimeThreshold}
               timeThresholds={timeThresholds}
               setTimeThresholds={setTimeThresholds}
               activeAlerts={activeAlerts}
@@ -1677,7 +1675,6 @@ interface ThresholdsTabProps {
   nodeDefaults: () => Record<string, number>;
   dockerDefaults: () => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
   storageDefault: () => number;
-  timeThreshold: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   overrides: () => Override[];
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
@@ -1695,7 +1692,6 @@ interface ThresholdsTabProps {
     value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),
   ) => void;
   setStorageDefault: (value: number) => void;
-  setTimeThreshold: (value: number) => void;
   setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
   setOverrides: (value: Override[]) => void;
   setRawOverridesConfig: (value: Record<string, RawOverrideConfig>) => void;
@@ -1752,8 +1748,6 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDockerDefaults={props.setDockerDefaults}
       storageDefault={props.storageDefault}
       setStorageDefault={props.setStorageDefault}
-      timeThreshold={props.timeThreshold}
-      setTimeThreshold={props.setTimeThreshold}
       timeThresholds={props.timeThresholds}
       setTimeThresholds={props.setTimeThresholds}
       setHasUnsavedChanges={props.setHasUnsavedChanges}
