@@ -1713,18 +1713,50 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		// Only attempt for online nodes
 		if node.Status == "online" && m.tempCollector != nil {
 			tempCtx, tempCancel := context.WithTimeout(ctx, 5*time.Second)
-			// Use node name as hostname (works for both cluster and standalone)
-			temp, err := m.tempCollector.CollectTemperature(tempCtx, node.Node, node.Node)
+
+			// Determine SSH hostname to use (most robust approach):
+			// 1. For cluster nodes: Try to find the node's specific IP or host from ClusterEndpoints
+			// 2. For standalone nodes: Use the Host URL from config
+			// 3. Fallback: Use node name (works for simple DNS/hosts setups)
+			sshHost := node.Node // Default fallback
+
+			if modelNode.IsClusterMember && instanceCfg.IsCluster {
+				// Look up this specific node in cluster endpoints to get its individual address
+				for _, ep := range instanceCfg.ClusterEndpoints {
+					if ep.NodeName == node.Node {
+						// Prefer IP address for reliability
+						if ep.IP != "" {
+							sshHost = ep.IP
+						} else if ep.Host != "" {
+							sshHost = ep.Host
+						}
+						break
+					}
+				}
+			} else if !modelNode.IsClusterMember {
+				// Standalone node: use the Host URL from config
+				sshHost = modelNode.Host
+			}
+
+			temp, err := m.tempCollector.CollectTemperature(tempCtx, sshHost, node.Node)
 			tempCancel()
 
 			if err == nil && temp != nil && temp.Available {
 				modelNode.Temperature = temp
 				log.Debug().
 					Str("node", node.Node).
+					Str("sshHost", sshHost).
 					Float64("cpuPackage", temp.CPUPackage).
 					Float64("cpuMax", temp.CPUMax).
 					Int("nvmeCount", len(temp.NVMe)).
 					Msg("Collected temperature data")
+			} else if err != nil {
+				log.Debug().
+					Str("node", node.Node).
+					Str("sshHost", sshHost).
+					Bool("isCluster", modelNode.IsClusterMember).
+					Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
+					Msg("Temperature collection failed - check SSH access")
 			}
 		}
 
