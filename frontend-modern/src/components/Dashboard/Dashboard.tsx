@@ -868,6 +868,12 @@ export function Dashboard(props: DashboardProps) {
                       Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[120px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      onClick={() => handleSort('status')}
+                    >
+                      Status {sortKey() === 'status' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th
                       class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[70px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('vmid')}
                     >
@@ -946,7 +952,7 @@ export function Dashboard(props: DashboardProps) {
                       return (
                       <>
                         <Show when={node && groupingMode() === 'grouped'}>
-                          <NodeGroupHeader node={node!} colspan={11} />
+                          <NodeGroupHeader node={node!} colspan={12} />
                         </Show>
                         <For each={guests} fallback={<></>}>
                           {(guest) => (
