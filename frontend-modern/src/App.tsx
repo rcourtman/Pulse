@@ -64,6 +64,16 @@ export const useDarkMode = () => {
   return context;
 };
 
+// Docker route component that properly uses activeAlerts from useWebSocket
+function DockerRoute() {
+  const wsContext = useContext(WebSocketContext);
+  if (!wsContext) {
+    return <div>Loading...</div>;
+  }
+  const { state, activeAlerts } = wsContext;
+  return <DockerHosts hosts={state().dockerHosts} activeAlerts={activeAlerts} />;
+}
+
 function App() {
   const TooltipRoot = createTooltipSystem();
   const owner = getOwner();
@@ -577,7 +587,7 @@ function App() {
       <Route path="/proxmox/backups" component={Backups} />
       <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
       <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
-      <Route path="/docker" component={() => <DockerHosts hosts={state().dockerHosts} activeAlerts={activeAlerts()} />} />
+      <Route path="/docker" component={DockerRoute} />
       <Route path="/alerts/*" component={Alerts} />
       <Route
         path="/settings/*"
