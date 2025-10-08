@@ -67,6 +67,7 @@ interface Override {
   instance?: string;
   disabled?: boolean; // Completely disable alerts for this guest/storage
   disableConnectivity?: boolean; // For nodes - disable offline/connectivity alerts
+  poweredOffSeverity?: 'warning' | 'critical';
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -369,6 +370,12 @@ export function Alerts() {
             instance: host.displayName,
             disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
+            poweredOffSeverity:
+              thresholds.poweredOffSeverity === 'critical'
+                ? 'critical'
+                : thresholds.poweredOffSeverity === 'warning'
+                  ? 'warning'
+                  : undefined,
             thresholds: extractTriggerValues(thresholds),
           });
           return;
@@ -388,6 +395,12 @@ export function Alerts() {
               node: hostId,
               disabled: thresholds.disabled || false,
               disableConnectivity: thresholds.disableConnectivity || false,
+              poweredOffSeverity:
+                thresholds.poweredOffSeverity === 'critical'
+                  ? 'critical'
+                  : thresholds.poweredOffSeverity === 'warning'
+                    ? 'warning'
+                    : undefined,
               thresholds: extractTriggerValues(thresholds),
             });
             return;
@@ -449,17 +462,23 @@ export function Alerts() {
               const container = (state.containers || []).find((g) => g.id === key);
               const guest = vm || container;
               if (guest) {
-                overridesList.push({
-                  id: key,
-                  name: guest.name,
-                  type: 'guest',
-                  resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
-                  vmid: guest.vmid,
-                  node: guest.node,
-                  instance: guest.instance,
-                  disabled: thresholds.disabled || false,
-                  thresholds: extractTriggerValues(thresholds),
-                });
+              overridesList.push({
+                id: key,
+                name: guest.name,
+                type: 'guest',
+                resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
+                vmid: guest.vmid,
+                node: guest.node,
+                instance: guest.instance,
+                disabled: thresholds.disabled || false,
+                poweredOffSeverity:
+                  thresholds.poweredOffSeverity === 'critical'
+                    ? 'critical'
+                    : thresholds.poweredOffSeverity === 'warning'
+                      ? 'warning'
+                      : undefined,
+                thresholds: extractTriggerValues(thresholds),
+              });
               }
             }
           }
@@ -477,12 +496,18 @@ export function Alerts() {
           const thresholdsChanged =
             JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
           const connectivityChanged =
-            (newOverride.type === 'node' || newOverride.type === 'pbs') &&
+            (newOverride.type === 'node' ||
+              newOverride.type === 'pbs' ||
+              newOverride.type === 'dockerContainer') &&
             newOverride.disableConnectivity !== existing.disableConnectivity;
           const disabledChanged =
             (newOverride.type === 'guest' || newOverride.type === 'storage') &&
             newOverride.disabled !== existing.disabled;
-          return thresholdsChanged || connectivityChanged || disabledChanged;
+          const severityChanged =
+            (newOverride.type === 'guest' || newOverride.type === 'dockerContainer') &&
+            (newOverride.poweredOffSeverity ?? null) !==
+              (existing.poweredOffSeverity ?? null);
+          return thresholdsChanged || connectivityChanged || disabledChanged || severityChanged;
         });
 
       if (hasChanged) {
@@ -506,6 +531,7 @@ export function Alerts() {
       networkOut: -1,
     });
     setGuestDisableConnectivity(false);
+    setGuestPoweredOffSeverity('warning');
     setNodeDefaults({
       cpu: 80,
       memory: 85,
@@ -551,8 +577,12 @@ export function Alerts() {
           networkOut: getTriggerValue(config.guestDefaults.networkOut) ?? -1,
         });
         setGuestDisableConnectivity(Boolean(config.guestDefaults.disableConnectivity));
+        setGuestPoweredOffSeverity(
+          config.guestDefaults.poweredOffSeverity === 'critical' ? 'critical' : 'warning',
+        );
       } else {
         setGuestDisableConnectivity(false);
+        setGuestPoweredOffSeverity('warning');
       }
 
       if (config.nodeDefaults) {
@@ -790,7 +820,7 @@ export function Alerts() {
     const result: Record<string, number> = {};
     Object.entries(thresholds).forEach(([key, value]) => {
       // Skip non-threshold fields
-      if (key === 'disabled' || key === 'disableConnectivity') return;
+      if (key === 'disabled' || key === 'disableConnectivity' || key === 'poweredOffSeverity') return;
       result[key] = getTriggerValue(value);
     });
     return result;
@@ -807,6 +837,7 @@ export function Alerts() {
     networkOut: -1,
   });
   const [guestDisableConnectivity, setGuestDisableConnectivity] = createSignal(false);
+  const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<'warning' | 'critical'>('warning');
 
   const [nodeDefaults, setNodeDefaults] = createSignal({
     cpu: 80,
@@ -953,6 +984,7 @@ export function Alerts() {
                         networkIn: createHysteresisThreshold(guestDefaults().networkIn),
                         networkOut: createHysteresisThreshold(guestDefaults().networkOut),
                         disableConnectivity: guestDisableConnectivity(),
+                        poweredOffSeverity: guestPoweredOffSeverity(),
                       },
                       nodeDefaults: {
                         cpu: createHysteresisThreshold(nodeDefaults().cpu),
@@ -1163,6 +1195,8 @@ export function Alerts() {
               guestDisableConnectivity={guestDisableConnectivity}
               setGuestDefaults={setGuestDefaults}
               setGuestDisableConnectivity={setGuestDisableConnectivity}
+              guestPoweredOffSeverity={guestPoweredOffSeverity}
+              setGuestPoweredOffSeverity={setGuestPoweredOffSeverity}
               nodeDefaults={nodeDefaults}
               setNodeDefaults={setNodeDefaults}
               dockerDefaults={dockerDefaults}
@@ -1275,6 +1309,12 @@ function OverviewTab(props: {
         return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
       });
   });
+
+  const unacknowledgedAlerts = createMemo(() =>
+    Object.values(props.activeAlerts).filter((alert) => !alert.acknowledged),
+  );
+
+  const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
 
   return (
     <div class="space-y-6">
@@ -1393,15 +1433,64 @@ function OverviewTab(props: {
             </div>
           }
         >
-          {/* Simple View Toggle - only show if there are acknowledged alerts */}
-          <Show when={alertStats().acknowledged > 0}>
-            <div class="flex justify-end p-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-              >
-                {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
-              </button>
+          <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
+            <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
+              <Show when={alertStats().acknowledged > 0}>
+                <button
+                  onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
+                  class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
+                </button>
+              </Show>
+              <Show when={alertStats().active > 0}>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={bulkAckProcessing()}
+                  onClick={async () => {
+                    if (bulkAckProcessing()) return;
+                    const pending = unacknowledgedAlerts();
+                    if (pending.length === 0) {
+                      return;
+                    }
+                    setBulkAckProcessing(true);
+                    try {
+                      const result = await AlertsAPI.bulkAcknowledge(pending.map((alert) => alert.id));
+                      const successes = result.results.filter((r) => r.success);
+                      const failures = result.results.filter((r) => !r.success);
+
+                      successes.forEach((res) => {
+                        props.updateAlert(res.alertId, {
+                          acknowledged: true,
+                          ackTime: new Date().toISOString(),
+                        });
+                      });
+
+                      if (successes.length > 0) {
+                        showSuccess(
+                          `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
+                        );
+                      }
+
+                      if (failures.length > 0) {
+                        showError(
+                          `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
+                        );
+                      }
+                    } catch (error) {
+                      console.error('Bulk acknowledge failed', error);
+                      showError('Failed to acknowledge alerts');
+                    } finally {
+                      setBulkAckProcessing(false);
+                    }
+                  }}
+                >
+                  {bulkAckProcessing()
+                    ? 'Acknowledging…'
+                    : `Acknowledge all (${alertStats().active})`}
+                </button>
+              </Show>
             </div>
           </Show>
           <div class="space-y-2">
@@ -1597,6 +1686,8 @@ interface ThresholdsTabProps {
   ) => void;
   guestDisableConnectivity: () => boolean;
   setGuestDisableConnectivity: (value: boolean) => void;
+  guestPoweredOffSeverity: () => 'warning' | 'critical';
+  setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   setNodeDefaults: (
     value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
   ) => void;
@@ -1650,9 +1741,11 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       dockerHosts={props.state.dockerHosts || []}
       pbsInstances={props.state.pbs || []}
       guestDefaults={props.guestDefaults()}
-      guestDisableConnectivity={props.guestDisableConnectivity()}
+      guestDisableConnectivity={props.guestDisableConnectivity}
       setGuestDefaults={props.setGuestDefaults}
       setGuestDisableConnectivity={props.setGuestDisableConnectivity}
+      guestPoweredOffSeverity={props.guestPoweredOffSeverity}
+      setGuestPoweredOffSeverity={props.setGuestPoweredOffSeverity}
       nodeDefaults={props.nodeDefaults()}
       setNodeDefaults={props.setNodeDefaults}
       dockerDefaults={props.dockerDefaults()}

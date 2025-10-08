@@ -714,7 +714,20 @@ function AppLayout(props: {
 
   const utilityTabs = createMemo(() => {
     const allAlerts = props.state().activeAlerts || [];
-    const activeAlertCount = allAlerts.filter((a: any) => !a.acknowledged).length;
+    const breakdown = allAlerts.reduce(
+      (acc, alert: any) => {
+        if (alert?.acknowledged) return acc;
+        const level = String(alert?.level || '').toLowerCase();
+        if (level === 'critical') {
+          acc.critical += 1;
+        } else {
+          acc.warning += 1;
+        }
+        return acc;
+      },
+      { warning: 0, critical: 0 },
+    );
+    const activeAlertCount = breakdown.warning + breakdown.critical;
     return [
       {
         id: 'alerts' as const,
@@ -723,6 +736,7 @@ function AppLayout(props: {
         tooltip: 'Review active alerts and automation rules',
         badge: null as 'update' | null,
         count: activeAlertCount,
+        breakdown,
         icon: <AlertsIcon class="w-4 h-4 shrink-0" />,
       },
       {
@@ -732,6 +746,7 @@ function AppLayout(props: {
         tooltip: 'Configure Pulse preferences and integrations',
         badge: updateStore.isUpdateVisible() ? ('update' as const) : null,
         count: undefined,
+        breakdown: undefined,
         icon: <SettingsGearIcon class="w-4 h-4 shrink-0" />,
       },
     ];
@@ -936,19 +951,26 @@ function AppLayout(props: {
                     {tab.icon}
                     <span class="flex items-center gap-1.5">
                       <span>{tab.label}</span>
-                      {tab.id === 'alerts' && (
-                        <>
-                          {(tab.count !== undefined && tab.count > 0) ? (
-                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-red-500 text-white rounded-full">
-                              {tab.count}
-                            </span>
-                          ) : (
-                            <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </>
-                      )}
+                      {tab.id === 'alerts' && (() => {
+                        const total = tab.count ?? 0;
+                        if (total <= 0) {
+                          return null;
+                        }
+                        return (
+                          <span class="inline-flex items-center gap-1">
+                            {tab.breakdown?.critical > 0 && (
+                              <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
+                                {tab.breakdown.critical}
+                              </span>
+                            )}
+                            {tab.breakdown?.warning > 0 && (
+                              <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500/80 rounded-full">
+                                {tab.breakdown.warning}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </span>
                     <Show when={tab.badge === 'update'}>
                       <span class="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>

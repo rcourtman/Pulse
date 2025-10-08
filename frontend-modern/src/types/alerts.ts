@@ -14,6 +14,7 @@ export interface AlertThresholds {
   networkIn?: HysteresisThreshold;
   networkOut?: HysteresisThreshold;
   disableConnectivity?: boolean; // Disable connectivity/powered-off alerts
+  poweredOffSeverity?: 'warning' | 'critical';
   // Legacy support for backward compatibility
   cpuLegacy?: number;
   memoryLegacy?: number;
@@ -29,6 +30,7 @@ export interface AlertThresholds {
 export type RawOverrideConfig = AlertThresholds & {
   disabled?: boolean;
   disableConnectivity?: boolean;
+  poweredOffSeverity?: 'warning' | 'critical';
   // NOTE: To disable individual metrics, set threshold to -1
 };
 
