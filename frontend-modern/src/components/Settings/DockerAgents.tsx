@@ -24,9 +24,11 @@ export const DockerAgents: Component = () => {
     return 'http://localhost:7655';
   };
 
+  const TOKEN_PLACEHOLDER = '<api-token>';
+
   const getInstallCommand = () => {
     const url = pulseUrl();
-    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url}`;
+    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER}`;
   };
 
   const getUninstallCommand = () => {
@@ -42,7 +44,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/pulse-docker-agent --url ${pulseUrl()} --token disabled --interval 30s
+Environment=PULSE_TOKEN=${TOKEN_PLACEHOLDER}
+ExecStart=/usr/local/bin/pulse-docker-agent --url ${pulseUrl()} --interval 30s
 Restart=always
 RestartSec=5s
 User=root
@@ -152,7 +155,8 @@ WantedBy=multi-user.target`;
               <code class="text-sm text-green-400 font-mono">{getInstallCommand()}</code>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              This will download the agent binary, create a systemd service, and start monitoring automatically.
+              Replace <code class="px-1 bg-gray-100 dark:bg-gray-800 rounded">{TOKEN_PLACEHOLDER}</code> with the API token from{' '}
+              <span class="font-medium">Settings → Security</span>. The script downloads the agent, creates a systemd service, and starts monitoring automatically.
             </p>
           </div>
 
@@ -232,7 +236,8 @@ WantedBy=multi-user.target`;
                   </div>
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Save to <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">/etc/systemd/system/pulse-docker-agent.service</code>
+                  Save to <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">/etc/systemd/system/pulse-docker-agent.service</code> and replace{' '}
+                  <code class="px-1 bg-gray-100 dark:bg-gray-800 rounded">{TOKEN_PLACEHOLDER}</code> with a valid API token.
                 </p>
               </div>
 

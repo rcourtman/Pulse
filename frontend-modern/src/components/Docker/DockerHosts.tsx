@@ -280,10 +280,10 @@ const DockerContainerRow: Component<{
           }`}
         >
           <td class="px-4 py-2" colSpan={5}>
-            <div class="flex flex-wrap gap-3 justify-start">
+            <div class="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {/* Network & IPs */}
               <Show when={container.networks && container.networks.length > 0}>
-                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Network</div>
                   <div class="mt-1 space-y-1">
                     <For each={container.networks}>
@@ -312,7 +312,7 @@ const DockerContainerRow: Component<{
 
               {/* Ports */}
               <Show when={container.ports && container.ports.length > 0}>
-                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Ports</div>
                   <div class="mt-1 flex flex-wrap gap-1">
                     <For each={container.ports}>
@@ -331,7 +331,7 @@ const DockerContainerRow: Component<{
               </Show>
 
               {/* Container Info */}
-              <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Info</div>
                 <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
                   <Show when={container.image}>

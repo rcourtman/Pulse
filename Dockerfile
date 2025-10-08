@@ -35,11 +35,15 @@ COPY VERSION ./
 # Must be at internal/api/frontend-modern for Go embed
 COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-modern/dist
 
-# Build the binary with embedded frontend
+# Build the binaries with embedded frontend
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
     -trimpath \
-    -o pulse ./cmd/pulse
+    -o pulse ./cmd/pulse && \
+    CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -trimpath \
+    -o pulse-docker-agent ./cmd/pulse-docker-agent
 
 # Final stage
 FROM alpine:latest
@@ -48,8 +52,9 @@ RUN apk --no-cache add ca-certificates tzdata su-exec
 
 WORKDIR /app
 
-# Copy binary from builder (frontend is embedded)
+# Copy binaries from builder (frontend is embedded)
 COPY --from=backend-builder /app/pulse .
+COPY --from=backend-builder /app/pulse-docker-agent .
 
 # Copy VERSION file
 COPY --from=backend-builder /app/VERSION .

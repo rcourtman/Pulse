@@ -7,25 +7,32 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 type MockConfig struct {
-	NodeCount      int
-	VMsPerNode     int
-	LXCsPerNode    int
-	RandomMetrics  bool
-	HighLoadNodes  []string // Specific nodes to simulate high load
-	StoppedPercent float64  // Percentage of guests that should be stopped
+	NodeCount               int
+	VMsPerNode              int
+	LXCsPerNode             int
+	DockerHostCount         int
+	DockerContainersPerHost int
+	RandomMetrics           bool
+	HighLoadNodes           []string // Specific nodes to simulate high load
+	StoppedPercent          float64  // Percentage of guests that should be stopped
 }
 
+const dockerConnectionPrefix = "docker-"
+
 var DefaultConfig = MockConfig{
-	NodeCount:      7, // Test the 5-9 node range by default
-	VMsPerNode:     5,
-	LXCsPerNode:    8,
-	RandomMetrics:  true,
-	StoppedPercent: 0.2,
+	NodeCount:               7, // Test the 5-9 node range by default
+	VMsPerNode:              5,
+	LXCsPerNode:             8,
+	DockerHostCount:         3,
+	DockerContainersPerHost: 12,
+	RandomMetrics:           true,
+	StoppedPercent:          0.2,
 }
 
 var appNames = []string{
@@ -38,6 +45,39 @@ var appNames = []string{
 	"webserver", "database", "cache", "loadbalancer", "firewall",
 	"docker", "kubernetes", "rancher", "jenkins", "gitea",
 	"syncthing", "seafile", "owncloud", "minio", "sftp",
+}
+
+var dockerHostPrefixes = []string{
+	"nebula", "orion", "aurora", "atlas", "zephyr",
+	"draco", "phoenix", "hydra", "pegasus", "lyra",
+}
+
+var dockerOperatingSystems = []string{
+	"Debian GNU/Linux 12 (bookworm)",
+	"Ubuntu 24.04.1 LTS",
+	"Ubuntu 22.04.4 LTS",
+	"Fedora Linux 40",
+	"Alpine Linux 3.19",
+}
+
+var dockerKernelVersions = []string{
+	"6.8.12-1-amd64",
+	"6.6.32-1-lts",
+	"6.5.0-27-generic",
+	"6.1.55-1-arm64",
+}
+
+var dockerArchitectures = []string{"x86_64", "aarch64"}
+
+var dockerVersions = []string{
+	"27.3.1",
+	"26.1.3",
+	"25.0.6",
+}
+
+var dockerAgentVersions = []string{
+	"0.1.0",
+	"0.1.0-dev",
 }
 
 // Common tags used for VMs and containers
@@ -129,6 +169,7 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 
 	data := models.StateSnapshot{
 		Nodes:            generateNodes(config),
+		DockerHosts:      generateDockerHosts(config),
 		VMs:              []models.VM{},
 		Containers:       []models.Container{},
 		PhysicalDisks:    []models.PhysicalDisk{},
@@ -141,6 +182,10 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 	// Generate physical disks for each node
 	for _, node := range data.Nodes {
 		data.PhysicalDisks = append(data.PhysicalDisks, generateDisksForNode(node)...)
+	}
+
+	for _, host := range data.DockerHosts {
+		data.ConnectionHealth[dockerConnectionPrefix+host.ID] = host.Status != "offline"
 	}
 
 	// Generate VMs and containers for each node
@@ -793,6 +838,362 @@ func generateGuestOSMetadata() (string, string) {
 
 	choice := variants[rand.Intn(len(variants))]
 	return choice.Name, choice.Version
+}
+
+func generateDockerHosts(config MockConfig) []models.DockerHost {
+	hostCount := config.DockerHostCount
+	if hostCount <= 0 {
+		return []models.DockerHost{}
+	}
+
+	now := time.Now()
+	hosts := make([]models.DockerHost, 0, hostCount)
+
+	for i := 0; i < hostCount; i++ {
+		agentVersion := dockerAgentVersions[rand.Intn(len(dockerAgentVersions))]
+		prefix := dockerHostPrefixes[i%len(dockerHostPrefixes)]
+		hostname := fmt.Sprintf("%s-%d", prefix, i+1)
+		hostID := fmt.Sprintf("%s-mock", hostname)
+
+		cpus := []int{4, 6, 8, 12, 16}[rand.Intn(5)]
+		totalMemoryBytes := int64((16 + rand.Intn(64)) * 1024 * 1024 * 1024) // 16-79 GB
+		interval := 30
+		uptime := int64(86400*(3+rand.Intn(25))) + int64(rand.Intn(3600))
+
+		containers := generateDockerContainers(hostname, i, config)
+
+		// Optionally ensure the second host looks degraded for UI coverage
+		if i == 1 && len(containers) > 0 && hostCount > 1 {
+			idx := rand.Intn(len(containers))
+			containers[idx].Health = "unhealthy"
+			containers[idx].CPUPercent = clampFloat(containers[idx].CPUPercent+35, 5, 190)
+		}
+
+		status := "online"
+		if hostCount > 2 && i == hostCount-1 {
+			status = "offline"
+		}
+
+		lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
+		if status == "offline" {
+			lastSeen = now.Add(-time.Duration(5+rand.Intn(20)) * time.Minute)
+			for idx := range containers {
+				exitCode := containers[idx].ExitCode
+				if exitCode == 0 {
+					exitCode = []int{0, 1, 137}[rand.Intn(3)]
+				}
+				containers[idx].State = "exited"
+				containers[idx].Health = ""
+				containers[idx].CPUPercent = 0
+				containers[idx].MemoryUsage = 0
+				containers[idx].MemoryPercent = 0
+				containers[idx].UptimeSeconds = 0
+				finished := now.Add(-time.Duration(rand.Intn(72)+1) * time.Hour)
+				containers[idx].StartedAt = nil
+				containers[idx].FinishedAt = &finished
+				containers[idx].Status = fmt.Sprintf("Exited (%d) %s ago", exitCode, formatDurationForStatus(now.Sub(finished)))
+			}
+		}
+
+		if status != "offline" {
+			running := 0
+			unhealthy := 0
+			for _, ct := range containers {
+				if strings.ToLower(ct.State) == "running" {
+					running++
+					healthState := strings.ToLower(ct.Health)
+					if healthState == "unhealthy" || healthState == "starting" {
+						unhealthy++
+					}
+				}
+			}
+
+			if running == 0 {
+				status = "offline"
+				lastSeen = now.Add(-time.Duration(3+rand.Intn(5)) * time.Minute)
+			} else if unhealthy > 0 || float64(len(containers)-running)/float64(len(containers)) > 0.35 {
+				status = "degraded"
+				if lastSeen.After(now.Add(-30 * time.Second)) {
+					lastSeen = now.Add(-35 * time.Second)
+				}
+			} else if status != "offline" {
+				status = "online"
+			}
+		}
+
+		host := models.DockerHost{
+			ID:               hostID,
+			AgentID:          fmt.Sprintf("agent-%s", randomHexString(6)),
+			Hostname:         hostname,
+			DisplayName:      humanizeHostDisplayName(hostname),
+			MachineID:        randomHexString(32),
+			OS:               dockerOperatingSystems[rand.Intn(len(dockerOperatingSystems))],
+			KernelVersion:    dockerKernelVersions[rand.Intn(len(dockerKernelVersions))],
+			Architecture:     dockerArchitectures[rand.Intn(len(dockerArchitectures))],
+			DockerVersion:    dockerVersions[rand.Intn(len(dockerVersions))],
+			CPUs:             cpus,
+			TotalMemoryBytes: totalMemoryBytes,
+			UptimeSeconds:    uptime,
+			Status:           status,
+			LastSeen:         lastSeen,
+			IntervalSeconds:  interval,
+			AgentVersion:     agentVersion,
+			Containers:       containers,
+		}
+
+		hosts = append(hosts, host)
+	}
+
+	return hosts
+}
+
+func generateDockerContainers(hostName string, hostIdx int, config MockConfig) []models.DockerContainer {
+	base := config.DockerContainersPerHost
+	if base < 1 {
+		base = 6
+	}
+	variation := rand.Intn(5) - 2
+	count := base + variation
+	if count < 3 {
+		count = 3
+	}
+
+	now := time.Now()
+	containers := make([]models.DockerContainer, 0, count)
+	nameUsage := make(map[string]int)
+
+	for i := 0; i < count; i++ {
+		baseName := appNames[rand.Intn(len(appNames))]
+		nameUsage[baseName]++
+		containerName := baseName
+		if nameUsage[baseName] > 1 {
+			containerName = fmt.Sprintf("%s-%d", baseName, nameUsage[baseName])
+		}
+
+		id := fmt.Sprintf("%s-%s", hostName, randomHexString(12))
+		running := rand.Float64() >= config.StoppedPercent
+		if running && rand.Float64() < 0.05 {
+			running = false // small chance of paused/exited container regardless of stopped percent
+		}
+
+		memLimit := int64((256 + rand.Intn(4096)) * 1024 * 1024) // 256MB - ~4.25GB
+		if memLimit < 256*1024*1024 {
+			memLimit = 256 * 1024 * 1024
+		}
+		memPercent := clampFloat(20+rand.Float64()*65, 2, 96)
+		if !running {
+			memPercent = 0
+		}
+		memUsage := int64(float64(memLimit) * (memPercent / 100.0))
+
+		cpuPercent := clampFloat(rand.Float64()*70, 0.2, 180)
+		if !running {
+			cpuPercent = 0
+		}
+
+		restartCount := rand.Intn(4)
+		exitCode := 0
+		health := "healthy"
+
+		if rand.Float64() < 0.08 {
+			health = "starting"
+		}
+		if rand.Float64() < 0.08 {
+			health = "unhealthy"
+		}
+
+		var startedAt *time.Time
+		var finishedAt *time.Time
+		uptime := int64(0)
+		state := "running"
+		statusText := ""
+		createdAt := now.Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
+
+		if running {
+			uptime = int64(3600 + rand.Intn(86400*14)) // 1 hour to ~14 days
+			start := now.Add(-time.Duration(uptime) * time.Second)
+			startedAt = &start
+			statusText = fmt.Sprintf("Up %s", formatDurationForStatus(time.Duration(uptime)*time.Second))
+		} else {
+			stateOptions := []string{"exited", "paused"}
+			state = stateOptions[rand.Intn(len(stateOptions))]
+			if state == "exited" {
+				exitCode = []int{0, 1, 137, 139}[rand.Intn(4)]
+				restartCount = 1 + rand.Intn(4)
+				finished := now.Add(-time.Duration(rand.Intn(72)+1) * time.Hour)
+				finishedAt = &finished
+				statusText = fmt.Sprintf("Exited (%d) %s ago", exitCode, formatDurationForStatus(now.Sub(finished)))
+				health = ""
+			} else {
+				statusText = "Paused"
+				if rand.Float64() < 0.3 {
+					health = ""
+				}
+			}
+		}
+
+		container := models.DockerContainer{
+			ID:            id,
+			Name:          containerName,
+			Image:         fmt.Sprintf("ghcr.io/mock/%s:%d.%d.%d", containerName, 1+rand.Intn(2), rand.Intn(10), rand.Intn(10)),
+			State:         state,
+			Status:        statusText,
+			Health:        health,
+			CPUPercent:    cpuPercent,
+			MemoryUsage:   memUsage,
+			MemoryLimit:   memLimit,
+			MemoryPercent: memPercent,
+			UptimeSeconds: uptime,
+			RestartCount:  restartCount,
+			ExitCode:      exitCode,
+			CreatedAt:     createdAt,
+			StartedAt:     startedAt,
+			FinishedAt:    finishedAt,
+			Ports:         generateDockerPorts(),
+			Labels:        generateDockerLabels(containerName, hostName),
+			Networks:      generateDockerNetworks(hostIdx, i),
+		}
+
+		containers = append(containers, container)
+	}
+
+	return containers
+}
+
+func generateDockerPorts() []models.DockerContainerPort {
+	if rand.Float64() < 0.45 {
+		return nil
+	}
+
+	portChoices := []int{80, 443, 3000, 3306, 5432, 6379, 8080, 9000}
+	count := 1 + rand.Intn(2)
+	ports := make([]models.DockerContainerPort, 0, count)
+	used := make(map[int]bool)
+
+	for len(ports) < count && len(used) < len(portChoices) {
+		private := portChoices[rand.Intn(len(portChoices))]
+		if used[private] {
+			continue
+		}
+		used[private] = true
+
+		port := models.DockerContainerPort{
+			PrivatePort: private,
+			Protocol:    []string{"tcp", "udp"}[rand.Intn(2)],
+		}
+
+		if rand.Float64() < 0.75 {
+			port.PublicPort = 20000 + rand.Intn(20000)
+			port.IP = "0.0.0.0"
+		}
+
+		ports = append(ports, port)
+	}
+
+	return ports
+}
+
+func generateDockerNetworks(hostIdx, containerIdx int) []models.DockerContainerNetworkLink {
+	networks := []models.DockerContainerNetworkLink{{
+		Name: "bridge",
+		IPv4: fmt.Sprintf("172.18.%d.%d", hostIdx+10, containerIdx+20),
+	}}
+
+	if rand.Float64() < 0.3 {
+		networks = append(networks, models.DockerContainerNetworkLink{
+			Name: "frontend",
+			IPv4: fmt.Sprintf("10.%d.%d.%d", hostIdx+20, containerIdx+10, rand.Intn(200)+20),
+		})
+	}
+
+	if rand.Float64() < 0.2 {
+		networks[len(networks)-1].IPv6 = fmt.Sprintf("fd00:%x:%x::%x", hostIdx+1, containerIdx+1, rand.Intn(4000))
+	}
+
+	return networks
+}
+
+func generateDockerLabels(serviceName, hostName string) map[string]string {
+	labels := map[string]string{
+		"com.docker.compose.project": hostName,
+		"com.docker.compose.service": serviceName,
+	}
+
+	if rand.Float64() < 0.25 {
+		labels["environment"] = []string{"production", "staging", "development"}[rand.Intn(3)]
+	}
+
+	if rand.Float64() < 0.2 {
+		labels["traefik.enable"] = "true"
+	}
+
+	return labels
+}
+
+func formatDurationForStatus(d time.Duration) string {
+	if d < 0 {
+		d = -d
+	}
+
+	if d < time.Minute {
+		return "less than a minute"
+	}
+
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+
+	if d < 24*time.Hour {
+		hours := int(d / time.Hour)
+		minutes := int((d % time.Hour) / time.Minute)
+		if minutes == 0 {
+			return fmt.Sprintf("%dh", hours)
+		}
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	}
+
+	days := int(d / (24 * time.Hour))
+	hours := int((d % (24 * time.Hour)) / time.Hour)
+	if hours == 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	return fmt.Sprintf("%dd%dh", days, hours)
+}
+
+func clampFloat(value, min, max float64) float64 {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
+
+func randomHexString(n int) string {
+	const hexChars = "0123456789abcdef"
+	if n <= 0 {
+		return ""
+	}
+
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = hexChars[rand.Intn(len(hexChars))]
+	}
+	return string(b)
+}
+
+func humanizeHostDisplayName(hostname string) string {
+	parts := strings.Split(hostname, "-")
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		runes := []rune(part)
+		runes[0] = unicode.ToUpper(runes[0])
+		parts[i] = string(runes)
+	}
+	return strings.Join(parts, " ")
 }
 
 func generateContainer(nodeName string, instance string, vmid int, config MockConfig) models.Container {
@@ -1936,6 +2337,8 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 
 // UpdateMetrics simulates changing metrics over time
 func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
+	updateDockerHosts(data, config)
+
 	if !config.RandomMetrics {
 		return
 	}
@@ -2070,6 +2473,147 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 	}
 
 	data.LastUpdate = time.Now()
+}
+
+func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
+	if len(data.DockerHosts) == 0 {
+		return
+	}
+
+	now := time.Now()
+	step := int64(updateInterval.Seconds())
+	if step <= 0 {
+		step = 2
+	}
+
+	for i := range data.DockerHosts {
+		host := &data.DockerHosts[i]
+
+		if host.Status != "offline" {
+			host.LastSeen = now.Add(-time.Duration(rand.Intn(6)) * time.Second)
+			host.UptimeSeconds += step
+		} else if config.RandomMetrics && rand.Float64() < 0.01 {
+			// Occasionally bring an offline host back online
+			host.Status = "online"
+			host.LastSeen = now
+			if len(host.Containers) == 0 {
+				host.Containers = generateDockerContainers(host.Hostname, i, config)
+			}
+		}
+
+		running := 0
+		flagged := 0
+
+		for j := range host.Containers {
+			container := &host.Containers[j]
+			state := strings.ToLower(container.State)
+			health := strings.ToLower(container.Health)
+
+			if state != "running" {
+				if health == "unhealthy" || health == "starting" {
+					flagged++
+				}
+
+				if config.RandomMetrics && (state == "exited" || state == "paused") && rand.Float64() < 0.02 {
+					container.State = "running"
+					container.Status = "Up a few seconds"
+					container.Health = "starting"
+					container.CPUPercent = clampFloat(rand.Float64()*35, 2, 90)
+					container.MemoryPercent = clampFloat(25+rand.Float64()*40, 5, 85)
+					if container.MemoryLimit > 0 {
+						container.MemoryUsage = int64(float64(container.MemoryLimit) * (container.MemoryPercent / 100.0))
+					}
+					container.UptimeSeconds = step
+					start := now.Add(-time.Duration(container.UptimeSeconds) * time.Second)
+					container.StartedAt = &start
+					container.FinishedAt = nil
+					state = "running"
+					health = "starting"
+				} else {
+					continue
+				}
+			}
+
+			if state == "running" {
+				running++
+
+				if config.RandomMetrics {
+					cpuChange := (rand.Float64() - 0.5) * 6
+					container.CPUPercent = clampFloat(container.CPUPercent+cpuChange, 0, 190)
+
+					memChange := (rand.Float64() - 0.5) * 4
+					container.MemoryPercent = clampFloat(container.MemoryPercent+memChange, 1, 97)
+					if container.MemoryLimit > 0 {
+						container.MemoryUsage = int64(float64(container.MemoryLimit) * (container.MemoryPercent / 100.0))
+					}
+
+					container.UptimeSeconds += step
+
+					switch health {
+					case "unhealthy":
+						if rand.Float64() < 0.3 {
+							container.Health = "healthy"
+							health = "healthy"
+						}
+					case "starting":
+						if rand.Float64() < 0.5 {
+							container.Health = "healthy"
+							health = "healthy"
+						}
+					default:
+						if rand.Float64() < 0.03 {
+							container.Health = "unhealthy"
+							health = "unhealthy"
+						} else if rand.Float64() < 0.04 {
+							container.Health = "starting"
+							health = "starting"
+						}
+					}
+
+					if rand.Float64() < 0.01 {
+						container.RestartCount++
+					}
+				}
+
+				if health == "unhealthy" || health == "starting" {
+					flagged++
+				}
+			}
+		}
+
+		if data.ConnectionHealth != nil {
+			data.ConnectionHealth[dockerConnectionPrefix+host.ID] = host.Status != "offline"
+		}
+
+		if host.Status == "offline" {
+			continue
+		}
+
+		total := len(host.Containers)
+		if total == 0 {
+			host.Status = "offline"
+			if data.ConnectionHealth != nil {
+				data.ConnectionHealth[dockerConnectionPrefix+host.ID] = false
+			}
+			continue
+		}
+
+		if running == 0 {
+			host.Status = "offline"
+			host.LastSeen = now.Add(-90 * time.Second)
+			if data.ConnectionHealth != nil {
+				data.ConnectionHealth[dockerConnectionPrefix+host.ID] = false
+			}
+			continue
+		}
+
+		stopped := total - running
+		if flagged > 0 || float64(stopped)/float64(total) > 0.35 {
+			host.Status = "degraded"
+		} else {
+			host.Status = "online"
+		}
+	}
 }
 
 func generateDisksForNode(node models.Node) []models.PhysicalDisk {

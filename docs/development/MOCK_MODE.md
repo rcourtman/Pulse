@@ -34,6 +34,8 @@ PULSE_MOCK_MODE=false              # Disabled by default
 PULSE_MOCK_NODES=7
 PULSE_MOCK_VMS_PER_NODE=5
 PULSE_MOCK_LXCS_PER_NODE=8
+PULSE_MOCK_DOCKER_HOSTS=3
+PULSE_MOCK_DOCKER_CONTAINERS=12
 PULSE_MOCK_RANDOM_METRICS=true
 PULSE_MOCK_STOPPED_PERCENT=20
 ```
@@ -54,6 +56,8 @@ The `.local` file overrides values from `mock.env`, and is gitignored to keep yo
 - `PULSE_MOCK_NODES`: Number of nodes to generate (default: 7)
 - `PULSE_MOCK_VMS_PER_NODE`: Average VMs per node (default: 5)
 - `PULSE_MOCK_LXCS_PER_NODE`: Average containers per node (default: 8)
+- `PULSE_MOCK_DOCKER_HOSTS`: Number of Docker hosts to generate (default: 3)
+- `PULSE_MOCK_DOCKER_CONTAINERS`: Average containers per Docker host (default: 12)
 - `PULSE_MOCK_RANDOM_METRICS`: Enable metric fluctuations (`true`/`false`)
 - `PULSE_MOCK_STOPPED_PERCENT`: Percentage of guests in stopped state (default: 20)
 

@@ -2,7 +2,7 @@
 set -e
 
 # Pulse Docker Agent Installer/Uninstaller
-# Install: curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --url http://pulse.example.com
+# Install: curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --url http://pulse.example.com --token <api-token>
 # Uninstall: curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --uninstall
 
 PULSE_URL=""
@@ -12,6 +12,7 @@ UNRAID_STARTUP="/boot/config/go.d/pulse-docker-agent.sh"
 LOG_PATH="/var/log/pulse-docker-agent.log"
 INTERVAL="30s"
 UNINSTALL=false
+TOKEN="${PULSE_TOKEN:-}"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -28,8 +29,14 @@ while [[ $# -gt 0 ]]; do
       UNINSTALL=true
       shift
       ;;
+    --token)
+      TOKEN="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
+      echo "Usage: $0 --url <Pulse URL> --token <API token> [--interval 30s]"
+      echo "       $0 --uninstall"
       exit 1
       ;;
   esac
@@ -98,14 +105,21 @@ if [ "$UNINSTALL" = true ]; then
     exit 0
 fi
 
-# Validate URL for install
-if [[ -z "$PULSE_URL" ]]; then
-  echo "Error: --url parameter is required for installation"
-  echo ""
-  echo "Usage:"
-  echo "  Install:   $0 --url http://pulse.example.com [--interval 30s]"
-  echo "  Uninstall: $0 --uninstall"
-  exit 1
+# Validate URL and token for install
+if [[ "$UNINSTALL" != true ]]; then
+  if [[ -z "$PULSE_URL" ]]; then
+    echo "Error: --url parameter is required for installation"
+    echo ""
+    echo "Usage:"
+    echo "  Install:   $0 --url http://pulse.example.com --token <api-token> [--interval 30s]"
+    echo "  Uninstall: $0 --uninstall"
+    exit 1
+  fi
+
+  if [[ -z "$TOKEN" ]]; then
+    echo "Error: API token required. Provide via --token or PULSE_TOKEN environment variable."
+    exit 1
+  fi
 fi
 
 echo "==================================="
@@ -114,6 +128,9 @@ echo "==================================="
 echo "Pulse URL: $PULSE_URL"
 echo "Install path: $AGENT_PATH"
 echo "Interval: $INTERVAL"
+if [[ "$UNINSTALL" != true ]]; then
+  echo "API token: (provided)"
+fi
 echo ""
 
 # Check if Docker is installed
@@ -162,23 +179,19 @@ if ! command -v systemctl &> /dev/null || [ ! -d /etc/systemd/system ]; then
 
         # Create startup script
         STARTUP_SCRIPT="/boot/config/go.d/pulse-docker-agent.sh"
-        cat > "$STARTUP_SCRIPT" << 'EOFSCRIPT'
+        cat > "$STARTUP_SCRIPT" <<EOF
 #!/bin/bash
 # Pulse Docker Agent - Auto-start script
 sleep 10  # Wait for Docker to be ready
-/usr/local/bin/pulse-docker-agent --url PULSE_URL_PLACEHOLDER --token disabled --interval INTERVAL_PLACEHOLDER > /var/log/pulse-docker-agent.log 2>&1 &
-EOFSCRIPT
-
-        # Replace placeholders
-        sed -i "s|PULSE_URL_PLACEHOLDER|$PULSE_URL|g" "$STARTUP_SCRIPT"
-        sed -i "s|INTERVAL_PLACEHOLDER|$INTERVAL|g" "$STARTUP_SCRIPT"
+PULSE_TOKEN="$TOKEN" $AGENT_PATH --url "$PULSE_URL" --interval "$INTERVAL" > /var/log/pulse-docker-agent.log 2>&1 &
+EOF
 
         chmod +x "$STARTUP_SCRIPT"
         echo "✓ Startup script created at $STARTUP_SCRIPT"
 
         # Start the agent now
         echo "Starting agent..."
-        $AGENT_PATH --url $PULSE_URL --token disabled --interval $INTERVAL > /var/log/pulse-docker-agent.log 2>&1 &
+        PULSE_TOKEN="$TOKEN" $AGENT_PATH --url "$PULSE_URL" --interval "$INTERVAL" > /var/log/pulse-docker-agent.log 2>&1 &
 
         echo ""
         echo "==================================="
@@ -198,7 +211,7 @@ EOFSCRIPT
     echo "The agent has been installed to: $AGENT_PATH"
     echo ""
     echo "To run manually:"
-    echo "  $AGENT_PATH --url $PULSE_URL --token disabled --interval $INTERVAL &"
+    echo "  PULSE_TOKEN=<api-token> $AGENT_PATH --url $PULSE_URL --interval $INTERVAL &"
     echo ""
     echo "To make it start automatically, add the above command to your system's startup scripts."
     echo ""
@@ -215,7 +228,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$AGENT_PATH --url $PULSE_URL --token disabled --interval $INTERVAL
+Environment="PULSE_TOKEN=$TOKEN"
+ExecStart=$AGENT_PATH --url "$PULSE_URL" --interval "$INTERVAL"
 Restart=always
 RestartSec=5s
 User=root

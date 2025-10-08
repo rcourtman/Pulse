@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-# Use Go 1.23 if available
+# Use Go 1.24 if available
 if [ -x /usr/local/go/bin/go ]; then
     export PATH=/usr/local/go/bin:$PATH
 fi
@@ -46,12 +46,22 @@ for build_name in "${!builds[@]}"; do
     # Get build environment
     build_env="${builds[$build_name]}"
     
-    # Build binary with version info
+    build_time=$(date -u '+%Y-%m-%d_%H:%M:%S')
+    git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+
+    # Build backend binary with version info
     env $build_env go build \
-        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.GitCommit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
+        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit}" \
         -trimpath \
         -o "$BUILD_DIR/pulse-$build_name" \
         ./cmd/pulse
+
+    # Build docker agent binary
+    env $build_env go build \
+        -ldflags="-s -w" \
+        -trimpath \
+        -o "$BUILD_DIR/pulse-docker-agent-$build_name" \
+        ./cmd/pulse-docker-agent
     
     # Create release archive with proper structure
     tar_name="pulse-v${VERSION}-${build_name}.tar.gz"
@@ -61,8 +71,9 @@ for build_name in "${!builds[@]}"; do
     rm -rf "$staging_dir"
     mkdir -p "$staging_dir/bin"
     
-    # Copy binary and VERSION file
+    # Copy binaries and VERSION file
     cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
+    cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$staging_dir/bin/pulse-docker-agent"
     echo "$VERSION" > "$staging_dir/VERSION"
     
     # Create tarball from staging directory
@@ -84,7 +95,8 @@ mkdir -p "$universal_dir/bin"
 
 # Copy all binaries to bin/ directory to maintain consistent structure
 for build_name in "${!builds[@]}"; do
-    cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/"
+    cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/pulse-${build_name}"
+    cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$universal_dir/bin/pulse-docker-agent-${build_name}"
 done
 
 # Create a detection script that creates the pulse symlink based on architecture
@@ -110,6 +122,29 @@ case "$ARCH" in
 esac
 EOF
 chmod +x "$universal_dir/bin/pulse"
+
+cat > "$universal_dir/bin/pulse-docker-agent" << 'EOF'
+#!/bin/sh
+# Auto-detect architecture and run appropriate pulse-docker-agent binary
+
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        exec "$(dirname "$0")/pulse-docker-agent-linux-amd64" "$@"
+        ;;
+    aarch64|arm64)
+        exec "$(dirname "$0")/pulse-docker-agent-linux-arm64" "$@"
+        ;;
+    armv7l|armhf)
+        exec "$(dirname "$0")/pulse-docker-agent-linux-armv7" "$@"
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH" >&2
+        exit 1
+        ;;
+esac
+EOF
+chmod +x "$universal_dir/bin/pulse-docker-agent"
 
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
