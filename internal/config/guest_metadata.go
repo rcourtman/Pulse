@@ -91,6 +91,32 @@ func (s *GuestMetadataStore) Delete(guestID string) error {
 	return s.save()
 }
 
+// ReplaceAll replaces all metadata entries and persists them to disk.
+func (s *GuestMetadataStore) ReplaceAll(metadata map[string]*GuestMetadata) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.metadata = make(map[string]*GuestMetadata)
+
+	if metadata != nil {
+		for guestID, meta := range metadata {
+			if meta == nil {
+				continue
+			}
+
+			clone := *meta
+			clone.ID = guestID
+			// Ensure slice copy is not nil to allow JSON marshalling of empty tags
+			if clone.Tags == nil {
+				clone.Tags = []string{}
+			}
+			s.metadata[guestID] = &clone
+		}
+	}
+
+	return s.save()
+}
+
 // Load reads metadata from disk
 func (s *GuestMetadataStore) Load() error {
 	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
