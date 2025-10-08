@@ -265,12 +265,16 @@ type AlertConfig struct {
 	CustomRules    []CustomAlertRule          `json:"customRules,omitempty"`
 	Schedule       ScheduleConfig             `json:"schedule"`
 	// Global disable flags per resource type
-	DisableAllNodes            bool `json:"disableAllNodes"`            // Disable all alerts for Proxmox nodes
-	DisableAllGuests           bool `json:"disableAllGuests"`           // Disable all alerts for VMs/containers
-	DisableAllStorage          bool `json:"disableAllStorage"`          // Disable all alerts for storage
-	DisableAllPBS              bool `json:"disableAllPBS"`              // Disable all alerts for PBS servers
-	DisableAllDockerHosts      bool `json:"disableAllDockerHosts"`      // Disable all alerts for Docker hosts
-	DisableAllDockerContainers bool `json:"disableAllDockerContainers"` // Disable all alerts for Docker containers
+	DisableAllNodes              bool `json:"disableAllNodes"`              // Disable all alerts for Proxmox nodes
+	DisableAllGuests             bool `json:"disableAllGuests"`             // Disable all alerts for VMs/containers
+	DisableAllStorage            bool `json:"disableAllStorage"`            // Disable all alerts for storage
+	DisableAllPBS                bool `json:"disableAllPBS"`                // Disable all alerts for PBS servers
+	DisableAllDockerHosts        bool `json:"disableAllDockerHosts"`        // Disable all alerts for Docker hosts
+	DisableAllDockerContainers   bool `json:"disableAllDockerContainers"`   // Disable all alerts for Docker containers
+	DisableAllNodesOffline       bool `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
+	DisableAllGuestsOffline      bool `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
+	DisableAllPBSOffline         bool `json:"disableAllPBSOffline"`         // Disable PBS offline alerts globally
+	DisableAllDockerHostsOffline bool `json:"disableAllDockerHostsOffline"` // Disable Docker host offline alerts globally
 	// New configuration options
 	MinimumDelta      float64        `json:"minimumDelta"`      // Minimum % change to trigger new alert
 	SuppressionWindow int            `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
@@ -358,13 +362,13 @@ func NewManager() *Manager {
 			Enabled: true,
 			GuestDefaults: ThresholdConfig{
 				PoweredOffSeverity: AlertLevelWarning,
-				CPU:        &HysteresisThreshold{Trigger: 80, Clear: 75},
-				Memory:     &HysteresisThreshold{Trigger: 85, Clear: 80},
-				Disk:       &HysteresisThreshold{Trigger: 90, Clear: 85},
-				DiskRead:   &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
-				DiskWrite:  &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
-				NetworkIn:  &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
-				NetworkOut: &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
+				CPU:                &HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory:             &HysteresisThreshold{Trigger: 85, Clear: 80},
+				Disk:               &HysteresisThreshold{Trigger: 90, Clear: 85},
+				DiskRead:           &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
+				DiskWrite:          &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
+				NetworkIn:          &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
+				NetworkOut:         &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
 			},
 			NodeDefaults: ThresholdConfig{
 				CPU:         &HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -538,7 +542,6 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	config.GuestDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
 	config.NodeDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
 
-
 	m.config = config
 	for id, override := range m.config.Overrides {
 		override.PoweredOffSeverity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
@@ -548,6 +551,9 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		}
 		m.config.Overrides[id] = override
 	}
+
+	m.applyGlobalOfflineSettingsLocked()
+
 	log.Info().
 		Bool("enabled", config.Enabled).
 		Interface("guestDefaults", config.GuestDefaults).
@@ -555,6 +561,62 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 
 	// Re-evaluate active alerts against new thresholds
 	m.reevaluateActiveAlertsLocked()
+}
+
+// applyGlobalOfflineSettingsLocked clears tracking and active alerts for globally disabled offline detectors.
+// Caller must hold m.mu.
+func (m *Manager) applyGlobalOfflineSettingsLocked() {
+	if m.config.DisableAllNodesOffline {
+		var nodeAlerts []string
+		for alertID := range m.activeAlerts {
+			if strings.HasPrefix(alertID, "node-offline-") {
+				nodeAlerts = append(nodeAlerts, alertID)
+			}
+		}
+		for _, alertID := range nodeAlerts {
+			m.clearAlertNoLock(alertID)
+		}
+		m.nodeOfflineCount = make(map[string]int)
+	}
+
+	if m.config.DisableAllPBSOffline {
+		var pbsAlerts []string
+		for alertID, alert := range m.activeAlerts {
+			if strings.HasPrefix(alertID, "pbs-offline-") {
+				pbsAlerts = append(pbsAlerts, alertID)
+				delete(m.offlineConfirmations, alert.ResourceID)
+			}
+		}
+		for _, alertID := range pbsAlerts {
+			m.clearAlertNoLock(alertID)
+		}
+	}
+
+	if m.config.DisableAllGuestsOffline {
+		var guestAlerts []string
+		for alertID, alert := range m.activeAlerts {
+			if strings.HasPrefix(alertID, "guest-powered-off-") {
+				guestAlerts = append(guestAlerts, alertID)
+				delete(m.offlineConfirmations, alert.ResourceID)
+			}
+		}
+		for _, alertID := range guestAlerts {
+			m.clearAlertNoLock(alertID)
+		}
+	}
+
+	if m.config.DisableAllDockerHostsOffline {
+		var hostAlerts []string
+		for alertID := range m.activeAlerts {
+			if strings.HasPrefix(alertID, "docker-host-offline-") {
+				hostAlerts = append(hostAlerts, alertID)
+			}
+		}
+		for _, alertID := range hostAlerts {
+			m.clearAlertNoLock(alertID)
+		}
+		m.dockerOfflineCount = make(map[string]int)
+	}
 }
 
 // reevaluateActiveAlertsLocked re-evaluates all active alerts against the current configuration
@@ -963,17 +1025,19 @@ func (m *Manager) GetConfig() AlertConfig {
 // CheckGuest checks a guest (VM or container) against thresholds
 func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	m.mu.RLock()
-	if !m.config.Enabled {
-		m.mu.RUnlock()
+	enabled := m.config.Enabled
+	disableAllGuests := m.config.DisableAllGuests
+	disableAllGuestsOffline := m.config.DisableAllGuestsOffline
+	m.mu.RUnlock()
+
+	if !enabled {
 		log.Debug().Msg("CheckGuest: alerts disabled globally")
 		return
 	}
-	if m.config.DisableAllGuests {
-		m.mu.RUnlock()
+	if disableAllGuests {
 		log.Debug().Msg("CheckGuest: all guest alerts disabled")
 		return
 	}
-	m.mu.RUnlock()
 
 	var guestID, name, node, guestType, status string
 	var cpu, memUsage, diskUsage float64
@@ -1031,7 +1095,15 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	if status != "running" {
 		// Check for powered-off state and generate alert if configured
 		if status == "stopped" {
-			m.checkGuestPoweredOff(guestID, name, node, instanceName, guestType)
+			if disableAllGuestsOffline {
+				// Clear any pending powered-off tracking and alerts when globally disabled
+				m.mu.Lock()
+				delete(m.offlineConfirmations, guestID)
+				m.mu.Unlock()
+				m.clearAlert(fmt.Sprintf("guest-powered-off-%s", guestID))
+			} else {
+				m.checkGuestPoweredOff(guestID, name, node, instanceName, guestType)
+			}
 		} else {
 			// For paused/suspended, clear powered-off alert
 			m.clearGuestPoweredOffAlert(guestID, name)
@@ -1190,18 +1262,27 @@ func (m *Manager) CheckNode(node models.Node) {
 		m.mu.RUnlock()
 		return
 	}
+	disableNodesOffline := m.config.DisableAllNodesOffline
 	thresholds := m.config.NodeDefaults
 	if override, exists := m.config.Overrides[node.ID]; exists {
 		thresholds = m.applyThresholdOverride(thresholds, override)
 	}
 	m.mu.RUnlock()
 
-	// CRITICAL: Check if node is offline first
-	if node.Status == "offline" || node.ConnectionHealth == "error" || node.ConnectionHealth == "failed" {
-		m.checkNodeOffline(node)
+	if disableNodesOffline {
+		// Clear tracking and any existing offline alerts when globally disabled
+		m.mu.Lock()
+		delete(m.nodeOfflineCount, node.ID)
+		m.mu.Unlock()
+		m.clearAlert(fmt.Sprintf("node-offline-%s", node.ID))
 	} else {
-		// Clear any existing offline alert if node is back online
-		m.clearNodeOfflineAlert(node)
+		// CRITICAL: Check if node is offline first
+		if node.Status == "offline" || node.ConnectionHealth == "error" || node.ConnectionHealth == "failed" {
+			m.checkNodeOffline(node)
+		} else {
+			// Clear any existing offline alert if node is back online
+			m.clearNodeOfflineAlert(node)
+		}
 	}
 
 	// Check each metric (only if node is online) - checkMetric will skip if threshold is nil or <= 0
@@ -1240,14 +1321,23 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	// Use node defaults for PBS (same as nodes: CPU, Memory)
 	cpuThreshold := m.config.NodeDefaults.CPU
 	memoryThreshold := m.config.NodeDefaults.Memory
+	disablePBSOffline := m.config.DisableAllPBSOffline
 	m.mu.RUnlock()
 
-	// Check if PBS is offline first (similar to nodes)
-	if pbs.Status == "offline" || pbs.ConnectionHealth == "error" || pbs.ConnectionHealth == "unhealthy" {
-		m.checkPBSOffline(pbs)
+	if disablePBSOffline {
+		// Clear tracking and any existing offline alerts when globally disabled
+		m.mu.Lock()
+		delete(m.offlineConfirmations, pbs.ID)
+		m.mu.Unlock()
+		m.clearAlert(fmt.Sprintf("pbs-offline-%s", pbs.ID))
 	} else {
-		// Clear any existing offline alert if PBS is back online
-		m.clearPBSOfflineAlert(pbs)
+		// Check if PBS is offline first (similar to nodes)
+		if pbs.Status == "offline" || pbs.ConnectionHealth == "error" || pbs.ConnectionHealth == "unhealthy" {
+			m.checkPBSOffline(pbs)
+		} else {
+			// Clear any existing offline alert if PBS is back online
+			m.clearPBSOfflineAlert(pbs)
+		}
 	}
 
 	// If alerts are disabled for this PBS instance, clear any existing alerts and return
@@ -1511,12 +1601,21 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 		m.mu.RUnlock()
 		return
 	}
+	disableDockerHostsOffline := m.config.DisableAllDockerHostsOffline
 	m.mu.RUnlock()
 
 	alertID := fmt.Sprintf("docker-host-offline-%s", host.ID)
 	resourceID := fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID))
 	instanceName := dockerInstanceName(host)
 	nodeName := strings.TrimSpace(host.Hostname)
+
+	if disableDockerHostsOffline {
+		m.mu.Lock()
+		delete(m.dockerOfflineCount, host.ID)
+		m.mu.Unlock()
+		m.clearAlert(alertID)
+		return
+	}
 
 	var disableConnectivity bool
 	m.mu.RLock()
@@ -3330,15 +3429,15 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 		thresholds = m.config.GuestDefaults
 	}
 
-    severity := normalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
+	severity := normalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
 
-    // Check if powered-off alerts are disabled for this guest
-    if thresholds.Disabled || thresholds.DisableConnectivity {
-        // Powered-off alerts are disabled, clear any existing alert and return
-        if _, alertExists := m.activeAlerts[alertID]; alertExists {
-            m.clearAlertNoLock(alertID)
-            log.Debug().
-                Str("guest", name).
+	// Check if powered-off alerts are disabled for this guest
+	if thresholds.Disabled || thresholds.DisableConnectivity {
+		// Powered-off alerts are disabled, clear any existing alert and return
+		if _, alertExists := m.activeAlerts[alertID]; alertExists {
+			m.clearAlertNoLock(alertID)
+			log.Debug().
+				Str("guest", name).
 				Msg("Guest powered-off alert cleared (alerts disabled)")
 		}
 		delete(m.offlineConfirmations, guestID)
@@ -3346,12 +3445,12 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 	}
 
 	// Check if alert already exists
-    if alert, exists := m.activeAlerts[alertID]; exists {
-        // Alert already exists, just update LastSeen
-        alert.LastSeen = time.Now()
-        alert.Level = severity
-        return
-    }
+	if alert, exists := m.activeAlerts[alertID]; exists {
+		// Alert already exists, just update LastSeen
+		alert.LastSeen = time.Now()
+		alert.Level = severity
+		return
+	}
 
 	// Increment confirmation count
 	m.offlineConfirmations[guestID]++
@@ -3376,10 +3475,10 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 	}
 
 	// Create new powered-off alert after confirmation
-    alert := &Alert{
-        ID:           alertID,
-        Type:         "powered-off",
-        Level:        severity,
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "powered-off",
+		Level:        severity,
 		ResourceID:   guestID,
 		ResourceName: name,
 		Node:         node,
