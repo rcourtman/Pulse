@@ -130,6 +130,19 @@ GET /api/state
 
 Response includes all monitored nodes, VMs, containers, storage, and backups.
 
+### Docker Agent Integration
+Accept reports from the optional Docker agent to track container workloads outside Proxmox.
+
+```bash
+POST /api/agents/docker/report        # Submit agent heartbeat payloads (JSON)
+DELETE /api/agents/docker/hosts/<id>  # Remove a Docker host that has gone offline
+GET /api/agent/version                # Retrieve the bundled Docker agent version
+GET /install-docker-agent.sh          # Download the installation convenience script
+GET /download/pulse-docker-agent      # Download the standalone Docker agent binary
+```
+
+Agent routes require authentication. Use an API token or an authenticated session when calling them from automation.
+
 ## Monitoring Data
 
 ### Charts Data
@@ -197,8 +210,8 @@ Note: Manual subnet scanning via POST is currently not available through the API
 Manage system-wide settings.
 
 ```bash
-GET /api/system/settings         # Get current system settings
-POST /api/system/settings/update  # Update system settings
+GET /api/system/settings         # Get current system settings (includes env overrides)
+POST /api/system/settings/update # Update system settings (admin only)
 ```
 
 ## Configuration
@@ -238,6 +251,17 @@ Get and update system configuration.
 GET /api/config/system   # Get system config
 PUT /api/config/system   # Update system config
 ```
+
+### Mock Mode Control
+Toggle mock data generation used for demos and development.
+
+```bash
+GET /api/system/mock-mode       # Report current mock mode status
+POST /api/system/mock-mode      # Enable/disable mock mode (admin only)
+PUT /api/system/mock-mode       # Same as POST, but idempotent for tooling
+```
+
+These endpoints back the `npm run mock:on|off|status` scripts and trigger the same hot reload behavior.
 
 ### Security Configuration
 
