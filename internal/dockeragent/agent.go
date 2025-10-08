@@ -240,7 +240,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (
 	}
 	defer statsResp.Body.Close()
 
-	var stats types.StatsJSON
+	var stats containertypes.StatsResponse
 	if err := json.NewDecoder(statsResp.Body).Decode(&stats); err != nil {
 		return agentsdocker.Container{}, fmt.Errorf("decode stats: %w", err)
 	}
@@ -359,7 +359,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 
 const agentVersion = "0.1.0"
 
-func calculateCPUPercent(stats types.StatsJSON, hostCPUs int) float64 {
+func calculateCPUPercent(stats containertypes.StatsResponse, hostCPUs int) float64 {
 	totalDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
 	systemDelta := float64(stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage)
 
@@ -382,7 +382,7 @@ func calculateCPUPercent(stats types.StatsJSON, hostCPUs int) float64 {
 	return safeFloat((totalDelta / systemDelta) * float64(onlineCPUs) * 100.0)
 }
 
-func calculateMemoryUsage(stats types.StatsJSON) (usage int64, limit int64, percent float64) {
+func calculateMemoryUsage(stats containertypes.StatsResponse) (usage int64, limit int64, percent float64) {
 	usage = int64(stats.MemoryStats.Usage)
 	if cache, ok := stats.MemoryStats.Stats["cache"]; ok {
 		usage -= int64(cache)
