@@ -71,7 +71,8 @@ function DockerRoute() {
     return <div>Loading...</div>;
   }
   const { state, activeAlerts } = wsContext;
-  return <DockerHosts hosts={state().dockerHosts} activeAlerts={activeAlerts} />;
+  const hosts = state().dockerHosts || [];
+  return <DockerHosts hosts={hosts} activeAlerts={activeAlerts} />;
 }
 
 function App() {
