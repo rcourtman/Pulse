@@ -16,6 +16,7 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
+import { isNodeOnline } from '@/utils/status';
 
 interface DashboardProps {
   vms: VM[];
@@ -105,6 +106,28 @@ export function Dashboard(props: DashboardProps) {
     });
     return map;
   });
+
+  const resolveParentNode = (guest: VM | Container): Node | undefined => {
+    if (!guest) return undefined;
+    const nodes = nodeByInstance();
+
+    if (guest.id) {
+      const lastDash = guest.id.lastIndexOf('-');
+      if (lastDash > 0) {
+        const nodeId = guest.id.slice(0, lastDash);
+        if (nodes[nodeId]) {
+          return nodes[nodeId];
+        }
+      }
+    }
+
+    const compositeKey = `${guest.instance}-${guest.node}`;
+    if (nodes[compositeKey]) {
+      return nodes[compositeKey];
+    }
+
+    return undefined;
+  };
 
 
   // Persist filter states to localStorage
@@ -947,7 +970,6 @@ export function Dashboard(props: DashboardProps) {
                   >
                     {([instanceId, guests]) => {
                       const node = nodeByInstance()[instanceId];
-                      const isNodeOnline = !!(node && node.status === 'online' && (node.uptime || 0) > 0);
 
                       return (
                       <>
@@ -967,6 +989,8 @@ export function Dashboard(props: DashboardProps) {
                                 const metadata =
                                   guestMetadata()[guestId] ||
                                   guestMetadata()[`${guest.node}-${guest.vmid}`];
+                                const parentNode = node ?? resolveParentNode(guest);
+                                const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
                                 return (
                                   <GuestRow
                                     guest={guest}
@@ -974,7 +998,7 @@ export function Dashboard(props: DashboardProps) {
                                     customUrl={metadata?.customUrl}
                                     onTagClick={handleTagClick}
                                     activeSearch={search()}
-                                    parentNodeOnline={isNodeOnline}
+                                    parentNodeOnline={parentNodeOnline}
                                   />
                                 );
                               })()}
