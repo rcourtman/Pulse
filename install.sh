@@ -180,6 +180,83 @@ check_docker_environment() {
     fi
 }
 
+# Discover host bridge interfaces, including Open vSwitch bridges.
+detect_network_bridges() {
+    local preferred=()
+    local fallback=()
+    local ip_output=""
+    ip_output=$(ip -o link show type bridge 2>/dev/null || true)
+    if [[ -n "$ip_output" ]]; then
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            local iface=${line#*: }
+            iface=${iface%%:*}
+            iface=${iface%%@*}
+            case "$iface" in
+                docker*|br-*|virbr*|cni*|cilium*|flannel*|kube-*|veth*|tap*|ovs-system)
+                    continue
+                    ;;
+                vmbr*|vnet*|ovs*)
+                    preferred+=("$iface")
+                    ;;
+                *)
+                    fallback+=("$iface")
+                    ;;
+            esac
+        done <<< "$ip_output"
+    fi
+    
+    if command -v ovs-vsctl >/dev/null 2>&1; then
+        local ovs_output=""
+        ovs_output=$(ovs-vsctl list-br 2>/dev/null || true)
+        if [[ -n "$ovs_output" ]]; then
+            while IFS= read -r iface; do
+                [[ -z "$iface" ]] && continue
+                case "$iface" in
+                    docker*|br-*|virbr*|cni*|cilium*|flannel*|kube-*|veth*|tap*|ovs-system)
+                        continue
+                        ;;
+                    vmbr*|vnet*|ovs*)
+                        preferred+=("$iface")
+                        ;;
+                    *)
+                        fallback+=("$iface")
+                        ;;
+                esac
+            done <<< "$ovs_output"
+        fi
+    fi
+    
+    local combined=()
+    if [[ ${#preferred[@]} -gt 0 ]]; then
+        combined=("${preferred[@]}")
+    fi
+    if [[ ${#fallback[@]} -gt 0 ]]; then
+        combined+=("${fallback[@]}")
+    fi
+    
+    if [[ ${#combined[@]} -gt 0 ]]; then
+        printf '%s\n' "${combined[@]}" | awk '!seen[$0]++' | paste -sd' ' -
+    fi
+}
+
+is_bridge_interface() {
+    local iface="$1"
+    [[ -z "$iface" ]] && return 1
+    
+    local bridge_info=""
+    bridge_info=$(ip -o link show "$iface" type bridge 2>/dev/null || true)
+    if [[ -n "$bridge_info" ]]; then
+        return 0
+    fi
+    
+    if command -v ovs-vsctl >/dev/null 2>&1 && ovs-vsctl br-exists "$iface" &>/dev/null; then
+        return 0
+    fi
+    
+    return 1
+}
+
 create_lxc_container() {
     # Set up trap to cleanup on interrupt (CTID will be set later)
     trap 'echo ""; print_error "Installation cancelled"; exit 1' INT
@@ -381,7 +458,7 @@ create_lxc_container() {
     print_info "Detecting available resources..."
     
     # Get available bridges
-    local BRIDGES=$(ip link show type bridge | grep -E '^[0-9]+:' | cut -d: -f2 | tr -d ' ' | grep -E '^(vmbr|vnet)' | paste -sd' ' -)
+    local BRIDGES=$(detect_network_bridges)
     
     # First try to find the default network interface (could be bridge or regular interface)
     local DEFAULT_INTERFACE=$(ip route | grep default | head -1 | grep -oP 'dev \K\S+')
@@ -389,7 +466,7 @@ create_lxc_container() {
     # Check if the default interface is a bridge
     local DEFAULT_BRIDGE=""
     if [[ -n "$DEFAULT_INTERFACE" ]]; then
-        if ip link show "$DEFAULT_INTERFACE" type bridge &>/dev/null; then
+        if is_bridge_interface "$DEFAULT_INTERFACE"; then
             # Default interface is a bridge, use it
             DEFAULT_BRIDGE="$DEFAULT_INTERFACE"
         fi
@@ -450,7 +527,7 @@ create_lxc_container() {
             fi
         else
             echo "No network bridges detected"
-            echo "You may need to create a bridge first (e.g., vmbr0)"
+            echo "You may need to create a Linux bridge or Open vSwitch bridge first (e.g., vmbr0)"
             set +e
             safe_read "Enter network bridge name: " bridge
             set -e
@@ -588,7 +665,7 @@ create_lxc_container() {
             fi
         else
             print_error "No network bridges detected on this system"
-            print_info "You may need to create a bridge first (e.g., vmbr0)"
+            print_info "You may need to create a Linux bridge or Open vSwitch bridge first (e.g., vmbr0)"
             set +e
             safe_read "Enter network bridge name to use: " bridge
             set -e
