@@ -14,7 +14,7 @@ import { renderDockerStatusBadge } from './DockerStatusBadge';
 
 interface DockerHostsProps {
   hosts: DockerHost[];
-  activeAlerts?: Record<string, Alert>;
+  activeAlerts?: Record<string, Alert> | any; // Can be Store or plain object
 }
 
 interface ContainerEntry {
@@ -129,7 +129,9 @@ const DockerContainerRow: Component<{
   const alertStyles = createMemo(() => {
     if (!props.activeAlerts) return defaultAlertStyles;
     try {
-      return getAlertStyles(containerResourceId(), props.activeAlerts) || defaultAlertStyles;
+      // Convert Store to plain object if needed
+      const alertsObj = typeof props.activeAlerts === 'object' ? { ...props.activeAlerts } : props.activeAlerts;
+      return getAlertStyles(containerResourceId(), alertsObj) || defaultAlertStyles;
     } catch (e) {
       console.warn('Error getting alert styles for container:', containerResourceId(), e);
       return defaultAlertStyles;
