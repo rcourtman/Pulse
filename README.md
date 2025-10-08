@@ -71,6 +71,9 @@ Your infrastructure data is yours alone.
 # Recommended: Official installer (auto-detects Proxmox and creates container)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 
+# Need to roll back to a previous release? Pass the tag you want
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.20.0
+
 # Alternative: Docker
 docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 
