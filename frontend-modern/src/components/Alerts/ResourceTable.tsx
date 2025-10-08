@@ -5,6 +5,28 @@ import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
+const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
+  'cpu %': 'Percent CPU utilization allowed before an alert fires.',
+  'memory %': 'Percent memory usage threshold for triggering alerts.',
+  'disk %': 'Percent disk usage threshold for this resource.',
+  'disk r mb/s': 'Maximum sustained disk read throughput before alerting.',
+  'disk w mb/s': 'Maximum sustained disk write throughput before alerting.',
+  'net in mb/s': 'Inbound network throughput threshold for alerts.',
+  'net out mb/s': 'Outbound network throughput threshold for alerts.',
+  'usage %': 'Storage capacity usage percentage that triggers an alert.',
+  'temp °c': 'CPU temperature limit for node alerts.',
+  'temperature °c': 'CPU temperature limit for node alerts.',
+  temperature: 'CPU temperature limit for node alerts.',
+  'restart count': 'Maximum container restarts within the evaluation window.',
+  'restart window': 'Time window used to evaluate the restart count threshold.',
+  'restart window (s)': 'Time window used to evaluate the restart count threshold.',
+  'memory warn %': 'Warning threshold for container memory usage.',
+  'memory critical %': 'Critical threshold for container memory usage.',
+};
+
+const OFFLINE_ALERTS_TOOLTIP =
+  'Toggle default behavior for powered-off or connectivity alerts for this resource type.';
+
 export interface Resource {
   id: string;
   name: string;
@@ -28,6 +50,7 @@ export interface Resource {
   uptime?: number;
   clusterName?: string;
   isClusterMember?: boolean;
+  delaySeconds?: number;
   [key: string]: unknown;
 }
 
@@ -169,6 +192,43 @@ export function ResourceTable(props: ResourceTableProps) {
       return 95;
     }
     return 80;
+  };
+
+  const resourceDelaySeconds = (resource: Resource): number => {
+    if (typeof resource.delaySeconds === 'number' && Number.isFinite(resource.delaySeconds)) {
+      return resource.delaySeconds;
+    }
+    if (typeof props.globalDelaySeconds === 'number' && Number.isFinite(props.globalDelaySeconds)) {
+      return props.globalDelaySeconds;
+    }
+    return 0;
+  };
+
+  const formatDelayLabel = (delay: number): string => (delay <= 0 ? 'Instant' : `${delay}s`);
+
+  const isCustomDelay = (resource: Resource, delay: number): boolean => {
+    if (typeof resource.delaySeconds !== 'number') {
+      return false;
+    }
+    if (!Number.isFinite(resource.delaySeconds)) {
+      return false;
+    }
+    const globalDelay =
+      typeof props.globalDelaySeconds === 'number' && Number.isFinite(props.globalDelaySeconds)
+        ? props.globalDelaySeconds
+        : 0;
+    return resource.delaySeconds !== globalDelay;
+  };
+
+  const totalColumnCount = () =>
+    props.columns.length +
+    3 +
+    (props.showOfflineAlertsColumn ? 1 : 0) +
+    (props.showDelayColumn ? 1 : 0);
+
+  const getColumnHeaderTooltip = (column: string): string | undefined => {
+    const normalized = column.trim().toLowerCase();
+    return COLUMN_TOOLTIP_LOOKUP[column] ?? COLUMN_TOOLTIP_LOOKUP[normalized];
   };
 
   const resourceSupportsMetric = (resourceType: string | undefined, metric: string): boolean => {
@@ -345,18 +405,27 @@ export function ResourceTable(props: ResourceTableProps) {
               </th>
               <For each={props.columns}>
                 {(column) => (
-                  <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th
+                    class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    title={getColumnHeaderTooltip(column)}
+                  >
                     {column}
                   </th>
                 )}
               </For>
               <Show when={props.showOfflineAlertsColumn}>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th
+                  class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                  title={OFFLINE_ALERTS_TOOLTIP}
+                >
                   Offline Alerts
                 </th>
               </Show>
               <Show when={props.showDelayColumn}>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th
+                  class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                  title="Pulse waits for the configured alert delay before creating a notification. If the metric drops back below the threshold during this window, the alert is suppressed to reduce noise. Update the delay values using the Alert Delay column in each table."
+                >
                   Alert Delay (s)
                 </th>
               </Show>
@@ -487,13 +556,8 @@ export function ResourceTable(props: ResourceTableProps) {
                         });
                       })()}
                     </Show>
-                            </td>
-                          </Show>
-                          <Show when={props.showDelayColumn}>
-                            <td class="p-1 px-2 text-center align-middle">
-                              <span class="text-sm text-gray-400">—</span>
-                            </td>
-                          </Show>
+                  </td>
+                </Show>
                 <Show when={props.showDelayColumn}>
                   <td class="p-1 px-2 text-center align-middle">
                     <div class="flex justify-center">
@@ -531,7 +595,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       {/* Node group header */}
                       <tr class="bg-gray-50 dark:bg-gray-700/50">
                         <td
-                          colspan={props.columns.length + (props.showOfflineAlertsColumn ? 4 : 3)}
+                          colspan={totalColumnCount()}
                           class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400"
                         >
                           {renderGroupHeader(nodeName, headerMeta)}
@@ -815,6 +879,32 @@ export function ResourceTable(props: ResourceTableProps) {
                                     titleDisabled: 'Offline alerts disabled. Click to enable for this resource.',
                                     titleWhenDisabled: 'Offline alerts controlled globally',
                                   });
+                                })()}
+                              </td>
+                            </Show>
+
+                            <Show when={props.showDelayColumn}>
+                              <td class="p-1 px-2 text-center align-middle">
+                                {(() => {
+                                  const delay = resourceDelaySeconds(resource);
+                                  const label = formatDelayLabel(delay);
+                                  const custom = isCustomDelay(resource, delay);
+                                  const title = custom
+                                    ? 'Custom delay applied to this resource'
+                                    : 'Using global alert delay';
+
+                                  return (
+                                    <span
+                                      class={`text-sm ${
+                                        custom
+                                          ? 'font-medium text-blue-600 dark:text-blue-300'
+                                          : 'text-gray-600 dark:text-gray-300'
+                                      }`}
+                                      title={title}
+                                    >
+                                      {label}
+                                    </span>
+                                  );
                                 })()}
                               </td>
                             </Show>
@@ -1204,14 +1294,40 @@ export function ResourceTable(props: ResourceTableProps) {
                                     />
                                   );
                                 })()}
-                              </Show>
+                            </Show>
                           </td>
                         </Show>
 
-                          {/* Actions column */}
-                          <td class="p-1 px-2">
-                            <div class="flex items-center justify-center gap-1">
-                              <Show
+                        <Show when={props.showDelayColumn}>
+                          <td class="p-1 px-2 text-center align-middle">
+                            {(() => {
+                              const delay = resourceDelaySeconds(resource);
+                              const label = formatDelayLabel(delay);
+                              const custom = isCustomDelay(resource, delay);
+                              const title = custom
+                                ? 'Custom delay applied to this resource'
+                                : 'Using global alert delay';
+
+                              return (
+                                <span
+                                  class={`text-sm ${
+                                    custom
+                                      ? 'font-medium text-blue-600 dark:text-blue-300'
+                                      : 'text-gray-600 dark:text-gray-300'
+                                  }`}
+                                  title={title}
+                                >
+                                  {label}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        </Show>
+
+                        {/* Actions column */}
+                        <td class="p-1 px-2">
+                          <div class="flex items-center justify-center gap-1">
+                            <Show
                                 when={!isEditing()}
                                 fallback={
                                   <button
@@ -1303,7 +1419,7 @@ export function ResourceTable(props: ResourceTableProps) {
               >
                 <tr>
                   <td
-                    colspan={props.columns.length + (props.showOfflineAlertsColumn ? 4 : 3)}
+                    colspan={totalColumnCount()}
                     class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
                   >
                     No {props.title.toLowerCase()} found
@@ -1314,7 +1430,7 @@ export function ResourceTable(props: ResourceTableProps) {
             <Show when={!hasRows()}>
               <tr>
                 <td
-                  colspan={props.columns.length + (props.showOfflineAlertsColumn ? 4 : 3)}
+                  colspan={totalColumnCount()}
                   class="px-4 py-6 text-sm text-center text-gray-500 dark:text-gray-400"
                 >
                   {props.emptyMessage || 'No resources available.'}

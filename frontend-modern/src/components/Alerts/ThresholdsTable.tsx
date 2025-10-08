@@ -17,8 +17,6 @@ import type { RawOverrideConfig } from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
-import { TimeThresholdSettings } from './TimeThresholdSettings';
-
 type OverrideType =
   | 'guest'
   | 'node'
@@ -92,8 +90,6 @@ interface ThresholdsTableProps {
   ) => void;
   storageDefault: () => number;
   setStorageDefault: (value: number) => void;
-  timeThreshold: () => number;
-  setTimeThreshold: (value: number) => void;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
   setHasUnsavedChanges: (value: boolean) => void;
@@ -1348,15 +1344,6 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
   return (
     <div class="space-y-6">
-    {/* Time Threshold Settings */}
-    <Show when={activeTab() === 'proxmox'}>
-      <TimeThresholdSettings
-        timeThresholds={props.timeThresholds}
-        setTimeThresholds={props.setTimeThresholds}
-        setHasUnsavedChanges={props.setHasUnsavedChanges}
-      />
-    </Show>
-
       {/* Search Bar */}
       <div class="relative">
         <input
@@ -1524,7 +1511,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
                 onToggleDisabled={toggleDisabled}
-                showOfflineAlertsColumn={true}
+                showOfflineAlertsColumn={false}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
@@ -1686,6 +1673,9 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onToggleGlobalDisableOffline={() =>
                   props.setGuestDisableConnectivity(!props.guestDisableConnectivity())
                 }
+                showDelayColumn={true}
+                globalDelaySeconds={props.timeThresholds().guest}
+                onGlobalDelayChange={(value) => updateDelay('guest', value)}
                 globalOfflineSeverity={props.guestPoweredOffSeverity()}
                 onSetOfflineState={setOfflineState}
               />
