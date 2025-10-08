@@ -44,6 +44,35 @@ func isValidPrivateOrigin(host string) bool {
 	return false
 }
 
+// normalizeForwardedProto coerces forwarded proto values into the HTTP scheme space so that
+// websocket upgrades coming through proxies that emit ws/wss continue to compare equal to the
+// browser-sent Origin header (which is always http/https).
+func normalizeForwardedProto(proto string, fallback string) string {
+	if proto == "" {
+		return fallback
+	}
+
+	// Some proxies send comma-separated proto chains; take the first hop.
+	if comma := strings.IndexByte(proto, ','); comma != -1 {
+		proto = proto[:comma]
+	}
+
+	cleaned := strings.TrimSpace(strings.ToLower(proto))
+	switch cleaned {
+	case "wss":
+		return "https"
+	case "ws":
+		return "http"
+	case "https", "http":
+		return cleaned
+	default:
+		if cleaned != "" {
+			return cleaned
+		}
+		return fallback
+	}
+}
+
 // SetAllowedOrigins sets the allowed origins for CORS
 func (h *Hub) SetAllowedOrigins(origins []string) {
 	h.mu.Lock()
@@ -69,7 +98,9 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 
 	// Check if we're behind a reverse proxy
 	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
-		scheme = forwardedProto
+		scheme = normalizeForwardedProto(forwardedProto, scheme)
+	} else if forwardedScheme := r.Header.Get("X-Forwarded-Scheme"); forwardedScheme != "" {
+		scheme = normalizeForwardedProto(forwardedScheme, scheme)
 	} else if r.TLS != nil {
 		scheme = "https"
 	}
