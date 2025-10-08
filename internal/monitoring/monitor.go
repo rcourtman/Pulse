@@ -98,6 +98,7 @@ type Monitor struct {
 	authFailures     map[string]int            // Track consecutive auth failures per node
 	lastAuthAttempt  map[string]time.Time      // Track last auth attempt time
 	lastClusterCheck map[string]time.Time      // Track last cluster check for standalone nodes
+	lastPhysicalDiskPoll map[string]time.Time  // Track last physical disk poll time per instance
 	persistence      *config.ConfigPersistence // Add persistence for saving updated configs
 	pbsBackupPollers map[string]bool           // Track PBS backup polling goroutines per instance
 	runtimeCtx       context.Context           // Context used while monitor is running
@@ -653,6 +654,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		authFailures:     make(map[string]int),
 		lastAuthAttempt:  make(map[string]time.Time),
 		lastClusterCheck: make(map[string]time.Time),
+		lastPhysicalDiskPoll: make(map[string]time.Time),
 		persistence:      config.NewConfigPersistence(cfg.DataPath),
 		pbsBackupPollers: make(map[string]bool),
 	}
@@ -1802,31 +1804,58 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Poll physical disks for health monitoring
-	log.Debug().Int("nodeCount", len(nodes)).Msg("Starting disk health polling")
-
-	// Get existing disks from state to preserve data for offline nodes
-	currentState := m.state.GetSnapshot()
-	existingDisksMap := make(map[string]models.PhysicalDisk)
-	for _, disk := range currentState.PhysicalDisks {
-		if disk.Instance == instanceName {
-			existingDisksMap[disk.ID] = disk
-		}
-	}
-
-	var allDisks []models.PhysicalDisk
-	polledNodes := make(map[string]bool) // Track which nodes we successfully polled
-
-	for _, node := range nodes {
-		// Skip offline nodes but preserve their existing disk data
-		if node.Status != "online" {
-			log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
-			continue
+	// Poll physical disks for health monitoring (only if enabled and interval elapsed)
+	if instanceCfg.MonitorPhysicalDisks {
+		// Determine polling interval (default 5 minutes to avoid spinning up HDDs too frequently)
+		pollingInterval := 5 * time.Minute
+		if instanceCfg.PhysicalDiskPollingMinutes > 0 {
+			pollingInterval = time.Duration(instanceCfg.PhysicalDiskPollingMinutes) * time.Minute
 		}
 
-		// Get disk list for this node
-		log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
-		disks, err := client.GetDisks(ctx, node.Node)
+		// Check if enough time has elapsed since last poll
+		m.mu.Lock()
+		lastPoll, exists := m.lastPhysicalDiskPoll[instanceName]
+		shouldPoll := !exists || time.Since(lastPoll) >= pollingInterval
+		if shouldPoll {
+			m.lastPhysicalDiskPoll[instanceName] = time.Now()
+		}
+		m.mu.Unlock()
+
+		if !shouldPoll {
+			log.Debug().
+				Str("instance", instanceName).
+				Dur("sinceLastPoll", time.Since(lastPoll)).
+				Dur("interval", pollingInterval).
+				Msg("Skipping physical disk poll - interval not elapsed")
+			// Don't clear existing data, just skip the poll
+		} else {
+			log.Debug().
+				Int("nodeCount", len(nodes)).
+				Dur("interval", pollingInterval).
+				Msg("Starting disk health polling")
+
+		// Get existing disks from state to preserve data for offline nodes
+		currentState := m.state.GetSnapshot()
+		existingDisksMap := make(map[string]models.PhysicalDisk)
+		for _, disk := range currentState.PhysicalDisks {
+			if disk.Instance == instanceName {
+				existingDisksMap[disk.ID] = disk
+			}
+		}
+
+		var allDisks []models.PhysicalDisk
+		polledNodes := make(map[string]bool) // Track which nodes we successfully polled
+
+		for _, node := range nodes {
+			// Skip offline nodes but preserve their existing disk data
+			if node.Status != "online" {
+				log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
+				continue
+			}
+
+			// Get disk list for this node
+			log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
+			disks, err := client.GetDisks(ctx, node.Node)
 		if err != nil {
 			// Check if it's a permission error or if the endpoint doesn't exist
 			if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
@@ -1913,26 +1942,32 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Preserve existing disk data for nodes that weren't polled (offline or error)
-	for _, existingDisk := range existingDisksMap {
-		// Only preserve if we didn't poll this node
-		if !polledNodes[existingDisk.Node] {
-			// Keep the existing disk data but update the LastChecked to indicate it's stale
-			allDisks = append(allDisks, existingDisk)
-			log.Debug().
-				Str("node", existingDisk.Node).
-				Str("disk", existingDisk.DevPath).
-				Msg("Preserving existing disk data for unpolled node")
+		// Preserve existing disk data for nodes that weren't polled (offline or error)
+		for _, existingDisk := range existingDisksMap {
+			// Only preserve if we didn't poll this node
+			if !polledNodes[existingDisk.Node] {
+				// Keep the existing disk data but update the LastChecked to indicate it's stale
+				allDisks = append(allDisks, existingDisk)
+				log.Debug().
+					Str("node", existingDisk.Node).
+					Str("disk", existingDisk.DevPath).
+					Msg("Preserving existing disk data for unpolled node")
+			}
 		}
-	}
 
-	// Update physical disks in state
-	log.Debug().
-		Str("instance", instanceName).
-		Int("diskCount", len(allDisks)).
-		Int("preservedCount", len(existingDisksMap)-len(polledNodes)).
-		Msg("Updating physical disks in state")
-	m.state.UpdatePhysicalDisks(instanceName, allDisks)
+			// Update physical disks in state
+			log.Debug().
+				Str("instance", instanceName).
+				Int("diskCount", len(allDisks)).
+				Int("preservedCount", len(existingDisksMap)-len(polledNodes)).
+				Msg("Updating physical disks in state")
+			m.state.UpdatePhysicalDisks(instanceName, allDisks)
+		}
+	} else {
+		// Physical disk monitoring is disabled - clear any existing disk data for this instance
+		log.Debug().Str("instance", instanceName).Msg("Physical disk monitoring disabled - clearing disk data")
+		m.state.UpdatePhysicalDisks(instanceName, []models.PhysicalDisk{})
+	}
 
 	// Update nodes with storage fallback if rootfs was not available
 	for i := range modelNodes {

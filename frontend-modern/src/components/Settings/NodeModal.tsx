@@ -46,6 +46,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     tokenValue: '',
     fingerprint: '',
     verifySSL: true,
+    monitorPhysicalDisks: false,
   });
 
   const [formData, setFormData] = createSignal(getCleanFormData());
@@ -123,6 +124,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         tokenValue: '', // Don't show existing token
         fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
         verifySSL: node.verifySSL ?? true,
+        monitorPhysicalDisks: ('monitorPhysicalDisks' in node ? node.monitorPhysicalDisks : false) ?? false,
       });
     }
   });
@@ -160,6 +162,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         monitorContainers: true,
         monitorStorage: true,
         monitorBackups: true,
+        monitorPhysicalDisks: data.monitorPhysicalDisks,
       });
     } else {
       Object.assign(nodeData, {
@@ -1511,6 +1514,33 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       always get full visibility without extra configuration.
                     </p>
                   </div>
+
+                  {/* Physical Disk Monitoring - PVE only */}
+                  <Show when={props.nodeType === 'pve'}>
+                    <div>
+                      <SectionHeader
+                        title="Advanced monitoring"
+                        size="sm"
+                        class="mb-3"
+                        titleClass="text-gray-900 dark:text-gray-100"
+                      />
+                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={formData().monitorPhysicalDisks}
+                          onChange={(e) => updateField('monitorPhysicalDisks', e.currentTarget.checked)}
+                          class={formCheckbox + ' mt-0.5'}
+                        />
+                        <div>
+                          <div>Monitor physical disk health (SMART)</div>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Polls disk SMART data every 5 minutes. Note: This will cause HDDs to spin up from standby.
+                            If you have HDDs that should stay idle, leave this disabled.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </Show>
                 </div>
 
                 {/* Test Result */}
