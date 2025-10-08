@@ -15,8 +15,6 @@ import type {
 } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
-import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 type OverrideType =
   | 'guest'
   | 'node'

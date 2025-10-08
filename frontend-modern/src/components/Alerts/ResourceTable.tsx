@@ -206,7 +206,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
   const formatDelayLabel = (delay: number): string => (delay <= 0 ? 'Instant' : `${delay}s`);
 
-  const isCustomDelay = (resource: Resource, delay: number): boolean => {
+  const isCustomDelay = (resource: Resource): boolean => {
     if (typeof resource.delaySeconds !== 'number') {
       return false;
     }
@@ -888,7 +888,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 {(() => {
                                   const delay = resourceDelaySeconds(resource);
                                   const label = formatDelayLabel(delay);
-                                  const custom = isCustomDelay(resource, delay);
+                                  const custom = isCustomDelay(resource);
                                   const title = custom
                                     ? 'Custom delay applied to this resource'
                                     : 'Using global alert delay';
@@ -1303,7 +1303,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             {(() => {
                               const delay = resourceDelaySeconds(resource);
                               const label = formatDelayLabel(delay);
-                              const custom = isCustomDelay(resource, delay);
+                              const custom = isCustomDelay(resource);
                               const title = custom
                                 ? 'Custom delay applied to this resource'
                                 : 'Using global alert delay';

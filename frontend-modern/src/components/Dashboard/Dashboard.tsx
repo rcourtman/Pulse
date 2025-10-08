@@ -176,6 +176,31 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
+  const getDiskUsagePercent = (guest: VM | Container): number | null => {
+    const disk = guest?.disk;
+    if (!disk) return null;
+
+    const clamp = (value: number) => Math.min(100, Math.max(0, value));
+
+    if (typeof disk.usage === 'number' && Number.isFinite(disk.usage)) {
+      // Some sources report usage as a ratio (0-1), others as a percentage (0-100)
+      const usageValue = disk.usage > 1 ? disk.usage : disk.usage * 100;
+      return clamp(usageValue);
+    }
+
+    if (
+      typeof disk.used === 'number' &&
+      Number.isFinite(disk.used) &&
+      typeof disk.total === 'number' &&
+      Number.isFinite(disk.total) &&
+      disk.total > 0
+    ) {
+      return clamp((disk.used / disk.total) * 100);
+    }
+
+    return null;
+  };
+
   // Handle keyboard shortcuts
   let searchInputRef: HTMLInputElement | undefined;
 
@@ -359,9 +384,8 @@ export function Dashboard(props: DashboardProps) {
             aVal = a.memory ? a.memory.usage || 0 : 0;
             bVal = b.memory ? b.memory.usage || 0 : 0;
           } else if (key === 'disk') {
-            // Disk is displayed as percentage
-            aVal = a.disk.total > 0 ? (a.disk.used / a.disk.total) * 100 : 0;
-            bVal = b.disk.total > 0 ? (b.disk.used / b.disk.total) * 100 : 0;
+            aVal = getDiskUsagePercent(a);
+            bVal = getDiskUsagePercent(b);
           }
 
           // Handle null/undefined/empty values - put at end for both asc and desc
@@ -431,9 +455,8 @@ export function Dashboard(props: DashboardProps) {
             aVal = a.memory ? a.memory.usage || 0 : 0;
             bVal = b.memory ? b.memory.usage || 0 : 0;
           } else if (key === 'disk') {
-            // Disk is displayed as percentage
-            aVal = a.disk.total > 0 ? (a.disk.used / a.disk.total) * 100 : 0;
-            bVal = b.disk.total > 0 ? (b.disk.used / b.disk.total) * 100 : 0;
+            aVal = getDiskUsagePercent(a);
+            bVal = getDiskUsagePercent(b);
           }
 
           // Handle null/undefined/empty values - put at end for both asc and desc
