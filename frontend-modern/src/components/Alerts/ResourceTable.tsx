@@ -19,6 +19,7 @@ export interface Resource {
   defaults?: Record<string, number | undefined>;
   disabled?: boolean;
   disableConnectivity?: boolean;
+  poweredOffSeverity?: 'warning' | 'critical';
   hasOverride?: boolean;
   status?: string;
   vmid?: number;
@@ -58,6 +59,12 @@ interface ResourceTableProps {
   onToggleDisabled?: (resourceId: string) => void;
   onToggleNodeConnectivity?: (nodeId: string) => void;
   showOfflineAlertsColumn?: boolean; // Show separate column for offline/connectivity alerts
+  globalOfflineSeverity?: 'warning' | 'critical';
+  onSetGlobalOfflineState?: (state: OfflineState) => void;
+  onSetOfflineState?: (resourceId: string, state: OfflineState) => void;
+  showDelayColumn?: boolean;
+  globalDelaySeconds?: number;
+  onGlobalDelayChange?: (value: number) => void;
   editingId: () => string | null;
   editingThresholds: () => Record<string, number | undefined>;
   setEditingThresholds: (value: Record<string, number | undefined>) => void;
@@ -72,6 +79,8 @@ interface ResourceTableProps {
   onToggleGlobalDisableOffline?: () => void;
   groupHeaderMeta?: Record<string, GroupHeaderMeta>;
 }
+
+type OfflineState = 'off' | 'warning' | 'critical';
 
 export function ResourceTable(props: ResourceTableProps) {
   const flattenResources = (): Resource[] => {
@@ -269,6 +278,52 @@ export function ResourceTable(props: ResourceTableProps) {
     return <StatusBadge {...config} />;
   };
 
+  const offlineStateOrder: OfflineState[] = ['off', 'warning', 'critical'];
+
+  const offlineStateConfig: Record<OfflineState, { label: string; className: string; title: string }> = {
+    off: {
+      label: 'Off',
+      className:
+        'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600',
+      title: 'Offline alerts disabled for this resource.',
+    },
+    warning: {
+      label: 'Warn',
+      className:
+        'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30',
+      title: 'Offline alerts will raise warning-level notifications.',
+    },
+    critical: {
+      label: 'Crit',
+      className:
+        'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-500/20 dark:text-red-200 dark:hover:bg-red-500/30',
+      title: 'Offline alerts will raise critical-level notifications.',
+    },
+  };
+
+  const nextOfflineState = (state: OfflineState): OfflineState => {
+    const idx = offlineStateOrder.indexOf(state);
+    return offlineStateOrder[(idx + 1) % offlineStateOrder.length];
+  };
+
+  const renderOfflineStateButton = (state: OfflineState, disabled: boolean, onToggle: () => void) => {
+    const config = offlineStateConfig[state];
+    return (
+      <button
+        type="button"
+        class={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          onToggle();
+        }}
+        title={config.title}
+      >
+        {config.label}
+      </button>
+    );
+  };
+
   return (
     <Card
       padding="none"
@@ -298,6 +353,11 @@ export function ResourceTable(props: ResourceTableProps) {
               <Show when={props.showOfflineAlertsColumn}>
                 <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Offline Alerts
+                </th>
+              </Show>
+              <Show when={props.showDelayColumn}>
+                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Alert Delay (s)
                 </th>
               </Show>
               <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -391,21 +451,65 @@ export function ResourceTable(props: ResourceTableProps) {
                 </For>
                 <Show when={props.showOfflineAlertsColumn}>
                   <td class="p-1 px-2 text-center align-middle">
-                    <Show when={props.onToggleGlobalDisableOffline} fallback={<span class="text-sm text-gray-400">-</span>}>
+                    <Show when={props.onSetGlobalOfflineState} fallback={
+                      <Show when={props.onToggleGlobalDisableOffline} fallback={<span class="text-sm text-gray-400">-</span>}>
+                        {(() => {
+                          const defaultDisabled = props.globalDisableOfflineFlag?.() ?? false;
+                          return renderToggleBadge({
+                            isEnabled: !defaultDisabled,
+                            size: 'md',
+                            onToggle: () => {
+                              props.onToggleGlobalDisableOffline?.();
+                              props.setHasUnsavedChanges?.(true);
+                            },
+                            labelEnabled: 'On',
+                            labelDisabled: 'Off',
+                            titleEnabled: 'Offline alerts currently enabled by default. Click to disable.',
+                            titleDisabled: 'Offline alerts currently disabled by default. Click to enable.',
+                          });
+                        })()}
+                      </Show>
+                    }>
                       {(() => {
-                        const offlineDisabled = props.globalDisableOfflineFlag?.() ?? false;
-                        return renderToggleBadge({
-                          isEnabled: !offlineDisabled,
-                          size: 'md',
-                          onToggle: () => {
-                            props.onToggleGlobalDisableOffline?.();
-                            props.setHasUnsavedChanges?.(true);
-                          },
-                          titleEnabled: 'Offline alerts currently enabled globally. Click to disable.',
-                          titleDisabled: 'Offline alerts currently disabled globally. Click to enable.',
+                        const disabledGlobally = props.globalDisableFlag?.() ?? false;
+                        const defaultDisabled = props.globalDisableOfflineFlag?.() ?? false;
+                        const defaultSeverity = props.globalOfflineSeverity ?? 'warning';
+                        const state: OfflineState = defaultDisabled
+                          ? 'off'
+                          : defaultSeverity === 'critical'
+                            ? 'critical'
+                            : 'warning';
+
+                        return renderOfflineStateButton(state, disabledGlobally, () => {
+                          if (disabledGlobally) return;
+                          const next = nextOfflineState(state);
+                          props.onSetGlobalOfflineState?.(next);
                         });
                       })()}
                     </Show>
+                            </td>
+                          </Show>
+                          <Show when={props.showDelayColumn}>
+                            <td class="p-1 px-2 text-center align-middle">
+                              <span class="text-sm text-gray-400">—</span>
+                            </td>
+                          </Show>
+                <Show when={props.showDelayColumn}>
+                  <td class="p-1 px-2 text-center align-middle">
+                    <div class="flex justify-center">
+                      <input
+                        type="number"
+                        min="0"
+                        value={props.globalDelaySeconds ?? 0}
+                        onInput={(e) => {
+                          const raw = parseInt(e.currentTarget.value, 10);
+                          if (Number.isNaN(raw)) return;
+                          props.onGlobalDelayChange?.(Math.max(0, raw));
+                          props.setHasUnsavedChanges?.(true);
+                        }}
+                        class="w-20 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-100 px-2 py-0.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
                   </td>
                 </Show>
                 <td class="p-1 px-2 text-center align-middle">
@@ -667,9 +771,38 @@ export function ResourceTable(props: ResourceTableProps) {
                             {/* Offline Alerts column - Connectivity/powered-off alerts */}
                             <Show when={props.showOfflineAlertsColumn}>
                               <td class="p-1 px-2 text-center align-middle">
-                                <Show when={props.onToggleNodeConnectivity}>
                                 {(() => {
-                                  const disabledGlobally = props.globalDisableFlag?.() || props.globalDisableOfflineFlag?.();
+                                  const disabledGlobally = props.globalDisableFlag?.() ?? false;
+                                  const supportsTriState =
+                                    typeof props.onSetOfflineState === 'function' &&
+                                    (resource.type === 'guest' || resource.type === 'dockerContainer');
+
+                                  if (supportsTriState) {
+                                    const defaultDisabled = props.globalDisableOfflineFlag?.() ?? false;
+                                    const defaultSeverity = props.globalOfflineSeverity ?? 'warning';
+
+                                    let state: OfflineState;
+                                    if (resource.disableConnectivity) {
+                                      state = 'off';
+                                    } else if (resource.poweredOffSeverity) {
+                                      state = resource.poweredOffSeverity;
+                                    } else if (defaultDisabled) {
+                                      state = 'off';
+                                    } else {
+                                      state = defaultSeverity === 'critical' ? 'critical' : 'warning';
+                                    }
+
+                                    return renderOfflineStateButton(state, disabledGlobally, () => {
+                                      if (disabledGlobally) return;
+                                      const next = nextOfflineState(state);
+                                      props.onSetOfflineState?.(resource.id, next);
+                                    });
+                                  }
+
+                                  if (!props.onToggleNodeConnectivity) {
+                                    return <span class="text-sm text-gray-400">-</span>;
+                                  }
+
                                   const globalOfflineDisabled = props.globalDisableOfflineFlag?.() ?? false;
                                   return renderToggleBadge({
                                     isEnabled: !globalOfflineDisabled && !resource.disableConnectivity,
@@ -683,9 +816,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                     titleWhenDisabled: 'Offline alerts controlled globally',
                                   });
                                 })()}
-                              </Show>
-                            </td>
-                          </Show>
+                              </td>
+                            </Show>
 
                             {/* Actions column */}
                             <td class="p-1 px-2">
@@ -1058,8 +1190,9 @@ export function ResourceTable(props: ResourceTableProps) {
                             <td class="p-1 px-2 text-center align-middle">
                               <Show when={props.onToggleNodeConnectivity}>
                                 {(() => {
-                                  const disabledGlobally = props.globalDisableFlag?.() || props.globalDisableOfflineFlag?.();
-                                  const isEnabled = !(resource.disableConnectivity || props.globalDisableOfflineFlag?.());
+                                  const defaultOfflineDisabled = props.globalDisableOfflineFlag?.() ?? false;
+                                  const isEnabled = !(resource.disableConnectivity || defaultOfflineDisabled);
+                                  const disabledGlobally = props.globalDisableFlag?.() ?? false;
                                   return (
                                     <StatusBadge
                                       isEnabled={isEnabled}
