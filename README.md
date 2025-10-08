@@ -4,9 +4,9 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
 [![License](https://img.shields.io/github/license/rcourtman/Pulse)](LICENSE)
 
-**Real-time monitoring for Proxmox VE and PBS with alerts and webhooks.**
+**Real-time monitoring for Proxmox VE, PBS, and Docker infrastructure with alerts and webhooks.**
 
-Monitor your entire Proxmox infrastructure from a single dashboard. Get instant alerts when nodes go down, backups fail, or storage fills up. Supports email, Discord, Slack, Telegram, and more.
+Monitor your hybrid Proxmox and Docker estate from a single dashboard. Get instant alerts when nodes go down, containers misbehave, backups fail, or storage fills up. Supports email, Discord, Slack, Telegram, and more.
 
 **[Try the live demo →](https://demo.pulserelay.pro)** (read-only with mock data)
 
