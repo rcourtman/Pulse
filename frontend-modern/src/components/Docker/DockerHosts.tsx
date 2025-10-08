@@ -11,6 +11,7 @@ import { DockerFilter } from './DockerFilter';
 import { getAlertStyles } from '@/utils/alerts';
 // import type { DockerHostSummary } from './DockerHostSummaryTable';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
+import { useWebSocket } from '@/App';
 
 interface DockerHostsProps {
   hosts: DockerHost[];
@@ -362,12 +363,20 @@ const DockerContainerRow: Component<{
             </div>
           </td>
         </tr>
-      </Show>
+        </Show>
     </>
   );
 };
 
 export const DockerHosts: Component<DockerHostsProps> = (props) => {
+  const { initialDataReceived, reconnecting, connected } = useWebSocket();
+  const isLoading = createMemo(() => {
+    if (typeof initialDataReceived === 'function') {
+      const hostCount = Array.isArray(props.hosts) ? props.hosts.length : 0;
+      return !initialDataReceived() && hostCount === 0;
+    }
+    return false;
+  });
   const sortedHosts = createMemo(() => {
     const hosts = props.hosts || [];
     return [...hosts].sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -545,249 +554,287 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
 
   return (
     <div class="space-y-0">
-      <Show
-        when={sortedHosts().length === 0}
-        fallback={
-          <>
-            {/* Filters */}
-            <DockerFilter
-              search={search}
-              setSearch={setSearch}
-              activeHostName={activeHostName()}
-              onClearHost={() => setSelectedHostId(null)}
-              onReset={() => setSelectedHostId(null)}
-            />
+      <Show when={isLoading()}>
+        <Card padding="lg">
+          <EmptyState
+            icon={
+              <svg
+                class="h-12 w-12 animate-spin text-blue-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            }
+            title={reconnecting() ? 'Reconnecting to Docker agents...' : 'Loading Docker data...'}
+            description={
+              reconnecting()
+                ? 'Re-establishing metrics from the monitoring service.'
+                : connected()
+                  ? 'Waiting for the first Docker update.'
+                  : 'Connecting to the monitoring service.'
+            }
+          />
+        </Card>
+      </Show>
 
-            {/* Master-Detail Layout */}
-            <div class="flex gap-4">
-              {/* Left: Host List */}
-              <Card padding="none" class="w-80 flex-shrink-0 overflow-hidden">
-                <div class="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                  <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Docker Hosts</h3>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sortedHosts().length} {sortedHosts().length === 1 ? 'host' : 'hosts'}</p>
-                </div>
-                <div class="divide-y divide-gray-200 dark:divide-gray-700">
-                  <For each={sortedHosts()}>
-                    {(host) => {
-                      const isSelected = () => selectedHostId() === host.id;
-                      const containerCount = (host.containers || []).length;
-                      const runningCount = (host.containers || []).filter(c => c.state?.toLowerCase() === 'running').length;
+      <Show when={!isLoading()}>
+        <Show
+          when={sortedHosts().length === 0}
+          fallback={
+            <>
+              {/* Filters */}
+              <DockerFilter
+                search={search}
+                setSearch={setSearch}
+                activeHostName={activeHostName()}
+                onClearHost={() => setSelectedHostId(null)}
+                onReset={() => setSelectedHostId(null)}
+              />
 
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => toggleHostSelection(host.id)}
-                          class={`w-full text-left px-4 py-3 transition-colors ${
-                            isSelected()
-                              ? 'bg-blue-100 dark:bg-blue-900/40'
-                              : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                          }`}
-                        >
-                          <div class="flex items-center justify-between mb-1">
-                            <div class="flex items-center gap-2">
-                              <span class={`text-sm font-medium ${isSelected() ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>
-                                {host.displayName}
-                              </span>
-                              {renderDockerStatusBadge(host.status)}
+              {/* Master-Detail Layout */}
+              <div class="flex gap-4">
+                {/* Left: Host List */}
+                <Card padding="none" class="w-80 flex-shrink-0 overflow-hidden">
+                  <div class="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Docker Hosts</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sortedHosts().length} {sortedHosts().length === 1 ? 'host' : 'hosts'}</p>
+                  </div>
+                  <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <For each={sortedHosts()}>
+                      {(host) => {
+                        const isSelected = () => selectedHostId() === host.id;
+                        const containerCount = (host.containers || []).length;
+                        const runningCount = (host.containers || []).filter(c => c.state?.toLowerCase() === 'running').length;
+
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => toggleHostSelection(host.id)}
+                            class={`w-full text-left px-4 py-3 transition-colors ${
+                              isSelected()
+                                ? 'bg-blue-100 dark:bg-blue-900/40'
+                                : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                            }`}
+                          >
+                            <div class="flex items-center justify-between mb-1">
+                              <div class="flex items-center gap-2">
+                                <span class={`text-sm font-medium ${isSelected() ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>
+                                  {host.displayName}
+                                </span>
+                                {renderDockerStatusBadge(host.status)}
+                              </div>
                             </div>
-                          </div>
-                          <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                            <span>{runningCount}/{containerCount} running</span>
-                            <Show when={host.lastSeen}>
-                              <span>{formatRelativeTime(host.lastSeen!)}</span>
-                            </Show>
-                          </div>
-                        </button>
-                      );
-                    }}
-                  </For>
-                </div>
-              </Card>
+                            <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                              <span>{runningCount}/{containerCount} running</span>
+                              <Show when={host.lastSeen}>
+                                <span>{formatRelativeTime(host.lastSeen!)}</span>
+                              </Show>
+                            </div>
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </Card>
 
-              {/* Right: Container List */}
-              <div class="flex-1 min-w-0">
-                <Show
-                  when={selectedHost()}
-                  fallback={
-                    <Show
-                      when={hasContainers()}
-                      fallback={
-                        <Card padding="lg">
-                          <EmptyState
-                            title="No containers found"
-                            description={
-                              search().trim()
-                                ? 'No containers match your search.'
-                                : 'No containers on any host'
-                            }
-                          />
-                        </Card>
-                      }
-                    >
-                      <Card padding="none" class="overflow-hidden">
-                        <ScrollableTable>
-                          <table class="w-full border-collapse table-fixed">
-                            <colgroup>
-                              <col style="width: 25%" />
-                              <col style="width: 15%" />
-                              <col style="width: 20%" />
-                              <col style="width: 20%" />
-                              <col style="width: 20%" />
-                            </colgroup>
-                            <thead>
-                              <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                                <th class="pl-4 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Container
-                                </th>
-                                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Status
-                                </th>
-                                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  CPU
-                                </th>
-                                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Memory
-                                </th>
-                                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Restarts
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <For each={groupedContainers()}>
-                                {(group) => (
-                                  <>
-                                    {/* Host Section Header */}
-                                    <tr class="bg-gray-50 dark:bg-gray-900/40">
-                                      <td colspan="5" class="px-4 py-2 border-t-2 border-b border-gray-200 dark:border-gray-700">
-                                        <div class="flex items-center justify-between">
-                                          <div class="flex items-center gap-3">
-                                            <h3 class="text-sm font-bold text-gray-900 dark:text-gray-100">{group.host.displayName}</h3>
-                                            <Show when={group.host.displayName !== group.host.hostname}>
-                                              <span class="text-xs text-gray-500 dark:text-gray-400">({group.host.hostname})</span>
-                                            </Show>
-                                            {renderDockerStatusBadge(group.host.status)}
-                                            <span class="text-xs text-gray-600 dark:text-gray-400">
-                                              {group.containers.length} {group.containers.length === 1 ? 'container' : 'containers'}
-                                            </span>
+                {/* Right: Container List */}
+                <div class="flex-1 min-w-0">
+                  <Show
+                    when={selectedHost()}
+                    fallback={
+                      <Show
+                        when={hasContainers()}
+                        fallback={
+                          <Card padding="lg">
+                            <EmptyState
+                              title="No containers found"
+                              description={
+                                search().trim()
+                                  ? 'No containers match your search.'
+                                  : 'No containers on any host'
+                              }
+                            />
+                          </Card>
+                        }
+                      >
+                        <Card padding="none" class="overflow-hidden">
+                          <ScrollableTable>
+                            <table class="w-full border-collapse table-fixed">
+                              <colgroup>
+                                <col style="width: 25%" />
+                                <col style="width: 15%" />
+                                <col style="width: 20%" />
+                                <col style="width: 20%" />
+                                <col style="width: 20%" />
+                              </colgroup>
+                              <thead>
+                                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                                  <th class="pl-4 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    Container
+                                  </th>
+                                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    Status
+                                  </th>
+                                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    CPU
+                                  </th>
+                                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    Memory
+                                  </th>
+                                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    Restarts
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <For each={groupedContainers()}>
+                                  {(group) => (
+                                    <>
+                                      {/* Host Section Header */}
+                                      <tr class="bg-gray-50 dark:bg-gray-900/40">
+                                        <td colspan="5" class="px-4 py-2 border-t-2 border-b border-gray-200 dark:border-gray-700">
+                                          <div class="flex items-center justify-between">
+                                            <div class="flex items-center gap-3">
+                                              <h3 class="text-sm font-bold text-gray-900 dark:text-gray-100">{group.host.displayName}</h3>
+                                              <Show when={group.host.displayName !== group.host.hostname}>
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">({group.host.hostname})</span>
+                                              </Show>
+                                              {renderDockerStatusBadge(group.host.status)}
+                                              <span class="text-xs text-gray-600 dark:text-gray-400">
+                                                {group.containers.length} {group.containers.length === 1 ? 'container' : 'containers'}
+                                              </span>
+                                            </div>
+                                            <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                                              <Show when={group.host.lastSeen}>
+                                                <span>Updated {formatRelativeTime(group.host.lastSeen!)}</span>
+                                              </Show>
+                                              <Show when={group.host.agentVersion}>
+                                                <span>Agent {group.host.agentVersion}</span>
+                                              </Show>
+                                            </div>
                                           </div>
-                                          <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                            <Show when={group.host.lastSeen}>
-                                              <span>Updated {formatRelativeTime(group.host.lastSeen!)}</span>
-                                            </Show>
-                                            <Show when={group.host.agentVersion}>
-                                              <span>Agent {group.host.agentVersion}</span>
-                                            </Show>
-                                          </div>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                    {/* Host Containers */}
-                                    <For each={group.containers}>
-                                      {(entry) => <DockerContainerRow entry={entry} onHostSelect={toggleHostSelection} activeAlerts={props.activeAlerts} />}
-                                    </For>
-                                  </>
-                                )}
-                              </For>
-                            </tbody>
-                          </table>
-                        </ScrollableTable>
-                      </Card>
-                    </Show>
-                  }
-                >
-                  {(host) => (
-                    <Show
-                      when={selectedHostContainers().length > 0}
-                      fallback={
-                        <Card padding="lg">
-                          <EmptyState
-                            title="No containers found"
-                            description={
-                              search().trim()
-                                ? 'No containers match your search.'
-                                : `No containers on ${host().displayName}`
-                            }
-                          />
+                                        </td>
+                                      </tr>
+                                      {/* Host Containers */}
+                                      <For each={group.containers}>
+                                        {(entry) => <DockerContainerRow entry={entry} onHostSelect={toggleHostSelection} activeAlerts={props.activeAlerts} />}
+                                      </For>
+                                    </>
+                                  )}
+                                </For>
+                              </tbody>
+                            </table>
+                          </ScrollableTable>
                         </Card>
-                      }
-                    >
-                      <Card padding="none" class="overflow-hidden">
-                        {/* Host Info Header */}
-                        <div class="bg-gray-50 dark:bg-gray-900/40 border-b-2 border-gray-200 dark:border-gray-700 px-4 py-3">
-                          <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                              <h3 class="text-base font-bold text-gray-900 dark:text-gray-100">{host().displayName}</h3>
-                              <Show when={host().displayName !== host().hostname}>
-                                <span class="text-sm text-gray-500 dark:text-gray-400">({host().hostname})</span>
-                              </Show>
-                              {renderDockerStatusBadge(host().status)}
-                              <span class="text-sm text-gray-600 dark:text-gray-400">
-                                {selectedHostContainers().length} {selectedHostContainers().length === 1 ? 'container' : 'containers'}
-                              </span>
-                            </div>
-                            <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                              <Show when={host().lastSeen}>
-                                <span>Updated {formatRelativeTime(host().lastSeen!)}</span>
-                              </Show>
-                              <Show when={host().agentVersion}>
-                                <span>Agent {host().agentVersion}</span>
-                              </Show>
+                      </Show>
+                    }
+                  >
+                    {(host) => (
+                      <Show
+                        when={selectedHostContainers().length > 0}
+                        fallback={
+                          <Card padding="lg">
+                            <EmptyState
+                              title="No containers found"
+                              description={
+                                search().trim()
+                                  ? 'No containers match your search.'
+                                  : `No containers on ${host().displayName}`
+                              }
+                            />
+                          </Card>
+                        }
+                      >
+                        <Card padding="none" class="overflow-hidden">
+                          {/* Host Info Header */}
+                          <div class="bg-gray-50 dark:bg-gray-900/40 border-b-2 border-gray-200 dark:border-gray-700 px-4 py-3">
+                            <div class="flex items-center justify-between">
+                              <div class="flex items-center gap-3">
+                                <h3 class="text-base font-bold text-gray-900 dark:text-gray-100">{host().displayName}</h3>
+                                <Show when={host().displayName !== host().hostname}>
+                                  <span class="text-sm text-gray-500 dark:text-gray-400">({host().hostname})</span>
+                                </Show>
+                                {renderDockerStatusBadge(host().status)}
+                                <span class="text-sm text-gray-600 dark:text-gray-400">
+                                  {selectedHostContainers().length} {selectedHostContainers().length === 1 ? 'container' : 'containers'}
+                                </span>
+                              </div>
+                              <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                                <Show when={host().lastSeen}>
+                                  <span>Updated {formatRelativeTime(host().lastSeen!)}</span>
+                                </Show>
+                                <Show when={host().agentVersion}>
+                                  <span>Agent {host().agentVersion}</span>
+                                </Show>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Containers Table */}
-                        <ScrollableTable>
-                          <table class="w-full border-collapse table-fixed">
-                            <colgroup>
-                              <col style="width: 25%" />
-                              <col style="width: 15%" />
-                              <col style="width: 20%" />
-                              <col style="width: 20%" />
-                              <col style="width: 20%" />
-                            </colgroup>
-                            <thead>
-                              <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                                <th class="pl-4 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Container
-                                </th>
-                                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Status
-                                </th>
-                                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  CPU
-                                </th>
-                                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Memory
-                                </th>
-                                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Restarts
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                              <For each={selectedHostContainers()}>
-                                {(entry) => (
-                                  <DockerContainerRow
-                                    entry={entry}
-                                    onHostSelect={toggleHostSelection}
-                                    activeAlerts={props.activeAlerts}
-                                  />
-                                )}
-                              </For>
-                            </tbody>
-                          </table>
-                        </ScrollableTable>
-                      </Card>
-                    </Show>
-                  )}
-                </Show>
+                          {/* Containers Table */}
+                          <ScrollableTable>
+                            <table class="w-full border-collapse table-fixed">
+                              <colgroup>
+                                <col style="width: 25%" />
+                                <col style="width: 15%" />
+                                <col style="width: 20%" />
+                                <col style="width: 20%" />
+                                <col style="width: 20%" />
+                              </colgroup>
+                              <thead>
+                                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                                  <th class="pl-4 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    Container
+                                  </th>
+                                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    Status
+                                  </th>
+                                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    CPU
+                                  </th>
+                                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    Memory
+                                  </th>
+                                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                                    Restarts
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <For each={selectedHostContainers()}>
+                                  {(entry) => (
+                                    <DockerContainerRow
+                                      entry={entry}
+                                      onHostSelect={toggleHostSelection}
+                                      activeAlerts={props.activeAlerts}
+                                    />
+                                  )}
+                                </For>
+                              </tbody>
+                            </table>
+                          </ScrollableTable>
+                        </Card>
+                      </Show>
+                    )}
+                  </Show>
+                </div>
               </div>
-            </div>
-          </>
-        }
-      >
+            </>
+          }
+        >
         <Card padding="lg">
           <EmptyState
             icon={
@@ -836,6 +883,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
             }
           />
         </Card>
+        </Show>
       </Show>
     </div>
   );
