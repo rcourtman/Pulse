@@ -59,6 +59,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - ProxmoxVE installations may pre-configure API_TOKEN
 - Changes to this file are applied immediately without restart (v4.3.9+)
 - **DO NOT** put port configuration here - use system.json or systemd overrides
+- Copy `.env.example` from the repository for a ready-to-edit template
 
 ---
 
