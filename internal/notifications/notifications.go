@@ -332,11 +332,23 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	if exists && record.alertStart.Equal(alert.StartTime) && time.Since(record.lastSent) < n.cooldown {
 		log.Info().
 			Str("alertID", alert.ID).
+			Str("resourceName", alert.ResourceName).
+			Str("type", alert.Type).
 			Dur("timeSince", time.Since(record.lastSent)).
 			Dur("cooldown", n.cooldown).
-			Msg("Alert notification in cooldown for active alert")
+			Dur("remainingCooldown", n.cooldown-time.Since(record.lastSent)).
+			Msg("Alert notification in cooldown for active alert - notification suppressed")
 		return
 	}
+
+	log.Info().
+		Str("alertID", alert.ID).
+		Str("resourceName", alert.ResourceName).
+		Str("type", alert.Type).
+		Float64("value", alert.Value).
+		Float64("threshold", alert.Threshold).
+		Bool("inCooldown", exists).
+		Msg("Alert passed cooldown check - adding to pending notifications")
 
 	// Add to pending alerts for grouping
 	n.pendingAlerts = append(n.pendingAlerts, alert)
@@ -425,7 +437,18 @@ func (n *NotificationManager) sendGroupedAlerts() {
 
 	// Send notifications using the captured snapshots outside the lock to avoid blocking writers
 	if emailConfig.Enabled {
+		log.Info().
+			Int("alertCount", len(alertsToSend)).
+			Str("smtpHost", emailConfig.SMTPHost).
+			Int("smtpPort", emailConfig.SMTPPort).
+			Strs("recipients", emailConfig.To).
+			Bool("hasAuth", emailConfig.Username != "" && emailConfig.Password != "").
+			Msg("Email notifications enabled - sending grouped email")
 		go n.sendGroupedEmail(emailConfig, alertsToSend)
+	} else {
+		log.Debug().
+			Int("alertCount", len(alertsToSend)).
+			Msg("Email notifications disabled - skipping email delivery")
 	}
 
 	for _, webhook := range webhooks {

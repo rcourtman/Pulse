@@ -15,6 +15,7 @@ import type {
 } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
+import { TimeThresholdSettings } from './TimeThresholdSettings';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
@@ -1190,6 +1191,13 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
   return (
     <div class="space-y-6">
+      {/* Time Threshold Settings */}
+      <TimeThresholdSettings
+        timeThresholds={props.timeThresholds}
+        setTimeThresholds={props.setTimeThresholds}
+        setHasUnsavedChanges={props.setHasUnsavedChanges}
+      />
+
       {/* Search Bar */}
       <div class="relative">
         <input
