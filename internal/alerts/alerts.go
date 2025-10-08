@@ -23,6 +23,15 @@ const (
 	AlertLevelCritical AlertLevel = "critical"
 )
 
+func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
+	switch strings.ToLower(string(level)) {
+	case string(AlertLevelCritical):
+		return AlertLevelCritical
+	default:
+		return AlertLevelWarning
+	}
+}
+
 // Alert represents an active alert
 type Alert struct {
 	ID           string                 `json:"id"`
@@ -138,6 +147,7 @@ type HysteresisThreshold struct {
 type ThresholdConfig struct {
 	Disabled            bool                 `json:"disabled,omitempty"`            // Completely disable alerts for this guest
 	DisableConnectivity bool                 `json:"disableConnectivity,omitempty"` // Disable node offline/connectivity/powered-off alerts
+	PoweredOffSeverity  AlertLevel           `json:"poweredOffSeverity,omitempty"`  // Severity for powered-off alerts
 	CPU                 *HysteresisThreshold `json:"cpu,omitempty"`
 	Memory              *HysteresisThreshold `json:"memory,omitempty"`
 	Disk                *HysteresisThreshold `json:"disk,omitempty"`
@@ -347,6 +357,7 @@ func NewManager() *Manager {
 		config: AlertConfig{
 			Enabled: true,
 			GuestDefaults: ThresholdConfig{
+				PoweredOffSeverity: AlertLevelWarning,
 				CPU:        &HysteresisThreshold{Trigger: 80, Clear: 75},
 				Memory:     &HysteresisThreshold{Trigger: 85, Clear: 80},
 				Disk:       &HysteresisThreshold{Trigger: 90, Clear: 85},
@@ -524,12 +535,18 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		config.HysteresisMargin = 5.0
 	}
 
+	config.GuestDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
+	config.NodeDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
+
+
 	m.config = config
 	for id, override := range m.config.Overrides {
+		override.PoweredOffSeverity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
 		if override.Usage != nil {
 			override.Usage = ensureHysteresisThreshold(override.Usage)
 			m.config.Overrides[id] = override
 		}
+		m.config.Overrides[id] = override
 	}
 	log.Info().
 		Bool("enabled", config.Enabled).
@@ -1580,9 +1597,24 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	stateKey := resourceID
 
+	m.mu.RLock()
+	thresholds, exists := m.config.Overrides[resourceID]
+	if !exists {
+		thresholds = m.config.GuestDefaults
+	}
+	disableConnectivity := thresholds.DisableConnectivity
+	severity := normalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
+	m.mu.RUnlock()
+
+	if disableConnectivity {
+		m.clearDockerContainerStateAlert(resourceID)
+		return
+	}
+
 	m.mu.Lock()
 	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
 		alert.LastSeen = time.Now()
+		alert.Level = severity
 		if alert.Metadata == nil {
 			alert.Metadata = make(map[string]interface{})
 		}
@@ -1608,18 +1640,11 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 		return
 	}
 
-	level := AlertLevelWarning
-	stateLower := strings.ToLower(container.State)
-	switch stateLower {
-	case "exited", "dead", "removing", "restarting", "unknown":
-		level = AlertLevelCritical
-	}
-
 	message := fmt.Sprintf("Docker container '%s' is %s", containerName, strings.TrimSpace(container.Status))
 	alert := &Alert{
 		ID:           alertID,
 		Type:         "docker-container-state",
-		Level:        level,
+		Level:        severity,
 		ResourceID:   resourceID,
 		ResourceName: containerName,
 		Node:         nodeName,
@@ -3305,13 +3330,15 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 		thresholds = m.config.GuestDefaults
 	}
 
-	// Check if powered-off alerts are disabled for this guest
-	if thresholds.Disabled || thresholds.DisableConnectivity {
-		// Powered-off alerts are disabled, clear any existing alert and return
-		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			m.clearAlertNoLock(alertID)
-			log.Debug().
-				Str("guest", name).
+    severity := normalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
+
+    // Check if powered-off alerts are disabled for this guest
+    if thresholds.Disabled || thresholds.DisableConnectivity {
+        // Powered-off alerts are disabled, clear any existing alert and return
+        if _, alertExists := m.activeAlerts[alertID]; alertExists {
+            m.clearAlertNoLock(alertID)
+            log.Debug().
+                Str("guest", name).
 				Msg("Guest powered-off alert cleared (alerts disabled)")
 		}
 		delete(m.offlineConfirmations, guestID)
@@ -3319,11 +3346,12 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 	}
 
 	// Check if alert already exists
-	if _, exists := m.activeAlerts[alertID]; exists {
-		// Alert already exists, just update LastSeen
-		m.activeAlerts[alertID].LastSeen = time.Now()
-		return
-	}
+    if alert, exists := m.activeAlerts[alertID]; exists {
+        // Alert already exists, just update LastSeen
+        alert.LastSeen = time.Now()
+        alert.Level = severity
+        return
+    }
 
 	// Increment confirmation count
 	m.offlineConfirmations[guestID]++
@@ -3348,10 +3376,10 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 	}
 
 	// Create new powered-off alert after confirmation
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "powered-off",
-		Level:        AlertLevelWarning, // Powered-off is a warning, not critical
+    alert := &Alert{
+        ID:           alertID,
+        Type:         "powered-off",
+        Level:        severity,
 		ResourceID:   guestID,
 		ResourceName: name,
 		Node:         node,

@@ -113,7 +113,7 @@ const DockerContainerRow: Component<{
   const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(containerId()) ?? false);
 
   // Get alert styles for this container
-  const containerResourceId = createMemo(() => `docker-container-${host.id}-${container.id}`);
+  const containerResourceId = createMemo(() => `docker:${host.id}/${container.id}`);
   const defaultAlertStyles = {
     hasUnacknowledgedAlert: false,
     hasAcknowledgedOnlyAlert: false,
