@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,45 +65,142 @@ func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 	}
 
 	friendly := strings.TrimSpace(instance.Name)
-	if friendly == "" {
+
+	if instance.IsCluster {
+		if endpointLabel := lookupClusterEndpointLabel(instance, nodeName); endpointLabel != "" {
+			return endpointLabel
+		}
+
+		if baseName != "" && baseName != "unknown-node" {
+			return baseName
+		}
+
+		if friendly != "" {
+			return friendly
+		}
+
 		return baseName
 	}
 
-	if instance.IsCluster {
-		if strings.EqualFold(friendly, baseName) {
-			return baseName
-		}
-		return fmt.Sprintf("%s (%s)", friendly, baseName)
+	if friendly != "" {
+		return friendly
 	}
 
-	return friendly
+	if baseName != "" && baseName != "unknown-node" {
+		return baseName
+	}
+
+	if label := normalizeEndpointHost(instance.Host); label != "" && !isLikelyIPAddress(label) {
+		return label
+	}
+
+	return baseName
+}
+
+func lookupClusterEndpointLabel(instance *config.PVEInstance, nodeName string) string {
+	if instance == nil {
+		return ""
+	}
+
+	for _, endpoint := range instance.ClusterEndpoints {
+		if !strings.EqualFold(endpoint.NodeName, nodeName) {
+			continue
+		}
+
+		if host := strings.TrimSpace(endpoint.Host); host != "" {
+			if label := normalizeEndpointHost(host); label != "" && !isLikelyIPAddress(label) {
+				return label
+			}
+		}
+
+		if nodeNameLabel := strings.TrimSpace(endpoint.NodeName); nodeNameLabel != "" {
+			return nodeNameLabel
+		}
+
+		if ip := strings.TrimSpace(endpoint.IP); ip != "" {
+			return ip
+		}
+	}
+
+	return ""
+}
+
+func normalizeEndpointHost(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+
+	if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+		host := parsed.Hostname()
+		if host != "" {
+			return host
+		}
+		return parsed.Host
+	}
+
+	value = strings.TrimPrefix(value, "https://")
+	value = strings.TrimPrefix(value, "http://")
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+
+	if idx := strings.Index(value, "/"); idx >= 0 {
+		value = strings.TrimSpace(value[:idx])
+	}
+
+	if idx := strings.Index(value, ":"); idx >= 0 {
+		value = strings.TrimSpace(value[:idx])
+	}
+
+	return value
+}
+
+func isLikelyIPAddress(value string) bool {
+	if value == "" {
+		return false
+	}
+
+	if ip := net.ParseIP(value); ip != nil {
+		return true
+	}
+
+	// Handle IPv6 with zone identifier (fe80::1%eth0)
+	if i := strings.Index(value, "%"); i > 0 {
+		if ip := net.ParseIP(value[:i]); ip != nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Monitor handles all monitoring operations
 type Monitor struct {
-	config           *config.Config
-	state            *models.State
-	pveClients       map[string]PVEClientInterface
-	pbsClients       map[string]*pbs.Client
-	tempCollector    *TemperatureCollector // SSH-based temperature collector
-	mu               sync.RWMutex
-	startTime        time.Time
-	rateTracker      *RateTracker
-	metricsHistory   *MetricsHistory
-	alertManager     *alerts.Manager
-	notificationMgr  *notifications.NotificationManager
-	configPersist    *config.ConfigPersistence
-	discoveryService *discovery.Service        // Background discovery service
-	activePollCount  int32                     // Number of active polling operations
-	pollCounter      int64                     // Counter for polling cycles
-	authFailures     map[string]int            // Track consecutive auth failures per node
-	lastAuthAttempt  map[string]time.Time      // Track last auth attempt time
-	lastClusterCheck map[string]time.Time      // Track last cluster check for standalone nodes
-	lastPhysicalDiskPoll map[string]time.Time  // Track last physical disk poll time per instance
-	persistence      *config.ConfigPersistence // Add persistence for saving updated configs
-	pbsBackupPollers map[string]bool           // Track PBS backup polling goroutines per instance
-	runtimeCtx       context.Context           // Context used while monitor is running
-	wsHub            *websocket.Hub            // Hub used for broadcasting state
+	config               *config.Config
+	state                *models.State
+	pveClients           map[string]PVEClientInterface
+	pbsClients           map[string]*pbs.Client
+	tempCollector        *TemperatureCollector // SSH-based temperature collector
+	mu                   sync.RWMutex
+	startTime            time.Time
+	rateTracker          *RateTracker
+	metricsHistory       *MetricsHistory
+	alertManager         *alerts.Manager
+	notificationMgr      *notifications.NotificationManager
+	configPersist        *config.ConfigPersistence
+	discoveryService     *discovery.Service        // Background discovery service
+	activePollCount      int32                     // Number of active polling operations
+	pollCounter          int64                     // Counter for polling cycles
+	authFailures         map[string]int            // Track consecutive auth failures per node
+	lastAuthAttempt      map[string]time.Time      // Track last auth attempt time
+	lastClusterCheck     map[string]time.Time      // Track last cluster check for standalone nodes
+	lastPhysicalDiskPoll map[string]time.Time      // Track last physical disk poll time per instance
+	persistence          *config.ConfigPersistence // Add persistence for saving updated configs
+	pbsBackupPollers     map[string]bool           // Track PBS backup polling goroutines per instance
+	runtimeCtx           context.Context           // Context used while monitor is running
+	wsHub                *websocket.Hub            // Hub used for broadcasting state
 }
 
 // safePercentage calculates percentage safely, returning 0 if divisor is 0
@@ -639,24 +737,24 @@ func New(cfg *config.Config) (*Monitor, error) {
 	tempCollector := NewTemperatureCollector("root", "")
 
 	m := &Monitor{
-		config:           cfg,
-		state:            models.NewState(),
-		pveClients:       make(map[string]PVEClientInterface),
-		pbsClients:       make(map[string]*pbs.Client),
-		tempCollector:    tempCollector,
-		startTime:        time.Now(),
-		rateTracker:      NewRateTracker(),
-		metricsHistory:   NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
-		alertManager:     alerts.NewManager(),
-		notificationMgr:  notifications.NewNotificationManager(cfg.PublicURL),
-		configPersist:    config.NewConfigPersistence(cfg.DataPath),
-		discoveryService: nil, // Will be initialized in Start()
-		authFailures:     make(map[string]int),
-		lastAuthAttempt:  make(map[string]time.Time),
-		lastClusterCheck: make(map[string]time.Time),
+		config:               cfg,
+		state:                models.NewState(),
+		pveClients:           make(map[string]PVEClientInterface),
+		pbsClients:           make(map[string]*pbs.Client),
+		tempCollector:        tempCollector,
+		startTime:            time.Now(),
+		rateTracker:          NewRateTracker(),
+		metricsHistory:       NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
+		alertManager:         alerts.NewManager(),
+		notificationMgr:      notifications.NewNotificationManager(cfg.PublicURL),
+		configPersist:        config.NewConfigPersistence(cfg.DataPath),
+		discoveryService:     nil, // Will be initialized in Start()
+		authFailures:         make(map[string]int),
+		lastAuthAttempt:      make(map[string]time.Time),
+		lastClusterCheck:     make(map[string]time.Time),
 		lastPhysicalDiskPoll: make(map[string]time.Time),
-		persistence:      config.NewConfigPersistence(cfg.DataPath),
-		pbsBackupPollers: make(map[string]bool),
+		persistence:          config.NewConfigPersistence(cfg.DataPath),
+		pbsBackupPollers:     make(map[string]bool),
 	}
 
 	// Load saved configurations
@@ -1866,126 +1964,126 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				Dur("interval", pollingInterval).
 				Msg("Starting disk health polling")
 
-		// Get existing disks from state to preserve data for offline nodes
-		currentState := m.state.GetSnapshot()
-		existingDisksMap := make(map[string]models.PhysicalDisk)
-		for _, disk := range currentState.PhysicalDisks {
-			if disk.Instance == instanceName {
-				existingDisksMap[disk.ID] = disk
-			}
-		}
-
-		var allDisks []models.PhysicalDisk
-		polledNodes := make(map[string]bool) // Track which nodes we successfully polled
-
-		for _, node := range nodes {
-			// Skip offline nodes but preserve their existing disk data
-			if node.Status != "online" {
-				log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
-				continue
+			// Get existing disks from state to preserve data for offline nodes
+			currentState := m.state.GetSnapshot()
+			existingDisksMap := make(map[string]models.PhysicalDisk)
+			for _, disk := range currentState.PhysicalDisks {
+				if disk.Instance == instanceName {
+					existingDisksMap[disk.ID] = disk
+				}
 			}
 
-			// Get disk list for this node
-			log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
-			disks, err := client.GetDisks(ctx, node.Node)
-		if err != nil {
-			// Check if it's a permission error or if the endpoint doesn't exist
-			if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
-				log.Warn().
-					Str("node", node.Node).
-					Err(err).
-					Msg("Insufficient permissions to access disk information - check API token permissions")
-			} else if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "501") {
-				log.Info().
-					Str("node", node.Node).
-					Msg("Disk monitoring not available on this node (may be using non-standard storage)")
-			} else {
-				log.Warn().
-					Str("node", node.Node).
-					Err(err).
-					Msg("Failed to get disk list")
-			}
-			continue
-		}
+			var allDisks []models.PhysicalDisk
+			polledNodes := make(map[string]bool) // Track which nodes we successfully polled
 
-		log.Debug().
-			Str("node", node.Node).
-			Int("diskCount", len(disks)).
-			Msg("Got disk list for node")
+			for _, node := range nodes {
+				// Skip offline nodes but preserve their existing disk data
+				if node.Status != "online" {
+					log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
+					continue
+				}
 
-		// Mark this node as successfully polled
-		polledNodes[node.Node] = true
+				// Get disk list for this node
+				log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
+				disks, err := client.GetDisks(ctx, node.Node)
+				if err != nil {
+					// Check if it's a permission error or if the endpoint doesn't exist
+					if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
+						log.Warn().
+							Str("node", node.Node).
+							Err(err).
+							Msg("Insufficient permissions to access disk information - check API token permissions")
+					} else if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "501") {
+						log.Info().
+							Str("node", node.Node).
+							Msg("Disk monitoring not available on this node (may be using non-standard storage)")
+					} else {
+						log.Warn().
+							Str("node", node.Node).
+							Err(err).
+							Msg("Failed to get disk list")
+					}
+					continue
+				}
 
-		// Check each disk for health issues and add to state
-		for _, disk := range disks {
-			// Create PhysicalDisk model
-			diskID := fmt.Sprintf("%s-%s-%s", instanceName, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
-			physicalDisk := models.PhysicalDisk{
-				ID:          diskID,
-				Node:        node.Node,
-				Instance:    instanceName,
-				DevPath:     disk.DevPath,
-				Model:       disk.Model,
-				Serial:      disk.Serial,
-				Type:        disk.Type,
-				Size:        disk.Size,
-				Health:      disk.Health,
-				Wearout:     disk.Wearout,
-				RPM:         disk.RPM,
-				Used:        disk.Used,
-				LastChecked: time.Now(),
-			}
-
-			allDisks = append(allDisks, physicalDisk)
-
-			log.Debug().
-				Str("node", node.Node).
-				Str("disk", disk.DevPath).
-				Str("model", disk.Model).
-				Str("health", disk.Health).
-				Int("wearout", disk.Wearout).
-				Msg("Checking disk health")
-
-			normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
-			if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
-				// Disk has failed or is failing - alert manager will handle this
-				log.Warn().
-					Str("node", node.Node).
-					Str("disk", disk.DevPath).
-					Str("model", disk.Model).
-					Str("health", disk.Health).
-					Int("wearout", disk.Wearout).
-					Msg("Disk health issue detected")
-
-				// Pass disk info to alert manager
-				m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
-			} else if disk.Wearout > 0 && disk.Wearout < 10 {
-				// Low wearout warning (less than 10% life remaining)
-				log.Warn().
-					Str("node", node.Node).
-					Str("disk", disk.DevPath).
-					Str("model", disk.Model).
-					Int("wearout", disk.Wearout).
-					Msg("SSD wearout critical - less than 10% life remaining")
-
-				// Pass to alert manager for wearout alert
-				m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
-			}
-		}
-	}
-
-		// Preserve existing disk data for nodes that weren't polled (offline or error)
-		for _, existingDisk := range existingDisksMap {
-			// Only preserve if we didn't poll this node
-			if !polledNodes[existingDisk.Node] {
-				// Keep the existing disk data but update the LastChecked to indicate it's stale
-				allDisks = append(allDisks, existingDisk)
 				log.Debug().
-					Str("node", existingDisk.Node).
-					Str("disk", existingDisk.DevPath).
-					Msg("Preserving existing disk data for unpolled node")
+					Str("node", node.Node).
+					Int("diskCount", len(disks)).
+					Msg("Got disk list for node")
+
+				// Mark this node as successfully polled
+				polledNodes[node.Node] = true
+
+				// Check each disk for health issues and add to state
+				for _, disk := range disks {
+					// Create PhysicalDisk model
+					diskID := fmt.Sprintf("%s-%s-%s", instanceName, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
+					physicalDisk := models.PhysicalDisk{
+						ID:          diskID,
+						Node:        node.Node,
+						Instance:    instanceName,
+						DevPath:     disk.DevPath,
+						Model:       disk.Model,
+						Serial:      disk.Serial,
+						Type:        disk.Type,
+						Size:        disk.Size,
+						Health:      disk.Health,
+						Wearout:     disk.Wearout,
+						RPM:         disk.RPM,
+						Used:        disk.Used,
+						LastChecked: time.Now(),
+					}
+
+					allDisks = append(allDisks, physicalDisk)
+
+					log.Debug().
+						Str("node", node.Node).
+						Str("disk", disk.DevPath).
+						Str("model", disk.Model).
+						Str("health", disk.Health).
+						Int("wearout", disk.Wearout).
+						Msg("Checking disk health")
+
+					normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
+					if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
+						// Disk has failed or is failing - alert manager will handle this
+						log.Warn().
+							Str("node", node.Node).
+							Str("disk", disk.DevPath).
+							Str("model", disk.Model).
+							Str("health", disk.Health).
+							Int("wearout", disk.Wearout).
+							Msg("Disk health issue detected")
+
+						// Pass disk info to alert manager
+						m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
+					} else if disk.Wearout > 0 && disk.Wearout < 10 {
+						// Low wearout warning (less than 10% life remaining)
+						log.Warn().
+							Str("node", node.Node).
+							Str("disk", disk.DevPath).
+							Str("model", disk.Model).
+							Int("wearout", disk.Wearout).
+							Msg("SSD wearout critical - less than 10% life remaining")
+
+						// Pass to alert manager for wearout alert
+						m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
+					}
+				}
 			}
-		}
+
+			// Preserve existing disk data for nodes that weren't polled (offline or error)
+			for _, existingDisk := range existingDisksMap {
+				// Only preserve if we didn't poll this node
+				if !polledNodes[existingDisk.Node] {
+					// Keep the existing disk data but update the LastChecked to indicate it's stale
+					allDisks = append(allDisks, existingDisk)
+					log.Debug().
+						Str("node", existingDisk.Node).
+						Str("disk", existingDisk.DevPath).
+						Msg("Preserving existing disk data for unpolled node")
+				}
+			}
 
 			// Update physical disks in state
 			log.Debug().

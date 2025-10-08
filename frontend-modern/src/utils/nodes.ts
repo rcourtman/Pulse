@@ -16,11 +16,11 @@ const extractHostname = (value: string): string => {
 };
 
 export function getNodeDisplayName<T extends DisplayableNode>(node: T): string {
-  const nameRaw = typeof node.name === 'string' ? node.name.trim() : '';
-  if (nameRaw) return nameRaw;
-
   const display = typeof node.displayName === 'string' ? node.displayName.trim() : '';
   if (display) return display;
+
+  const nameRaw = typeof node.name === 'string' ? node.name.trim() : '';
+  if (nameRaw) return nameRaw;
 
   const hostRaw = typeof node.host === 'string' ? node.host.trim() : '';
   const hostname = extractHostname(hostRaw);
