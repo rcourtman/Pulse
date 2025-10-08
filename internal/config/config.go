@@ -141,6 +141,8 @@ type PVEInstance struct {
 	MonitorContainers bool
 	MonitorStorage    bool
 	MonitorBackups    bool
+	MonitorPhysicalDisks bool // Monitor physical disks (polled less frequently to avoid spinning up HDDs)
+	PhysicalDiskPollingMinutes int // How often to poll physical disks (0 = use default)
 
 	// Cluster support
 	IsCluster        bool              // True if this is a cluster

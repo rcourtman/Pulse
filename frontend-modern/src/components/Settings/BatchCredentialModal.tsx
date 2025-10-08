@@ -77,6 +77,7 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                 monitorContainers: true,
                 monitorStorage: true,
                 monitorBackups: true,
+                monitorPhysicalDisks: false,
               }
             : {
                 monitorDatastores: true,
