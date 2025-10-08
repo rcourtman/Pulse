@@ -26,6 +26,7 @@ export interface PVENodeConfig {
   monitorContainers: boolean;
   monitorStorage: boolean;
   monitorBackups: boolean;
+  monitorPhysicalDisks: boolean;
   // Cluster information
   isCluster?: boolean;
   clusterName?: string;

@@ -1417,6 +1417,13 @@ const Settings: Component<SettingsProps> = (props) => {
                                           Backups
                                         </span>
                                       )}
+                                    {node.type === 'pve' &&
+                                      'monitorPhysicalDisks' in node &&
+                                      node.monitorPhysicalDisks && (
+                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                                          Physical Disks
+                                        </span>
+                                      )}
                                     {node.type === 'pve' && node.temperature?.available && (
                                       <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
                                         Temperature
@@ -1689,6 +1696,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   monitorContainers: true,
                                   monitorStorage: true,
                                   monitorBackups: true,
+                                  monitorPhysicalDisks: false,
                                   status: 'pending',
                                 } as NodeConfigWithStatus);
                                 setCurrentNodeType('pve');
