@@ -113,13 +113,28 @@ const DockerContainerRow: Component<{
 
   // Get alert styles for this container
   const containerResourceId = createMemo(() => `docker-container-${host.id}-${container.id}`);
-  const alertStyles = createMemo(() =>
-    props.activeAlerts ? getAlertStyles(containerResourceId(), props.activeAlerts) : {
-      hasUnacknowledgedAlert: false,
-      hasAcknowledgedOnlyAlert: false,
-      severity: null as 'critical' | 'warning' | null,
+  const defaultAlertStyles = {
+    hasUnacknowledgedAlert: false,
+    hasAcknowledgedOnlyAlert: false,
+    severity: null as 'critical' | 'warning' | null,
+    hasAlert: false,
+    alertCount: 0,
+    unacknowledgedCount: 0,
+    acknowledgedCount: 0,
+    rowClass: '',
+    indicatorClass: '',
+    badgeClass: '',
+  };
+
+  const alertStyles = createMemo(() => {
+    if (!props.activeAlerts) return defaultAlertStyles;
+    try {
+      return getAlertStyles(containerResourceId(), props.activeAlerts) || defaultAlertStyles;
+    } catch (e) {
+      console.warn('Error getting alert styles for container:', containerResourceId(), e);
+      return defaultAlertStyles;
     }
-  );
+  });
 
   const cpuPercent = Math.max(0, Math.min(100, container.cpuPercent ?? 0));
   const memoryPercent = Math.max(0, Math.min(100, container.memoryPercent ?? 0));
@@ -173,17 +188,19 @@ const DockerContainerRow: Component<{
   });
 
   // Match GuestRow styling with alert highlighting
-  const showAlertHighlight = createMemo(() => alertStyles().hasUnacknowledgedAlert);
+  const showAlertHighlight = createMemo(() => alertStyles()?.hasUnacknowledgedAlert ?? false);
   const alertAccentColor = createMemo(() => {
     if (!showAlertHighlight()) return undefined;
-    return alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
+    const severity = alertStyles()?.severity;
+    return severity === 'critical' ? '#ef4444' : '#eab308';
   });
 
   const rowClass = () => {
     const base = 'transition-all duration-200 relative';
     const hover = 'hover:shadow-sm';
+    const severity = alertStyles()?.severity;
     const alertBg = showAlertHighlight()
-      ? alertStyles().severity === 'critical'
+      ? severity === 'critical'
         ? 'bg-red-50 dark:bg-red-950/30'
         : 'bg-yellow-50 dark:bg-yellow-950/20'
       : '';
