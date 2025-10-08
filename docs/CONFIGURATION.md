@@ -2,9 +2,9 @@
 
 ## Key Features
 
-- **🔒 Auto-Hashing Security** (v4.5.0+): Plain text credentials in environment variables are automatically hashed
-- **📁 Separated Configuration**: Authentication (.env), settings (system.json), and node credentials (nodes.enc) 
-- **🚀 Zero-Touch Deployment**: Configure via environment variables, skip UI setup entirely
+- **🔒 Auto-Hashing Security** (v4.5.0+): Plain text credentials provided via environment variables are hashed before being persisted
+- **📁 Separated Configuration**: Authentication (.env), runtime settings (system.json), and node credentials (nodes.enc) stay isolated
+- **⚙️ UI-First Provisioning**: Nodes and infrastructure settings are managed through the web UI to prevent accidental wipes
 - **🔐 Enterprise Security**: Credentials encrypted at rest, hashed in memory
 
 ## Configuration File Structure
@@ -37,7 +37,7 @@ All configuration files are stored in `/etc/pulse/` (or `/data/` in Docker conta
 # User authentication
 PULSE_AUTH_USER='admin'              # Admin username
 PULSE_AUTH_PASS='$2a$12$...'        # Bcrypt hashed password (keep quotes!)
-API_TOKEN=abc123...                  # API token (plain text, not hashed)
+API_TOKEN=abc123...                  # API token (Pulse hashes it automatically)
 
 # Security settings
 DISABLE_AUTH=true                    # Disable authentication entirely
@@ -53,7 +53,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 
 **Important Notes:**
 - Password hash MUST be in single quotes to prevent shell expansion
-- API tokens are stored in plain text (48-64 hex characters)
+- API tokens are stored as SHA3-256 hashes on disk; provide a plain token and Pulse hashes it automatically
 - This file should have restricted permissions (600)
 - Never commit this file to version control
 - ProxmoxVE installations may pre-configure API_TOKEN
@@ -104,21 +104,27 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 **Contents:**
 ```json
 {
-  "pollingInterval": 10,          // Fixed at 10 seconds to match Proxmox update cycle
-  "connectionTimeout": 10,        // Seconds before node connection timeout
-  "autoUpdateEnabled": false,     // Enable automatic stable updates via systemd timer
-  "updateChannel": "stable",      // Update channel: stable or rc (UI updates only)
-  "autoUpdateTime": "03:00",      // Reserved for future use (currently 2-6 AM random)
-  "allowedOrigins": "",           // CORS allowed origins (empty = same-origin only)
-  "backendPort": 7655,            // Backend API port
-  "frontendPort": 7655,           // Frontend UI port (same as backend in embedded mode)
-  "discoveryEnabled": true,       // Enable/disable network discovery for Proxmox/PBS servers
-  "discoverySubnet": "auto"       // Subnet to scan ("auto" or CIDR like "192.168.1.0/24")
+  "pbsPollingInterval": 60,        // Seconds between PBS refreshes (PVE polling fixed at 10s)
+  "connectionTimeout": 60,         // Seconds before node connection timeout
+  "autoUpdateEnabled": false,      // Systemd timer toggle for automatic updates
+  "autoUpdateCheckInterval": 24,   // Hours between auto-update checks
+  "autoUpdateTime": "03:00",       // Preferred update window (combined with randomized delay)
+  "updateChannel": "stable",       // Update channel: stable or rc
+  "allowedOrigins": "",            // CORS allowed origins (empty = same-origin only)
+  "allowEmbedding": false,         // Allow iframe embedding
+  "allowedEmbedOrigins": "",       // Comma-separated origins allowed to embed Pulse
+  "backendPort": 3000,             // Internal API listen port (not normally changed)
+  "frontendPort": 7655,            // Public port exposed by the service
+  "logLevel": "info",              // Log level: debug, info, warn, error
+  "discoveryEnabled": true,        // Enable/disable network discovery for Proxmox/PBS servers
+  "discoverySubnet": "auto",       // CIDR to scan ("auto" discovers common ranges)
+  "theme": ""                      // UI theme preference: "", "light", or "dark"
 }
 ```
 
 **Important Notes:**
 - User-editable via Settings UI
+- Environment variable overrides (e.g., `DISCOVERY_ENABLED`, `ALLOWED_ORIGINS`) take precedence and lock the corresponding UI controls
 - Can be safely backed up without exposing secrets
 - Missing file results in defaults being used
 - Changes take effect immediately (no restart required)

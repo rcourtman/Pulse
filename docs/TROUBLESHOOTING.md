@@ -6,29 +6,47 @@
 
 #### Forgot Password / Lost Access
 
-**Solution: Start Fresh**
+**Solution: Use the built-in recovery endpoint**
 
-If you've forgotten your password, the recommended approach is to simply start fresh. Pulse is designed for quick setup.
+Pulse ships with a guarded recovery API that lets you regain access without wiping configuration.
 
-**Why no password recovery?**
-- Adding recovery mechanisms creates security vulnerabilities
-- Pulse setup is intentionally simple and fast
-- You're not losing important data (Pulse only tracks current state, not history)
-- Your nodes will immediately repopulate with all VMs/containers
+1. **From the Pulse host (localhost only)**  
+   Generate a short-lived recovery token or temporarily disable auth:
+   ```bash
+   # Create a 30 minute recovery token (returns JSON with the token value)
+   curl -s -X POST http://localhost:7655/api/security/recovery \
+     -H 'Content-Type: application/json' \
+     -d '{"action":"generate_token","duration":30}'
 
-**Steps to start fresh:**
-1. Stop Pulse
-2. Delete your configuration/data directory (`/etc/pulse`, `/data`, or wherever you configured it)
-3. Restart Pulse
-4. Run Quick Security Setup (30 seconds)
-5. Add your nodes back (another 30 seconds)
+   # OR force local-only recovery access (writes .auth_recovery in the data dir)
+   curl -s -X POST http://localhost:7655/api/security/recovery \
+     -H 'Content-Type: application/json' \
+     -d '{"action":"disable_auth"}'
+   ```
 
-That's it. Your infrastructure will be fully visible again immediately.
+2. **If you generated a token**, use it from a trusted workstation:
+   ```bash
+   curl -s -X POST https://pulse.example.com/api/security/recovery \
+     -H 'Content-Type: application/json' \
+     -H 'X-Recovery-Token: YOUR_TOKEN' \
+     -d '{"action":"disable_auth"}'
+   ```
+   The token is single-use and expires automatically.
+
+3. **Log in and reset credentials** using Settings → Security, then re-enable auth:
+   ```bash
+   curl -s -X POST http://localhost:7655/api/security/recovery \
+     -H 'Content-Type: application/json' \
+     -d '{"action":"enable_auth"}'
+   ```
+   Alternatively, delete `/etc/pulse/.auth_recovery` (or `/data/.auth_recovery` for Docker) and restart Pulse.
+
+Only fall back to nuking `/etc/pulse` if the recovery endpoint is unreachable.
 
 **Prevention:**
 - Use a password manager
-- Document your credentials securely
-- Consider using API tokens for automation
+- Store exported configuration backups securely
+- Generate API tokens for automation instead of sharing passwords
 
 #### Cannot login after setting up security
 **Symptoms**: "Invalid username or password" error despite correct credentials
