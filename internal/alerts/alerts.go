@@ -617,6 +617,21 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		}
 		m.dockerOfflineCount = make(map[string]int)
 	}
+
+	if m.config.DisableAllDockerContainers {
+		var containerAlerts []string
+		for alertID := range m.activeAlerts {
+			if strings.HasPrefix(alertID, "docker-container-") {
+				containerAlerts = append(containerAlerts, alertID)
+			}
+		}
+		for _, alertID := range containerAlerts {
+			m.clearAlertNoLock(alertID)
+		}
+		m.dockerStateConfirm = make(map[string]int)
+		m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
+		m.dockerLastExitCode = make(map[string]int)
+	}
 }
 
 // reevaluateActiveAlertsLocked re-evaluates all active alerts against the current configuration

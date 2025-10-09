@@ -821,13 +821,14 @@ export function Alerts() {
     Object.entries(thresholds).forEach(([key, value]) => {
       // Skip non-threshold fields
       if (key === 'disabled' || key === 'disableConnectivity' || key === 'poweredOffSeverity') return;
+      if (typeof value === 'string') return;
       result[key] = getTriggerValue(value);
     });
     return result;
   };
 
   // Threshold states - using trigger values for display
-  const [guestDefaults, setGuestDefaults] = createSignal({
+  const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({
     cpu: 80,
     memory: 85,
     disk: 90,
@@ -839,7 +840,7 @@ export function Alerts() {
   const [guestDisableConnectivity, setGuestDisableConnectivity] = createSignal(false);
   const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<'warning' | 'critical'>('warning');
 
-  const [nodeDefaults, setNodeDefaults] = createSignal({
+  const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({
     cpu: 80,
     memory: 85,
     disk: 90,
@@ -943,12 +944,15 @@ export function Alerts() {
                   try {
                     // Save alert configuration with hysteresis format
                     const createHysteresisThreshold = (
-                      trigger: number,
+                      trigger: number | undefined,
                       clearMargin: number = 5,
-                    ) => ({
-                      trigger,
-                      clear: Math.max(0, trigger - clearMargin),
-                    });
+                    ) => {
+                      const normalized = typeof trigger === 'number' ? trigger : 0;
+                      return {
+                        trigger: normalized,
+                        clear: Math.max(0, normalized - clearMargin),
+                      };
+                    };
 
                     const alertConfig = {
                       enabled: true,
@@ -1660,22 +1664,26 @@ function OverviewTab(props: {
 interface ThresholdsTabProps {
   allGuests: () => (VM | Container)[];
   state: State;
-  guestDefaults: () => Record<string, number>;
-  nodeDefaults: () => Record<string, number>;
+  guestDefaults: () => Record<string, number | undefined>;
+  nodeDefaults: () => Record<string, number | undefined>;
   dockerDefaults: () => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
   storageDefault: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   overrides: () => Override[];
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
   setGuestDefaults: (
-    value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
   guestDisableConnectivity: () => boolean;
   setGuestDisableConnectivity: (value: boolean) => void;
   guestPoweredOffSeverity: () => 'warning' | 'critical';
   setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   setNodeDefaults: (
-    value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
   setDockerDefaults: (
     value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),

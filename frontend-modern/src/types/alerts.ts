@@ -13,6 +13,7 @@ export interface AlertThresholds {
   diskWrite?: HysteresisThreshold;
   networkIn?: HysteresisThreshold;
   networkOut?: HysteresisThreshold;
+  temperature?: HysteresisThreshold;
   disableConnectivity?: boolean; // Disable connectivity/powered-off alerts
   poweredOffSeverity?: 'warning' | 'critical';
   // Legacy support for backward compatibility
@@ -24,7 +25,7 @@ export interface AlertThresholds {
   networkInLegacy?: number;
   networkOutLegacy?: number;
   // Allow indexing with string
-  [key: string]: HysteresisThreshold | number | boolean | undefined;
+  [key: string]: HysteresisThreshold | number | boolean | string | undefined;
 }
 
 export type RawOverrideConfig = AlertThresholds & {
@@ -56,11 +57,21 @@ export interface CustomAlertRule {
   updatedAt: string;
 }
 
+export interface DockerThresholdConfig {
+  cpu?: HysteresisThreshold;
+  memory?: HysteresisThreshold;
+  restartCount?: number;
+  restartWindow?: number;
+  memoryWarnPct?: number;
+  memoryCriticalPct?: number;
+}
+
 export interface AlertConfig {
   enabled: boolean;
   guestDefaults: AlertThresholds;
   nodeDefaults: AlertThresholds;
   storageDefault: HysteresisThreshold;
+  dockerDefaults?: DockerThresholdConfig;
   customRules?: CustomAlertRule[];
   overrides: Record<string, RawOverrideConfig>; // key: resource ID
   minimumDelta?: number;
@@ -130,6 +141,16 @@ export interface AlertConfig {
       levels?: Array<{ after: number; notify: string }>;
     };
   };
+  disableAllNodes?: boolean;
+  disableAllGuests?: boolean;
+  disableAllStorage?: boolean;
+  disableAllPBS?: boolean;
+  disableAllDockerHosts?: boolean;
+  disableAllDockerContainers?: boolean;
+  disableAllNodesOffline?: boolean;
+  disableAllGuestsOffline?: boolean;
+  disableAllPBSOffline?: boolean;
+  disableAllDockerHostsOffline?: boolean;
 }
 
 // Priority levels:
