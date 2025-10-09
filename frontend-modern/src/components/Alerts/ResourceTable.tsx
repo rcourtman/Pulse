@@ -655,23 +655,29 @@ export function ResourceTable(props: ResourceTableProps) {
                             {/* Alert toggle column */}
                             <td class="p-1 px-2 text-center align-middle">
                               <Show when={props.onToggleDisabled}>
-                                <div class="flex items-center justify-center">
-                                  <TogglePrimitive
-                                    size="sm"
-                                    checked={!resource.disabled}
-                                    disabled={props.globalDisableFlag?.()}
-                                    onToggle={() => !props.globalDisableFlag?.() && props.onToggleDisabled?.(resource.id)}
-                                    class="my-[1px]"
-                                    title={
-                                      props.globalDisableFlag?.()
-                                        ? 'Alerts disabled globally'
-                                        : resource.disabled
-                                          ? 'Click to enable alerts'
-                                          : 'Click to disable alerts'
-                                    }
-                                    ariaLabel={resource.disabled ? 'Alerts disabled for this resource' : 'Alerts enabled for this resource'}
-                                  />
-                                </div>
+                                {(() => {
+                                  const globallyDisabled = props.globalDisableFlag?.() ?? false;
+                                  const isChecked = !globallyDisabled && !resource.disabled;
+                                  return (
+                                    <div class="flex items-center justify-center">
+                                      <TogglePrimitive
+                                        size="sm"
+                                        checked={isChecked}
+                                        disabled={globallyDisabled}
+                                        onToggle={() => !globallyDisabled && props.onToggleDisabled?.(resource.id)}
+                                        class="my-[1px]"
+                                        title={
+                                          globallyDisabled
+                                            ? 'Alerts disabled globally'
+                                            : resource.disabled
+                                              ? 'Click to enable alerts'
+                                              : 'Click to disable alerts'
+                                        }
+                                        ariaLabel={isChecked ? 'Alerts enabled for this resource' : 'Alerts disabled for this resource'}
+                                      />
+                                    </div>
+                                  );
+                                })()}
                               </Show>
                             </td>
                           <td class="p-1 px-2">
@@ -1065,24 +1071,30 @@ export function ResourceTable(props: ResourceTableProps) {
                           {/* Alert toggle column */}
                           <td class="p-1 px-2 text-center align-middle">
                             <Show when={props.onToggleDisabled}>
-                              <div class="flex items-center justify-center">
-                                <TogglePrimitive
-                                  size="sm"
-                                  checked={!resource.disabled}
-                                  disabled={props.globalDisableFlag?.()}
-                                  onToggle={() => !props.globalDisableFlag?.() && props.onToggleDisabled?.(resource.id)}
-                                  class="my-[1px]"
-                                  title={
-                                    props.globalDisableFlag?.()
-                                      ? 'Alerts disabled globally'
-                                      : resource.disabled
-                                        ? 'Click to enable alerts'
-                                        : 'Click to disable alerts'
-                                  }
-                                  ariaLabel={resource.disabled ? 'Alerts disabled for this resource' : 'Alerts enabled for this resource'}
-                                />
-                              </div>
-                            </Show>
+                                {(() => {
+                                  const globallyDisabled = props.globalDisableFlag?.() ?? false;
+                                  const isChecked = !globallyDisabled && !resource.disabled;
+                                  return (
+                                    <div class="flex items-center justify-center">
+                                      <TogglePrimitive
+                                        size="sm"
+                                        checked={isChecked}
+                                        disabled={globallyDisabled}
+                                        onToggle={() => !globallyDisabled && props.onToggleDisabled?.(resource.id)}
+                                        class="my-[1px]"
+                                        title={
+                                          globallyDisabled
+                                            ? 'Alerts disabled globally'
+                                            : resource.disabled
+                                              ? 'Click to enable alerts'
+                                              : 'Click to disable alerts'
+                                        }
+                                        ariaLabel={isChecked ? 'Alerts enabled for this resource' : 'Alerts disabled for this resource'}
+                                      />
+                                    </div>
+                                  );
+                                })()}
+                              </Show>
                           </td>
                           <td class="p-1 px-2">
                             <Show when={resource.type === 'node'} fallback={
