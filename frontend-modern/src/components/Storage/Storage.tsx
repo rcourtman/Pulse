@@ -422,7 +422,33 @@ const Storage: Component = () => {
       // Group by node ID (instance + node name) to match Node.ID format
       const groups: Record<string, StorageType[]> = {};
       storage.forEach((s) => {
-        // Node.ID is formatted as "instance-nodename", so we need to match that
+        if (s.shared) {
+          const nodeCandidates = [
+            ...((s.nodeIds ?? [])
+              .map((id) => (id.startsWith(`${s.instance}-`) ? id.slice(s.instance.length + 1) : id))
+              .filter((node): node is string => Boolean(node))),
+            ...((s.nodes ?? []).filter((node): node is string => Boolean(node))),
+          ];
+          const normalizedNodes = Array.from(
+            new Set(
+              nodeCandidates
+                .map((node) => node.trim())
+                .filter((node) => node && node !== 'shared' && node !== 'cluster'),
+            ),
+          );
+          const nodesForStorage =
+            normalizedNodes.length > 0
+              ? normalizedNodes
+              : [s.node].map((node) => node?.trim()).filter((node): node is string => Boolean(node));
+
+          nodesForStorage.forEach((nodeName) => {
+            const key = `${s.instance}-${nodeName}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push({ ...s, node: nodeName });
+          });
+          return;
+        }
+
         const key = `${s.instance}-${s.node}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push(s);
