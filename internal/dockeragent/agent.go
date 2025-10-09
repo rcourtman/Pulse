@@ -341,6 +341,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Token", a.cfg.APIToken)
+	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
 	req.Header.Set("User-Agent", "pulse-docker-agent/"+agentVersion)
 
 	resp, err := a.httpClient.Do(req)
