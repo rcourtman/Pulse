@@ -103,6 +103,25 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
 	}
+	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
+	if config.TimeThreshold <= 0 {
+		config.TimeThreshold = 5
+	}
+	if config.TimeThresholds == nil {
+		config.TimeThresholds = make(map[string]int)
+	}
+	ensureDelay := func(key string) {
+		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
+			config.TimeThresholds[key] = config.TimeThreshold
+		}
+	}
+	ensureDelay("guest")
+	ensureDelay("node")
+	ensureDelay("storage")
+	ensureDelay("pbs")
+	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
+		config.TimeThresholds["all"] = config.TimeThreshold
+	}
 
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -138,11 +157,19 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 				},
 				NodeDefaults: alerts.ThresholdConfig{
-					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
+					CPU:         &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
+					Memory:      &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+					Disk:        &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
+					Temperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
 				},
-				StorageDefault:    alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+				TimeThreshold:  5,
+				TimeThresholds: map[string]int{
+					"guest":   5,
+					"node":    5,
+					"storage": 5,
+					"pbs":     5,
+				},
 				MinimumDelta:      2.0,
 				SuppressionWindow: 5,
 				HysteresisMargin:  5.0,
@@ -175,6 +202,28 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
 	}
+	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger <= 0 {
+		config.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	}
+	if config.TimeThreshold <= 0 {
+		config.TimeThreshold = 5
+	}
+	if config.TimeThresholds == nil {
+		config.TimeThresholds = make(map[string]int)
+	}
+	ensureDelay := func(key string) {
+		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
+			config.TimeThresholds[key] = config.TimeThreshold
+		}
+	}
+	ensureDelay("guest")
+	ensureDelay("node")
+	ensureDelay("storage")
+	ensureDelay("pbs")
+	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
+		config.TimeThresholds["all"] = config.TimeThreshold
+	}
+	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
 
 	// Migration: Set I/O metrics to Off (0) if they have the old default values
 	// This helps existing users avoid noisy I/O alerts

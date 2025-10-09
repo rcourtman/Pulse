@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestGetTimeThresholdForTypeMappings(t *testing.T) {
+func TestGetTimeThresholdMappings(t *testing.T) {
 	manager := NewManager()
 
 	manager.mu.Lock()
@@ -35,8 +35,53 @@ func TestGetTimeThresholdForTypeMappings(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		if got := manager.getTimeThresholdForType(tc.resourceType); got != tc.expected {
-			t.Errorf("getTimeThresholdForType(%q) = %d, want %d", tc.resourceType, got, tc.expected)
+		if got := manager.getTimeThreshold("", tc.resourceType, "cpu"); got != tc.expected {
+			t.Errorf("getTimeThreshold(%q, \"cpu\") = %d, want %d", tc.resourceType, got, tc.expected)
+		}
+	}
+}
+
+func TestGetTimeThresholdMetricOverrides(t *testing.T) {
+	manager := NewManager()
+
+	manager.mu.Lock()
+	manager.config.TimeThreshold = 15
+	manager.config.TimeThresholds = map[string]int{
+		"guest":   30,
+		"node":    60,
+		"storage": 90,
+	}
+	manager.config.MetricTimeThresholds = map[string]map[string]int{
+		"guest": {
+			"cpu": 5,
+		},
+		"node": {
+			"temperature": 120,
+		},
+		"all": {
+			"default": 20,
+		},
+	}
+	manager.mu.Unlock()
+
+	cases := []struct {
+		resourceID   string
+		resourceType string
+		metricType   string
+		expected     int
+	}{
+		{"vm-resource", "VM", "cpu", 5},             // guest metric override
+		{"vm-resource", "VM", "memory", 30},         // falls back to guest type delay
+		{"node-1", "Node", "temperature", 120},      // node metric override
+		{"node-1", "Node", "cpu", 60},               // node type delay
+		{"storage-1", "storage", "usage", 90},       // storage type delay
+		{"unknown", "unknown", "cpu", 20},           // global default metric override
+		{"unknown", "unknown", "disk", 20},
+	}
+
+	for _, tc := range cases {
+		if got := manager.getTimeThreshold(tc.resourceID, tc.resourceType, tc.metricType); got != tc.expected {
+			t.Errorf("getTimeThreshold(%q, %q, %q) = %d, want %d", tc.resourceID, tc.resourceType, tc.metricType, got, tc.expected)
 		}
 	}
 }

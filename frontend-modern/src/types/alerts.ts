@@ -84,6 +84,7 @@ export interface AlertConfig {
     storage?: number;
     pbs?: number;
   };
+  metricTimeThresholds?: Record<string, Record<string, number>>;
   aggregation?: {
     enabled: boolean;
     timeWindow: number;
