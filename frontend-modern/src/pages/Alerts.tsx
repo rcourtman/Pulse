@@ -1122,7 +1122,7 @@ const [timeThresholds, setTimeThresholds] = createSignal({
 
       <Card padding="none" class="relative lg:flex">
         <Show when={!sidebarCollapsed()}>
-          <div class="hidden lg:flex lg:flex-col w-72 relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top">
+          <div class="hidden lg:flex lg:flex-col w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem] relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0">
             <button
               type="button"
               class="hidden lg:flex absolute top-6 right-0 translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
@@ -1183,7 +1183,7 @@ const [timeThresholds, setTimeThresholds] = createSignal({
           </button>
         </Show>
 
-        <div class="flex-1">
+        <div class="flex-1 min-w-0">
           <Show when={flatTabs.length > 0}>
             <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
               <div class="p-1">
