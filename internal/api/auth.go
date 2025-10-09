@@ -291,6 +291,15 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				return true
 			}
 		}
+		// Support Authorization: Bearer <token> for environments that strip custom headers
+		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+				bearerToken := strings.TrimSpace(authHeader[7:])
+				if bearerToken != "" && internalauth.CompareAPIToken(bearerToken, cfg.APIToken) {
+					return true
+				}
+			}
+		}
 		// Check query parameter (for export/import)
 		if token := r.URL.Query().Get("token"); token != "" {
 			// Config always has hashed token now (auto-hashed on load)
