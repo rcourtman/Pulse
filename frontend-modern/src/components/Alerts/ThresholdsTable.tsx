@@ -23,6 +23,8 @@ type OverrideType =
   | 'dockerHost'
   | 'dockerContainer';
 
+type OfflineState = 'off' | 'warning' | 'critical';
+
 interface Override {
   id: string;
   name: string;
@@ -72,7 +74,7 @@ interface ThresholdsTableProps {
   pbsInstances?: PBSInstance[]; // PBS instances from state
   guestDefaults: SimpleThresholds;
   setGuestDefaults: (
-    value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
+    value: Record<string, number | undefined> | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
   guestDisableConnectivity: () => boolean;
   setGuestDisableConnectivity: (value: boolean) => void;
@@ -80,7 +82,7 @@ interface ThresholdsTableProps {
   setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   nodeDefaults: SimpleThresholds;
   setNodeDefaults: (
-    value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
+    value: Record<string, number | undefined> | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
   dockerDefaults: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
   setDockerDefaults: (
