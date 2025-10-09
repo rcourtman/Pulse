@@ -10,6 +10,7 @@ func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 	m := NewManager()
 	m.ClearActiveAlerts()
 	cfg := m.GetConfig()
+	cfg.TimeThreshold = 0
 	cfg.TimeThresholds = map[string]int{}
 	cfg.SuppressionWindow = 0
 	cfg.MinimumDelta = 0
