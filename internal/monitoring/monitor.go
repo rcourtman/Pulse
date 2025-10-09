@@ -3492,7 +3492,19 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 	}
 
 	var allStorage []models.Storage
-	seenStorage := make(map[string]bool)
+	sharedStorageIndex := make(map[string]int)
+
+	addUniqueString := func(target *[]string, value string) {
+		if value == "" {
+			return
+		}
+		for _, existing := range *target {
+			if existing == value {
+				return
+			}
+		}
+		*target = append(*target, value)
+	}
 
 	// Get storage from each node (this includes capacity info)
 	log.Debug().Str("instance", instanceName).Int("nodeCount", len(nodes)).Msg("Starting storage polling for nodes")
@@ -3538,10 +3550,13 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			// For shared storage, only include it once
 			storageKey := storage.Storage
 			if shared {
-				if seenStorage[storageKey] {
+				if idx, exists := sharedStorageIndex[storageKey]; exists {
+					existing := &allStorage[idx]
+					addUniqueString(&existing.Nodes, node.Node)
+					addUniqueString(&existing.NodeIDs, fmt.Sprintf("%s-%s", instanceName, node.Node))
+					existing.NodeCount = len(existing.Nodes)
 					continue
 				}
-				seenStorage[storageKey] = true
 			}
 
 			// Use appropriate node name
@@ -3569,6 +3584,11 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 				Enabled:  true,
 				Active:   true,
 			}
+
+			nodeIdentifier := fmt.Sprintf("%s-%s", instanceName, node.Node)
+			modelStorage.Nodes = []string{node.Node}
+			modelStorage.NodeIDs = []string{nodeIdentifier}
+			modelStorage.NodeCount = len(modelStorage.Nodes)
 
 			// Override with cluster config if available
 			if hasClusterConfig {
@@ -3599,6 +3619,9 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			}
 
 			allStorage = append(allStorage, modelStorage)
+			if shared {
+				sharedStorageIndex[storageKey] = len(allStorage) - 1
+			}
 
 			// Record storage metrics history
 			now := time.Now()
