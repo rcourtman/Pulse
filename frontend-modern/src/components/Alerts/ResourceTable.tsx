@@ -117,6 +117,7 @@ export function ResourceTable(props: ResourceTableProps) {
   const hasRows = () => flattenResources().length > 0;
 
   const [activeMetricInput, setActiveMetricInput] = createSignal<{ resourceId: string; metric: string } | null>(null);
+  const [showDelayRow, setShowDelayRow] = createSignal(false);
 
   const normalizeMetricKey = (column: string): string => {
     const key = column.trim().toLowerCase();
@@ -536,11 +537,35 @@ export function ResourceTable(props: ResourceTableProps) {
                   </td>
                 </Show>
                 <td class="p-1 px-2 text-center align-middle">
-                  <span class="text-sm text-gray-400">-</span>
+                  <Show when={props.showDelayColumn && typeof props.onMetricDelayChange === 'function'}>
+                    <button
+                      type="button"
+                      onClick={() => setShowDelayRow(!showDelayRow())}
+                      class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
+                      title={showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'}
+                    >
+                      <svg
+                        class={`w-4 h-4 transition-transform ${showDelayRow() ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </button>
+                  </Show>
+                  <Show when={!props.showDelayColumn || typeof props.onMetricDelayChange !== 'function'}>
+                    <span class="text-sm text-gray-400">-</span>
+                  </Show>
                 </td>
               </tr>
             </Show>
-            <Show when={props.showDelayColumn && typeof props.onMetricDelayChange === 'function'}>
+            <Show when={showDelayRow() && props.showDelayColumn && typeof props.onMetricDelayChange === 'function'}>
               <tr class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}>
                 <td class="p-1 px-2 text-center align-middle">
                   <span class="text-sm text-gray-400">-</span>
@@ -558,15 +583,15 @@ export function ResourceTable(props: ResourceTableProps) {
 
                     return (
                       <td class="p-1 px-2 text-center align-middle">
-                        <div class="flex items-center justify-center gap-2">
+                        <div class="relative flex justify-center w-full">
                           <input
                             type="number"
                             min="0"
                             value={(() => {
                               return overrideDelay !== undefined ? overrideDelay : '';
                             })()}
-                            placeholder={formatDelayLabel(typeDefaultDelay)}
-                            class="w-20 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            placeholder={String(typeDefaultDelay)}
+                            class="w-16 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-0.5 text-sm text-center text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             onInput={(e) => {
                               const raw = e.currentTarget.value;
                               if (raw === '') {
@@ -577,36 +602,17 @@ export function ResourceTable(props: ResourceTableProps) {
                                 if (Number.isNaN(parsed)) {
                                   return;
                                 }
-                                props.onMetricDelayChange?.(metric, Math.max(0, parsed));
+                                const sanitized = Math.max(0, parsed);
+                                // If the value matches the default, clear the override
+                                if (sanitized === typeDefaultDelay) {
+                                  props.onMetricDelayChange?.(metric, null);
+                                } else {
+                                  props.onMetricDelayChange?.(metric, sanitized);
+                                }
                                 props.setHasUnsavedChanges?.(true);
                               }
                             }}
                           />
-                          <Show when={metricDelayOverride(metric) !== undefined}>
-                            <button
-                              type="button"
-                              class="rounded p-1 text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                              onClick={() => {
-                                props.onMetricDelayChange?.(metric, null);
-                                props.setHasUnsavedChanges?.(true);
-                              }}
-                              title="Clear delay override"
-                              aria-label="Clear delay override"
-                            >
-                              <svg
-                                class="h-3 w-3"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                                aria-hidden="true"
-                              >
-                                <path
-                                  fill-rule="evenodd"
-                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm2.707-10.707a1 1 0 00-1.414-1.414L10 7.586 8.707 6.293A1 1 0 007.293 7.707L8.586 9l-1.293 1.293a1 1 0 101.414 1.414L10 10.414l1.293 1.293a1 1 0 001.414-1.414L11.414 9l1.293-1.293z"
-                                  clip-rule="evenodd"
-                                />
-                              </svg>
-                            </button>
-                          </Show>
                         </div>
                       </td>
                     );
