@@ -2293,9 +2293,14 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		default:
 			// Run backup polling in a separate goroutine to not block main polling
 			go func() {
-				log.Info().Str("instance", instanceName).Msg("Starting background backup/snapshot polling")
+				timeout := m.calculateBackupOperationTimeout(instanceName)
+				startTime := time.Now()
+				log.Info().
+					Str("instance", instanceName).
+					Dur("timeout", timeout).
+					Msg("Starting background backup/snapshot polling")
 				// Create a separate context with longer timeout for backup operations
-				backupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				backupCtx, cancel := context.WithTimeout(context.Background(), timeout)
 				defer cancel()
 
 				// Poll backup tasks
@@ -2307,7 +2312,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				// Poll guest snapshots
 				m.pollGuestSnapshots(backupCtx, instanceName, client)
 
-				log.Info().Str("instance", instanceName).Msg("Completed background backup/snapshot polling")
+				log.Info().
+					Str("instance", instanceName).
+					Dur("duration", time.Since(startTime)).
+					Msg("Completed background backup/snapshot polling")
 			}()
 		}
 	}
@@ -4268,22 +4276,115 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		Msg("Storage backups polled")
 }
 
+func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Duration {
+	const (
+		minTimeout      = 2 * time.Minute
+		maxTimeout      = 5 * time.Minute
+		timeoutPerGuest = 2 * time.Second
+	)
+
+	timeout := minTimeout
+	snapshot := m.state.GetSnapshot()
+
+	guestCount := 0
+	for _, vm := range snapshot.VMs {
+		if vm.Instance == instanceName && !vm.Template {
+			guestCount++
+		}
+	}
+	for _, ct := range snapshot.Containers {
+		if ct.Instance == instanceName && !ct.Template {
+			guestCount++
+		}
+	}
+
+	if guestCount > 0 {
+		dynamic := time.Duration(guestCount) * timeoutPerGuest
+		if dynamic > timeout {
+			timeout = dynamic
+		}
+	}
+
+	if timeout > maxTimeout {
+		return maxTimeout
+	}
+
+	return timeout
+}
+
 // pollGuestSnapshots polls snapshots for all VMs and containers
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling guest snapshots")
 
-	// Create a separate context with a longer timeout for snapshot queries
-	// Snapshot queries can be slow, especially with many VMs/containers
-	snapshotCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	// Get current VMs and containers from state
+	// Get current VMs and containers from state for this instance
 	m.mu.RLock()
-	vms := append([]models.VM{}, m.state.VMs...)
-	containers := append([]models.Container{}, m.state.Containers...)
+	var vms []models.VM
+	for _, vm := range m.state.VMs {
+		if vm.Instance == instanceName {
+			vms = append(vms, vm)
+		}
+	}
+	var containers []models.Container
+	for _, ct := range m.state.Containers {
+		if ct.Instance == instanceName {
+			containers = append(containers, ct)
+		}
+	}
 	m.mu.RUnlock()
 
+	activeGuests := 0
+	for _, vm := range vms {
+		if !vm.Template {
+			activeGuests++
+		}
+	}
+	for _, ct := range containers {
+		if !ct.Template {
+			activeGuests++
+		}
+	}
+
+	const (
+		minSnapshotTimeout      = 60 * time.Second
+		maxSnapshotTimeout      = 4 * time.Minute
+		snapshotTimeoutPerGuest = 2 * time.Second
+	)
+
+	timeout := minSnapshotTimeout
+	if activeGuests > 0 {
+		dynamic := time.Duration(activeGuests) * snapshotTimeoutPerGuest
+		if dynamic > timeout {
+			timeout = dynamic
+		}
+	}
+	if timeout > maxSnapshotTimeout {
+		timeout = maxSnapshotTimeout
+	}
+
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			log.Warn().
+				Str("instance", instanceName).
+				Msg("Skipping guest snapshot polling; backup context deadline exceeded")
+			return
+		}
+		if timeout > remaining {
+			timeout = remaining
+		}
+	}
+
+	snapshotCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	log.Debug().
+		Str("instance", instanceName).
+		Int("guestCount", activeGuests).
+		Dur("timeout", timeout).
+		Msg("Guest snapshot polling budget established")
+
 	var allSnapshots []models.GuestSnapshot
+	deadlineExceeded := false
 
 	// Poll VM snapshots
 	for _, vm := range vms {
@@ -4294,6 +4395,16 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 		snapshots, err := client.GetVMSnapshots(snapshotCtx, vm.Node, vm.VMID)
 		if err != nil {
+			if snapshotCtx.Err() != nil {
+				log.Warn().
+					Str("instance", instanceName).
+					Str("node", vm.Node).
+					Int("vmid", vm.VMID).
+					Err(snapshotCtx.Err()).
+					Msg("Aborting guest snapshot polling due to context cancellation while fetching VM snapshots")
+				deadlineExceeded = true
+				break
+			}
 			// This is common for VMs without snapshots, so use debug level
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_vm_snapshots", instanceName, err).WithNode(vm.Node)
 			log.Debug().
@@ -4322,6 +4433,13 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		}
 	}
 
+	if deadlineExceeded {
+		log.Warn().
+			Str("instance", instanceName).
+			Msg("Guest snapshot polling timed out before completing VM collection; retaining previous snapshots")
+		return
+	}
+
 	// Poll container snapshots
 	for _, ct := range containers {
 		// Skip templates
@@ -4331,6 +4449,16 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 		snapshots, err := client.GetContainerSnapshots(snapshotCtx, ct.Node, ct.VMID)
 		if err != nil {
+			if snapshotCtx.Err() != nil {
+				log.Warn().
+					Str("instance", instanceName).
+					Str("node", ct.Node).
+					Int("vmid", ct.VMID).
+					Err(snapshotCtx.Err()).
+					Msg("Aborting guest snapshot polling due to context cancellation while fetching container snapshots")
+				deadlineExceeded = true
+				break
+			}
 			// API error 596 means snapshots not supported/available - this is expected for many containers
 			errStr := err.Error()
 			if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
@@ -4363,6 +4491,13 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 			allSnapshots = append(allSnapshots, snapshot)
 		}
+	}
+
+	if deadlineExceeded || snapshotCtx.Err() != nil {
+		log.Warn().
+			Str("instance", instanceName).
+			Msg("Guest snapshot polling timed out before completion; retaining previous snapshots")
+		return
 	}
 
 	// Update state with guest snapshots for this instance
