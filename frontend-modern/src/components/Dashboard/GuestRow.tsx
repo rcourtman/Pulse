@@ -140,6 +140,11 @@ export function GuestRow(props: GuestRowProps) {
     if (props.guest.disk.usage === -1) return -1;
     return (props.guest.disk.used / props.guest.disk.total) * 100;
   });
+  const hasDiskUsage = createMemo(() => {
+    if (!props.guest.disk) return false;
+    if (props.guest.disk.total <= 0) return false;
+    return diskPercent() !== -1;
+  });
 
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);
   const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
@@ -340,15 +345,10 @@ export function GuestRow(props: GuestRowProps) {
         </div>
       </td>
 
-      {/* Disk */}
+      {/* Disk – surface usage even if guest is currently stopped so users can see last reported values */}
       <td class="py-0.5 px-2 w-[140px]">
         <Show
-          when={
-            showGuestMetrics() &&
-            props.guest.disk &&
-            props.guest.disk.total > 0 &&
-            diskPercent() !== -1
-          }
+          when={hasDiskUsage()}
           fallback={
             <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
               -
