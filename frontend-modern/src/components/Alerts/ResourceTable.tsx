@@ -196,8 +196,6 @@ export function ResourceTable(props: ResourceTableProps) {
     return 80;
   };
 
-  const formatDelayLabel = (delay: number): string => (delay <= 0 ? 'Instant' : `${delay}s`);
-
   const metricDelayOverride = (metric: string): number | undefined => {
     const normalized = metric.trim().toLowerCase();
     const value = props.metricDelaySeconds?.[normalized] ?? props.metricDelaySeconds?.[metric];
