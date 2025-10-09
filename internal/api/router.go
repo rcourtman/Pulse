@@ -973,6 +973,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/login", // Add login endpoint as public
 				"/api/oidc/login",
 				config.DefaultOIDCCallbackPath,
+				"/install-docker-agent.sh",     // Docker agent bootstrap script must be public
+				"/download/pulse-docker-agent", // Agent binary download should not require auth
+				"/api/agent/version",           // Agent update checks need to work before auth
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
