@@ -37,21 +37,28 @@ type WebhookFilterRules struct {
 // WebhookPayloadData contains all data available for templates
 type WebhookPayloadData struct {
 	// Alert fields
-	ID           string
-	Level        string
-	Type         string
-	ResourceName string
-	ResourceID   string
-	Node         string
-	Instance     string
-	Message      string
-	Value        float64
-	Threshold    float64
-	StartTime    string
-	Duration     string
-	Timestamp    string
+	ID                 string
+	Level              string
+	Type               string
+	ResourceName       string
+	ResourceID         string
+	Node               string
+	Instance           string
+	Message            string
+	Value              float64
+	Threshold          float64
+	ValueFormatted     string
+	ThresholdFormatted string
+	StartTime          string
+	Duration           string
+	Timestamp          string
+	ResourceType       string
+	Acknowledged       bool
+	AckTime            string
+	AckUser            string
 
 	// Additional context
+	Metadata     map[string]interface{}
 	CustomFields map[string]interface{}
 	AlertCount   int
 	Alerts       []*alerts.Alert // For grouped alerts

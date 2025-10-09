@@ -918,6 +918,10 @@ const Storage: Component = () => {
                                 () => expandedStorage() === storageRowId(),
                               );
 
+                              const hasAcknowledgedOnlyAlert = createMemo(
+                                () => alertStyles.hasAcknowledgedOnlyAlert && parentNodeOnline(),
+                              );
+
                               const rowClass = createMemo(() => {
                                 const classes = [
                                   'transition-all duration-200',
@@ -931,6 +935,8 @@ const Storage: Component = () => {
                                       ? 'bg-red-50 dark:bg-red-950/30'
                                       : 'bg-yellow-50 dark:bg-yellow-950/20',
                                   );
+                                } else if (hasAcknowledgedOnlyAlert()) {
+                                  classes.push('bg-gray-50/40 dark:bg-gray-800/40');
                                 }
 
                                 if (isDisabled || !parentNodeOnline()) {
@@ -949,21 +955,34 @@ const Storage: Component = () => {
                               });
 
                               const rowStyle = createMemo(() => {
-                                if (!showAlertHighlight()) return {} as Record<string, string>;
-                                const color =
-                                  alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
-                                return {
-                                  'box-shadow': `inset 4px 0 0 0 ${color}`,
-                                };
+                                if (showAlertHighlight()) {
+                                  const color =
+                                    alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+                                  return {
+                                    'box-shadow': `inset 4px 0 0 0 ${color}`,
+                                  };
+                                }
+                                if (hasAcknowledgedOnlyAlert()) {
+                                  return {
+                                    'box-shadow': 'inset 4px 0 0 0 rgba(156, 163, 175, 0.8)',
+                                  };
+                                }
+                                return {} as Record<string, string>;
                               });
+
+                              const firstCellHasIndicator = createMemo(
+                                () => showAlertHighlight() || hasAcknowledgedOnlyAlert(),
+                              );
 
                               const firstCellClass = createMemo(() => {
                                 if (viewMode() === 'node') {
-                                  return showAlertHighlight()
+                                  return firstCellHasIndicator()
                                     ? 'p-0.5 pl-7 pr-1.5'
                                     : 'p-0.5 pl-8 pr-1.5';
                                 }
-                                return showAlertHighlight() ? 'p-0.5 pl-3 pr-1.5' : 'p-0.5 pl-3 pr-1.5';
+                                return firstCellHasIndicator()
+                                  ? 'p-0.5 pl-3 pr-1.5'
+                                  : 'p-0.5 pl-3 pr-1.5';
                               });
 
                               const toggleDrawer = () => {

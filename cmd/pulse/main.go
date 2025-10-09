@@ -126,16 +126,23 @@ func runServer() {
 	reloadableMonitor.Start(ctx)
 
 	// Initialize API server with reload function
+	var router *api.Router
 	reloadFunc := func() error {
-		return reloadableMonitor.Reload()
+		if err := reloadableMonitor.Reload(); err != nil {
+			return err
+		}
+		if router != nil {
+			router.SetMonitor(reloadableMonitor.GetMonitor())
+		}
+		return nil
 	}
-	router := api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc)
+	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc)
 
 	// Create HTTP server with unified configuration
 	// In production, serve everything (frontend + API) on the frontend port
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.FrontendPort),
-		Handler:      router,
+		Handler:      router.Handler(),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 60 * time.Second, // Increased from 15s to 60s to support large JSON responses (e.g., mock data)
 		IdleTimeout:  60 * time.Second,
@@ -151,6 +158,8 @@ func runServer() {
 			log.Info().Msg("mock.env changed, reloading monitor")
 			if err := reloadableMonitor.Reload(); err != nil {
 				log.Error().Err(err).Msg("Failed to reload monitor after mock.env change")
+			} else if router != nil {
+				router.SetMonitor(reloadableMonitor.GetMonitor())
 			}
 		})
 

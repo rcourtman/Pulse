@@ -651,6 +651,8 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		}
 
 		data := n.prepareWebhookData(alert, customFields)
+		data.AlertCount = len(alertList)
+		data.Alerts = alertList
 
 		// For Telegram webhooks (check URL pattern since service might be empty)
 		if strings.Contains(webhook.URL, "api.telegram.org") {
@@ -715,6 +717,8 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 
 			// Prepare data and generate payload
 			data := n.prepareWebhookData(alert, customFields)
+			data.AlertCount = len(alertList)
+			data.Alerts = alertList
 
 			// Handle service-specific requirements
 			if webhook.Service == "telegram" {
@@ -1122,22 +1126,49 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		instance = alert.Instance
 	}
 
+	resourceType := ""
+	if alert.Metadata != nil {
+		if rt, ok := alert.Metadata["resourceType"].(string); ok {
+			resourceType = rt
+		}
+	}
+
+	var metadataCopy map[string]interface{}
+	if alert.Metadata != nil {
+		metadataCopy = make(map[string]interface{}, len(alert.Metadata))
+		for k, v := range alert.Metadata {
+			metadataCopy[k] = v
+		}
+	}
+
+	var ackTime string
+	if alert.AckTime != nil {
+		ackTime = alert.AckTime.Format(time.RFC3339)
+	}
+
 	return WebhookPayloadData{
-		ID:           alert.ID,
-		Level:        string(alert.Level),
-		Type:         alert.Type,
-		ResourceName: alert.ResourceName,
-		ResourceID:   alert.ResourceID,
-		Node:         alert.Node,
-		Instance:     instance,
-		Message:      alert.Message,
-		Value:        alert.Value,
-		Threshold:    alert.Threshold,
-		StartTime:    alert.StartTime.Format(time.RFC3339),
-		Duration:     formatWebhookDuration(duration),
-		Timestamp:    time.Now().Format(time.RFC3339),
-		CustomFields: customFields,
-		AlertCount:   1,
+		ID:                 alert.ID,
+		Level:              string(alert.Level),
+		Type:               alert.Type,
+		ResourceName:       alert.ResourceName,
+		ResourceID:         alert.ResourceID,
+		Node:               alert.Node,
+		Instance:           instance,
+		Message:            alert.Message,
+		Value:              alert.Value,
+		Threshold:          alert.Threshold,
+		ValueFormatted:     formatMetricValue(alert.Type, alert.Value),
+		ThresholdFormatted: formatMetricThreshold(alert.Type, alert.Threshold),
+		StartTime:          alert.StartTime.Format(time.RFC3339),
+		Duration:           formatWebhookDuration(duration),
+		Timestamp:          time.Now().Format(time.RFC3339),
+		ResourceType:       resourceType,
+		Acknowledged:       alert.Acknowledged,
+		AckTime:            ackTime,
+		AckUser:            alert.AckUser,
+		Metadata:           metadataCopy,
+		CustomFields:       customFields,
+		AlertCount:         1,
 	}
 }
 

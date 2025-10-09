@@ -25,6 +25,11 @@ func NewNotificationHandlers(monitor *monitoring.Monitor) *NotificationHandlers 
 	}
 }
 
+// SetMonitor updates the monitor reference for notification handlers.
+func (h *NotificationHandlers) SetMonitor(m *monitoring.Monitor) {
+	h.monitor = m
+}
+
 // GetEmailConfig returns the current email configuration
 func (h *NotificationHandlers) GetEmailConfig(w http.ResponseWriter, r *http.Request) {
 	config := h.monitor.GetNotificationManager().GetEmailConfig()
