@@ -305,7 +305,7 @@ const buildNodeHeaderMeta = (node: Node) => {
   return { headerMeta, keys };
 };
 
-const overrideHasContent = (override: Override): boolean => {
+const _overrideHasContent = (override: Override): boolean => {
   const hasThresholds = Object.values(override.thresholds || {}).some(
     (value) => value !== undefined,
   );
@@ -315,7 +315,7 @@ const overrideHasContent = (override: Override): boolean => {
   return hasThresholds || hasStateFlags;
 };
 
-const buildOverrideFromResource = (resource: Resource): Override => ({
+const _buildOverrideFromResource = (resource: Resource): Override => ({
   id: resource.id,
   name: resource.name,
   type: resource.type as OverrideType,
@@ -937,7 +937,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
     const editedThresholds = editingThresholds();
     const defaultThresholds = (resource.defaults ?? {}) as Record<string, number | undefined>;
-    const existingOverride = props.overrides().find((o) => o.id === resourceId);
+    const _existingOverride = props.overrides().find((o) => o.id === resourceId);
 
     // Only include values that differ from defaults
     const overrideThresholds: Record<string, number> = {};
@@ -1128,7 +1128,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
     // Get existing override if it exists
     const existingOverride = props.overrides().find((o) => o.id === resourceId);
-    const existingRaw = props.rawOverridesConfig()[resourceId];
+    const _existingRaw = props.rawOverridesConfig()[resourceId];
 
     // Determine the current disabled state - check the resource's current state, not the override
     const currentDisabledState = resource.disabled;
@@ -1244,7 +1244,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
     // Get existing override if it exists
     const existingOverride = props.overrides().find((o) => o.id === resourceId);
-    const existingRaw = props.rawOverridesConfig()[resourceId];
+    const _existingRaw = props.rawOverridesConfig()[resourceId];
 
     // Determine the current state - use the resource's computed state, not just the override
     const currentDisableConnectivity = resource.disableConnectivity;
@@ -1335,7 +1335,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     const defaultSeverity = props.guestPoweredOffSeverity();
 
     const existingOverride = props.overrides().find((o) => o.id === resourceId);
-    const existingRaw = props.rawOverridesConfig()[resourceId];
+    const _existingRaw = props.rawOverridesConfig()[resourceId];
     const cleanThresholds: Record<string, number> = { ...(existingOverride?.thresholds || {}) };
     delete (cleanThresholds as Record<string, unknown>).disabled;
     delete (cleanThresholds as Record<string, unknown>).disableConnectivity;
