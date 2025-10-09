@@ -26,20 +26,26 @@ import (
 
 // Router handles HTTP routing
 type Router struct {
-	mux           *http.ServeMux
-	config        *config.Config
-	monitor       *monitoring.Monitor
-	wsHub         *websocket.Hub
-	reloadFunc    func() error
-	updateManager *updates.Manager
-	exportLimiter *RateLimiter
-	persistence   *config.ConfigPersistence
-	oidcMu        sync.Mutex
-	oidcService   *OIDCService
+	mux                   *http.ServeMux
+	config                *config.Config
+	monitor               *monitoring.Monitor
+	alertHandlers         *AlertHandlers
+	configHandlers        *ConfigHandlers
+	notificationHandlers  *NotificationHandlers
+	dockerAgentHandlers   *DockerAgentHandlers
+	systemSettingsHandler *SystemSettingsHandler
+	wsHub                 *websocket.Hub
+	reloadFunc            func() error
+	updateManager         *updates.Manager
+	exportLimiter         *RateLimiter
+	persistence           *config.ConfigPersistence
+	oidcMu                sync.Mutex
+	oidcService           *OIDCService
+	wrapped               http.Handler
 }
 
 // NewRouter creates a new router instance
-func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket.Hub, reloadFunc func() error) http.Handler {
+func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket.Hub, reloadFunc func() error) *Router {
 	// Initialize persistent session and CSRF stores
 	InitSessionStore(cfg.DataPath)
 	InitCSRFStore(cfg.DataPath)
@@ -78,24 +84,25 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	handler = ErrorHandler(handler)
 	handler = DemoModeMiddleware(cfg, handler)
 	handler = UniversalRateLimitMiddleware(handler)
-	return handler
+	r.wrapped = handler
+	return r
 }
 
 // setupRoutes configures all routes
 func (r *Router) setupRoutes() {
 	// Create handlers
-	alertHandlers := NewAlertHandlers(r.monitor, r.wsHub)
-	notificationHandlers := NewNotificationHandlers(r.monitor)
+	r.alertHandlers = NewAlertHandlers(r.monitor, r.wsHub)
+	r.notificationHandlers = NewNotificationHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
-	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler)
+	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler)
 	updateHandlers := NewUpdateHandlers(r.updateManager)
-	dockerAgentHandlers := NewDockerAgentHandlers(r.monitor, r.wsHub)
+	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/state", r.handleState)
-	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, dockerAgentHandlers.HandleReport))
-	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, dockerAgentHandlers.HandleDeleteHost))
+	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, r.dockerAgentHandlers.HandleReport))
+	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, r.dockerAgentHandlers.HandleDeleteHost))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", r.handleStorage)
 	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
@@ -130,44 +137,44 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/updates/status", updateHandlers.HandleUpdateStatus)
 
 	// Config management routes
-	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
+	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
 		case http.MethodGet:
-			configHandlers.HandleGetNodes(w, r)
+			r.configHandlers.HandleGetNodes(w, req)
 		case http.MethodPost:
-			RequireAdmin(configHandlers.config, configHandlers.HandleAddNode)(w, r)
+			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleAddNode)(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
 	// Test node configuration endpoint (for new nodes)
-	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			configHandlers.HandleTestNodeConfig(w, r)
+	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			r.configHandlers.HandleTestNodeConfig(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
 	// Test connection endpoint
-	r.mux.HandleFunc("/api/config/nodes/test-connection", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			configHandlers.HandleTestConnection(w, r)
+	r.mux.HandleFunc("/api/config/nodes/test-connection", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			r.configHandlers.HandleTestConnection(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
+	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
 		case http.MethodPut:
-			RequireAdmin(configHandlers.config, configHandlers.HandleUpdateNode)(w, r)
+			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleUpdateNode)(w, req)
 		case http.MethodDelete:
-			RequireAdmin(configHandlers.config, configHandlers.HandleDeleteNode)(w, r)
+			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleDeleteNode)(w, req)
 		case http.MethodPost:
 			// Handle test endpoint
-			if strings.HasSuffix(r.URL.Path, "/test") {
-				configHandlers.HandleTestNode(w, r)
+			if strings.HasSuffix(req.URL.Path, "/test") {
+				r.configHandlers.HandleTestNode(w, req)
 			} else {
 				http.Error(w, "Not found", http.StatusNotFound)
 			}
@@ -177,13 +184,13 @@ func (r *Router) setupRoutes() {
 	})
 
 	// System settings routes
-	r.mux.HandleFunc("/api/config/system", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
+	r.mux.HandleFunc("/api/config/system", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
 		case http.MethodGet:
-			configHandlers.HandleGetSystemSettings(w, r)
+			r.configHandlers.HandleGetSystemSettings(w, req)
 		case http.MethodPut:
 			// DEPRECATED - use /api/system/settings/update instead
-			RequireAdmin(configHandlers.config, configHandlers.HandleUpdateSystemSettingsOLD)(w, r)
+			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleUpdateSystemSettingsOLD)(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -193,9 +200,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/mock-mode", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			configHandlers.HandleGetMockMode(w, req)
+			r.configHandlers.HandleGetMockMode(w, req)
 		case http.MethodPost, http.MethodPut:
-			RequireAdmin(configHandlers.config, configHandlers.HandleUpdateMockMode)(w, req)
+			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleUpdateMockMode)(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -657,7 +664,7 @@ func (r *Router) setupRoutes() {
 				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration export initiated")
 
-			configHandlers.HandleExportConfig(w, req)
+			r.configHandlers.HandleExportConfig(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -755,7 +762,7 @@ func (r *Router) setupRoutes() {
 				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration import initiated")
 
-			configHandlers.HandleImportConfig(w, req)
+			r.configHandlers.HandleImportConfig(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -764,15 +771,15 @@ func (r *Router) setupRoutes() {
 	// Discovery route
 
 	// Setup script route
-	r.mux.HandleFunc("/api/setup-script", configHandlers.HandleSetupScript)
+	r.mux.HandleFunc("/api/setup-script", r.configHandlers.HandleSetupScript)
 
 	// Generate setup script URL with temporary token (for authenticated users)
-	r.mux.HandleFunc("/api/setup-script-url", configHandlers.HandleSetupScriptURL)
+	r.mux.HandleFunc("/api/setup-script-url", r.configHandlers.HandleSetupScriptURL)
 
 	// Auto-register route for setup scripts
-	r.mux.HandleFunc("/api/auto-register", configHandlers.HandleAutoRegister)
+	r.mux.HandleFunc("/api/auto-register", r.configHandlers.HandleAutoRegister)
 	// Discovery endpoint
-	r.mux.HandleFunc("/api/discover", RequireAuth(r.config, configHandlers.HandleDiscoverServers))
+	r.mux.HandleFunc("/api/discover", RequireAuth(r.config, r.configHandlers.HandleDiscoverServers))
 
 	// Test endpoint for WebSocket notifications
 	r.mux.HandleFunc("/api/test-notification", func(w http.ResponseWriter, req *http.Request) {
@@ -799,19 +806,19 @@ func (r *Router) setupRoutes() {
 	})
 
 	// Alert routes
-	r.mux.HandleFunc("/api/alerts/", alertHandlers.HandleAlerts)
+	r.mux.HandleFunc("/api/alerts/", r.alertHandlers.HandleAlerts)
 
 	// Notification routes
-	r.mux.HandleFunc("/api/notifications/", notificationHandlers.HandleNotifications)
+	r.mux.HandleFunc("/api/notifications/", r.notificationHandlers.HandleNotifications)
 
 	// Settings routes
 	r.mux.HandleFunc("/api/settings", getSettings)
 	r.mux.HandleFunc("/api/settings/update", updateSettings)
 
 	// System settings and API token management
-	systemSettingsHandler := NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor)
-	r.mux.HandleFunc("/api/system/settings", systemSettingsHandler.HandleGetSystemSettings)
-	r.mux.HandleFunc("/api/system/settings/update", systemSettingsHandler.HandleUpdateSystemSettings)
+	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor)
+	r.mux.HandleFunc("/api/system/settings", r.systemSettingsHandler.HandleGetSystemSettings)
+	r.mux.HandleFunc("/api/system/settings/update", r.systemSettingsHandler.HandleUpdateSystemSettings)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// Docker agent download endpoints
@@ -831,6 +838,34 @@ func (r *Router) setupRoutes() {
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
 
+}
+
+// Handler returns the router wrapped with middleware.
+func (r *Router) Handler() http.Handler {
+	if r.wrapped != nil {
+		return r.wrapped
+	}
+	return r
+}
+
+// SetMonitor updates the router and associated handlers with a new monitor instance.
+func (r *Router) SetMonitor(m *monitoring.Monitor) {
+	r.monitor = m
+	if r.alertHandlers != nil {
+		r.alertHandlers.SetMonitor(m)
+	}
+	if r.configHandlers != nil {
+		r.configHandlers.SetMonitor(m)
+	}
+	if r.notificationHandlers != nil {
+		r.notificationHandlers.SetMonitor(m)
+	}
+	if r.dockerAgentHandlers != nil {
+		r.dockerAgentHandlers.SetMonitor(m)
+	}
+	if r.systemSettingsHandler != nil {
+		r.systemSettingsHandler.SetMonitor(m)
+	}
 }
 
 // ServeHTTP implements http.Handler

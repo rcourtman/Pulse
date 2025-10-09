@@ -78,6 +78,11 @@ func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFu
 	return h
 }
 
+// SetMonitor updates the monitor reference used by the config handlers.
+func (h *ConfigHandlers) SetMonitor(m *monitoring.Monitor) {
+	h.monitor = m
+}
+
 // cleanupExpiredCodes removes expired or used setup codes periodically
 func (h *ConfigHandlers) cleanupExpiredCodes() {
 	ticker := time.NewTicker(5 * time.Minute)
@@ -269,51 +274,53 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
 
 // NodeConfigRequest represents a request to add/update a node
 type NodeConfigRequest struct {
-	Type               string `json:"type"` // "pve" or "pbs"
-	Name               string `json:"name"`
-	Host               string `json:"host"`
-	User               string `json:"user,omitempty"`
-	Password           string `json:"password,omitempty"`
-	TokenName          string `json:"tokenName,omitempty"`
-	TokenValue         string `json:"tokenValue,omitempty"`
-	Fingerprint        string `json:"fingerprint,omitempty"`
-	VerifySSL          bool   `json:"verifySSL"`
-	MonitorVMs         bool   `json:"monitorVMs,omitempty"`         // PVE only
-	MonitorContainers  bool   `json:"monitorContainers,omitempty"`  // PVE only
-	MonitorStorage     bool   `json:"monitorStorage,omitempty"`     // PVE only
-	MonitorBackups     bool   `json:"monitorBackups,omitempty"`     // PVE only
-	MonitorDatastores  bool   `json:"monitorDatastores,omitempty"`  // PBS only
-	MonitorSyncJobs    bool   `json:"monitorSyncJobs,omitempty"`    // PBS only
-	MonitorVerifyJobs  bool   `json:"monitorVerifyJobs,omitempty"`  // PBS only
-	MonitorPruneJobs   bool   `json:"monitorPruneJobs,omitempty"`   // PBS only
-	MonitorGarbageJobs bool   `json:"monitorGarbageJobs,omitempty"` // PBS only
+	Type                 string `json:"type"` // "pve" or "pbs"
+	Name                 string `json:"name"`
+	Host                 string `json:"host"`
+	User                 string `json:"user,omitempty"`
+	Password             string `json:"password,omitempty"`
+	TokenName            string `json:"tokenName,omitempty"`
+	TokenValue           string `json:"tokenValue,omitempty"`
+	Fingerprint          string `json:"fingerprint,omitempty"`
+	VerifySSL            bool   `json:"verifySSL"`
+	MonitorVMs           bool   `json:"monitorVMs,omitempty"`           // PVE only
+	MonitorContainers    bool   `json:"monitorContainers,omitempty"`    // PVE only
+	MonitorStorage       bool   `json:"monitorStorage,omitempty"`       // PVE only
+	MonitorBackups       bool   `json:"monitorBackups,omitempty"`       // PVE only
+	MonitorPhysicalDisks bool   `json:"monitorPhysicalDisks,omitempty"` // PVE only
+	MonitorDatastores    bool   `json:"monitorDatastores,omitempty"`    // PBS only
+	MonitorSyncJobs      bool   `json:"monitorSyncJobs,omitempty"`      // PBS only
+	MonitorVerifyJobs    bool   `json:"monitorVerifyJobs,omitempty"`    // PBS only
+	MonitorPruneJobs     bool   `json:"monitorPruneJobs,omitempty"`     // PBS only
+	MonitorGarbageJobs   bool   `json:"monitorGarbageJobs,omitempty"`   // PBS only
 }
 
 // NodeResponse represents a node in API responses
 type NodeResponse struct {
-	ID                 string                   `json:"id"`
-	Type               string                   `json:"type"`
-	Name               string                   `json:"name"`
-	Host               string                   `json:"host"`
-	User               string                   `json:"user,omitempty"`
-	HasPassword        bool                     `json:"hasPassword"`
-	TokenName          string                   `json:"tokenName,omitempty"`
-	HasToken           bool                     `json:"hasToken"`
-	Fingerprint        string                   `json:"fingerprint,omitempty"`
-	VerifySSL          bool                     `json:"verifySSL"`
-	MonitorVMs         bool                     `json:"monitorVMs,omitempty"`
-	MonitorContainers  bool                     `json:"monitorContainers,omitempty"`
-	MonitorStorage     bool                     `json:"monitorStorage,omitempty"`
-	MonitorBackups     bool                     `json:"monitorBackups,omitempty"`
-	MonitorDatastores  bool                     `json:"monitorDatastores,omitempty"`
-	MonitorSyncJobs    bool                     `json:"monitorSyncJobs,omitempty"`
-	MonitorVerifyJobs  bool                     `json:"monitorVerifyJobs,omitempty"`
-	MonitorPruneJobs   bool                     `json:"monitorPruneJobs,omitempty"`
-	MonitorGarbageJobs bool                     `json:"monitorGarbageJobs,omitempty"`
-	Status             string                   `json:"status"` // "connected", "disconnected", "error"
-	IsCluster          bool                     `json:"isCluster,omitempty"`
-	ClusterName        string                   `json:"clusterName,omitempty"`
-	ClusterEndpoints   []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
+	ID                   string                   `json:"id"`
+	Type                 string                   `json:"type"`
+	Name                 string                   `json:"name"`
+	Host                 string                   `json:"host"`
+	User                 string                   `json:"user,omitempty"`
+	HasPassword          bool                     `json:"hasPassword"`
+	TokenName            string                   `json:"tokenName,omitempty"`
+	HasToken             bool                     `json:"hasToken"`
+	Fingerprint          string                   `json:"fingerprint,omitempty"`
+	VerifySSL            bool                     `json:"verifySSL"`
+	MonitorVMs           bool                     `json:"monitorVMs,omitempty"`
+	MonitorContainers    bool                     `json:"monitorContainers,omitempty"`
+	MonitorStorage       bool                     `json:"monitorStorage,omitempty"`
+	MonitorBackups       bool                     `json:"monitorBackups,omitempty"`
+	MonitorPhysicalDisks bool                     `json:"monitorPhysicalDisks,omitempty"`
+	MonitorDatastores    bool                     `json:"monitorDatastores,omitempty"`
+	MonitorSyncJobs      bool                     `json:"monitorSyncJobs,omitempty"`
+	MonitorVerifyJobs    bool                     `json:"monitorVerifyJobs,omitempty"`
+	MonitorPruneJobs     bool                     `json:"monitorPruneJobs,omitempty"`
+	MonitorGarbageJobs   bool                     `json:"monitorGarbageJobs,omitempty"`
+	Status               string                   `json:"status"` // "connected", "disconnected", "error"
+	IsCluster            bool                     `json:"isCluster,omitempty"`
+	ClusterName          string                   `json:"clusterName,omitempty"`
+	ClusterEndpoints     []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
 }
 
 // validateNodeAPI tests if a cluster node has a working Proxmox API
@@ -576,24 +583,25 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 		h.maybeRefreshClusterInfo(&h.config.PVEInstances[i])
 		pve = h.config.PVEInstances[i]
 		node := NodeResponse{
-			ID:                generateNodeID("pve", i),
-			Type:              "pve",
-			Name:              pve.Name,
-			Host:              pve.Host,
-			User:              pve.User,
-			HasPassword:       pve.Password != "",
-			TokenName:         pve.TokenName,
-			HasToken:          pve.TokenValue != "",
-			Fingerprint:       pve.Fingerprint,
-			VerifySSL:         pve.VerifySSL,
-			MonitorVMs:        pve.MonitorVMs,
-			MonitorContainers: pve.MonitorContainers,
-			MonitorStorage:    pve.MonitorStorage,
-			MonitorBackups:    pve.MonitorBackups,
-			Status:            h.getNodeStatus("pve", pve.Name),
-			IsCluster:         pve.IsCluster,
-			ClusterName:       pve.ClusterName,
-			ClusterEndpoints:  pve.ClusterEndpoints,
+			ID:                   generateNodeID("pve", i),
+			Type:                 "pve",
+			Name:                 pve.Name,
+			Host:                 pve.Host,
+			User:                 pve.User,
+			HasPassword:          pve.Password != "",
+			TokenName:            pve.TokenName,
+			HasToken:             pve.TokenValue != "",
+			Fingerprint:          pve.Fingerprint,
+			VerifySSL:            pve.VerifySSL,
+			MonitorVMs:           pve.MonitorVMs,
+			MonitorContainers:    pve.MonitorContainers,
+			MonitorStorage:       pve.MonitorStorage,
+			MonitorBackups:       pve.MonitorBackups,
+			MonitorPhysicalDisks: pve.MonitorPhysicalDisks,
+			Status:               h.getNodeStatus("pve", pve.Name),
+			IsCluster:            pve.IsCluster,
+			ClusterName:          pve.ClusterName,
+			ClusterEndpoints:     pve.ClusterEndpoints,
 		}
 		nodes = append(nodes, node)
 	}
@@ -660,24 +668,25 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 
 			// Create a single cluster entry (representing the cluster config)
 			clusterNode := NodeResponse{
-				ID:                generateNodeID("pve", 0),
-				Type:              "pve",
-				Name:              "mock-cluster",       // The cluster name
-				Host:              "192.168.0.100:8006", // Primary entry point
-				User:              "root@pam",
-				HasPassword:       true,
-				TokenName:         "pulse",
-				HasToken:          true,
-				Fingerprint:       "",
-				VerifySSL:         false,
-				MonitorVMs:        true,
-				MonitorContainers: true,
-				MonitorStorage:    true,
-				MonitorBackups:    true,
-				Status:            "connected",
-				IsCluster:         true,
-				ClusterName:       "mock-cluster",
-				ClusterEndpoints:  clusterEndpoints, // All cluster nodes
+				ID:                   generateNodeID("pve", 0),
+				Type:                 "pve",
+				Name:                 "mock-cluster",       // The cluster name
+				Host:                 "192.168.0.100:8006", // Primary entry point
+				User:                 "root@pam",
+				HasPassword:          true,
+				TokenName:            "pulse",
+				HasToken:             true,
+				Fingerprint:          "",
+				VerifySSL:            false,
+				MonitorVMs:           true,
+				MonitorContainers:    true,
+				MonitorStorage:       true,
+				MonitorBackups:       true,
+				MonitorPhysicalDisks: true,
+				Status:               "connected",
+				IsCluster:            true,
+				ClusterName:          "mock-cluster",
+				ClusterEndpoints:     clusterEndpoints, // All cluster nodes
 			}
 			mockNodes = append(mockNodes, clusterNode)
 		}
@@ -685,24 +694,25 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 		// Add standalone nodes as individual entries
 		for i, node := range standaloneNodes {
 			standaloneNode := NodeResponse{
-				ID:                generateNodeID("pve", len(mockNodes)+i),
-				Type:              "pve",
-				Name:              node.Name,                               // Use the actual node name
-				Host:              fmt.Sprintf("192.168.0.%d:8006", 150+i), // Different IP range for standalone
-				User:              "root@pam",
-				HasPassword:       true,
-				TokenName:         "pulse",
-				HasToken:          true,
-				Fingerprint:       "",
-				VerifySSL:         false,
-				MonitorVMs:        true,
-				MonitorContainers: true,
-				MonitorStorage:    true,
-				MonitorBackups:    true,
-				Status:            "connected",
-				IsCluster:         false, // Not part of a cluster
-				ClusterName:       "",
-				ClusterEndpoints:  []config.ClusterEndpoint{},
+				ID:                   generateNodeID("pve", len(mockNodes)+i),
+				Type:                 "pve",
+				Name:                 node.Name,                               // Use the actual node name
+				Host:                 fmt.Sprintf("192.168.0.%d:8006", 150+i), // Different IP range for standalone
+				User:                 "root@pam",
+				HasPassword:          true,
+				TokenName:            "pulse",
+				HasToken:             true,
+				Fingerprint:          "",
+				VerifySSL:            false,
+				MonitorVMs:           true,
+				MonitorContainers:    true,
+				MonitorStorage:       true,
+				MonitorBackups:       true,
+				MonitorPhysicalDisks: true,
+				Status:               "connected",
+				IsCluster:            false, // Not part of a cluster
+				ClusterName:          "",
+				ClusterEndpoints:     []config.ClusterEndpoint{},
 			}
 			mockNodes = append(mockNodes, standaloneNode)
 		}
@@ -943,21 +953,22 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 
 		pve := config.PVEInstance{
-			Name:              req.Name,
-			Host:              host, // Use normalized host
-			User:              req.User,
-			Password:          req.Password,
-			TokenName:         req.TokenName,
-			TokenValue:        req.TokenValue,
-			Fingerprint:       req.Fingerprint,
-			VerifySSL:         req.VerifySSL,
-			MonitorVMs:        req.MonitorVMs,
-			MonitorContainers: req.MonitorContainers,
-			MonitorStorage:    req.MonitorStorage,
-			MonitorBackups:    req.MonitorBackups,
-			IsCluster:         isCluster,
-			ClusterName:       clusterName,
-			ClusterEndpoints:  clusterEndpoints,
+			Name:                 req.Name,
+			Host:                 host, // Use normalized host
+			User:                 req.User,
+			Password:             req.Password,
+			TokenName:            req.TokenName,
+			TokenValue:           req.TokenValue,
+			Fingerprint:          req.Fingerprint,
+			VerifySSL:            req.VerifySSL,
+			MonitorVMs:           req.MonitorVMs,
+			MonitorContainers:    req.MonitorContainers,
+			MonitorStorage:       req.MonitorStorage,
+			MonitorBackups:       req.MonitorBackups,
+			MonitorPhysicalDisks: req.MonitorPhysicalDisks,
+			IsCluster:            isCluster,
+			ClusterName:          clusterName,
+			ClusterEndpoints:     clusterEndpoints,
 		}
 		h.config.PVEInstances = append(h.config.PVEInstances, pve)
 
@@ -1362,6 +1373,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		pve.MonitorContainers = req.MonitorContainers
 		pve.MonitorStorage = req.MonitorStorage
 		pve.MonitorBackups = req.MonitorBackups
+		pve.MonitorPhysicalDisks = req.MonitorPhysicalDisks
 	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
 		pbs := &h.config.PBSInstances[index]
 		pbs.Name = req.Name

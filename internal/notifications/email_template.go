@@ -377,16 +377,28 @@ func pluralize(count int) string {
 
 // formatMetricValue formats a metric value with the appropriate unit
 func formatMetricValue(metricType string, value float64) string {
-	if metricType == "diskRead" || metricType == "diskWrite" {
+	switch strings.ToLower(metricType) {
+	case "diskread", "diskwrite", "networkin", "networkout":
 		return fmt.Sprintf("%.1f MB/s", value)
+	case "temperature":
+		return fmt.Sprintf("%.1f°C", value)
+	case "cpu", "memory", "disk", "usage":
+		return fmt.Sprintf("%.1f%%", value)
+	default:
+		return fmt.Sprintf("%.1f", value)
 	}
-	return fmt.Sprintf("%.1f%%", value)
 }
 
 // formatMetricThreshold formats a metric threshold with the appropriate unit
 func formatMetricThreshold(metricType string, threshold float64) string {
-	if metricType == "diskRead" || metricType == "diskWrite" {
+	switch strings.ToLower(metricType) {
+	case "diskread", "diskwrite", "networkin", "networkout":
 		return fmt.Sprintf("%.0f MB/s", threshold)
+	case "temperature":
+		return fmt.Sprintf("%.0f°C", threshold)
+	case "cpu", "memory", "disk", "usage":
+		return fmt.Sprintf("%.0f%%", threshold)
+	default:
+		return fmt.Sprintf("%.0f", threshold)
 	}
-	return fmt.Sprintf("%.0f%%", threshold)
 }

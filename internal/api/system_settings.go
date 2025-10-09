@@ -40,6 +40,15 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	}
 }
 
+// SetMonitor updates the monitor reference used by the handler at runtime.
+func (h *SystemSettingsHandler) SetMonitor(m interface {
+	GetDiscoveryService() *discovery.Service
+	StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
+	StopDiscoveryService()
+}) {
+	h.monitor = m
+}
+
 // validateSystemSettings validates settings before applying them
 func validateSystemSettings(settings *config.SystemSettings, rawRequest map[string]interface{}) error {
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s

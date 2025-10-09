@@ -29,6 +29,11 @@ func NewAlertHandlers(monitor *monitoring.Monitor, wsHub *websocket.Hub) *AlertH
 	}
 }
 
+// SetMonitor updates the monitor reference for alert handlers.
+func (h *AlertHandlers) SetMonitor(m *monitoring.Monitor) {
+	h.monitor = m
+}
+
 // validateAlertID validates an alert ID for security
 func validateAlertID(alertID string) bool {
 	// Check length to prevent DOS attacks with huge IDs
