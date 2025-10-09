@@ -19,7 +19,7 @@ type ReloadableMonitor struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	parentCtx  context.Context
-	reloadChan chan struct{}
+	reloadChan chan chan error
 }
 
 // NewReloadableMonitor creates a new reloadable monitor
@@ -33,7 +33,7 @@ func NewReloadableMonitor(cfg *config.Config, wsHub *websocket.Hub) (*Reloadable
 		monitor:    monitor,
 		config:     cfg,
 		wsHub:      wsHub,
-		reloadChan: make(chan struct{}, 1),
+		reloadChan: make(chan chan error, 1),
 	}
 
 	return rm, nil
@@ -55,13 +55,9 @@ func (rm *ReloadableMonitor) Start(ctx context.Context) {
 
 // Reload triggers a monitor reload
 func (rm *ReloadableMonitor) Reload() error {
-	select {
-	case rm.reloadChan <- struct{}{}:
-		return nil
-	default:
-		// Channel is full, reload already pending
-		return nil
-	}
+	done := make(chan error, 1)
+	rm.reloadChan <- done
+	return <-done
 }
 
 // watchReload watches for reload signals
@@ -70,12 +66,14 @@ func (rm *ReloadableMonitor) watchReload(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-rm.reloadChan:
+		case done := <-rm.reloadChan:
 			log.Info().Msg("Reloading monitor configuration")
 			if err := rm.doReload(); err != nil {
 				log.Error().Err(err).Msg("Failed to reload monitor")
+				done <- err
 			} else {
 				log.Info().Msg("Monitor reloaded successfully")
+				done <- nil
 			}
 		}
 	}

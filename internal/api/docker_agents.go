@@ -24,6 +24,11 @@ func NewDockerAgentHandlers(m *monitoring.Monitor, hub *websocket.Hub) *DockerAg
 	return &DockerAgentHandlers{monitor: m, wsHub: hub}
 }
 
+// SetMonitor updates the monitor reference for docker agent handlers.
+func (h *DockerAgentHandlers) SetMonitor(m *monitoring.Monitor) {
+	h.monitor = m
+}
+
 // HandleReport accepts heartbeat payloads from the Docker agent.
 func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
