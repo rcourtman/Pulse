@@ -1723,33 +1723,55 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 				// Update memory metrics to use Available field for more accurate usage
 				if nodeInfo.Memory != nil && nodeInfo.Memory.Total > 0 {
-					// Calculate memory usage based on available memory (which excludes non-reclaimable cache)
-					// This provides a more accurate picture of actual memory pressure
 					var actualUsed uint64
-					if nodeInfo.Memory.Available > 0 {
-						// Use available memory for calculation (preferred method)
-						actualUsed = nodeInfo.Memory.Total - nodeInfo.Memory.Available
-						log.Debug().
+					effectiveAvailable := nodeInfo.Memory.EffectiveAvailable()
+
+					switch {
+					case effectiveAvailable > 0 && effectiveAvailable <= nodeInfo.Memory.Total:
+						// Prefer available/avail fields or derived buffers+cache values when present.
+						actualUsed = nodeInfo.Memory.Total - effectiveAvailable
+						if actualUsed > nodeInfo.Memory.Total {
+							actualUsed = nodeInfo.Memory.Total
+						}
+
+						logCtx := log.Debug().
 							Str("node", node.Node).
 							Uint64("total", nodeInfo.Memory.Total).
-							Uint64("available", nodeInfo.Memory.Available).
+							Uint64("effectiveAvailable", effectiveAvailable).
 							Uint64("actualUsed", actualUsed).
-							Float64("usage", safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total))).
-							Msg("Node memory: using available field (excludes reclaimable cache)")
-					} else {
-						// Fallback to traditional used memory if available field is missing
+							Float64("usage", safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total)))
+
+						switch {
+						case nodeInfo.Memory.Available > 0:
+							logCtx.Msg("Node memory: using available field (excludes reclaimable cache)")
+						case nodeInfo.Memory.Avail > 0:
+							logCtx.Msg("Node memory: using avail field (excludes reclaimable cache)")
+						default:
+							logCtx.
+								Uint64("free", nodeInfo.Memory.Free).
+								Uint64("buffers", nodeInfo.Memory.Buffers).
+								Uint64("cached", nodeInfo.Memory.Cached).
+								Msg("Node memory: derived available from free+buffers+cached (excludes reclaimable cache)")
+						}
+					default:
+						// Fallback to traditional used memory if no cache-aware data is exposed
 						actualUsed = nodeInfo.Memory.Used
 						log.Debug().
 							Str("node", node.Node).
 							Uint64("total", nodeInfo.Memory.Total).
 							Uint64("used", nodeInfo.Memory.Used).
-							Msg("Node memory: Available field missing - using traditional calculation (includes cache)")
+							Msg("Node memory: no cache-aware metrics - using traditional calculation (includes cache)")
+					}
+
+					free := int64(nodeInfo.Memory.Total - actualUsed)
+					if free < 0 {
+						free = 0
 					}
 
 					modelNode.Memory = models.Memory{
 						Total: int64(nodeInfo.Memory.Total),
 						Used:  int64(actualUsed),
-						Free:  int64(nodeInfo.Memory.Total - actualUsed),
+						Free:  free,
 						Usage: safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total)),
 					}
 					memoryUpdated = true

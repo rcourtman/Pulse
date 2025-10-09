@@ -417,6 +417,38 @@ type MemoryStatus struct {
 	Used      uint64 `json:"used"`
 	Free      uint64 `json:"free"`
 	Available uint64 `json:"available"` // Memory available for allocation (excludes non-reclaimable cache)
+	Avail     uint64 `json:"avail"`     // Older Proxmox field name for available memory
+	Buffers   uint64 `json:"buffers"`   // Reclaimable buffers
+	Cached    uint64 `json:"cached"`    // Reclaimable page cache
+	Shared    uint64 `json:"shared"`    // Shared memory (informational)
+}
+
+// EffectiveAvailable returns the best-effort estimate of reclaimable memory.
+// Prefer the dedicated "available"/"avail" fields when present, otherwise derive
+// from free + buffers + cached which mirrors Linux's MemAvailable calculation.
+func (m *MemoryStatus) EffectiveAvailable() uint64 {
+	if m == nil {
+		return 0
+	}
+
+	if m.Available > 0 {
+		return m.Available
+	}
+	if m.Avail > 0 {
+		return m.Avail
+	}
+
+	derived := m.Free + m.Buffers + m.Cached
+	if derived == 0 {
+		return 0
+	}
+
+	// Cap at total to guard against over-reporting when buffers/cached exceed total.
+	if m.Total > 0 && derived > m.Total {
+		return m.Total
+	}
+
+	return derived
 }
 
 // SwapStatus represents swap information
