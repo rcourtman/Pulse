@@ -9,12 +9,13 @@ import (
 func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 	m := NewManager()
 	m.ClearActiveAlerts()
-	cfg := m.GetConfig()
-	cfg.TimeThreshold = 0
-	cfg.TimeThresholds = map[string]int{}
-	cfg.SuppressionWindow = 0
-	cfg.MinimumDelta = 0
-	m.UpdateConfig(cfg)
+	// Set config fields directly to bypass UpdateConfig's default value enforcement
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.config.SuppressionWindow = 0
+	m.config.MinimumDelta = 0
+	m.mu.Unlock()
 
 	threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "usage", 90, threshold, nil)
