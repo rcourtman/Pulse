@@ -141,6 +141,10 @@ print_info() {
     echo -e "${YELLOW}[INFO] $1${NC}"
 }
 
+print_warn() {
+    echo -e "${YELLOW}[WARN] $1${NC}"
+}
+
 ensure_debian_template() {
     if [[ -n "$DEBIAN_TEMPLATE" ]]; then
         return
