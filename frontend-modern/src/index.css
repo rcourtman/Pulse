@@ -118,6 +118,18 @@
 }
 
 @layer components {
+  .pulse-shell {
+    width: min(96vw, 110rem);
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 3vw, 3.25rem);
+    transition: padding-inline 0.3s ease;
+  }
+
+  .pulse-panel {
+    padding: clamp(0.75rem, 1.6vw, 1.5rem);
+  }
+
   /* Card styles */
   .card {
     @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;

@@ -546,23 +546,21 @@ function App() {
                   <SecurityWarning />
                   <DemoBanner />
                   <UpdateBanner />
-                  <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
-                    <div class="container w-[98%] max-w-[1920px] mx-auto">
-                      <AppLayout
-                        connected={connected}
-                        reconnecting={reconnecting}
-                        dataUpdated={dataUpdated}
-                        lastUpdateText={lastUpdateText}
-                        versionInfo={versionInfo}
-                        hasAuth={hasAuth}
-                        needsAuth={needsAuth}
-                        proxyAuthInfo={proxyAuthInfo}
-                        handleLogout={handleLogout}
-                        state={state}
-                      >
-                        {props.children}
-                      </AppLayout>
-                    </div>
+                  <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6">
+                    <AppLayout
+                      connected={connected}
+                      reconnecting={reconnecting}
+                      dataUpdated={dataUpdated}
+                      lastUpdateText={lastUpdateText}
+                      versionInfo={versionInfo}
+                      hasAuth={hasAuth}
+                      needsAuth={needsAuth}
+                      proxyAuthInfo={proxyAuthInfo}
+                      handleLogout={handleLogout}
+                      state={state}
+                    >
+                      {props.children}
+                    </AppLayout>
                   </div>
                   <ToastContainer />
                   <NotificationContainer />
@@ -599,7 +597,6 @@ function App() {
   );
 }
 
-// Layout component that wraps all routes
 function AppLayout(props: {
   connected: () => boolean;
   reconnecting: () => boolean;
@@ -766,7 +763,7 @@ function AppLayout(props: {
   };
 
   return (
-    <>
+    <div class="pulse-shell">
       {/* Header */}
       <div class="header flex flex-row justify-between items-center mb-2">
         <div class="hidden md:block md:flex-1"></div>
@@ -989,7 +986,7 @@ function AppLayout(props: {
         id="main"
         class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2"
       >
-        <div class="p-3">
+        <div class="pulse-panel">
           {props.children}
         </div>
       </main>
@@ -1012,7 +1009,7 @@ function AppLayout(props: {
           <span>Last refresh: {props.lastUpdateText()}</span>
         </Show>
       </footer>
-    </>
+    </div>
   );
 }
 
