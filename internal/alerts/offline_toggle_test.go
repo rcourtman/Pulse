@@ -79,3 +79,48 @@ func TestUpdateConfigClearsExistingNodeOfflineAlerts(t *testing.T) {
 		t.Fatalf("expected node offline counter to be reset when DisableAllNodesOffline is enabled")
 	}
 }
+
+func TestUpdateConfigClearsDockerContainerAlertsWhenDisabled(t *testing.T) {
+	manager := NewManager()
+
+	containerResourceID := "docker:host-1/container-1"
+	containerAlertIDs := []string{
+		"docker-container-state-" + containerResourceID,
+		"docker-container-health-" + containerResourceID,
+		"docker-container-restart-loop-" + containerResourceID,
+		"docker-container-oom-" + containerResourceID,
+		"docker-container-memory-limit-" + containerResourceID,
+	}
+
+	manager.mu.Lock()
+	for _, id := range containerAlertIDs {
+		manager.activeAlerts[id] = &Alert{ID: id, ResourceID: containerResourceID}
+	}
+	manager.dockerStateConfirm[containerResourceID] = 2
+	manager.dockerRestartTracking[containerResourceID] = &dockerRestartRecord{}
+	manager.dockerLastExitCode[containerResourceID] = 137
+	manager.mu.Unlock()
+
+	config := manager.GetConfig()
+	config.DisableAllDockerContainers = true
+	manager.UpdateConfig(config)
+
+	time.Sleep(10 * time.Millisecond)
+
+	manager.mu.RLock()
+	defer manager.mu.RUnlock()
+	for _, id := range containerAlertIDs {
+		if _, exists := manager.activeAlerts[id]; exists {
+			t.Fatalf("expected docker container alert %s to be cleared when DisableAllDockerContainers is enabled", id)
+		}
+	}
+	if len(manager.dockerStateConfirm) != 0 {
+		t.Fatalf("expected dockerStateConfirm map to be cleared when DisableAllDockerContainers is enabled")
+	}
+	if len(manager.dockerRestartTracking) != 0 {
+		t.Fatalf("expected dockerRestartTracking map to be cleared when DisableAllDockerContainers is enabled")
+	}
+	if len(manager.dockerLastExitCode) != 0 {
+		t.Fatalf("expected dockerLastExitCode map to be cleared when DisableAllDockerContainers is enabled")
+	}
+}
