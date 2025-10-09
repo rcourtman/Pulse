@@ -72,3 +72,52 @@ func TestDiskUnmarshalWearout(t *testing.T) {
 		})
 	}
 }
+
+func TestMemoryStatusEffectiveAvailable(t *testing.T) {
+	t.Run("nil receiver returns zero", func(t *testing.T) {
+		var status *MemoryStatus
+		if status.EffectiveAvailable() != 0 {
+			t.Fatalf("expected nil receiver to return 0")
+		}
+	})
+
+	tests := []struct {
+		name   string
+		status MemoryStatus
+		want   uint64
+	}{
+		{
+			name:   "uses available field when set",
+			status: MemoryStatus{Total: 16 * 1024, Available: 6 * 1024},
+			want:   6 * 1024,
+		},
+		{
+			name:   "uses avail field fallback",
+			status: MemoryStatus{Total: 16 * 1024, Avail: 5 * 1024},
+			want:   5 * 1024,
+		},
+		{
+			name:   "derives from free buffers cached",
+			status: MemoryStatus{Total: 32 * 1024, Free: 4 * 1024, Buffers: 2 * 1024, Cached: 6 * 1024},
+			want:   12 * 1024,
+		},
+		{
+			name:   "caps derived value at total",
+			status: MemoryStatus{Total: 8 * 1024, Free: 4 * 1024, Buffers: 4 * 1024, Cached: 4 * 1024},
+			want:   8 * 1024,
+		},
+		{
+			name:   "returns zero when no data",
+			status: MemoryStatus{Total: 24 * 1024},
+			want:   0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.status.EffectiveAvailable(); got != tc.want {
+				t.Fatalf("EffectiveAvailable: got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
