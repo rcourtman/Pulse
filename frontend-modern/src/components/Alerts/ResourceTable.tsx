@@ -87,7 +87,6 @@ interface ResourceTableProps {
   onSetOfflineState?: (resourceId: string, state: OfflineState) => void;
   showDelayColumn?: boolean;
   globalDelaySeconds?: number;
-  onGlobalDelayChange?: (value: number) => void;
   editingId: () => string | null;
   editingThresholds: () => Record<string, number | undefined>;
   setEditingThresholds: (value: Record<string, number | undefined>) => void;
@@ -100,6 +99,8 @@ interface ResourceTableProps {
   onToggleGlobalDisable?: () => void;
   globalDisableOfflineFlag?: () => boolean;
   onToggleGlobalDisableOffline?: () => void;
+  metricDelaySeconds?: Record<string, number>;
+  onMetricDelayChange?: (metricKey: string, value: number | null) => void;
   groupHeaderMeta?: Record<string, GroupHeaderMeta>;
 }
 
@@ -194,37 +195,21 @@ export function ResourceTable(props: ResourceTableProps) {
     return 80;
   };
 
-  const resourceDelaySeconds = (resource: Resource): number => {
-    if (typeof resource.delaySeconds === 'number' && Number.isFinite(resource.delaySeconds)) {
-      return resource.delaySeconds;
-    }
-    if (typeof props.globalDelaySeconds === 'number' && Number.isFinite(props.globalDelaySeconds)) {
-      return props.globalDelaySeconds;
-    }
-    return 0;
-  };
-
   const formatDelayLabel = (delay: number): string => (delay <= 0 ? 'Instant' : `${delay}s`);
 
-  const isCustomDelay = (resource: Resource): boolean => {
-    if (typeof resource.delaySeconds !== 'number') {
-      return false;
+  const metricDelayOverride = (metric: string): number | undefined => {
+    const normalized = metric.trim().toLowerCase();
+    const value = props.metricDelaySeconds?.[normalized] ?? props.metricDelaySeconds?.[metric];
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return undefined;
     }
-    if (!Number.isFinite(resource.delaySeconds)) {
-      return false;
-    }
-    const globalDelay =
-      typeof props.globalDelaySeconds === 'number' && Number.isFinite(props.globalDelaySeconds)
-        ? props.globalDelaySeconds
-        : 0;
-    return resource.delaySeconds !== globalDelay;
+    return value;
   };
 
   const totalColumnCount = () =>
     props.columns.length +
     3 +
-    (props.showOfflineAlertsColumn ? 1 : 0) +
-    (props.showDelayColumn ? 1 : 0);
+    (props.showOfflineAlertsColumn ? 1 : 0);
 
   const getColumnHeaderTooltip = (column: string): string | undefined => {
     const normalized = column.trim().toLowerCase();
@@ -421,14 +406,6 @@ export function ResourceTable(props: ResourceTableProps) {
                   Offline Alerts
                 </th>
               </Show>
-              <Show when={props.showDelayColumn}>
-                <th
-                  class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                  title="Pulse waits for the configured alert delay before creating a notification. If the metric drops back below the threshold during this window, the alert is suppressed to reduce noise. Update the delay values using the Alert Delay column in each table."
-                >
-                  Alert Delay (s)
-                </th>
-              </Show>
               <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Actions
               </th>
@@ -469,7 +446,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                     return (
                       <td class="p-1 px-2 text-center align-middle">
-                        <div class="relative flex justify-center">
+                        <div class="relative flex justify-center w-full">
                           <input
                             type="number"
                             min={bounds.min}
@@ -558,22 +535,86 @@ export function ResourceTable(props: ResourceTableProps) {
                     </Show>
                   </td>
                 </Show>
-                <Show when={props.showDelayColumn}>
+                <td class="p-1 px-2 text-center align-middle">
+                  <span class="text-sm text-gray-400">-</span>
+                </td>
+              </tr>
+            </Show>
+            <Show when={props.showDelayColumn && typeof props.onMetricDelayChange === 'function'}>
+              <tr class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}>
+                <td class="p-1 px-2 text-center align-middle">
+                  <span class="text-sm text-gray-400">-</span>
+                </td>
+                <td class="p-1 px-2 align-middle">
+                  <span class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                    Alert Delay (s)
+                  </span>
+                </td>
+                <For each={props.columns}>
+                  {(column) => {
+                    const metric = normalizeMetricKey(column);
+                    const typeDefaultDelay = props.globalDelaySeconds ?? 5;
+                    const overrideDelay = metricDelayOverride(metric);
+
+                    return (
+                      <td class="p-1 px-2 text-center align-middle">
+                        <div class="flex items-center justify-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            value={(() => {
+                              return overrideDelay !== undefined ? overrideDelay : '';
+                            })()}
+                            placeholder={formatDelayLabel(typeDefaultDelay)}
+                            class="w-20 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            onInput={(e) => {
+                              const raw = e.currentTarget.value;
+                              if (raw === '') {
+                                props.onMetricDelayChange?.(metric, null);
+                                props.setHasUnsavedChanges?.(true);
+                              } else {
+                                const parsed = parseInt(raw, 10);
+                                if (Number.isNaN(parsed)) {
+                                  return;
+                                }
+                                props.onMetricDelayChange?.(metric, Math.max(0, parsed));
+                                props.setHasUnsavedChanges?.(true);
+                              }
+                            }}
+                          />
+                          <Show when={metricDelayOverride(metric) !== undefined}>
+                            <button
+                              type="button"
+                              class="rounded p-1 text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                              onClick={() => {
+                                props.onMetricDelayChange?.(metric, null);
+                                props.setHasUnsavedChanges?.(true);
+                              }}
+                              title="Clear delay override"
+                              aria-label="Clear delay override"
+                            >
+                              <svg
+                                class="h-3 w-3"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  fill-rule="evenodd"
+                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm2.707-10.707a1 1 0 00-1.414-1.414L10 7.586 8.707 6.293A1 1 0 007.293 7.707L8.586 9l-1.293 1.293a1 1 0 101.414 1.414L10 10.414l1.293 1.293a1 1 0 001.414-1.414L11.414 9l1.293-1.293z"
+                                  clip-rule="evenodd"
+                                />
+                              </svg>
+                            </button>
+                          </Show>
+                        </div>
+                      </td>
+                    );
+                  }}
+                </For>
+                <Show when={props.showOfflineAlertsColumn}>
                   <td class="p-1 px-2 text-center align-middle">
-                    <div class="flex justify-center">
-                      <input
-                        type="number"
-                        min="0"
-                        value={props.globalDelaySeconds ?? 0}
-                        onInput={(e) => {
-                          const raw = parseInt(e.currentTarget.value, 10);
-                          if (Number.isNaN(raw)) return;
-                          props.onGlobalDelayChange?.(Math.max(0, raw));
-                          props.setHasUnsavedChanges?.(true);
-                        }}
-                        class="w-20 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-100 px-2 py-0.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
+                    <span class="text-sm text-gray-400">-</span>
                   </td>
                 </Show>
                 <td class="p-1 px-2 text-center align-middle">
@@ -765,74 +806,76 @@ export function ResourceTable(props: ResourceTableProps) {
                                         </span>
                                       }
                                     >
-                                      <Show
-                                        when={isEditing()}
-                                        fallback={
-                                          <div
-                                            onClick={openMetricEditor}
-                                            class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 py-0.5 transition-colors"
-                                            title="Click to edit this metric"
-                                          >
-                                            <MetricValueWithHeat
-                                              resourceId={resource.id}
-                                              metric={metric}
-                                              value={displayValue(metric)}
-                                              isOverridden={isOverridden(metric)}
+                                        <Show
+                                          when={isEditing()}
+                                          fallback={
+                                            <div
+                                              onClick={(event) => {
+                                                openMetricEditor(event);
+                                              }}
+                                              class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 py-0.5 transition-colors"
+                                              title="Click to edit this metric"
+                                            >
+                                              <MetricValueWithHeat
+                                                resourceId={resource.id}
+                                                metric={metric}
+                                                value={displayValue(metric)}
+                                                isOverridden={isOverridden(metric)}
+                                              />
+                                            </div>
+                                          }
+                                        >
+                                          <div class="flex items-center justify-center">
+                                            <input
+                                              type="number"
+                                              min={bounds.min}
+                                              max={bounds.max}
+                                              value={thresholds()?.[metric] ?? ''}
+                                              placeholder={isDisabled() ? 'Off' : ''}
+                                              ref={(el) => {
+                                                if (
+                                                  isEditing() &&
+                                                  activeMetricInput()?.resourceId === resource.id &&
+                                                  activeMetricInput()?.metric === metric
+                                                ) {
+                                                  queueMicrotask(() => {
+                                                    el.focus();
+                                                    el.select();
+                                                  });
+                                                }
+                                              }}
+                                              onInput={(e) => {
+                                                const raw = e.currentTarget.value;
+                                                if (raw === '') {
+                                                  props.setEditingThresholds({
+                                                    ...props.editingThresholds(),
+                                                    [metric]: undefined,
+                                                  });
+                                                  return;
+                                                }
+                                                const val = parseInt(raw, 10);
+                                                if (!Number.isNaN(val)) {
+                                                  props.setEditingThresholds({
+                                                    ...props.editingThresholds(),
+                                                    [metric]: val,
+                                                  });
+                                                }
+                                              }}
+                                              onBlur={() => {
+                                                if (props.editingId() === resource.id) {
+                                                  props.onSaveEdit(resource.id);
+                                                }
+                                                setActiveMetricInput(null);
+                                              }}
+                                              class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
+                                                isDisabled()
+                                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
+                                                  : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+                                              }`}
                                             />
                                           </div>
-                                        }
-                                      >
-                                      <div class="flex items-center justify-center">
-                                       <input
-                                         type="number"
-                                          min={bounds.min}
-                                          max={bounds.max}
-                                          value={thresholds()?.[metric] ?? ''}
-                                          placeholder={isDisabled() ? 'Off' : ''}
-                                          ref={(el) => {
-                                            if (
-                                              isEditing() &&
-                                              activeMetricInput()?.resourceId === resource.id &&
-                                              activeMetricInput()?.metric === metric
-                                            ) {
-                                              queueMicrotask(() => {
-                                                el.focus();
-                                                el.select();
-                                              });
-                                            }
-                                          }}
-                                          onInput={(e) => {
-                                            const raw = e.currentTarget.value;
-                                            if (raw === '') {
-                                              props.setEditingThresholds({
-                                                ...props.editingThresholds(),
-                                                [metric]: undefined,
-                                              });
-                                              return;
-                                            }
-                                            const val = parseInt(raw, 10);
-                                            if (!Number.isNaN(val)) {
-                                              props.setEditingThresholds({
-                                                ...props.editingThresholds(),
-                                                [metric]: val,
-                                              });
-                                            }
-                                          }}
-                                          onBlur={() => {
-                                            if (props.editingId() === resource.id) {
-                                              props.onSaveEdit(resource.id);
-                                            }
-                                            setActiveMetricInput(null);
-                                          }}
-                                          class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                                            isDisabled()
-                                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
-                                              : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
-                                          }`}
-                                        />
-                                      </div>
-                                      </Show>
-                                    </Show>
+                                        </Show>
+                                     </Show>
                                   </td>
                                 );
                               }}
@@ -885,32 +928,6 @@ export function ResourceTable(props: ResourceTableProps) {
                                     titleDisabled: 'Offline alerts disabled. Click to enable for this resource.',
                                     titleWhenDisabled: 'Offline alerts controlled globally',
                                   });
-                                })()}
-                              </td>
-                            </Show>
-
-                            <Show when={props.showDelayColumn}>
-                              <td class="p-1 px-2 text-center align-middle">
-                                {(() => {
-                                  const delay = resourceDelaySeconds(resource);
-                                  const label = formatDelayLabel(delay);
-                                  const custom = isCustomDelay(resource);
-                                  const title = custom
-                                    ? 'Custom delay applied to this resource'
-                                    : 'Using global alert delay';
-
-                                  return (
-                                    <span
-                                      class={`text-sm ${
-                                        custom
-                                          ? 'font-medium text-blue-600 dark:text-blue-300'
-                                          : 'text-gray-600 dark:text-gray-300'
-                                      }`}
-                                      title={title}
-                                    >
-                                      {label}
-                                    </span>
-                                  );
                                 })()}
                               </td>
                             </Show>
@@ -1307,32 +1324,6 @@ export function ResourceTable(props: ResourceTableProps) {
                                   );
                                 })()}
                             </Show>
-                          </td>
-                        </Show>
-
-                        <Show when={props.showDelayColumn}>
-                          <td class="p-1 px-2 text-center align-middle">
-                            {(() => {
-                              const delay = resourceDelaySeconds(resource);
-                              const label = formatDelayLabel(delay);
-                              const custom = isCustomDelay(resource);
-                              const title = custom
-                                ? 'Custom delay applied to this resource'
-                                : 'Using global alert delay';
-
-                              return (
-                                <span
-                                  class={`text-sm ${
-                                    custom
-                                      ? 'font-medium text-blue-600 dark:text-blue-300'
-                                      : 'text-gray-600 dark:text-gray-300'
-                                  }`}
-                                  title={title}
-                                >
-                                  {label}
-                                </span>
-                              );
-                            })()}
                           </td>
                         </Show>
 

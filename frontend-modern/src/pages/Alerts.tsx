@@ -163,10 +163,39 @@ const createDefaultGrouping = (): GroupingConfig => ({
   byGuest: false,
 });
 
+const normalizeMetricDelayMap = (
+  input: Record<string, Record<string, number>> | undefined | null,
+): Record<string, Record<string, number>> => {
+  if (!input) return {};
+  const normalized: Record<string, Record<string, number>> = {};
+
+  Object.entries(input).forEach(([rawType, metrics]) => {
+    if (!metrics) return;
+    const typeKey = rawType.trim().toLowerCase();
+    if (!typeKey) return;
+
+    const entries: Record<string, number> = {};
+    Object.entries(metrics).forEach(([rawMetric, value]) => {
+      if (typeof value !== 'number' || Number.isNaN(value) || value < 0) return;
+      const metricKey = rawMetric.trim().toLowerCase();
+      if (!metricKey) return;
+      entries[metricKey] = Math.round(value);
+    });
+
+    if (Object.keys(entries).length > 0) {
+      normalized[typeKey] = entries;
+    }
+  });
+
+  return normalized;
+};
+
 const createDefaultEscalation = (): EscalationConfig => ({
   enabled: false,
   levels: [],
 });
+
+const DEFAULT_DELAY_SECONDS = 5;
 
 export function Alerts() {
   const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
@@ -462,23 +491,23 @@ export function Alerts() {
               const container = (state.containers || []).find((g) => g.id === key);
               const guest = vm || container;
               if (guest) {
-              overridesList.push({
-                id: key,
-                name: guest.name,
-                type: 'guest',
-                resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
-                vmid: guest.vmid,
-                node: guest.node,
-                instance: guest.instance,
-                disabled: thresholds.disabled || false,
-                poweredOffSeverity:
-                  thresholds.poweredOffSeverity === 'critical'
-                    ? 'critical'
-                    : thresholds.poweredOffSeverity === 'warning'
-                      ? 'warning'
-                      : undefined,
-                thresholds: extractTriggerValues(thresholds),
-              });
+                overridesList.push({
+                  id: key,
+                  name: guest.name,
+                  type: 'guest',
+                  resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
+                  vmid: guest.vmid,
+                  node: guest.node,
+                  instance: guest.instance,
+                  disabled: thresholds.disabled || false,
+                  poweredOffSeverity:
+                    thresholds.poweredOffSeverity === 'critical'
+                      ? 'critical'
+                      : thresholds.poweredOffSeverity === 'warning'
+                        ? 'warning'
+                        : undefined,
+                  thresholds: extractTriggerValues(thresholds),
+                });
               }
             }
           }
@@ -507,7 +536,12 @@ export function Alerts() {
             (newOverride.type === 'guest' || newOverride.type === 'dockerContainer') &&
             (newOverride.poweredOffSeverity ?? null) !==
               (existing.poweredOffSeverity ?? null);
-          return thresholdsChanged || connectivityChanged || disabledChanged || severityChanged;
+          return (
+            thresholdsChanged ||
+            connectivityChanged ||
+            disabledChanged ||
+            severityChanged
+          );
         });
 
       if (hasChanged) {
@@ -539,8 +573,14 @@ export function Alerts() {
       temperature: 80,
     });
     setStorageDefault(85);
-    setTimeThreshold(0);
-    setTimeThresholds({ guest: 10, node: 15, storage: 30, pbs: 30 });
+    setTimeThreshold(DEFAULT_DELAY_SECONDS);
+    setTimeThresholds({
+      guest: DEFAULT_DELAY_SECONDS,
+      node: DEFAULT_DELAY_SECONDS,
+      storage: DEFAULT_DELAY_SECONDS,
+      pbs: DEFAULT_DELAY_SECONDS,
+    });
+    setMetricTimeThresholds({});
     setScheduleQuietHours(createDefaultQuietHours());
     setScheduleCooldown(createDefaultCooldown());
     setScheduleGrouping(createDefaultGrouping());
@@ -613,18 +653,24 @@ export function Alerts() {
       }
       if (config.timeThresholds) {
         setTimeThresholds({
-          guest: config.timeThresholds.guest ?? 10,
-          node: config.timeThresholds.node ?? 15,
-          storage: config.timeThresholds.storage ?? 30,
-          pbs: config.timeThresholds.pbs ?? 30,
+          guest: config.timeThresholds.guest ?? DEFAULT_DELAY_SECONDS,
+          node: config.timeThresholds.node ?? DEFAULT_DELAY_SECONDS,
+          storage: config.timeThresholds.storage ?? DEFAULT_DELAY_SECONDS,
+          pbs: config.timeThresholds.pbs ?? DEFAULT_DELAY_SECONDS,
         });
-      } else if (config.timeThreshold !== undefined && config.timeThreshold > 0) {
+      } else {
+        const fallback = config.timeThreshold && config.timeThreshold > 0 ? config.timeThreshold : DEFAULT_DELAY_SECONDS;
         setTimeThresholds({
-          guest: config.timeThreshold,
-          node: config.timeThreshold,
-          storage: config.timeThreshold,
-          pbs: config.timeThreshold,
+          guest: fallback,
+          node: fallback,
+          storage: fallback,
+          pbs: fallback,
         });
+      }
+      if (config.metricTimeThresholds) {
+        setMetricTimeThresholds(normalizeMetricDelayMap(config.metricTimeThresholds));
+      } else {
+        setMetricTimeThresholds({});
       }
 
       // Load global disable flags
@@ -856,14 +902,16 @@ export function Alerts() {
     memoryCriticalPct: 95,
   });
 
-  const [storageDefault, setStorageDefault] = createSignal(85);
-  const [timeThreshold, setTimeThreshold] = createSignal(0); // Legacy
-  const [timeThresholds, setTimeThresholds] = createSignal({
-    guest: 10,
-    node: 15,
-    storage: 30,
-    pbs: 30,
-  });
+const [storageDefault, setStorageDefault] = createSignal(85);
+const [timeThreshold, setTimeThreshold] = createSignal(DEFAULT_DELAY_SECONDS); // Legacy
+const [timeThresholds, setTimeThresholds] = createSignal({
+  guest: DEFAULT_DELAY_SECONDS,
+  node: DEFAULT_DELAY_SECONDS,
+  storage: DEFAULT_DELAY_SECONDS,
+  pbs: DEFAULT_DELAY_SECONDS,
+});
+  const [metricTimeThresholds, setMetricTimeThresholds] =
+    createSignal<Record<string, Record<string, number>>>({});
 
   // Global disable flags per resource type
   const [disableAllNodes, setDisableAllNodes] = createSignal(false);
@@ -999,6 +1047,7 @@ export function Alerts() {
                       hysteresisMargin: 5.0,
                       timeThreshold: timeThreshold() || 0, // Legacy
                       timeThresholds: timeThresholds(),
+                      metricTimeThresholds: normalizeMetricDelayMap(metricTimeThresholds()),
                       // Use rawOverridesConfig which is already properly formatted with disabled flags
                       overrides: rawOverridesConfig(),
                       schedule: {
@@ -1197,7 +1246,8 @@ export function Alerts() {
               storageDefault={storageDefault}
               setStorageDefault={setStorageDefault}
               timeThresholds={timeThresholds}
-              setTimeThresholds={setTimeThresholds}
+              metricTimeThresholds={metricTimeThresholds}
+              setMetricTimeThresholds={setMetricTimeThresholds}
               activeAlerts={activeAlerts}
               setHasUnsavedChanges={setHasUnsavedChanges}
               hasUnsavedChanges={hasUnsavedChanges}
@@ -1669,6 +1719,7 @@ interface ThresholdsTabProps {
   dockerDefaults: () => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
   storageDefault: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
+  metricTimeThresholds: () => Record<string, Record<string, number>>;
   overrides: () => Override[];
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
   setGuestDefaults: (
@@ -1689,7 +1740,11 @@ interface ThresholdsTabProps {
     value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),
   ) => void;
   setStorageDefault: (value: number) => void;
-  setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
+  setMetricTimeThresholds: (
+    value:
+      | Record<string, Record<string, number>>
+      | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
+  ) => void;
   setOverrides: (value: Override[]) => void;
   setRawOverridesConfig: (value: Record<string, RawOverrideConfig>) => void;
   activeAlerts: Record<string, Alert>;
@@ -1746,7 +1801,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       storageDefault={props.storageDefault}
       setStorageDefault={props.setStorageDefault}
       timeThresholds={props.timeThresholds}
-      setTimeThresholds={props.setTimeThresholds}
+      metricTimeThresholds={props.metricTimeThresholds}
+      setMetricTimeThresholds={props.setMetricTimeThresholds}
       setHasUnsavedChanges={props.setHasUnsavedChanges}
       activeAlerts={props.activeAlerts}
       removeAlerts={props.removeAlerts}
@@ -2627,6 +2683,7 @@ function HistoryTab() {
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
+  const MS_PER_HOUR = 60 * 60 * 1000;
 
   // Ref for search input
   let searchInputRef: HTMLInputElement | undefined;
@@ -2638,6 +2695,25 @@ function HistoryTab() {
 
   createEffect(() => {
     localStorage.setItem('alertHistorySeverityFilter', severityFilter());
+  });
+
+  // Clear chart selection when high-level filters change
+  let lastTimeFilterValue: string | null = null;
+  createEffect(() => {
+    const current = timeFilter();
+    if (lastTimeFilterValue !== null && current !== lastTimeFilterValue) {
+      setSelectedBarIndex(null);
+    }
+    lastTimeFilterValue = current;
+  });
+
+  let lastSeverityFilterValue: string | null = null;
+  createEffect(() => {
+    const current = severityFilter();
+    if (lastSeverityFilterValue !== null && current !== lastSeverityFilterValue) {
+      setSelectedBarIndex(null);
+    }
+    lastSeverityFilterValue = current;
   });
 
   // Load alert history on mount
@@ -2703,8 +2779,54 @@ function HistoryTab() {
     return `${minutes}m`;
   };
 
-  // Get resource type (VM, CT, Node, Storage)
-  const getResourceType = (resourceName: string) => {
+  const formatBucketRange = (startMs: number, endMs: number) => {
+    const start = new Date(startMs);
+    const end = new Date(endMs);
+
+    const sameDay =
+      start.getFullYear() === end.getFullYear() &&
+      start.getMonth() === end.getMonth() &&
+      start.getDate() === end.getDate();
+
+    const startDay = start.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: start.getFullYear() !== end.getFullYear() ? 'numeric' : undefined,
+    });
+    const endDay = end.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    const timeFormatter: Intl.DateTimeFormatOptions = {
+      hour: 'numeric',
+      minute: '2-digit',
+    };
+
+    const startTimeStr = start.toLocaleTimeString('en-US', timeFormatter);
+    const endTimeStr = end.toLocaleTimeString('en-US', timeFormatter);
+
+    if (sameDay) {
+      return `${startDay}, ${startTimeStr} – ${endTimeStr}`;
+    }
+
+    return `${startDay}, ${startTimeStr} → ${endDay}, ${endTimeStr}`;
+  };
+
+  // Get resource type (VM, CT, Node, Storage, Docker, PBS, etc.)
+  const getResourceType = (
+    resourceName: string,
+    metadata?: Record<string, unknown> | undefined,
+  ) => {
+    const metadataType =
+      typeof metadata?.resourceType === 'string'
+        ? (metadata.resourceType as string)
+        : undefined;
+    if (metadataType && metadataType.trim().length > 0) {
+      return metadataType;
+    }
+
     // Check VMs and containers
     const vm = state.vms?.find((v) => v.name === resourceName);
     if (vm) return 'VM';
@@ -2719,6 +2841,34 @@ function HistoryTab() {
     // Check storage
     const storage = state.storage?.find((s) => s.name === resourceName || s.id === resourceName);
     if (storage) return 'Storage';
+
+    // Docker hosts
+    const dockerHost = state.dockerHosts?.find(
+      (host) =>
+        host.displayName === resourceName ||
+        host.hostname === resourceName ||
+        host.agentId === resourceName ||
+        host.id === resourceName,
+    );
+    if (dockerHost) return 'Docker Host';
+
+    // Docker containers (via known hosts)
+    const dockerContainer = state.dockerHosts
+      ?.flatMap((host) => host.containers || [])
+      .find((c) => c.name === resourceName || c.id === resourceName);
+    if (dockerContainer) return 'Docker Container';
+
+    // PBS instances
+    const pbsInstance = state.pbs?.find(
+      (pbs) => pbs.name === resourceName || pbs.host === resourceName || pbs.id === resourceName,
+    );
+    if (pbsInstance) return 'PBS';
+
+    // Ceph clusters
+    const cephCluster = state.cephClusters?.find(
+      (cluster) => cluster.name === resourceName || cluster.id === resourceName,
+    );
+    if (cephCluster) return 'Ceph';
 
     return 'Unknown';
   };
@@ -2741,7 +2891,7 @@ function HistoryTab() {
         ...alert,
         status: 'active',
         duration: formatDuration(alert.startTime),
-        resourceType: getResourceType(alert.resourceName),
+        resourceType: getResourceType(alert.resourceName, alert.metadata),
       });
     });
 
@@ -2759,63 +2909,67 @@ function HistoryTab() {
         ...alert,
         status: alert.acknowledged ? 'acknowledged' : 'resolved',
         duration: formatDuration(alert.startTime, alert.lastSeen),
-        resourceType: getResourceType(alert.resourceName),
+        resourceType: getResourceType(alert.resourceName, alert.metadata),
       });
     });
 
     return allAlerts;
   });
 
+  // Apply severity & search filters (time filtering is layered separately)
+  const severityAndSearchFilteredAlerts = createMemo(() => {
+    let filtered = allAlertsData();
+
+    if (severityFilter() !== 'all') {
+      filtered = filtered.filter((a) => a.level === severityFilter());
+    }
+
+    if (searchTerm()) {
+      const term = searchTerm().toLowerCase();
+      filtered = filtered.filter((alert) => {
+        const name = alert.resourceName?.toLowerCase() ?? '';
+        const message = alert.message?.toLowerCase() ?? '';
+        const type = alert.type?.toLowerCase() ?? '';
+        const nodeName = alert.node?.toLowerCase() ?? '';
+        return (
+          name.includes(term) || message.includes(term) || type.includes(term) || nodeName.includes(term)
+        );
+      });
+    }
+
+    return filtered;
+  });
+
   // Apply filters to get the final alert data
   const alertData = createMemo(() => {
-    let filtered = allAlertsData();
+    let filtered = severityAndSearchFilteredAlerts();
 
     // Selected bar filter (takes precedence over time filter)
     if (selectedBarIndex() !== null) {
       const trends = alertTrends();
       const index = selectedBarIndex()!;
       const bucketStart = trends.bucketTimes[index];
-      const bucketEnd = bucketStart + trends.bucketSize * 60 * 60 * 1000;
+      const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
 
       filtered = filtered.filter((alert) => {
         const alertTime = new Date(alert.startTime).getTime();
         return alertTime >= bucketStart && alertTime < bucketEnd;
       });
-    } else {
-      // Time filter
-      if (timeFilter() !== 'all') {
-        const now = Date.now();
-        const cutoff = {
-          '24h': now - 24 * 60 * 60 * 1000,
-          '7d': now - 7 * 24 * 60 * 60 * 1000,
-          '30d': now - 30 * 24 * 60 * 60 * 1000,
-        }[timeFilter()];
+    } else if (timeFilter() !== 'all') {
+      const now = Date.now();
+      const cutoff = {
+        '24h': now - 24 * 60 * 60 * 1000,
+        '7d': now - 7 * 24 * 60 * 60 * 1000,
+        '30d': now - 30 * 24 * 60 * 60 * 1000,
+      }[timeFilter()];
 
-        if (cutoff) {
-          filtered = filtered.filter((a) => new Date(a.startTime).getTime() > cutoff);
-        }
+      if (cutoff) {
+        filtered = filtered.filter((a) => new Date(a.startTime).getTime() > cutoff);
       }
     }
 
-    // Severity filter
-    if (severityFilter() !== 'all') {
-      filtered = filtered.filter((a) => a.level === severityFilter());
-    }
-
-    // Search filter
-    if (searchTerm()) {
-      const term = searchTerm().toLowerCase();
-      filtered = filtered.filter(
-        (alert) =>
-          alert.resourceName.toLowerCase().includes(term) ||
-          alert.message.toLowerCase().includes(term) ||
-          alert.type.toLowerCase().includes(term) ||
-          alert.node.toLowerCase().includes(term),
-      );
-    }
-
     // Sort by start time (newest first)
-    return filtered.sort(
+    return [...filtered].sort(
       (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
     );
   });
@@ -2919,60 +3073,114 @@ function HistoryTab() {
   // Calculate alert trends for mini-chart
   const alertTrends = createMemo(() => {
     const now = Date.now();
-    const timeRange =
-      timeFilter() === '24h'
-        ? 24
-        : timeFilter() === '7d'
-          ? 7 * 24
-          : timeFilter() === '30d'
-            ? 30 * 24
-            : 90 * 24; // hours
-    const bucketSize =
-      timeFilter() === '24h' ? 1 : timeFilter() === '7d' ? 6 : timeFilter() === '30d' ? 24 : 72; // hours per bucket
-    const numBuckets = Math.min(Math.floor(timeRange / bucketSize), 30); // Limit to 30 buckets max
+    const msPerHour = MS_PER_HOUR;
+    const filteredAlerts = severityAndSearchFilteredAlerts();
+    const niceBucketSizes = [1, 2, 3, 6, 12, 24, 48, 72, 168, 336, 720, 1440]; // hours
+    const maxBuckets = 30;
 
-    // Calculate start time for the chart
-    const startTime = now - timeRange * 60 * 60 * 1000;
+    let bucketSizeHours: number;
+    let computedRangeHours: number;
+    let startTime: number;
 
-    // Initialize buckets
-    const buckets = new Array(numBuckets).fill(0);
-    // bucketTimes represents the START of each bucket
-    const bucketTimes = new Array(numBuckets)
-      .fill(0)
-      .map((_, i) => startTime + i * bucketSize * 60 * 60 * 1000);
-
-    // Filter alerts based on current time filter
-    let alertsToCount = allAlertsData();
-    if (timeFilter() !== 'all') {
-      const cutoff = {
-        '24h': now - 24 * 60 * 60 * 1000,
-        '7d': now - 7 * 24 * 60 * 60 * 1000,
-        '30d': now - 30 * 24 * 60 * 60 * 1000,
-      }[timeFilter()];
-
-      if (cutoff) {
-        alertsToCount = alertsToCount.filter((a) => new Date(a.startTime).getTime() > cutoff);
+    const filter = timeFilter();
+    if (filter === '24h') {
+      bucketSizeHours = 1;
+      computedRangeHours = 24;
+      startTime = now - computedRangeHours * msPerHour;
+    } else if (filter === '7d') {
+      bucketSizeHours = 6;
+      computedRangeHours = 7 * 24;
+      startTime = now - computedRangeHours * msPerHour;
+    } else if (filter === '30d') {
+      bucketSizeHours = 24;
+      computedRangeHours = 30 * 24;
+      startTime = now - computedRangeHours * msPerHour;
+    } else {
+      if (!filteredAlerts.length) {
+        bucketSizeHours = 24;
+        computedRangeHours = 24;
+        startTime = now - computedRangeHours * msPerHour;
+      } else {
+        const earliest = filteredAlerts.reduce((min, alert) => {
+          const alertTime = new Date(alert.startTime).getTime();
+          return Math.min(min, alertTime);
+        }, now);
+        const rawRangeHours = Math.max(1, Math.ceil((now - earliest) / msPerHour));
+        const rawBucketSize = Math.max(1, Math.ceil(rawRangeHours / maxBuckets));
+        bucketSizeHours =
+          niceBucketSizes.find((size) => size >= rawBucketSize) ?? rawBucketSize;
+        computedRangeHours = Math.max(rawRangeHours, bucketSizeHours);
+        const bucketsNeeded = Math.min(
+          Math.max(1, Math.ceil(computedRangeHours / bucketSizeHours)),
+          maxBuckets,
+        );
+        startTime = now - bucketsNeeded * bucketSizeHours * msPerHour;
       }
     }
 
-    alertsToCount.forEach((alert) => {
+    const bucketCount = Math.min(
+      Math.max(1, Math.ceil(computedRangeHours / bucketSizeHours)),
+      maxBuckets,
+    );
+    startTime = Math.min(startTime, now - bucketCount * bucketSizeHours * msPerHour);
+
+    const buckets = new Array(bucketCount).fill(0);
+    const bucketTimes = new Array(bucketCount)
+      .fill(0)
+      .map((_, i) => startTime + i * bucketSizeHours * msPerHour);
+
+    const windowStart = startTime;
+    const windowEnd = now;
+
+    filteredAlerts.forEach((alert) => {
       const alertTime = new Date(alert.startTime).getTime();
-      if (alertTime >= startTime && alertTime <= now) {
-        const bucketIndex = Math.floor((alertTime - startTime) / (bucketSize * 60 * 60 * 1000));
-        if (bucketIndex >= 0 && bucketIndex < numBuckets) {
-          buckets[bucketIndex]++;
-        }
+      if (alertTime < windowStart || alertTime > windowEnd) {
+        return;
+      }
+      const rawIndex = Math.floor((alertTime - windowStart) / (bucketSizeHours * msPerHour));
+      const bucketIndex = Math.min(bucketCount - 1, Math.max(0, rawIndex));
+      if (bucketIndex >= 0 && bucketIndex < bucketCount) {
+        buckets[bucketIndex]++;
       }
     });
 
-    // Find max for scaling
     const max = Math.max(...buckets, 1);
 
     return {
       buckets,
       max,
-      bucketSize,
+      bucketSize: bucketSizeHours,
       bucketTimes,
+      rangeStart: windowStart,
+      rangeHours: bucketCount * bucketSizeHours,
+    };
+  });
+
+  const chartRangeLabel = createMemo(() => {
+    const filter = timeFilter();
+    if (filter === '24h') return '24h ago';
+    if (filter === '7d') return '7d ago';
+    if (filter === '30d') return '30d ago';
+
+    const rangeHours = alertTrends().rangeHours ?? 0;
+    if (rangeHours <= 0) return '—';
+    if (rangeHours >= 24) {
+      const days = Math.round(rangeHours / 24);
+      return `${days}d ago`;
+    }
+    return `${Math.round(rangeHours)}h ago`;
+  });
+
+  const selectedBucketDetails = createMemo(() => {
+    const index = selectedBarIndex();
+    if (index === null) return null;
+    const trends = alertTrends();
+    const bucketStart = trends.bucketTimes[index];
+    const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
+    return {
+      rangeLabel: formatBucketRange(bucketStart, bucketEnd),
+      start: bucketStart,
+      end: bucketEnd,
     };
   });
 
@@ -2980,7 +3188,7 @@ function HistoryTab() {
     <div class="space-y-4">
       {/* Alert Trends Mini-Chart */}
       <Card padding="md">
-        <div class="mb-3 flex items-start justify-between gap-3">
+        <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <SectionHeader
             title="Alert frequency"
             description={
@@ -2991,25 +3199,37 @@ function HistoryTab() {
             size="sm"
             class="flex-1"
           />
-          <div class="flex items-center gap-2">
-            <Show when={selectedBarIndex() !== null}>
-              <button
-                type="button"
-                onClick={() => setSelectedBarIndex(null)}
-                class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
-              >
-                Clear filter
-              </button>
+          <div class="flex flex-col items-start gap-2 sm:items-end">
+            <Show when={selectedBucketDetails()}>
+              {(selection) => (
+                <div class="inline-flex items-center gap-2 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 text-xs text-blue-700 dark:text-blue-200">
+                  <span class="font-medium uppercase tracking-wide text-[10px] text-blue-600 dark:text-blue-300">
+                    Filtered Range
+                  </span>
+                  <span class="font-mono text-[11px]">{selection().rangeLabel}</span>
+                </div>
+              )}
             </Show>
-            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span class="flex items-center gap-1">
-                <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                {alertData().filter((a) => a.level === 'warning').length} warnings
-              </span>
-              <span class="flex items-center gap-1">
-                <div class="w-2 h-2 bg-red-500 rounded-full"></div>
-                {alertData().filter((a) => a.level === 'critical').length} critical
-              </span>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <Show when={selectedBarIndex() !== null}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBarIndex(null)}
+                  class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+                >
+                  Clear filter
+                </button>
+              </Show>
+              <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span class="flex items-center gap-1">
+                  <div class="h-2 w-2 rounded-full bg-yellow-500"></div>
+                  {alertData().filter((a) => a.level === 'warning').length} warnings
+                </span>
+                <span class="flex items-center gap-1">
+                  <div class="h-2 w-2 rounded-full bg-red-500"></div>
+                  {alertData().filter((a) => a.level === 'critical').length} critical
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -3049,11 +3269,10 @@ function HistoryTab() {
                     }
                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                     const bucketHours = alertTrends().bucketSize;
-                    const bucketLabel = (() => {
-                      if (timeFilter() === '24h') return `${bucketHours} hour period`;
-                      const bucketDays = bucketHours / 24;
-                      return `${bucketDays} day period`;
-                    })();
+                    const bucketLabel =
+                      bucketHours % 24 === 0
+                        ? `${bucketHours / 24} day${bucketHours / 24 === 1 ? '' : 's'}`
+                        : `${bucketHours} hour${bucketHours === 1 ? '' : 's'}`;
                     const timestamp = new Date(alertTrends().bucketTimes[i]).toLocaleString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -3062,7 +3281,7 @@ function HistoryTab() {
                     });
                     const content = [
                       `${val} alert${val !== 1 ? 's' : ''}`,
-                      bucketLabel,
+                      `${bucketLabel} period`,
                       timestamp,
                     ].join('\n');
                     showTooltip(content, rect.left + rect.width / 2, rect.top, {
@@ -3080,13 +3299,7 @@ function HistoryTab() {
         {/* Time labels */}
         <div class="flex justify-between mt-1 text-[10px] text-gray-400 dark:text-gray-500">
           <span>
-            {timeFilter() === '24h'
-              ? '24h ago'
-              : timeFilter() === '7d'
-                ? '7d ago'
-                : timeFilter() === '30d'
-                  ? '30d ago'
-                  : '90d ago'}
+            {chartRangeLabel()}
           </span>
           <span>Now</span>
         </div>

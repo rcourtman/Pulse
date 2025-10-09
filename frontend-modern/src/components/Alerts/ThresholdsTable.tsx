@@ -91,7 +91,12 @@ interface ThresholdsTableProps {
   storageDefault: () => number;
   setStorageDefault: (value: number) => void;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
-  setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
+  metricTimeThresholds: () => Record<string, Record<string, number>>;
+  setMetricTimeThresholds: (
+    value:
+      | Record<string, Record<string, number>>
+      | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
+  ) => void;
   setHasUnsavedChanges: (value: boolean) => void;
   activeAlerts?: Record<string, Alert>;
   removeAlerts?: (predicate: (alert: Alert) => boolean) => void;
@@ -130,30 +135,37 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
   // Set up keyboard shortcuts
   onMount(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if user is typing in an input or textarea (unless it's Escape)
-      const target = e.target as HTMLElement;
-      const isInInput =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.contentEditable === 'true';
+    const isEditableElement = (el: HTMLElement | null | undefined): boolean => {
+      if (!el) return false;
+      const tag = el.tagName;
+      return (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        el.contentEditable === 'true'
+      );
+    };
 
-      // Escape clears search from anywhere
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const activeElement = (document.activeElement as HTMLElement) ?? null;
+      const inEditable = isEditableElement(target);
+
       if (e.key === 'Escape') {
-        e.preventDefault();
-        setSearchTerm('');
-        if (searchInputRef && isInInput) {
+        if (searchTerm()) {
+          e.preventDefault();
+          setSearchTerm('');
+        }
+        if (searchInputRef && document.activeElement === searchInputRef) {
           searchInputRef.blur();
         }
         return;
       }
 
-      // Skip other shortcuts if already in an input
-      if (isInInput) {
+      if (e.defaultPrevented || inEditable || isEditableElement(activeElement) || editingId()) {
         return;
       }
 
-      // Any letter/number focuses search and starts typing
       if (e.key.length === 1 && e.key.match(/[a-z0-9]/i)) {
         e.preventDefault();
         if (searchInputRef) {
@@ -293,6 +305,30 @@ const buildNodeHeaderMeta = (node: Node) => {
   return { headerMeta, keys };
 };
 
+const overrideHasContent = (override: Override): boolean => {
+  const hasThresholds = Object.values(override.thresholds || {}).some(
+    (value) => value !== undefined,
+  );
+  const hasStateFlags = Boolean(
+    override.disabled || override.disableConnectivity || override.poweredOffSeverity,
+  );
+  return hasThresholds || hasStateFlags;
+};
+
+const buildOverrideFromResource = (resource: Resource): Override => ({
+  id: resource.id,
+  name: resource.name,
+  type: resource.type as OverrideType,
+  resourceType: resource.resourceType,
+  vmid: (resource as unknown as { vmid?: number }).vmid,
+  node: (resource as unknown as { node?: string }).node,
+  instance: (resource as unknown as { instance?: string }).instance,
+  disabled: resource.disabled,
+  disableConnectivity: resource.disableConnectivity,
+  poweredOffSeverity: resource.poweredOffSeverity,
+  thresholds: resource.thresholds ? { ...resource.thresholds } : {},
+});
+
   const nodesWithOverrides = createMemo<Resource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
@@ -315,6 +351,7 @@ const buildNodeHeaderMeta = (node: Node) => {
             override.thresholds[k] !== (props.nodeDefaults as any)[k]
           );
         });
+
 
       const originalDisplayName = node.displayName?.trim() || node.name;
       const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
@@ -341,8 +378,8 @@ const buildNodeHeaderMeta = (node: Node) => {
         hasOverride: hasCustomThresholds || false,
         disabled: false,
         disableConnectivity: override?.disableConnectivity || false,
-       thresholds: override?.thresholds || {},
-       defaults: props.nodeDefaults,
+        thresholds: override?.thresholds || {},
+        defaults: props.nodeDefaults,
         clusterName: node.isClusterMember ? node.clusterName?.trim() : undefined,
         isClusterMember: node.isClusterMember ?? false,
         instance: node.instance,
@@ -464,6 +501,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
               override.thresholds[k] !== defaults?.[k as keyof typeof defaults]
             );
           });
+
 
         const hasOverride =
           hasCustomThresholds || override?.disabled || override?.disableConnectivity || overrideSeverity !== undefined || false;
@@ -621,6 +659,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           );
         });
 
+
       // A guest has an override if it has custom thresholds OR is disabled OR has connectivity disabled
       const hasOverride =
         hasCustomThresholds || override?.disabled || override?.disableConnectivity || overrideSeverity !== undefined || false;
@@ -719,6 +758,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
               override.thresholds[k] !== props.nodeDefaults[k as keyof typeof props.nodeDefaults]
             );
           });
+
 
         return {
           id: pbsId,
@@ -897,6 +937,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
     const editedThresholds = editingThresholds();
     const defaultThresholds = (resource.defaults ?? {}) as Record<string, number | undefined>;
+    const existingOverride = props.overrides().find((o) => o.id === resourceId);
 
     // Only include values that differ from defaults
     const overrideThresholds: Record<string, number> = {};
@@ -1012,12 +1053,47 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     setEditingThresholds({});
   };
 
-  const updateDelay = (key: 'guest' | 'node' | 'storage' | 'pbs', value: number) => {
-    const sanitized = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
-    const current = props.timeThresholds();
-    if (current[key] === sanitized) return;
-    props.setTimeThresholds({ ...current, [key]: sanitized });
-    props.setHasUnsavedChanges(true);
+  const updateMetricDelay = (typeKey: 'guest' | 'node' | 'storage' | 'pbs', metricKey: string, value: number | null) => {
+    const normalizedMetric = metricKey.trim().toLowerCase();
+    if (!normalizedMetric) return;
+
+    let changed = false;
+    props.setMetricTimeThresholds((prev) => {
+      const current = prev ? { ...prev } : {};
+      const existing = prev?.[typeKey];
+      const typeOverrides = existing ? { ...existing } : {};
+
+      if (value === null) {
+        if (typeOverrides[normalizedMetric] === undefined) {
+          return prev;
+        }
+        delete typeOverrides[normalizedMetric];
+        changed = true;
+      } else {
+        const sanitized = Math.max(0, Math.round(value));
+        if (typeOverrides[normalizedMetric] === sanitized) {
+          return prev;
+        }
+        typeOverrides[normalizedMetric] = sanitized;
+        changed = true;
+      }
+
+      if (!changed) {
+        return prev;
+      }
+
+      if (Object.keys(typeOverrides).length === 0) {
+        delete current[typeKey];
+      } else {
+        current[typeKey] = typeOverrides;
+      }
+
+      return current;
+    });
+
+    if (changed) {
+      props.setHasUnsavedChanges(true);
+    }
   };
 
   const removeOverride = (resourceId: string) => {
@@ -1052,6 +1128,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
     // Get existing override if it exists
     const existingOverride = props.overrides().find((o) => o.id === resourceId);
+    const existingRaw = props.rawOverridesConfig()[resourceId];
 
     // Determine the current disabled state - check the resource's current state, not the override
     const currentDisabledState = resource.disabled;
@@ -1062,7 +1139,10 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     delete (cleanThresholds as Record<string, unknown>).disabled;
 
     // If enabling (disabled = false) and no custom thresholds exist, remove the override entirely
-    if (!newDisabledState && (!existingOverride || Object.keys(cleanThresholds).length === 0)) {
+    if (
+      !newDisabledState &&
+      (!existingOverride || Object.keys(cleanThresholds).length === 0)
+    ) {
       // Remove the override completely
       props.setOverrides(props.overrides().filter((o) => o.id !== resourceId));
 
@@ -1108,9 +1188,15 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
       if (newDisabledState) {
         hysteresisThresholds.disabled = true;
+      } else {
+        delete hysteresisThresholds.disabled;
       }
 
-      newRawConfig[resourceId] = hysteresisThresholds;
+      if (Object.keys(hysteresisThresholds).length === 0) {
+        delete newRawConfig[resourceId];
+      } else {
+        newRawConfig[resourceId] = hysteresisThresholds;
+      }
       props.setRawOverridesConfig(newRawConfig);
     }
 
@@ -1158,6 +1244,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
     // Get existing override if it exists
     const existingOverride = props.overrides().find((o) => o.id === resourceId);
+    const existingRaw = props.rawOverridesConfig()[resourceId];
 
     // Determine the current state - use the resource's computed state, not just the override
     const currentDisableConnectivity = resource.disableConnectivity;
@@ -1215,9 +1302,15 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
       if (newDisableConnectivity) {
         hysteresisThresholds.disableConnectivity = true;
+      } else {
+        delete hysteresisThresholds.disableConnectivity;
       }
 
-      newRawConfig[resourceId] = hysteresisThresholds;
+      if (Object.keys(hysteresisThresholds).length === 0) {
+        delete newRawConfig[resourceId];
+      } else {
+        newRawConfig[resourceId] = hysteresisThresholds;
+      }
       props.setRawOverridesConfig(newRawConfig);
     }
 
@@ -1242,6 +1335,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     const defaultSeverity = props.guestPoweredOffSeverity();
 
     const existingOverride = props.overrides().find((o) => o.id === resourceId);
+    const existingRaw = props.rawOverridesConfig()[resourceId];
     const cleanThresholds: Record<string, number> = { ...(existingOverride?.thresholds || {}) };
     delete (cleanThresholds as Record<string, unknown>).disabled;
     delete (cleanThresholds as Record<string, unknown>).disableConnectivity;
@@ -1258,7 +1352,12 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
       newDisableConnectivity !== defaultDisabled ||
       (!newDisableConnectivity && newSeverity !== defaultSeverity);
 
-    if (!differsFromDefaults && !hasThresholds && !overrideDisabled && !existingOverride?.disableConnectivity) {
+    if (
+      !differsFromDefaults &&
+      !hasThresholds &&
+      !overrideDisabled &&
+      !existingOverride?.disableConnectivity
+    ) {
       // Remove override entirely
       if (existingOverride) {
         props.setOverrides(props.overrides().filter((o) => o.id !== resourceId));
@@ -1444,7 +1543,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onToggleGlobalDisableOffline={() => props.setDisableAllNodesOffline(!props.disableAllNodesOffline())}
                 showDelayColumn={true}
                 globalDelaySeconds={props.timeThresholds().node}
-                onGlobalDelayChange={(value) => updateDelay('node', value)}
+                metricDelaySeconds={props.metricTimeThresholds().node ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('node', metric, value)}
               />
             </div>
           </Show>
@@ -1492,7 +1592,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onSetOfflineState={setOfflineState}
                 showDelayColumn={true}
                 globalDelaySeconds={props.timeThresholds().guest}
-                onGlobalDelayChange={(value) => updateDelay('guest', value)}
+                metricDelaySeconds={props.metricTimeThresholds().guest ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
               />
             </div>
           </Show>
@@ -1531,7 +1632,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onToggleGlobalDisable={() => props.setDisableAllStorage(!props.disableAllStorage())}
                 showDelayColumn={true}
                 globalDelaySeconds={props.timeThresholds().storage}
-                onGlobalDelayChange={(value) => updateDelay('storage', value)}
+                metricDelaySeconds={props.metricTimeThresholds().storage ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
               />
             </div>
           </Show>
@@ -1572,7 +1674,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onToggleGlobalDisableOffline={() => props.setDisableAllPBSOffline(!props.disableAllPBSOffline())}
                 showDelayColumn={true}
                 globalDelaySeconds={props.timeThresholds().pbs}
-                onGlobalDelayChange={(value) => updateDelay('pbs', value)}
+                metricDelaySeconds={props.metricTimeThresholds().pbs ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('pbs', metric, value)}
               />
             </div>
           </Show>
@@ -1675,7 +1778,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 }
                 showDelayColumn={true}
                 globalDelaySeconds={props.timeThresholds().guest}
-                onGlobalDelayChange={(value) => updateDelay('guest', value)}
+                metricDelaySeconds={props.metricTimeThresholds().guest ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
                 globalOfflineSeverity={props.guestPoweredOffSeverity()}
                 onSetOfflineState={setOfflineState}
               />

@@ -276,11 +276,12 @@ type AlertConfig struct {
 	DisableAllPBSOffline         bool `json:"disableAllPBSOffline"`         // Disable PBS offline alerts globally
 	DisableAllDockerHostsOffline bool `json:"disableAllDockerHostsOffline"` // Disable Docker host offline alerts globally
 	// New configuration options
-	MinimumDelta      float64        `json:"minimumDelta"`      // Minimum % change to trigger new alert
-	SuppressionWindow int            `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
-	HysteresisMargin  float64        `json:"hysteresisMargin"`  // Default margin for legacy thresholds
-	TimeThreshold     int            `json:"timeThreshold"`     // Legacy: Seconds that threshold must be exceeded before triggering
-	TimeThresholds    map[string]int `json:"timeThresholds"`    // Per-type delays: guest, node, storage, pbs
+	MinimumDelta         float64                   `json:"minimumDelta"`         // Minimum % change to trigger new alert
+	SuppressionWindow    int                       `json:"suppressionWindow"`    // Minutes to suppress duplicate alerts
+	HysteresisMargin     float64                   `json:"hysteresisMargin"`     // Default margin for legacy thresholds
+	TimeThreshold        int                       `json:"timeThreshold"`        // Legacy: Seconds that threshold must be exceeded before triggering
+	TimeThresholds       map[string]int            `json:"timeThresholds"`       // Per-type delays: guest, node, storage, pbs
+	MetricTimeThresholds map[string]map[string]int `json:"metricTimeThresholds"` // Optional per-metric delays keyed by resource type
 }
 
 // Manager handles alert monitoring and state
@@ -388,11 +389,12 @@ func NewManager() *Manager {
 			MinimumDelta:      2.0, // 2% minimum change
 			SuppressionWindow: 5,   // 5 minutes
 			HysteresisMargin:  5.0, // 5% default margin
+			TimeThreshold: 5,
 			TimeThresholds: map[string]int{
-				"guest":   10, // 10 second delay for guest CPU alerts
-				"node":    15, // 15 second delay for node alerts
-				"storage": 30, // 30 second delay for storage alerts
-				"pbs":     30, // 30 second delay for PBS alerts
+				"guest":   5,
+				"node":    5,
+				"storage": 5,
+				"pbs":     5,
 			},
 			Overrides: make(map[string]ThresholdConfig),
 			Schedule: ScheduleConfig{
@@ -539,6 +541,39 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		config.HysteresisMargin = 5.0
 	}
 
+	// Ensure temperature defaults exist for nodes so high temps alert out of the box
+	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger <= 0 {
+		config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.NodeDefaults.Temperature.Clear <= 0 {
+		config.NodeDefaults.Temperature.Clear = config.NodeDefaults.Temperature.Trigger - 5
+		if config.NodeDefaults.Temperature.Clear <= 0 {
+			config.NodeDefaults.Temperature.Clear = 75
+		}
+	}
+
+	// Normalize any metric-level delay overrides
+	config.MetricTimeThresholds = normalizeMetricTimeThresholds(config.MetricTimeThresholds)
+
+	const defaultDelaySeconds = 5
+	if config.TimeThreshold <= 0 {
+		config.TimeThreshold = defaultDelaySeconds
+	}
+	if config.TimeThresholds == nil {
+		config.TimeThresholds = make(map[string]int)
+	}
+	ensureDelay := func(key string) {
+		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
+			config.TimeThresholds[key] = defaultDelaySeconds
+		}
+	}
+	ensureDelay("guest")
+	ensureDelay("node")
+	ensureDelay("storage")
+	ensureDelay("pbs")
+	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
+		config.TimeThresholds["all"] = defaultDelaySeconds
+	}
+
 	config.GuestDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
 	config.NodeDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
 
@@ -561,6 +596,42 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 
 	// Re-evaluate active alerts against new thresholds
 	m.reevaluateActiveAlertsLocked()
+}
+
+// normalizeMetricTimeThresholds cleans resource/metric keys and drops invalid delay overrides.
+func normalizeMetricTimeThresholds(input map[string]map[string]int) map[string]map[string]int {
+	if len(input) == 0 {
+		return nil
+	}
+
+	normalized := make(map[string]map[string]int)
+	for rawType, metrics := range input {
+		typeKey := strings.ToLower(strings.TrimSpace(rawType))
+		if typeKey == "" || len(metrics) == 0 {
+			continue
+		}
+		for rawMetric, delay := range metrics {
+			metricKey := strings.ToLower(strings.TrimSpace(rawMetric))
+			if metricKey == "" || delay < 0 {
+				continue
+			}
+			if _, exists := normalized[typeKey]; !exists {
+				normalized[typeKey] = make(map[string]int)
+			}
+			normalized[typeKey][metricKey] = delay
+		}
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
+}
+
+// NormalizeMetricTimeThresholds exposes normalization for other packages (e.g., config persistence).
+func NormalizeMetricTimeThresholds(input map[string]map[string]int) map[string]map[string]int {
+	return normalizeMetricTimeThresholds(input)
 }
 
 // applyGlobalOfflineSettingsLocked clears tracking and active alerts for globally disabled offline detectors.
@@ -2488,38 +2559,142 @@ func (m *Manager) clearAlert(alertID string) {
 		Msg("Alert cleared")
 }
 
-// getTimeThresholdForType returns the appropriate time threshold for the resource type
-func (m *Manager) getTimeThresholdForType(resourceType string) int {
-	typeKey := strings.ToLower(strings.TrimSpace(resourceType))
+// getTimeThreshold determines the delay to apply for a metric/resource combination.
+func (m *Manager) getTimeThreshold(_ string, resourceType, metricType string) int {
+	if delay, ok := m.getMetricTimeThreshold(resourceType, metricType); ok {
+		return delay
+	}
 
-	// Use per-type thresholds if available
-	if m.config.TimeThresholds != nil {
-		switch typeKey {
-		case "guest", "qemu", "lxc", "vm", "ct", "container":
-			if delay, ok := m.config.TimeThresholds["guest"]; ok {
-				return delay
-			}
-		case "docker container", "dockercontainer", "docker":
-			if delay, ok := m.config.TimeThresholds["guest"]; ok {
-				return delay
-			}
-		case "node":
-			if delay, ok := m.config.TimeThresholds["node"]; ok {
-				return delay
-			}
-		case "storage":
-			if delay, ok := m.config.TimeThresholds["storage"]; ok {
-				return delay
-			}
-		case "pbs":
-			if delay, ok := m.config.TimeThresholds["pbs"]; ok {
-				return delay
-			}
+	base, hasTypeSpecific := m.getBaseTimeThreshold(resourceType)
+
+	if !hasTypeSpecific {
+		if delay, ok := m.getGlobalMetricTimeThreshold(metricType); ok {
+			return delay
 		}
 	}
 
-	// Fall back to legacy single threshold
-	return m.config.TimeThreshold
+	return base
+}
+
+// getMetricTimeThreshold returns a metric-specific delay if configured at the resource-type level.
+func (m *Manager) getMetricTimeThreshold(resourceType, metricType string) (int, bool) {
+	if len(m.config.MetricTimeThresholds) == 0 {
+		return 0, false
+	}
+
+	metricKey := strings.ToLower(strings.TrimSpace(metricType))
+	if metricKey == "" {
+		return 0, false
+	}
+
+	for _, typeKey := range canonicalResourceTypeKeys(resourceType) {
+		perType, ok := m.config.MetricTimeThresholds[typeKey]
+		if !ok || len(perType) == 0 {
+			continue
+		}
+
+		if delay, ok := perType[metricKey]; ok {
+			return delay, true
+		}
+		if delay, ok := perType["default"]; ok {
+			return delay, true
+		}
+		if delay, ok := perType["_default"]; ok {
+			return delay, true
+		}
+		if delay, ok := perType["*"]; ok {
+			return delay, true
+		}
+	}
+
+	return 0, false
+}
+
+// getBaseTimeThreshold returns the resource-type level delay.
+func (m *Manager) getBaseTimeThreshold(resourceType string) (int, bool) {
+	if m.config.TimeThresholds != nil {
+		for _, key := range canonicalResourceTypeKeys(resourceType) {
+			if delay, ok := m.config.TimeThresholds[key]; ok {
+				return delay, true
+			}
+		}
+		if delay, ok := m.config.TimeThresholds["all"]; ok {
+			return delay, false
+		}
+	}
+
+	return m.config.TimeThreshold, false
+}
+
+func (m *Manager) getGlobalMetricTimeThreshold(metricType string) (int, bool) {
+	if len(m.config.MetricTimeThresholds) == 0 {
+		return 0, false
+	}
+
+	perType, ok := m.config.MetricTimeThresholds["all"]
+	if !ok || len(perType) == 0 {
+		return 0, false
+	}
+
+	metricKey := strings.ToLower(strings.TrimSpace(metricType))
+	if metricKey == "" {
+		return 0, false
+	}
+
+	if delay, ok := perType[metricKey]; ok {
+		return delay, true
+	}
+	if delay, ok := perType["default"]; ok {
+		return delay, true
+	}
+	if delay, ok := perType["_default"]; ok {
+		return delay, true
+	}
+	if delay, ok := perType["*"]; ok {
+		return delay, true
+	}
+
+	return 0, false
+}
+
+func canonicalResourceTypeKeys(resourceType string) []string {
+	typeKey := strings.ToLower(strings.TrimSpace(resourceType))
+
+	addUnique := func(slice []string, value string) []string {
+		if value == "" {
+			return slice
+		}
+		for _, existing := range slice {
+			if existing == value {
+				return slice
+			}
+		}
+		return append(slice, value)
+	}
+
+	var keys []string
+	switch typeKey {
+	case "guest", "qemu", "vm", "ct", "container", "lxc":
+		keys = addUnique(keys, "guest")
+	case "docker", "docker container", "dockercontainer":
+		keys = addUnique(keys, "docker")
+		keys = addUnique(keys, "guest")
+	case "docker host", "dockerhost":
+		keys = addUnique(keys, "dockerhost")
+		keys = addUnique(keys, "docker")
+		keys = addUnique(keys, "node")
+	case "node":
+		keys = addUnique(keys, "node")
+	case "pbs", "pbs server", "pbsserver":
+		keys = addUnique(keys, "pbs")
+		keys = addUnique(keys, "node")
+	case "storage":
+		keys = addUnique(keys, "storage")
+	default:
+		keys = addUnique(keys, typeKey)
+	}
+
+	return keys
 }
 
 // checkMetric checks a single metric against its threshold with hysteresis
@@ -2563,8 +2738,8 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		if !exists {
 			alertStartTime := time.Now()
 
-			// Determine the appropriate time threshold based on resource type
-			timeThreshold := m.getTimeThresholdForType(resourceType)
+			// Determine the appropriate time threshold based on resource/metric type
+			timeThreshold := m.getTimeThreshold(resourceID, resourceType, metricType)
 
 			// Check if we have a time threshold configured
 			if timeThreshold > 0 {
