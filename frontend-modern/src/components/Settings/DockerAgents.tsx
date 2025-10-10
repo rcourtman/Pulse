@@ -72,8 +72,6 @@ export const DockerAgents: Component = () => {
     return true;
   };
 
-  const tokenAvailable = () => requiresToken() && Boolean(apiToken());
-
   // Always return command template with placeholder - CommandBuilder will do the substitution
   const getInstallCommandTemplate = () => {
     const url = pulseUrl();
