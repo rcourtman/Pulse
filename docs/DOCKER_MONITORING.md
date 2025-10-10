@@ -89,7 +89,7 @@ docker run -d \
   ghcr.io/rcourtman/pulse-docker-agent:latest
 ```
 
-> **Note**: The container image is published with the first release that includes the agent. Build locally if you are testing nightly builds.
+> **Note**: Official images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/rcourtman/pulse-docker-agent`. To test local changes, run `docker build --target agent_runtime -t pulse-docker-agent:test .` from the repository root.
 
 ## Configuration reference
 

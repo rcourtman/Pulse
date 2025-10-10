@@ -45,7 +45,19 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -o pulse-docker-agent ./cmd/pulse-docker-agent
 
-# Final stage
+# Runtime image for the Docker agent (offered via --target agent_runtime)
+FROM alpine:latest AS agent_runtime
+
+RUN apk --no-cache add ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=backend-builder /app/pulse-docker-agent /usr/local/bin/pulse-docker-agent
+COPY --from=backend-builder /app/VERSION /VERSION
+
+ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
+
+# Final stage (Pulse server runtime)
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates tzdata su-exec
