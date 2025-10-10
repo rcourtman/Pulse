@@ -129,18 +129,18 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		return info, nil
 	}
 
-	// Get latest release from GitHub with specified channel
-	release, err := m.getLatestReleaseForChannel(ctx, channel)
-	if err != nil {
-		m.updateStatus("error", 0, "Failed to check for updates")
-		return nil, err
-	}
-
-	// Parse versions
+	// Parse current version first
 	currentVer, err := ParseVersion(currentInfo.Version)
 	if err != nil {
 		m.updateStatus("error", 0, "Invalid current version")
 		return nil, fmt.Errorf("failed to parse current version: %w", err)
+	}
+
+	// Get latest release from GitHub with specified channel and current version
+	release, err := m.getLatestReleaseForChannel(ctx, channel, currentVer)
+	if err != nil {
+		m.updateStatus("error", 0, "Failed to check for updates")
+		return nil, err
 	}
 
 	latestVer, err := ParseVersion(release.TagName)
@@ -335,31 +335,33 @@ func (m *Manager) GetStatus() UpdateStatus {
 }
 
 // getLatestRelease fetches the latest release from GitHub using saved config
-func (m *Manager) getLatestRelease(ctx context.Context) (*ReleaseInfo, error) {
+func (m *Manager) getLatestRelease(ctx context.Context, currentVer *Version) (*ReleaseInfo, error) {
 	channel := m.config.UpdateChannel
 	if channel == "" {
 		channel = "stable"
 	}
-	return m.getLatestReleaseForChannel(ctx, channel)
+	return m.getLatestReleaseForChannel(ctx, channel, currentVer)
 }
 
 // getLatestReleaseForChannel fetches the latest release from GitHub for a specific channel
-func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string) (*ReleaseInfo, error) {
+func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string, currentVer *Version) (*ReleaseInfo, error) {
 	if channel == "" {
 		channel = "stable"
 	}
 
-	log.Info().Str("channel", channel).Msg("Checking for updates")
+	log.Info().
+		Str("channel", channel).
+		Str("currentVersion", currentVer.String()).
+		Bool("isPrerelease", currentVer.IsPrerelease()).
+		Msg("Checking for updates")
 
 	// GitHub API URL (can be overridden for testing)
+	// Always fetch all releases so we can do version-aware filtering
 	baseURL := os.Getenv("PULSE_UPDATE_SERVER")
 	if baseURL == "" {
 		baseURL = "https://api.github.com"
 	}
 	url := baseURL + "/repos/rcourtman/Pulse/releases"
-	if channel == "stable" {
-		url += "/latest"
-	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -381,37 +383,102 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
 
-	if channel == "stable" {
-		var release ReleaseInfo
-		if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-			return nil, fmt.Errorf("failed to decode release: %w", err)
-		}
-		return &release, nil
-	}
-
-	// For RC channel, get all releases and find latest
 	var releases []ReleaseInfo
 	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
 		return nil, fmt.Errorf("failed to decode releases: %w", err)
 	}
 
-	// Find latest release based on channel
+	// Find latest release based on channel and current version
+	// RC channel: return newest release (RC or stable) that's > currentVer
+	// Stable channel: return newest stable release that's > currentVer
 	if channel == "rc" {
-		// For RC channel, return the first release (newest by creation date)
-		// GitHub API returns releases sorted by created_at desc
-		if len(releases) > 0 {
-			return &releases[0], nil
+		// For RC channel: find newest release (RC or stable) that's greater than current version
+		// RC users should see both new RCs and new stable releases
+		var newestRC *ReleaseInfo
+		var newestStable *ReleaseInfo
+
+		for i := range releases {
+			releaseVer, err := ParseVersion(releases[i].TagName)
+			if err != nil {
+				log.Debug().Str("tag", releases[i].TagName).Err(err).Msg("Failed to parse release version")
+				continue
+			}
+
+			// Only consider releases newer than current version
+			if !releaseVer.IsNewerThan(currentVer) {
+				continue
+			}
+
+			if releases[i].Prerelease {
+				// Track newest RC
+				if newestRC == nil {
+					newestRC = &releases[i]
+				} else {
+					newestRCVer, _ := ParseVersion(newestRC.TagName)
+					if releaseVer.IsNewerThan(newestRCVer) {
+						newestRC = &releases[i]
+					}
+				}
+			} else {
+				// Track newest stable
+				if newestStable == nil {
+					newestStable = &releases[i]
+				} else {
+					newestStableVer, _ := ParseVersion(newestStable.TagName)
+					if releaseVer.IsNewerThan(newestStableVer) {
+						newestStable = &releases[i]
+					}
+				}
+			}
+		}
+
+		// Return the highest version among candidates
+		// Stable versions are considered higher than RCs (4.22.0 > 4.22.0-rc.3)
+		if newestStable != nil && newestRC != nil {
+			stableVer, _ := ParseVersion(newestStable.TagName)
+			rcVer, _ := ParseVersion(newestRC.TagName)
+			if stableVer.IsNewerThan(rcVer) {
+				log.Info().
+					Str("stable", newestStable.TagName).
+					Str("rc", newestRC.TagName).
+					Msg("Found both stable and RC updates, preferring stable")
+				return newestStable, nil
+			}
+			log.Info().
+				Str("rc", newestRC.TagName).
+				Str("stable", newestStable.TagName).
+				Msg("Found both RC and stable updates, preferring RC")
+			return newestRC, nil
+		} else if newestStable != nil {
+			log.Info().Str("version", newestStable.TagName).Msg("Found stable update for RC user")
+			return newestStable, nil
+		} else if newestRC != nil {
+			log.Info().Str("version", newestRC.TagName).Msg("Found RC update")
+			return newestRC, nil
 		}
 	} else {
-		// For stable channel, find the first non-prerelease
+		// For stable channel: find latest non-prerelease that's greater than current version
 		for i := range releases {
-			if !releases[i].Prerelease {
+			if releases[i].Prerelease {
+				continue
+			}
+
+			releaseVer, err := ParseVersion(releases[i].TagName)
+			if err != nil {
+				log.Debug().Str("tag", releases[i].TagName).Err(err).Msg("Failed to parse release version")
+				continue
+			}
+
+			// Only consider releases newer than current version
+			if releaseVer.IsNewerThan(currentVer) {
+				log.Info().Str("version", releases[i].TagName).Msg("Found stable update")
 				return &releases[i], nil
 			}
 		}
 	}
 
-	return nil, fmt.Errorf("no releases found for channel %s", channel)
+	log.Info().Str("channel", channel).Msg("No updates found")
+	return nil, fmt.Errorf("no updates found for channel %s", channel)
 }
 
 // downloadFile downloads a file from URL to dest
