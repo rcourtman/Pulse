@@ -11,12 +11,26 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   const [status, setStatus] = createSignal<UpdateStatus | null>(null);
   const [isComplete, setIsComplete] = createSignal(false);
   const [hasError, setHasError] = createSignal(false);
+  const [isRestarting, setIsRestarting] = createSignal(false);
   let pollInterval: number | undefined;
+  let healthCheckInterval: number | undefined;
+  let healthCheckAttempts = 0;
 
   const pollStatus = async () => {
     try {
       const currentStatus = await UpdatesAPI.getUpdateStatus();
       setStatus(currentStatus);
+
+      // Check if restarting
+      if (currentStatus.status === 'restarting') {
+        setIsRestarting(true);
+        if (pollInterval) {
+          clearInterval(pollInterval);
+        }
+        // Start health check polling
+        startHealthCheckPolling();
+        return;
+      }
 
       // Check if complete or error
       if (
@@ -34,7 +48,46 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       }
     } catch (error) {
       console.error('Failed to poll update status:', error);
+      // If we get errors during update, assume we're restarting
+      const currentStatus = status();
+      if (currentStatus && currentStatus.status !== 'idle' && currentStatus.status !== 'error') {
+        setIsRestarting(true);
+        if (pollInterval) {
+          clearInterval(pollInterval);
+        }
+        startHealthCheckPolling();
+      }
     }
+  };
+
+  const startHealthCheckPolling = () => {
+    if (healthCheckInterval) {
+      clearInterval(healthCheckInterval);
+    }
+
+    const checkHealth = async () => {
+      try {
+        const response = await fetch('/api/health');
+        if (response.ok) {
+          // Backend is back! Reload the page to get the new version
+          console.log('Backend is healthy again, reloading...');
+          window.location.reload();
+        }
+      } catch (error) {
+        // Backend still down, continue polling
+        healthCheckAttempts++;
+        // Exponential backoff: 2s, 4s, 8s, max 15s
+        const nextDelay = Math.min(2000 * Math.pow(2, Math.min(healthCheckAttempts, 3)), 15000);
+
+        if (healthCheckInterval) {
+          clearInterval(healthCheckInterval);
+        }
+        healthCheckInterval = setInterval(checkHealth, nextDelay) as unknown as number;
+      }
+    };
+
+    // Start checking immediately
+    checkHealth();
   };
 
   onMount(() => {
@@ -49,6 +102,9 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   onCleanup(() => {
     if (pollInterval) {
       clearInterval(pollInterval);
+    }
+    if (healthCheckInterval) {
+      clearInterval(healthCheckInterval);
     }
   });
 
@@ -82,6 +138,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
   const getStatusText = () => {
     const currentStatus = status();
+
+    if (isRestarting()) {
+      return 'Pulse is restarting...';
+    }
+
     if (!currentStatus) return 'Initializing...';
 
     if (hasError()) {
@@ -161,18 +222,32 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
               </div>
             </Show>
 
-            {/* Warning */}
+            {/* Warning / Info */}
             <Show when={!isComplete()}>
-              <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-                <div class="flex items-start gap-2">
-                  <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <div class="text-sm text-yellow-800 dark:text-yellow-200">
-                    Please do not close this window or refresh the page during the update.
+              <Show when={isRestarting()}>
+                <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <div class="flex items-start gap-2">
+                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div class="text-sm text-blue-800 dark:text-blue-200">
+                      Pulse is restarting with the new version. This page will reload automatically when ready.
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Show>
+              <Show when={!isRestarting()}>
+                <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                  <div class="flex items-start gap-2">
+                    <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div class="text-sm text-yellow-800 dark:text-yellow-200">
+                      Please do not close this window or refresh the page during the update.
+                    </div>
+                  </div>
+                </div>
+              </Show>
             </Show>
           </div>
 

@@ -170,6 +170,24 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	// Get latest release from GitHub with specified channel and current version
 	release, err := m.getLatestReleaseForChannel(ctx, channel, currentVer)
 	if err != nil {
+		// Check if this is a "no releases found" error - handle gracefully
+		if strings.Contains(err.Error(), "no releases found") {
+			// No releases available for this channel - return "no update available"
+			info := &UpdateInfo{
+				Available:      false,
+				CurrentVersion: currentInfo.Version,
+				LatestVersion:  currentInfo.Version,
+			}
+			if useCache {
+				m.statusMu.Lock()
+				m.checkCache[channel] = info
+				m.cacheTime[channel] = time.Now()
+				m.statusMu.Unlock()
+			}
+			m.updateStatus("idle", 0, fmt.Sprintf("No releases available for %s channel", channel))
+			return info, nil
+		}
+		// For other errors, return the error
 		m.updateStatus("error", 0, "Failed to check for updates")
 		return nil, err
 	}
