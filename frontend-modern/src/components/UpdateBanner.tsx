@@ -1,8 +1,61 @@
-import { Show, createSignal } from 'solid-js';
+import { Show, createSignal, createEffect, For } from 'solid-js';
 import { updateStore } from '@/stores/updates';
+import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
+import { UpdateConfirmationModal } from './UpdateConfirmationModal';
+import { UpdateProgressModal } from './UpdateProgressModal';
 
 export function UpdateBanner() {
   const [isExpanded, setIsExpanded] = createSignal(false);
+  const [updatePlan, setUpdatePlan] = createSignal<UpdatePlan | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = createSignal(false);
+  const [showProgressModal, setShowProgressModal] = createSignal(false);
+  const [isApplying, setIsApplying] = createSignal(false);
+  const [copiedIndex, setCopiedIndex] = createSignal<number | null>(null);
+
+  // Fetch update plan when update info is available
+  createEffect(async () => {
+    const info = updateStore.updateInfo();
+    if (info?.available && info.latestVersion) {
+      try {
+        const plan = await UpdatesAPI.getUpdatePlan(info.latestVersion);
+        setUpdatePlan(plan);
+      } catch (error) {
+        console.error('Failed to fetch update plan:', error);
+      }
+    }
+  });
+
+  const handleApplyUpdate = () => {
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmUpdate = async () => {
+    const info = updateStore.updateInfo();
+    if (!info?.downloadUrl) return;
+
+    setIsApplying(true);
+    try {
+      await UpdatesAPI.applyUpdate(info.downloadUrl);
+      // Close confirmation and show progress
+      setShowConfirmModal(false);
+      setShowProgressModal(true);
+    } catch (error) {
+      console.error('Failed to start update:', error);
+      alert('Failed to start update. Please try again.');
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
 
   // Get deployment type message
   const getUpdateInstructions = () => {
@@ -53,8 +106,26 @@ export function UpdateBanner() {
                 />
               </svg>
 
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-3 flex-wrap">
                 <span class="text-sm font-medium">{getShortMessage()}</span>
+
+                {/* Apply Update Button (automated deployments) */}
+                <Show when={updatePlan()?.canAutoUpdate && !isExpanded()}>
+                  <button
+                    onClick={handleApplyUpdate}
+                    class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                  >
+                    Apply Update
+                  </button>
+                </Show>
+
+                {/* Manual Steps Badge (non-automated deployments) */}
+                <Show when={updatePlan() && !updatePlan()?.canAutoUpdate && !isExpanded()}>
+                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 rounded">
+                    Manual steps required
+                  </span>
+                </Show>
+
                 {!isExpanded() && getUpdateInstructions() && (
                   <>
                     <span class="text-blue-600 dark:text-blue-400 text-sm hidden sm:inline">•</span>
@@ -134,6 +205,54 @@ export function UpdateBanner() {
                     This is a pre-release version
                   </p>
                 </Show>
+
+                {/* Manual Update Instructions */}
+                <Show when={updatePlan()?.instructions && updatePlan()!.instructions.length > 0}>
+                  <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                    <div class="font-medium mb-2">Update Instructions:</div>
+                    <div class="space-y-2">
+                      <For each={updatePlan()!.instructions}>
+                        {(instruction, index) => (
+                          <div class="bg-gray-50 dark:bg-gray-900/50 rounded border border-blue-200 dark:border-blue-700 p-2">
+                            <div class="flex items-start justify-between gap-2">
+                              <code class="text-xs text-gray-800 dark:text-gray-200 font-mono flex-1 break-all">
+                                {instruction}
+                              </code>
+                              <button
+                                onClick={() => copyToClipboard(instruction, index())}
+                                class="flex-shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
+                                title="Copy to clipboard"
+                              >
+                                <Show when={copiedIndex() === index()} fallback={
+                                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                }>
+                                  <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </Show>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+
+                {/* Apply Update Button (expanded view for automated deployments) */}
+                <Show when={updatePlan()?.canAutoUpdate}>
+                  <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                    <button
+                      onClick={handleApplyUpdate}
+                      class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                    >
+                      Apply Update Automatically
+                    </button>
+                  </div>
+                </Show>
+
                 <div class="flex gap-3 mt-2">
                   <a
                     href={`https://github.com/rcourtman/Pulse/releases/tag/${updateStore.updateInfo()?.latestVersion}`}
@@ -155,6 +274,32 @@ export function UpdateBanner() {
           </Show>
         </div>
       </div>
+
+      {/* Update Confirmation Modal */}
+      <UpdateConfirmationModal
+        isOpen={showConfirmModal()}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleConfirmUpdate}
+        currentVersion={updateStore.versionInfo()?.version || 'Unknown'}
+        latestVersion={updateStore.updateInfo()?.latestVersion || ''}
+        plan={updatePlan() || {
+          canAutoUpdate: false,
+          requiresRoot: false,
+          rollbackSupport: false,
+        }}
+        isApplying={isApplying()}
+      />
+
+      {/* Update Progress Modal */}
+      <UpdateProgressModal
+        isOpen={showProgressModal()}
+        onClose={() => setShowProgressModal(false)}
+        onViewHistory={() => {
+          setShowProgressModal(false);
+          // TODO: Navigate to Settings → Update History
+          // For now, just close the modal
+        }}
+      />
     </Show>
   );
 }
