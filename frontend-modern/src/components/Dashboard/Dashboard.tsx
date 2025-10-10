@@ -7,7 +7,6 @@ import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
-import { formatBytes, formatUptime } from '@/utils/format';
 import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
@@ -30,7 +29,7 @@ type GroupingMode = 'grouped' | 'flat';
 
 export function Dashboard(props: DashboardProps) {
   const ws = useWebSocket();
-  const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect, state } = ws;
+  const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
@@ -43,26 +42,6 @@ export function Dashboard(props: DashboardProps) {
       ? storedViewMode
       : 'all',
   );
-
-  // Sort nodes by cluster membership and name
-  const sortedNodes = createMemo(() => {
-    const nodes = [...props.nodes];
-    return nodes.sort((a, b) => {
-      // First, group by cluster membership (clustered first, then standalone)
-      if (a.isClusterMember && !b.isClusterMember) return -1;
-      if (!a.isClusterMember && b.isClusterMember) return 1;
-
-      // Then sort by cluster name (if both are clustered)
-      if (a.isClusterMember && b.isClusterMember && a.clusterName !== b.clusterName) {
-        return (a.clusterName || '').localeCompare(b.clusterName || '');
-      }
-
-      // Finally, sort by node display name (falls back to hostname if unset)
-      const nameA = getNodeDisplayName(a);
-      const nameB = getNodeDisplayName(b);
-      return nameA.localeCompare(nameB);
-    });
-  });
 
   const storedStatusMode = localStorage.getItem('dashboardStatusMode');
   const [statusMode, setStatusMode] = createSignal<StatusMode>(

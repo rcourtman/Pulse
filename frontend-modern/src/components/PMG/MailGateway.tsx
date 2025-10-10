@@ -1,5 +1,4 @@
 import { Component, Show, For, createMemo } from 'solid-js';
-import type { PMGInstance } from '@/types/api';
 import { useWebSocket } from '@/App';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { Card } from '@/components/shared/Card';

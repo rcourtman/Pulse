@@ -209,11 +209,11 @@ export function UpdateBanner() {
                 </Show>
 
                 {/* Manual Update Instructions */}
-                <Show when={updatePlan()?.instructions && updatePlan()!.instructions.length > 0}>
+                <Show when={updatePlan()?.instructions && updatePlan()?.instructions.length > 0}>
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                     <div class="font-medium mb-2">Update Instructions:</div>
                     <div class="space-y-2">
-                      <For each={updatePlan()!.instructions}>
+                      <For each={updatePlan()?.instructions || []}>
                         {(instruction, index) => (
                           <div class="bg-gray-50 dark:bg-gray-900/50 rounded border border-blue-200 dark:border-blue-700 p-2">
                             <div class="flex items-start justify-between gap-2">

@@ -68,22 +68,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return props.nodes?.some((node) => node.temperature?.available) || false;
   });
 
-  const countFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-
-  const formatCount = (value?: number | null) => {
-    if (value === undefined || value === null || Number.isNaN(value)) {
-      return '—';
-    }
-    return countFormatter.format(Math.max(0, Math.round(value)));
-  };
-
-  const formatRelativeTimestamp = (value?: string) => {
-    if (!value) return '—';
-    const parsed = Date.parse(value);
-    if (Number.isNaN(parsed)) return '—';
-    return formatRelativeTime(parsed);
-  };
-
   const nodeKey = (instance?: string, nodeName?: string) => `${instance ?? ''}::${nodeName ?? ''}`;
 
   const vmCountsByNode = createMemo<Record<string, number>>(() => {
