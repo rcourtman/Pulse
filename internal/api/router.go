@@ -136,6 +136,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/updates/check", updateHandlers.HandleCheckUpdates)
 	r.mux.HandleFunc("/api/updates/apply", updateHandlers.HandleApplyUpdate)
 	r.mux.HandleFunc("/api/updates/status", updateHandlers.HandleUpdateStatus)
+	r.mux.HandleFunc("/api/updates/plan", updateHandlers.HandleGetUpdatePlan)
+	r.mux.HandleFunc("/api/updates/history", updateHandlers.HandleListUpdateHistory)
+	r.mux.HandleFunc("/api/updates/history/entry", updateHandlers.HandleGetUpdateHistoryEntry)
 
 	// Config management routes
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
