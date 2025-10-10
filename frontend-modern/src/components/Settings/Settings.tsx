@@ -3849,6 +3849,63 @@ const Settings: Component<SettingsProps> = (props) => {
                               const sanitizedId = `${nodeType}-${index}`;
                               connectionKeyMap.set(nodeName, sanitizedId);
 
+                              // Sanitize nested physical disks data if present
+                              const physicalDisks = node.physicalDisks as Record<
+                                string,
+                                unknown
+                              > | undefined;
+                              if (physicalDisks && Array.isArray(physicalDisks.nodeResults)) {
+                                physicalDisks.nodeResults = (
+                                  physicalDisks.nodeResults as Array<Record<string, unknown>>
+                                ).map((result) => ({
+                                  ...result,
+                                  nodeName: sanitizeHostname(
+                                    typeof result.nodeName === 'string' ? result.nodeName : '',
+                                  ),
+                                  apiResponse:
+                                    sanitizeText(
+                                      typeof result.apiResponse === 'string'
+                                        ? result.apiResponse
+                                        : undefined,
+                                    ) ?? result.apiResponse,
+                                  error:
+                                    sanitizeText(
+                                      typeof result.error === 'string' ? result.error : undefined,
+                                    ) ?? result.error,
+                                }));
+                              }
+
+                              // Sanitize nested VM disk check data if present
+                              const vmDiskCheck = node.vmDiskCheck as Record<
+                                string,
+                                unknown
+                              > | undefined;
+                              if (vmDiskCheck) {
+                                if (typeof vmDiskCheck.testVMName === 'string') {
+                                  vmDiskCheck.testVMName = 'vm-REDACTED';
+                                }
+                                if (typeof vmDiskCheck.testResult === 'string') {
+                                  vmDiskCheck.testResult = sanitizeText(vmDiskCheck.testResult);
+                                }
+                                if (Array.isArray(vmDiskCheck.problematicVMs)) {
+                                  vmDiskCheck.problematicVMs = (
+                                    vmDiskCheck.problematicVMs as Array<Record<string, unknown>>
+                                  ).map((problem) => ({
+                                    ...problem,
+                                    name: 'vm-REDACTED',
+                                    issue:
+                                      sanitizeText(
+                                        typeof problem.issue === 'string' ? problem.issue : undefined,
+                                      ) ?? problem.issue,
+                                  }));
+                                }
+                                if (Array.isArray(vmDiskCheck.recommendations)) {
+                                  vmDiskCheck.recommendations = (
+                                    vmDiskCheck.recommendations as Array<string>
+                                  ).map((rec) => sanitizeText(rec) ?? rec);
+                                }
+                              }
+
                               return {
                                 ...node,
                                 id: sanitizedId,
@@ -3859,6 +3916,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                 tokenName: tokenName ? 'token-REDACTED' : tokenName,
                                 clusterName: clusterName ? 'cluster-REDACTED' : clusterName,
                                 clusterEndpoints,
+                                physicalDisks,
+                                vmDiskCheck,
                               };
                             });
                           }
@@ -4235,6 +4294,142 @@ const Settings: Component<SettingsProps> = (props) => {
 
                           if (sanitize) {
                             diagnostics = sanitizeForGitHub(diagnostics);
+
+                            // Rebuild nodeStatus from sanitized nodes to avoid leaking real names
+                            // Both arrays are built in the same order, so we can match by index
+                            if (
+                              Array.isArray(diagnostics.nodes) &&
+                              Array.isArray(diagnostics.nodeStatus)
+                            ) {
+                              const sanitizedNodes = diagnostics.nodes as Array<
+                                Record<string, unknown>
+                              >;
+                              const originalNodeStatus = diagnostics.nodeStatus as Array<
+                                Record<string, unknown>
+                              >;
+
+                              diagnostics.nodeStatus = sanitizedNodes.map((sanitizedNode, index) => {
+                                // Get corresponding runtime data using same index
+                                const originalStatus = originalNodeStatus[index];
+
+                                // Use sanitized node name/id but preserve runtime metrics
+                                return {
+                                  id: sanitizedNode.id,
+                                  name: sanitizedNode.name, // Already sanitized
+                                  status: originalStatus?.status || 'unknown',
+                                  online: originalStatus?.online || false,
+                                  cpu: originalStatus?.cpu,
+                                  memory: originalStatus?.memory,
+                                  uptime: originalStatus?.uptime,
+                                  version: originalStatus?.version,
+                                };
+                              });
+                            }
+
+                            // Sanitize storage entries that have nodes arrays or instance fields
+                            if (Array.isArray(diagnostics.storage)) {
+                              diagnostics.storage = (
+                                diagnostics.storage as Array<Record<string, unknown>>
+                              ).map((storageItem, index) => {
+                                const sanitizedItem = { ...storageItem };
+
+                                // Sanitize storage name field (original Proxmox storage name)
+                                // This field often contains node names (e.g., "pbs-delly")
+                                if (
+                                  typeof sanitizedItem.storage === 'string' &&
+                                  sanitizedItem.storage
+                                ) {
+                                  sanitizedItem.storage = `storage-${index}`;
+                                }
+
+                                // Sanitize nodes array if present (cluster storage has this)
+                                if (Array.isArray(sanitizedItem.nodes)) {
+                                  sanitizedItem.nodes = (
+                                    sanitizedItem.nodes as Array<string>
+                                  ).map(() => 'node-REDACTED');
+                                }
+
+                                // Sanitize nodeIds array if present
+                                if (Array.isArray(sanitizedItem.nodeIds)) {
+                                  sanitizedItem.nodeIds = (
+                                    sanitizedItem.nodeIds as Array<string>
+                                  ).map(() => 'node-REDACTED');
+                                }
+
+                                // Sanitize instance field if present
+                                if (
+                                  typeof sanitizedItem.instance === 'string' &&
+                                  sanitizedItem.instance
+                                ) {
+                                  const instanceMatch = (
+                                    sanitizedItem.instance as string
+                                  ).match(/\.(lan|local|home|internal)$/);
+                                  const suffix = instanceMatch ? instanceMatch[0] : '';
+                                  sanitizedItem.instance = `instance-REDACTED${suffix}`;
+                                }
+
+                                return sanitizedItem;
+                              });
+                            }
+
+                            // Sanitize activeAlerts resourceName field
+                            if (Array.isArray(diagnostics.activeAlerts)) {
+                              diagnostics.activeAlerts = (
+                                diagnostics.activeAlerts as Array<Record<string, unknown>>
+                              ).map((alert, index) => {
+                                const sanitizedAlert = { ...alert };
+
+                                // Sanitize resourceName if present
+                                if (
+                                  typeof sanitizedAlert.resourceName === 'string' &&
+                                  sanitizedAlert.resourceName
+                                ) {
+                                  const hostnameMatch = (
+                                    sanitizedAlert.resourceName as string
+                                  ).match(/\.(lan|local|home|internal)$/);
+                                  const suffix = hostnameMatch ? hostnameMatch[0] : '';
+                                  sanitizedAlert.resourceName = `resource-REDACTED${suffix}`;
+                                }
+
+                                // Sanitize node field if present
+                                if (
+                                  typeof sanitizedAlert.node === 'string' &&
+                                  sanitizedAlert.node
+                                ) {
+                                  sanitizedAlert.node = 'node-REDACTED';
+                                }
+
+                                // Sanitize instance field if present
+                                if (
+                                  typeof sanitizedAlert.instance === 'string' &&
+                                  sanitizedAlert.instance
+                                ) {
+                                  const instanceMatch = (
+                                    sanitizedAlert.instance as string
+                                  ).match(/\.(lan|local|home|internal)$/);
+                                  const suffix = instanceMatch ? instanceMatch[0] : '';
+                                  sanitizedAlert.instance = `instance-REDACTED${suffix}`;
+                                }
+
+                                // Sanitize resourceId (e.g., "delly.lan-delly" → "alert-resource-0")
+                                if (
+                                  typeof sanitizedAlert.resourceId === 'string' &&
+                                  sanitizedAlert.resourceId
+                                ) {
+                                  sanitizedAlert.resourceId = `alert-resource-${index}`;
+                                }
+
+                                // Sanitize id field (e.g., "delly.lan-delly-temperature" → "alert-0-temperature")
+                                if (typeof sanitizedAlert.id === 'string' && sanitizedAlert.id) {
+                                  // Extract the alert type from the end (e.g., "temperature")
+                                  const idParts = (sanitizedAlert.id as string).split('-');
+                                  const alertType = idParts[idParts.length - 1];
+                                  sanitizedAlert.id = `alert-${index}-${alertType}`;
+                                }
+
+                                return sanitizedAlert;
+                              });
+                            }
                           }
 
                           const blob = new Blob([JSON.stringify(diagnostics, null, 2)], {
