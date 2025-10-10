@@ -28,7 +28,7 @@ import { updateStore } from '@/stores/updates';
 interface DiscoveredServer {
   ip: string;
   port: number;
-  type: 'pve' | 'pbs';
+  type: 'pve' | 'pbs' | 'pmg';
   version: string;
   hostname?: string;
   release?: string;

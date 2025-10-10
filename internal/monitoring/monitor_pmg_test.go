@@ -62,6 +62,10 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"data":{"count":2,"avgbytes":0,"mbytes":0}}`)
 
+		case "/api2/json/nodes/mail-gateway/postfix/queue":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"active":5,"deferred":2,"hold":0,"maildrop":0}}`)
+
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
