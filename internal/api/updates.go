@@ -17,9 +17,10 @@ type UpdateHandlers struct {
 }
 
 // NewUpdateHandlers creates new update handlers
-func NewUpdateHandlers(manager *updates.Manager) *UpdateHandlers {
-	// Initialize update history
-	history, err := updates.NewUpdateHistory("/var/lib/pulse")
+func NewUpdateHandlers(manager *updates.Manager, dataDir string) *UpdateHandlers {
+	// Initialize update history using configured data directory
+	// Empty string defaults to /var/lib/pulse for backward compatibility
+	history, err := updates.NewUpdateHistory(dataDir)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize update history")
 		// Continue without history - handlers will check for nil

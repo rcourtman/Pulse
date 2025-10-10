@@ -97,7 +97,7 @@ func (r *Router) setupRoutes() {
 	r.notificationHandlers = NewNotificationHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler)
-	updateHandlers := NewUpdateHandlers(r.updateManager)
+	updateHandlers := NewUpdateHandlers(r.updateManager, r.config.DataPath)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
 
 	// API routes

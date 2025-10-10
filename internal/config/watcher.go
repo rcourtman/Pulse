@@ -38,8 +38,15 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		envPath = "/data/.env"
 	}
 
-	// Determine mock.env path (always in project root)
-	mockEnvPath := "/opt/pulse/mock.env"
+	// Determine mock.env path - skip in Docker or if directory doesn't exist
+	mockEnvPath := ""
+	isDocker := os.Getenv("PULSE_DOCKER") == "true"
+	mockDir := "/opt/pulse"
+	if !isDocker {
+		if stat, err := os.Stat(mockDir); err == nil && stat.IsDir() {
+			mockEnvPath = filepath.Join(mockDir, "mock.env")
+		}
+	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -58,8 +65,10 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	if stat, err := os.Stat(envPath); err == nil {
 		cw.lastModTime = stat.ModTime()
 	}
-	if stat, err := os.Stat(mockEnvPath); err == nil {
-		cw.mockLastModTime = stat.ModTime()
+	if mockEnvPath != "" {
+		if stat, err := os.Stat(mockEnvPath); err == nil {
+			cw.mockLastModTime = stat.ModTime()
+		}
 	}
 
 	return cw, nil
@@ -81,10 +90,12 @@ func (cw *ConfigWatcher) Start() error {
 		log.Warn().Err(err).Str("path", dir).Msg("Failed to watch config directory")
 	}
 
-	// Also watch the mock.env directory (/opt/pulse)
-	mockDir := filepath.Dir(cw.mockEnvPath)
-	if err := cw.watcher.Add(mockDir); err != nil {
-		log.Warn().Err(err).Str("path", mockDir).Msg("Failed to watch mock.env directory")
+	// Also watch the mock.env directory if it's configured (not in Docker)
+	if cw.mockEnvPath != "" {
+		mockDir := filepath.Dir(cw.mockEnvPath)
+		if err := cw.watcher.Add(mockDir); err != nil {
+			log.Warn().Err(err).Str("path", mockDir).Msg("Failed to watch mock.env directory")
+		}
 	}
 
 	if err != nil {
@@ -94,10 +105,11 @@ func (cw *ConfigWatcher) Start() error {
 	}
 
 	go cw.watchForChanges()
-	log.Info().
-		Str("env_path", cw.envPath).
-		Str("mock_env_path", cw.mockEnvPath).
-		Msg("Started watching config files for changes")
+	logEvent := log.Info().Str("env_path", cw.envPath)
+	if cw.mockEnvPath != "" {
+		logEvent = logEvent.Str("mock_env_path", cw.mockEnvPath)
+	}
+	logEvent.Msg("Started watching config files for changes")
 	return nil
 }
 
@@ -138,8 +150,8 @@ func (cw *ConfigWatcher) watchForChanges() {
 				}
 			}
 
-			// Check if the event is for mock.env
-			if filepath.Base(event.Name) == "mock.env" || event.Name == cw.mockEnvPath {
+			// Check if the event is for mock.env (only if mock.env watching is enabled)
+			if cw.mockEnvPath != "" && (filepath.Base(event.Name) == "mock.env" || event.Name == cw.mockEnvPath) {
 				// Debounce - wait a bit for write to complete
 				time.Sleep(100 * time.Millisecond)
 
@@ -178,12 +190,14 @@ func (cw *ConfigWatcher) pollForChanges() {
 				}
 			}
 
-			// Check mock.env
-			if stat, err := os.Stat(cw.mockEnvPath); err == nil {
-				if stat.ModTime().After(cw.mockLastModTime) {
-					log.Info().Msg("Detected mock.env file change via polling")
-					cw.mockLastModTime = stat.ModTime()
-					cw.reloadMockConfig()
+			// Check mock.env (only if mock.env watching is enabled)
+			if cw.mockEnvPath != "" {
+				if stat, err := os.Stat(cw.mockEnvPath); err == nil {
+					if stat.ModTime().After(cw.mockLastModTime) {
+						log.Info().Msg("Detected mock.env file change via polling")
+						cw.mockLastModTime = stat.ModTime()
+						cw.reloadMockConfig()
+					}
 				}
 			}
 
@@ -274,6 +288,11 @@ func (cw *ConfigWatcher) reloadConfig() {
 
 // reloadMockConfig handles mock.env file changes
 func (cw *ConfigWatcher) reloadMockConfig() {
+	// Skip if mock.env watching is disabled (Docker environment)
+	if cw.mockEnvPath == "" {
+		return
+	}
+
 	cw.mu.Lock()
 	callback := cw.onMockReload
 	cw.mu.Unlock()
