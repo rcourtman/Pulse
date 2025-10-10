@@ -89,9 +89,20 @@ func (m *Manager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 
 // CheckForUpdatesWithChannel checks GitHub for available updates with optional channel override
 func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string) (*UpdateInfo, error) {
-	// Use provided channel or fall back to config
+	// Get current version first to auto-detect channel if needed
+	currentInfo, err := GetCurrentVersion()
+	if err != nil {
+		m.updateStatus("error", 0, "Failed to get current version")
+		return nil, fmt.Errorf("failed to get current version: %w", err)
+	}
+
+	// Use provided channel, or fall back to config, or auto-detect from current version
 	if channel == "" {
 		channel = m.config.UpdateChannel
+	}
+	if channel == "" && currentInfo.Channel != "" {
+		// Auto-detect channel from current version (RC users get RC updates)
+		channel = currentInfo.Channel
 	}
 	if channel == "" {
 		channel = "stable"
@@ -106,13 +117,6 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	}
 
 	m.updateStatus("checking", 0, "Checking for updates...")
-
-	// Get current version
-	currentInfo, err := GetCurrentVersion()
-	if err != nil {
-		m.updateStatus("error", 0, "Failed to get current version")
-		return nil, fmt.Errorf("failed to get current version: %w", err)
-	}
 
 	// Skip update check for Docker
 	if currentInfo.IsDocker {
@@ -332,6 +336,14 @@ func (m *Manager) GetStatus() UpdateStatus {
 	m.statusMu.RLock()
 	defer m.statusMu.RUnlock()
 	return m.status
+}
+
+// GetCachedUpdateInfo returns the cached update info without making a network request
+// Returns nil if no cached info is available
+func (m *Manager) GetCachedUpdateInfo() *UpdateInfo {
+	m.statusMu.RLock()
+	defer m.statusMu.RUnlock()
+	return m.checkCache
 }
 
 // getLatestRelease fetches the latest release from GitHub using saved config
