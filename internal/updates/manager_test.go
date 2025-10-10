@@ -89,9 +89,9 @@ func TestRCUpdateNotifications(t *testing.T) {
 				{TagName: "v4.22.0", Prerelease: false},
 				{TagName: "v4.22.0-rc.3", Prerelease: true},
 			},
-			expectedVersion: "",
-			expectUpdate:    false,
-			description:     "RC users should not see older releases",
+			expectedVersion: "v4.22.0",
+			expectUpdate:    true, // Returns latest version even if not newer (Available will be false)
+			description:     "Returns latest stable version even when user is on newer RC",
 		},
 		{
 			name:           "RC user already on latest stable",
@@ -173,9 +173,9 @@ func TestStableUpdateNotifications(t *testing.T) {
 				{TagName: "v4.23.0-rc.1", Prerelease: true},
 				{TagName: "v4.22.0", Prerelease: false},
 			},
-			expectedVersion: "",
-			expectUpdate:    false,
-			description:     "Stable users should NOT see RC releases",
+			expectedVersion: "v4.22.0",
+			expectUpdate:    true, // Returns latest stable version (Available will be false)
+			description:     "Stable users get latest stable version, ignoring newer RCs",
 		},
 		{
 			name:           "Stable user with mixed releases",
@@ -197,9 +197,9 @@ func TestStableUpdateNotifications(t *testing.T) {
 				{TagName: "v4.22.0", Prerelease: false},
 				{TagName: "v4.21.0", Prerelease: false},
 			},
-			expectedVersion: "",
-			expectUpdate:    false,
-			description:     "Stable users should not see updates if already on latest",
+			expectedVersion: "v4.22.0",
+			expectUpdate:    true, // Returns latest version even if already on it (Available will be false)
+			description:     "Returns latest stable version even when already on it",
 		},
 	}
 

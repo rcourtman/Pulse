@@ -102,6 +102,13 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 		Message:  "Preparing update...",
 	})
 
+	// Validate version string to prevent command injection
+	// Version must match semantic versioning format (with optional 'v' prefix)
+	versionPattern := regexp.MustCompile(`^v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?(?:\+[a-zA-Z0-9.-]+)?$`)
+	if !versionPattern.MatchString(request.Version) {
+		return fmt.Errorf("invalid version format: %s", request.Version)
+	}
+
 	// Build command: bash install.sh --version vX.Y.Z
 	args := []string{"-s", "--", "--version", request.Version}
 	if request.Force {
