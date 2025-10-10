@@ -64,28 +64,16 @@ type Manager struct {
 	cacheTime     map[string]time.Time   // keyed by channel
 	cacheDuration time.Duration
 	progressChan  chan UpdateStatus
-	history       *UpdateHistory
 }
 
 // NewManager creates a new update manager
 func NewManager(cfg *config.Config) *Manager {
-	// Initialize update history
-	dataDir := os.Getenv("PULSE_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/var/lib/pulse"
-	}
-	history, err := NewUpdateHistory(dataDir)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize update history, history tracking will be disabled")
-	}
-
 	m := &Manager{
 		config:        cfg,
 		checkCache:    make(map[string]*UpdateInfo),
 		cacheTime:     make(map[string]time.Time),
 		cacheDuration: 5 * time.Minute, // Cache update checks for 5 minutes
 		progressChan:  make(chan UpdateStatus, 100),
-		history:       history,
 		status: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -259,8 +247,6 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 
 // ApplyUpdate downloads and applies an update
 func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
-	startTime := time.Now()
-
 	// Validate download URL (allow test server URLs when PULSE_UPDATE_SERVER is set)
 	if os.Getenv("PULSE_UPDATE_SERVER") == "" {
 		if !strings.HasPrefix(downloadURL, "https://github.com/rcourtman/Pulse/releases/download/") {
@@ -277,67 +263,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	// Check for pre-v4 installation
 	if isPreV4Installation() {
 		return fmt.Errorf("manual migration required: Pulse v4 is a complete rewrite. Please create a fresh installation. See https://github.com/rcourtman/Pulse/releases/v4.0.0")
-	}
-
-	// Extract target version from download URL
-	targetVersion := "unknown"
-	if parts := strings.Split(downloadURL, "/"); len(parts) > 0 {
-		for _, part := range parts {
-			if strings.HasPrefix(part, "v") {
-				targetVersion = part
-				break
-			}
-		}
-	}
-
-	// Create history entry if history is available
-	var historyEventID string
-	if m.history != nil {
-		deploymentType := "systemd" // Default
-		if currentInfo.IsDocker {
-			deploymentType = "docker"
-		}
-
-		entry := UpdateHistoryEntry{
-			Action:         ActionUpdate,
-			Channel:        m.config.UpdateChannel,
-			VersionFrom:    currentInfo.Version,
-			VersionTo:      targetVersion,
-			DeploymentType: deploymentType,
-			InitiatedBy:    InitiatedByUser, // Assuming API calls are user-initiated
-			InitiatedVia:   InitiatedViaUI,
-			Status:         StatusInProgress,
-		}
-
-		eventID, err := m.history.CreateEntry(ctx, entry)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to create update history entry")
-		} else {
-			historyEventID = eventID
-		}
-	}
-
-	// Wrapper function to update history on completion
-	updateHistoryOnComplete := func(err error, backupPath string) {
-		if m.history != nil && historyEventID != "" {
-			duration := time.Since(startTime).Milliseconds()
-
-			m.history.UpdateEntry(ctx, historyEventID, func(entry *UpdateHistoryEntry) error {
-				entry.DurationMs = duration
-				entry.BackupPath = backupPath
-
-				if err != nil {
-					entry.Status = StatusFailed
-					entry.Error = &UpdateError{
-						Message: err.Error(),
-					}
-				} else {
-					entry.Status = StatusSuccess
-				}
-
-				return nil
-			})
-		}
 	}
 
 	m.updateStatus("downloading", 10, "Downloading update...")
@@ -373,7 +298,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	tarballPath := filepath.Join(tempDir, "update.tar.gz")
 	if err := m.downloadFile(ctx, downloadURL, tarballPath); err != nil {
 		m.updateStatus("error", 20, "Failed to download update")
-		updateHistoryOnComplete(err, "")
 		return fmt.Errorf("failed to download update: %w", err)
 	}
 
@@ -392,7 +316,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	extractDir := filepath.Join(tempDir, "extracted")
 	if err := m.extractTarball(tarballPath, extractDir); err != nil {
 		m.updateStatus("error", 40, "Failed to extract update")
-		updateHistoryOnComplete(err, "")
 		return fmt.Errorf("failed to extract update: %w", err)
 	}
 
@@ -402,7 +325,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	backupPath, err := m.createBackup()
 	if err != nil {
 		m.updateStatus("error", 60, "Failed to create backup")
-		updateHistoryOnComplete(err, "")
 		return fmt.Errorf("failed to create backup: %w", err)
 	}
 	log.Info().Str("backup", backupPath).Msg("Created backup")
@@ -431,14 +353,10 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 		if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
 			log.Error().Err(restoreErr).Msg("Failed to restore backup")
 		}
-		updateHistoryOnComplete(err, backupPath)
 		return fmt.Errorf("failed to apply update: %w", err)
 	}
 
 	m.updateStatus("restarting", 95, "Restarting service...")
-
-	// Update history with success before restarting
-	updateHistoryOnComplete(nil, backupPath)
 
 	// Schedule a clean exit after a short delay - systemd will restart us
 	go func() {
