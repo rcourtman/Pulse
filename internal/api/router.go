@@ -396,6 +396,9 @@ func (r *Router) setupRoutes() {
 	// API token regeneration endpoint
 	r.mux.HandleFunc("/api/security/regenerate-token", r.HandleRegenerateAPIToken)
 
+	// API token validation endpoint
+	r.mux.HandleFunc("/api/security/validate-token", r.HandleValidateAPIToken)
+
 	// Apply security restart endpoint
 	r.mux.HandleFunc("/api/security/apply-restart", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
