@@ -51,14 +51,14 @@ for build_name in "${!builds[@]}"; do
 
     # Build backend binary with version info
     env $build_env go build \
-        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit}" \
+        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v${VERSION}" \
         -trimpath \
         -o "$BUILD_DIR/pulse-$build_name" \
         ./cmd/pulse
 
     # Build docker agent binary
     env $build_env go build \
-        -ldflags="-s -w" \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v${VERSION}" \
         -trimpath \
         -o "$BUILD_DIR/pulse-docker-agent-$build_name" \
         ./cmd/pulse-docker-agent
@@ -70,10 +70,13 @@ for build_name in "${!builds[@]}"; do
     staging_dir="$BUILD_DIR/staging-$build_name"
     rm -rf "$staging_dir"
     mkdir -p "$staging_dir/bin"
+    mkdir -p "$staging_dir/scripts"
     
     # Copy binaries and VERSION file
     cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$staging_dir/bin/pulse-docker-agent"
+    cp "scripts/install-docker-agent.sh" "$staging_dir/scripts/install-docker-agent.sh"
+    chmod 755 "$staging_dir/scripts/install-docker-agent.sh"
     echo "$VERSION" > "$staging_dir/VERSION"
     
     # Create tarball from staging directory
@@ -92,12 +95,16 @@ echo "Creating universal tarball..."
 universal_dir="$BUILD_DIR/universal"
 rm -rf "$universal_dir"
 mkdir -p "$universal_dir/bin"
+mkdir -p "$universal_dir/scripts"
 
 # Copy all binaries to bin/ directory to maintain consistent structure
 for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/pulse-${build_name}"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$universal_dir/bin/pulse-docker-agent-${build_name}"
 done
+
+cp "scripts/install-docker-agent.sh" "$universal_dir/scripts/install-docker-agent.sh"
+chmod 755 "$universal_dir/scripts/install-docker-agent.sh"
 
 # Create a detection script that creates the pulse symlink based on architecture
 cat > "$universal_dir/bin/pulse" << 'EOF'

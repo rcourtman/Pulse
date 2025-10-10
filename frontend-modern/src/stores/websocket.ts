@@ -28,6 +28,7 @@ export function createWebSocketStore(url: string) {
     cephClusters: [],
     physicalDisks: [],
     pbs: [],
+    pmg: [],
     metrics: [],
     pveBackups: {
       backupTasks: [],
@@ -280,6 +281,7 @@ export function createWebSocketStore(url: string) {
             if (message.data.cephClusters !== undefined)
               setState('cephClusters', message.data.cephClusters);
             if (message.data.pbs !== undefined) setState('pbs', message.data.pbs);
+            if (message.data.pmg !== undefined) setState('pmg', message.data.pmg);
             if (message.data.pbsBackups !== undefined)
               setState('pbsBackups', message.data.pbsBackups);
             if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);

@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
@@ -182,6 +183,7 @@ type Monitor struct {
 	state                *models.State
 	pveClients           map[string]PVEClientInterface
 	pbsClients           map[string]*pbs.Client
+	pmgClients           map[string]*pmg.Client
 	tempCollector        *TemperatureCollector // SSH-based temperature collector
 	mu                   sync.RWMutex
 	startTime            time.Time
@@ -746,6 +748,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		state:                models.NewState(),
 		pveClients:           make(map[string]PVEClientInterface),
 		pbsClients:           make(map[string]*pbs.Client),
+		pmgClients:           make(map[string]*pmg.Client),
 		tempCollector:        tempCollector,
 		startTime:            time.Now(),
 		rateTracker:          NewRateTracker(),
@@ -945,6 +948,41 @@ func New(cfg *config.Config) (*Monitor, error) {
 			log.Info().Str("instance", pbsInst.Name).Msg("PBS client created successfully")
 			// Set initial connection health to true
 			m.state.SetConnectionHealth("pbs-"+pbsInst.Name, true)
+		}
+
+		// Initialize PMG clients
+		log.Info().Int("count", len(cfg.PMGInstances)).Msg("Initializing PMG clients")
+		for _, pmgInst := range cfg.PMGInstances {
+			log.Info().
+				Str("name", pmgInst.Name).
+				Str("host", pmgInst.Host).
+				Str("user", pmgInst.User).
+				Bool("hasToken", pmgInst.TokenName != "").
+				Msg("Configuring PMG instance")
+
+			clientConfig := config.CreatePMGConfig(&pmgInst)
+			if clientConfig.Timeout <= 0 {
+				clientConfig.Timeout = 45 * time.Second
+			}
+
+			client, err := pmg.NewClient(clientConfig)
+			if err != nil {
+				monErr := errors.WrapConnectionError("create_pmg_client", pmgInst.Name, err)
+				log.Error().
+					Err(monErr).
+					Str("instance", pmgInst.Name).
+					Str("host", pmgInst.Host).
+					Str("user", pmgInst.User).
+					Bool("hasPassword", pmgInst.Password != "").
+					Bool("hasToken", pmgInst.TokenValue != "").
+					Msg("Failed to create PMG client - gateway will show as disconnected")
+				m.state.SetConnectionHealth("pmg-"+pmgInst.Name, false)
+				continue
+			}
+
+			m.pmgClients[pmgInst.Name] = client
+			log.Info().Str("instance", pmgInst.Name).Msg("PMG client created successfully")
+			m.state.SetConnectionHealth("pmg-"+pmgInst.Name, true)
 		}
 	} // End of else block for mock mode check
 
@@ -1468,6 +1506,21 @@ func (m *Monitor) pollConcurrent(ctx context.Context) {
 		}(name, client)
 	}
 
+	// Poll PMG instances
+	for name, client := range m.pmgClients {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		wg.Add(1)
+		go func(instanceName string, c *pmg.Client) {
+			defer wg.Done()
+			m.pollPMGInstance(ctx, instanceName, c)
+		}(name, client)
+	}
+
 	// Wait for all goroutines to complete or context cancellation
 	done := make(chan struct{})
 	go func() {
@@ -1508,6 +1561,16 @@ func (m *Monitor) pollSequential(ctx context.Context) {
 		default:
 		}
 		m.pollPBSInstance(ctx, name, client)
+	}
+
+	// Poll PMG instances
+	for name, client := range m.pmgClients {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		m.pollPMGInstance(ctx, name, client)
 	}
 }
 
@@ -2189,7 +2252,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 							// Save the updated configuration
 						if m.persistence != nil {
-							if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances); err != nil {
+							if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
 								log.Warn().Err(err).Msg("Failed to persist updated node configuration")
 							}
 						}
@@ -3996,6 +4059,184 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	}
 }
 
+// pollPMGInstance polls a single Proxmox Mail Gateway instance
+func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client *pmg.Client) {
+	select {
+	case <-ctx.Done():
+		log.Debug().Str("instance", instanceName).Msg("PMG polling cancelled by context")
+		return
+	default:
+	}
+
+	log.Debug().Str("instance", instanceName).Msg("Polling PMG instance")
+
+	var instanceCfg *config.PMGInstance
+	for idx := range m.config.PMGInstances {
+		if m.config.PMGInstances[idx].Name == instanceName {
+			instanceCfg = &m.config.PMGInstances[idx]
+			break
+		}
+	}
+
+	if instanceCfg == nil {
+		log.Error().Str("instance", instanceName).Msg("PMG instance config not found")
+		return
+	}
+
+	now := time.Now()
+	pmgInst := models.PMGInstance{
+		ID:               "pmg-" + instanceName,
+		Name:             instanceName,
+		Host:             instanceCfg.Host,
+		Status:           "offline",
+		ConnectionHealth: "unhealthy",
+		LastSeen:         now,
+		LastUpdated:      now,
+	}
+
+	version, err := client.GetVersion(ctx)
+	if err != nil {
+		monErr := errors.WrapConnectionError("pmg_get_version", instanceName, err)
+		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PMG instance")
+		m.state.SetConnectionHealth("pmg-"+instanceName, false)
+		m.state.UpdatePMGInstance(pmgInst)
+		if errors.IsAuthError(err) {
+			m.recordAuthFailure(instanceName, "pmg")
+		}
+		return
+	}
+
+	pmgInst.Status = "online"
+	pmgInst.ConnectionHealth = "healthy"
+	if version != nil {
+		pmgInst.Version = strings.TrimSpace(version.Version)
+	}
+	m.state.SetConnectionHealth("pmg-"+instanceName, true)
+	m.resetAuthFailures(instanceName, "pmg")
+
+	cluster, err := client.GetClusterStatus(ctx, true)
+	if err != nil {
+		log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to retrieve PMG cluster status")
+	} else if len(cluster) > 0 {
+		nodes := make([]models.PMGNodeStatus, 0, len(cluster))
+		for _, entry := range cluster {
+			status := strings.ToLower(strings.TrimSpace(entry.Type))
+			if status == "" {
+				status = "online"
+			}
+			node := models.PMGNodeStatus{
+				Name:   entry.Name,
+				Status: status,
+				Role:   entry.Type,
+			}
+
+			// Fetch queue status for this node
+			if queueData, qErr := client.GetQueueStatus(ctx, entry.Name); qErr != nil {
+				log.Debug().Err(qErr).
+					Str("instance", instanceName).
+					Str("node", entry.Name).
+					Msg("Failed to fetch PMG queue status")
+			} else if queueData != nil {
+				total := queueData.Active + queueData.Deferred + queueData.Hold + queueData.Incoming
+				node.QueueStatus = &models.PMGQueueStatus{
+					Active:    queueData.Active,
+					Deferred:  queueData.Deferred,
+					Hold:      queueData.Hold,
+					Incoming:  queueData.Incoming,
+					Total:     total,
+					OldestAge: queueData.OldestAge,
+					UpdatedAt: time.Now(),
+				}
+			}
+
+			nodes = append(nodes, node)
+		}
+		pmgInst.Nodes = nodes
+	}
+
+	if stats, err := client.GetMailStatistics(ctx, "day"); err != nil {
+		log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail statistics")
+	} else if stats != nil {
+		pmgInst.MailStats = &models.PMGMailStats{
+			Timeframe:            "day",
+			CountTotal:           stats.Count,
+			CountIn:              stats.CountIn,
+			CountOut:             stats.CountOut,
+			SpamIn:               stats.SpamIn,
+			SpamOut:              stats.SpamOut,
+			VirusIn:              stats.VirusIn,
+			VirusOut:             stats.VirusOut,
+			BouncesIn:            stats.BouncesIn,
+			BouncesOut:           stats.BouncesOut,
+			BytesIn:              stats.BytesIn,
+			BytesOut:             stats.BytesOut,
+			GreylistCount:        stats.GreylistCount,
+			JunkIn:               stats.JunkIn,
+			AverageProcessTimeMs: stats.AvgProcessSec * 1000,
+			RBLRejects:           stats.RBLRejects,
+			PregreetRejects:      stats.Pregreet,
+			UpdatedAt:            time.Now(),
+		}
+	}
+
+	if counts, err := client.GetMailCount(ctx, 24); err != nil {
+		log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail count data")
+	} else if len(counts) > 0 {
+		points := make([]models.PMGMailCountPoint, 0, len(counts))
+		for _, entry := range counts {
+			ts := time.Unix(entry.Time, 0)
+			points = append(points, models.PMGMailCountPoint{
+				Timestamp:   ts,
+				Count:       entry.Count,
+				CountIn:     entry.CountIn,
+				CountOut:    entry.CountOut,
+				SpamIn:      entry.SpamIn,
+				SpamOut:     entry.SpamOut,
+				VirusIn:     entry.VirusIn,
+				VirusOut:    entry.VirusOut,
+				RBLRejects:  entry.RBLRejects,
+				Pregreet:    entry.PregreetReject,
+				BouncesIn:   entry.BouncesIn,
+				BouncesOut:  entry.BouncesOut,
+				Greylist:    entry.GreylistCount,
+				Index:       entry.Index,
+				Timeframe:   "hour",
+				WindowStart: ts,
+			})
+		}
+		pmgInst.MailCount = points
+	}
+
+	if scores, err := client.GetSpamScores(ctx); err != nil {
+		log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG spam score distribution")
+	} else if len(scores) > 0 {
+		buckets := make([]models.PMGSpamBucket, 0, len(scores))
+		for _, bucket := range scores {
+			buckets = append(buckets, models.PMGSpamBucket{
+				Score: bucket.Level,
+				Count: float64(bucket.Count),
+			})
+		}
+		pmgInst.SpamDistribution = buckets
+	}
+
+	quarantine := models.PMGQuarantineTotals{}
+	if spamStatus, err := client.GetQuarantineStatus(ctx, "spam"); err == nil && spamStatus != nil {
+		quarantine.Spam = spamStatus.Count
+	}
+	if virusStatus, err := client.GetQuarantineStatus(ctx, "virus"); err == nil && virusStatus != nil {
+		quarantine.Virus = virusStatus.Count
+	}
+	pmgInst.Quarantine = &quarantine
+
+	m.state.UpdatePMGInstance(pmgInst)
+	log.Info().
+		Str("instance", instanceName).
+		Str("status", pmgInst.Status).
+		Int("nodes", len(pmgInst.Nodes)).
+		Msg("PMG instance updated in state")
+}
+
 // GetState returns the current state
 func (m *Monitor) GetState() models.StateSnapshot {
 	// Check if mock mode is enabled
@@ -4581,6 +4822,8 @@ func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
 			m.removeFailedPVENode(instanceName)
 		} else if nodeType == "pbs" {
 			m.removeFailedPBSNode(instanceName)
+		} else if nodeType == "pmg" {
+			m.removeFailedPMGInstance(instanceName)
 		}
 
 		// Reset the counter since we've removed the node
@@ -4671,6 +4914,20 @@ func (m *Monitor) removeFailedPBSNode(instanceName string) {
 
 	// Set connection health to false
 	m.state.SetConnectionHealth("pbs-"+instanceName, false)
+}
+
+// removeFailedPMGInstance removes PMG data from state when authentication fails repeatedly
+func (m *Monitor) removeFailedPMGInstance(instanceName string) {
+	currentInstances := m.state.PMGInstances
+	updated := make([]models.PMGInstance, 0, len(currentInstances))
+	for _, inst := range currentInstances {
+		if inst.Name != instanceName {
+			updated = append(updated, inst)
+		}
+	}
+
+	m.state.UpdatePMGInstances(updated)
+	m.state.SetConnectionHealth("pmg-"+instanceName, false)
 }
 
 // pollPBSBackups fetches all backups from PBS datastores

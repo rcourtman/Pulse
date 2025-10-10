@@ -93,6 +93,7 @@ Mock mode generates:
 - **VMs & Containers**: Realistic distribution with various states
 - **Storage**: Local, ZFS, PBS, and shared NFS storage
 - **Backups**: Both PVE and PBS backups with realistic metadata
+- **Mail Gateway**: PMG instances with mail throughput, spam/virus totals, and quarantine counts
 - **Alerts**: CPU, memory, disk, and connectivity alerts
 - **Metrics**: Live-updating metrics every 2 seconds
 

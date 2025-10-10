@@ -128,7 +128,76 @@ Get complete system state including all nodes and their metrics.
 GET /api/state
 ```
 
-Response includes all monitored nodes, VMs, containers, storage, and backups.
+Response includes all monitored nodes (PVE, PMG, PBS), VMs, containers, storage, PMG mail analytics, and backups.
+
+#### PMG Mail Gateway Data
+
+When PMG instances are configured, the `pmg` array inside `/api/state` surfaces consolidated health and mail analytics for each gateway:
+
+- `status`/`connectionHealth` reflect reachability (`online` + `healthy` when the API responds).
+- `nodes` lists discovered cluster members and their reported role.
+- `mailStats` contains rolling totals for the configured timeframe (default: last 24 hours).
+- `mailCount` provides hourly buckets for the last day; useful for charting trends.
+- `spamDistribution` captures spam score buckets as returned by PMG.
+- `quarantine` aggregates queue counts for spam and virus categories.
+
+Snippet:
+
+```json
+{
+  "pmg": [
+    {
+      "id": "pmg-primary",
+      "name": "primary",
+      "host": "https://pmg.example.com",
+      "status": "online",
+      "version": "8.3.1",
+      "connectionHealth": "healthy",
+      "lastSeen": "2025-10-10T09:30:00Z",
+      "lastUpdated": "2025-10-10T09:30:05Z",
+      "nodes": [
+        { "name": "pmg01", "status": "master", "role": "master" }
+      ],
+      "mailStats": {
+        "timeframe": "day",
+        "countTotal": 100,
+        "countIn": 60,
+        "countOut": 40,
+        "spamIn": 5,
+        "spamOut": 2,
+        "virusIn": 1,
+        "virusOut": 0,
+        "rblRejects": 2,
+        "pregreetRejects": 1,
+        "greylistCount": 7,
+        "averageProcessTimeMs": 480,
+        "updatedAt": "2025-10-10T09:30:05Z"
+      },
+      "mailCount": [
+        {
+          "timestamp": "2025-10-10T09:00:00Z",
+          "count": 100,
+          "countIn": 60,
+          "countOut": 40,
+          "spamIn": 5,
+          "spamOut": 2,
+          "virusIn": 1,
+          "virusOut": 0,
+          "rblRejects": 2,
+          "pregreet": 1,
+          "greylist": 7,
+          "index": 0,
+          "timeframe": "hour"
+        }
+      ],
+      "spamDistribution": [
+        { "score": "low", "count": 10 }
+      ],
+      "quarantine": { "spam": 5, "virus": 2 }
+    }
+  ]
+}
+```
 
 ### Docker Agent Integration
 Accept reports from the optional Docker agent to track container workloads outside Proxmox.
@@ -217,7 +286,7 @@ POST /api/system/settings/update # Update system settings (admin only)
 ## Configuration
 
 ### Node Management
-Manage Proxmox VE and PBS nodes.
+Manage Proxmox VE, Proxmox Mail Gateway, and PBS nodes.
 
 ```bash
 GET /api/config/nodes                    # List all nodes
@@ -502,7 +571,7 @@ POST /api/setup-script-url
 Request:
 ```json
 {
-  "type": "pve",        // "pve" or "pbs"
+  "type": "pve",        // "pve", "pmg", or "pbs"
   "host": "https://192.168.1.100:8006",
   "backupPerms": true   // Optional: add backup management permissions (PVE only)
 }

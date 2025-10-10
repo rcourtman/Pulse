@@ -1390,7 +1390,8 @@ download_pulse() {
         chmod +x "$INSTALL_DIR/bin/pulse"
 
         print_info "Building Docker agent from source..."
-        if ! go build -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
+        agent_version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+        if ! go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
             print_error "Failed to build Docker agent binary"
             exit 1
         fi
@@ -1402,7 +1403,9 @@ download_pulse() {
         ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
 
         rm -f pulse-docker-agent
-        
+
+        build_agent_binaries_from_source "$agent_version"
+
         # Update VERSION file to show it's from source
         echo "$SOURCE_BRANCH-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
         
@@ -1522,6 +1525,19 @@ download_pulse() {
         else
             print_warn "Docker agent binary not found in archive; skipping installation"
         fi
+
+        install_additional_agent_binaries "$LATEST_RELEASE"
+
+        # Install Docker agent convenience script
+        mkdir -p "$INSTALL_DIR/scripts"
+        if [[ -f "$TEMP_EXTRACT/scripts/install-docker-agent.sh" ]]; then
+            cp "$TEMP_EXTRACT/scripts/install-docker-agent.sh" "$INSTALL_DIR/scripts/install-docker-agent.sh"
+            chmod 755 "$INSTALL_DIR/scripts/install-docker-agent.sh"
+            chown pulse:pulse "$INSTALL_DIR/scripts/install-docker-agent.sh"
+            print_success "Docker agent install script deployed"
+        else
+            print_warn "Docker agent install script not found in archive; skipping installation"
+        fi
         
         chmod +x "$INSTALL_DIR/bin/pulse"
         chown -R pulse:pulse "$INSTALL_DIR"
@@ -1566,6 +1582,15 @@ download_pulse() {
                     chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
                     ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
                 fi
+
+                install_additional_agent_binaries "$LATEST_RELEASE"
+
+                if [[ -f "$TEMP_EXTRACT2/scripts/install-docker-agent.sh" ]]; then
+                    mkdir -p "$INSTALL_DIR/scripts"
+                    cp "$TEMP_EXTRACT2/scripts/install-docker-agent.sh" "$INSTALL_DIR/scripts/install-docker-agent.sh"
+                    chmod 755 "$INSTALL_DIR/scripts/install-docker-agent.sh"
+                    chown pulse:pulse "$INSTALL_DIR/scripts/install-docker-agent.sh"
+                fi
                 
                 chmod +x "$INSTALL_DIR/bin/pulse"
                 chown -R pulse:pulse "$INSTALL_DIR"
@@ -1586,6 +1611,124 @@ download_pulse() {
         # Cleanup
         rm -rf "$TEMP_EXTRACT" pulse.tar.gz
     fi  # End of SKIP_DOWNLOAD check
+}
+
+install_additional_agent_binaries() {
+    local version="$1"
+
+    if [[ -z "$version" ]]; then
+        return
+    fi
+
+    local targets=("linux-amd64" "linux-arm64" "linux-armv7")
+    local missing=0
+    for target in "${targets[@]}"; do
+        if [[ ! -f "$INSTALL_DIR/bin/pulse-docker-agent-$target" ]]; then
+            missing=1
+            break
+        fi
+    done
+
+    if [[ $missing -eq 0 ]]; then
+        return
+    fi
+
+    local universal_url="https://github.com/$GITHUB_REPO/releases/download/$version/pulse-${version}.tar.gz"
+    local universal_tar="/tmp/pulse-universal-${version}.tar.gz"
+
+    print_info "Downloading universal agent bundle for cross-architecture support..."
+
+    if command -v curl >/dev/null 2>&1; then
+        if ! curl -fsSL --connect-timeout 10 --max-time 300 -o "$universal_tar" "$universal_url"; then
+            print_warn "Failed to download universal agent bundle"
+            rm -f "$universal_tar"
+            return
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        if ! wget -q --timeout=300 -O "$universal_tar" "$universal_url"; then
+            print_warn "Failed to download universal agent bundle"
+            rm -f "$universal_tar"
+            return
+        fi
+    else
+        print_warn "Cannot download universal agent bundle (curl or wget not available)"
+        return
+    fi
+
+    local temp_dir
+    temp_dir=$(mktemp -d -t pulse-universal-XXXXXX)
+    if ! tar -xzf "$universal_tar" -C "$temp_dir"; then
+        print_warn "Failed to extract universal agent bundle"
+        rm -f "$universal_tar"
+        rm -rf "$temp_dir"
+        return
+    fi
+
+    local installed=0
+    for agent_file in "$temp_dir"/bin/pulse-docker-agent-linux-*; do
+        if [[ -f "$agent_file" ]]; then
+            local base
+            base=$(basename "$agent_file")
+            cp -f "$agent_file" "$INSTALL_DIR/bin/$base"
+            cp -f "$agent_file" "$INSTALL_DIR/$base"
+            chmod +x "$INSTALL_DIR/bin/$base" "$INSTALL_DIR/$base"
+            chown pulse:pulse "$INSTALL_DIR/bin/$base" "$INSTALL_DIR/$base"
+            installed=1
+        fi
+    done
+
+    if [[ $installed -eq 1 ]]; then
+        print_success "Additional Docker agent binaries installed"
+    else
+        print_warn "No agent binaries found in universal bundle"
+    fi
+
+    rm -f "$universal_tar"
+    rm -rf "$temp_dir"
+}
+
+build_agent_binaries_from_source() {
+    local agent_version="$1"
+
+    if ! command -v go >/dev/null 2>&1; then
+        print_warn "Go not available for cross-compiling additional agent binaries"
+        return
+    fi
+
+    local targets=(
+        "linux-amd64:amd64:"
+        "linux-arm64:arm64:"
+        "linux-armv7:arm:7"
+    )
+
+    for entry in "${targets[@]}"; do
+        IFS=':' read -r suffix goarch goarm <<< "$entry"
+
+        local output="/tmp/pulse-docker-agent-$suffix-$$"
+
+        # Skip if already exists
+        if [[ -f "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" ]]; then
+            continue
+        fi
+
+        print_info "Cross-compiling Docker agent for $suffix"
+        local env_cmd=(env GOOS=linux GOARCH="$goarch")
+        if [[ -n "$goarm" ]]; then
+            env_cmd+=(GOARM="$goarm")
+        fi
+
+        if ! "${env_cmd[@]}" go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o "$output" ./cmd/pulse-docker-agent >/dev/null 2>&1; then
+            print_warn "Failed to build Docker agent for $suffix"
+            rm -f "$output"
+            continue
+        fi
+
+        cp -f "$output" "$INSTALL_DIR/bin/pulse-docker-agent-$suffix"
+        cp -f "$output" "$INSTALL_DIR/pulse-docker-agent-$suffix"
+        chmod +x "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" "$INSTALL_DIR/pulse-docker-agent-$suffix"
+        chown pulse:pulse "$INSTALL_DIR/bin/pulse-docker-agent-$suffix" "$INSTALL_DIR/pulse-docker-agent-$suffix"
+        rm -f "$output"
+    done
 }
 
 setup_directories() {
@@ -2017,7 +2160,8 @@ main() {
             chown pulse:pulse "$INSTALL_DIR/bin/pulse"
 
             print_info "Building Docker agent from source..."
-            if ! go build -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
+            agent_version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+            if ! go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
                 print_error "Failed to build Docker agent binary"
                 cd /
                 rm -rf "$TEMP_BUILD_DIR"
@@ -2031,6 +2175,17 @@ main() {
             ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
             rm -f pulse-docker-agent
             ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+
+            mkdir -p "$INSTALL_DIR/scripts"
+            if [[ -f "scripts/install-docker-agent.sh" ]]; then
+                cp "scripts/install-docker-agent.sh" "$INSTALL_DIR/scripts/install-docker-agent.sh"
+                chmod 755 "$INSTALL_DIR/scripts/install-docker-agent.sh"
+                chown pulse:pulse "$INSTALL_DIR/scripts/install-docker-agent.sh"
+            else
+                print_warn "Docker agent install script missing from source checkout; skipping installation"
+            fi
+
+            build_agent_binaries_from_source "$agent_version"
             
             # Setup update command and service
             setup_update_command

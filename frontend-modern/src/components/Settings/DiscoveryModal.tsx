@@ -6,7 +6,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 interface DiscoveredServer {
   ip: string;
   port: number;
-  type: 'pve' | 'pbs';
+  type: 'pve' | 'pbs' | 'pmg';
   version: string;
   hostname?: string;
   release?: string;
@@ -201,7 +201,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
       setDiscoveryResult(result);
 
       if (result.servers.length === 0) {
-        showError('No Proxmox/PBS servers found on the network');
+        showError('No Proxmox servers found on the network');
       } else {
         showSuccess(`Found ${result.servers.length} server(s)`);
       }
@@ -243,6 +243,21 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
           <line x1="20" y1="14" x2="23" y2="14"></line>
           <line x1="1" y1="9" x2="4" y2="9"></line>
           <line x1="1" y1="14" x2="4" y2="14"></line>
+        </svg>
+      );
+    }
+    if (type === 'pmg') {
+      return (
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+          <polyline points="22,6 12,13 2,6"></polyline>
         </svg>
       );
     }
@@ -440,7 +455,13 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                                 <div class="flex items-start gap-3">
                                   {/* Server Icon */}
                                   <div
-                                    class={`mt-0.5 ${server.type === 'pve' ? 'text-orange-500' : 'text-green-500'}`}
+                                    class={`mt-0.5 ${
+                                      server.type === 'pve'
+                                        ? 'text-orange-500'
+                                        : server.type === 'pmg'
+                                          ? 'text-purple-500'
+                                          : 'text-green-500'
+                                    }`}
                                   >
                                     {getServerIcon(server.type)}
                                   </div>
@@ -455,7 +476,11 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                                     </div>
                                     <div class="flex items-center gap-2 mt-2">
                                       <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                                        {server.type === 'pve' ? 'Proxmox VE' : 'PBS'}
+                                        {server.type === 'pve'
+                                          ? 'Proxmox VE'
+                                          : server.type === 'pmg'
+                                            ? 'PMG'
+                                            : 'PBS'}
                                       </span>
                                       <Show when={server.version !== 'Unknown'}>
                                         <span class="text-xs text-gray-500 dark:text-gray-400">

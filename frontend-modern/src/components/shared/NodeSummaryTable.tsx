@@ -1,6 +1,6 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
-import type { Node, VM, Container, Storage, PBSInstance } from '@/types/api';
-import { formatBytes, formatUptime } from '@/utils/format';
+import type { Node, VM, Container, Storage, PBSInstance, PMGInstance } from '@/types/api';
+import { formatBytes, formatUptime, formatRelativeTime } from '@/utils/format';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -10,6 +10,7 @@ import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 interface NodeSummaryTableProps {
   nodes: Node[];
   pbsInstances?: PBSInstance[];
+  pmgInstances?: PMGInstance[];
   vms?: VM[];
   containers?: Container[];
   storage?: Storage[];
@@ -67,6 +68,22 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const hasAnyTemperatureData = createMemo(() => {
     return props.nodes?.some((node) => node.temperature?.available) || false;
   });
+
+  const countFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
+  const formatCount = (value?: number | null) => {
+    if (value === undefined || value === null || Number.isNaN(value)) {
+      return '—';
+    }
+    return countFormatter.format(Math.max(0, Math.round(value)));
+  };
+
+  const formatRelativeTimestamp = (value?: string) => {
+    if (!value) return '—';
+    const parsed = Date.parse(value);
+    if (Number.isNaN(parsed)) return '—';
+    return formatRelativeTime(parsed);
+  };
 
   const nodeKey = (instance?: string, nodeName?: string) => `${instance ?? ''}::${nodeName ?? ''}`;
 
@@ -210,6 +227,10 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
       return null;
     }
 
+    if (item.type === 'pmg') {
+      return null;
+    }
+
     const node = item.data as Node;
     const keyId = nodeKey(node.instance, node.name);
 
@@ -234,7 +255,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
       case 'name':
         return item.type === 'pve'
           ? getNodeDisplayName(item.data as Node)
-          : (item.data as PBSInstance).name;
+          : item.type === 'pbs'
+            ? (item.data as PBSInstance).name
+            : (item.data as PMGInstance).name;
       case 'uptime':
         return item.type === 'pve'
           ? (item.data as Node).uptime ?? 0
@@ -324,11 +347,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     });
   });
 
+  const pmgRows = createMemo(() => props.pmgInstances ?? []);
+
   // Don't return null - let the table render even if empty
   // This prevents the table from disappearing on refresh while data loads
 
   return (
-    <Card padding="none" class="mb-4 overflow-hidden">
+    <>
+      <Card padding="none" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full min-w-[600px] border-collapse">
           <thead>
@@ -396,8 +422,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
             <For each={sortedItems()}>
               {(item) => {
                 const isPVE = item.type === 'pve';
+                const isPBS = item.type === 'pbs';
+                const isPMG = item.type === 'pmg';
                 const node = isPVE ? (item.data as Node) : null;
-                const pbs = !isPVE ? (item.data as PBSInstance) : null;
+                const pbs = isPBS ? (item.data as PBSInstance) : null;
+                const pmg = isPMG ? (item.data as PMGInstance) : null;
 
                 const online = isItemOnline(item);
                 const cpuPercentValue = getCpuPercent(item);
@@ -405,16 +434,23 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const diskPercentValue = getDiskPercent(item);
                 const diskSublabel = getDiskSublabel(item);
                 const temperatureValue = getTemperatureValue(item);
-                const uptimeValue = isPVE ? node?.uptime ?? 0 : pbs?.uptime ?? 0;
-                const displayName = () =>
-                  isPVE ? getNodeDisplayName(node as Node) : (pbs as PBSInstance).name;
+                const uptimeValue = isPVE ? node?.uptime ?? 0 : isPBS ? pbs?.uptime ?? 0 : 0;
+                const displayName = () => {
+                  if (isPVE) return getNodeDisplayName(node as Node);
+                  if (isPBS) return (pbs as PBSInstance).name;
+                  return (pmg as PMGInstance).name;
+                };
                 const showActualName = () => isPVE && hasAlternateDisplayName(node as Node);
 
                 // Use unique node ID (not hostname) to handle duplicate node names
-                const nodeId = isPVE ? node!.id : pbs!.name;
+                const nodeId = isPVE ? node!.id : isPBS ? pbs!.name : pmg!.id;
                 const isSelected = () => props.selectedNode === nodeId;
                 // Use the full resource ID for alert matching
-                const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;
+                const resourceId = isPVE
+                  ? node!.id || node!.name
+                  : isPBS
+                    ? pbs!.id || pbs!.name
+                    : pmg!.id || pmg!.name;
                 const alertStyles = getAlertStyles(resourceId, activeAlerts);
                 const showAlertHighlight = alertStyles.hasUnacknowledgedAlert && online;
 
@@ -479,7 +515,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           href={
                             isPVE
                               ? node!.host || `https://${node!.name}:8006`
-                              : pbs!.host || `https://${pbs!.name}:8007`
+                              : isPBS
+                                ? pbs!.host || `https://${pbs!.name}:8007`
+                                : pmg!.host || `https://${pmg!.name}:8006`
                           }
                           target="_blank"
                           onClick={(e) => e.stopPropagation()}
@@ -513,12 +551,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             {node!.isClusterMember ? node!.clusterName : 'Standalone'}
                           </span>
                         </Show>
-                        <Show when={!isPVE}>
+                        <Show when={isPBS}>
                           <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                             PBS
                           </span>
                         </Show>
-                        <Show when={!isPVE && pbs!.version}>
+                        <Show when={isPBS && pbs!.version}>
                           <span class="text-[9px] text-gray-500 dark:text-gray-400">
                             v{pbs!.version}
                           </span>
@@ -543,11 +581,17 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
                     <td class="px-2 py-0.5">
                       <Show
-                        when={online}
-                        fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                        when={online && cpuPercentValue !== null}
+                        fallback={
+                          <span class="text-xs text-gray-500 dark:text-gray-400">
+                            {isPMG
+                              ? `Mail: ${formatCount(pmg?.mailStats?.countTotal)}`
+                              : '-'}
+                          </span>
+                        }
                       >
                         <MetricBar
-                          value={cpuPercentValue}
+                          value={cpuPercentValue ?? 0}
                           label={`${cpuPercentValue}%`}
                           sublabel={
                             isPVE && node!.cpuInfo?.cores
@@ -560,16 +604,22 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
                     <td class="px-2 py-0.5">
                       <Show
-                        when={online}
-                        fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                        when={online && memoryPercentValue !== null}
+                        fallback={
+                          <span class="text-xs text-gray-500 dark:text-gray-400">
+                            {isPMG
+                              ? `Spam: ${formatCount(pmg?.mailStats?.spamIn)} · Virus: ${formatCount(pmg?.mailStats?.virusIn)}`
+                              : '-'}
+                          </span>
+                        }
                       >
                         <MetricBar
-                          value={memoryPercentValue}
+                          value={memoryPercentValue ?? 0}
                           label={`${memoryPercentValue}%`}
                           sublabel={
                             isPVE && node!.memory
                               ? `${formatBytes(node!.memory.used)}/${formatBytes(node!.memory.total)}`
-                              : !isPVE && pbs!.memoryTotal
+                              : isPBS && pbs!.memoryTotal
                                 ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}`
                                 : undefined
                           }
@@ -579,11 +629,17 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
                     <td class="px-2 py-0.5">
                       <Show
-                        when={online}
-                        fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                        when={online && diskPercentValue !== null}
+                        fallback={
+                          <span class="text-xs text-gray-500 dark:text-gray-400">
+                            {isPMG && pmg?.quarantine
+                              ? `Quarantine: ${formatCount(pmg?.quarantine?.spam)}/${formatCount(pmg?.quarantine?.virus)}`
+                              : '-'}
+                          </span>
+                        }
                       >
                         <MetricBar
-                          value={diskPercentValue}
+                          value={diskPercentValue ?? 0}
                           label={`${diskPercentValue}%`}
                           sublabel={diskSublabel}
                           type="disk"
@@ -631,6 +687,94 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
           </tbody>
         </table>
       </div>
-    </Card>
+      </Card>
+      <Show when={pmgRows().length > 0 && props.currentTab === 'dashboard'}>
+        <Card padding="none" class="overflow-hidden">
+        <div class="px-3 py-2 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+            Proxmox Mail Gateway
+          </h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[600px]">
+            <thead class="bg-gray-50 dark:bg-gray-800/70 border-b border-gray-200 dark:border-gray-700">
+              <tr class="text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                <th class="pl-3 pr-2 py-1.5 text-left">Name</th>
+                <th class="px-2 py-1.5 text-left">Status</th>
+                <th class="px-2 py-1.5 text-left">Mail Volume</th>
+                <th class="px-2 py-1.5 text-left">Spam Catch Rate</th>
+                <th class="px-2 py-1.5 text-left">Virus Rate</th>
+                <th class="px-2 py-1.5 text-left">Quarantine Load</th>
+                <th class="px-2 py-1.5 text-left">Updated</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+              <For each={pmgRows()}>
+                {(pmg) => {
+                  const statusTone = (pmg.connectionHealth || pmg.status || '').toLowerCase();
+                  const isHealthy = statusTone.includes('healthy') || (pmg.status || '').toLowerCase() === 'online';
+                  const isWarning = statusTone.includes('degraded') || statusTone.includes('warning');
+                  const dotClass = isHealthy ? 'bg-green-500' : isWarning ? 'bg-amber-500' : 'bg-red-500';
+
+                  return (
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors text-sm">
+                      <td class="pl-3 pr-2 py-1.5">
+                        <div class="flex flex-col">
+                          <a
+                            href={pmg.host || `https://${pmg.name}:8006`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
+                          >
+                            {pmg.name}
+                          </a>
+                          <Show when={pmg.host}>
+                            <span class="text-[11px] text-gray-500 dark:text-gray-400">{pmg.host}</span>
+                          </Show>
+                        </div>
+                      </td>
+                      <td class="px-2 py-1.5">
+                        <div class="flex items-center gap-1">
+                          <span class={`h-2 w-2 rounded-full ${dotClass}`} aria-hidden="true" />
+                          <span class="text-xs text-gray-600 dark:text-gray-400 capitalize">
+                            {pmg.status || 'unknown'}
+                          </span>
+                        </div>
+                        <Show when={pmg.connectionHealth && pmg.connectionHealth !== pmg.status}>
+                          <div class="text-[11px] text-gray-500 dark:text-gray-400">
+                            {pmg.connectionHealth}
+                          </div>
+                        </Show>
+                      </td>
+                      <td class="px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300">
+                        {formatCount(pmg.mailStats?.countTotal)} total
+                        <Show when={pmg.mailStats?.countIn !== undefined}>
+                          <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                            {' '}(in {formatCount(pmg.mailStats?.countIn)} / out {formatCount(pmg.mailStats?.countOut)})
+                          </span>
+                        </Show>
+                      </td>
+                      <td class="px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300">
+                        {formatCount(pmg.mailStats?.spamIn)} caught
+                      </td>
+                      <td class="px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300">
+                        {formatCount(pmg.mailStats?.virusIn)} blocked
+                      </td>
+                      <td class="px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300">
+                        {formatCount(pmg.quarantine?.spam)} spam / {formatCount(pmg.quarantine?.virus)} virus
+                      </td>
+                      <td class="px-2 py-1.5 text-[12px] text-gray-600 dark:text-gray-400">
+                        {formatRelativeTimestamp(pmg.mailStats?.updatedAt || pmg.lastUpdated || pmg.lastSeen)}
+                      </td>
+                    </tr>
+                  );
+                }}
+              </For>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      </Show>
+    </>
   );
 };

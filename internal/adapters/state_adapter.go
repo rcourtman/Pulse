@@ -71,6 +71,11 @@ func (s *StateAdapter) UpdatePBSInstances(instances []models.PBSInstance) {
 	s.state.UpdatePBSInstances(instances)
 }
 
+// UpdatePMGInstances implements StateStore interface
+func (s *StateAdapter) UpdatePMGInstances(instances []models.PMGInstance) {
+	s.state.UpdatePMGInstances(instances)
+}
+
 // SetConnectionHealth implements StateStore interface
 func (s *StateAdapter) SetConnectionHealth(instance string, healthy bool) {
 	s.state.SetConnectionHealth(instance, healthy)
