@@ -10,7 +10,6 @@ import { DockerAgents } from './DockerAgents';
 import { OIDCPanel } from './OIDCPanel';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
-import { UpdateHistoryPanel } from './UpdateHistoryPanel';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -312,7 +311,6 @@ const Settings: Component<SettingsProps> = (props) => {
         { id: 'system', label: 'System' },
         { id: 'security', label: 'Security' },
         { id: 'diagnostics', label: 'Diagnostics' },
-        { id: 'updates', label: 'Update History' },
       ],
     },
   ];
@@ -4297,11 +4295,6 @@ const Settings: Component<SettingsProps> = (props) => {
                 hasUnsavedChanges={hasUnsavedChanges}
                 setHasUnsavedChanges={setHasUnsavedChanges}
               />
-            </Show>
-
-            {/* Update History Tab */}
-            <Show when={activeTab() === 'updates'}>
-              <UpdateHistoryPanel />
             </Show>
           </div>
           </div>
