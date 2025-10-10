@@ -5,7 +5,7 @@ import type { Node, VM, Container, Storage } from '@/types/api';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
-  onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => void;
+  onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
   onNamespaceSelect?: (namespace: string) => void;
   nodes?: Node[];
   filteredVms?: VM[];
@@ -79,7 +79,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     return counts;
   });
 
-  const handleNodeClick = (nodeId: string, nodeType: 'pve' | 'pbs' | 'pmg') => {
+  const handleNodeClick = (nodeId: string, nodeType: 'pve' | 'pbs') => {
     // Toggle selection
     if (selectedNode() === nodeId) {
       setSelectedNode(null);
@@ -98,7 +98,6 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       <NodeSummaryTable
         nodes={nodes()}
         pbsInstances={props.currentTab === 'backups' ? state.pbs : undefined}
-        pmgInstances={state.pmg}
         vms={state.vms} // Always use unfiltered data for counts
         containers={state.containers} // Always use unfiltered data for counts
         storage={state.storage} // Always use unfiltered data for counts
