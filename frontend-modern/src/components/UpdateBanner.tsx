@@ -1,10 +1,12 @@
 import { Show, createSignal, createEffect, For } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
 import { UpdateProgressModal } from './UpdateProgressModal';
 
 export function UpdateBanner() {
+  const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = createSignal(false);
   const [updatePlan, setUpdatePlan] = createSignal<UpdatePlan | null>(null);
   const [showConfirmModal, setShowConfirmModal] = createSignal(false);
@@ -296,8 +298,7 @@ export function UpdateBanner() {
         onClose={() => setShowProgressModal(false)}
         onViewHistory={() => {
           setShowProgressModal(false);
-          // TODO: Navigate to Settings → Update History
-          // For now, just close the modal
+          navigate('/settings/updates');
         }}
       />
     </Show>
