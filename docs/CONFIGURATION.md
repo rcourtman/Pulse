@@ -105,6 +105,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 ```json
 {
   "pbsPollingInterval": 60,        // Seconds between PBS refreshes (PVE polling fixed at 10s)
+  "pmgPollingInterval": 60,        // Seconds between PMG refreshes (mail analytics and health)
   "connectionTimeout": 60,         // Seconds before node connection timeout
   "autoUpdateEnabled": false,      // Systemd timer toggle for automatic updates
   "autoUpdateCheckInterval": 24,   // Hours between auto-update checks

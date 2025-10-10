@@ -206,7 +206,8 @@ type StateFrontend struct {
 	Storage          []StorageFrontend     `json:"storage"`
 	CephClusters     []CephClusterFrontend `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk        `json:"physicalDisks"`
-	PBS              []PBSInstance         `json:"pbs"`              // Keep as is
+	PBS              []PBSInstance         `json:"pbs"` // Keep as is
+	PMG              []PMGInstance         `json:"pmg"`
 	ActiveAlerts     []Alert               `json:"activeAlerts"`     // Active alerts
 	Metrics          map[string]any        `json:"metrics"`          // Empty object for now
 	PVEBackups       PVEBackups            `json:"pveBackups"`       // Keep as is

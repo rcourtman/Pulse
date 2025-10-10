@@ -9,6 +9,7 @@ export interface State {
   cephClusters: CephCluster[];
   physicalDisks: PhysicalDisk[];
   pbs: PBSInstance[];
+  pmg: PMGInstance[];
   pbsBackups: PBSBackup[];
   metrics: Metric[];
   pveBackups: PVEBackups;
@@ -266,6 +267,94 @@ export interface PBSInstance {
   garbageJobs: PBSGarbageJob[];
   connectionHealth: string;
   lastSeen: string;
+}
+
+export interface PMGInstance {
+  id: string;
+  name: string;
+  host: string;
+  status: string;
+  version: string;
+  nodes?: PMGNodeStatus[];
+  mailStats?: PMGMailStats;
+  mailCount?: PMGMailCountPoint[];
+  spamDistribution?: PMGSpamBucket[];
+  quarantine?: PMGQuarantineTotals;
+  connectionHealth: string;
+  lastSeen: string;
+  lastUpdated: string;
+}
+
+export interface PMGNodeStatus {
+  name: string;
+  status: string;
+  role?: string;
+  uptime?: number;
+  loadAvg?: string;
+  queueStatus?: PMGQueueStatus;
+}
+
+export interface PMGMailStats {
+  timeframe: string;
+  countTotal: number;
+  countIn: number;
+  countOut: number;
+  spamIn: number;
+  spamOut: number;
+  virusIn: number;
+  virusOut: number;
+  bouncesIn: number;
+  bouncesOut: number;
+  bytesIn: number;
+  bytesOut: number;
+  greylistCount: number;
+  junkIn: number;
+  averageProcessTimeMs: number;
+  rblRejects: number;
+  pregreetRejects: number;
+  updatedAt: string;
+}
+
+export interface PMGMailCountPoint {
+  timestamp: string;
+  count: number;
+  countIn: number;
+  countOut: number;
+  spamIn: number;
+  spamOut: number;
+  virusIn: number;
+  virusOut: number;
+  rblRejects: number;
+  pregreet: number;
+  bouncesIn: number;
+  bouncesOut: number;
+  greylist: number;
+  index: number;
+  timeframe: string;
+  windowStart?: string;
+  windowEnd?: string;
+}
+
+export interface PMGSpamBucket {
+  score: string;
+  count: number;
+}
+
+export interface PMGQuarantineTotals {
+  spam: number;
+  virus: number;
+  attachment?: number;
+  blacklisted?: number;
+}
+
+export interface PMGQueueStatus {
+  active: number;
+  deferred: number;
+  hold: number;
+  incoming: number;
+  total: number;
+  oldestAge: number;
+  updatedAt: string;
 }
 
 export interface PBSDatastore {

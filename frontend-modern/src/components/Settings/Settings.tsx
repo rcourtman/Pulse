@@ -102,7 +102,15 @@ interface DiscoveryScanStatus {
   errors?: string[];
 }
 
-type SettingsTab = 'pve' | 'pbs' | 'docker' | 'system' | 'urls' | 'security' | 'diagnostics';
+type SettingsTab =
+  | 'pve'
+  | 'pbs'
+  | 'pmg'
+  | 'docker'
+  | 'system'
+  | 'urls'
+  | 'security'
+  | 'diagnostics';
 
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
   pve: {
@@ -112,6 +120,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   pbs: {
     title: 'Proxmox Backup Server',
     description: 'Add and maintain Proxmox Backup Server endpoints used for snapshot and archive monitoring.',
+  },
+  pmg: {
+    title: 'Proxmox Mail Gateway',
+    description: 'Monitor mail flow, spam trends, and quarantine health from your PMG nodes.',
   },
   docker: {
     title: 'Docker Agents',
@@ -156,6 +168,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const activeTab = () => {
     const path = location.pathname;
     if (path.includes('/settings/pbs')) return 'pbs';
+    if (path.includes('/settings/pmg')) return 'pmg';
     if (path.includes('/settings/docker')) return 'docker';
     if (path.includes('/settings/system')) return 'system';
     if (path.includes('/settings/security')) return 'security';
@@ -187,7 +200,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
   const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
-  const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
+  const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs' | 'pmg'>('pve');
   const [modalResetKey, setModalResetKey] = createSignal(0);
   const [showPasswordModal, setShowPasswordModal] = createSignal(false);
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
@@ -276,6 +289,7 @@ const Settings: Component<SettingsProps> = (props) => {
       items: [
         { id: 'pve', label: 'Proxmox VE nodes' },
         { id: 'pbs', label: 'Proxmox Backup Server' },
+        { id: 'pmg', label: 'Proxmox Mail Gateway' },
         { id: 'urls', label: 'Guest URLs' },
       ],
     },
@@ -1557,7 +1571,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 type="button"
                                 onClick={() => {
                                   setEditingNode(node);
-                                  setCurrentNodeType(node.type as 'pve' | 'pbs');
+                                  setCurrentNodeType(node.type as 'pve' | 'pbs' | 'pmg');
                                   setShowNodeModal(true);
                                 }}
                                 class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
@@ -1764,10 +1778,12 @@ const Settings: Component<SettingsProps> = (props) => {
                     <div class="flex flex-wrap gap-2 items-center justify-end">
                       {/* Discovery toggle */}
                       <div
-                        class="flex items-center gap-2"
+                        class="flex items-center gap-2 sm:gap-3"
                         title="Enable automatic discovery of PBS servers on your network"
                       >
-                        <span class="text-sm text-gray-600 dark:text-gray-400">Discovery</span>
+                        <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                          Discovery
+                        </span>
                         <Toggle
                           checked={discoveryEnabled()}
                           onChange={async (e) => {
@@ -1988,7 +2004,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 type="button"
                                 onClick={() => {
                                   setEditingNode(node);
-                                  setCurrentNodeType(node.type as 'pve' | 'pbs');
+                                  setCurrentNodeType(node.type as 'pve' | 'pbs' | 'pmg');
                                   setShowNodeModal(true);
                                 }}
                                 class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
@@ -2153,6 +2169,417 @@ const Settings: Component<SettingsProps> = (props) => {
                                           Click to configure
                                         </span>
                                       </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <svg
+                                  width="20"
+                                  height="20"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  class="text-gray-400 mt-1"
+                                >
+                                  <path
+                                    d="M12 5v14m-7-7h14"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                  />
+                                </svg>
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+
+            {/* PMG Nodes Tab */}
+            <Show when={activeTab() === 'pmg'}>
+              <div class="space-y-4">
+                <Show when={!initialLoadComplete()}>
+                  <div class="flex items-center justify-center py-8">
+                    <span class="text-gray-500">Loading configuration...</span>
+                  </div>
+                </Show>
+
+                <Show when={initialLoadComplete()}>
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                    <SectionHeader title="Proxmox Mail Gateway nodes" size="md" class="flex-1" />
+                    <div class="flex flex-wrap gap-2 items-center justify-end">
+                      {/* Discovery toggle */}
+                      <div
+                        class="flex items-center gap-2 sm:gap-3"
+                        title="Enable automatic discovery of PMG servers on your network"
+                      >
+                        <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                          Discovery
+                        </span>
+                        <Toggle
+                          checked={discoveryEnabled()}
+                          onChange={async (e) => {
+                            if (envOverrides().discoveryEnabled) {
+                              return;
+                            }
+                            const newValue = e.currentTarget.checked;
+                            setDiscoveryEnabled(newValue);
+                            try {
+                              await SettingsAPI.updateSystemSettings({
+                                discoveryEnabled: newValue,
+                                discoverySubnet: discoverySubnet(),
+                              });
+                              if (newValue) {
+                                await triggerDiscoveryScan({ quiet: true });
+                                notificationStore.success(
+                                  'Discovery enabled — scanning network...',
+                                  2000,
+                                );
+                              } else {
+                                notificationStore.info('Discovery disabled', 2000);
+                                setDiscoveryScanStatus((prev) => ({
+                                  ...prev,
+                                  scanning: false,
+                                }));
+                              }
+                            } catch (error) {
+                              console.error('Failed to update discovery setting:', error);
+                              notificationStore.error('Failed to update discovery setting');
+                              setDiscoveryEnabled(!newValue);
+                            } finally {
+                              await loadDiscoveredNodes();
+                            }
+                          }}
+                          disabled={envOverrides().discoveryEnabled}
+                          containerClass="gap-2"
+                          label={
+                            <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                              {discoveryEnabled() ? 'On' : 'Off'}
+                            </span>
+                          }
+                        />
+                      </div>
+
+                      <Show when={discoveryEnabled()}>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            notificationStore.info('Refreshing discovery...', 2000);
+                            try {
+                              await triggerDiscoveryScan({ quiet: true });
+                            } finally {
+                              await loadDiscoveredNodes();
+                            }
+                          }}
+                          class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                          title="Refresh discovered servers"
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                          </svg>
+                          <span class="hidden sm:inline">Refresh</span>
+                        </button>
+                      </Show>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingNode(null);
+                          setCurrentNodeType('pmg');
+                          setModalResetKey((prev) => prev + 1);
+                          setShowNodeModal(true);
+                        }}
+                        class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span class="sm:hidden">Add</span>
+                        <span class="hidden sm:inline">Add PMG Node</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="grid gap-4">
+                    <For each={nodes().filter((n) => n.type === 'pmg')}>
+                      {(node) => {
+                        const pmgNode = node as NodeConfigWithStatus & {
+                          monitorMailStats?: boolean;
+                          monitorQueues?: boolean;
+                          monitorQuarantine?: boolean;
+                          monitorDomainStats?: boolean;
+                        };
+                        const statePMG = state.pmg.find((p) => p.name === pmgNode.name);
+
+                        const statusClass = (() => {
+                          if (
+                            statePMG?.connectionHealth === 'unhealthy' ||
+                            statePMG?.connectionHealth === 'error' ||
+                            statePMG?.status === 'offline'
+                          ) {
+                            return 'bg-red-500';
+                          }
+                          if (statePMG?.connectionHealth === 'degraded') {
+                            return 'bg-yellow-500';
+                          }
+                          if (statePMG && (statePMG.status === 'online' || statePMG.connectionHealth === 'healthy')) {
+                            return 'bg-green-500';
+                          }
+                          if (pmgNode.status === 'connected') {
+                            return 'bg-green-500';
+                          }
+                          if (pmgNode.status === 'error') {
+                            return 'bg-red-500';
+                          }
+                          if (pmgNode.status === 'pending' || pmgNode.status === 'disconnected') {
+                            return 'bg-amber-500 animate-pulse';
+                          }
+                          return 'bg-gray-400';
+                        })();
+
+                        return (
+                          <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                              <div class="flex-1 min-w-0">
+                                <div class="flex items-start gap-3">
+                                  <div class={`flex-shrink-0 w-3 h-3 mt-1.5 rounded-full ${statusClass}`}></div>
+                                  <div class="flex-1 min-w-0">
+                                    <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                      {pmgNode.name}
+                                    </h4>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-all">
+                                      {pmgNode.host}
+                                    </p>
+                                    <div class="flex flex-wrap gap-1 sm:gap-2 mt-2">
+                                      <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
+                                        {pmgNode.user ? `User: ${pmgNode.user}` : `Token: ${pmgNode.tokenName}`}
+                                      </span>
+                                      {pmgNode.monitorMailStats && (
+                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                                          Mail stats
+                                        </span>
+                                      )}
+                                      {pmgNode.monitorQueues && (
+                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                                          Queues
+                                        </span>
+                                      )}
+                                      {pmgNode.monitorQuarantine && (
+                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                                          Quarantine
+                                        </span>
+                                      )}
+                                      {pmgNode.monitorDomainStats && (
+                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                                          Domain stats
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => testNodeConnection(pmgNode.id)}
+                                  class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                                  title="Test connection"
+                                >
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                  >
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingNode(nodes().find((n) => n.id === pmgNode.id) ?? null);
+                                    setCurrentNodeType('pmg');
+                                    setModalResetKey((prev) => prev + 1);
+                                    setShowNodeModal(true);
+                                  }}
+                                  class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                                  title="Edit node"
+                                >
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                  >
+                                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteNode(pmgNode.id)}
+                                  class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                  title="Delete node"
+                                >
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                  >
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    </For>
+
+                    {nodes().filter((n) => n.type === 'pmg').length === 0 && (
+                      <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <p>No PMG nodes configured</p>
+                        <p class="text-sm mt-1">Add a node to start monitoring mail flow</p>
+                      </div>
+                    )}
+
+                    {/* Discovered PMG nodes - only show when discovery is enabled */}
+                    <Show when={discoveryEnabled()}>
+                      <div class="space-y-3">
+                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                          <Show when={discoveryScanStatus().scanning}>
+                            <span class="flex items-center gap-2">
+                              <svg
+                                class="h-4 w-4 animate-spin"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                              >
+                                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <path d="M12 3v6m0 6v6m6-9h-6m-6 0H3" />
+                              </svg>
+                              Scanning network...
+                            </span>
+                          </Show>
+                          <Show
+                            when={
+                              !discoveryScanStatus().scanning &&
+                              (discoveryScanStatus().lastResultAt ||
+                                discoveryScanStatus().lastScanStartedAt)
+                            }
+                          >
+                            <span>
+                              Last scan{' '}
+                              {formatRelativeTime(
+                                discoveryScanStatus().lastResultAt ??
+                                  discoveryScanStatus().lastScanStartedAt,
+                              )}
+                            </span>
+                          </Show>
+                        </div>
+                        <Show
+                          when={
+                            discoveryScanStatus().errors && discoveryScanStatus().errors!.length
+                          }
+                        >
+                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                            <span class="font-medium">Discovery issues:</span>
+                            <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                              <For each={discoveryScanStatus().errors || []}>
+                                {(err) => <li>{err}</li>}
+                              </For>
+                            </ul>
+                          </div>
+                        </Show>
+                        <Show
+                          when={
+                            discoveryScanStatus().scanning &&
+                            discoveredNodes().filter((n) => n.type === 'pmg').length === 0
+                          }
+                        >
+                          <div class="text-center py-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+                            <svg
+                              class="h-8 w-8 mx-auto mb-2 animate-pulse text-purple-500"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            >
+                              <circle cx="11" cy="11" r="8" />
+                              <path d="m21 21-4.35-4.35" />
+                            </svg>
+                            <p class="text-sm">Scanning for PMG servers...</p>
+                          </div>
+                        </Show>
+                        <For each={discoveredNodes().filter((n) => n.type === 'pmg')}>
+                          {(server) => (
+                            <div
+                              class="bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-900/20 dark:to-transparent border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
+                              onClick={() => {
+                                setEditingNode(null);
+                                setCurrentNodeType('pmg');
+                                setModalResetKey((prev) => prev + 1);
+                                setShowNodeModal(true);
+                                setTimeout(() => {
+                                  const hostInput = document.querySelector(
+                                    'input[placeholder*="192.168"]',
+                                  ) as HTMLInputElement;
+                                  if (hostInput) {
+                                    hostInput.value = server.ip;
+                                    hostInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                  }
+                                }, 50);
+                              }}
+                            >
+                              <div class="flex items-start justify-between">
+                                <div class="flex items-start gap-3 flex-1 min-w-0">
+                                  <svg
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    class="text-purple-500 flex-shrink-0 mt-0.5"
+                                  >
+                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                    <polyline points="22,6 12,13 2,6"></polyline>
+                                  </svg>
+                                  <div class="flex-1 min-w-0">
+                                    <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                      {server.hostname || `PMG at ${server.ip}`}
+                                    </h4>
+                                    <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                      {server.ip}:{server.port}
+                                    </p>
+                                    <div class="flex items-center gap-2 mt-2">
+                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                        Discovered
+                                      </span>
+                                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                                        Click to configure
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -3975,6 +4402,59 @@ const Settings: Component<SettingsProps> = (props) => {
                   const nodesWithStatus = nodesList.map((node) => ({
                     ...node,
                     // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+                    hasPassword: node.hasPassword ?? !!node.password,
+                    hasToken: node.hasToken ?? !!node.tokenValue,
+                    status: node.status || ('pending' as const),
+                  }));
+                  setNodes(nodesWithStatus);
+                  showSuccess('Node added successfully');
+                }
+
+                setShowNodeModal(false);
+                setEditingNode(null);
+              } catch (error) {
+                showError(error instanceof Error ? error.message : 'Operation failed');
+              }
+            }}
+          />
+        </Show>
+
+        {/* PMG Node Modal */}
+        <Show when={showNodeModal() && currentNodeType() === 'pmg'}>
+          <NodeModal
+            isOpen={true}
+            resetKey={modalResetKey()}
+            onClose={() => {
+              setShowNodeModal(false);
+              setEditingNode(null);
+              setModalResetKey((prev) => prev + 1);
+            }}
+            nodeType="pmg"
+            editingNode={editingNode()?.type === 'pmg' ? (editingNode() ?? undefined) : undefined}
+            securityStatus={securityStatus() ?? undefined}
+            onSave={async (nodeData) => {
+              try {
+                if (editingNode() && editingNode()!.id) {
+                  await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+                  setNodes(
+                    nodes().map((n) =>
+                      n.id === editingNode()!.id
+                        ? {
+                            ...n,
+                            ...nodeData,
+                            hasPassword: nodeData.password ? true : n.hasPassword,
+                            hasToken: nodeData.tokenValue ? true : n.hasToken,
+                            status: 'pending',
+                          }
+                        : n,
+                    ),
+                  );
+                  showSuccess('Node updated successfully');
+                } else {
+                  await NodesAPI.addNode(nodeData as NodeConfig);
+                  const nodesList = await NodesAPI.getNodes();
+                  const nodesWithStatus = nodesList.map((node) => ({
+                    ...node,
                     hasPassword: node.hasPassword ?? !!node.password,
                     hasToken: node.hasToken ?? !!node.tokenValue,
                     status: node.status || ('pending' as const),

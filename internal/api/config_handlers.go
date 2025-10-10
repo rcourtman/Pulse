@@ -30,6 +30,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
@@ -263,7 +264,7 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
 		Msg("Updated cluster metadata after validation retry")
 
 	if h.persistence != nil {
-		if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+		if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
 			log.Warn().
 				Err(err).
 				Str("instance", instance.Name).
@@ -274,7 +275,7 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
 
 // NodeConfigRequest represents a request to add/update a node
 type NodeConfigRequest struct {
-	Type                 string `json:"type"` // "pve" or "pbs"
+	Type                 string `json:"type"` // "pve", "pbs", or "pmg"
 	Name                 string `json:"name"`
 	Host                 string `json:"host"`
 	User                 string `json:"user,omitempty"`
@@ -293,6 +294,10 @@ type NodeConfigRequest struct {
 	MonitorVerifyJobs    bool   `json:"monitorVerifyJobs,omitempty"`    // PBS only
 	MonitorPruneJobs     bool   `json:"monitorPruneJobs,omitempty"`     // PBS only
 	MonitorGarbageJobs   bool   `json:"monitorGarbageJobs,omitempty"`   // PBS only
+	MonitorMailStats     bool   `json:"monitorMailStats,omitempty"`     // PMG only
+	MonitorQueues        bool   `json:"monitorQueues,omitempty"`        // PMG only
+	MonitorQuarantine    bool   `json:"monitorQuarantine,omitempty"`    // PMG only
+	MonitorDomainStats   bool   `json:"monitorDomainStats,omitempty"`   // PMG only
 }
 
 // NodeResponse represents a node in API responses
@@ -317,6 +322,10 @@ type NodeResponse struct {
 	MonitorVerifyJobs    bool                     `json:"monitorVerifyJobs,omitempty"`
 	MonitorPruneJobs     bool                     `json:"monitorPruneJobs,omitempty"`
 	MonitorGarbageJobs   bool                     `json:"monitorGarbageJobs,omitempty"`
+	MonitorMailStats     bool                     `json:"monitorMailStats,omitempty"`
+	MonitorQueues        bool                     `json:"monitorQueues,omitempty"`
+	MonitorQuarantine    bool                     `json:"monitorQuarantine,omitempty"`
+	MonitorDomainStats   bool                     `json:"monitorDomainStats,omitempty"`
 	Status               string                   `json:"status"` // "connected", "disconnected", "error"
 	IsCluster            bool                     `json:"isCluster,omitempty"`
 	ClusterName          string                   `json:"clusterName,omitempty"`
@@ -629,6 +638,33 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 		nodes = append(nodes, node)
 	}
 
+	// Add PMG nodes
+	for i, pmgInst := range h.config.PMGInstances {
+		monitorMailStats := pmgInst.MonitorMailStats
+		if !pmgInst.MonitorMailStats && !pmgInst.MonitorQueues && !pmgInst.MonitorQuarantine && !pmgInst.MonitorDomainStats {
+			monitorMailStats = true
+		}
+
+		node := NodeResponse{
+			ID:                 generateNodeID("pmg", i),
+			Type:               "pmg",
+			Name:               pmgInst.Name,
+			Host:               pmgInst.Host,
+			User:               pmgInst.User,
+			HasPassword:        pmgInst.Password != "",
+			TokenName:          pmgInst.TokenName,
+			HasToken:           pmgInst.TokenValue != "",
+			Fingerprint:        pmgInst.Fingerprint,
+			VerifySSL:          pmgInst.VerifySSL,
+			MonitorMailStats:   monitorMailStats,
+			MonitorQueues:      pmgInst.MonitorQueues,
+			MonitorQuarantine:  pmgInst.MonitorQuarantine,
+			MonitorDomainStats: pmgInst.MonitorDomainStats,
+			Status:             h.getNodeStatus("pmg", pmgInst.Name),
+		}
+		nodes = append(nodes, node)
+	}
+
 	return nodes
 }
 
@@ -738,6 +774,24 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 				Status:             "connected", // Always connected in mock mode
 			}
 			mockNodes = append(mockNodes, pbsNode)
+		}
+
+		// Add mock PMG instances
+		for i, pmg := range state.PMGInstances {
+			pmgNode := NodeResponse{
+				ID:          generateNodeID("pmg", i),
+				Type:        "pmg",
+				Name:        pmg.Name,
+				Host:        pmg.Host,
+				User:        "root@pam",
+				HasPassword: true,
+				TokenName:   "pulse",
+				HasToken:    true,
+				Fingerprint: "",
+				VerifySSL:   false,
+				Status:      "connected", // Always connected in mock mode
+			}
+			mockNodes = append(mockNodes, pmgNode)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -864,7 +918,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid IPv6 address", http.StatusBadRequest)
 			return
 		}
-	} else {
+	} else if req.Type == "pbs" {
 		// Validate as hostname - no spaces or special characters
 		if strings.ContainsAny(host, " /\\<>|\"'`;") {
 			http.Error(w, "Invalid hostname", http.StatusBadRequest)
@@ -878,7 +932,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Type != "pve" && req.Type != "pbs" {
+	if req.Type != "pve" && req.Type != "pbs" && req.Type != "pmg" {
 		http.Error(w, "Invalid node type", http.StatusBadRequest)
 		return
 	}
@@ -891,15 +945,23 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for duplicate nodes by name
-	if req.Type == "pve" {
+	switch req.Type {
+	case "pve":
 		for _, node := range h.config.PVEInstances {
 			if node.Name == req.Name {
 				http.Error(w, "A node with this name already exists", http.StatusConflict)
 				return
 			}
 		}
-	} else {
+	case "pbs":
 		for _, node := range h.config.PBSInstances {
+			if node.Name == req.Name {
+				http.Error(w, "A node with this name already exists", http.StatusConflict)
+				return
+			}
+		}
+	case "pmg":
+		for _, node := range h.config.PMGInstances {
 			if node.Name == req.Name {
 				http.Error(w, "A node with this name already exists", http.StatusConflict)
 				return
@@ -978,7 +1040,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				Int("endpoints", len(clusterEndpoints)).
 				Msg("Added Proxmox cluster with auto-discovered endpoints")
 		}
-	} else {
+	} else if req.Type == "pbs" {
 		// PBS node - ensure host has protocol and port
 		host := req.Host
 		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
@@ -1037,10 +1099,61 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorGarbageJobs: req.MonitorGarbageJobs,
 		}
 		h.config.PBSInstances = append(h.config.PBSInstances, pbs)
+	} else if req.Type == "pmg" {
+		host := req.Host
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		protocolEnd := 0
+		if strings.HasPrefix(host, "https://") {
+			protocolEnd = 8
+		} else if strings.HasPrefix(host, "http://") {
+			protocolEnd = 7
+		}
+		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
+			host = host + ":8006"
+		}
+
+		var pmgUser string
+		var pmgPassword string
+		var pmgTokenName string
+		var pmgTokenValue string
+
+		if req.TokenName != "" && req.TokenValue != "" {
+			pmgTokenName = req.TokenName
+			pmgTokenValue = req.TokenValue
+		} else if req.Password != "" {
+			pmgUser = req.User
+			pmgPassword = req.Password
+			if pmgUser != "" && !strings.Contains(pmgUser, "@") {
+				pmgUser = pmgUser + "@pmg"
+			}
+		}
+
+		monitorMailStats := req.MonitorMailStats
+		if !req.MonitorMailStats && !req.MonitorQueues && !req.MonitorQuarantine && !req.MonitorDomainStats {
+			monitorMailStats = true
+		}
+
+		pmgInstance := config.PMGInstance{
+			Name:               req.Name,
+			Host:               host,
+			User:               pmgUser,
+			Password:           pmgPassword,
+			TokenName:          pmgTokenName,
+			TokenValue:         pmgTokenValue,
+			Fingerprint:        req.Fingerprint,
+			VerifySSL:          req.VerifySSL,
+			MonitorMailStats:   monitorMailStats,
+			MonitorQueues:      req.MonitorQueues,
+			MonitorQuarantine:  req.MonitorQuarantine,
+			MonitorDomainStats: req.MonitorDomainStats,
+		}
+		h.config.PMGInstances = append(h.config.PMGInstances, pmgInstance)
 	}
 
 	// Save configuration to disk using our persistence instance
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -1439,13 +1552,66 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		pbs.MonitorVerifyJobs = req.MonitorVerifyJobs
 		pbs.MonitorPruneJobs = req.MonitorPruneJobs
 		pbs.MonitorGarbageJobs = req.MonitorGarbageJobs
+	} else if nodeType == "pmg" && index < len(h.config.PMGInstances) {
+		pmgInst := &h.config.PMGInstances[index]
+		pmgInst.Name = req.Name
+
+		if req.Host != "" {
+			host := req.Host
+			if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+				host = "https://" + host
+			}
+			protocolEnd := 0
+			if strings.HasPrefix(host, "https://") {
+				protocolEnd = 8
+			} else if strings.HasPrefix(host, "http://") {
+				protocolEnd = 7
+			}
+			if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
+				host = host + ":8006"
+			}
+			pmgInst.Host = host
+		}
+
+		if req.TokenName != "" && req.TokenValue != "" {
+			pmgInst.User = ""
+			pmgInst.Password = ""
+			pmgInst.TokenName = req.TokenName
+			pmgInst.TokenValue = req.TokenValue
+		} else {
+			if req.User != "" {
+				user := req.User
+				if !strings.Contains(user, "@") {
+					user = user + "@pmg"
+				}
+				pmgInst.User = user
+			}
+			if req.Password != "" {
+				pmgInst.Password = req.Password
+			}
+			if req.TokenName == "" && req.TokenValue == "" {
+				pmgInst.TokenName = ""
+				pmgInst.TokenValue = ""
+			}
+		}
+
+		pmgInst.Fingerprint = req.Fingerprint
+		pmgInst.VerifySSL = req.VerifySSL
+		monitorMailStats := req.MonitorMailStats
+		if !req.MonitorMailStats && !req.MonitorQueues && !req.MonitorQuarantine && !req.MonitorDomainStats {
+			monitorMailStats = true
+		}
+		pmgInst.MonitorMailStats = monitorMailStats
+		pmgInst.MonitorQueues = req.MonitorQueues
+		pmgInst.MonitorQuarantine = req.MonitorQuarantine
+		pmgInst.MonitorDomainStats = req.MonitorDomainStats
 	} else {
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
 	}
 
 	// Save configuration to disk using our persistence instance
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -1563,6 +1729,7 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		Int("index", index).
 		Int("pveCount", len(h.config.PVEInstances)).
 		Int("pbsCount", len(h.config.PBSInstances)).
+		Int("pmgCount", len(h.config.PMGInstances)).
 		Msg("Attempting to delete node")
 
 	var deletedNodeHost string
@@ -1576,6 +1743,10 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		deletedNodeHost = h.config.PBSInstances[index].Host
 		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PBS node")
 		h.config.PBSInstances = append(h.config.PBSInstances[:index], h.config.PBSInstances[index+1:]...)
+	} else if nodeType == "pmg" && index < len(h.config.PMGInstances) {
+		deletedNodeHost = h.config.PMGInstances[index].Host
+		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PMG node")
+		h.config.PMGInstances = append(h.config.PMGInstances[:index], h.config.PMGInstances[index+1:]...)
 	} else {
 		log.Warn().
 			Str("nodeID", nodeID).
@@ -1583,13 +1754,14 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 			Int("index", index).
 			Int("pveCount", len(h.config.PVEInstances)).
 			Int("pbsCount", len(h.config.PBSInstances)).
+			Int("pmgCount", len(h.config.PMGInstances)).
 			Msg("Node not found for deletion")
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
 	}
 
 	// Save configuration to disk using our persistence instance
-	if err := h.persistence.SaveNodesConfigAllowEmpty(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := h.persistence.SaveNodesConfigAllowEmpty(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -1908,6 +2080,41 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 				testResult = map[string]interface{}{
 					"status":  "success",
 					"message": fmt.Sprintf("Connected to PBS instance"),
+					"latency": latency,
+				}
+			}
+		}
+	} else if req.Type == "pmg" {
+		clientConfig := pmg.ClientConfig{
+			Host:        req.Host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   req.VerifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+		client, err := pmg.NewClient(clientConfig)
+		if err != nil {
+			testResult = map[string]interface{}{
+				"status":  "error",
+				"message": sanitizeErrorMessage(err, "create_client"),
+			}
+		} else {
+			startTime := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			if _, err := client.GetVersion(ctx); err != nil {
+				testResult = map[string]interface{}{
+					"status":  "error",
+					"message": sanitizeErrorMessage(err, "connection"),
+				}
+			} else {
+				latency := time.Since(startTime).Milliseconds()
+				testResult = map[string]interface{}{
+					"status":  "success",
+					"message": "Connected to PMG instance",
 					"latency": latency,
 				}
 			}
@@ -3827,7 +4034,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Save configuration
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save auto-registered node")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -4049,7 +4256,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	}
 
 	// Save configuration
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances, h.config.PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save auto-registered node")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return

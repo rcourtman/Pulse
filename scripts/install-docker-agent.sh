@@ -13,6 +13,7 @@ LOG_PATH="/var/log/pulse-docker-agent.log"
 INTERVAL="30s"
 UNINSTALL=false
 TOKEN="${PULSE_TOKEN:-}"
+DOWNLOAD_ARCH=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -133,6 +134,26 @@ if [[ "$UNINSTALL" != true ]]; then
 fi
 echo ""
 
+# Detect architecture for download
+if [[ "$UNINSTALL" != true ]]; then
+  ARCH=$(uname -m)
+  case "$ARCH" in
+    x86_64|amd64)
+      DOWNLOAD_ARCH="linux-amd64"
+      ;;
+    aarch64|arm64)
+      DOWNLOAD_ARCH="linux-arm64"
+      ;;
+    armv7l|armhf|armv7)
+      DOWNLOAD_ARCH="linux-armv7"
+      ;;
+    *)
+      DOWNLOAD_ARCH=""
+      echo "Warning: Unknown architecture '$ARCH'. Falling back to default agent binary."
+      ;;
+  esac
+fi
+
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
     echo "Warning: Docker not found. The agent requires Docker to be installed."
@@ -145,14 +166,18 @@ fi
 
 # Download agent binary
 echo "Downloading Pulse Docker agent..."
+DOWNLOAD_URL="$PULSE_URL/download/pulse-docker-agent"
+if [[ -n "$DOWNLOAD_ARCH" ]]; then
+    DOWNLOAD_URL="$DOWNLOAD_URL?arch=$DOWNLOAD_ARCH"
+fi
 if command -v wget &> /dev/null; then
-    wget -q --show-progress -O "$AGENT_PATH" "$PULSE_URL/download/pulse-docker-agent" || {
+    wget -q --show-progress -O "$AGENT_PATH" "$DOWNLOAD_URL" || {
         echo "Error: Failed to download agent binary"
         echo "Make sure the Pulse server is accessible at: $PULSE_URL"
         exit 1
     }
 elif command -v curl &> /dev/null; then
-    curl -fL --progress-bar -o "$AGENT_PATH" "$PULSE_URL/download/pulse-docker-agent" || {
+    curl -fL --progress-bar -o "$AGENT_PATH" "$DOWNLOAD_URL" || {
         echo "Error: Failed to download agent binary"
         echo "Make sure the Pulse server is accessible at: $PULSE_URL"
         exit 1

@@ -4,7 +4,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
 [![License](https://img.shields.io/github/license/rcourtman/Pulse)](LICENSE)
 
-**Real-time monitoring for Proxmox VE, PBS, and Docker infrastructure with alerts and webhooks.**
+**Real-time monitoring for Proxmox VE, Proxmox Mail Gateway, PBS, and Docker infrastructure with alerts and webhooks.**
 
 Monitor your hybrid Proxmox and Docker estate from a single dashboard. Get instant alerts when nodes go down, containers misbehave, backups fail, or storage fills up. Supports email, Discord, Slack, Telegram, and more.
 
@@ -44,6 +44,7 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - Example: "Storage 'local-lvm' at 85% capacity"
   - Example: "VM 'database' is back online"
 - Unified view of PBS backups, PVE backups, and snapshots
+- Proxmox Mail Gateway analytics: mail volume, spam/virus trends, quarantine health, and cluster node status
 - Optional Docker container monitoring via lightweight agent
 - Config export/import with encryption and authentication
 - Automatic stable updates with safe rollback (opt-in)

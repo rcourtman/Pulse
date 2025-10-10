@@ -6,13 +6,14 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rs/zerolog/log"
 )
 
 // PollResult represents the result of a polling operation
 type PollResult struct {
 	InstanceName string
-	InstanceType string // "pve" or "pbs"
+	InstanceType string // "pve", "pbs", or "pmg"
 	Success      bool
 	Error        error
 	StartTime    time.Time
@@ -22,9 +23,10 @@ type PollResult struct {
 // PollTask represents a polling task to be executed
 type PollTask struct {
 	InstanceName string
-	InstanceType string // "pve" or "pbs"
+	InstanceType string // "pve", "pbs", or "pmg"
 	PVEClient    PVEClientInterface
 	PBSClient    *pbs.Client
+	PMGClient    *pmg.Client
 }
 
 // PollerPool manages concurrent polling with channels
@@ -120,6 +122,13 @@ func (p *PollerPool) executeTask(ctx context.Context, task PollTask) PollResult 
 			result.Success = false
 			result.Error = errors.NewMonitorError(errors.ErrorTypeInternal, "poll_pbs", task.InstanceName, errors.ErrInvalidInput)
 		}
+	case "pmg":
+		if task.PMGClient != nil {
+			p.monitor.pollPMGInstance(ctx, task.InstanceName, task.PMGClient)
+		} else {
+			result.Success = false
+			result.Error = errors.NewMonitorError(errors.ErrorTypeInternal, "poll_pmg", task.InstanceName, errors.ErrInvalidInput)
+		}
 	default:
 		result.Success = false
 		result.Error = errors.NewMonitorError(errors.ErrorTypeValidation, "poll_unknown", task.InstanceName, errors.ErrInvalidInput)
@@ -192,7 +201,7 @@ func (p *PollerPool) Close() {
 // pollWithChannels implements channel-based concurrent polling
 func (m *Monitor) pollWithChannels(ctx context.Context) {
 	// Create worker pool based on instance count
-	workerCount := len(m.pveClients) + len(m.pbsClients)
+	workerCount := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
 	if workerCount > 10 {
 		workerCount = 10 // Cap at 10 workers
 	}
@@ -237,6 +246,20 @@ func (m *Monitor) pollWithChannels(ctx context.Context) {
 		}
 		if err := pool.SubmitTask(pollCtx, task); err != nil {
 			log.Error().Err(err).Str("instance", name).Msg("Failed to submit PBS polling task")
+		} else {
+			taskCount++
+		}
+	}
+
+	// Submit PMG tasks
+	for name, client := range m.pmgClients {
+		task := PollTask{
+			InstanceName: name,
+			InstanceType: "pmg",
+			PMGClient:    client,
+		}
+		if err := pool.SubmitTask(pollCtx, task); err != nil {
+			log.Error().Err(err).Str("instance", name).Msg("Failed to submit PMG polling task")
 		} else {
 			taskCount++
 		}

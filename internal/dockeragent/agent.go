@@ -179,7 +179,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	report := agentsdocker.Report{
 		Agent: agentsdocker.AgentInfo{
 			ID:              agentID,
-			Version:         agentVersion,
+			Version:         Version,
 			IntervalSeconds: int(a.cfg.Interval / time.Second),
 		},
 		Host: agentsdocker.HostInfo{
@@ -342,7 +342,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Token", a.cfg.APIToken)
 	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
-	req.Header.Set("User-Agent", "pulse-docker-agent/"+agentVersion)
+	req.Header.Set("User-Agent", "pulse-docker-agent/"+Version)
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
@@ -357,8 +357,6 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 	a.logger.Debug().Int("containers", len(report.Containers)).Msg("Report sent")
 	return nil
 }
-
-const agentVersion = "0.1.0"
 
 func calculateCPUPercent(stats containertypes.StatsResponse, hostCPUs int) float64 {
 	totalDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
@@ -489,13 +487,13 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	}
 
 	// Compare versions
-	if versionResp.Version == agentVersion {
-		a.logger.Debug().Str("version", agentVersion).Msg("Agent is up to date")
+	if versionResp.Version == Version {
+		a.logger.Debug().Str("version", Version).Msg("Agent is up to date")
 		return
 	}
 
 	a.logger.Info().
-		Str("currentVersion", agentVersion).
+		Str("currentVersion", Version).
 		Str("availableVersion", versionResp.Version).
 		Msg("New agent version available, performing self-update")
 

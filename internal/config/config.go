@@ -68,9 +68,13 @@ type Config struct {
 	// Proxmox Backup Server connections
 	PBSInstances []PBSInstance
 
+	// Proxmox Mail Gateway connections
+	PMGInstances []PMGInstance
+
 	// Monitoring settings
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
 	PBSPollingInterval   time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
+	PMGPollingInterval   time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
 	ConcurrentPolling    bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
 	ConnectionTimeout    time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
 	MetricsRetentionDays int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
@@ -129,20 +133,20 @@ type Config struct {
 
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
-	Name              string
-	Host              string // Primary endpoint (user-provided)
-	User              string
-	Password          string
-	TokenName         string
-	TokenValue        string
-	Fingerprint       string
-	VerifySSL         bool
-	MonitorVMs        bool
-	MonitorContainers bool
-	MonitorStorage    bool
-	MonitorBackups    bool
-	MonitorPhysicalDisks bool // Monitor physical disks (polled less frequently to avoid spinning up HDDs)
-	PhysicalDiskPollingMinutes int // How often to poll physical disks (0 = use default)
+	Name                       string
+	Host                       string // Primary endpoint (user-provided)
+	User                       string
+	Password                   string
+	TokenName                  string
+	TokenValue                 string
+	Fingerprint                string
+	VerifySSL                  bool
+	MonitorVMs                 bool
+	MonitorContainers          bool
+	MonitorStorage             bool
+	MonitorBackups             bool
+	MonitorPhysicalDisks       bool // Monitor physical disks (polled less frequently to avoid spinning up HDDs)
+	PhysicalDiskPollingMinutes int  // How often to poll physical disks (0 = use default)
 
 	// Cluster support
 	IsCluster        bool              // True if this is a cluster
@@ -176,6 +180,23 @@ type PBSInstance struct {
 	MonitorVerifyJobs  bool
 	MonitorPruneJobs   bool
 	MonitorGarbageJobs bool
+}
+
+// PMGInstance represents a Proxmox Mail Gateway connection
+type PMGInstance struct {
+	Name        string
+	Host        string
+	User        string
+	Password    string
+	TokenName   string
+	TokenValue  string
+	Fingerprint string
+	VerifySSL   bool
+
+	MonitorMailStats   bool
+	MonitorQueues      bool
+	MonitorQuarantine  bool
+	MonitorDomainStats bool
 }
 
 // Global persistence instance for saving
@@ -242,6 +263,7 @@ func Load() (*Config, error) {
 		AllowedOrigins:       "", // Empty means no CORS headers (same-origin only)
 		IframeEmbeddingAllow: "SAMEORIGIN",
 		PBSPollingInterval:   60 * time.Second, // Default PBS polling (slower)
+		PMGPollingInterval:   60 * time.Second, // Default PMG polling (aggregated stats)
 		DiscoveryEnabled:     true,
 		DiscoverySubnet:      "auto",
 		EnvOverrides:         make(map[string]bool),
@@ -257,9 +279,11 @@ func Load() (*Config, error) {
 		if nodesConfig, err := persistence.LoadNodesConfig(); err == nil && nodesConfig != nil {
 			cfg.PVEInstances = nodesConfig.PVEInstances
 			cfg.PBSInstances = nodesConfig.PBSInstances
+			cfg.PMGInstances = nodesConfig.PMGInstances
 			log.Info().
 				Int("pve", len(cfg.PVEInstances)).
 				Int("pbs", len(cfg.PBSInstances)).
+				Int("pmg", len(cfg.PMGInstances)).
 				Msg("Loaded nodes configuration")
 		} else if err != nil {
 			log.Warn().Err(err).Msg("Failed to load nodes configuration")
@@ -270,6 +294,9 @@ func Load() (*Config, error) {
 			// Load PBS polling interval if configured
 			if systemSettings.PBSPollingInterval > 0 {
 				cfg.PBSPollingInterval = time.Duration(systemSettings.PBSPollingInterval) * time.Second
+			}
+			if systemSettings.PMGPollingInterval > 0 {
+				cfg.PMGPollingInterval = time.Duration(systemSettings.PMGPollingInterval) * time.Second
 			}
 
 			if systemSettings.UpdateChannel != "" {
@@ -324,6 +351,9 @@ func Load() (*Config, error) {
 	// Note: PVE polling is hardcoded to 10s in monitor.go
 	if cfg.PBSPollingInterval == 0 {
 		cfg.PBSPollingInterval = 60 * time.Second
+	}
+	if cfg.PMGPollingInterval == 0 {
+		cfg.PMGPollingInterval = 60 * time.Second
 	}
 
 	// Limited environment variable support
@@ -590,7 +620,7 @@ func SaveConfig(cfg *Config) error {
 	}
 
 	// Save nodes configuration
-	if err := globalPersistence.SaveNodesConfig(cfg.PVEInstances, cfg.PBSInstances); err != nil {
+	if err := globalPersistence.SaveNodesConfig(cfg.PVEInstances, cfg.PBSInstances, cfg.PMGInstances); err != nil {
 		return fmt.Errorf("failed to save nodes config: %w", err)
 	}
 

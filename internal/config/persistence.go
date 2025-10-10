@@ -470,12 +470,14 @@ func (c *ConfigPersistence) MigrateWebhooksIfNeeded() error {
 type NodesConfig struct {
 	PVEInstances []PVEInstance `json:"pveInstances"`
 	PBSInstances []PBSInstance `json:"pbsInstances"`
+	PMGInstances []PMGInstance `json:"pmgInstances"`
 }
 
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
 	PBSPollingInterval      int    `json:"pbsPollingInterval"` // PBS polling interval in seconds
+	PMGPollingInterval      int    `json:"pmgPollingInterval"` // PMG polling interval in seconds
 	BackendPort             int    `json:"backendPort,omitempty"`
 	FrontendPort            int    `json:"frontendPort,omitempty"`
 	AllowedOrigins          string `json:"allowedOrigins,omitempty"`
@@ -494,17 +496,17 @@ type SystemSettings struct {
 }
 
 // SaveNodesConfig saves nodes configuration to file (encrypted)
-func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance) error {
-	return c.saveNodesConfig(pveInstances, pbsInstances, false)
+func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance, pmgInstances []PMGInstance) error {
+	return c.saveNodesConfig(pveInstances, pbsInstances, pmgInstances, false)
 }
 
 // SaveNodesConfigAllowEmpty saves nodes configuration even when all nodes are removed.
 // Use sparingly for explicit administrative actions (e.g. deleting the final node).
-func (c *ConfigPersistence) SaveNodesConfigAllowEmpty(pveInstances []PVEInstance, pbsInstances []PBSInstance) error {
-	return c.saveNodesConfig(pveInstances, pbsInstances, true)
+func (c *ConfigPersistence) SaveNodesConfigAllowEmpty(pveInstances []PVEInstance, pbsInstances []PBSInstance, pmgInstances []PMGInstance) error {
+	return c.saveNodesConfig(pveInstances, pbsInstances, pmgInstances, true)
 }
 
-func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance, allowEmpty bool) error {
+func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance, pmgInstances []PMGInstance, allowEmpty bool) error {
 	// CRITICAL: Prevent saving empty nodes when in mock mode
 	// Mock mode should NEVER modify real node configuration
 	if mock.IsMockEnabled() {
@@ -517,16 +519,17 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 
 	// CRITICAL: Never save empty nodes configuration
 	// This prevents data loss from accidental wipes
-	if !allowEmpty && len(pveInstances) == 0 && len(pbsInstances) == 0 {
+	if !allowEmpty && len(pveInstances) == 0 && len(pbsInstances) == 0 && len(pmgInstances) == 0 {
 		// Check if we're replacing existing non-empty config
 		if existing, err := c.LoadNodesConfig(); err == nil && existing != nil {
-			if len(existing.PVEInstances) > 0 || len(existing.PBSInstances) > 0 {
+			if len(existing.PVEInstances) > 0 || len(existing.PBSInstances) > 0 || len(existing.PMGInstances) > 0 {
 				log.Error().
 					Int("existing_pve", len(existing.PVEInstances)).
 					Int("existing_pbs", len(existing.PBSInstances)).
+					Int("existing_pmg", len(existing.PMGInstances)).
 					Msg("BLOCKED attempt to save empty nodes config - would delete existing nodes!")
 				return fmt.Errorf("refusing to save empty nodes config when %d nodes exist",
-					len(existing.PVEInstances)+len(existing.PBSInstances))
+					len(existing.PVEInstances)+len(existing.PBSInstances)+len(existing.PMGInstances))
 			}
 		}
 	}
@@ -534,6 +537,7 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 	config := NodesConfig{
 		PVEInstances: pveInstances,
 		PBSInstances: pbsInstances,
+		PMGInstances: pmgInstances,
 	}
 
 	data, err := json.MarshalIndent(config, "", "  ")
@@ -594,6 +598,7 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 	log.Info().Str("file", c.nodesFile).
 		Int("pve", len(pveInstances)).
 		Int("pbs", len(pbsInstances)).
+		Int("pmg", len(pmgInstances)).
 		Bool("encrypted", c.crypto != nil).
 		Msg("Nodes configuration saved")
 	return nil
@@ -612,6 +617,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			return &NodesConfig{
 				PVEInstances: []PVEInstance{},
 				PBSInstances: []PBSInstance{},
+				PMGInstances: []PMGInstance{},
 			}, nil
 		}
 		return nil, err
@@ -661,7 +667,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 					os.Rename(c.nodesFile, corruptedFile)
 
 					// Create empty but valid config so system can start
-					emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}}
+					emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
 					emptyData, _ := json.Marshal(emptyConfig)
 					if c.crypto != nil {
 						emptyData, _ = c.crypto.Encrypt(emptyData)
@@ -683,7 +689,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				os.Rename(c.nodesFile, corruptedFile)
 
 				// Create empty but valid config so system can start
-				emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}}
+				emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
 				emptyData, _ := json.Marshal(emptyConfig)
 				if c.crypto != nil {
 					emptyData, _ = c.crypto.Encrypt(emptyData)
@@ -700,6 +706,16 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	var config NodesConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
+	}
+
+	if config.PVEInstances == nil {
+		config.PVEInstances = []PVEInstance{}
+	}
+	if config.PBSInstances == nil {
+		config.PBSInstances = []PBSInstance{}
+	}
+	if config.PMGInstances == nil {
+		config.PMGInstances = []PMGInstance{}
 	}
 
 	// Track if any migrations were applied
@@ -770,12 +786,61 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		}
 	}
 
+	for i := range config.PMGInstances {
+		if config.PMGInstances[i].Password != "" && config.PMGInstances[i].TokenName != "" {
+			log.Info().
+				Str("instance", config.PMGInstances[i].Name).
+				Msg("Fixing PMG config: clearing TokenName since Password is set")
+			config.PMGInstances[i].TokenName = ""
+			config.PMGInstances[i].TokenValue = ""
+			migrationApplied = true
+		}
+
+		host := config.PMGInstances[i].Host
+		if host == "" {
+			continue
+		}
+
+		protocolEnd := 0
+		if strings.HasPrefix(host, "https://") {
+			protocolEnd = 8
+		} else if strings.HasPrefix(host, "http://") {
+			protocolEnd = 7
+		} else if !strings.Contains(host, "://") {
+			if !strings.Contains(host, ":") {
+				config.PMGInstances[i].Host = "https://" + host + ":8006"
+			} else {
+				config.PMGInstances[i].Host = "https://" + host
+			}
+			log.Info().
+				Str("instance", config.PMGInstances[i].Name).
+				Str("oldHost", host).
+				Str("newHost", config.PMGInstances[i].Host).
+				Msg("Fixed PMG host by adding protocol/port")
+			migrationApplied = true
+			continue
+		}
+
+		if protocolEnd > 0 {
+			hostAfterProtocol := host[protocolEnd:]
+			if !strings.Contains(hostAfterProtocol, ":") {
+				config.PMGInstances[i].Host = host + ":8006"
+				log.Info().
+					Str("instance", config.PMGInstances[i].Name).
+					Str("oldHost", host).
+					Str("newHost", config.PMGInstances[i].Host).
+					Msg("Fixed PMG host by adding default port 8006")
+				migrationApplied = true
+			}
+		}
+	}
+
 	// If any migrations were applied, save the updated configuration
 	if migrationApplied {
 		log.Info().Msg("Migrations applied, saving updated configuration")
 		// Need to unlock before saving to avoid deadlock
 		c.mu.RUnlock()
-		if err := c.SaveNodesConfig(config.PVEInstances, config.PBSInstances); err != nil {
+		if err := c.SaveNodesConfig(config.PVEInstances, config.PBSInstances, config.PMGInstances); err != nil {
 			log.Error().Err(err).Msg("Failed to save configuration after migration")
 		}
 		c.mu.RLock()
@@ -784,6 +849,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	log.Info().Str("file", c.nodesFile).
 		Int("pve", len(config.PVEInstances)).
 		Int("pbs", len(config.PBSInstances)).
+		Int("pmg", len(config.PMGInstances)).
 		Bool("encrypted", c.crypto != nil).
 		Msg("Nodes configuration loaded")
 	return &config, nil

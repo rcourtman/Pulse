@@ -317,6 +317,12 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		data.ConnectionHealth[fmt.Sprintf("pbs-%s", pbs.Name)] = true
 	}
 
+	// Generate PMG instances and mail data
+	data.PMGInstances = generatePMGInstances()
+	for _, pmg := range data.PMGInstances {
+		data.ConnectionHealth[fmt.Sprintf("pmg-%s", pmg.Name)] = true
+	}
+
 	// Generate backups for VMs and containers
 	data.PVEBackups = models.PVEBackups{
 		BackupTasks:    []models.BackupTask{},
@@ -2263,6 +2269,175 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 	return backups
 }
 
+func generatePMGInstances() []models.PMGInstance {
+	now := time.Now()
+	mailStats := models.PMGMailStats{
+		Timeframe:            "day",
+		CountTotal:           2800 + rand.Float64()*400,
+		CountIn:              1800 + rand.Float64()*200,
+		CountOut:             900 + rand.Float64()*100,
+		SpamIn:               320 + rand.Float64()*40,
+		SpamOut:              45 + rand.Float64()*10,
+		VirusIn:              12 + rand.Float64()*3,
+		VirusOut:             3 + rand.Float64()*2,
+		BouncesIn:            18 + rand.Float64()*5,
+		BouncesOut:           6 + rand.Float64()*3,
+		BytesIn:              9.6e9 + rand.Float64()*1.5e9,
+		BytesOut:             3.2e9 + rand.Float64()*0.8e9,
+		GreylistCount:        210 + rand.Float64()*40,
+		JunkIn:               120 + rand.Float64()*20,
+		AverageProcessTimeMs: 480 + rand.Float64()*120,
+		RBLRejects:           140 + rand.Float64()*30,
+		PregreetRejects:      60 + rand.Float64()*15,
+		UpdatedAt:            now,
+	}
+
+	mailPoints := make([]models.PMGMailCountPoint, 0, 24)
+	for i := 0; i < 24; i++ {
+		pointTime := now.Add(-time.Duration(23-i) * time.Hour)
+		baseCount := 80 + rand.Float64()*25
+		mailPoints = append(mailPoints, models.PMGMailCountPoint{
+			Timestamp:   pointTime,
+			Count:       baseCount + rand.Float64()*20,
+			CountIn:     baseCount*0.65 + rand.Float64()*10,
+			CountOut:    baseCount*0.35 + rand.Float64()*5,
+			SpamIn:      baseCount*0.12 + rand.Float64()*4,
+			SpamOut:     baseCount*0.02 + rand.Float64()*1,
+			VirusIn:     rand.Float64() * 2,
+			VirusOut:    rand.Float64(),
+			RBLRejects:  rand.Float64() * 5,
+			Pregreet:    rand.Float64() * 3,
+			BouncesIn:   rand.Float64() * 4,
+			BouncesOut:  rand.Float64() * 2,
+			Greylist:    rand.Float64() * 6,
+			Index:       i,
+			Timeframe:   "hour",
+			WindowStart: pointTime,
+			WindowEnd:   pointTime.Add(time.Hour),
+		})
+	}
+
+	spamBuckets := []models.PMGSpamBucket{
+		{Score: "0-2", Count: 950 + rand.Float64()*40},
+		{Score: "3-5", Count: 420 + rand.Float64()*25},
+		{Score: "6-8", Count: 180 + rand.Float64()*15},
+		{Score: "9-10", Count: 70 + rand.Float64()*10},
+	}
+
+	quarantine := models.PMGQuarantineTotals{
+		Spam:        25 + rand.Intn(30),
+		Virus:       2 + rand.Intn(6),
+		Attachment:  4 + rand.Intn(6),
+		Blacklisted: rand.Intn(8),
+	}
+
+	nodes := []models.PMGNodeStatus{
+		{
+			Name:    "pmg-primary",
+			Status:  "online",
+			Role:    "master",
+			Uptime:  int64(86400 * 18),
+			LoadAvg: fmt.Sprintf("%.2f", 0.75+rand.Float64()*0.25),
+			QueueStatus: &models.PMGQueueStatus{
+				Active:    rand.Intn(5),
+				Deferred:  rand.Intn(15),
+				Hold:      rand.Intn(3),
+				Incoming:  rand.Intn(8),
+				Total:     0, // Will be calculated below
+				OldestAge: int64(rand.Intn(3600)),
+				UpdatedAt: now,
+			},
+		},
+	}
+	// Calculate total for primary node
+	nodes[0].QueueStatus.Total = nodes[0].QueueStatus.Active + nodes[0].QueueStatus.Deferred +
+		nodes[0].QueueStatus.Hold + nodes[0].QueueStatus.Incoming
+
+	if rand.Float64() > 0.5 {
+		queueStatus := &models.PMGQueueStatus{
+			Active:    rand.Intn(3),
+			Deferred:  rand.Intn(10),
+			Hold:      rand.Intn(2),
+			Incoming:  rand.Intn(5),
+			Total:     0,
+			OldestAge: int64(rand.Intn(1800)),
+			UpdatedAt: now,
+		}
+		queueStatus.Total = queueStatus.Active + queueStatus.Deferred + queueStatus.Hold + queueStatus.Incoming
+
+		nodes = append(nodes, models.PMGNodeStatus{
+			Name:        "pmg-secondary",
+			Status:      "online",
+			Role:        "node",
+			Uptime:      int64(86400 * 9),
+			LoadAvg:     fmt.Sprintf("%.2f", 0.55+rand.Float64()*0.2),
+			QueueStatus: queueStatus,
+		})
+	}
+
+	primary := models.PMGInstance{
+		ID:               "pmg-main",
+		Name:             "pmg-main",
+		Host:             "https://pmg.mock.lan:8006",
+		Status:           "online",
+		Version:          "8.1-2",
+		Nodes:            nodes,
+		MailStats:        &mailStats,
+		MailCount:        mailPoints,
+		SpamDistribution: spamBuckets,
+		Quarantine:       &quarantine,
+		ConnectionHealth: "healthy",
+		LastSeen:         now,
+		LastUpdated:      now,
+	}
+
+	instances := []models.PMGInstance{primary}
+
+	if rand.Float64() > 0.65 {
+		backupNow := now.Add(-6 * time.Hour)
+		secondaryStats := mailStats
+		secondaryStats.CountTotal *= 0.6
+		secondaryStats.CountIn *= 0.6
+		secondaryStats.CountOut *= 0.6
+		secondaryStats.UpdatedAt = backupNow
+
+		edgeQueue := &models.PMGQueueStatus{
+			Active:    rand.Intn(2),
+			Deferred:  rand.Intn(5),
+			Hold:      rand.Intn(1),
+			Incoming:  rand.Intn(3),
+			Total:     0,
+			OldestAge: int64(rand.Intn(600)),
+			UpdatedAt: backupNow,
+		}
+		edgeQueue.Total = edgeQueue.Active + edgeQueue.Deferred + edgeQueue.Hold + edgeQueue.Incoming
+
+		instances = append(instances, models.PMGInstance{
+			ID:      "pmg-edge",
+			Name:    "pmg-edge",
+			Host:    "https://pmg-edge.mock.lan:8006",
+			Status:  "online",
+			Version: "8.0-7",
+			Nodes: []models.PMGNodeStatus{{
+				Name:        "pmg-edge",
+				Status:      "online",
+				Role:        "standalone",
+				Uptime:      int64(86400 * 4),
+				QueueStatus: edgeQueue,
+			}},
+			MailStats:        &secondaryStats,
+			MailCount:        mailPoints[:12],
+			SpamDistribution: spamBuckets,
+			Quarantine:       &models.PMGQuarantineTotals{Spam: 8 + rand.Intn(5), Virus: rand.Intn(3)},
+			ConnectionHealth: "healthy",
+			LastSeen:         backupNow,
+			LastUpdated:      backupNow,
+		})
+	}
+
+	return instances
+}
+
 // generateSnapshots generates mock snapshot data for VMs and containers
 func generateSnapshots(vms []models.VM, containers []models.Container) []models.GuestSnapshot {
 	var snapshots []models.GuestSnapshot
@@ -2472,6 +2647,77 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 		disk.LastChecked = time.Now()
 	}
 
+	// Update PMG metrics with gentle fluctuations
+	for i := range data.PMGInstances {
+		inst := &data.PMGInstances[i]
+		now := time.Now()
+		inst.LastSeen = now
+		inst.LastUpdated = now
+
+		if inst.MailStats != nil {
+			inst.MailStats.CountTotal = fluctuateFloat(inst.MailStats.CountTotal, 0.05, 0, math.MaxFloat64)
+			inst.MailStats.CountIn = fluctuateFloat(inst.MailStats.CountIn, 0.05, 0, math.MaxFloat64)
+			inst.MailStats.CountOut = fluctuateFloat(inst.MailStats.CountOut, 0.05, 0, math.MaxFloat64)
+			inst.MailStats.SpamIn = fluctuateFloat(inst.MailStats.SpamIn, 0.08, 0, math.MaxFloat64)
+			inst.MailStats.SpamOut = fluctuateFloat(inst.MailStats.SpamOut, 0.08, 0, math.MaxFloat64)
+			inst.MailStats.VirusIn = fluctuateFloat(inst.MailStats.VirusIn, 0.1, 0, math.MaxFloat64)
+			inst.MailStats.VirusOut = fluctuateFloat(inst.MailStats.VirusOut, 0.1, 0, math.MaxFloat64)
+			inst.MailStats.RBLRejects = fluctuateFloat(inst.MailStats.RBLRejects, 0.07, 0, math.MaxFloat64)
+			inst.MailStats.PregreetRejects = fluctuateFloat(inst.MailStats.PregreetRejects, 0.07, 0, math.MaxFloat64)
+			inst.MailStats.GreylistCount = fluctuateFloat(inst.MailStats.GreylistCount, 0.05, 0, math.MaxFloat64)
+			inst.MailStats.AverageProcessTimeMs = fluctuateFloat(inst.MailStats.AverageProcessTimeMs, 0.05, 200, 2000)
+			inst.MailStats.UpdatedAt = now
+		}
+
+		if len(inst.MailCount) > 0 {
+			// Drop oldest point if we already have 24
+			if len(inst.MailCount) >= 24 {
+				inst.MailCount = inst.MailCount[1:]
+			}
+
+			base := 60 + rand.Float64()*30
+			newPoint := models.PMGMailCountPoint{
+				Timestamp:  now,
+				Count:      base + rand.Float64()*15,
+				CountIn:    base*0.6 + rand.Float64()*10,
+				CountOut:   base*0.4 + rand.Float64()*8,
+				SpamIn:     base*0.1 + rand.Float64()*5,
+				SpamOut:    base*0.02 + rand.Float64()*1,
+				VirusIn:    rand.Float64() * 2,
+				VirusOut:   rand.Float64(),
+				RBLRejects: rand.Float64() * 4,
+				Pregreet:   rand.Float64() * 3,
+				BouncesIn:  rand.Float64() * 3,
+				BouncesOut: rand.Float64() * 2,
+				Greylist:   rand.Float64() * 5,
+				Index:      len(inst.MailCount),
+				Timeframe:  "hour",
+			}
+			inst.MailCount = append(inst.MailCount, newPoint)
+		}
+
+		if len(inst.SpamDistribution) > 0 {
+			for j := range inst.SpamDistribution {
+				inst.SpamDistribution[j].Count = fluctuateFloat(inst.SpamDistribution[j].Count, 0.05, 0, math.MaxFloat64)
+			}
+		}
+
+		if inst.Quarantine != nil {
+			inst.Quarantine.Spam = fluctuateInt(inst.Quarantine.Spam, 5, 0, 500)
+			inst.Quarantine.Virus = fluctuateInt(inst.Quarantine.Virus, 2, 0, 200)
+			inst.Quarantine.Attachment = fluctuateInt(inst.Quarantine.Attachment, 2, 0, 200)
+			inst.Quarantine.Blacklisted = fluctuateInt(inst.Quarantine.Blacklisted, 1, 0, 100)
+		}
+
+		if len(inst.Nodes) > 0 {
+			for j := range inst.Nodes {
+				if inst.Nodes[j].Status == "online" {
+					inst.Nodes[j].Uptime += int64(updateInterval.Seconds())
+				}
+			}
+		}
+	}
+
 	data.LastUpdate = time.Now()
 }
 
@@ -2614,6 +2860,33 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 			host.Status = "online"
 		}
 	}
+}
+
+func fluctuateFloat(value, variance, min, max float64) float64 {
+	change := (rand.Float64()*2 - 1) * variance
+	newValue := value * (1 + change)
+	if newValue < min {
+		newValue = min
+	}
+	if newValue > max {
+		newValue = max
+	}
+	return newValue
+}
+
+func fluctuateInt(value, delta, min, max int) int {
+	if delta <= 0 {
+		return value
+	}
+	change := rand.Intn(delta*2+1) - delta
+	newValue := value + change
+	if newValue < min {
+		newValue = min
+	}
+	if newValue > max {
+		newValue = max
+	}
+	return newValue
 }
 
 func generateDisksForNode(node models.Node) []models.PhysicalDisk {

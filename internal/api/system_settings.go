@@ -70,6 +70,22 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 		}
 	}
 
+	if val, ok := rawRequest["pmgPollingInterval"]; ok {
+		if interval, ok := val.(float64); ok {
+			if interval <= 0 {
+				return fmt.Errorf("PMG polling interval must be positive (minimum 10 seconds)")
+			}
+			if interval < 10 {
+				return fmt.Errorf("PMG polling interval must be at least 10 seconds")
+			}
+			if interval > 3600 {
+				return fmt.Errorf("PMG polling interval cannot exceed 3600 seconds (1 hour)")
+			}
+		} else {
+			return fmt.Errorf("PMG polling interval must be a number")
+		}
+	}
+
 	// Validate boolean fields have correct type
 	if val, ok := rawRequest["autoUpdateEnabled"]; ok {
 		if _, ok := val.(bool); !ok {
@@ -258,6 +274,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["pbsPollingInterval"]; ok {
 		settings.PBSPollingInterval = updates.PBSPollingInterval
 	}
+	if _, ok := rawRequest["pmgPollingInterval"]; ok {
+		settings.PMGPollingInterval = updates.PMGPollingInterval
+	}
 	if updates.AllowedOrigins != "" {
 		settings.AllowedOrigins = updates.AllowedOrigins
 	}
@@ -302,6 +321,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if settings.ConnectionTimeout > 0 {
 		h.config.ConnectionTimeout = time.Duration(settings.ConnectionTimeout) * time.Second
+	}
+	if settings.PMGPollingInterval > 0 {
+		h.config.PMGPollingInterval = time.Duration(settings.PMGPollingInterval) * time.Second
 	}
 	if settings.UpdateChannel != "" {
 		h.config.UpdateChannel = settings.UpdateChannel

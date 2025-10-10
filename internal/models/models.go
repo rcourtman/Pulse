@@ -18,6 +18,7 @@ type State struct {
 	CephClusters     []CephCluster   `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk  `json:"physicalDisks"`
 	PBSInstances     []PBSInstance   `json:"pbs"`
+	PMGInstances     []PMGInstance   `json:"pmg"`
 	PBSBackups       []PBSBackup     `json:"pbsBackups"`
 	Metrics          []Metric        `json:"metrics"`
 	PVEBackups       PVEBackups      `json:"pveBackups"`
@@ -409,6 +410,101 @@ type PBSGarbageJob struct {
 	Error        string    `json:"error,omitempty"`
 }
 
+// PMGInstance represents a Proxmox Mail Gateway connection
+type PMGInstance struct {
+	ID               string               `json:"id"`
+	Name             string               `json:"name"`
+	Host             string               `json:"host"`
+	Status           string               `json:"status"`
+	Version          string               `json:"version"`
+	Nodes            []PMGNodeStatus      `json:"nodes,omitempty"`
+	MailStats        *PMGMailStats        `json:"mailStats,omitempty"`
+	MailCount        []PMGMailCountPoint  `json:"mailCount,omitempty"`
+	SpamDistribution []PMGSpamBucket      `json:"spamDistribution,omitempty"`
+	Quarantine       *PMGQuarantineTotals `json:"quarantine,omitempty"`
+	ConnectionHealth string               `json:"connectionHealth"`
+	LastSeen         time.Time            `json:"lastSeen"`
+	LastUpdated      time.Time            `json:"lastUpdated"`
+}
+
+// PMGNodeStatus represents the status of a PMG cluster node
+type PMGNodeStatus struct {
+	Name        string          `json:"name"`
+	Status      string          `json:"status"`
+	Role        string          `json:"role,omitempty"`
+	Uptime      int64           `json:"uptime,omitempty"`
+	LoadAvg     string          `json:"loadAvg,omitempty"`
+	QueueStatus *PMGQueueStatus `json:"queueStatus,omitempty"` // Postfix queue status for this node
+}
+
+// PMGMailStats summarizes aggregated mail statistics for a timeframe
+type PMGMailStats struct {
+	Timeframe            string    `json:"timeframe"`
+	CountTotal           float64   `json:"countTotal"`
+	CountIn              float64   `json:"countIn"`
+	CountOut             float64   `json:"countOut"`
+	SpamIn               float64   `json:"spamIn"`
+	SpamOut              float64   `json:"spamOut"`
+	VirusIn              float64   `json:"virusIn"`
+	VirusOut             float64   `json:"virusOut"`
+	BouncesIn            float64   `json:"bouncesIn"`
+	BouncesOut           float64   `json:"bouncesOut"`
+	BytesIn              float64   `json:"bytesIn"`
+	BytesOut             float64   `json:"bytesOut"`
+	GreylistCount        float64   `json:"greylistCount"`
+	JunkIn               float64   `json:"junkIn"`
+	AverageProcessTimeMs float64   `json:"averageProcessTimeMs"`
+	RBLRejects           float64   `json:"rblRejects"`
+	PregreetRejects      float64   `json:"pregreetRejects"`
+	UpdatedAt            time.Time `json:"updatedAt"`
+}
+
+// PMGMailCountPoint represents a point-in-time mail counter snapshot
+type PMGMailCountPoint struct {
+	Timestamp   time.Time `json:"timestamp"`
+	Count       float64   `json:"count"`
+	CountIn     float64   `json:"countIn"`
+	CountOut    float64   `json:"countOut"`
+	SpamIn      float64   `json:"spamIn"`
+	SpamOut     float64   `json:"spamOut"`
+	VirusIn     float64   `json:"virusIn"`
+	VirusOut    float64   `json:"virusOut"`
+	RBLRejects  float64   `json:"rblRejects"`
+	Pregreet    float64   `json:"pregreet"`
+	BouncesIn   float64   `json:"bouncesIn"`
+	BouncesOut  float64   `json:"bouncesOut"`
+	Greylist    float64   `json:"greylist"`
+	Index       int       `json:"index"`
+	Timeframe   string    `json:"timeframe"`
+	WindowStart time.Time `json:"windowStart,omitempty"`
+	WindowEnd   time.Time `json:"windowEnd,omitempty"`
+}
+
+// PMGSpamBucket represents spam distribution counts by score
+type PMGSpamBucket struct {
+	Score string  `json:"score"`
+	Count float64 `json:"count"`
+}
+
+// PMGQuarantineTotals summarizes quarantine counts per category
+type PMGQuarantineTotals struct {
+	Spam        int `json:"spam"`
+	Virus       int `json:"virus"`
+	Attachment  int `json:"attachment"`
+	Blacklisted int `json:"blacklisted"`
+}
+
+// PMGQueueStatus represents the Postfix mail queue status for a PMG instance
+type PMGQueueStatus struct {
+	Active    int       `json:"active"`    // Messages currently being delivered
+	Deferred  int       `json:"deferred"`  // Messages waiting for retry
+	Hold      int       `json:"hold"`      // Messages on hold
+	Incoming  int       `json:"incoming"`  // Messages in incoming queue
+	Total     int       `json:"total"`     // Total messages in all queues
+	OldestAge int64     `json:"oldestAge"` // Age of oldest message in seconds (0 if queue empty)
+	UpdatedAt time.Time `json:"updatedAt"` // When this queue data was collected
+}
+
 // Memory represents memory usage
 type Memory struct {
 	Total     int64   `json:"total"`
@@ -559,6 +655,7 @@ func NewState() *State {
 		Storage:       make([]Storage, 0),
 		PhysicalDisks: make([]PhysicalDisk, 0),
 		PBSInstances:  make([]PBSInstance, 0),
+		PMGInstances:  make([]PMGInstance, 0),
 		PBSBackups:    make([]PBSBackup, 0),
 		Metrics:       make([]Metric, 0),
 		PVEBackups: PVEBackups{
@@ -967,6 +1064,36 @@ func (s *State) UpdatePBSInstance(instance PBSInstance) {
 
 	if !found {
 		s.PBSInstances = append(s.PBSInstances, instance)
+	}
+
+	s.LastUpdate = time.Now()
+}
+
+// UpdatePMGInstances replaces the entire PMG instance list
+func (s *State) UpdatePMGInstances(instances []PMGInstance) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.PMGInstances = instances
+	s.LastUpdate = time.Now()
+}
+
+// UpdatePMGInstance updates or inserts a PMG instance record
+func (s *State) UpdatePMGInstance(instance PMGInstance) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	updated := false
+	for i := range s.PMGInstances {
+		if s.PMGInstances[i].ID == instance.ID || strings.EqualFold(s.PMGInstances[i].Name, instance.Name) {
+			s.PMGInstances[i] = instance
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		s.PMGInstances = append(s.PMGInstances, instance)
 	}
 
 	s.LastUpdate = time.Now()

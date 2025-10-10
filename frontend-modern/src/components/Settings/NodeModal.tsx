@@ -18,7 +18,7 @@ interface NodeModalProps {
   isOpen: boolean;
   resetKey?: number;
   onClose: () => void;
-  nodeType: 'pve' | 'pbs';
+  nodeType: 'pve' | 'pbs' | 'pmg';
   editingNode?: NodeConfig;
   onSave: (nodeData: Partial<NodeConfig>) => void;
   showBackToDiscovery?: boolean;
@@ -47,6 +47,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     fingerprint: '',
     verifySSL: true,
     monitorPhysicalDisks: false,
+    monitorMailStats: true,
+    monitorQueues: true,
+    monitorQuarantine: true,
+    monitorDomainStats: false,
   });
 
   const [formData, setFormData] = createSignal(getCleanFormData());
@@ -99,32 +103,45 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     // This prevents PVE data from being used when adding a PBS node
     if (props.editingNode && props.editingNode.type === props.nodeType) {
       const node = props.editingNode;
-      // Handle auth fields
       let username = ('user' in node ? node.user : '') || '';
       let tokenName = node.tokenName || '';
 
-      // For PBS with token auth, keep the full token format in tokenName field
-      // The user field is not shown in the UI for token auth anyway
-      if (props.nodeType === 'pbs' && tokenName && tokenName.includes('!') && !node.hasPassword) {
-        // Keep full token format for PBS token auth
-        // tokenName stays as-is (e.g., "pulse-monitor@pbs!pulse-192-168-0-123")
-        // Extract username for internal use only
+      const usesToken =
+        node.type !== 'pve' && tokenName && tokenName.includes('!') && !node.hasPassword;
+      if (usesToken) {
         const parts = tokenName.split('!');
         username = parts[0];
       }
 
+      const pmgConfig =
+        node.type === 'pmg'
+          ? (node as NodeConfig & {
+              monitorMailStats?: boolean;
+              monitorQueues?: boolean;
+              monitorQuarantine?: boolean;
+              monitorDomainStats?: boolean;
+            })
+          : undefined;
+
       setFormData({
         name: node.name || '',
         host: node.host || '',
-        authType: node.hasPassword ? 'password' : 'token', // Check actual auth type
+        authType: node.hasPassword ? 'password' : 'token',
         setupMode: 'auto',
         user: username,
-        password: '', // Don't show existing password
+        password: '',
         tokenName: tokenName,
-        tokenValue: '', // Don't show existing token
+        tokenValue: '',
         fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
         verifySSL: node.verifySSL ?? true,
-        monitorPhysicalDisks: ('monitorPhysicalDisks' in node ? node.monitorPhysicalDisks : false) ?? false,
+        monitorPhysicalDisks:
+          node.type === 'pve'
+            ? (node as NodeConfig & { monitorPhysicalDisks?: boolean }).monitorPhysicalDisks ?? false
+            : false,
+        monitorMailStats: pmgConfig?.monitorMailStats ?? true,
+        monitorQueues: pmgConfig?.monitorQueues ?? true,
+        monitorQuarantine: pmgConfig?.monitorQuarantine ?? true,
+        monitorDomainStats: pmgConfig?.monitorDomainStats ?? false,
       });
     }
   });
@@ -164,13 +181,20 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         monitorBackups: true,
         monitorPhysicalDisks: data.monitorPhysicalDisks,
       });
-    } else {
+    } else if (props.nodeType === 'pbs') {
       Object.assign(nodeData, {
         monitorDatastores: true,
         monitorSyncJobs: true,
         monitorVerifyJobs: true,
         monitorPruneJobs: true,
         monitorGarbageJobs: true,
+      });
+    } else {
+      Object.assign(nodeData, {
+        monitorMailStats: data.monitorMailStats,
+        monitorQueues: data.monitorQueues,
+        monitorQuarantine: data.monitorQuarantine,
+        monitorDomainStats: data.monitorDomainStats,
       });
     }
 
@@ -284,6 +308,17 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     }
   };
 
+  const nodeProductName = () => {
+    switch (props.nodeType) {
+      case 'pve':
+        return 'Proxmox VE';
+      case 'pbs':
+        return 'Proxmox Backup Server';
+      default:
+        return 'Proxmox Mail Gateway';
+    }
+  };
+
   return (
     <Portal>
       <Show when={props.isOpen}>
@@ -298,7 +333,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 {/* Header */}
                 <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                   <SectionHeader
-                    title={`${props.editingNode ? 'Edit' : 'Add'} ${props.nodeType === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server'} node`}
+                    title={`${props.editingNode ? 'Edit' : 'Add'} ${nodeProductName()} node`}
                     size="md"
                     class="flex-1"
                   />
@@ -356,7 +391,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           placeholder={
                             props.nodeType === 'pve'
                               ? 'https://proxmox.example.com:8006'
-                              : 'https://backup.example.com:8007'
+                              : props.nodeType === 'pbs'
+                                ? 'https://backup.example.com:8007'
+                                : 'https://mail-gateway.example.com:8006'
                           }
                           required
                           class={controlClass()}
@@ -364,6 +401,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         <Show when={props.nodeType === 'pbs'}>
                           <p class={formHelpText}>
                             PBS requires HTTPS (not HTTP). Default port is 8007.
+                          </p>
+                        </Show>
+                        <Show when={props.nodeType === 'pmg'}>
+                          <p class={formHelpText}>
+                            PMG API listens on HTTPS. Default port is 8006.
                           </p>
                         </Show>
                       </div>
@@ -425,12 +467,21 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             type="text"
                             value={formData().user}
                             onInput={(e) => updateField('user', e.currentTarget.value)}
-                            placeholder={props.nodeType === 'pve' ? 'root@pam' : 'admin@pbs'}
+                            placeholder={
+                              props.nodeType === 'pve'
+                                ? 'root@pam'
+                                : props.nodeType === 'pbs'
+                                  ? 'admin@pbs'
+                                  : 'root@pam'
+                            }
                             required={formData().authType === 'password'}
                             class={controlClass()}
                           />
                           <Show when={props.nodeType === 'pbs'}>
                             <p class={formHelpText}>Must include realm (e.g., admin@pbs).</p>
+                          </Show>
+                          <Show when={props.nodeType === 'pmg'}>
+                            <p class={formHelpText}>Include realm (e.g., root@pam or api@pmg).</p>
                           </Show>
                         </div>
 
@@ -1409,13 +1460,30 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </ul>
                                   </div>
                                 </div>
-                              </Show>
-                            </div>
                           </Show>
                         </div>
+                      </Show>
+                      <Show when={props.nodeType === 'pmg'}>
+                        <div class="space-y-3 text-xs text-gray-700 dark:text-gray-200">
+                          <p>
+                            Generate a dedicated API token in <strong>Configuration → API Tokens</strong> on your
+                            Mail Gateway. We recommend creating a service user such as <code class="font-mono">pulse-monitor@pmg</code>
+                            with <em>Auditor</em> privileges.
+                          </p>
+                          <ol class="list-decimal ml-4 space-y-1">
+                            <li>Click <em>Add</em> and choose the service user (or create one if needed).</li>
+                            <li>Enable <em>Privilege Separation</em> and assign the <em>Auditor</em> role.</li>
+                            <li>Copy the generated Token ID (e.g. <code class="font-mono">pulse-monitor@pmg!pulse-edge</code>) and the secret value into the fields below.</li>
+                          </ol>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">
+                            Pulse only requires read-only access. Avoid granting administrator permissions to the token.
+                          </p>
+                        </div>
+                      </Show>
+                    </div>
 
-                        {/* Token Input Fields */}
-                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {/* Token Input Fields */}
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                           <div class={formField}>
                             <label class={labelClass()}>
                               Token ID <span class="text-red-500">*</span>
@@ -1509,9 +1577,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       titleClass="text-gray-900 dark:text-gray-100"
                     />
                     <p class="text-sm text-gray-600 dark:text-gray-400">
-                      Pulse automatically tracks all supported resources for this node — virtual
-                      machines, containers, storage usage, backups, and PBS job activity — so you
-                      always get full visibility without extra configuration.
+                      {props.nodeType === 'pmg'
+                        ? 'Pulse captures mail flow analytics, rejection causes, and quarantine visibility without additional scripts.'
+                        : 'Pulse automatically tracks all supported resources for this node — virtual machines, containers, storage usage, backups, and PBS job activity — so you always get full visibility without extra configuration.'}
                     </p>
                   </div>
 
@@ -1536,6 +1604,79 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Polls disk SMART data every 5 minutes. Note: This will cause HDDs to spin up from standby.
                             If you have HDDs that should stay idle, leave this disabled.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </Show>
+                  <Show when={props.nodeType === 'pmg'}>
+                    <div class="space-y-3">
+                      <SectionHeader
+                        title="Data collection"
+                        size="sm"
+                        class="mb-1"
+                        titleClass="text-gray-900 dark:text-gray-100"
+                      />
+                      <p class="text-xs text-gray-600 dark:text-gray-400">
+                        Control which PMG data sets Pulse ingests. Disable individual collectors if you want to limit API usage.
+                      </p>
+
+                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={formData().monitorMailStats}
+                          onChange={(e) => updateField('monitorMailStats', e.currentTarget.checked)}
+                          class={formCheckbox + ' mt-0.5'}
+                        />
+                        <div>
+                          <div>Mail statistics &amp; trends</div>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Total mail volume, inbound/outbound breakdown, spam and virus counts.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={formData().monitorQueues}
+                          onChange={(e) => updateField('monitorQueues', e.currentTarget.checked)}
+                          class={formCheckbox + ' mt-0.5'}
+                        />
+                        <div>
+                          <div>Queue health insights</div>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Track Postfix queue depth and rejection trends to spot delivery bottlenecks.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={formData().monitorQuarantine}
+                          onChange={(e) => updateField('monitorQuarantine', e.currentTarget.checked)}
+                          class={formCheckbox + ' mt-0.5'}
+                        />
+                        <div>
+                          <div>Quarantine totals</div>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Mirror PMG quarantine sizes for spam, virus, and attachment buckets.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={formData().monitorDomainStats}
+                          onChange={(e) => updateField('monitorDomainStats', e.currentTarget.checked)}
+                          class={formCheckbox + ' mt-0.5'}
+                        />
+                        <div>
+                          <div>Domain-level statistics</div>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Gather per-domain metrics for deeper mail routing analysis.
                           </p>
                         </div>
                       </label>

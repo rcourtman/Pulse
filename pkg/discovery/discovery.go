@@ -15,11 +15,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// DiscoveredServer represents a discovered Proxmox/PBS server
+// DiscoveredServer represents a discovered Proxmox/PBS/PMG server
 type DiscoveredServer struct {
 	IP       string `json:"ip"`
 	Port     int    `json:"port"`
-	Type     string `json:"type"` // "pve" or "pbs"
+	Type     string `json:"type"` // "pve", "pbs", or "pmg"
 	Version  string `json:"version"`
 	Hostname string `json:"hostname,omitempty"`
 	Release  string `json:"release,omitempty"`
@@ -191,8 +191,8 @@ func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, ipChan <-c
 		case <-ctx.Done():
 			return
 		default:
-			// Check Proxmox VE (port 8006)
-			if server := s.checkServer(ctx, ip, 8006, "pve"); server != nil {
+			// Check port 8006 (could be PVE or PMG)
+			if server := s.checkPort8006(ctx, ip); server != nil {
 				resultChan <- server
 			}
 
@@ -202,6 +202,115 @@ func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, ipChan <-c
 			}
 		}
 	}
+}
+
+// checkPort8006 checks if port 8006 is running PMG or PVE
+func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServer {
+	// First check if port is open
+	address := net.JoinHostPort(ip, "8006")
+	conn, err := net.DialTimeout("tcp", address, s.timeout)
+	if err != nil {
+		return nil // Port not open
+	}
+	conn.Close()
+
+	// Port is open - now detect if it's PMG or PVE
+	// PMG has statistics/mail endpoint that PVE doesn't have
+	// Even if auth is required, PMG will return 401, PVE will return 404
+	isPMG := s.isPMGServer(ctx, address)
+
+	serverType := "pve"
+	if isPMG {
+		serverType = "pmg"
+	}
+
+	log.Info().
+		Str("ip", ip).
+		Int("port", 8006).
+		Str("type", serverType).
+		Msg("Found potential server (port open)")
+
+	server := &DiscoveredServer{
+		IP:      ip,
+		Port:    8006,
+		Type:    serverType,
+		Version: "Unknown", // Will be determined after auth
+	}
+
+	// Try to get version without auth (some installations allow it)
+	url := fmt.Sprintf("https://%s/api2/json/version", address)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err == nil {
+		resp, err := s.httpClient.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+
+			// Only try to parse if we got a successful response
+			if resp.StatusCode == 200 {
+				var versionResp struct {
+					Data struct {
+						Version string `json:"version"`
+						Release string `json:"release,omitempty"`
+					} `json:"data"`
+				}
+
+				if err := json.NewDecoder(resp.Body).Decode(&versionResp); err == nil && versionResp.Data.Version != "" {
+					server.Version = versionResp.Data.Version
+					server.Release = versionResp.Data.Release
+
+					log.Info().
+						Str("ip", ip).
+						Int("port", 8006).
+						Str("version", server.Version).
+						Msg("Got server version without auth")
+				}
+			}
+		}
+	}
+
+	// Try to resolve hostname via reverse DNS
+	names, err := net.LookupAddr(ip)
+	if err == nil && len(names) > 0 {
+		// Use the first hostname, remove trailing dot if present
+		hostname := strings.TrimSuffix(names[0], ".")
+		server.Hostname = hostname
+		log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
+	}
+
+	return server
+}
+
+// isPMGServer checks if a server is PMG by checking for PMG-specific endpoints
+func (s *Scanner) isPMGServer(ctx context.Context, address string) bool {
+	// Try PMG-specific endpoint: /api2/json/statistics/mail
+	// PMG will return 401 (unauthorized) or 200
+	// PVE will return 404 (not found)
+	url := fmt.Sprintf("https://%s/api2/json/statistics/mail", address)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	// If we get anything other than 404, it's likely PMG
+	// PMG will return 401 (needs auth) or 200 (if auth not required)
+	// PVE will return 404 (endpoint doesn't exist)
+	if resp.StatusCode != 404 {
+		log.Debug().
+			Str("address", address).
+			Int("status", resp.StatusCode).
+			Msg("PMG-specific endpoint found - identified as PMG")
+		return true
+	}
+
+	return false
 }
 
 // checkServer checks if a server is running at the given IP and port
