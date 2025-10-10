@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -67,6 +68,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 
 	// Start forwarding update progress to WebSocket
 	go r.forwardUpdateProgress()
+
+	// Start background update checker
+	go r.backgroundUpdateChecker()
 
 	// Load system settings to configure security headers
 	allowEmbedding := false
@@ -1736,6 +1740,12 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 		GoVersion: runtime.Version(),
 	}
 
+	// Add cached update info if available
+	if cachedUpdate := r.updateManager.GetCachedUpdateInfo(); cachedUpdate != nil {
+		response.UpdateAvailable = cachedUpdate.Available
+		response.LatestVersion = cachedUpdate.LatestVersion
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -2502,6 +2512,29 @@ func (r *Router) forwardUpdateProgress() {
 			Int("progress", status.Progress).
 			Str("message", status.Message).
 			Msg("Update progress")
+	}
+}
+
+// backgroundUpdateChecker periodically checks for updates and caches the result
+func (r *Router) backgroundUpdateChecker() {
+	// Check immediately on startup
+	ctx := context.Background()
+	if _, err := r.updateManager.CheckForUpdates(ctx); err != nil {
+		log.Debug().Err(err).Msg("Initial update check failed")
+	} else {
+		log.Info().Msg("Initial update check completed")
+	}
+
+	// Then check every hour
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if _, err := r.updateManager.CheckForUpdates(ctx); err != nil {
+			log.Debug().Err(err).Msg("Periodic update check failed")
+		} else {
+			log.Debug().Msg("Periodic update check completed")
+		}
 	}
 }
 
