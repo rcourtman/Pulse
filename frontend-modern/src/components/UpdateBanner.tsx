@@ -209,7 +209,7 @@ export function UpdateBanner() {
                 </Show>
 
                 {/* Manual Update Instructions */}
-                <Show when={updatePlan()?.instructions && updatePlan()?.instructions.length > 0}>
+                <Show when={updatePlan()?.instructions && (updatePlan()?.instructions?.length ?? 0) > 0}>
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                     <div class="font-medium mb-2">Update Instructions:</div>
                     <div class="space-y-2">
