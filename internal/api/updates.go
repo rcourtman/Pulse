@@ -11,13 +11,33 @@ import (
 
 // UpdateHandlers handles update-related API requests
 type UpdateHandlers struct {
-	manager *updates.Manager
+	manager  *updates.Manager
+	history  *updates.UpdateHistory
+	registry *updates.UpdaterRegistry
 }
 
 // NewUpdateHandlers creates new update handlers
 func NewUpdateHandlers(manager *updates.Manager) *UpdateHandlers {
+	// Initialize update history
+	history, err := updates.NewUpdateHistory("/var/lib/pulse")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize update history")
+		// Continue without history - handlers will check for nil
+	}
+
+	// Initialize updater registry
+	registry := updates.NewUpdaterRegistry()
+
+	// Register adapters
+	registry.Register("systemd", updates.NewInstallShAdapter(history))
+	registry.Register("proxmoxve", updates.NewInstallShAdapter(history))
+	registry.Register("docker", updates.NewDockerUpdater())
+	registry.Register("aur", updates.NewAURUpdater())
+
 	return &UpdateHandlers{
-		manager: manager,
+		manager:  manager,
+		history:  history,
+		registry: registry,
 	}
 }
 
@@ -96,4 +116,108 @@ func (h *UpdateHandlers) HandleUpdateStatus(w http.ResponseWriter, r *http.Reque
 	if err := json.NewEncoder(w).Encode(status); err != nil {
 		log.Error().Err(err).Msg("Failed to encode update status")
 	}
+}
+
+// HandleGetUpdatePlan returns update plan for current deployment
+func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get current version info to determine deployment type
+	versionInfo, err := updates.GetCurrentVersion()
+	if err != nil {
+		http.Error(w, "Failed to get version info", http.StatusInternalServerError)
+		return
+	}
+
+	// Get updater for deployment type
+	updater, err := h.registry.Get(versionInfo.DeploymentType)
+	if err != nil {
+		http.Error(w, "No updater for deployment type", http.StatusNotFound)
+		return
+	}
+
+	// Get version from query
+	version := r.URL.Query().Get("version")
+	if version == "" {
+		http.Error(w, "version parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// Prepare update plan
+	plan, err := updater.PrepareUpdate(r.Context(), updates.UpdateRequest{
+		Version: version,
+		Channel: r.URL.Query().Get("channel"),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to prepare update plan")
+		http.Error(w, "Failed to prepare update plan", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(plan)
+}
+
+// HandleListUpdateHistory returns update history
+func (h *UpdateHandlers) HandleListUpdateHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.history == nil {
+		http.Error(w, "Update history not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Parse query parameters
+	filter := updates.HistoryFilter{
+		Limit: 50, // Default limit
+	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		// Parse limit (simple implementation)
+		filter.Limit = 50
+	}
+
+	if status := r.URL.Query().Get("status"); status != "" {
+		filter.Status = updates.UpdateStatusType(status)
+	}
+
+	entries := h.history.ListEntries(filter)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entries)
+}
+
+// HandleGetUpdateHistoryEntry returns a specific update history entry
+func (h *UpdateHandlers) HandleGetUpdateHistoryEntry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.history == nil {
+		http.Error(w, "Update history not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Get event ID from URL path
+	eventID := r.URL.Query().Get("id")
+	if eventID == "" {
+		http.Error(w, "event ID required", http.StatusBadRequest)
+		return
+	}
+
+	entry, err := h.history.GetEntry(eventID)
+	if err != nil {
+		http.Error(w, "Entry not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entry)
 }
