@@ -141,7 +141,7 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		fmt.Printf("Warning: Config was exported from version %s, current version is 4.0\n", exportData.Version)
 	}
 	// Import all configurations
-	if err := c.SaveNodesConfig(exportData.Nodes.PVEInstances, exportData.Nodes.PBSInstances); err != nil {
+	if err := c.SaveNodesConfig(exportData.Nodes.PVEInstances, exportData.Nodes.PBSInstances, exportData.Nodes.PMGInstances); err != nil {
 		return fmt.Errorf("failed to import nodes config: %w", err)
 	}
 

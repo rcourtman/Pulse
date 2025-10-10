@@ -47,6 +47,7 @@ type StateResponse struct {
 	Storage          []models.Storage            `json:"storage"`
 	CephClusters     []models.CephCluster        `json:"cephClusters"`
 	PBSInstances     []models.PBSInstance        `json:"pbs"`
+	PMGInstances     []models.PMGInstance        `json:"pmg"`
 	PBSBackups       []models.PBSBackup          `json:"pbsBackups"`
 	Metrics          []models.Metric             `json:"metrics"`
 	PVEBackups       models.PVEBackups           `json:"pveBackups"`
@@ -91,7 +92,7 @@ type SettingsConfig struct {
 // NodeRequest represents a request to create/update a node
 type NodeRequest struct {
 	Name     string            `json:"name" validate:"required,min=1,max=100"`
-	Type     string            `json:"type" validate:"required,oneof=proxmox pve pbs"`
+	Type     string            `json:"type" validate:"required,oneof=proxmox pve pbs pmg"`
 	Address  string            `json:"address" validate:"required,ip|hostname"`
 	Port     int               `json:"port,omitempty" validate:"omitempty,min=1,max=65535"`
 	Username string            `json:"username,omitempty"`

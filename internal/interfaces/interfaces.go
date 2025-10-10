@@ -20,6 +20,7 @@ type StateStore interface {
 	UpdateStorage(storage []models.Storage)
 	UpdateCephClustersForInstance(instanceName string, clusters []models.CephCluster)
 	UpdatePBSInstances(instances []models.PBSInstance)
+	UpdatePMGInstances(instances []models.PMGInstance)
 	SetConnectionHealth(instance string, healthy bool)
 }
 

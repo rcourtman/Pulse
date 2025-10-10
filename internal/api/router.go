@@ -16,6 +16,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
@@ -1735,11 +1736,14 @@ func (r *Router) handleAgentVersion(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Current agent version - matches the version in internal/dockeragent/agent.go
-	const currentAgentVersion = "0.1.0"
+	// Current agent version - matches the version baked into the Docker agent binary
+	version := strings.TrimSpace(dockeragent.Version)
+	if version == "" {
+		version = "dev"
+	}
 
 	response := AgentVersionResponse{
-		Version: currentAgentVersion,
+		Version: version,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1796,7 +1800,7 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	log.Debug().Str("method", req.Method).Str("url", req.URL.String()).Msg("Charts endpoint hit")
 
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -2043,7 +2047,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 
 // handleStorageCharts handles storage chart data requests
 func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -2508,6 +2512,49 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	binaryPath := "/opt/pulse/pulse-docker-agent"
-	http.ServeFile(w, req, binaryPath)
+	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
+	searchPaths := make([]string, 0, 4)
+
+	if normalized := normalizeDockerAgentArch(archParam); normalized != "" {
+		searchPaths = append(searchPaths,
+			filepath.Join("/opt/pulse/bin", "pulse-docker-agent-"+normalized),
+			filepath.Join("/opt/pulse", "pulse-docker-agent-"+normalized),
+		)
+	}
+
+	// Default locations (host architecture)
+	searchPaths = append(searchPaths,
+		filepath.Join("/opt/pulse/bin", "pulse-docker-agent"),
+		"/opt/pulse/pulse-docker-agent",
+	)
+
+	for _, candidate := range searchPaths {
+		if candidate == "" {
+			continue
+		}
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			http.ServeFile(w, req, candidate)
+			return
+		}
+	}
+
+	http.Error(w, "Agent binary not found", http.StatusNotFound)
+}
+
+func normalizeDockerAgentArch(arch string) string {
+	if arch == "" {
+		return ""
+	}
+
+	arch = strings.ToLower(strings.TrimSpace(arch))
+	switch arch {
+	case "linux-amd64", "amd64", "x86_64", "x86-64":
+		return "linux-amd64"
+	case "linux-arm64", "arm64", "aarch64":
+		return "linux-arm64"
+	case "linux-armv7", "armv7", "armv7l", "armhf":
+		return "linux-armv7"
+	default:
+		return ""
+	}
 }

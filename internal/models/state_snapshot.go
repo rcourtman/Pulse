@@ -12,6 +12,7 @@ type StateSnapshot struct {
 	CephClusters     []CephCluster   `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk  `json:"physicalDisks"`
 	PBSInstances     []PBSInstance   `json:"pbs"`
+	PMGInstances     []PMGInstance   `json:"pmg"`
 	PBSBackups       []PBSBackup     `json:"pbsBackups"`
 	Metrics          []Metric        `json:"metrics"`
 	PVEBackups       PVEBackups      `json:"pveBackups"`
@@ -38,6 +39,7 @@ func (s *State) GetSnapshot() StateSnapshot {
 		CephClusters:  append([]CephCluster{}, s.CephClusters...),
 		PhysicalDisks: append([]PhysicalDisk{}, s.PhysicalDisks...),
 		PBSInstances:  append([]PBSInstance{}, s.PBSInstances...),
+		PMGInstances:  append([]PMGInstance{}, s.PMGInstances...),
 		PBSBackups:    append([]PBSBackup{}, s.PBSBackups...),
 		Metrics:       append([]Metric{}, s.Metrics...),
 		PVEBackups: PVEBackups{
@@ -107,6 +109,7 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		CephClusters:     cephClusters,
 		PhysicalDisks:    s.PhysicalDisks,
 		PBS:              s.PBSInstances,
+		PMG:              s.PMGInstances,
 		ActiveAlerts:     s.ActiveAlerts,
 		Metrics:          make(map[string]any),
 		PVEBackups:       s.PVEBackups,

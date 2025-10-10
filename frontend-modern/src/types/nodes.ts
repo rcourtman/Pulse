@@ -52,8 +52,26 @@ export interface PBSNodeConfig {
   monitorGarbageJobs: boolean;
 }
 
-export type NodeConfig = (PVENodeConfig | PBSNodeConfig) & {
-  type: 'pve' | 'pbs';
+export interface PMGNodeConfig {
+  id: string;
+  name: string;
+  host: string;
+  user: string;
+  hasPassword?: boolean;
+  hasToken?: boolean;
+  tokenName?: string;
+  tokenValue?: string;
+  password?: string;
+  fingerprint?: string;
+  verifySSL: boolean;
+  monitorMailStats: boolean;
+  monitorQueues: boolean;
+  monitorQuarantine: boolean;
+  monitorDomainStats: boolean;
+}
+
+export type NodeConfig = (PVENodeConfig | PBSNodeConfig | PMGNodeConfig) & {
+  type: 'pve' | 'pbs' | 'pmg';
   status?: 'connected' | 'disconnected' | 'error' | 'pending';
   temperature?: Temperature;
 };
@@ -61,6 +79,7 @@ export type NodeConfig = (PVENodeConfig | PBSNodeConfig) & {
 export interface NodesResponse {
   pve_instances: PVENodeConfig[];
   pbs_instances: PBSNodeConfig[];
+  pmg_instances?: PMGNodeConfig[];
 }
 
 export interface NodeUpdateRequest {

@@ -37,6 +37,7 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
+import MailGateway from './components/PMG/MailGateway';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { DockerIcon } from '@/components/icons/DockerIcon';
 import { AlertsIcon } from '@/components/icons/AlertsIcon';
@@ -95,6 +96,7 @@ function App() {
     cephClusters: [],
     physicalDisks: [],
     pbs: [],
+    pmg: [],
     metrics: [],
     pveBackups: {
       backupTasks: [],
@@ -584,6 +586,7 @@ function App() {
         component={() => <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />}
       />
       <Route path="/proxmox/storage" component={StorageComponent} />
+      <Route path="/proxmox/mail" component={MailGateway} />
       <Route path="/proxmox/backups" component={Backups} />
       <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
       <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />

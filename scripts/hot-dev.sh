@@ -162,6 +162,7 @@ PORT=${PULSE_DEV_API_PORT}
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT
 
 # MUST export PULSE_DATA_DIR so backend uses dev-config directory
+PULSE_DATA_DIR=${PULSE_DATA_DIR:-/etc/pulse}
 export PULSE_DATA_DIR
 
 echo "[hot-dev] Backend will use config directory: ${PULSE_DATA_DIR}"

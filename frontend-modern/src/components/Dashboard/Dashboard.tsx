@@ -7,7 +7,6 @@ import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
-import { MetricBar } from './MetricBar';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
@@ -30,7 +29,8 @@ type StatusMode = 'all' | 'running' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
 
 export function Dashboard(props: DashboardProps) {
-  const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = useWebSocket();
+  const ws = useWebSocket();
+  const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect, state } = ws;
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
@@ -502,7 +502,7 @@ export function Dashboard(props: DashboardProps) {
     };
   });
 
-  const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => {
+  const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
     console.log('handleNodeSelect called:', nodeId, nodeType);
     // Track selected node for filtering (independent of search)
     if (nodeType === 'pve' || nodeType === null) {
@@ -576,183 +576,6 @@ export function Dashboard(props: DashboardProps) {
         filteredContainers={filteredGuests().filter((g) => g.type === 'lxc')}
         searchTerm={search()}
       />
-
-      {/* Removed old node table - keeping the rest unchanged */}
-      <Show when={false}>
-        <Card padding="none" class="mb-4">
-          <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead>
-                <tr class="border-b border-gray-200 dark:border-gray-700">
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Node
-                  </th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    CPU
-                  </th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Memory
-                  </th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Disk
-                  </th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    VMs
-                  </th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Containers
-                  </th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Uptime
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                <For each={sortedNodes()}>
-                  {(node) => {
-                    const isOnline = () => node.status === 'online' && node.uptime > 0;
-                    const cpuPercent = () => Math.round(node.cpu * 100);
-                    const memPercent = () => Math.round(node.memory?.usage || 0);
-                    const diskPercent = () =>
-                      node.disk ? Math.round((node.disk.used / node.disk.total) * 100) : 0;
-
-                    // Count VMs and containers for this node (match by both instance and node name)
-                    const nodeVMs = () => props.vms.filter((vm) => vm.instance === node.instance && vm.node === node.name).length;
-                    const nodeContainers = () =>
-                      props.containers.filter((ct) => ct.instance === node.instance && ct.node === node.name).length;
-
-                    const isSelected = () => search().includes(`node:${node.name}`);
-
-                    return (
-                      <tr
-                        class={`hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors ${
-                          isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                        }`}
-                        onClick={() => {
-                          const currentSearch = search();
-                          const nodeFilter = `node:${node.name}`;
-
-                          if (currentSearch.includes(nodeFilter)) {
-                            setSearch(
-                              currentSearch
-                                .replace(nodeFilter, '')
-                                .trim()
-                                .replace(/,\s*,/g, ',')
-                                .replace(/^,|,$/g, ''),
-                            );
-                            setIsSearchLocked(false);
-                          } else {
-                            const cleanedSearch = currentSearch
-                              .replace(/node:\w+/g, '')
-                              .trim()
-                              .replace(/,\s*,/g, ',')
-                              .replace(/^,|,$/g, '');
-                            const newSearch = cleanedSearch
-                              ? `${cleanedSearch}, ${nodeFilter}`
-                              : nodeFilter;
-                            setSearch(newSearch);
-                            setIsSearchLocked(true);
-
-                            if (!showFilters()) {
-                              setShowFilters(true);
-                            }
-                          }
-                        }}
-                      >
-                        <td class="py-0.5 px-2 whitespace-nowrap">
-                          <div class="flex items-center gap-1">
-                            <a
-                              href={node.host || `https://${node.name}:8006`}
-                              target="_blank"
-                              onClick={(e) => e.stopPropagation()}
-                              class="font-medium text-xs text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
-                            >
-                              {node.name}
-                            </a>
-                            <Show when={node.isClusterMember !== undefined}>
-                              <span
-                                class={`text-[9px] px-1 py-0 rounded text-[8px] font-medium ${
-                                  node.isClusterMember
-                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
-                                }`}
-                              >
-                                {node.isClusterMember ? node.clusterName : 'Standalone'}
-                              </span>
-                            </Show>
-                          </div>
-                        </td>
-                        <td class="py-0.5 px-2 whitespace-nowrap">
-                          <div class="flex items-center gap-1">
-                            <span
-                              class={`h-2 w-2 rounded-full ${
-                                isOnline() ? 'bg-green-500' : 'bg-red-500'
-                              }`}
-                            />
-                            <span class="text-xs text-gray-600 dark:text-gray-400">
-                              {isOnline() ? 'Online' : 'Offline'}
-                            </span>
-                          </div>
-                        </td>
-                        <td class="py-0.5 px-2 min-w-[180px]">
-                          <MetricBar
-                            value={cpuPercent()}
-                            label={`${cpuPercent()}%`}
-                            sublabel={
-                              node.cpuInfo?.cores ? `${node.cpuInfo.cores} cores` : undefined
-                            }
-                            type="cpu"
-                          />
-                        </td>
-                        <td class="py-0.5 px-2 min-w-[180px]">
-                          <MetricBar
-                            value={memPercent()}
-                            label={`${memPercent()}%`}
-                            sublabel={
-                              node.memory
-                                ? `${formatBytes(node.memory.used)}/${formatBytes(node.memory.total)}`
-                                : undefined
-                            }
-                            type="memory"
-                          />
-                        </td>
-                        <td class="py-0.5 px-2 min-w-[180px]">
-                          <MetricBar
-                            value={diskPercent()}
-                            label={`${diskPercent()}%`}
-                            sublabel={
-                              node.disk
-                                ? `${formatBytes(node.disk.used)}/${formatBytes(node.disk.total)}`
-                                : undefined
-                            }
-                            type="disk"
-                          />
-                        </td>
-                        <td class="py-0.5 px-2 whitespace-nowrap text-center">
-                          <span class="text-xs text-gray-700 dark:text-gray-300">{nodeVMs()}</span>
-                        </td>
-                        <td class="py-0.5 px-2 whitespace-nowrap text-center">
-                          <span class="text-xs text-gray-700 dark:text-gray-300">
-                            {nodeContainers()}
-                          </span>
-                        </td>
-                        <td class="py-0.5 px-2 whitespace-nowrap">
-                          <span class="text-xs text-gray-600 dark:text-gray-400">
-                            {formatUptime(node.uptime)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  }}
-                </For>
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </Show>
 
       {/* Dashboard Filter */}
       <DashboardFilter

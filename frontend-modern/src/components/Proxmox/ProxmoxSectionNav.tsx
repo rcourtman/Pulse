@@ -1,14 +1,16 @@
 import type { Component } from 'solid-js';
+import { createMemo, For } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
+import { useWebSocket } from '@/App';
 
-type ProxmoxSection = 'overview' | 'storage' | 'backups';
+type ProxmoxSection = 'overview' | 'storage' | 'backups' | 'mail';
 
 interface ProxmoxSectionNavProps {
   current: ProxmoxSection;
   class?: string;
 }
 
-const sections: Array<{
+const allSections: Array<{
   id: ProxmoxSection;
   label: string;
   path: string;
@@ -24,6 +26,11 @@ const sections: Array<{
     path: '/proxmox/storage',
   },
   {
+    id: 'mail',
+    label: 'Mail Gateway',
+    path: '/proxmox/mail',
+  },
+  {
     id: 'backups',
     label: 'Backups',
     path: '/proxmox/backups',
@@ -32,13 +39,20 @@ const sections: Array<{
 
 export const ProxmoxSectionNav: Component<ProxmoxSectionNavProps> = (props) => {
   const navigate = useNavigate();
+  const { state } = useWebSocket();
+
+  // Only show Mail Gateway tab if PMG instances are configured
+  const sections = createMemo(() => {
+    const hasPMG = state.pmg && state.pmg.length > 0;
+    return allSections.filter((section) => section.id !== 'mail' || hasPMG);
+  });
 
   const baseClasses =
     'inline-flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900';
 
   return (
     <div class={`flex flex-wrap items-center gap-3 sm:gap-4 ${props.class ?? ''}`} aria-label="Proxmox sections">
-      {sections.map((section) => {
+      <For each={sections()}>{(section) => {
         const isActive = section.id === props.current;
         const classes = isActive
           ? `${baseClasses} text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400`
@@ -54,7 +68,7 @@ export const ProxmoxSectionNav: Component<ProxmoxSectionNavProps> = (props) => {
             <span>{section.label}</span>
           </button>
         );
-      })}
+      }}</For>
     </div>
   );
 };
