@@ -1,6 +1,6 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import type { Node, VM, Container, Storage, PBSInstance } from '@/types/api';
-import { formatBytes, formatUptime, formatRelativeTime } from '@/utils/format';
+import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
