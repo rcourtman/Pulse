@@ -6,6 +6,7 @@ import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
+import { CommandBuilder } from './CommandBuilder';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
@@ -71,19 +72,15 @@ export const DockerAgents: Component = () => {
     return true;
   };
 
-  const tokenArgument = () => {
-    if (!requiresToken()) {
-      return ' --token disabled';
-    }
-    const token = apiToken();
-    return token ? ` --token '${token}'` : ` --token ${TOKEN_PLACEHOLDER}`;
-  };
-
   const tokenAvailable = () => requiresToken() && Boolean(apiToken());
 
-  const getInstallCommand = () => {
+  // Always return command template with placeholder - CommandBuilder will do the substitution
+  const getInstallCommandTemplate = () => {
     const url = pulseUrl();
-    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url}${tokenArgument()}`;
+    if (!requiresToken()) {
+      return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url} --token disabled`;
+    }
+    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER}`;
   };
 
   const getUninstallCommand = () => {
@@ -92,7 +89,7 @@ export const DockerAgents: Component = () => {
   };
 
   const getSystemdService = () => {
-    const token = requiresToken() ? apiToken() ?? TOKEN_PLACEHOLDER : 'disabled';
+    const token = requiresToken() ? TOKEN_PLACEHOLDER : 'disabled';
     return `[Unit]
 Description=Pulse Docker Agent
 After=network-online.target docker.service
@@ -193,40 +190,29 @@ WantedBy=multi-user.target`;
 
           {/* Quick Install - One-liner */}
           <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Quick install (one command)
-              </h4>
-              <button
-                type="button"
-                onClick={() => copyToClipboard(getInstallCommand())}
-                class="px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                title="Copy to clipboard"
-              >
-                Copy command
-              </button>
-            </div>
-            <div class="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto">
-              <code class="text-sm text-green-400 font-mono">{getInstallCommand()}</code>
-            </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              <Show
-                when={requiresToken()}
-                fallback={<span>Authentication is disabled, so Pulse runs the agent without an API token.</span>}
-              >
-                <Show
-                  when={tokenAvailable()}
-                  fallback={
-                    <>
-                      Replace <code class="px-1 bg-gray-100 dark:bg-gray-800 rounded">{TOKEN_PLACEHOLDER}</code> with the API token from{' '}
-                      <span class="font-medium">Settings → Security</span>.
-                    </>
-                  }
-                >
-                  <span>Your stored API token is pre-filled. Review the command before running to keep the token secure.</span>
-                </Show>
-              </Show>{' '}
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Quick install (one command)
+            </h4>
+            <CommandBuilder
+              command={getInstallCommandTemplate()}
+              placeholder={TOKEN_PLACEHOLDER}
+              storedToken={apiToken()}
+              currentTokenHint={securityStatus()?.apiTokenHint}
+              requiresToken={requiresToken()}
+              hasExistingToken={Boolean(securityStatus()?.apiTokenConfigured)}
+              onTokenGenerated={(token) => {
+                setApiToken(token);
+                // If user already had a token in localStorage, save the new one too
+                if (typeof window !== 'undefined' && window.localStorage.getItem('apiToken')) {
+                  window.localStorage.setItem('apiToken', token);
+                }
+              }}
+            />
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
               The script downloads the agent, creates a systemd service, and starts monitoring automatically.
+              <Show when={!requiresToken()}>
+                <span class="ml-1 font-medium">Authentication is disabled, so the agent runs without an API token.</span>
+              </Show>
             </p>
           </div>
 

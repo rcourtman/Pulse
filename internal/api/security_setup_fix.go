@@ -361,22 +361,34 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 
 	// Check if using proxy auth and if so, verify admin status
 	if r.config.ProxyAuthSecret != "" {
-		if valid, username, isAdmin := CheckProxyAuth(r.config, rq); valid {
-			if !isAdmin {
-				// User is authenticated but not an admin
-				log.Warn().
-					Str("ip", rq.RemoteAddr).
-					Str("path", rq.URL.Path).
-					Str("method", rq.Method).
-					Str("username", username).
-					Msg("Non-admin user attempted to regenerate API token")
+		valid, username, isAdmin := CheckProxyAuth(r.config, rq)
+		if !valid {
+			// Proxy auth is configured but validation failed - reject immediately
+			log.Warn().
+				Str("ip", rq.RemoteAddr).
+				Str("path", rq.URL.Path).
+				Str("method", rq.Method).
+				Msg("Proxy authentication failed for API token regeneration")
 
-				// Return forbidden error
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				w.Write([]byte(`{"error":"Admin privileges required"}`))
-				return
-			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"Authentication required"}`))
+			return
+		}
+		if !isAdmin {
+			// User is authenticated but not an admin
+			log.Warn().
+				Str("ip", rq.RemoteAddr).
+				Str("path", rq.URL.Path).
+				Str("method", rq.Method).
+				Str("username", username).
+				Msg("Non-admin user attempted to regenerate API token")
+
+			// Return forbidden error
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"Admin privileges required"}`))
+			return
 		}
 	}
 
@@ -463,6 +475,120 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		"deploymentType":  deploymentType,
 		"requiresRestart": false,
 		"message":         "New API token generated and active immediately! Save this token - it won't be shown again.",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleValidateAPIToken validates an API token without logging it
+func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request) {
+	if rq.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Require authentication to prevent unauthenticated token guessing oracle
+	// Use same auth logic as regenerate-token endpoint
+	if !r.config.DisableAuth && (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
+		return
+	}
+
+	// Check if using proxy auth and if so, verify admin status
+	if r.config.ProxyAuthSecret != "" {
+		valid, username, isAdmin := CheckProxyAuth(r.config, rq)
+		if !valid {
+			// Proxy auth is configured but validation failed - reject immediately
+			log.Warn().
+				Str("ip", rq.RemoteAddr).
+				Str("path", rq.URL.Path).
+				Str("method", rq.Method).
+				Msg("Proxy authentication failed for API token validation")
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"Authentication required"}`))
+			return
+		}
+		if !isAdmin {
+			// User is authenticated but not an admin
+			log.Warn().
+				Str("ip", rq.RemoteAddr).
+				Str("path", rq.URL.Path).
+				Str("method", rq.Method).
+				Str("username", username).
+				Msg("Non-admin user attempted to validate API token")
+
+			// Return forbidden error
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"Admin privileges required"}`))
+			return
+		}
+	}
+
+	// Apply rate limiting to prevent brute force attacks
+	clientIP := GetClientIP(rq)
+	if !authLimiter.Allow(clientIP) {
+		log.Warn().Str("ip", clientIP).Msg("Rate limit exceeded for API token validation")
+		http.Error(w, "Too many attempts. Please try again later.", http.StatusTooManyRequests)
+		return
+	}
+
+	// Parse request body
+	var validateRequest struct {
+		Token string `json:"token"`
+	}
+
+	if err := json.NewDecoder(rq.Body).Decode(&validateRequest); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if validateRequest.Token == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": "Token is required",
+		})
+		return
+	}
+
+	// Check if API token auth is enabled
+	if !r.config.APITokenEnabled || r.config.APIToken == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": "API token authentication is not configured",
+		})
+		return
+	}
+
+	// Validate the token (compare hash)
+	hashedProvidedToken := internalauth.HashAPIToken(validateRequest.Token)
+	isValid := hashedProvidedToken == r.config.APIToken
+
+	// Log validation attempt without logging the token itself
+	if isValid {
+		log.Debug().
+			Str("ip", clientIP).
+			Msg("API token validation successful")
+	} else {
+		log.Warn().
+			Str("ip", clientIP).
+			Msg("API token validation failed")
+	}
+
+	// Return validation result
+	response := map[string]interface{}{
+		"valid": isValid,
+	}
+
+	if isValid {
+		response["message"] = "Token is valid"
+	} else {
+		response["message"] = "Token is invalid"
 	}
 
 	w.Header().Set("Content-Type", "application/json")
