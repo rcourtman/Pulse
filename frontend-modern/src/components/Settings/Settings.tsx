@@ -10,6 +10,7 @@ import { DockerAgents } from './DockerAgents';
 import { OIDCPanel } from './OIDCPanel';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
+import { UpdateHistoryPanel } from './UpdateHistoryPanel';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -110,7 +111,8 @@ type SettingsTab =
   | 'system'
   | 'urls'
   | 'security'
-  | 'diagnostics';
+  | 'diagnostics'
+  | 'updates';
 
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
   pve: {
@@ -145,6 +147,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'Diagnostics',
     description: 'Inspect discovery scans, connection health, and runtime metrics for troubleshooting.',
   },
+  updates: {
+    title: 'Update History',
+    description: 'Review past software updates, rollback events, and upgrade audit logs.',
+  },
 };
 
 // Node with UI-specific fields
@@ -174,6 +180,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security')) return 'security';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
     if (path.includes('/settings/urls')) return 'urls';
+    if (path.includes('/settings/updates')) return 'updates';
     return 'pve'; // default
   };
 
@@ -305,6 +312,7 @@ const Settings: Component<SettingsProps> = (props) => {
         { id: 'system', label: 'System' },
         { id: 'security', label: 'Security' },
         { id: 'diagnostics', label: 'Diagnostics' },
+        { id: 'updates', label: 'Update History' },
       ],
     },
   ];
@@ -4289,6 +4297,11 @@ const Settings: Component<SettingsProps> = (props) => {
                 hasUnsavedChanges={hasUnsavedChanges}
                 setHasUnsavedChanges={setHasUnsavedChanges}
               />
+            </Show>
+
+            {/* Update History Tab */}
+            <Show when={activeTab() === 'updates'}>
+              <UpdateHistoryPanel />
             </Show>
           </div>
           </div>
