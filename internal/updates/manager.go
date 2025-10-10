@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -58,28 +60,52 @@ type Manager struct {
 	config        *config.Config
 	status        UpdateStatus
 	statusMu      sync.RWMutex
-	checkCache    *UpdateInfo
-	cacheTime     time.Time
+	checkCache    map[string]*UpdateInfo // keyed by channel
+	cacheTime     map[string]time.Time   // keyed by channel
 	cacheDuration time.Duration
 	progressChan  chan UpdateStatus
+	history       *UpdateHistory
 }
 
 // NewManager creates a new update manager
 func NewManager(cfg *config.Config) *Manager {
-	return &Manager{
+	// Initialize update history
+	dataDir := os.Getenv("PULSE_DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/var/lib/pulse"
+	}
+	history, err := NewUpdateHistory(dataDir)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize update history, history tracking will be disabled")
+	}
+
+	m := &Manager{
 		config:        cfg,
+		checkCache:    make(map[string]*UpdateInfo),
+		cacheTime:     make(map[string]time.Time),
 		cacheDuration: 5 * time.Minute, // Cache update checks for 5 minutes
 		progressChan:  make(chan UpdateStatus, 100),
+		history:       history,
 		status: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
 		},
 	}
+
+	// Clean up old temp directories from previous failed/killed updates
+	go m.cleanupOldTempDirs()
+
+	return m
 }
 
 // GetProgressChannel returns the channel for update progress
 func (m *Manager) GetProgressChannel() <-chan UpdateStatus {
 	return m.progressChan
+}
+
+// Close closes the progress channel and cleans up resources
+func (m *Manager) Close() {
+	close(m.progressChan)
 }
 
 // CheckForUpdates checks GitHub for available updates using saved config channel
@@ -96,6 +122,9 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("failed to get current version: %w", err)
 	}
 
+	// Track whether an explicit channel override was provided
+	explicitChannelProvided := channel != ""
+
 	// Use provided channel, or fall back to config, or auto-detect from current version
 	if channel == "" {
 		channel = m.config.UpdateChannel
@@ -109,11 +138,19 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	}
 
 	// Don't use cache when channel is explicitly provided (UI might have changed it)
-	useCache := channel == m.config.UpdateChannel || channel == ""
+	// But DO use cache for auto-detected or default channels
+	useCache := !explicitChannelProvided
 
 	// Check cache first (only if using saved channel)
-	if useCache && m.checkCache != nil && time.Since(m.cacheTime) < m.cacheDuration {
-		return m.checkCache, nil
+	if useCache {
+		m.statusMu.RLock()
+		cachedInfo, hasCached := m.checkCache[channel]
+		cachedTime, hasTime := m.cacheTime[channel]
+		if hasCached && hasTime && time.Since(cachedTime) < m.cacheDuration {
+			m.statusMu.RUnlock()
+			return cachedInfo, nil
+		}
+		m.statusMu.RUnlock()
 	}
 
 	m.updateStatus("checking", 0, "Checking for updates...")
@@ -126,8 +163,10 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 			LatestVersion:  currentInfo.Version,
 		}
 		if useCache {
-			m.checkCache = info
-			m.cacheTime = time.Now()
+			m.statusMu.Lock()
+			m.checkCache[channel] = info
+			m.cacheTime[channel] = time.Now()
+			m.statusMu.Unlock()
 		}
 		m.updateStatus("idle", 0, "Updates not available in Docker")
 		return info, nil
@@ -201,8 +240,10 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 
 	// Cache the result (only if using saved channel)
 	if useCache {
-		m.checkCache = info
-		m.cacheTime = time.Now()
+		m.statusMu.Lock()
+		m.checkCache[channel] = info
+		m.cacheTime[channel] = time.Now()
+		m.statusMu.Unlock()
 	}
 
 	status := "idle"
@@ -218,6 +259,8 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 
 // ApplyUpdate downloads and applies an update
 func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
+	startTime := time.Now()
+
 	// Validate download URL (allow test server URLs when PULSE_UPDATE_SERVER is set)
 	if os.Getenv("PULSE_UPDATE_SERVER") == "" {
 		if !strings.HasPrefix(downloadURL, "https://github.com/rcourtman/Pulse/releases/download/") {
@@ -234,6 +277,67 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	// Check for pre-v4 installation
 	if isPreV4Installation() {
 		return fmt.Errorf("manual migration required: Pulse v4 is a complete rewrite. Please create a fresh installation. See https://github.com/rcourtman/Pulse/releases/v4.0.0")
+	}
+
+	// Extract target version from download URL
+	targetVersion := "unknown"
+	if parts := strings.Split(downloadURL, "/"); len(parts) > 0 {
+		for _, part := range parts {
+			if strings.HasPrefix(part, "v") {
+				targetVersion = part
+				break
+			}
+		}
+	}
+
+	// Create history entry if history is available
+	var historyEventID string
+	if m.history != nil {
+		deploymentType := "systemd" // Default
+		if currentInfo.IsDocker {
+			deploymentType = "docker"
+		}
+
+		entry := UpdateHistoryEntry{
+			Action:         ActionUpdate,
+			Channel:        m.config.UpdateChannel,
+			VersionFrom:    currentInfo.Version,
+			VersionTo:      targetVersion,
+			DeploymentType: deploymentType,
+			InitiatedBy:    InitiatedByUser, // Assuming API calls are user-initiated
+			InitiatedVia:   InitiatedViaUI,
+			Status:         StatusInProgress,
+		}
+
+		eventID, err := m.history.CreateEntry(ctx, entry)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to create update history entry")
+		} else {
+			historyEventID = eventID
+		}
+	}
+
+	// Wrapper function to update history on completion
+	updateHistoryOnComplete := func(err error, backupPath string) {
+		if m.history != nil && historyEventID != "" {
+			duration := time.Since(startTime).Milliseconds()
+
+			m.history.UpdateEntry(ctx, historyEventID, func(entry *UpdateHistoryEntry) error {
+				entry.DurationMs = duration
+				entry.BackupPath = backupPath
+
+				if err != nil {
+					entry.Status = StatusFailed
+					entry.Error = &UpdateError{
+						Message: err.Error(),
+					}
+				} else {
+					entry.Status = StatusSuccess
+				}
+
+				return nil
+			})
+		}
 	}
 
 	m.updateStatus("downloading", 10, "Downloading update...")
@@ -269,7 +373,17 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	tarballPath := filepath.Join(tempDir, "update.tar.gz")
 	if err := m.downloadFile(ctx, downloadURL, tarballPath); err != nil {
 		m.updateStatus("error", 20, "Failed to download update")
+		updateHistoryOnComplete(err, "")
 		return fmt.Errorf("failed to download update: %w", err)
+	}
+
+	// Verify checksum if available
+	m.updateStatus("verifying", 30, "Verifying download...")
+	if err := m.verifyChecksum(ctx, downloadURL, tarballPath); err != nil {
+		// Log warning but don't fail - checksums might not be available for all releases
+		log.Warn().Err(err).Msg("Checksum verification failed or unavailable")
+	} else {
+		log.Info().Msg("Checksum verification passed")
 	}
 
 	m.updateStatus("extracting", 40, "Extracting update...")
@@ -278,6 +392,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	extractDir := filepath.Join(tempDir, "extracted")
 	if err := m.extractTarball(tarballPath, extractDir); err != nil {
 		m.updateStatus("error", 40, "Failed to extract update")
+		updateHistoryOnComplete(err, "")
 		return fmt.Errorf("failed to extract update: %w", err)
 	}
 
@@ -287,6 +402,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	backupPath, err := m.createBackup()
 	if err != nil {
 		m.updateStatus("error", 60, "Failed to create backup")
+		updateHistoryOnComplete(err, "")
 		return fmt.Errorf("failed to create backup: %w", err)
 	}
 	log.Info().Str("backup", backupPath).Msg("Created backup")
@@ -315,10 +431,14 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 		if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
 			log.Error().Err(restoreErr).Msg("Failed to restore backup")
 		}
+		updateHistoryOnComplete(err, backupPath)
 		return fmt.Errorf("failed to apply update: %w", err)
 	}
 
 	m.updateStatus("restarting", 95, "Restarting service...")
+
+	// Update history with success before restarting
+	updateHistoryOnComplete(nil, backupPath)
 
 	// Schedule a clean exit after a short delay - systemd will restart us
 	go func() {
@@ -340,10 +460,24 @@ func (m *Manager) GetStatus() UpdateStatus {
 
 // GetCachedUpdateInfo returns the cached update info without making a network request
 // Returns nil if no cached info is available
+// Uses the configured or auto-detected channel
 func (m *Manager) GetCachedUpdateInfo() *UpdateInfo {
+	// Determine which channel to use (same logic as CheckForUpdates)
+	channel := m.config.UpdateChannel
+	if channel == "" {
+		// Try to auto-detect from current version
+		currentInfo, err := GetCurrentVersion()
+		if err == nil && currentInfo.Channel != "" {
+			channel = currentInfo.Channel
+		}
+	}
+	if channel == "" {
+		channel = "stable"
+	}
+
 	m.statusMu.RLock()
 	defer m.statusMu.RUnlock()
-	return m.checkCache
+	return m.checkCache[channel]
 }
 
 // getLatestRelease fetches the latest release from GitHub using saved config
@@ -400,12 +534,13 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("failed to decode releases: %w", err)
 	}
 
-	// Find latest release based on channel and current version
-	// RC channel: return newest release (RC or stable) that's > currentVer
-	// Stable channel: return newest stable release that's > currentVer
+	// Find latest release based on channel
+	// RC channel: return newest release (RC or stable), even if not newer than current
+	// Stable channel: return newest stable release, even if not newer than current
+	// The caller will determine if it's actually an update by comparing versions
 	if channel == "rc" {
-		// For RC channel: find newest release (RC or stable) that's greater than current version
-		// RC users should see both new RCs and new stable releases
+		// For RC channel: find newest release (RC or stable)
+		// RC users should see both RCs and stable releases
 		var newestRC *ReleaseInfo
 		var newestStable *ReleaseInfo
 
@@ -413,11 +548,6 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 			releaseVer, err := ParseVersion(releases[i].TagName)
 			if err != nil {
 				log.Debug().Str("tag", releases[i].TagName).Err(err).Msg("Failed to parse release version")
-				continue
-			}
-
-			// Only consider releases newer than current version
-			if !releaseVer.IsNewerThan(currentVer) {
 				continue
 			}
 
@@ -450,26 +580,40 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 			stableVer, _ := ParseVersion(newestStable.TagName)
 			rcVer, _ := ParseVersion(newestRC.TagName)
 			if stableVer.IsNewerThan(rcVer) {
-				log.Info().
-					Str("stable", newestStable.TagName).
-					Str("rc", newestRC.TagName).
-					Msg("Found both stable and RC updates, preferring stable")
+				isUpdate := stableVer.IsNewerThan(currentVer)
+				if isUpdate {
+					log.Info().Str("version", newestStable.TagName).Msg("Found stable update for RC user")
+				} else {
+					log.Info().Str("version", newestStable.TagName).Msg("On latest stable version")
+				}
 				return newestStable, nil
 			}
-			log.Info().
-				Str("rc", newestRC.TagName).
-				Str("stable", newestStable.TagName).
-				Msg("Found both RC and stable updates, preferring RC")
+			isUpdate := rcVer.IsNewerThan(currentVer)
+			if isUpdate {
+				log.Info().Str("version", newestRC.TagName).Msg("Found RC update")
+			} else {
+				log.Info().Str("version", newestRC.TagName).Msg("On latest RC version")
+			}
 			return newestRC, nil
 		} else if newestStable != nil {
-			log.Info().Str("version", newestStable.TagName).Msg("Found stable update for RC user")
+			isUpdate := newestStable.TagName != currentVer.String()
+			if isUpdate {
+				log.Info().Str("version", newestStable.TagName).Msg("Found stable update for RC user")
+			} else {
+				log.Info().Str("version", newestStable.TagName).Msg("On latest stable version")
+			}
 			return newestStable, nil
 		} else if newestRC != nil {
-			log.Info().Str("version", newestRC.TagName).Msg("Found RC update")
+			isUpdate := newestRC.TagName != currentVer.String()
+			if isUpdate {
+				log.Info().Str("version", newestRC.TagName).Msg("Found RC update")
+			} else {
+				log.Info().Str("version", newestRC.TagName).Msg("On latest RC version")
+			}
 			return newestRC, nil
 		}
 	} else {
-		// For stable channel: find latest non-prerelease that's greater than current version
+		// For stable channel: find latest non-prerelease
 		for i := range releases {
 			if releases[i].Prerelease {
 				continue
@@ -481,16 +625,20 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 				continue
 			}
 
-			// Only consider releases newer than current version
-			if releaseVer.IsNewerThan(currentVer) {
+			// Found the latest stable release
+			isUpdate := releaseVer.IsNewerThan(currentVer)
+			if isUpdate {
 				log.Info().Str("version", releases[i].TagName).Msg("Found stable update")
-				return &releases[i], nil
+			} else {
+				log.Info().Str("version", releases[i].TagName).Msg("On latest stable version")
 			}
+			return &releases[i], nil
 		}
 	}
 
-	log.Info().Str("channel", channel).Msg("No updates found")
-	return nil, fmt.Errorf("no updates found for channel %s", channel)
+	// No releases found at all for this channel
+	log.Warn().Str("channel", channel).Msg("No releases found for channel")
+	return nil, fmt.Errorf("no releases found for channel %s", channel)
 }
 
 // downloadFile downloads a file from URL to dest
@@ -524,6 +672,108 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) error {
 	}
 
 	log.Info().Int64("bytes", written).Str("file", dest).Msg("Downloaded file")
+	return nil
+}
+
+// verifyChecksum downloads and verifies the SHA256 checksum of a file
+func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath string) error {
+	// Try to find checksum file URL by deriving from tarball URL
+	// Example: pulse-v4.22.0-linux-amd64.tar.gz -> SHA256SUMS or checksums.txt
+	baseURL := tarballURL[:strings.LastIndex(tarballURL, "/")+1]
+
+	// Common checksum file names used in GitHub releases
+	checksumNames := []string{"SHA256SUMS", "checksums.txt", "SHA256SUMS.txt"}
+
+	var checksumContent string
+	var checksumErr error
+
+	// Try each checksum filename
+	for _, name := range checksumNames {
+		checksumURL := baseURL + name
+
+		req, err := http.NewRequestWithContext(ctx, "GET", checksumURL, nil)
+		if err != nil {
+			continue
+		}
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			body, err := io.ReadAll(resp.Body)
+			if err == nil {
+				checksumContent = string(body)
+				log.Info().Str("file", name).Msg("Found checksum file")
+				break
+			}
+		}
+	}
+
+	if checksumContent == "" {
+		return fmt.Errorf("no checksum file found")
+	}
+
+	// Parse checksum file to find the hash for our tarball
+	tarballName := filepath.Base(tarballURL)
+	expectedHash := ""
+
+	for _, line := range strings.Split(checksumContent, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Format: "hash  filename" or "hash *filename"
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			hash := parts[0]
+			filename := parts[1]
+			// Remove leading * if present (indicates binary mode)
+			filename = strings.TrimPrefix(filename, "*")
+
+			if filename == tarballName {
+				expectedHash = strings.ToLower(hash)
+				break
+			}
+		}
+	}
+
+	if expectedHash == "" {
+		return fmt.Errorf("checksum not found for %s in checksum file", tarballName)
+	}
+
+	// Compute SHA256 of downloaded file
+	file, err := os.Open(tarballPath)
+	if err != nil {
+		return fmt.Errorf("failed to open tarball for checksum: %w", err)
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return fmt.Errorf("failed to compute checksum: %w", err)
+	}
+
+	actualHash := hex.EncodeToString(hash.Sum(nil))
+
+	// Compare hashes
+	if actualHash != expectedHash {
+		checksumErr = fmt.Errorf("checksum mismatch: expected %s, got %s", expectedHash, actualHash)
+		log.Error().
+			Str("expected", expectedHash).
+			Str("actual", actualHash).
+			Msg("Checksum verification failed")
+		return checksumErr
+	}
+
+	log.Info().
+		Str("hash", actualHash).
+		Msg("Checksum verified successfully")
+
 	return nil
 }
 
@@ -622,8 +872,7 @@ func (m *Manager) createBackup() (string, error) {
 		dest := filepath.Join(backupDir, dir)
 
 		if _, err := os.Stat(src); err == nil {
-			cmd := exec.Command("cp", "-r", src, dest)
-			if err := cmd.Run(); err != nil {
+			if err := m.copyDirSafe(src, dest); err != nil {
 				log.Warn().Str("dir", dir).Err(err).Msg("Failed to backup directory")
 			}
 		}
@@ -633,9 +882,28 @@ func (m *Manager) createBackup() (string, error) {
 	envSrc := filepath.Join(pulseDir, ".env")
 	if _, err := os.Stat(envSrc); err == nil {
 		envDest := filepath.Join(backupDir, ".env")
-		cmd := exec.Command("cp", envSrc, envDest)
-		if err := cmd.Run(); err != nil {
+		if err := m.copyFileSafe(envSrc, envDest); err != nil {
 			log.Warn().Err(err).Msg("Failed to backup .env file")
+		}
+	}
+
+	// Backup the pulse binary itself
+	binaryPath, err := os.Executable()
+	if err == nil {
+		binaryDest := filepath.Join(backupDir, "pulse")
+		if err := m.copyFileSafe(binaryPath, binaryDest); err != nil {
+			log.Warn().Err(err).Msg("Failed to backup pulse binary")
+		} else {
+			log.Info().Str("binary", binaryPath).Msg("Backed up pulse binary")
+		}
+	}
+
+	// Backup VERSION file if it exists
+	versionSrc := filepath.Join(pulseDir, "VERSION")
+	if _, err := os.Stat(versionSrc); err == nil {
+		versionDest := filepath.Join(backupDir, "VERSION")
+		if err := m.copyFileSafe(versionSrc, versionDest); err != nil {
+			log.Warn().Err(err).Msg("Failed to backup VERSION file")
 		}
 	}
 
@@ -653,8 +921,11 @@ func (m *Manager) restoreBackup(backupDir string) error {
 		dest := filepath.Join(pulseDir, dir)
 
 		if _, err := os.Stat(src); err == nil {
-			cmd := exec.Command("cp", "-r", src, dest)
-			if err := cmd.Run(); err != nil {
+			// Remove existing directory first
+			if err := os.RemoveAll(dest); err != nil {
+				return fmt.Errorf("failed to remove existing %s: %w", dir, err)
+			}
+			if err := m.copyDirSafe(src, dest); err != nil {
 				return fmt.Errorf("failed to restore %s: %w", dir, err)
 			}
 		}
@@ -664,9 +935,37 @@ func (m *Manager) restoreBackup(backupDir string) error {
 	envSrc := filepath.Join(backupDir, ".env")
 	if _, err := os.Stat(envSrc); err == nil {
 		envDest := filepath.Join(pulseDir, ".env")
-		cmd := exec.Command("cp", envSrc, envDest)
-		if err := cmd.Run(); err != nil {
+		if err := m.copyFileSafe(envSrc, envDest); err != nil {
 			return fmt.Errorf("failed to restore .env: %w", err)
+		}
+	}
+
+	// Restore the pulse binary if it exists in backup
+	binarySrc := filepath.Join(backupDir, "pulse")
+	if _, err := os.Stat(binarySrc); err == nil {
+		binaryPath, err := os.Executable()
+		if err == nil {
+			// Create temp copy first, then atomic rename
+			tempBinary := binaryPath + ".restored"
+			if err := m.copyFileSafe(binarySrc, tempBinary); err != nil {
+				return fmt.Errorf("failed to restore pulse binary: %w", err)
+			}
+			if err := os.Chmod(tempBinary, 0755); err != nil {
+				return fmt.Errorf("failed to set binary permissions: %w", err)
+			}
+			if err := os.Rename(tempBinary, binaryPath); err != nil {
+				return fmt.Errorf("failed to replace binary: %w", err)
+			}
+			log.Info().Str("binary", binaryPath).Msg("Restored pulse binary")
+		}
+	}
+
+	// Restore VERSION file if it exists in backup
+	versionSrc := filepath.Join(backupDir, "VERSION")
+	if _, err := os.Stat(versionSrc); err == nil {
+		versionDest := filepath.Join(pulseDir, "VERSION")
+		if err := m.copyFileSafe(versionSrc, versionDest); err != nil {
+			log.Warn().Err(err).Msg("Failed to restore VERSION file")
 		}
 	}
 
@@ -762,6 +1061,139 @@ func (m *Manager) updateStatus(status string, progress int, message string) {
 	case m.progressChan <- statusCopy:
 	default:
 	}
+}
+
+// cleanupOldTempDirs removes old pulse-update-* temp directories from previous runs
+func (m *Manager) cleanupOldTempDirs() {
+	// Check multiple locations where temp dirs might exist
+	dataDir := os.Getenv("PULSE_DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/etc/pulse"
+	}
+
+	dirsToCheck := []string{"/tmp", dataDir, "."}
+
+	for _, dir := range dirsToCheck {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue // Directory not accessible, skip
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+
+			// Check if it matches pulse-update-* pattern
+			if !strings.HasPrefix(entry.Name(), "pulse-update-") {
+				continue
+			}
+
+			fullPath := filepath.Join(dir, entry.Name())
+			info, err := os.Stat(fullPath)
+			if err != nil {
+				continue
+			}
+
+			// Remove directories older than 24 hours
+			if time.Since(info.ModTime()) > 24*time.Hour {
+				if err := os.RemoveAll(fullPath); err != nil {
+					log.Debug().Err(err).Str("path", fullPath).Msg("Failed to cleanup old temp directory")
+				} else {
+					log.Info().Str("path", fullPath).Msg("Cleaned up old temp directory")
+				}
+			}
+		}
+	}
+}
+
+// copyFileSafe safely copies a file, skipping symlinks for security
+func (m *Manager) copyFileSafe(src, dest string) error {
+	// Get file info and check if it's a symlink
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+
+	// Skip symlinks for security
+	if info.Mode()&os.ModeSymlink != 0 {
+		log.Warn().Str("file", src).Msg("Skipping symlink during backup/restore")
+		return nil
+	}
+
+	// Open source file
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	// Create destination file with same permissions
+	destFile, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	// Copy contents
+	if _, err := io.Copy(destFile, srcFile); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// copyDirSafe recursively copies a directory, skipping symlinks for security
+func (m *Manager) copyDirSafe(src, dest string) error {
+	// Get source directory info
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	// Create destination directory
+	if err := os.MkdirAll(dest, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	// Read source directory entries
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		destPath := filepath.Join(dest, entry.Name())
+
+		// Get file info (using Lstat to detect symlinks)
+		info, err := os.Lstat(srcPath)
+		if err != nil {
+			log.Warn().Str("path", srcPath).Err(err).Msg("Failed to stat file during copy")
+			continue
+		}
+
+		// Skip symlinks for security
+		if info.Mode()&os.ModeSymlink != 0 {
+			log.Warn().Str("path", srcPath).Msg("Skipping symlink during backup/restore")
+			continue
+		}
+
+		if entry.IsDir() {
+			// Recursively copy subdirectory
+			if err := m.copyDirSafe(srcPath, destPath); err != nil {
+				return err
+			}
+		} else {
+			// Copy file
+			if err := m.copyFileSafe(srcPath, destPath); err != nil {
+				log.Warn().Str("file", srcPath).Err(err).Msg("Failed to copy file")
+				continue
+			}
+		}
+	}
+
+	return nil
 }
 
 // isPreV4Installation checks if this is a pre-v4 (Node.js based) installation
