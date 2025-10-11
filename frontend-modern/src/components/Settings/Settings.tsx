@@ -178,9 +178,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Derive active tab from URL path
-  const activeTab = () => {
-    const path = location.pathname;
+  const deriveTabFromPath = (path: string): SettingsTab => {
     if (path.includes('/settings/pbs')) return 'pbs';
     if (path.includes('/settings/pmg')) return 'pmg';
     if (path.includes('/settings/docker')) return 'docker';
@@ -189,11 +187,20 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
     if (path.includes('/settings/urls')) return 'urls';
     if (path.includes('/settings/updates')) return 'updates';
-    return 'pve'; // default
+    return 'pve';
   };
 
+  const [currentTab, setCurrentTab] = createSignal<SettingsTab>(deriveTabFromPath(location.pathname));
+  const activeTab = () => currentTab();
+
   const setActiveTab = (tab: SettingsTab) => {
-    navigate(`/settings/${tab}`);
+    if (currentTab() !== tab) {
+      setCurrentTab(tab);
+    }
+    const targetPath = `/settings/${tab}`;
+    if (location.pathname !== targetPath) {
+      navigate(targetPath);
+    }
   };
 
   const headerMeta = () =>
@@ -202,12 +209,26 @@ const Settings: Component<SettingsProps> = (props) => {
       description: 'Manage Pulse configuration.',
     };
 
-  // Redirect /settings to /settings/pve on initial load
-  createEffect(() => {
-    if (location.pathname === '/settings' || location.pathname === '/settings/') {
-      navigate('/settings/pve', { replace: true });
-    }
-  });
+  // Keep tab state in sync with URL and handle /settings redirect without flicker
+  createEffect(
+    on(
+      () => location.pathname,
+      (path) => {
+        if (path === '/settings' || path === '/settings/') {
+          if (currentTab() !== 'pve') {
+            setCurrentTab('pve');
+          }
+          navigate('/settings/pve', { replace: true });
+          return;
+        }
+
+        const resolved = deriveTabFromPath(path);
+        if (resolved !== currentTab()) {
+          setCurrentTab(resolved);
+        }
+      },
+    ),
+  );
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(true);
