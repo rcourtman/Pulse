@@ -161,11 +161,17 @@ FRONTEND_PORT=${PULSE_DEV_API_PORT}
 PORT=${PULSE_DEV_API_PORT}
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT
 
-# MUST export PULSE_DATA_DIR so backend uses dev-config directory
-PULSE_DATA_DIR=${PULSE_DATA_DIR:-/etc/pulse}
-export PULSE_DATA_DIR
+# Set data directory based on mock mode to keep data isolated
+if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
+    export PULSE_DATA_DIR=/opt/pulse/tmp/mock-data
+    # Ensure mock data directory exists
+    mkdir -p "$PULSE_DATA_DIR"
+    echo "[hot-dev] Mock mode: Using isolated data directory: ${PULSE_DATA_DIR}"
+else
+    export PULSE_DATA_DIR=/etc/pulse
+    echo "[hot-dev] Production mode: Using production config: ${PULSE_DATA_DIR}"
+fi
 
-echo "[hot-dev] Backend will use config directory: ${PULSE_DATA_DIR}"
 ./pulse &
 BACKEND_PID=$!
 
