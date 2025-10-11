@@ -21,6 +21,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// TargetConfig describes a single Pulse backend the agent should report to.
+type TargetConfig struct {
+	URL                string
+	Token              string
+	InsecureSkipVerify bool
+}
+
 // Config describes runtime configuration for the Docker agent.
 type Config struct {
 	PulseURL           string
@@ -29,46 +36,72 @@ type Config struct {
 	HostnameOverride   string
 	AgentID            string
 	InsecureSkipVerify bool
+	Targets            []TargetConfig
 	Logger             *zerolog.Logger
 }
 
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
-	cfg        Config
-	docker     *client.Client
-	httpClient *http.Client
-	logger     zerolog.Logger
-	machineID  string
-	hostName   string
-	cpuCount   int
+	cfg         Config
+	docker      *client.Client
+	httpClients map[bool]*http.Client
+	logger      zerolog.Logger
+	machineID   string
+	hostName    string
+	cpuCount    int
+	targets     []TargetConfig
 }
 
 // New creates a new Docker agent instance.
 func New(cfg Config) (*Agent, error) {
-	if cfg.PulseURL == "" {
-		return nil, errors.New("pulse URL is required")
-	}
-	if cfg.APIToken == "" {
-		return nil, errors.New("pulse API token is required")
+	targets, err := normalizeTargets(cfg.Targets)
+	if err != nil {
+		return nil, err
 	}
 
-	trimmedURL := strings.TrimSpace(cfg.PulseURL)
-	trimmedURL = strings.TrimRight(trimmedURL, "/")
-	cfg.PulseURL = trimmedURL
+	if len(targets) == 0 {
+		url := strings.TrimSpace(cfg.PulseURL)
+		token := strings.TrimSpace(cfg.APIToken)
+		if url == "" || token == "" {
+			return nil, errors.New("at least one Pulse target is required")
+		}
+
+		targets, err = normalizeTargets([]TargetConfig{{
+			URL:                url,
+			Token:              token,
+			InsecureSkipVerify: cfg.InsecureSkipVerify,
+		}})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	cfg.Targets = targets
+	cfg.PulseURL = targets[0].URL
+	cfg.APIToken = targets[0].Token
+	cfg.InsecureSkipVerify = targets[0].InsecureSkipVerify
 
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
 
-	httpTransport := &http.Transport{}
-	if cfg.InsecureSkipVerify {
-		httpTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+	hasSecure := false
+	hasInsecure := false
+	for _, target := range cfg.Targets {
+		if target.InsecureSkipVerify {
+			hasInsecure = true
+		} else {
+			hasSecure = true
+		}
 	}
 
-	httpClient := &http.Client{
-		Timeout:   15 * time.Second,
-		Transport: httpTransport,
+	httpClients := make(map[bool]*http.Client, 2)
+	if hasSecure {
+		httpClients[false] = newHTTPClient(false)
+	}
+	if hasInsecure {
+		httpClients[true] = newHTTPClient(true)
 	}
 
 	logger := cfg.Logger
@@ -89,15 +122,55 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	agent := &Agent{
-		cfg:        cfg,
-		docker:     dockerClient,
-		httpClient: httpClient,
-		logger:     *logger,
-		machineID:  machineID,
-		hostName:   hostName,
+		cfg:         cfg,
+		docker:      dockerClient,
+		httpClients: httpClients,
+		logger:      *logger,
+		machineID:   machineID,
+		hostName:    hostName,
+		targets:     cfg.Targets,
 	}
 
 	return agent, nil
+}
+
+func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	normalized := make([]TargetConfig, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+
+	for _, target := range raw {
+		url := strings.TrimSpace(target.URL)
+		token := strings.TrimSpace(target.Token)
+		if url == "" && token == "" {
+			continue
+		}
+
+		if url == "" {
+			return nil, errors.New("pulse target URL is required")
+		}
+		if token == "" {
+			return nil, fmt.Errorf("pulse target %s is missing API token", url)
+		}
+
+		url = strings.TrimRight(url, "/")
+		key := fmt.Sprintf("%s|%s|%t", url, token, target.InsecureSkipVerify)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		normalized = append(normalized, TargetConfig{
+			URL:                url,
+			Token:              token,
+			InsecureSkipVerify: target.InsecureSkipVerify,
+		})
+	}
+
+	return normalized, nil
 }
 
 // Run starts the collection loop until the context is cancelled.
@@ -333,29 +406,82 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/agents/docker/report", a.cfg.PulseURL)
+	var errs []error
+	containerCount := len(report.Containers)
+
+	for _, target := range a.targets {
+		if err := a.sendReportToTarget(ctx, target, payload, containerCount); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	a.logger.Debug().
+		Int("containers", containerCount).
+		Int("targets", len(a.targets)).
+		Msg("Report sent to Pulse targets")
+	return nil
+}
+
+func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, payload []byte, containerCount int) error {
+	url := fmt.Sprintf("%s/api/agents/docker/report", target.URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return fmt.Errorf("target %s: create request: %w", target.URL, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Token", a.cfg.APIToken)
-	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
+	req.Header.Set("X-API-Token", target.Token)
+	req.Header.Set("Authorization", "Bearer "+target.Token)
 	req.Header.Set("User-Agent", "pulse-docker-agent/"+Version)
 
-	resp, err := a.httpClient.Do(req)
+	client := a.httpClientFor(target)
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send report: %w", err)
+		return fmt.Errorf("target %s: send report: %w", target.URL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("pulse responded with status %s", resp.Status)
+		return fmt.Errorf("target %s: pulse responded with status %s", target.URL, resp.Status)
 	}
 
-	a.logger.Debug().Int("containers", len(report.Containers)).Msg("Report sent")
 	return nil
+}
+
+func (a *Agent) primaryTarget() TargetConfig {
+	if len(a.targets) == 0 {
+		return TargetConfig{}
+	}
+	return a.targets[0]
+}
+
+func (a *Agent) httpClientFor(target TargetConfig) *http.Client {
+	if client, ok := a.httpClients[target.InsecureSkipVerify]; ok {
+		return client
+	}
+	if client, ok := a.httpClients[false]; ok {
+		return client
+	}
+	if client, ok := a.httpClients[true]; ok {
+		return client
+	}
+	return newHTTPClient(target.InsecureSkipVerify)
+}
+
+func newHTTPClient(insecure bool) *http.Client {
+	transport := &http.Transport{}
+	if insecure {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+	}
+
+	return &http.Client{
+		Timeout:   15 * time.Second,
+		Transport: transport,
+	}
 }
 
 func calculateCPUPercent(stats containertypes.StatsResponse, hostCPUs int) float64 {
@@ -457,15 +583,27 @@ func readSystemUptime() int64 {
 func (a *Agent) checkForUpdates(ctx context.Context) {
 	a.logger.Debug().Msg("Checking for agent updates")
 
+	target := a.primaryTarget()
+	if target.URL == "" {
+		a.logger.Debug().Msg("Skipping update check - no Pulse target configured")
+		return
+	}
+
 	// Get current version from server
-	url := fmt.Sprintf("%s/api/agent/version", a.cfg.PulseURL)
+	url := fmt.Sprintf("%s/api/agent/version", target.URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		a.logger.Warn().Err(err).Msg("Failed to create version check request")
 		return
 	}
 
-	resp, err := a.httpClient.Do(req)
+	if target.Token != "" {
+		req.Header.Set("X-API-Token", target.Token)
+		req.Header.Set("Authorization", "Bearer "+target.Token)
+	}
+
+	client := a.httpClientFor(target)
+	resp, err := client.Do(req)
 	if err != nil {
 		a.logger.Warn().Err(err).Msg("Failed to check for updates")
 		return
@@ -508,6 +646,11 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 
 // selfUpdate downloads the new agent binary and replaces the current one
 func (a *Agent) selfUpdate(ctx context.Context) error {
+	target := a.primaryTarget()
+	if target.URL == "" {
+		return errors.New("no Pulse target configured for self-update")
+	}
+
 	// Get path to current executable
 	execPath, err := os.Executable()
 	if err != nil {
@@ -515,13 +658,19 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	}
 
 	// Download new binary
-	url := fmt.Sprintf("%s/download/pulse-docker-agent", a.cfg.PulseURL)
+	url := fmt.Sprintf("%s/download/pulse-docker-agent", target.URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create download request: %w", err)
 	}
 
-	resp, err := a.httpClient.Do(req)
+	if target.Token != "" {
+		req.Header.Set("X-API-Token", target.Token)
+		req.Header.Set("Authorization", "Bearer "+target.Token)
+	}
+
+	client := a.httpClientFor(target)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download new binary: %w", err)
 	}

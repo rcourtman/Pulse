@@ -42,9 +42,22 @@ curl -fsSL http://pulse.example.com/install-docker-agent.sh \
   | sudo bash -s -- --url http://pulse.example.com --token <api-token>
 ```
 
+Running the one-liner again from another Pulse server (with its own URL/token) will merge that server into the same agent automatically—no extra flags required.
+
+To report to more than one Pulse instance from the same Docker host, repeat the `--target` flag (format: `https://pulse.example.com|<api-token>`) or export `PULSE_TARGETS` before running the script:
+
+```bash
+curl -fsSL http://pulse.example.com/install-docker-agent.sh \
+  | sudo bash -s -- \
+    --target https://pulse.example.com|<primary-token> \
+    --target https://pulse-dr.example.com|<dr-token>
+```
+
 ## Running the agent
 
-The agent needs to know where Pulse lives and which API token to use. You can supply these via flags or environment variables:
+The agent needs to know where Pulse lives and which API token to use.
+
+**Single instance:**
 
 ```bash
 export PULSE_URL="http://pulse.lan:7655"
@@ -53,7 +66,21 @@ export PULSE_TOKEN="<your-api-token>"
 sudo /usr/local/bin/pulse-docker-agent --interval 30s
 ```
 
+**Multiple instances (one agent fan-out):**
+
+```bash
+export PULSE_TARGETS="https://pulse-primary.lan:7655|<token-primary>;https://pulse-dr.lan:7655|<token-dr>"
+
+sudo /usr/local/bin/pulse-docker-agent --interval 30s
+```
+
+You can also repeat `--target https://pulse.example.com|<token>` on the command line instead of using `PULSE_TARGETS`; the agent will broadcast each heartbeat to every configured URL.
+
 The binary reads standard Docker environment variables. If you already use TLS-secured remote sockets set `DOCKER_HOST`, `DOCKER_TLS_VERIFY`, etc. as normal. To skip TLS verification for Pulse (not recommended) add `--insecure` or `PULSE_INSECURE_SKIP_VERIFY=true`.
+
+### Multiple Pulse instances
+
+A single `pulse-docker-agent` process can now serve any number of Pulse backends. Each target entry keeps its own API token and TLS preference, and Pulse de-duplicates reports using the shared agent ID / machine ID. This avoids running duplicate agents on busy Docker hosts.
 
 ### Systemd unit example
 
@@ -67,6 +94,7 @@ Requires=docker.service
 Type=simple
 Environment=PULSE_URL=https://pulse.example.com
 Environment=PULSE_TOKEN=replace-me
+Environment=PULSE_TARGETS=https://pulse.example.com|replace-me;https://pulse-dr.example.com|replace-me-dr
 ExecStart=/usr/local/bin/pulse-docker-agent --interval 30s
 Restart=always
 RestartSec=5
@@ -84,6 +112,7 @@ docker run -d \
   --name pulse-docker-agent \
   -e PULSE_URL="https://pulse.example.com" \
   -e PULSE_TOKEN="<token>" \
+  -e PULSE_TARGETS="https://pulse.example.com|<token>;https://pulse-dr.example.com|<token-dr>" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --restart unless-stopped \
   ghcr.io/rcourtman/pulse-docker-agent:latest
@@ -97,6 +126,7 @@ docker run -d \
 | ----------------------- | --------------------------------------------------------- | --------------- |
 | `--url`, `PULSE_URL`    | Pulse base URL (http/https).                              | `http://localhost:7655` |
 | `--token`, `PULSE_TOKEN`| Pulse API token (required).                               | —               |
+| `--target`, `PULSE_TARGETS` | One or more `url|token[|insecure]` entries to fan-out reports to multiple Pulse servers. Separate entries with `;` or repeat the flag. | — |
 | `--interval`, `PULSE_INTERVAL` | Reporting cadence (supports `30s`, `1m`, etc.).     | `30s`           |
 | `--hostname`, `PULSE_HOSTNAME` | Override host name reported to Pulse.              | Docker info / OS hostname |
 | `--agent-id`, `PULSE_AGENT_ID` | Stable ID for the agent (useful for clustering).   | Docker engine ID / machine-id |

@@ -212,6 +212,9 @@ WantedBy=multi-user.target`;
                 <span class="ml-1 font-medium">Authentication is disabled, so the agent runs without an API token.</span>
               </Show>
             </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              If you already installed the agent from another Pulse instance, running its command again on this host simply adds that server to the same agent—no duplicate processes to clean up.
+            </p>
           </div>
 
           {/* Uninstall */}

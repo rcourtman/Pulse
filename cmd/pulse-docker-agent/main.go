@@ -14,6 +14,17 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type targetFlagList []string
+
+func (l *targetFlagList) String() string {
+	return strings.Join(*l, ",")
+}
+
+func (l *targetFlagList) Set(value string) error {
+	*l = append(*l, value)
+	return nil
+}
+
 func main() {
 	cfg := loadConfig()
 
@@ -45,6 +56,7 @@ func loadConfig() dockeragent.Config {
 	envHostname := strings.TrimSpace(os.Getenv("PULSE_HOSTNAME"))
 	envAgentID := strings.TrimSpace(os.Getenv("PULSE_AGENT_ID"))
 	envInsecure := strings.TrimSpace(os.Getenv("PULSE_INSECURE_SKIP_VERIFY"))
+	envTargets := strings.TrimSpace(os.Getenv("PULSE_TARGETS"))
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -59,6 +71,8 @@ func loadConfig() dockeragent.Config {
 	hostnameFlag := flag.String("hostname", envHostname, "Override hostname reported to Pulse")
 	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
 	insecureFlag := flag.Bool("insecure", parseBool(envInsecure), "Skip TLS certificate verification")
+	var targetFlags targetFlagList
+	flag.Var(&targetFlags, "target", "Pulse target in url|token[|insecure] format. Repeat to send to multiple Pulse instances")
 
 	flag.Parse()
 
@@ -67,9 +81,32 @@ func loadConfig() dockeragent.Config {
 		pulseURL = "http://localhost:7655"
 	}
 
+	targets := make([]dockeragent.TargetConfig, 0)
+
+	if len(targetFlags) > 0 {
+		parsedTargets, err := parseTargetSpecs(targetFlags)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		targets = append(targets, parsedTargets...)
+	}
+
+	if envTargets != "" {
+		envTargetSpecs := splitTargetSpecs(envTargets)
+		if len(envTargetSpecs) > 0 {
+			parsedTargets, err := parseTargetSpecs(envTargetSpecs)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(1)
+			}
+			targets = append(targets, parsedTargets...)
+		}
+	}
+
 	token := strings.TrimSpace(*tokenFlag)
-	if token == "" {
-		fmt.Fprintln(os.Stderr, "error: PULSE_TOKEN or --token must be provided")
+	if token == "" && len(targets) == 0 {
+		fmt.Fprintln(os.Stderr, "error: PULSE_TOKEN, --token, or at least one --target/PULSE_TARGETS entry must be provided")
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -86,6 +123,7 @@ func loadConfig() dockeragent.Config {
 		HostnameOverride:   strings.TrimSpace(*hostnameFlag),
 		AgentID:            strings.TrimSpace(*agentIDFlag),
 		InsecureSkipVerify: *insecureFlag,
+		Targets:            targets,
 	}
 }
 
@@ -96,4 +134,70 @@ func parseBool(value string) bool {
 	default:
 		return false
 	}
+}
+
+func parseTargetSpecs(specs []string) ([]dockeragent.TargetConfig, error) {
+	targets := make([]dockeragent.TargetConfig, 0, len(specs))
+	for _, spec := range specs {
+		spec = strings.TrimSpace(spec)
+		if spec == "" {
+			continue
+		}
+		target, err := parseTargetSpec(spec)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	return targets, nil
+}
+
+func parseTargetSpec(spec string) (dockeragent.TargetConfig, error) {
+	parts := strings.Split(spec, "|")
+	if len(parts) < 2 {
+		return dockeragent.TargetConfig{}, fmt.Errorf("invalid target %q: expected format url|token[|insecure]", spec)
+	}
+
+	url := strings.TrimSpace(parts[0])
+	token := strings.TrimSpace(parts[1])
+	if url == "" {
+		return dockeragent.TargetConfig{}, fmt.Errorf("invalid target %q: URL is required", spec)
+	}
+	if token == "" {
+		return dockeragent.TargetConfig{}, fmt.Errorf("invalid target %q: token is required", spec)
+	}
+
+	insecure := false
+	if len(parts) >= 3 {
+		switch strings.ToLower(strings.TrimSpace(parts[2])) {
+		case "1", "true", "yes", "y", "on":
+			insecure = true
+		case "", "0", "false", "no", "n", "off":
+			insecure = false
+		default:
+			return dockeragent.TargetConfig{}, fmt.Errorf("invalid target %q: insecure flag must be true/false", spec)
+		}
+	}
+
+	return dockeragent.TargetConfig{
+		URL:                url,
+		Token:              token,
+		InsecureSkipVerify: insecure,
+	}, nil
+}
+
+func splitTargetSpecs(value string) []string {
+	if value == "" {
+		return nil
+	}
+
+	normalized := strings.ReplaceAll(value, "\n", ";")
+	raw := strings.Split(normalized, ";")
+	result := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }

@@ -1,9 +1,166 @@
 #!/bin/bash
 set -e
 
+trim() {
+    local value="$1"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s' "$value"
+}
+
+parse_bool() {
+    local value
+    value=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+    case "$value" in
+        1|true|yes|y|on)
+            PARSED_BOOL="true"
+            return 0
+            ;;
+        0|false|no|n|off|"")
+            PARSED_BOOL="false"
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+parse_target_spec() {
+    local spec="$1"
+    local raw_url raw_token raw_insecure
+
+    IFS='|' read -r raw_url raw_token raw_insecure <<< "$spec"
+    raw_url=$(trim "$raw_url")
+    raw_token=$(trim "$raw_token")
+    raw_insecure=$(trim "$raw_insecure")
+
+    if [[ -z "$raw_url" || -z "$raw_token" ]]; then
+        echo "Error: invalid target spec \"$spec\". Expected format url|token[|insecure]." >&2
+        return 1
+    fi
+
+    PARSED_TARGET_URL="${raw_url%/}"
+    PARSED_TARGET_TOKEN="$raw_token"
+
+    if [[ -n "$raw_insecure" ]]; then
+        if ! parse_bool "$raw_insecure"; then
+            echo "Error: invalid insecure flag \"$raw_insecure\" in target spec \"$spec\"." >&2
+            return 1
+        fi
+        PARSED_TARGET_INSECURE="$PARSED_BOOL"
+    else
+        PARSED_TARGET_INSECURE="false"
+    fi
+
+    return 0
+}
+
+split_targets_from_env() {
+    local value="$1"
+    if [[ -z "$value" ]]; then
+        return 0
+    fi
+
+    value="${value//$'\n'/;}"
+    IFS=';' read -ra __env_targets <<< "$value"
+    for entry in "${__env_targets[@]}"; do
+        local trimmed
+        trimmed=$(trim "$entry")
+        if [[ -n "$trimmed" ]]; then
+            printf '%s\n' "$trimmed"
+        fi
+    done
+}
+
+extract_targets_from_service() {
+    local file="$1"
+    [[ ! -f "$file" ]] && return
+
+    local line value
+
+    # Prefer explicit multi-target configuration if present
+    line=$(grep -m1 'PULSE_TARGETS=' "$file" 2>/dev/null || true)
+    if [[ -n "$line" ]]; then
+        value=$(printf '%s\n' "$line" | sed -n 's/.*PULSE_TARGETS=\([^"]*\).*/\1/p')
+        if [[ -n "$value" ]]; then
+            IFS=';' read -ra __service_targets <<< "$value"
+            for entry in "${__service_targets[@]}"; do
+                entry=$(trim "$entry")
+                if [[ -n "$entry" ]]; then
+                    printf '%s\n' "$entry"
+                fi
+            done
+        fi
+        return
+    fi
+
+    local url=""
+    local token=""
+    local insecure="false"
+
+    line=$(grep -m1 'PULSE_URL=' "$file" 2>/dev/null || true)
+    if [[ -n "$line" ]]; then
+        value="${line#*PULSE_URL=}"
+        value="${value%\"*}"
+        url=$(trim "$value")
+    fi
+
+    line=$(grep -m1 'PULSE_TOKEN=' "$file" 2>/dev/null || true)
+    if [[ -n "$line" ]]; then
+        value="${line#*PULSE_TOKEN=}"
+        value="${value%\"*}"
+        token=$(trim "$value")
+    fi
+
+    line=$(grep -m1 'PULSE_INSECURE_SKIP_VERIFY=' "$file" 2>/dev/null || true)
+    if [[ -n "$line" ]]; then
+        value="${line#*PULSE_INSECURE_SKIP_VERIFY=}"
+        value="${value%\"*}"
+        if parse_bool "$value"; then
+            insecure="$PARSED_BOOL"
+        fi
+    fi
+
+    local exec_line
+    exec_line=$(grep -m1 '^ExecStart=' "$file" 2>/dev/null || true)
+    if [[ -n "$exec_line" ]]; then
+        if [[ -z "$url" ]]; then
+            if [[ "$exec_line" =~ --url[[:space:]]+\"([^\"]+)\" ]]; then
+                url="${BASH_REMATCH[1]}"
+            elif [[ "$exec_line" =~ --url[[:space:]]+([^[:space:]]+) ]]; then
+                url="${BASH_REMATCH[1]}"
+            fi
+        fi
+        if [[ -z "$token" ]]; then
+            if [[ "$exec_line" =~ --token[[:space:]]+\"([^\"]+)\" ]]; then
+                token="${BASH_REMATCH[1]}"
+            elif [[ "$exec_line" =~ --token[[:space:]]+([^[:space:]]+) ]]; then
+                token="${BASH_REMATCH[1]}"
+            fi
+        fi
+        if [[ "$insecure" != "true" && "$exec_line" == *"--insecure"* ]]; then
+            insecure="true"
+        fi
+    fi
+
+    url=$(trim "$url")
+    token=$(trim "$token")
+
+    if [[ -n "$url" && -n "$token" ]]; then
+        printf '%s|%s|%s\n' "$url" "$token" "$insecure"
+    fi
+}
+
 # Pulse Docker Agent Installer/Uninstaller
-# Install: curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --url http://pulse.example.com --token <api-token>
-# Uninstall: curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --uninstall
+# Install (single target):
+#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --url http://pulse.example.com --token <api-token>
+# Install (multi-target fan-out):
+#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- \
+#     --target https://pulse.example.com|<api-token> \
+#     --target https://pulse-dr.example.com|<api-token>
+# Uninstall:
+#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --uninstall
 
 PULSE_URL=""
 AGENT_PATH="/usr/local/bin/pulse-docker-agent"
@@ -14,6 +171,13 @@ INTERVAL="30s"
 UNINSTALL=false
 TOKEN="${PULSE_TOKEN:-}"
 DOWNLOAD_ARCH=""
+TARGET_SPECS=()
+PULSE_TARGETS_ENV="${PULSE_TARGETS:-}"
+DEFAULT_INSECURE="$(trim "${PULSE_INSECURE_SKIP_VERIFY:-}")"
+PRIMARY_URL=""
+PRIMARY_TOKEN=""
+PRIMARY_INSECURE="false"
+JOINED_TARGETS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -32,6 +196,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --token)
       TOKEN="$2"
+      shift 2
+      ;;
+    --target)
+      TARGET_SPECS+=("$2")
       shift 2
       ;;
     *)
@@ -109,31 +277,112 @@ if [ "$UNINSTALL" = true ]; then
     exit 0
 fi
 
-# Validate URL and token for install
+# Validate target configuration for install
 if [[ "$UNINSTALL" != true ]]; then
-  if [[ -z "$PULSE_URL" ]]; then
-    echo "Error: --url parameter is required for installation"
-    echo ""
-    echo "Usage:"
-    echo "  Install:   $0 --url http://pulse.example.com --token <api-token> [--interval 30s]"
-    echo "  Uninstall: $0 --uninstall"
+  declare -a RAW_TARGETS=()
+
+  if [[ ${#TARGET_SPECS[@]} -gt 0 ]]; then
+    RAW_TARGETS+=("${TARGET_SPECS[@]}")
+  fi
+
+  if [[ -n "$PULSE_TARGETS_ENV" ]]; then
+    mapfile -t ENV_TARGETS < <(split_targets_from_env "$PULSE_TARGETS_ENV")
+    if [[ ${#ENV_TARGETS[@]} -gt 0 ]]; then
+      RAW_TARGETS+=("${ENV_TARGETS[@]}")
+    fi
+  fi
+
+  TOKEN=$(trim "$TOKEN")
+  PULSE_URL=$(trim "$PULSE_URL")
+
+  if [[ ${#RAW_TARGETS[@]} -eq 0 ]]; then
+    if [[ -z "$PULSE_URL" || -z "$TOKEN" ]]; then
+      echo "Error: Provide --target / PULSE_TARGETS or legacy --url and --token values."
+      echo ""
+      echo "Usage:"
+      echo "  Install:   $0 --target https://pulse.example.com|<api-token> [--target ...] [--interval 30s]"
+      echo "  Legacy:    $0 --url http://pulse.example.com --token <api-token> [--interval 30s]"
+      echo "  Uninstall: $0 --uninstall"
+      exit 1
+    fi
+
+    if [[ -n "$DEFAULT_INSECURE" ]]; then
+      if ! parse_bool "$DEFAULT_INSECURE"; then
+        echo "Error: invalid PULSE_INSECURE_SKIP_VERIFY value \"$DEFAULT_INSECURE\"." >&2
+        exit 1
+      fi
+      PRIMARY_INSECURE="$PARSED_BOOL"
+    else
+      PRIMARY_INSECURE="false"
+    fi
+
+    RAW_TARGETS+=("${PULSE_URL%/}|$TOKEN|$PRIMARY_INSECURE")
+  fi
+
+  if [[ -f "$SERVICE_PATH" ]]; then
+    mapfile -t EXISTING_TARGETS < <(extract_targets_from_service "$SERVICE_PATH")
+    if [[ ${#EXISTING_TARGETS[@]} -gt 0 ]]; then
+      RAW_TARGETS+=("${EXISTING_TARGETS[@]}")
+    fi
+  fi
+
+  declare -A SEEN_TARGETS=()
+  TARGETS=()
+
+  for spec in "${RAW_TARGETS[@]}"; do
+    if ! parse_target_spec "$spec"; then
+      exit 1
+    fi
+
+    local_normalized="${PARSED_TARGET_URL}|${PARSED_TARGET_TOKEN}|${PARSED_TARGET_INSECURE}"
+
+    if [[ -z "$PRIMARY_URL" ]]; then
+      PRIMARY_URL="$PARSED_TARGET_URL"
+      PRIMARY_TOKEN="$PARSED_TARGET_TOKEN"
+      PRIMARY_INSECURE="$PARSED_TARGET_INSECURE"
+    fi
+
+    if [[ -n "${SEEN_TARGETS[$local_normalized]}" ]]; then
+      continue
+    fi
+
+    SEEN_TARGETS[$local_normalized]=1
+    TARGETS+=("$local_normalized")
+  done
+
+  if [[ ${#TARGETS[@]} -eq 0 ]]; then
+    echo "Error: no valid Pulse targets provided." >&2
     exit 1
   fi
 
-  if [[ -z "$TOKEN" ]]; then
-    echo "Error: API token required. Provide via --token or PULSE_TOKEN environment variable."
-    exit 1
-  fi
+  JOINED_TARGETS=$(printf "%s;" "${TARGETS[@]}")
+  JOINED_TARGETS="${JOINED_TARGETS%;}"
+
+  # Backwards compatibility for older agent versions
+  PULSE_URL="$PRIMARY_URL"
+  TOKEN="$PRIMARY_TOKEN"
 fi
 
 echo "==================================="
 echo "Pulse Docker Agent Installer"
 echo "==================================="
-echo "Pulse URL: $PULSE_URL"
+echo "Primary Pulse URL: $PRIMARY_URL"
+if [[ ${#TARGETS[@]} -gt 1 ]]; then
+  echo "Additional Pulse targets: $(( ${#TARGETS[@]} - 1 ))"
+fi
 echo "Install path: $AGENT_PATH"
 echo "Interval: $INTERVAL"
 if [[ "$UNINSTALL" != true ]]; then
   echo "API token: (provided)"
+  echo "Targets:"
+  for spec in "${TARGETS[@]}"; do
+    IFS='|' read -r target_url _ target_insecure <<< "$spec"
+    if [[ "$target_insecure" == "true" ]]; then
+      echo "  - $target_url (skip TLS verify)"
+    else
+      echo "  - $target_url"
+    fi
+  done
 fi
 echo ""
 
@@ -167,24 +416,42 @@ if ! command -v docker &> /dev/null; then
     fi
 fi
 
+if [[ "$UNINSTALL" != true ]]; then
+    if command -v systemctl &> /dev/null; then
+        if systemctl list-unit-files pulse-docker-agent.service &> /dev/null; then
+            if systemctl is-active --quiet pulse-docker-agent; then
+                systemctl stop pulse-docker-agent
+            fi
+        fi
+    fi
+fi
+
 # Download agent binary
 echo "Downloading Pulse Docker agent..."
-DOWNLOAD_URL="$PULSE_URL/download/pulse-docker-agent"
+DOWNLOAD_URL="$PRIMARY_URL/download/pulse-docker-agent"
 if [[ -n "$DOWNLOAD_ARCH" ]]; then
     DOWNLOAD_URL="$DOWNLOAD_URL?arch=$DOWNLOAD_ARCH"
 fi
 if command -v wget &> /dev/null; then
-    wget -q --show-progress -O "$AGENT_PATH" "$DOWNLOAD_URL" || {
+    WGET_ARGS=(-q --show-progress -O "$AGENT_PATH" "$DOWNLOAD_URL")
+    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+        WGET_ARGS=(--no-check-certificate "${WGET_ARGS[@]}")
+    fi
+    if ! wget "${WGET_ARGS[@]}"; then
         echo "Error: Failed to download agent binary"
-        echo "Make sure the Pulse server is accessible at: $PULSE_URL"
+        echo "Make sure the Pulse server is accessible at: $PRIMARY_URL"
         exit 1
-    }
+    fi
 elif command -v curl &> /dev/null; then
-    curl -fL --progress-bar -o "$AGENT_PATH" "$DOWNLOAD_URL" || {
+    CURL_ARGS=(-fL --progress-bar -o "$AGENT_PATH" "$DOWNLOAD_URL")
+    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+        CURL_ARGS=(-k "${CURL_ARGS[@]}")
+    fi
+    if ! curl "${CURL_ARGS[@]}"; then
         echo "Error: Failed to download agent binary"
-        echo "Make sure the Pulse server is accessible at: $PULSE_URL"
+        echo "Make sure the Pulse server is accessible at: $PRIMARY_URL"
         exit 1
-    }
+    fi
 else
     echo "Error: Neither wget nor curl found. Please install one of them."
     exit 1
@@ -207,11 +474,11 @@ if ! command -v systemctl &> /dev/null || [ ! -d /etc/systemd/system ]; then
 
         # Create startup script
         STARTUP_SCRIPT="/boot/config/go.d/pulse-docker-agent.sh"
-        cat > "$STARTUP_SCRIPT" <<EOF
+cat > "$STARTUP_SCRIPT" <<EOF
 #!/bin/bash
 # Pulse Docker Agent - Auto-start script
 sleep 10  # Wait for Docker to be ready
-PULSE_TOKEN="$TOKEN" $AGENT_PATH --url "$PULSE_URL" --interval "$INTERVAL" > /var/log/pulse-docker-agent.log 2>&1 &
+PULSE_URL="$PRIMARY_URL" PULSE_TOKEN="$PRIMARY_TOKEN" PULSE_TARGETS="$JOINED_TARGETS" PULSE_INSECURE_SKIP_VERIFY="$PRIMARY_INSECURE" $AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL" > /var/log/pulse-docker-agent.log 2>&1 &
 EOF
 
         chmod +x "$STARTUP_SCRIPT"
@@ -219,7 +486,7 @@ EOF
 
         # Start the agent now
         echo "Starting agent..."
-        PULSE_TOKEN="$TOKEN" $AGENT_PATH --url "$PULSE_URL" --interval "$INTERVAL" > /var/log/pulse-docker-agent.log 2>&1 &
+        PULSE_URL="$PRIMARY_URL" PULSE_TOKEN="$PRIMARY_TOKEN" PULSE_TARGETS="$JOINED_TARGETS" PULSE_INSECURE_SKIP_VERIFY="$PRIMARY_INSECURE" $AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL" > /var/log/pulse-docker-agent.log 2>&1 &
 
         echo ""
         echo "==================================="
@@ -239,7 +506,9 @@ EOF
     echo "The agent has been installed to: $AGENT_PATH"
     echo ""
     echo "To run manually:"
-    echo "  PULSE_TOKEN=<api-token> $AGENT_PATH --url $PULSE_URL --interval $INTERVAL &"
+    echo "  PULSE_URL=$PRIMARY_URL PULSE_TOKEN=<api-token> \\"
+    echo "  PULSE_TARGETS=\"https://pulse.example.com|<token>[;https://pulse-alt.example.com|<token2>]\" \\"
+    echo "  $AGENT_PATH --interval $INTERVAL &"
     echo ""
     echo "To make it start automatically, add the above command to your system's startup scripts."
     echo ""
@@ -248,6 +517,13 @@ fi
 
 # Create systemd service
 echo "Creating systemd service..."
+SYSTEMD_ENV_TARGETS_LINE=""
+if [[ -n "$JOINED_TARGETS" ]]; then
+SYSTEMD_ENV_TARGETS_LINE="Environment=\"PULSE_TARGETS=$JOINED_TARGETS\""
+fi
+SYSTEMD_ENV_URL_LINE="Environment=\"PULSE_URL=$PRIMARY_URL\""
+SYSTEMD_ENV_TOKEN_LINE="Environment=\"PULSE_TOKEN=$PRIMARY_TOKEN\""
+SYSTEMD_ENV_INSECURE_LINE="Environment=\"PULSE_INSECURE_SKIP_VERIFY=$PRIMARY_INSECURE\""
 cat > "$SERVICE_PATH" << EOF
 [Unit]
 Description=Pulse Docker Agent
@@ -256,8 +532,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-Environment="PULSE_TOKEN=$TOKEN"
-ExecStart=$AGENT_PATH --url "$PULSE_URL" --interval "$INTERVAL"
+$SYSTEMD_ENV_URL_LINE
+$SYSTEMD_ENV_TOKEN_LINE
+$SYSTEMD_ENV_TARGETS_LINE
+$SYSTEMD_ENV_INSECURE_LINE
+ExecStart=$AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"
 Restart=always
 RestartSec=5s
 User=root
