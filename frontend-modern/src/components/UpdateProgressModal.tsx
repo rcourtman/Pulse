@@ -13,8 +13,15 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   const [hasError, setHasError] = createSignal(false);
   const [isRestarting, setIsRestarting] = createSignal(false);
   let pollInterval: number | undefined;
-  let healthCheckInterval: number | undefined;
+  let healthCheckTimer: number | undefined;
   let healthCheckAttempts = 0;
+
+  const clearHealthCheckTimer = () => {
+    if (healthCheckTimer !== undefined) {
+      clearTimeout(healthCheckTimer);
+      healthCheckTimer = undefined;
+    }
+  };
 
   const pollStatus = async () => {
     try {
@@ -50,7 +57,19 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       console.error('Failed to poll update status:', error);
       // If we get errors during update, assume we're restarting
       const currentStatus = status();
-      if (currentStatus && currentStatus.status !== 'idle' && currentStatus.status !== 'error') {
+      const shouldAssumeRestart =
+        !isRestarting() &&
+        (!currentStatus || (currentStatus.status !== 'idle' && currentStatus.status !== 'error'));
+
+      if (shouldAssumeRestart) {
+        if (!currentStatus) {
+          setStatus({
+            status: 'restarting',
+            progress: 95,
+            message: 'Restarting service...',
+            updatedAt: new Date().toISOString(),
+          });
+        }
         setIsRestarting(true);
         if (pollInterval) {
           clearInterval(pollInterval);
@@ -61,33 +80,37 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   };
 
   const startHealthCheckPolling = () => {
-    if (healthCheckInterval) {
-      clearInterval(healthCheckInterval);
-    }
+    clearHealthCheckTimer();
+    healthCheckAttempts = 0;
 
     const checkHealth = async () => {
+      let isHealthy = false;
+
       try {
-        const response = await fetch('/api/health');
+        const response = await fetch('/api/health', { cache: 'no-store' });
         if (response.ok) {
-          // Backend is back! Reload the page to get the new version
-          console.log('Backend is healthy again, reloading...');
-          window.location.reload();
+          isHealthy = true;
         }
       } catch (error) {
-        // Backend still down, continue polling
-        healthCheckAttempts++;
-        // Exponential backoff: 2s, 4s, 8s, max 15s
-        const nextDelay = Math.min(2000 * Math.pow(2, Math.min(healthCheckAttempts, 3)), 15000);
-
-        if (healthCheckInterval) {
-          clearInterval(healthCheckInterval);
-        }
-        healthCheckInterval = setInterval(checkHealth, nextDelay) as unknown as number;
+        console.warn('Health check request failed, will retry', error);
       }
+
+      if (isHealthy) {
+        // Backend is back! Reload the page to get the new version
+        console.log('Backend is healthy again, reloading...');
+        window.location.reload();
+        return;
+      }
+
+      const attempt = Math.min(healthCheckAttempts, 3);
+      const nextDelay = Math.min(2000 * Math.pow(2, attempt), 15000);
+      healthCheckAttempts++;
+      clearHealthCheckTimer();
+      healthCheckTimer = window.setTimeout(checkHealth, nextDelay);
     };
 
     // Start checking immediately
-    checkHealth();
+    healthCheckTimer = window.setTimeout(checkHealth, 0);
   };
 
   onMount(() => {
@@ -103,9 +126,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     if (pollInterval) {
       clearInterval(pollInterval);
     }
-    if (healthCheckInterval) {
-      clearInterval(healthCheckInterval);
-    }
+    clearHealthCheckTimer();
   });
 
   const getStageIcon = () => {
