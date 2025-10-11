@@ -10,6 +10,7 @@ import type {
   Alert,
   Storage,
   PBSInstance,
+  PMGInstance,
   DockerHost,
   DockerContainer,
 } from '@/types/api';
@@ -20,6 +21,7 @@ type OverrideType =
   | 'node'
   | 'storage'
   | 'pbs'
+  | 'pmg'
   | 'dockerHost'
   | 'dockerContainer';
 
@@ -72,6 +74,7 @@ interface ThresholdsTableProps {
   storage: Storage[];
   dockerHosts: DockerHost[];
   pbsInstances?: PBSInstance[]; // PBS instances from state
+  pmgInstances?: PMGInstance[]; // PMG instances from state
   guestDefaults: SimpleThresholds;
   setGuestDefaults: (
     value: Record<string, number | undefined> | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -109,6 +112,8 @@ interface ThresholdsTableProps {
   setDisableAllStorage: (value: boolean) => void;
   disableAllPBS: () => boolean;
   setDisableAllPBS: (value: boolean) => void;
+  disableAllPMG: () => boolean;
+  setDisableAllPMG: (value: boolean) => void;
   disableAllDockerHosts: () => boolean;
   setDisableAllDockerHosts: (value: boolean) => void;
   disableAllDockerContainers: () => boolean;
@@ -120,6 +125,8 @@ interface ThresholdsTableProps {
   setDisableAllGuestsOffline: (value: boolean) => void;
   disableAllPBSOffline: () => boolean;
   setDisableAllPBSOffline: (value: boolean) => void;
+  disableAllPMGOffline: () => boolean;
+  setDisableAllPMGOffline: (value: boolean) => void;
   disableAllDockerHostsOffline: () => boolean;
   setDisableAllDockerHostsOffline: (value: boolean) => void;
 }
@@ -767,6 +774,51 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     return pbsServers;
   }, []);
 
+  // Process PMG servers with their overrides
+  const pmgServersWithOverrides = createMemo<Resource[]>((prev = []) => {
+    // If we're currently editing, return the previous value to avoid re-renders
+    if (editingId()) {
+      return prev;
+    }
+
+    const search = searchTerm().toLowerCase();
+    const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
+
+    // Get PMG instances from props
+    const pmgInstances = props.pmgInstances || [];
+
+    const pmgServers = pmgInstances.map((pmg) => {
+      // PMG IDs should already have appropriate prefix from backend
+      const pmgId = pmg.id;
+      const override = overridesMap.get(pmgId);
+
+      // PMG doesn't have editable thresholds in the table (too many fields)
+      // Just track disabled/connectivity states
+      const hasOverride = override?.disableConnectivity || false;
+
+      return {
+        id: pmgId,
+        name: pmg.name,
+        type: 'pmg' as const,
+        resourceType: 'PMG',
+        host: pmg.host,
+        status: pmg.status,
+        hasOverride,
+        disabled: false,
+        disableConnectivity: override?.disableConnectivity || false,
+        thresholds: {},
+        defaults: {},
+      };
+    });
+
+    if (search) {
+      return pmgServers.filter(
+        (p) => p.name.toLowerCase().includes(search) || p.host?.toLowerCase().includes(search),
+      );
+    }
+    return pmgServers;
+  }, []);
+
   // Process storage with their overrides
   const storageWithOverrides = createMemo<Resource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
@@ -857,6 +909,13 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           label: 'PBS Servers',
           total: props.pbsInstances?.length ?? 0,
           overrides: countOverrides(pbsServersWithOverrides()),
+          tab: 'proxmox' as const,
+        },
+        {
+          key: 'pmg' as const,
+          label: 'Mail Gateways',
+          total: props.pmgInstances?.length ?? 0,
+          overrides: countOverrides(pmgServersWithOverrides()),
           tab: 'proxmox' as const,
         },
         {
@@ -1648,6 +1707,34 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 globalDelaySeconds={props.timeThresholds().pbs}
                 metricDelaySeconds={props.metricTimeThresholds().pbs ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('pbs', metric, value)}
+              />
+            </div>
+          </Show>
+
+          <Show when={hasSection('pmg')}>
+            <div ref={registerSection('pmg')} class="scroll-mt-24">
+              <ResourceTable
+                title="Mail Gateways"
+                resources={pmgServersWithOverrides()}
+                columns={[]}
+                activeAlerts={props.activeAlerts}
+                emptyMessage="No mail gateways match the current filters."
+                onEdit={startEditing}
+                onSaveEdit={saveEdit}
+                onCancelEdit={cancelEdit}
+                onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
+                onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
+                editingId={editingId}
+                editingThresholds={editingThresholds}
+                setEditingThresholds={setEditingThresholds}
+                formatMetricValue={formatMetricValue}
+                hasActiveAlert={hasActiveAlert}
+                globalDisableFlag={props.disableAllPMG}
+                onToggleGlobalDisable={() => props.setDisableAllPMG(!props.disableAllPMG())}
+                globalDisableOfflineFlag={props.disableAllPMGOffline}
+                onToggleGlobalDisableOffline={() => props.setDisableAllPMGOffline(!props.disableAllPMGOffline())}
               />
             </div>
           </Show>
