@@ -119,6 +119,7 @@ interface ResourceTableProps {
   metricDelaySeconds?: Record<string, number>;
   onMetricDelayChange?: (metricKey: string, value: number | null) => void;
   groupHeaderMeta?: Record<string, GroupHeaderMeta>;
+  factoryDefaults?: Record<string, number | undefined>;
   onResetDefaults?: () => void;
 }
 
@@ -136,6 +137,16 @@ export function ResourceTable(props: ResourceTableProps) {
 
   const [activeMetricInput, setActiveMetricInput] = createSignal<{ resourceId: string; metric: string } | null>(null);
   const [showDelayRow, setShowDelayRow] = createSignal(false);
+
+  // Check if global defaults have been customized from factory defaults
+  const hasCustomGlobalDefaults = () => {
+    if (!props.globalDefaults || !props.factoryDefaults) return false;
+    return Object.keys(props.factoryDefaults).some(key => {
+      const current = props.globalDefaults?.[key];
+      const factory = props.factoryDefaults?.[key];
+      return current !== undefined && current !== factory;
+    });
+  };
 
   const normalizeMetricKey = (column: string): string => {
     const key = column.trim().toLowerCase();
@@ -450,9 +461,16 @@ export function ResourceTable(props: ResourceTableProps) {
                   </Show>
                 </td>
                 <td class="p-1 px-2">
-                  <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                    Global Defaults
-                  </span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Global Defaults
+                    </span>
+                    <Show when={hasCustomGlobalDefaults()}>
+                      <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                        Custom
+                      </span>
+                    </Show>
+                  </div>
                 </td>
                 <For each={props.columns}>
                   {(column) => {
@@ -576,11 +594,11 @@ export function ResourceTable(props: ResourceTableProps) {
                         </svg>
                       </button>
                     </Show>
-                    <Show when={props.onResetDefaults}>
+                    <Show when={hasCustomGlobalDefaults() && props.onResetDefaults}>
                       <button
                         type="button"
                         onClick={() => props.onResetDefaults?.()}
-                        class="p-1 text-gray-600 hover:text-orange-600 dark:text-gray-400 dark:hover:text-orange-400 transition-colors"
+                        class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                         title="Reset to factory defaults"
                       >
                         <svg
@@ -593,12 +611,12 @@ export function ResourceTable(props: ResourceTableProps) {
                             stroke-linecap="round"
                             stroke-linejoin="round"
                             stroke-width="2"
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                           />
                         </svg>
                       </button>
                     </Show>
-                    <Show when={!props.showDelayColumn && !props.onResetDefaults}>
+                    <Show when={!props.showDelayColumn && !hasCustomGlobalDefaults()}>
                       <span class="text-sm text-gray-400">-</span>
                     </Show>
                   </div>

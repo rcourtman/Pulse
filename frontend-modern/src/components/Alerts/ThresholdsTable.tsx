@@ -158,6 +158,10 @@ interface ThresholdsTableProps {
   resetNodeDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetStorageDefault?: () => void;
+  factoryGuestDefaults?: Record<string, number | undefined>;
+  factoryNodeDefaults?: Record<string, number | undefined>;
+  factoryDockerDefaults?: Record<string, number | undefined>;
+  factoryStorageDefault?: number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
   setMetricTimeThresholds: (
@@ -1754,6 +1758,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 globalDelaySeconds={props.timeThresholds().node}
                 metricDelaySeconds={props.metricTimeThresholds().node ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('node', metric, value)}
+                factoryDefaults={props.factoryNodeDefaults}
                 onResetDefaults={props.resetNodeDefaults}
               />
             </div>
@@ -1804,6 +1809,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 globalDelaySeconds={props.timeThresholds().guest}
                 metricDelaySeconds={props.metricTimeThresholds().guest ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
+                factoryDefaults={props.factoryGuestDefaults}
                 onResetDefaults={props.resetGuestDefaults}
               />
             </div>
@@ -1845,6 +1851,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 globalDelaySeconds={props.timeThresholds().storage}
                 metricDelaySeconds={props.metricTimeThresholds().storage ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
+                factoryDefaults={props.factoryStorageDefault !== undefined ? { usage: props.factoryStorageDefault } : undefined}
                 onResetDefaults={props.resetStorageDefault}
               />
             </div>
@@ -2052,6 +2059,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
                 globalOfflineSeverity={props.guestPoweredOffSeverity()}
                 onSetOfflineState={setOfflineState}
+                factoryDefaults={props.factoryDockerDefaults}
                 onResetDefaults={props.resetDockerDefaults}
               />
             </div>
