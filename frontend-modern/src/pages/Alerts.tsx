@@ -18,7 +18,7 @@ import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container, DockerHost, DockerContainer } from '@/types/api';
 import { useNavigate, useLocation } from '@solidjs/router';
 
-type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
+type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history' | 'pmg';
 
 const ALERT_HEADER_META: Record<AlertTab, { title: string; description: string }> = {
   overview: {
@@ -40,6 +40,10 @@ const ALERT_HEADER_META: Record<AlertTab, { title: string; description: string }
   history: {
     title: 'Alert History',
     description: 'Review previously triggered alerts and their resolution timeline.',
+  },
+  pmg: {
+    title: 'PMG Thresholds',
+    description: 'Configure mail gateway alert thresholds for queue depth, message age, quarantine, and anomaly detection.',
   },
 };
 
@@ -673,11 +677,34 @@ export function Alerts() {
         setMetricTimeThresholds({});
       }
 
+      // Load PMG thresholds
+      if (config.pmgDefaults) {
+        setPMGThresholds({
+          queueTotalWarning: config.pmgDefaults.queueTotalWarning ?? 500,
+          queueTotalCritical: config.pmgDefaults.queueTotalCritical ?? 1000,
+          oldestMessageWarnMins: config.pmgDefaults.oldestMessageWarnMins ?? 30,
+          oldestMessageCritMins: config.pmgDefaults.oldestMessageCritMins ?? 60,
+          deferredQueueWarn: config.pmgDefaults.deferredQueueWarn ?? 200,
+          deferredQueueCritical: config.pmgDefaults.deferredQueueCritical ?? 500,
+          holdQueueWarn: config.pmgDefaults.holdQueueWarn ?? 100,
+          holdQueueCritical: config.pmgDefaults.holdQueueCritical ?? 300,
+          quarantineSpamWarn: config.pmgDefaults.quarantineSpamWarn ?? 2000,
+          quarantineSpamCritical: config.pmgDefaults.quarantineSpamCritical ?? 5000,
+          quarantineVirusWarn: config.pmgDefaults.quarantineVirusWarn ?? 2000,
+          quarantineVirusCritical: config.pmgDefaults.quarantineVirusCritical ?? 5000,
+          quarantineGrowthWarnPct: config.pmgDefaults.quarantineGrowthWarnPct ?? 25,
+          quarantineGrowthWarnMin: config.pmgDefaults.quarantineGrowthWarnMin ?? 250,
+          quarantineGrowthCritPct: config.pmgDefaults.quarantineGrowthCritPct ?? 50,
+          quarantineGrowthCritMin: config.pmgDefaults.quarantineGrowthCritMin ?? 500,
+        });
+      }
+
       // Load global disable flags
       setDisableAllNodes(config.disableAllNodes ?? false);
       setDisableAllGuests(config.disableAllGuests ?? false);
       setDisableAllStorage(config.disableAllStorage ?? false);
       setDisableAllPBS(config.disableAllPBS ?? false);
+      setDisableAllPMG(config.disableAllPMG ?? false);
       setDisableAllDockerHosts(config.disableAllDockerHosts ?? false);
       setDisableAllDockerContainers(config.disableAllDockerContainers ?? false);
 
@@ -685,6 +712,7 @@ export function Alerts() {
       setDisableAllNodesOffline(config.disableAllNodesOffline ?? false);
       setDisableAllGuestsOffline(config.disableAllGuestsOffline ?? false);
       setDisableAllPBSOffline(config.disableAllPBSOffline ?? false);
+      setDisableAllPMGOffline(config.disableAllPMGOffline ?? false);
       setDisableAllDockerHostsOffline(config.disableAllDockerHostsOffline ?? false);
 
       setRawOverridesConfig(config.overrides || {});
@@ -913,11 +941,31 @@ const [timeThresholds, setTimeThresholds] = createSignal({
   const [metricTimeThresholds, setMetricTimeThresholds] =
     createSignal<Record<string, Record<string, number>>>({});
 
+  const [pmgThresholds, setPMGThresholds] = createSignal({
+    queueTotalWarning: 500,
+    queueTotalCritical: 1000,
+    oldestMessageWarnMins: 30,
+    oldestMessageCritMins: 60,
+    deferredQueueWarn: 200,
+    deferredQueueCritical: 500,
+    holdQueueWarn: 100,
+    holdQueueCritical: 300,
+    quarantineSpamWarn: 2000,
+    quarantineSpamCritical: 5000,
+    quarantineVirusWarn: 2000,
+    quarantineVirusCritical: 5000,
+    quarantineGrowthWarnPct: 25,
+    quarantineGrowthWarnMin: 250,
+    quarantineGrowthCritPct: 50,
+    quarantineGrowthCritMin: 500,
+  });
+
   // Global disable flags per resource type
   const [disableAllNodes, setDisableAllNodes] = createSignal(false);
   const [disableAllGuests, setDisableAllGuests] = createSignal(false);
   const [disableAllStorage, setDisableAllStorage] = createSignal(false);
   const [disableAllPBS, setDisableAllPBS] = createSignal(false);
+  const [disableAllPMG, setDisableAllPMG] = createSignal(false);
   const [disableAllDockerHosts, setDisableAllDockerHosts] = createSignal(false);
   const [disableAllDockerContainers, setDisableAllDockerContainers] = createSignal(false);
 
@@ -925,6 +973,7 @@ const [timeThresholds, setTimeThresholds] = createSignal({
   const [disableAllNodesOffline, setDisableAllNodesOffline] = createSignal(false);
   const [disableAllGuestsOffline, setDisableAllGuestsOffline] = createSignal(false);
   const [disableAllPBSOffline, setDisableAllPBSOffline] = createSignal(false);
+  const [disableAllPMGOffline, setDisableAllPMGOffline] = createSignal(false);
   const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
 
   const tabGroups: {
@@ -945,6 +994,7 @@ const [timeThresholds, setTimeThresholds] = createSignal({
       label: 'Configuration',
       items: [
         { id: 'thresholds', label: 'Thresholds' },
+        { id: 'pmg', label: 'PMG' },
         { id: 'destinations', label: 'Notifications' },
         { id: 'schedule', label: 'Schedule' },
       ],
@@ -1009,12 +1059,14 @@ const [timeThresholds, setTimeThresholds] = createSignal({
                       disableAllGuests: disableAllGuests(),
                       disableAllStorage: disableAllStorage(),
                       disableAllPBS: disableAllPBS(),
+                      disableAllPMG: disableAllPMG(),
                       disableAllDockerHosts: disableAllDockerHosts(),
                       disableAllDockerContainers: disableAllDockerContainers(),
                       // Global disable offline alerts flags
                       disableAllNodesOffline: disableAllNodesOffline(),
                       disableAllGuestsOffline: disableAllGuestsOffline(),
                       disableAllPBSOffline: disableAllPBSOffline(),
+                      disableAllPMGOffline: disableAllPMGOffline(),
                       disableAllDockerHostsOffline: disableAllDockerHostsOffline(),
                       guestDefaults: {
                         cpu: createHysteresisThreshold(guestDefaults().cpu),
@@ -1048,6 +1100,7 @@ const [timeThresholds, setTimeThresholds] = createSignal({
                       timeThreshold: timeThreshold() || 0, // Legacy
                       timeThresholds: timeThresholds(),
                       metricTimeThresholds: normalizeMetricDelayMap(metricTimeThresholds()),
+                      pmgDefaults: pmgThresholds(),
                       // Use rawOverridesConfig which is already properly formatted with disabled flags
                       overrides: rawOverridesConfig(),
                       schedule: {
@@ -1260,6 +1313,8 @@ const [timeThresholds, setTimeThresholds] = createSignal({
               setDisableAllStorage={setDisableAllStorage}
               disableAllPBS={disableAllPBS}
               setDisableAllPBS={setDisableAllPBS}
+              disableAllPMG={disableAllPMG}
+              setDisableAllPMG={setDisableAllPMG}
               disableAllDockerHosts={disableAllDockerHosts}
               setDisableAllDockerHosts={setDisableAllDockerHosts}
               disableAllDockerContainers={disableAllDockerContainers}
@@ -1270,8 +1325,19 @@ const [timeThresholds, setTimeThresholds] = createSignal({
               setDisableAllGuestsOffline={setDisableAllGuestsOffline}
               disableAllPBSOffline={disableAllPBSOffline}
               setDisableAllPBSOffline={setDisableAllPBSOffline}
+              disableAllPMGOffline={disableAllPMGOffline}
+              setDisableAllPMGOffline={setDisableAllPMGOffline}
               disableAllDockerHostsOffline={disableAllDockerHostsOffline}
               setDisableAllDockerHostsOffline={setDisableAllDockerHostsOffline}
+            />
+          </Show>
+
+          <Show when={activeTab() === 'pmg'}>
+            <PMGTab
+              hasUnsavedChanges={hasUnsavedChanges}
+              setHasUnsavedChanges={setHasUnsavedChanges}
+              pmgThresholds={pmgThresholds}
+              setPMGThresholds={setPMGThresholds}
             />
           </Show>
 
@@ -1760,6 +1826,8 @@ interface ThresholdsTabProps {
   setDisableAllStorage: (value: boolean) => void;
   disableAllPBS: () => boolean;
   setDisableAllPBS: (value: boolean) => void;
+  disableAllPMG: () => boolean;
+  setDisableAllPMG: (value: boolean) => void;
   disableAllDockerHosts: () => boolean;
   setDisableAllDockerHosts: (value: boolean) => void;
   disableAllDockerContainers: () => boolean;
@@ -1771,6 +1839,8 @@ interface ThresholdsTabProps {
   setDisableAllGuestsOffline: (value: boolean) => void;
   disableAllPBSOffline: () => boolean;
   setDisableAllPBSOffline: (value: boolean) => void;
+  disableAllPMGOffline: () => boolean;
+  setDisableAllPMGOffline: (value: boolean) => void;
   disableAllDockerHostsOffline: () => boolean;
   setDisableAllDockerHostsOffline: (value: boolean) => void;
 }
@@ -1788,6 +1858,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       storage={props.state.storage || []}
       dockerHosts={props.state.dockerHosts || []}
       pbsInstances={props.state.pbs || []}
+      pmgInstances={props.state.pmg || []}
       guestDefaults={props.guestDefaults()}
       guestDisableConnectivity={props.guestDisableConnectivity}
       setGuestDefaults={props.setGuestDefaults}
@@ -1814,6 +1885,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllStorage={props.setDisableAllStorage}
       disableAllPBS={props.disableAllPBS}
       setDisableAllPBS={props.setDisableAllPBS}
+      disableAllPMG={props.disableAllPMG}
+      setDisableAllPMG={props.setDisableAllPMG}
       disableAllDockerHosts={props.disableAllDockerHosts}
       setDisableAllDockerHosts={props.setDisableAllDockerHosts}
       disableAllDockerContainers={props.disableAllDockerContainers}
@@ -1824,9 +1897,263 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllGuestsOffline={props.setDisableAllGuestsOffline}
       disableAllPBSOffline={props.disableAllPBSOffline}
       setDisableAllPBSOffline={props.setDisableAllPBSOffline}
+      disableAllPMGOffline={props.disableAllPMGOffline}
+      setDisableAllPMGOffline={props.setDisableAllPMGOffline}
       disableAllDockerHostsOffline={props.disableAllDockerHostsOffline}
       setDisableAllDockerHostsOffline={props.setDisableAllDockerHostsOffline}
     />
+  );
+}
+
+// PMG Tab - Mail Gateway thresholds
+interface PMGTabProps {
+  hasUnsavedChanges: () => boolean;
+  setHasUnsavedChanges: (value: boolean) => void;
+  pmgThresholds: () => {
+    queueTotalWarning: number;
+    queueTotalCritical: number;
+    oldestMessageWarnMins: number;
+    oldestMessageCritMins: number;
+    deferredQueueWarn: number;
+    deferredQueueCritical: number;
+    holdQueueWarn: number;
+    holdQueueCritical: number;
+    quarantineSpamWarn: number;
+    quarantineSpamCritical: number;
+    quarantineVirusWarn: number;
+    quarantineVirusCritical: number;
+    quarantineGrowthWarnPct: number;
+    quarantineGrowthWarnMin: number;
+    quarantineGrowthCritPct: number;
+    quarantineGrowthCritMin: number;
+  };
+  setPMGThresholds: (value: any) => void;
+}
+
+function PMGTab(props: PMGTabProps) {
+  const thresholds = props.pmgThresholds;
+
+  const updateThreshold = (field: string, value: number) => {
+    props.setPMGThresholds((prev: any) => ({ ...prev, [field]: value }));
+    props.setHasUnsavedChanges(true);
+  };
+
+  return (
+    <div class="space-y-6">
+      {/* Queue Depth Thresholds */}
+      <SettingsPanel title="Queue Depth Monitoring" description="Alert when mail queue sizes exceed these thresholds">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class={formField}>
+            <label class={labelClass}>Total Queue Warning</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().queueTotalWarning}
+              onInput={(e) => updateThreshold('queueTotalWarning', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Trigger warning when total queue depth exceeds this value (default: 500)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Total Queue Critical</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().queueTotalCritical}
+              onInput={(e) => updateThreshold('queueTotalCritical', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Trigger critical when total queue depth exceeds this value (default: 1000)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Deferred Queue Warning</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().deferredQueueWarn}
+              onInput={(e) => updateThreshold('deferredQueueWarn', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Deferred messages warning threshold (default: 200)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Deferred Queue Critical</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().deferredQueueCritical}
+              onInput={(e) => updateThreshold('deferredQueueCritical', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Deferred messages critical threshold (default: 500)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Hold Queue Warning</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().holdQueueWarn}
+              onInput={(e) => updateThreshold('holdQueueWarn', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Held messages warning threshold (default: 100)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Hold Queue Critical</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().holdQueueCritical}
+              onInput={(e) => updateThreshold('holdQueueCritical', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Held messages critical threshold (default: 300)</p>
+          </div>
+        </div>
+      </SettingsPanel>
+
+      {/* Message Age Thresholds */}
+      <SettingsPanel title="Message Age Monitoring" description="Alert when messages remain in queue too long">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class={formField}>
+            <label class={labelClass}>Oldest Message Warning (minutes)</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().oldestMessageWarnMins}
+              onInput={(e) => updateThreshold('oldestMessageWarnMins', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Warning when oldest queued message age exceeds this (default: 30 mins)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Oldest Message Critical (minutes)</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().oldestMessageCritMins}
+              onInput={(e) => updateThreshold('oldestMessageCritMins', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Critical when oldest queued message age exceeds this (default: 60 mins)</p>
+          </div>
+        </div>
+      </SettingsPanel>
+
+      {/* Quarantine Thresholds */}
+      <SettingsPanel title="Quarantine Monitoring" description="Alert on quarantine size and growth">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class={formField}>
+            <label class={labelClass}>Spam Quarantine Warning</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().quarantineSpamWarn}
+              onInput={(e) => updateThreshold('quarantineSpamWarn', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Warning when spam quarantine count exceeds this (default: 2000)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Spam Quarantine Critical</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().quarantineSpamCritical}
+              onInput={(e) => updateThreshold('quarantineSpamCritical', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Critical when spam quarantine count exceeds this (default: 5000)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Virus Quarantine Warning</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().quarantineVirusWarn}
+              onInput={(e) => updateThreshold('quarantineVirusWarn', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Warning when virus quarantine count exceeds this (default: 2000)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Virus Quarantine Critical</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().quarantineVirusCritical}
+              onInput={(e) => updateThreshold('quarantineVirusCritical', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Critical when virus quarantine count exceeds this (default: 5000)</p>
+          </div>
+        </div>
+      </SettingsPanel>
+
+      {/* Quarantine Growth Thresholds */}
+      <SettingsPanel title="Quarantine Growth Detection" description="Alert on rapid quarantine growth">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class={formField}>
+            <label class={labelClass}>Growth Warning Percentage</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={thresholds().quarantineGrowthWarnPct}
+              onInput={(e) => updateThreshold('quarantineGrowthWarnPct', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Warning when quarantine grows by this percentage (default: 25%)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Growth Warning Minimum</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().quarantineGrowthWarnMin}
+              onInput={(e) => updateThreshold('quarantineGrowthWarnMin', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Minimum message increase to trigger warning (default: 250)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Growth Critical Percentage</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={thresholds().quarantineGrowthCritPct}
+              onInput={(e) => updateThreshold('quarantineGrowthCritPct', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Critical when quarantine grows by this percentage (default: 50%)</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass}>Growth Critical Minimum</label>
+            <input
+              type="number"
+              min="0"
+              value={thresholds().quarantineGrowthCritMin}
+              onInput={(e) => updateThreshold('quarantineGrowthCritMin', parseInt(e.currentTarget.value) || 0)}
+              class={controlClass}
+            />
+            <p class={formHelpText}>Minimum message increase to trigger critical (default: 500)</p>
+          </div>
+        </div>
+      </SettingsPanel>
+    </div>
   );
 }
 

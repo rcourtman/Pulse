@@ -3,6 +3,7 @@ package alerts
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -254,6 +255,26 @@ type DockerThresholdConfig struct {
 	MemoryCriticalPct int                 `json:"memoryCriticalPct"` // Memory limit % to trigger critical (default: 95)
 }
 
+// PMGThresholdConfig represents Proxmox Mail Gateway-specific alert thresholds
+type PMGThresholdConfig struct {
+	QueueTotalWarning       int `json:"queueTotalWarning"`       // Total queue depth warning threshold (default: 500)
+	QueueTotalCritical      int `json:"queueTotalCritical"`      // Total queue depth critical threshold (default: 1000)
+	OldestMessageWarnMins   int `json:"oldestMessageWarnMins"`   // Oldest queued message age warning in minutes (default: 30)
+	OldestMessageCritMins   int `json:"oldestMessageCritMins"`   // Oldest queued message age critical in minutes (default: 60)
+	DeferredQueueWarn       int `json:"deferredQueueWarn"`       // Deferred queue depth warning (default: 200)
+	DeferredQueueCritical   int `json:"deferredQueueCritical"`   // Deferred queue depth critical (default: 500)
+	HoldQueueWarn           int `json:"holdQueueWarn"`           // Hold queue depth warning (default: 100)
+	HoldQueueCritical       int `json:"holdQueueCritical"`       // Hold queue depth critical (default: 300)
+	QuarantineSpamWarn      int `json:"quarantineSpamWarn"`      // Spam quarantine absolute warning (default: 2000)
+	QuarantineSpamCritical  int `json:"quarantineSpamCritical"`  // Spam quarantine absolute critical (default: 5000)
+	QuarantineVirusWarn     int `json:"quarantineVirusWarn"`     // Virus quarantine absolute warning (default: 2000)
+	QuarantineVirusCritical int `json:"quarantineVirusCritical"` // Virus quarantine absolute critical (default: 5000)
+	QuarantineGrowthWarnPct int `json:"quarantineGrowthWarnPct"` // Growth % to trigger warning (default: 25)
+	QuarantineGrowthWarnMin int `json:"quarantineGrowthWarnMin"` // Minimum message growth for warning (default: 250)
+	QuarantineGrowthCritPct int `json:"quarantineGrowthCritPct"` // Growth % to trigger critical (default: 50)
+	QuarantineGrowthCritMin int `json:"quarantineGrowthCritMin"` // Minimum message growth for critical (default: 500)
+}
+
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
 	Enabled        bool                       `json:"enabled"`
@@ -261,6 +282,7 @@ type AlertConfig struct {
 	NodeDefaults   ThresholdConfig            `json:"nodeDefaults"`
 	StorageDefault HysteresisThreshold        `json:"storageDefault"`
 	DockerDefaults DockerThresholdConfig      `json:"dockerDefaults"`
+	PMGDefaults    PMGThresholdConfig         `json:"pmgDefaults"`
 	Overrides      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
 	CustomRules    []CustomAlertRule          `json:"customRules,omitempty"`
 	Schedule       ScheduleConfig             `json:"schedule"`
@@ -269,11 +291,13 @@ type AlertConfig struct {
 	DisableAllGuests             bool `json:"disableAllGuests"`             // Disable all alerts for VMs/containers
 	DisableAllStorage            bool `json:"disableAllStorage"`            // Disable all alerts for storage
 	DisableAllPBS                bool `json:"disableAllPBS"`                // Disable all alerts for PBS servers
+	DisableAllPMG                bool `json:"disableAllPMG"`                // Disable all alerts for PMG instances
 	DisableAllDockerHosts        bool `json:"disableAllDockerHosts"`        // Disable all alerts for Docker hosts
 	DisableAllDockerContainers   bool `json:"disableAllDockerContainers"`   // Disable all alerts for Docker containers
 	DisableAllNodesOffline       bool `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
 	DisableAllGuestsOffline      bool `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
 	DisableAllPBSOffline         bool `json:"disableAllPBSOffline"`         // Disable PBS offline alerts globally
+	DisableAllPMGOffline         bool `json:"disableAllPMGOffline"`         // Disable PMG offline alerts globally
 	DisableAllDockerHostsOffline bool `json:"disableAllDockerHostsOffline"` // Disable Docker host offline alerts globally
 	// New configuration options
 	MinimumDelta         float64                   `json:"minimumDelta"`         // Minimum % change to trigger new alert
@@ -282,6 +306,37 @@ type AlertConfig struct {
 	TimeThreshold        int                       `json:"timeThreshold"`        // Legacy: Seconds that threshold must be exceeded before triggering
 	TimeThresholds       map[string]int            `json:"timeThresholds"`       // Per-type delays: guest, node, storage, pbs
 	MetricTimeThresholds map[string]map[string]int `json:"metricTimeThresholds"` // Optional per-metric delays keyed by resource type
+}
+
+// pmgQuarantineSnapshot stores quarantine counts at a point in time for growth detection
+type pmgQuarantineSnapshot struct {
+	Spam      int
+	Virus     int
+	Timestamp time.Time
+}
+
+// pmgMailMetricSample stores a single hourly mail count sample
+type pmgMailMetricSample struct {
+	SpamIn    float64
+	SpamOut   float64
+	VirusIn   float64
+	VirusOut  float64
+	Timestamp time.Time
+}
+
+// pmgBaselineCache stores calculated baseline values for a metric
+type pmgBaselineCache struct {
+	TrimmedMean float64
+	Median      float64
+	LastUpdated time.Time
+}
+
+// pmgAnomalyTracker tracks history and baselines for anomaly detection
+type pmgAnomalyTracker struct {
+	Samples         []pmgMailMetricSample            // Ring buffer (max 48 samples)
+	Baselines       map[string]pmgBaselineCache      // Cached baselines per metric (spamIn, spamOut, virusIn, virusOut)
+	LastSampleTime  time.Time                        // Timestamp of most recent sample
+	SampleCount     int                              // Total samples collected (for warmup check)
 }
 
 // Manager handles alert monitoring and state
@@ -323,6 +378,10 @@ type Manager struct {
 	dockerStateConfirm    map[string]int                  // Track consecutive state confirmations for Docker containers
 	dockerRestartTracking map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
 	dockerLastExitCode    map[string]int                  // Track last exit code for OOM detection
+	// PMG quarantine growth tracking
+	pmgQuarantineHistory map[string][]pmgQuarantineSnapshot // Track quarantine snapshots for growth detection
+	// PMG anomaly detection tracking
+	pmgAnomalyTrackers   map[string]*pmgAnomalyTracker      // Track mail metrics for anomaly detection per PMG instance
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
 	ackState map[string]ackRecord
 }
@@ -358,6 +417,8 @@ func NewManager() *Manager {
 		dockerStateConfirm:    make(map[string]int),
 		dockerRestartTracking: make(map[string]*dockerRestartRecord),
 		dockerLastExitCode:    make(map[string]int),
+		pmgQuarantineHistory:  make(map[string][]pmgQuarantineSnapshot),
+		pmgAnomalyTrackers:    make(map[string]*pmgAnomalyTracker),
 		ackState:              make(map[string]ackRecord),
 		config: AlertConfig{
 			Enabled: true,
@@ -384,6 +445,24 @@ func NewManager() *Manager {
 				RestartWindow:     300, // 5 minutes
 				MemoryWarnPct:     90,
 				MemoryCriticalPct: 95,
+			},
+			PMGDefaults: PMGThresholdConfig{
+				QueueTotalWarning:       500,  // Warning at 500 total queued messages
+				QueueTotalCritical:      1000, // Critical at 1000 total queued messages
+				OldestMessageWarnMins:   30,   // Warning if oldest message is 30+ minutes old
+				OldestMessageCritMins:   60,   // Critical if oldest message is 60+ minutes old
+				DeferredQueueWarn:       200,  // Warning at 200 deferred messages
+				DeferredQueueCritical:   500,  // Critical at 500 deferred messages
+				HoldQueueWarn:           100,  // Warning at 100 held messages
+				HoldQueueCritical:       300,  // Critical at 300 held messages
+				QuarantineSpamWarn:      2000, // Warning at 2000 spam quarantined
+				QuarantineSpamCritical:  5000, // Critical at 5000 spam quarantined
+				QuarantineVirusWarn:     2000, // Warning at 2000 virus quarantined
+				QuarantineVirusCritical: 5000, // Critical at 5000 virus quarantined
+				QuarantineGrowthWarnPct: 25,   // Warning if growth ≥25%
+				QuarantineGrowthWarnMin: 250,  // AND ≥250 messages
+				QuarantineGrowthCritPct: 50,   // Critical if growth ≥50%
+				QuarantineGrowthCritMin: 500,  // AND ≥500 messages
 			},
 			StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
 			MinimumDelta:      2.0, // 2% minimum change
@@ -528,6 +607,56 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	}
 	if config.DockerDefaults.MemoryCriticalPct <= 0 {
 		config.DockerDefaults.MemoryCriticalPct = 95
+	}
+
+	// Initialize PMG defaults if missing/zero
+	if config.PMGDefaults.QueueTotalWarning <= 0 {
+		config.PMGDefaults.QueueTotalWarning = 500
+	}
+	if config.PMGDefaults.QueueTotalCritical <= 0 {
+		config.PMGDefaults.QueueTotalCritical = 1000
+	}
+	if config.PMGDefaults.OldestMessageWarnMins <= 0 {
+		config.PMGDefaults.OldestMessageWarnMins = 30
+	}
+	if config.PMGDefaults.OldestMessageCritMins <= 0 {
+		config.PMGDefaults.OldestMessageCritMins = 60
+	}
+	if config.PMGDefaults.DeferredQueueWarn <= 0 {
+		config.PMGDefaults.DeferredQueueWarn = 200
+	}
+	if config.PMGDefaults.DeferredQueueCritical <= 0 {
+		config.PMGDefaults.DeferredQueueCritical = 500
+	}
+	if config.PMGDefaults.HoldQueueWarn <= 0 {
+		config.PMGDefaults.HoldQueueWarn = 100
+	}
+	if config.PMGDefaults.HoldQueueCritical <= 0 {
+		config.PMGDefaults.HoldQueueCritical = 300
+	}
+	if config.PMGDefaults.QuarantineSpamWarn <= 0 {
+		config.PMGDefaults.QuarantineSpamWarn = 2000
+	}
+	if config.PMGDefaults.QuarantineSpamCritical <= 0 {
+		config.PMGDefaults.QuarantineSpamCritical = 5000
+	}
+	if config.PMGDefaults.QuarantineVirusWarn <= 0 {
+		config.PMGDefaults.QuarantineVirusWarn = 2000
+	}
+	if config.PMGDefaults.QuarantineVirusCritical <= 0 {
+		config.PMGDefaults.QuarantineVirusCritical = 5000
+	}
+	if config.PMGDefaults.QuarantineGrowthWarnPct <= 0 {
+		config.PMGDefaults.QuarantineGrowthWarnPct = 25
+	}
+	if config.PMGDefaults.QuarantineGrowthWarnMin <= 0 {
+		config.PMGDefaults.QuarantineGrowthWarnMin = 250
+	}
+	if config.PMGDefaults.QuarantineGrowthCritPct <= 0 {
+		config.PMGDefaults.QuarantineGrowthCritPct = 50
+	}
+	if config.PMGDefaults.QuarantineGrowthCritMin <= 0 {
+		config.PMGDefaults.QuarantineGrowthCritMin = 500
 	}
 
 	// Ensure minimums for other important fields
@@ -1410,6 +1539,42 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	disablePBSOffline := m.config.DisableAllPBSOffline
 	m.mu.RUnlock()
 
+	// Check override disable BEFORE offline detection to prevent spurious notifications
+	if hasOverride && override.Disabled {
+		m.mu.Lock()
+		// Reset offline confirmation tracking
+		delete(m.offlineConfirmations, pbs.ID)
+		// Clear CPU alert
+		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
+		if _, exists := m.activeAlerts[cpuAlertID]; exists {
+			m.clearAlertNoLock(cpuAlertID)
+			log.Debug().
+				Str("alertID", cpuAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared CPU alert - PBS has alerts disabled")
+		}
+		// Clear Memory alert
+		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
+		if _, exists := m.activeAlerts[memAlertID]; exists {
+			m.clearAlertNoLock(memAlertID)
+			log.Debug().
+				Str("alertID", memAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared Memory alert - PBS has alerts disabled")
+		}
+		// Clear offline alert
+		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
+		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+			m.clearAlertNoLock(offlineAlertID)
+			log.Debug().
+				Str("alertID", offlineAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared offline alert - PBS has alerts disabled")
+		}
+		m.mu.Unlock()
+		return
+	}
+
 	if disablePBSOffline {
 		// Clear tracking and any existing offline alerts when globally disabled
 		m.mu.Lock()
@@ -1424,40 +1589,6 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 			// Clear any existing offline alert if PBS is back online
 			m.clearPBSOfflineAlert(pbs)
 		}
-	}
-
-	// If alerts are disabled for this PBS instance, clear any existing alerts and return
-	if hasOverride && override.Disabled {
-		m.mu.Lock()
-		// Clear CPU alert
-		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
-		if _, exists := m.activeAlerts[cpuAlertID]; exists {
-			m.clearAlertNoLock(cpuAlertID)
-			log.Info().
-				Str("alertID", cpuAlertID).
-				Str("pbs", pbs.Name).
-				Msg("Cleared CPU alert - PBS has alerts disabled")
-		}
-		// Clear Memory alert
-		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
-		if _, exists := m.activeAlerts[memAlertID]; exists {
-			m.clearAlertNoLock(memAlertID)
-			log.Info().
-				Str("alertID", memAlertID).
-				Str("pbs", pbs.Name).
-				Msg("Cleared Memory alert - PBS has alerts disabled")
-		}
-		// Clear offline alert
-		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
-		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			m.clearAlertNoLock(offlineAlertID)
-			log.Info().
-				Str("alertID", offlineAlertID).
-				Str("pbs", pbs.Name).
-				Msg("Cleared offline alert - PBS has alerts disabled")
-		}
-		m.mu.Unlock()
-		return
 	}
 
 	// Check if there are custom thresholds for this PBS instance
@@ -1476,6 +1607,86 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "cpu", pbs.CPU, cpuThreshold, nil)
 		// PBS Memory is already a percentage
 		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "memory", pbs.Memory, memoryThreshold, nil)
+	}
+}
+
+// CheckPMG checks a Proxmox Mail Gateway instance against thresholds
+func (m *Manager) CheckPMG(pmg models.PMGInstance) {
+	m.mu.RLock()
+	if !m.config.Enabled {
+		m.mu.RUnlock()
+		return
+	}
+	if m.config.DisableAllPMG {
+		m.mu.RUnlock()
+		return
+	}
+
+	// Check if there's an override for this PMG instance
+	override, hasOverride := m.config.Overrides[pmg.ID]
+	disablePMGOffline := m.config.DisableAllPMGOffline
+	pmgDefaults := m.config.PMGDefaults
+	m.mu.RUnlock()
+
+	// Check override disable BEFORE offline detection to prevent spurious notifications
+	if hasOverride && override.Disabled {
+		m.mu.Lock()
+		// Reset offline confirmation tracking
+		delete(m.offlineConfirmations, pmg.ID)
+		// Clear all possible PMG alert types
+		alertTypes := []string{"queue-total", "queue-deferred", "queue-hold", "oldest-message"}
+		for _, alertType := range alertTypes {
+			alertID := fmt.Sprintf("%s-%s", pmg.ID, alertType)
+			if _, exists := m.activeAlerts[alertID]; exists {
+				m.clearAlertNoLock(alertID)
+				log.Debug().
+					Str("alertID", alertID).
+					Str("pmg", pmg.Name).
+					Msg("Cleared PMG alert - PMG has alerts disabled")
+			}
+		}
+		// Clear offline alert
+		offlineAlertID := fmt.Sprintf("pmg-offline-%s", pmg.ID)
+		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+			m.clearAlertNoLock(offlineAlertID)
+			log.Debug().
+				Str("alertID", offlineAlertID).
+				Str("pmg", pmg.Name).
+				Msg("Cleared offline alert - PMG has alerts disabled")
+		}
+		m.mu.Unlock()
+		return
+	}
+
+	// Handle offline detection
+	if disablePMGOffline {
+		// Clear tracking and any existing offline alerts when globally disabled
+		m.mu.Lock()
+		delete(m.offlineConfirmations, pmg.ID)
+		m.mu.Unlock()
+		m.clearAlert(fmt.Sprintf("pmg-offline-%s", pmg.ID))
+	} else {
+		// Check if PMG is offline (similar to PBS/nodes)
+		if pmg.Status == "offline" || pmg.ConnectionHealth == "error" || pmg.ConnectionHealth == "unhealthy" {
+			m.checkPMGOffline(pmg)
+		} else {
+			// Clear any existing offline alert if PMG is back online
+			m.clearPMGOfflineAlert(pmg)
+		}
+	}
+
+	// Check metrics only if PMG is online
+	if pmg.Status != "offline" {
+		// Check queue depths across all nodes
+		m.checkPMGQueueDepths(pmg, pmgDefaults)
+		// Check oldest message age across all nodes
+		m.checkPMGOldestMessage(pmg, pmgDefaults)
+		// Check quarantine backlog and growth
+		m.checkPMGQuarantineBacklog(pmg, pmgDefaults)
+		// Check spam/virus rate anomalies
+		m.checkPMGAnomalies(pmg, pmgDefaults)
+		// Check per-node queue health
+		m.checkPMGNodeQueues(pmg, pmgDefaults)
 	}
 }
 
@@ -3489,6 +3700,1114 @@ func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 		Str("host", pbs.Host).
 		Dur("downtime", time.Since(alert.StartTime)).
 		Msg("PBS instance is back online")
+}
+
+// checkPMGOffline creates an alert for offline PMG instances
+func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
+	alertID := fmt.Sprintf("pmg-offline-%s", pmg.ID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if PMG offline alerts are disabled via disableConnectivity flag
+	if override, exists := m.config.Overrides[pmg.ID]; exists && (override.Disabled || override.DisableConnectivity) {
+		// PMG connectivity alerts are disabled, clear any existing alert and return
+		if _, alertExists := m.activeAlerts[alertID]; alertExists {
+			m.clearAlertNoLock(alertID)
+			log.Debug().
+				Str("pmg", pmg.Name).
+				Msg("PMG offline alert cleared (connectivity alerts disabled)")
+		}
+		return
+	}
+
+	// Track confirmation count for this PMG
+	m.offlineConfirmations[pmg.ID]++
+
+	// Require 3 consecutive offline polls (~15 seconds) before alerting
+	if m.offlineConfirmations[pmg.ID] < 3 {
+		log.Debug().
+			Str("pmg", pmg.Name).
+			Int("confirmations", m.offlineConfirmations[pmg.ID]).
+			Msg("PMG offline detected, waiting for confirmation")
+		return
+	}
+
+	// Check if alert already exists
+	if _, exists := m.activeAlerts[alertID]; exists {
+		// Update last seen time
+		m.activeAlerts[alertID].LastSeen = time.Now()
+		return
+	}
+
+	// Create new offline alert after confirmation
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "offline",
+		Level:        AlertLevelCritical,
+		ResourceID:   pmg.ID,
+		ResourceName: pmg.Name,
+		Node:         pmg.Host,
+		Instance:     pmg.Name,
+		Message:      fmt.Sprintf("PMG instance %s is offline", pmg.Name),
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+	}
+
+	m.preserveAlertState(alertID, alert)
+
+	m.activeAlerts[alertID] = alert
+
+	// Log and notify
+	log.Error().
+		Str("pmg", pmg.Name).
+		Str("host", pmg.Host).
+		Int("confirmations", m.offlineConfirmations[pmg.ID]).
+		Msg("PMG instance is offline")
+
+	m.dispatchAlert(alert, true)
+}
+
+// clearPMGOfflineAlert removes offline alert when PMG comes back online
+func (m *Manager) clearPMGOfflineAlert(pmg models.PMGInstance) {
+	alertID := fmt.Sprintf("pmg-offline-%s", pmg.ID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Reset offline confirmation count
+	if count, exists := m.offlineConfirmations[pmg.ID]; exists && count > 0 {
+		log.Debug().
+			Str("pmg", pmg.Name).
+			Int("previousCount", count).
+			Msg("PMG is online, resetting offline confirmation count")
+		delete(m.offlineConfirmations, pmg.ID)
+	}
+
+	// Check if offline alert exists
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		return
+	}
+
+	// Remove from active alerts
+	m.removeActiveAlertNoLock(alertID)
+
+	resolvedAlert := &ResolvedAlert{
+		Alert:        alert,
+		ResolvedTime: time.Now(),
+	}
+	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+
+	// Send recovery notification
+	if m.onResolved != nil {
+		m.onResolved(alertID)
+	}
+
+	// Log recovery
+	log.Info().
+		Str("pmg", pmg.Name).
+		Str("host", pmg.Host).
+		Dur("downtime", time.Since(alert.StartTime)).
+		Msg("PMG instance is back online")
+}
+
+// checkPMGQueueDepths checks PMG mail queue depths and creates alerts
+// Evaluates all queue types (total, deferred, hold) independently
+func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresholdConfig) {
+	// Aggregate queue totals across all nodes
+	var totalQueue, totalDeferred, totalHold int
+
+	for _, node := range pmg.Nodes {
+		if node.QueueStatus != nil {
+			totalQueue += node.QueueStatus.Total
+			totalDeferred += node.QueueStatus.Deferred
+			totalHold += node.QueueStatus.Hold
+		}
+	}
+
+	// Check total queue depth
+	if defaults.QueueTotalWarning > 0 || defaults.QueueTotalCritical > 0 {
+		alertID := fmt.Sprintf("%s-queue-total", pmg.ID)
+		var level AlertLevel
+		var threshold int
+		var shouldAlert bool
+
+		if defaults.QueueTotalCritical > 0 && totalQueue >= defaults.QueueTotalCritical {
+			level = AlertLevelCritical
+			threshold = defaults.QueueTotalCritical
+			shouldAlert = true
+		} else if defaults.QueueTotalWarning > 0 && totalQueue >= defaults.QueueTotalWarning {
+			level = AlertLevelWarning
+			threshold = defaults.QueueTotalWarning
+			shouldAlert = true
+		}
+
+		if !shouldAlert {
+			m.clearAlert(alertID)
+		} else {
+			m.mu.Lock()
+			if alert, exists := m.activeAlerts[alertID]; exists {
+				alert.LastSeen = time.Now()
+				alert.Value = float64(totalQueue)
+				alert.Threshold = float64(threshold)
+				alert.Level = level
+			} else {
+				alert := &Alert{
+					ID:           alertID,
+					Type:         "queue-depth",
+					Level:        level,
+					ResourceID:   pmg.ID,
+					ResourceName: pmg.Name,
+					Node:         pmg.Host,
+					Instance:     pmg.Name,
+					Message:      fmt.Sprintf("PMG %s has %d total messages in queue (threshold: %d)", pmg.Name, totalQueue, threshold),
+					Value:        float64(totalQueue),
+					Threshold:    float64(threshold),
+					StartTime:    time.Now(),
+					LastSeen:     time.Now(),
+				}
+				m.activeAlerts[alertID] = alert
+				m.dispatchAlert(alert, true)
+				log.Warn().
+					Str("pmg", pmg.Name).
+					Int("total_queue", totalQueue).
+					Int("threshold", threshold).
+					Str("level", string(level)).
+					Msg("PMG total queue depth alert triggered")
+			}
+			m.mu.Unlock()
+		}
+	}
+
+	// Check deferred queue depth
+	if defaults.DeferredQueueWarn > 0 || defaults.DeferredQueueCritical > 0 {
+		alertID := fmt.Sprintf("%s-queue-deferred", pmg.ID)
+		var level AlertLevel
+		var threshold int
+		var shouldAlert bool
+
+		if defaults.DeferredQueueCritical > 0 && totalDeferred >= defaults.DeferredQueueCritical {
+			level = AlertLevelCritical
+			threshold = defaults.DeferredQueueCritical
+			shouldAlert = true
+		} else if defaults.DeferredQueueWarn > 0 && totalDeferred >= defaults.DeferredQueueWarn {
+			level = AlertLevelWarning
+			threshold = defaults.DeferredQueueWarn
+			shouldAlert = true
+		}
+
+		if !shouldAlert {
+			m.clearAlert(alertID)
+		} else {
+			m.mu.Lock()
+			if alert, exists := m.activeAlerts[alertID]; exists {
+				alert.LastSeen = time.Now()
+				alert.Value = float64(totalDeferred)
+				alert.Threshold = float64(threshold)
+				alert.Level = level
+			} else {
+				alert := &Alert{
+					ID:           alertID,
+					Type:         "queue-deferred",
+					Level:        level,
+					ResourceID:   pmg.ID,
+					ResourceName: pmg.Name,
+					Node:         pmg.Host,
+					Instance:     pmg.Name,
+					Message:      fmt.Sprintf("PMG %s has %d deferred messages (threshold: %d)", pmg.Name, totalDeferred, threshold),
+					Value:        float64(totalDeferred),
+					Threshold:    float64(threshold),
+					StartTime:    time.Now(),
+					LastSeen:     time.Now(),
+				}
+				m.activeAlerts[alertID] = alert
+				m.dispatchAlert(alert, true)
+				log.Warn().
+					Str("pmg", pmg.Name).
+					Int("deferred_queue", totalDeferred).
+					Int("threshold", threshold).
+					Str("level", string(level)).
+					Msg("PMG deferred queue depth alert triggered")
+			}
+			m.mu.Unlock()
+		}
+	}
+
+	// Check hold queue depth
+	if defaults.HoldQueueWarn > 0 || defaults.HoldQueueCritical > 0 {
+		alertID := fmt.Sprintf("%s-queue-hold", pmg.ID)
+		var level AlertLevel
+		var threshold int
+		var shouldAlert bool
+
+		if defaults.HoldQueueCritical > 0 && totalHold >= defaults.HoldQueueCritical {
+			level = AlertLevelCritical
+			threshold = defaults.HoldQueueCritical
+			shouldAlert = true
+		} else if defaults.HoldQueueWarn > 0 && totalHold >= defaults.HoldQueueWarn {
+			level = AlertLevelWarning
+			threshold = defaults.HoldQueueWarn
+			shouldAlert = true
+		}
+
+		if !shouldAlert {
+			m.clearAlert(alertID)
+		} else {
+			m.mu.Lock()
+			if alert, exists := m.activeAlerts[alertID]; exists {
+				alert.LastSeen = time.Now()
+				alert.Value = float64(totalHold)
+				alert.Threshold = float64(threshold)
+				alert.Level = level
+			} else {
+				alert := &Alert{
+					ID:           alertID,
+					Type:         "queue-hold",
+					Level:        level,
+					ResourceID:   pmg.ID,
+					ResourceName: pmg.Name,
+					Node:         pmg.Host,
+					Instance:     pmg.Name,
+					Message:      fmt.Sprintf("PMG %s has %d held messages (threshold: %d)", pmg.Name, totalHold, threshold),
+					Value:        float64(totalHold),
+					Threshold:    float64(threshold),
+					StartTime:    time.Now(),
+					LastSeen:     time.Now(),
+				}
+				m.activeAlerts[alertID] = alert
+				m.dispatchAlert(alert, true)
+				log.Warn().
+					Str("pmg", pmg.Name).
+					Int("hold_queue", totalHold).
+					Int("threshold", threshold).
+					Str("level", string(level)).
+					Msg("PMG hold queue depth alert triggered")
+			}
+			m.mu.Unlock()
+		}
+	}
+}
+
+// checkPMGOldestMessage checks oldest queued message age and creates alerts
+func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThresholdConfig) {
+	if defaults.OldestMessageWarnMins <= 0 && defaults.OldestMessageCritMins <= 0 {
+		return
+	}
+
+	// Find the oldest message age across all nodes
+	var oldestAge int64 // in seconds
+	for _, node := range pmg.Nodes {
+		if node.QueueStatus != nil && node.QueueStatus.OldestAge > oldestAge {
+			oldestAge = node.QueueStatus.OldestAge
+		}
+	}
+
+	if oldestAge == 0 {
+		// No messages in queue, clear any existing alert
+		m.clearAlert(fmt.Sprintf("%s-oldest-message", pmg.ID))
+		return
+	}
+
+	alertID := fmt.Sprintf("%s-oldest-message", pmg.ID)
+	oldestMinutes := oldestAge / 60
+
+	var level AlertLevel
+	var threshold int64
+
+	if defaults.OldestMessageCritMins > 0 && oldestMinutes >= int64(defaults.OldestMessageCritMins) {
+		level = AlertLevelCritical
+		threshold = int64(defaults.OldestMessageCritMins)
+	} else if defaults.OldestMessageWarnMins > 0 && oldestMinutes >= int64(defaults.OldestMessageWarnMins) {
+		level = AlertLevelWarning
+		threshold = int64(defaults.OldestMessageWarnMins)
+	} else {
+		// Oldest message is below thresholds, clear any existing alert
+		m.clearAlert(alertID)
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if alert already exists
+	if alert, exists := m.activeAlerts[alertID]; exists {
+		// Update existing alert
+		alert.LastSeen = time.Now()
+		alert.Value = float64(oldestMinutes)
+		alert.Threshold = float64(threshold)
+		alert.Level = level
+		return
+	}
+
+	// Create new alert
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "message-age",
+		Level:        level,
+		ResourceID:   pmg.ID,
+		ResourceName: pmg.Name,
+		Node:         pmg.Host,
+		Instance:     pmg.Name,
+		Message:      fmt.Sprintf("PMG %s has messages queued for %d minutes (threshold: %d minutes)", pmg.Name, oldestMinutes, threshold),
+		Value:        float64(oldestMinutes),
+		Threshold:    float64(threshold),
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+	}
+
+	m.activeAlerts[alertID] = alert
+	m.dispatchAlert(alert, true)
+
+	log.Warn().
+		Str("pmg", pmg.Name).
+		Int64("oldest_minutes", oldestMinutes).
+		Int64("threshold", threshold).
+		Str("level", string(level)).
+		Msg("PMG oldest message age alert triggered")
+}
+
+// checkPMGNodeQueues checks individual PMG node queue health
+// Uses scaled thresholds (60% warn, 80% crit) and outlier detection
+func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresholdConfig) {
+	if len(pmg.Nodes) == 0 {
+		return
+	}
+
+	// Calculate median queue values across nodes for outlier detection
+	nodeQueueTotals := make([]int, 0, len(pmg.Nodes))
+	nodeQueueDeferred := make([]int, 0, len(pmg.Nodes))
+	nodeQueueHold := make([]int, 0, len(pmg.Nodes))
+
+	for _, node := range pmg.Nodes {
+		if node.QueueStatus != nil {
+			nodeQueueTotals = append(nodeQueueTotals, node.QueueStatus.Total)
+			nodeQueueDeferred = append(nodeQueueDeferred, node.QueueStatus.Deferred)
+			nodeQueueHold = append(nodeQueueHold, node.QueueStatus.Hold)
+		}
+	}
+
+	medianTotal := calculateMedianInt(nodeQueueTotals)
+	medianDeferred := calculateMedianInt(nodeQueueDeferred)
+	medianHold := calculateMedianInt(nodeQueueHold)
+
+	// Scaled thresholds: 60% for warning, 80% for critical (computed once, used for all nodes)
+	scaledQueueWarn := scaleThreshold(defaults.QueueTotalWarning, 0.6)
+	scaledQueueCrit := scaleThreshold(defaults.QueueTotalCritical, 0.8)
+	scaledDeferredWarn := scaleThreshold(defaults.DeferredQueueWarn, 0.6)
+	scaledDeferredCrit := scaleThreshold(defaults.DeferredQueueCritical, 0.8)
+	scaledHoldWarn := scaleThreshold(defaults.HoldQueueWarn, 0.6)
+	scaledHoldCrit := scaleThreshold(defaults.HoldQueueCritical, 0.8)
+	scaledAgeWarn := scaleThreshold(defaults.OldestMessageWarnMins, 0.6)
+	scaledAgeCrit := scaleThreshold(defaults.OldestMessageCritMins, 0.8)
+
+	// Check each node
+	for _, node := range pmg.Nodes {
+		if node.QueueStatus == nil {
+			continue
+		}
+
+		// Check total queue - always check thresholds
+		if scaledQueueWarn > 0 || scaledQueueCrit > 0 {
+			total := node.QueueStatus.Total
+			alertID := fmt.Sprintf("%s-%s-queue-total", pmg.ID, node.Name)
+			var level AlertLevel
+			var threshold int
+
+			if scaledQueueCrit > 0 && total >= scaledQueueCrit {
+				level = AlertLevelCritical
+				threshold = scaledQueueCrit
+			} else if scaledQueueWarn > 0 && total >= scaledQueueWarn {
+				level = AlertLevelWarning
+				threshold = scaledQueueWarn
+			} else {
+				m.clearAlert(alertID)
+				continue
+			}
+
+			// Add outlier indicator to message if applicable
+			isOutlier := isQueueOutlier(total, medianTotal)
+			outlierNote := ""
+			if isOutlier {
+				outlierNote = ", outlier"
+			}
+
+			m.createOrUpdateNodeAlert(alertID, pmg, node.Name, "queue-total", level, float64(total), float64(threshold),
+				fmt.Sprintf("PMG node %s on %s has %d total messages in queue (threshold: %d%s)",
+					node.Name, pmg.Name, total, threshold, outlierNote))
+		}
+
+		// Check deferred queue - always check thresholds
+		if scaledDeferredWarn > 0 || scaledDeferredCrit > 0 {
+			deferred := node.QueueStatus.Deferred
+			alertID := fmt.Sprintf("%s-%s-queue-deferred", pmg.ID, node.Name)
+			var level AlertLevel
+			var threshold int
+
+			if scaledDeferredCrit > 0 && deferred >= scaledDeferredCrit {
+				level = AlertLevelCritical
+				threshold = scaledDeferredCrit
+			} else if scaledDeferredWarn > 0 && deferred >= scaledDeferredWarn {
+				level = AlertLevelWarning
+				threshold = scaledDeferredWarn
+			} else {
+				m.clearAlert(alertID)
+				continue
+			}
+
+			// Add outlier indicator to message if applicable
+			isOutlier := isQueueOutlier(deferred, medianDeferred)
+			outlierNote := ""
+			if isOutlier {
+				outlierNote = ", outlier"
+			}
+
+			m.createOrUpdateNodeAlert(alertID, pmg, node.Name, "queue-deferred", level, float64(deferred), float64(threshold),
+				fmt.Sprintf("PMG node %s on %s has %d deferred messages (threshold: %d%s)",
+					node.Name, pmg.Name, deferred, threshold, outlierNote))
+		}
+
+		// Check hold queue - always check thresholds
+		if scaledHoldWarn > 0 || scaledHoldCrit > 0 {
+			hold := node.QueueStatus.Hold
+			alertID := fmt.Sprintf("%s-%s-queue-hold", pmg.ID, node.Name)
+			var level AlertLevel
+			var threshold int
+
+			if scaledHoldCrit > 0 && hold >= scaledHoldCrit {
+				level = AlertLevelCritical
+				threshold = scaledHoldCrit
+			} else if scaledHoldWarn > 0 && hold >= scaledHoldWarn {
+				level = AlertLevelWarning
+				threshold = scaledHoldWarn
+			} else {
+				m.clearAlert(alertID)
+				continue
+			}
+
+			// Add outlier indicator to message if applicable
+			isOutlier := isQueueOutlier(hold, medianHold)
+			outlierNote := ""
+			if isOutlier {
+				outlierNote = ", outlier"
+			}
+
+			m.createOrUpdateNodeAlert(alertID, pmg, node.Name, "queue-hold", level, float64(hold), float64(threshold),
+				fmt.Sprintf("PMG node %s on %s has %d held messages (threshold: %d%s)",
+					node.Name, pmg.Name, hold, threshold, outlierNote))
+		}
+
+		// Check oldest message age per node
+		if scaledAgeWarn > 0 || scaledAgeCrit > 0 {
+			oldestAge := node.QueueStatus.OldestAge
+			if oldestAge > 0 {
+				oldestMinutes := oldestAge / 60
+				alertID := fmt.Sprintf("%s-%s-oldest-message", pmg.ID, node.Name)
+				var level AlertLevel
+				var threshold int64
+
+				if scaledAgeCrit > 0 && oldestMinutes >= int64(scaledAgeCrit) {
+					level = AlertLevelCritical
+					threshold = int64(scaledAgeCrit)
+				} else if scaledAgeWarn > 0 && oldestMinutes >= int64(scaledAgeWarn) {
+					level = AlertLevelWarning
+					threshold = int64(scaledAgeWarn)
+				} else {
+					m.clearAlert(alertID)
+					continue
+				}
+
+				m.createOrUpdateNodeAlert(alertID, pmg, node.Name, "message-age", level, float64(oldestMinutes), float64(threshold),
+					fmt.Sprintf("PMG node %s on %s has messages queued for %d minutes (threshold: %d min, node-specific)",
+						node.Name, pmg.Name, oldestMinutes, threshold))
+			}
+		}
+	}
+}
+
+// isQueueOutlier determines if a node's queue value is a significant outlier
+// Returns true if value is >40% above the median across all nodes
+func isQueueOutlier(value, median int) bool {
+	if median == 0 {
+		return value > 0
+	}
+	percentAboveMedian := float64(value-median) / float64(median) * 100
+	return percentAboveMedian > 40
+}
+
+// scaleThreshold applies a scaling factor to a threshold and ensures minimum value of 1
+// Uses ceiling to avoid truncation issues with small thresholds
+func scaleThreshold(threshold int, scaleFactor float64) int {
+	if threshold <= 0 {
+		return 0
+	}
+	scaled := int(math.Ceil(float64(threshold) * scaleFactor))
+	if scaled < 1 {
+		return 1
+	}
+	return scaled
+}
+
+// calculateMedianInt calculates median of integer slice
+func calculateMedianInt(values []int) int {
+	if len(values) == 0 {
+		return 0
+	}
+
+	// Copy and sort
+	sorted := make([]int, len(values))
+	copy(sorted, values)
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[i] > sorted[j] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+
+	mid := len(sorted) / 2
+	if len(sorted)%2 == 0 {
+		return (sorted[mid-1] + sorted[mid]) / 2
+	}
+	return sorted[mid]
+}
+
+// createOrUpdateNodeAlert creates or updates a per-node alert
+func (m *Manager) createOrUpdateNodeAlert(alertID string, pmg models.PMGInstance, nodeName, alertType string, level AlertLevel, value, threshold float64, message string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if alert already exists
+	if alert, exists := m.activeAlerts[alertID]; exists {
+		alert.LastSeen = time.Now()
+		alert.Value = value
+		alert.Threshold = threshold
+		alert.Level = level
+		alert.Message = message
+		return
+	}
+
+	// Create new alert
+	alert := &Alert{
+		ID:           alertID,
+		Type:         alertType,
+		Level:        level,
+		ResourceID:   pmg.ID,
+		ResourceName: pmg.Name,
+		Node:         nodeName,
+		Instance:     pmg.Name,
+		Message:      message,
+		Value:        value,
+		Threshold:    threshold,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+	}
+
+	m.activeAlerts[alertID] = alert
+	m.dispatchAlert(alert, true)
+
+	log.Warn().
+		Str("pmg", pmg.Name).
+		Str("node", nodeName).
+		Str("type", alertType).
+		Float64("value", value).
+		Float64("threshold", threshold).
+		Str("level", string(level)).
+		Msg("PMG per-node alert triggered")
+}
+
+// checkPMGQuarantineBacklog checks quarantine backlog and growth rates
+func (m *Manager) checkPMGQuarantineBacklog(pmg models.PMGInstance, defaults PMGThresholdConfig) {
+	if pmg.Quarantine == nil {
+		m.clearAlert(fmt.Sprintf("%s-quarantine-spam", pmg.ID))
+		m.clearAlert(fmt.Sprintf("%s-quarantine-virus", pmg.ID))
+		return
+	}
+
+	now := time.Now()
+	currentSpam := pmg.Quarantine.Spam
+	currentVirus := pmg.Quarantine.Virus
+
+	// Store current snapshot
+	m.mu.Lock()
+	snapshot := pmgQuarantineSnapshot{
+		Spam:      currentSpam,
+		Virus:     currentVirus,
+		Timestamp: now,
+	}
+
+	// Get or create history for this PMG instance
+	history := m.pmgQuarantineHistory[pmg.ID]
+	history = append(history, snapshot)
+
+	// Clean old snapshots (keep last 3 hours)
+	cutoff := now.Add(-3 * time.Hour)
+	validSnapshots := make([]pmgQuarantineSnapshot, 0, len(history))
+	for _, snap := range history {
+		if snap.Timestamp.After(cutoff) {
+			validSnapshots = append(validSnapshots, snap)
+		}
+	}
+	m.pmgQuarantineHistory[pmg.ID] = validSnapshots
+	m.mu.Unlock()
+
+	// Find snapshot from ~2 hours ago (within ±15 min tolerance)
+	var twoHoursAgo *pmgQuarantineSnapshot
+	targetTime := now.Add(-2 * time.Hour)
+	minDiff := 15 * time.Minute
+
+	for i := range validSnapshots {
+		snap := &validSnapshots[i]
+		diff := snap.Timestamp.Sub(targetTime)
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff < minDiff {
+			minDiff = diff
+			twoHoursAgo = snap
+		}
+	}
+
+	// Check spam quarantine
+	m.checkQuarantineMetric(pmg, "spam", currentSpam, twoHoursAgo, defaults)
+
+	// Check virus quarantine
+	m.checkQuarantineMetric(pmg, "virus", currentVirus, twoHoursAgo, defaults)
+}
+
+// checkQuarantineMetric checks a single quarantine metric (spam or virus)
+func (m *Manager) checkQuarantineMetric(pmg models.PMGInstance, metricType string, current int, twoHoursAgo *pmgQuarantineSnapshot, defaults PMGThresholdConfig) {
+	alertID := fmt.Sprintf("%s-quarantine-%s", pmg.ID, metricType)
+
+	var absoluteWarn, absoluteCrit int
+	var previousCount int
+
+	// Get thresholds and previous count based on metric type
+	if metricType == "spam" {
+		absoluteWarn = defaults.QuarantineSpamWarn
+		absoluteCrit = defaults.QuarantineSpamCritical
+		if twoHoursAgo != nil {
+			previousCount = twoHoursAgo.Spam
+		}
+	} else { // virus
+		absoluteWarn = defaults.QuarantineVirusWarn
+		absoluteCrit = defaults.QuarantineVirusCritical
+		if twoHoursAgo != nil {
+			previousCount = twoHoursAgo.Virus
+		}
+	}
+
+	var level AlertLevel
+	var message string
+	var threshold int
+	var alertTriggered bool
+
+	// Check absolute thresholds first
+	if absoluteCrit > 0 && current >= absoluteCrit {
+		level = AlertLevelCritical
+		threshold = absoluteCrit
+		message = fmt.Sprintf("PMG %s has %d %s messages in quarantine (threshold: %d)", pmg.Name, current, metricType, threshold)
+		alertTriggered = true
+	} else if absoluteWarn > 0 && current >= absoluteWarn {
+		level = AlertLevelWarning
+		threshold = absoluteWarn
+		message = fmt.Sprintf("PMG %s has %d %s messages in quarantine (threshold: %d)", pmg.Name, current, metricType, threshold)
+		alertTriggered = true
+	}
+
+	// Check growth thresholds if we have historical data
+	if twoHoursAgo != nil && previousCount > 0 {
+		growth := current - previousCount
+		growthPct := (float64(growth) / float64(previousCount)) * 100
+
+		// Critical growth: ≥50% AND ≥500 messages
+		if defaults.QuarantineGrowthCritPct > 0 && defaults.QuarantineGrowthCritMin > 0 {
+			if growthPct >= float64(defaults.QuarantineGrowthCritPct) && growth >= defaults.QuarantineGrowthCritMin {
+				if level != AlertLevelCritical { // Only override if not already critical from absolute
+					level = AlertLevelCritical
+					threshold = previousCount + defaults.QuarantineGrowthCritMin
+					message = fmt.Sprintf("PMG %s %s quarantine growing rapidly: +%d messages (+%.1f%%) in 2 hours", pmg.Name, metricType, growth, growthPct)
+					alertTriggered = true
+				}
+			}
+		}
+
+		// Warning growth: ≥25% AND ≥250 messages (if not already critical)
+		if level != AlertLevelCritical && defaults.QuarantineGrowthWarnPct > 0 && defaults.QuarantineGrowthWarnMin > 0 {
+			if growthPct >= float64(defaults.QuarantineGrowthWarnPct) && growth >= defaults.QuarantineGrowthWarnMin {
+				level = AlertLevelWarning
+				threshold = previousCount + defaults.QuarantineGrowthWarnMin
+				message = fmt.Sprintf("PMG %s %s quarantine growing: +%d messages (+%.1f%%) in 2 hours", pmg.Name, metricType, growth, growthPct)
+				alertTriggered = true
+			}
+		}
+	}
+
+	// Clear alert if no thresholds exceeded
+	if !alertTriggered {
+		m.clearAlert(alertID)
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if alert already exists
+	if alert, exists := m.activeAlerts[alertID]; exists {
+		// Update existing alert
+		alert.LastSeen = time.Now()
+		alert.Value = float64(current)
+		alert.Threshold = float64(threshold)
+		alert.Level = level
+		alert.Message = message
+		return
+	}
+
+	// Create new alert
+	alert := &Alert{
+		ID:           alertID,
+		Type:         fmt.Sprintf("quarantine-%s", metricType),
+		Level:        level,
+		ResourceID:   pmg.ID,
+		ResourceName: pmg.Name,
+		Node:         pmg.Host,
+		Instance:     pmg.Name,
+		Message:      message,
+		Value:        float64(current),
+		Threshold:    float64(threshold),
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+	}
+
+	m.activeAlerts[alertID] = alert
+	m.dispatchAlert(alert, true)
+
+	log.Warn().
+		Str("pmg", pmg.Name).
+		Str("type", metricType).
+		Int("current", current).
+		Int("threshold", threshold).
+		Str("level", string(level)).
+		Msg("PMG quarantine backlog alert triggered")
+}
+
+// calculateTrimmedBaseline computes a robust baseline from historical samples
+// using trimmed mean with median fallback as specified by Codex
+func calculateTrimmedBaseline(samples []float64) (baseline float64, trustworthy bool) {
+	sampleCount := len(samples)
+
+	// Need at least 12 samples for trustworthy baseline (warmup period)
+	if sampleCount < 12 {
+		return 0, false
+	}
+
+	// For full 24-sample baseline, use trimmed mean
+	if sampleCount >= 24 {
+		// Create a copy for sorting
+		sorted := make([]float64, len(samples))
+		copy(sorted, samples)
+
+		// Sort samples
+		for i := 0; i < len(sorted); i++ {
+			for j := i + 1; j < len(sorted); j++ {
+				if sorted[i] > sorted[j] {
+					sorted[i], sorted[j] = sorted[j], sorted[i]
+				}
+			}
+		}
+
+		// Calculate median
+		var median float64
+		mid := len(sorted) / 2
+		if len(sorted)%2 == 0 {
+			median = (sorted[mid-1] + sorted[mid]) / 2
+		} else {
+			median = sorted[mid]
+		}
+
+		// Calculate trimmed mean: drop top and bottom 2, average remaining 20
+		if len(sorted) >= 24 {
+			trimmed := sorted[2 : len(sorted)-2]
+			sum := 0.0
+			for _, val := range trimmed {
+				sum += val
+			}
+			trimmedMean := sum / float64(len(trimmed))
+
+			// Fallback rule: if trimmed mean differs from median by >40%, use median
+			diff := trimmedMean - median
+			if diff < 0 {
+				diff = -diff
+			}
+			percentDiff := (diff / median) * 100
+
+			if percentDiff > 40 {
+				return median, true
+			}
+			return trimmedMean, true
+		}
+	}
+
+	// For 12-23 samples, use simple mean (not enough for trimming)
+	sum := 0.0
+	for _, val := range samples {
+		sum += val
+	}
+	return sum / float64(len(samples)), true
+}
+
+// checkPMGAnomalies detects spam/virus rate anomalies using trimmed baseline
+func (m *Manager) checkPMGAnomalies(pmg models.PMGInstance, defaults PMGThresholdConfig) {
+	// Need mail count data
+	if len(pmg.MailCount) == 0 {
+		return
+	}
+
+	// Get the latest hourly sample (most recent)
+	latest := pmg.MailCount[len(pmg.MailCount)-1]
+	now := time.Now()
+
+	// Get or create anomaly tracker for this PMG instance
+	m.mu.Lock()
+	tracker := m.pmgAnomalyTrackers[pmg.ID]
+	if tracker == nil {
+		tracker = &pmgAnomalyTracker{
+			Samples:   make([]pmgMailMetricSample, 0, 48),
+			Baselines: make(map[string]pmgBaselineCache),
+		}
+		m.pmgAnomalyTrackers[pmg.ID] = tracker
+	}
+
+	// Create sample from latest mail count
+	sample := pmgMailMetricSample{
+		SpamIn:    latest.SpamIn,
+		SpamOut:   latest.SpamOut,
+		VirusIn:   latest.VirusIn,
+		VirusOut:  latest.VirusOut,
+		Timestamp: latest.Timestamp,
+	}
+
+	// Check for duplicate timestamp (already processed this sample)
+	if !tracker.LastSampleTime.IsZero() && !sample.Timestamp.After(tracker.LastSampleTime) {
+		m.mu.Unlock()
+		return
+	}
+
+	// Check for timestamp gaps (>90 min indicates data discontinuity)
+	if !tracker.LastSampleTime.IsZero() {
+		gap := sample.Timestamp.Sub(tracker.LastSampleTime)
+		if gap > 90*time.Minute {
+			// Discard old samples - data gap detected
+			log.Debug().
+				Str("pmg", pmg.Name).
+				Dur("gap", gap).
+				Msg("PMG mail count data gap detected, resetting anomaly history")
+			tracker.Samples = make([]pmgMailMetricSample, 0, 48)
+			tracker.SampleCount = 0
+		}
+	}
+
+	// Add sample to ring buffer
+	tracker.Samples = append(tracker.Samples, sample)
+	tracker.SampleCount++
+	tracker.LastSampleTime = sample.Timestamp
+
+	// Maintain ring buffer size (keep last 48)
+	if len(tracker.Samples) > 48 {
+		tracker.Samples = tracker.Samples[len(tracker.Samples)-48:]
+	}
+
+	sampleCount := len(tracker.Samples)
+	m.mu.Unlock()
+
+	// Need at least 12 samples for baseline warmup
+	if sampleCount < 12 {
+		log.Debug().
+			Str("pmg", pmg.Name).
+			Int("samples", sampleCount).
+			Msg("PMG anomaly detection warming up (need 12 samples)")
+		return
+	}
+
+	// Calculate baselines and check each metric
+	metrics := []struct {
+		name      string
+		current   float64
+		extractor func(pmgMailMetricSample) float64
+	}{
+		{"spamIn", sample.SpamIn, func(s pmgMailMetricSample) float64 { return s.SpamIn }},
+		{"spamOut", sample.SpamOut, func(s pmgMailMetricSample) float64 { return s.SpamOut }},
+		{"virusIn", sample.VirusIn, func(s pmgMailMetricSample) float64 { return s.VirusIn }},
+		{"virusOut", sample.VirusOut, func(s pmgMailMetricSample) float64 { return s.VirusOut }},
+	}
+
+	for _, metric := range metrics {
+		m.checkAnomalyMetric(pmg, tracker, metric.name, metric.current, metric.extractor, now)
+	}
+}
+
+// checkAnomalyMetric checks a single spam/virus metric for anomalies
+func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomalyTracker, metricName string, current float64, extractor func(pmgMailMetricSample) float64, now time.Time) {
+	// Extract historical values for this metric (excluding current sample)
+	m.mu.RLock()
+	samples := tracker.Samples
+	m.mu.RUnlock()
+
+	if len(samples) < 2 {
+		return
+	}
+
+	// Get previous 24 samples (or all available if less than 25 total)
+	startIdx := 0
+	if len(samples) > 25 {
+		startIdx = len(samples) - 25
+	}
+	historicalSamples := samples[startIdx : len(samples)-1] // Exclude current (last) sample
+
+	// Extract metric values
+	values := make([]float64, 0, len(historicalSamples))
+	for _, s := range historicalSamples {
+		values = append(values, extractor(s))
+	}
+
+	// Calculate baseline
+	baseline, trustworthy := calculateTrimmedBaseline(values)
+	if !trustworthy {
+		return
+	}
+
+	// Handle zero baseline edge case
+	if baseline == 0 && current > 0 {
+		baseline = 1.0 // Treat as 1 for ratio math
+	}
+
+	// Determine thresholds based on Codex spec
+	var warnRatio, critRatio float64
+	var warnDelta, critDelta float64
+
+	if baseline < 40 {
+		// Quiet site: use minimum absolute deltas
+		warnRatio = 0
+		critRatio = 0
+		warnDelta = baseline + 60
+		critDelta = baseline + 120
+	} else {
+		// Normal site: use ratio + absolute delta
+		warnRatio = 1.8
+		critRatio = 2.5
+		warnDelta = baseline + 150
+		critDelta = baseline + 300
+	}
+
+	alertID := fmt.Sprintf("%s-anomaly-%s", pmg.ID, metricName)
+	pendingKey := fmt.Sprintf("pmg-anomaly-%s-%s", pmg.ID, metricName)
+
+	var level AlertLevel
+	var triggered bool
+	var ratio float64
+
+	if baseline > 0 {
+		ratio = current / baseline
+	}
+
+	// Check critical threshold
+	if critRatio > 0 && ratio >= critRatio && current >= critDelta {
+		level = AlertLevelCritical
+		triggered = true
+	} else if warnRatio > 0 && ratio >= warnRatio && current >= warnDelta {
+		level = AlertLevelWarning
+		triggered = true
+	} else if baseline < 40 {
+		// Quiet site absolute check
+		if current >= critDelta {
+			level = AlertLevelCritical
+			triggered = true
+		} else if current >= warnDelta {
+			level = AlertLevelWarning
+			triggered = true
+		}
+	}
+
+	// Two-sample confirmation using pendingAlerts
+	if triggered {
+		m.mu.Lock()
+		firstSeen, pending := m.pendingAlerts[pendingKey]
+		if !pending {
+			// First sample above threshold - mark as pending
+			m.pendingAlerts[pendingKey] = now
+			m.mu.Unlock()
+			log.Debug().
+				Str("pmg", pmg.Name).
+				Str("metric", metricName).
+				Float64("current", current).
+				Float64("baseline", baseline).
+				Msg("PMG anomaly pending confirmation (first sample)")
+			return
+		}
+		m.mu.Unlock()
+
+		// Second consecutive sample above threshold - issue alert
+		log.Debug().
+			Str("pmg", pmg.Name).
+			Str("metric", metricName).
+			Float64("current", current).
+			Float64("baseline", baseline).
+			Dur("pending", now.Sub(firstSeen)).
+			Msg("PMG anomaly confirmed (second sample)")
+
+		m.mu.Lock()
+		delete(m.pendingAlerts, pendingKey) // Clear pending
+
+		// Check if alert already exists
+		if alert, exists := m.activeAlerts[alertID]; exists {
+			alert.LastSeen = now
+			alert.Value = current
+			alert.Threshold = baseline
+			alert.Level = level
+			m.mu.Unlock()
+			return
+		}
+
+		// Create new alert
+		message := fmt.Sprintf("PMG %s anomaly detected: %s is %.1f messages/hour (%.1fx baseline of %.1f)",
+			pmg.Name, metricName, current, ratio, baseline)
+
+		alert := &Alert{
+			ID:           alertID,
+			Type:         fmt.Sprintf("anomaly-%s", metricName),
+			Level:        level,
+			ResourceID:   pmg.ID,
+			ResourceName: pmg.Name,
+			Node:         pmg.Host,
+			Instance:     pmg.Name,
+			Message:      message,
+			Value:        current,
+			Threshold:    baseline,
+			StartTime:    now,
+			LastSeen:     now,
+		}
+
+		m.activeAlerts[alertID] = alert
+		m.mu.Unlock()
+		m.dispatchAlert(alert, true)
+
+		log.Warn().
+			Str("pmg", pmg.Name).
+			Str("metric", metricName).
+			Float64("current", current).
+			Float64("baseline", baseline).
+			Float64("ratio", ratio).
+			Str("level", string(level)).
+			Msg("PMG anomaly alert triggered")
+	} else {
+		// Below threshold - clear pending and alert
+		m.mu.Lock()
+		delete(m.pendingAlerts, pendingKey)
+		m.mu.Unlock()
+		m.clearAlert(alertID)
+	}
 }
 
 // checkStorageOffline creates an alert for offline/unavailable storage
