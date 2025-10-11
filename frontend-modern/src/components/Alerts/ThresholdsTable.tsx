@@ -14,7 +14,7 @@ import type {
   DockerHost,
   DockerContainer,
 } from '@/types/api';
-import type { RawOverrideConfig } from '@/types/alerts';
+import type { RawOverrideConfig, PMGThresholdDefaults } from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 type OverrideType =
   | 'guest'
@@ -51,6 +51,60 @@ interface Override {
   };
 }
 
+const normalizeThresholdLabel = (label: string): string =>
+  label
+    .trim()
+    .toLowerCase()
+    .replace(' %', '')
+    .replace(' °c', '')
+    .replace(' mb/s', '')
+    .replace('disk r', 'diskRead')
+    .replace('disk w', 'diskWrite')
+    .replace('net in', 'networkIn')
+    .replace('net out', 'networkOut');
+
+const pmgColumn = (key: keyof PMGThresholdDefaults, label: string) => ({
+  key,
+  label,
+  normalized: normalizeThresholdLabel(label),
+});
+
+const PMG_THRESHOLD_COLUMNS = [
+  pmgColumn('queueTotalWarning', 'Queue Warn'),
+  pmgColumn('queueTotalCritical', 'Queue Crit'),
+  pmgColumn('deferredQueueWarn', 'Deferred Warn'),
+  pmgColumn('deferredQueueCritical', 'Deferred Crit'),
+  pmgColumn('holdQueueWarn', 'Hold Warn'),
+  pmgColumn('holdQueueCritical', 'Hold Crit'),
+  pmgColumn('oldestMessageWarnMins', 'Oldest Warn (min)'),
+  pmgColumn('oldestMessageCritMins', 'Oldest Crit (min)'),
+  pmgColumn('quarantineSpamWarn', 'Spam Warn'),
+  pmgColumn('quarantineSpamCritical', 'Spam Crit'),
+  pmgColumn('quarantineVirusWarn', 'Virus Warn'),
+  pmgColumn('quarantineVirusCritical', 'Virus Crit'),
+  pmgColumn('quarantineGrowthWarnPct', 'Growth Warn %'),
+  pmgColumn('quarantineGrowthWarnMin', 'Growth Warn Min'),
+  pmgColumn('quarantineGrowthCritPct', 'Growth Crit %'),
+  pmgColumn('quarantineGrowthCritMin', 'Growth Crit Min'),
+] as const;
+
+const PMG_COLUMN_GROUPS = [
+  ['Queue Warn', 'Queue Crit', 'Deferred Warn', 'Deferred Crit'],
+  ['Hold Warn', 'Hold Crit', 'Oldest Warn (min)', 'Oldest Crit (min)'],
+  ['Spam Warn', 'Spam Crit', 'Virus Warn', 'Virus Crit'],
+  ['Growth Warn %', 'Growth Warn Min', 'Growth Crit %', 'Growth Crit Min'],
+] as const;
+
+const PMG_COLUMN_LABELS = PMG_COLUMN_GROUPS.map((group) => group.slice());
+
+const PMG_NORMALIZED_TO_KEY = new Map(
+  PMG_THRESHOLD_COLUMNS.map((column) => [column.normalized, column.key]),
+);
+
+const PMG_KEY_TO_NORMALIZED = new Map(
+  PMG_THRESHOLD_COLUMNS.map((column) => [column.key, column.normalized]),
+);
+
 // Simple threshold object for the UI
 interface SimpleThresholds {
   cpu?: number;
@@ -75,6 +129,12 @@ interface ThresholdsTableProps {
   dockerHosts: DockerHost[];
   pbsInstances?: PBSInstance[]; // PBS instances from state
   pmgInstances?: PMGInstance[]; // PMG instances from state
+  pmgThresholds: () => PMGThresholdDefaults;
+  setPMGThresholds: (
+    value:
+      | PMGThresholdDefaults
+      | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
+  ) => void;
   guestDefaults: SimpleThresholds;
   setGuestDefaults: (
     value: Record<string, number | undefined> | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -137,7 +197,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const [editingThresholds, setEditingThresholds] = createSignal<
     Record<string, number | undefined>
   >({});
-  const [activeTab, setActiveTab] = createSignal<'proxmox' | 'docker'>('proxmox');
+  const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'docker'>('proxmox');
   let searchInputRef: HTMLInputElement | undefined;
 
   // Set up keyboard shortcuts
@@ -774,6 +834,47 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     return pbsServers;
   }, []);
 
+  const pmgGlobalDefaults = createMemo<Record<string, number>>(() => {
+    const defaults = props.pmgThresholds();
+    const record: Record<string, number> = {};
+    PMG_THRESHOLD_COLUMNS.forEach(({ key, normalized }) => {
+      const value = defaults[key];
+      record[normalized] =
+        typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    });
+  return record;
+});
+
+  const setPMGGlobalDefaults = (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => {
+    const current = pmgGlobalDefaults();
+    const nextRecord =
+      typeof value === 'function' ? value({ ...current }) : { ...current, ...value };
+
+    let changed = false;
+    props.setPMGThresholds((prev) => {
+      const updated: PMGThresholdDefaults = { ...prev };
+      PMG_THRESHOLD_COLUMNS.forEach(({ key, normalized }) => {
+        const raw = nextRecord[normalized];
+        if (typeof raw === 'number' && !Number.isNaN(raw)) {
+          const sanitized = Math.max(0, Math.round(raw));
+          if (updated[key] !== sanitized) {
+            updated[key] = sanitized;
+            changed = true;
+          }
+        }
+      });
+      return updated;
+    });
+
+    if (changed) {
+      props.setHasUnsavedChanges(true);
+    }
+  };
+
   // Process PMG servers with their overrides
   const pmgServersWithOverrides = createMemo<Resource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
@@ -786,15 +887,29 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
     // Get PMG instances from props
     const pmgInstances = props.pmgInstances || [];
+    const defaultThresholds = pmgGlobalDefaults();
 
     const pmgServers = pmgInstances.map((pmg) => {
       // PMG IDs should already have appropriate prefix from backend
       const pmgId = pmg.id;
       const override = overridesMap.get(pmgId);
 
-      // PMG doesn't have editable thresholds in the table (too many fields)
-      // Just track disabled/connectivity states
-      const hasOverride = override?.disableConnectivity || false;
+      const thresholdOverrides: Record<string, number> = {};
+      const overrideThresholds = (override?.thresholds ?? {}) as Record<string, unknown>;
+      Object.entries(overrideThresholds).forEach(([rawKey, rawValue]) => {
+        if (typeof rawValue !== 'number' || Number.isNaN(rawValue)) return;
+        const normalizedKey =
+          PMG_KEY_TO_NORMALIZED.get(rawKey as keyof PMGThresholdDefaults) ||
+          (PMG_NORMALIZED_TO_KEY.has(rawKey) ? rawKey : undefined);
+        if (!normalizedKey) return;
+        thresholdOverrides[normalizedKey] = rawValue;
+      });
+
+      const hasOverride =
+        override?.disableConnectivity ||
+        override?.disabled ||
+        Object.keys(thresholdOverrides).length > 0 ||
+        false;
 
       return {
         id: pmgId,
@@ -804,10 +919,10 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
         host: pmg.host,
         status: pmg.status,
         hasOverride,
-        disabled: false,
+        disabled: override?.disabled || false,
         disableConnectivity: override?.disableConnectivity || false,
-        thresholds: {},
-        defaults: {},
+        thresholds: thresholdOverrides,
+        defaults: { ...defaultThresholds },
       };
     });
 
@@ -916,7 +1031,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           label: 'Mail Gateways',
           total: props.pmgInstances?.length ?? 0,
           overrides: countOverrides(pmgServersWithOverrides()),
-          tab: 'proxmox' as const,
+          tab: 'pmg' as const,
         },
         {
           key: 'dockerContainers' as const,
@@ -1531,6 +1646,17 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('pmg')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab() === 'pmg'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Mail Gateway
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('docker')}
             class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab() === 'docker'
@@ -1711,31 +1837,52 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
             </div>
           </Show>
 
-          <Show when={hasSection('pmg')}>
-            <div ref={registerSection('pmg')} class="scroll-mt-24">
-              <ResourceTable
-                title="Mail Gateways"
-                resources={pmgServersWithOverrides()}
-                columns={[]}
-                activeAlerts={props.activeAlerts}
-                emptyMessage="No mail gateways match the current filters."
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                onToggleDisabled={toggleDisabled}
-                onToggleNodeConnectivity={toggleNodeConnectivity}
-                showOfflineAlertsColumn={true}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDisableFlag={props.disableAllPMG}
-                onToggleGlobalDisable={() => props.setDisableAllPMG(!props.disableAllPMG())}
-                globalDisableOfflineFlag={props.disableAllPMGOffline}
-                onToggleGlobalDisableOffline={() => props.setDisableAllPMGOffline(!props.disableAllPMGOffline())}
-              />
+        </Show>
+
+        <Show when={activeTab() === 'pmg'}>
+          <Show
+            when={pmgServersWithOverrides().length > 0}
+            fallback={
+              <div class="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                No mail gateways configured yet. Add a PMG instance in Settings to manage thresholds.
+              </div>
+            }
+          >
+            <div class="space-y-6">
+              <For each={PMG_COLUMN_GROUPS}>
+                {(group) => (
+                  <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <ResourceTable
+                      title={`Mail Gateway Thresholds (${group
+                        .map((label) => label.split(' ')[0])
+                        .join(' / ')})`}
+                      resources={pmgServersWithOverrides()}
+                      columns={group}
+                      activeAlerts={props.activeAlerts}
+                      emptyMessage=""
+                      onEdit={startEditing}
+                      onSaveEdit={saveEdit}
+                      onCancelEdit={cancelEdit}
+                      onRemoveOverride={removeOverride}
+                      onToggleDisabled={toggleDisabled}
+                      onToggleNodeConnectivity={toggleNodeConnectivity}
+                      showOfflineAlertsColumn={true}
+                      editingId={editingId}
+                      editingThresholds={editingThresholds}
+                      setEditingThresholds={setEditingThresholds}
+                      formatMetricValue={formatMetricValue}
+                      hasActiveAlert={hasActiveAlert}
+                      globalDefaults={pmgGlobalDefaults()}
+                      setGlobalDefaults={setPMGGlobalDefaults}
+                      setHasUnsavedChanges={props.setHasUnsavedChanges}
+                      globalDisableFlag={props.disableAllPMG}
+                      onToggleGlobalDisable={() => props.setDisableAllPMG(!props.disableAllPMG())}
+                      globalDisableOfflineFlag={props.disableAllPMGOffline}
+                      onToggleGlobalDisableOffline={() => props.setDisableAllPMGOffline(!props.disableAllPMGOffline())}
+                    />
+                  </div>
+                )}
+              </For>
             </div>
           </Show>
         </Show>
