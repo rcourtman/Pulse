@@ -583,7 +583,7 @@ create_lxc_container() {
                 local used_pct=$(echo "$line" | awk '{print $7}')
                 
                 storage_names+=("$storage_name")
-                printf "  %d) %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n" \
+                LC_ALL=C printf "  %d) %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n" \
                     "$idx" "$storage_name" "$storage_type" "$avail_gb" "$total_gb" "$used_pct"
                 
                 if [[ "$storage_name" == "$DEFAULT_STORAGE" ]]; then
@@ -723,7 +723,7 @@ create_lxc_container() {
                 local used_pct=$(echo "$line" | awk '{print $7}')
                 
                 storage_names+=("$storage_name")
-                printf "  %d) %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n" \
+                LC_ALL=C printf "  %d) %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n" \
                     "$idx" "$storage_name" "$storage_type" "$avail_gb" "$total_gb" "$used_pct"
                 
                 if [[ "$storage_name" == "$DEFAULT_STORAGE" ]]; then
