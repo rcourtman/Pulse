@@ -1850,7 +1850,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           >
             <div class="space-y-6">
               <For each={PMG_COLUMN_GROUPS}>
-                {(group) => (
+                {(group, index) => (
                   <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                     <ResourceTable
                       title={`Mail Gateway Thresholds (${group
@@ -1866,7 +1866,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                       onRemoveOverride={removeOverride}
                       onToggleDisabled={toggleDisabled}
                       onToggleNodeConnectivity={toggleNodeConnectivity}
-                      showOfflineAlertsColumn={true}
+                      showOfflineAlertsColumn={index() === 0}
                       editingId={editingId}
                       editingThresholds={editingThresholds}
                       setEditingThresholds={setEditingThresholds}
