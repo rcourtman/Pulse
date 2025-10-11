@@ -142,6 +142,18 @@ Discord, Slack, Gotify, Telegram, ntfy.sh, Teams, generic JSON
 ### Works with reverse proxy?
 Yes, ensure WebSocket support is enabled
 
+### How do I disable alerts for specific metrics?
+Go to **Alerts → Thresholds**, then set any threshold to `-1` to disable alerts for that metric.
+
+**Examples:**
+- Don't care about disk I/O alerts? Set "Disk R MB/s" and "Disk W MB/s" to `-1`
+- Want to ignore network alerts on a specific VM? Set "Net In MB/s" and "Net Out MB/s" to `-1`
+- Need to disable CPU alerts for a maintenance node? Set "CPU %" to `-1`
+
+**To re-enable:** Click on any disabled threshold showing "Off" and it will restore to a default value.
+
+**Per-resource customization:** You can disable metrics globally (affects all resources) or individually (just one VM, container, node, etc.). Resources with custom settings show a blue "Custom" badge.
+
 ## Updates
 
 ### How to update?

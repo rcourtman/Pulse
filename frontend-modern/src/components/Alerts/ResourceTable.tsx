@@ -119,6 +119,7 @@ interface ResourceTableProps {
   metricDelaySeconds?: Record<string, number>;
   onMetricDelayChange?: (metricKey: string, value: number | null) => void;
   groupHeaderMeta?: Record<string, GroupHeaderMeta>;
+  onResetDefaults?: () => void;
 }
 
 type OfflineState = 'off' | 'warning' | 'critical';
@@ -487,7 +488,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 italic placeholder:text-gray-400 dark:placeholder:text-gray-500 placeholder:opacity-60 pointer-events-none'
                                 : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                             }`}
-                            title={isOff() ? 'Click to enable this metric' : ''}
+                            title={isOff() ? 'Click to enable this metric' : 'Set to -1 to disable alerts for this metric'}
                           />
                           <Show when={isOff()}>
                             <button
@@ -552,31 +553,55 @@ export function ResourceTable(props: ResourceTableProps) {
                   </td>
                 </Show>
                 <td class="p-1 px-2 text-center align-middle">
-                  <Show when={props.showDelayColumn && typeof props.onMetricDelayChange === 'function'}>
-                    <button
-                      type="button"
-                      onClick={() => setShowDelayRow(!showDelayRow())}
-                      class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
-                      title={showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'}
-                    >
-                      <svg
-                        class={`w-4 h-4 transition-transform ${showDelayRow() ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                  <div class="flex items-center justify-center gap-1">
+                    <Show when={props.showDelayColumn && typeof props.onMetricDelayChange === 'function'}>
+                      <button
+                        type="button"
+                        onClick={() => setShowDelayRow(!showDelayRow())}
+                        class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
+                        title={showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'}
                       >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
-                  </Show>
-                  <Show when={!props.showDelayColumn || typeof props.onMetricDelayChange !== 'function'}>
-                    <span class="text-sm text-gray-400">-</span>
-                  </Show>
+                        <svg
+                          class={`w-4 h-4 transition-transform ${showDelayRow() ? 'rotate-180' : ''}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
+                      </button>
+                    </Show>
+                    <Show when={props.onResetDefaults}>
+                      <button
+                        type="button"
+                        onClick={() => props.onResetDefaults?.()}
+                        class="p-1 text-gray-600 hover:text-orange-600 dark:text-gray-400 dark:hover:text-orange-400 transition-colors"
+                        title="Reset to factory defaults"
+                      >
+                        <svg
+                          class="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
+                        </svg>
+                      </button>
+                    </Show>
+                    <Show when={!props.showDelayColumn && !props.onResetDefaults}>
+                      <span class="text-sm text-gray-400">-</span>
+                    </Show>
+                  </div>
                 </td>
               </tr>
             </Show>
@@ -853,6 +878,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                               max={bounds.max}
                                               value={thresholds()?.[metric] ?? ''}
                                               placeholder={isDisabled() ? 'Off' : ''}
+                                              title="Set to -1 to disable alerts for this metric"
                                               ref={(el) => {
                                                 if (
                                                   isEditing() &&
@@ -1276,6 +1302,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           }
                                           value={thresholds()?.[metric] ?? ''}
                                           placeholder={isDisabled() ? 'Off' : ''}
+                                          title="Set to -1 to disable alerts for this metric"
                                           ref={(el) => {
                                             if (
                                               isEditing() &&

@@ -917,8 +917,8 @@ export function Alerts() {
     return result;
   };
 
-  // Threshold states - using trigger values for display
-  const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({
+  // Factory defaults - constants for reset functionality
+  const FACTORY_GUEST_DEFAULTS = {
     cpu: 80,
     memory: 85,
     disk: 90,
@@ -926,27 +926,57 @@ export function Alerts() {
     diskWrite: -1,
     networkIn: -1,
     networkOut: -1,
-  });
-  const [guestDisableConnectivity, setGuestDisableConnectivity] = createSignal(false);
-  const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<'warning' | 'critical'>('warning');
+  };
 
-  const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({
+  const FACTORY_NODE_DEFAULTS = {
     cpu: 80,
     memory: 85,
     disk: 90,
     temperature: 80,
-  });
+  };
 
-  const [dockerDefaults, setDockerDefaults] = createSignal({
+  const FACTORY_DOCKER_DEFAULTS = {
     cpu: 80,
     memory: 85,
     restartCount: 3,
     restartWindow: 300,
     memoryWarnPct: 90,
     memoryCriticalPct: 95,
-  });
+  };
 
-const [storageDefault, setStorageDefault] = createSignal(85);
+  const FACTORY_STORAGE_DEFAULT = 85;
+
+  // Threshold states - using trigger values for display
+  const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_GUEST_DEFAULTS });
+  const [guestDisableConnectivity, setGuestDisableConnectivity] = createSignal(false);
+  const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<'warning' | 'critical'>('warning');
+
+  const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_NODE_DEFAULTS });
+
+  const [dockerDefaults, setDockerDefaults] = createSignal({ ...FACTORY_DOCKER_DEFAULTS });
+
+const [storageDefault, setStorageDefault] = createSignal(FACTORY_STORAGE_DEFAULT);
+
+  // Reset functions
+  const resetGuestDefaults = () => {
+    setGuestDefaults({ ...FACTORY_GUEST_DEFAULTS });
+    setHasUnsavedChanges(true);
+  };
+
+  const resetNodeDefaults = () => {
+    setNodeDefaults({ ...FACTORY_NODE_DEFAULTS });
+    setHasUnsavedChanges(true);
+  };
+
+  const resetDockerDefaults = () => {
+    setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
+    setHasUnsavedChanges(true);
+  };
+
+  const resetStorageDefault = () => {
+    setStorageDefault(FACTORY_STORAGE_DEFAULT);
+    setHasUnsavedChanges(true);
+  };
 const [timeThreshold, setTimeThreshold] = createSignal(DEFAULT_DELAY_SECONDS); // Legacy
 const [timeThresholds, setTimeThresholds] = createSignal({
   guest: DEFAULT_DELAY_SECONDS,
@@ -1313,6 +1343,10 @@ const [timeThresholds, setTimeThresholds] = createSignal({
               setDockerDefaults={setDockerDefaults}
               storageDefault={storageDefault}
               setStorageDefault={setStorageDefault}
+              resetGuestDefaults={resetGuestDefaults}
+              resetNodeDefaults={resetNodeDefaults}
+              resetDockerDefaults={resetDockerDefaults}
+              resetStorageDefault={resetStorageDefault}
               timeThresholds={timeThresholds}
               metricTimeThresholds={metricTimeThresholds}
               setMetricTimeThresholds={setMetricTimeThresholds}

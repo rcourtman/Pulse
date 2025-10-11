@@ -154,6 +154,10 @@ interface ThresholdsTableProps {
   ) => void;
   storageDefault: () => number;
   setStorageDefault: (value: number) => void;
+  resetGuestDefaults?: () => void;
+  resetNodeDefaults?: () => void;
+  resetDockerDefaults?: () => void;
+  resetStorageDefault?: () => void;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
   setMetricTimeThresholds: (
@@ -1666,6 +1670,18 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
         </Show>
       </div>
 
+      {/* Help Banner */}
+      <div class="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3">
+        <div class="flex items-start gap-2">
+          <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="text-sm text-blue-900 dark:text-blue-100">
+            <span class="font-medium">Quick tips:</span> Set any threshold to <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">-1</code> to disable alerts for that metric. Click on disabled thresholds showing <span class="italic">Off</span> to re-enable them. Resources with custom settings show a <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">Custom</span> badge.
+          </div>
+        </div>
+      </div>
+
       {/* Tab Navigation */}
       <div class="border-b border-gray-200 dark:border-gray-700">
         <nav class="-mb-px flex gap-6" aria-label="Tabs">
@@ -1738,6 +1754,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 globalDelaySeconds={props.timeThresholds().node}
                 metricDelaySeconds={props.metricTimeThresholds().node ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('node', metric, value)}
+                onResetDefaults={props.resetNodeDefaults}
               />
             </div>
           </Show>
@@ -1787,6 +1804,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 globalDelaySeconds={props.timeThresholds().guest}
                 metricDelaySeconds={props.metricTimeThresholds().guest ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
+                onResetDefaults={props.resetGuestDefaults}
               />
             </div>
           </Show>
@@ -1827,6 +1845,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 globalDelaySeconds={props.timeThresholds().storage}
                 metricDelaySeconds={props.metricTimeThresholds().storage ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
+                onResetDefaults={props.resetStorageDefault}
               />
             </div>
           </Show>
@@ -2033,6 +2052,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
                 globalOfflineSeverity={props.guestPoweredOffSeverity()}
                 onSetOfflineState={setOfflineState}
+                onResetDefaults={props.resetDockerDefaults}
               />
             </div>
           </Show>
