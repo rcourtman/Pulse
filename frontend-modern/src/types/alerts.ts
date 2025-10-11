@@ -66,12 +66,32 @@ export interface DockerThresholdConfig {
   memoryCriticalPct?: number;
 }
 
+export interface PMGThresholdDefaults {
+  queueTotalWarning?: number;
+  queueTotalCritical?: number;
+  oldestMessageWarnMins?: number;
+  oldestMessageCritMins?: number;
+  deferredQueueWarn?: number;
+  deferredQueueCritical?: number;
+  holdQueueWarn?: number;
+  holdQueueCritical?: number;
+  quarantineSpamWarn?: number;
+  quarantineSpamCritical?: number;
+  quarantineVirusWarn?: number;
+  quarantineVirusCritical?: number;
+  quarantineGrowthWarnPct?: number;
+  quarantineGrowthWarnMin?: number;
+  quarantineGrowthCritPct?: number;
+  quarantineGrowthCritMin?: number;
+}
+
 export interface AlertConfig {
   enabled: boolean;
   guestDefaults: AlertThresholds;
   nodeDefaults: AlertThresholds;
   storageDefault: HysteresisThreshold;
   dockerDefaults?: DockerThresholdConfig;
+  pmgDefaults?: PMGThresholdDefaults;
   customRules?: CustomAlertRule[];
   overrides: Record<string, RawOverrideConfig>; // key: resource ID
   minimumDelta?: number;
@@ -151,11 +171,13 @@ export interface AlertConfig {
   disableAllGuests?: boolean;
   disableAllStorage?: boolean;
   disableAllPBS?: boolean;
+  disableAllPMG?: boolean;
   disableAllDockerHosts?: boolean;
   disableAllDockerContainers?: boolean;
   disableAllNodesOffline?: boolean;
   disableAllGuestsOffline?: boolean;
   disableAllPBSOffline?: boolean;
+  disableAllPMGOffline?: boolean;
   disableAllDockerHostsOffline?: boolean;
 }
 

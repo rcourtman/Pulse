@@ -11,6 +11,7 @@ Every check interval (30s by default) the agent collects:
 - Restart counters and exit codes
 - CPU usage, memory consumption and limits
 - Images, port mappings, network addresses, and start times
+- Health-check failures, restart-loop windows, and recent exit codes (displayed in the UI under each container drawer)
 
 Data is pushed to Pulse over HTTPS using your existing API token – no inbound firewall rules required.
 
@@ -140,6 +141,7 @@ The agent automatically discovers the Docker socket via the usual environment va
 - Ensure the Pulse API token has not expired or been regenerated.
 - If `pulse-docker-agent` reports `Cannot connect to the Docker daemon`, verify the socket path and permissions.
 - Check Pulse (`/docker` tab) for the latest heartbeat time. Hosts are marked offline if they stop reporting for >4× the configured interval.
+- Use the search box above the host grid to filter by host name, stack label, or container name. Restart loops surface in the “Issues” column and display the last five exit codes.
 
 ## Removing the agent
 

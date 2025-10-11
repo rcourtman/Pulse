@@ -96,8 +96,6 @@ const PMG_COLUMN_GROUPS = [
   ['Growth Warn %', 'Growth Warn Min', 'Growth Crit %', 'Growth Crit Min'],
 ] as const;
 
-const PMG_COLUMN_LABELS = PMG_COLUMN_GROUPS.map((group) => group.slice());
-
 const PMG_NORMALIZED_TO_KEY = new Map(
   PMG_THRESHOLD_COLUMNS.map((column) => [column.normalized, column.key]),
 );
@@ -899,7 +897,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
       typeof value === 'function' ? value({ ...current }) : { ...current, ...value };
 
     let changed = false;
-    props.setPMGThresholds((prev) => {
+    props.setPMGThresholds((prev: PMGThresholdDefaults) => {
       const updated: PMGThresholdDefaults = { ...prev };
       PMG_THRESHOLD_COLUMNS.forEach(({ key, normalized }) => {
         const raw = nextRecord[normalized];

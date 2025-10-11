@@ -60,6 +60,7 @@ type OverrideType =
   | 'node'
   | 'storage'
   | 'pbs'
+  | 'pmg'
   | 'dockerHost'
   | 'dockerContainer';
 

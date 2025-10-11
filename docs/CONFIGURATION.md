@@ -6,6 +6,7 @@
 - **📁 Separated Configuration**: Authentication (.env), runtime settings (system.json), and node credentials (nodes.enc) stay isolated
 - **⚙️ UI-First Provisioning**: Nodes and infrastructure settings are managed through the web UI to prevent accidental wipes
 - **🔐 Enterprise Security**: Credentials encrypted at rest, hashed in memory
+- **🎯 Hysteresis Thresholds**: `alerts.json` stores trigger/clear pairs, fractional network limits, per-metric delays, and overrides that match the Alert Thresholds UI
 
 ## Configuration File Structure
 
@@ -167,6 +168,88 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - Credentials never exposed in UI (only "•••••" shown)
 - Export/import requires authentication
 - Automatic re-encryption on each save
+
+---
+
+## 📁 `alerts.json` - Alert Thresholds & Scheduling
+
+**Purpose:** Captures the full alerting policy – default thresholds, per-resource overrides, suppression windows, and delivery preferences – exactly as shown in **Alerts → Thresholds**.
+
+**Format:** JSON with hysteresis-aware thresholds (`trigger` and `clear`) and nested configuration blocks.
+
+**Example (trimmed):**
+
+```json
+{
+  "enabled": true,
+  "guestDefaults": {
+    "cpu": { "trigger": 90, "clear": 80 },
+    "memory": { "trigger": 85, "clear": 72.5 },
+    "networkOut": { "trigger": 120.5, "clear": 95 }
+  },
+  "nodeDefaults": {
+    "cpu": { "trigger": 85, "clear": 70 },
+    "temperature": { "trigger": 80, "clear": 70 },
+    "disableConnectivity": false
+  },
+  "storageDefault": { "trigger": 85, "clear": 75 },
+  "dockerDefaults": {
+    "cpu": { "trigger": 75, "clear": 60 },
+    "restartCount": 3,
+    "restartWindow": 300
+  },
+  "pmgThresholds": {
+    "queueTotalWarning": 500,
+    "oldestMessageWarnMins": 30
+  },
+  "timeThresholds": { "guest": 90, "node": 60, "storage": 180, "pbs": 120 },
+  "metricTimeThresholds": {
+    "guest": { "disk": 120, "networkOut": 240 }
+  },
+  "overrides": {
+    "delly.lan/qemu/101": {
+      "memory": { "trigger": 92, "clear": 80 },
+      "networkOut": -1,
+      "poweredOffSeverity": "warning"
+    }
+  },
+  "aggregation": {
+    "enabled": true,
+    "timeWindow": 120,
+    "countThreshold": 3,
+    "similarityWindow": 90
+  },
+  "flapping": {
+    "enabled": true,
+    "threshold": 5,
+    "window": 300,
+    "suppressionTime": 600,
+    "minStability": 180
+  },
+  "schedule": {
+    "quietHours": {
+      "enabled": true,
+      "start": "22:00",
+      "end": "06:00",
+      "timezone": "Europe/London",
+      "days": { "monday": true, "tuesday": true, "sunday": true },
+      "suppress": { "performance": true, "storage": false, "offline": true }
+    },
+    "cooldown": 15,
+    "grouping": { "enabled": true, "window": 120, "byNode": true }
+  }
+}
+```
+
+**Key behaviours:**
+
+- Thresholds use hysteresis pairs (`trigger` / `clear`) to avoid flapping. Use decimals for fine-grained network and IO limits.
+- Set a metric to `-1` to disable it globally or per-resource (the UI shows “Off” and adds a **Custom** badge).
+- `timeThresholds` apply a grace period before an alert fires; `metricTimeThresholds` allow per-metric overrides (e.g., delay network alerts longer than CPU).
+- `overrides` are indexed by the stable resource ID returned from `/api/state` (VMs: `instance/qemu/vmid`, containers: `instance/lxc/ctid`, nodes: `instance/node`).
+- Quiet hours, escalation, deduplication, and restart loop detection are all managed here, and the UI keeps the JSON in sync automatically.
+
+> Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.
 
 ---
 

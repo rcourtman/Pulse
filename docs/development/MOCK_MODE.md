@@ -61,6 +61,15 @@ The `.local` file overrides values from `mock.env`, and is gitignored to keep yo
 - `PULSE_MOCK_RANDOM_METRICS`: Enable metric fluctuations (`true`/`false`)
 - `PULSE_MOCK_STOPPED_PERCENT`: Percentage of guests in stopped state (default: 20)
 
+### Data Isolation
+
+Hot-dev mode now isolates mock data from production credentials automatically:
+
+- **Mock mode:** data lives in `/opt/pulse/tmp/mock-data`
+- **Production mode:** data lives in `/etc/pulse`
+
+The toggle script exports `PULSE_DATA_DIR` before launching the backend, creates the temporary directory if needed, and cleans up on exit. This guarantees mock credentials never overwrite your real cluster configuration and makes it safe to flip between datasets repeatedly during a session.
+
 ## Hot-Dev Workflow
 
 1. **Start hot-dev mode:**

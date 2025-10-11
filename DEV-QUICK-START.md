@@ -46,6 +46,7 @@ The toggle script automatically:
 - Restarts the backend with new settings
 - Keeps the frontend running (no restart needed)
 - Syncs production config when switching to production mode
+- Switches `PULSE_DATA_DIR` between `/opt/pulse/tmp/mock-data` (mock) and `/etc/pulse` (production) so test data never touches real credentials
 
 ## Mock Mode Configuration
 
@@ -59,6 +60,8 @@ PULSE_MOCK_LXCS_PER_NODE=8      # Average containers per node
 PULSE_MOCK_RANDOM_METRICS=true  # Enable metric fluctuations
 PULSE_MOCK_STOPPED_PERCENT=20   # Percentage of stopped guests
 ```
+
+Prefer `mock.env.local` for personal tweaks (`cp mock.env mock.env.local`). The toggle script honours `.local` first, keeping the shared defaults untouched.
 
 ## Development Workflow
 

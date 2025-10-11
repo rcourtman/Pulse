@@ -26,7 +26,6 @@ import Container from 'lucide-solid/icons/container';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Shield from 'lucide-solid/icons/shield';
 import Activity from 'lucide-solid/icons/activity';
-import ArrowUpCircle from 'lucide-solid/icons/arrow-up-circle';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';

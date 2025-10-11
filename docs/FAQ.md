@@ -49,6 +49,9 @@ Settings → Security → Backup & Restore → Export Backup
 - If using API token only: Provide the API token when prompted
 - Includes all settings, nodes, credentials (encrypted), and custom console URLs
 
+### Can I filter backup history or focus on a specific time window?
+Yes. The **Backups** workspace exposes a time-range picker above the chart (Last 24 h / 7 d / 30 d / Custom). Selecting a range reflows the chart, highlights matching bars, and filters the grid below. Hovering the chart shows tooltips with the top jobs inside that window so you can jump directly to a backup task or snapshot.
+
 ### Can Pulse detect Proxmox clusters?
 Yes! When you add one cluster node, Pulse automatically discovers and monitors all nodes
 
@@ -150,9 +153,18 @@ Go to **Alerts → Thresholds**, then set any threshold to `-1` to disable alert
 - Want to ignore network alerts on a specific VM? Set "Net In MB/s" and "Net Out MB/s" to `-1`
 - Need to disable CPU alerts for a maintenance node? Set "CPU %" to `-1`
 
-**To re-enable:** Click on any disabled threshold showing "Off" and it will restore to a default value.
+**To re-enable:** Click on any disabled threshold showing "Off" and it will restore to a default value. The trash icon beside **Global Defaults** resets that row instantly, and the search bar at the top of the tab filters resources live.
 
-**Per-resource customization:** You can disable metrics globally (affects all resources) or individually (just one VM, container, node, etc.). Resources with custom settings show a blue "Custom" badge.
+**Per-resource customization:** You can disable metrics globally (affects all resources) or individually (just one VM, container, node, etc.). Resources with custom settings show a blue "Custom" badge so you can spot overrides quickly.
+
+### Can I set fractional thresholds or specify different trigger/clear values?
+Yes. Pulse stores hysteresis thresholds in pairs: `trigger` (when to fire) and `clear` (when to recover). Both values accept decimal precision – for example, set network thresholds to `12.5` / `9.5` MB/s. The UI shows the trigger value in the table and reveals the clear threshold in the sidebar drawer.
+
+### How do I interpret the alert timeline graph?
+Open **Alerts → History** and click an entry. The right-hand panel now shows a context timeline that plots alert start, acknowledgement, clearance, and any escalations so you can see at a glance how long the condition lasted and when notifications were sent. Hovering each marker reveals the exact timestamp and value Pulse captured at that step.
+
+### Does Pulse monitor Ceph clusters?
+Yes. When Ceph-backed storage (RBD or CephFS) is detected, Pulse queries `/cluster/ceph/status` and `/cluster/ceph/df` and surfaces the results on the **Storage → Ceph** drawer and via `/api/state` → `cephClusters`. You get cluster health, daemon counts, placement groups, and per-pool capacity without any additional configuration.
 
 ## Updates
 
