@@ -16,6 +16,8 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
 
 Temperature monitoring uses standard SSH key authentication (just like Ansible, Saltstack, and other automation tools) to securely collect sensor data from your nodes. Pulse connects via SSH and runs the `sensors` command to read hardware temperatures - that's it!
 
+> **Important:** Run every setup command as the same user account that executes the Pulse service (typically `pulse`). The backend reads the SSH key from that user’s home directory; keys under `root` or other accounts will be ignored.
+
 ## Requirements
 
 1. **SSH Key Authentication**: Your Pulse server needs SSH key access to nodes (no passwords)
@@ -45,7 +47,7 @@ If you skipped SSH setup during auto-setup, you can configure it manually:
 ### 1. Generate SSH Key (on Pulse server)
 
 ```bash
-# Run as the user running Pulse (usually root or pulse)
+# Run as the user running Pulse (usually the pulse service account)
 ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
 ```
 

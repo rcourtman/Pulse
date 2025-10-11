@@ -2930,6 +2930,10 @@ function HistoryTab() {
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
   const MS_PER_HOUR = 60 * 60 * 1000;
+  const userLocale =
+    Intl.DateTimeFormat().resolvedOptions().locale ||
+    (typeof navigator !== 'undefined' ? navigator.language : undefined) ||
+    'en-US';
 
   // Ref for search input
   let searchInputRef: HTMLInputElement | undefined;
@@ -3034,12 +3038,12 @@ function HistoryTab() {
       start.getMonth() === end.getMonth() &&
       start.getDate() === end.getDate();
 
-    const startDay = start.toLocaleDateString('en-US', {
+    const startDay = start.toLocaleDateString(userLocale, {
       month: 'short',
       day: 'numeric',
       year: start.getFullYear() !== end.getFullYear() ? 'numeric' : undefined,
     });
-    const endDay = end.toLocaleDateString('en-US', {
+    const endDay = end.toLocaleDateString(userLocale, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -3050,8 +3054,8 @@ function HistoryTab() {
       minute: '2-digit',
     };
 
-    const startTimeStr = start.toLocaleTimeString('en-US', timeFormatter);
-    const endTimeStr = end.toLocaleTimeString('en-US', timeFormatter);
+    const startTimeStr = start.toLocaleTimeString(userLocale, timeFormatter);
+    const endTimeStr = end.toLocaleTimeString(userLocale, timeFormatter);
 
     if (sameDay) {
       return `${startDay}, ${startTimeStr} – ${endTimeStr}`;
@@ -3402,19 +3406,134 @@ function HistoryTab() {
     };
   });
 
-  const chartRangeLabel = createMemo(() => {
-    const filter = timeFilter();
-    if (filter === '24h') return '24h ago';
-    if (filter === '7d') return '7d ago';
-    if (filter === '30d') return '30d ago';
-
-    const rangeHours = alertTrends().rangeHours ?? 0;
-    if (rangeHours <= 0) return '—';
-    if (rangeHours >= 24) {
-      const days = Math.round(rangeHours / 24);
-      return `${days}d ago`;
+  const bucketDurationLabel = createMemo(() => {
+    const bucketHours = alertTrends().bucketSize;
+    if (!Number.isFinite(bucketHours) || bucketHours <= 0) {
+      return '—';
     }
-    return `${Math.round(rangeHours)}h ago`;
+    if (bucketHours % 24 === 0) {
+      const days = bucketHours / 24;
+      return `${days} day${days === 1 ? '' : 's'}`;
+    }
+    return `${bucketHours} hour${bucketHours === 1 ? '' : 's'}`;
+  });
+
+  const formatAxisTickLabel = (
+    timestamp: number,
+    bucketHours: number,
+    totalHours: number,
+    isEnd = false,
+  ) => {
+    if (!Number.isFinite(timestamp)) return '—';
+
+    if (isEnd && Math.abs(Date.now() - timestamp) < bucketHours * MS_PER_HOUR * 0.75) {
+      return 'Now';
+    }
+
+    const date = new Date(timestamp);
+    const options: Intl.DateTimeFormatOptions = {};
+
+    if (totalHours <= 48) {
+      options.month = 'short';
+      options.day = 'numeric';
+      options.hour = '2-digit';
+      options.minute = '2-digit';
+    } else if (totalHours <= 24 * 90) {
+      options.month = 'short';
+      options.day = 'numeric';
+      if (bucketHours <= 12 || totalHours <= 24 * 14) {
+        options.hour = '2-digit';
+      }
+    } else {
+      options.year = 'numeric';
+      options.month = 'short';
+      options.day = 'numeric';
+    }
+
+    return date.toLocaleString(userLocale, options);
+  };
+
+  const rangeSummary = createMemo(() => {
+    const trends = alertTrends();
+    if (!trends.bucketTimes.length || trends.bucketSize <= 0) {
+      return null;
+    }
+
+    const bucketHours = trends.bucketSize;
+    const totalHours = Math.max(trends.rangeHours ?? bucketHours, bucketHours);
+    const start = trends.bucketTimes[0];
+    const end = start + trends.buckets.length * bucketHours * MS_PER_HOUR;
+
+    return {
+      startLabel: formatAxisTickLabel(start, bucketHours, totalHours),
+      endLabel: formatAxisTickLabel(end, bucketHours, totalHours, true),
+    };
+  });
+
+  const axisTicks = createMemo(() => {
+    const trends = alertTrends();
+    if (!trends.bucketTimes.length || trends.bucketSize <= 0) {
+      return [] as Array<{ position: number; label: string; align: 'start' | 'center' | 'end' }>;
+    }
+
+    const bucketHours = trends.bucketSize;
+    const totalHours = Math.max(trends.rangeHours ?? bucketHours, bucketHours);
+    const start = trends.bucketTimes[0];
+    const totalDurationMs = Math.max(
+      trends.buckets.length * bucketHours * MS_PER_HOUR,
+      bucketHours * MS_PER_HOUR,
+    );
+    const end = start + totalDurationMs;
+
+    const desiredTicks = Math.min(5, trends.bucketTimes.length + 1);
+    const step = Math.max(
+      1,
+      Math.round(trends.bucketTimes.length / Math.max(1, desiredTicks - 1)),
+    );
+    const ticks: Array<{ position: number; label: string }> = [];
+
+    for (let index = 0; index < trends.bucketTimes.length; index += step) {
+      const ts = trends.bucketTimes[index];
+      const position = Math.min(
+        1,
+        Math.max(0, (ts - start) / (totalDurationMs || 1)),
+      );
+      ticks.push({
+        position,
+        label: formatAxisTickLabel(ts, bucketHours, totalHours),
+      });
+    }
+
+    if (!ticks.length || ticks[0].position > 0.01) {
+      ticks.unshift({
+        position: 0,
+        label: formatAxisTickLabel(start, bucketHours, totalHours),
+      });
+    } else {
+      ticks[0] = {
+        position: 0,
+        label: formatAxisTickLabel(start, bucketHours, totalHours),
+      };
+    }
+
+    const lastTick = ticks[ticks.length - 1];
+    if (!lastTick || Math.abs(lastTick.position - 1) > 0.01) {
+      ticks.push({
+        position: 1,
+        label: formatAxisTickLabel(end, bucketHours, totalHours, true),
+      });
+    } else {
+      ticks[ticks.length - 1] = {
+        position: 1,
+        label: formatAxisTickLabel(end, bucketHours, totalHours, true),
+      };
+    }
+
+    return ticks.map((tick, index, arr) => ({
+      position: tick.position,
+      label: tick.label,
+      align: index === 0 ? 'start' : index === arr.length - 1 ? 'end' : 'center',
+    }));
   });
 
   const selectedBucketDetails = createMemo(() => {
@@ -3456,6 +3575,22 @@ function HistoryTab() {
                 </div>
               )}
             </Show>
+            <div class="flex flex-col items-start gap-1 text-xs text-gray-500 dark:text-gray-400 sm:items-end">
+              <div>
+                <span class="font-medium text-gray-600 dark:text-gray-300">Bar size:</span>{' '}
+                {bucketDurationLabel()}
+              </div>
+              <Show when={rangeSummary()}>
+                {(summary) => (
+                  <div class="flex items-center gap-1 whitespace-nowrap">
+                    <span class="font-medium text-gray-600 dark:text-gray-300">Range:</span>
+                    <span>{summary().startLabel}</span>
+                    <span class="text-gray-400 dark:text-gray-500">→</span>
+                    <span>{summary().endLabel}</span>
+                  </div>
+                )}
+              </Show>
+            </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               <Show when={selectedBarIndex() !== null}>
                 <button
@@ -3481,74 +3616,106 @@ function HistoryTab() {
         </div>
 
         {/* Mini sparkline chart */}
-        <div class="text-[10px] text-gray-400 mb-1">
-          Showing {alertTrends().buckets.length} time periods - Total: {alertData().length} alerts
+        <div class="mb-1 text-[10px] text-gray-400 dark:text-gray-500">
+          Showing {alertTrends().buckets.length} time periods ({bucketDurationLabel()} each) ·
+          Total: {alertData().length} alerts
         </div>
 
         {/* Alert frequency chart */}
-        <div class="h-12 bg-gray-100 dark:bg-gray-800 rounded p-1 flex items-end gap-1">
-          {alertTrends().buckets.map((val, i) => {
-            const scaledHeight = val > 0 ? Math.min(100, Math.max(20, Math.log(val + 1) * 20)) : 0;
-            const pixelHeight = val > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0; // 40px is roughly the inner height
-            const isSelected = selectedBarIndex() === i;
-            return (
-              <div
-                class="flex-1 relative flex items-end cursor-pointer"
-                onClick={() => setSelectedBarIndex(i === selectedBarIndex() ? null : i)}
-              >
-                {/* Background track for all slots */}
-                <div class="absolute bottom-0 w-full h-1 bg-gray-300 dark:bg-gray-600 opacity-30 rounded-full"></div>
-                {/* Actual bar */}
-                <div
-                  class="w-full relative rounded-sm transition-all"
-                  style={{
-                    height: `${pixelHeight}px`,
-                    'background-color':
-                      val > 0 ? (isSelected ? '#2563eb' : '#3b82f6') : 'transparent',
-                    opacity: isSelected ? '1' : '0.8',
-                    'box-shadow': isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.4)' : 'none',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (val <= 0) {
-                      hideTooltip();
-                      return;
-                    }
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    const bucketHours = alertTrends().bucketSize;
-                    const bucketLabel =
-                      bucketHours % 24 === 0
-                        ? `${bucketHours / 24} day${bucketHours / 24 === 1 ? '' : 's'}`
-                        : `${bucketHours} hour${bucketHours === 1 ? '' : 's'}`;
-                    const timestamp = new Date(alertTrends().bucketTimes[i]).toLocaleString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: timeFilter() === '24h' ? 'numeric' : undefined,
-                      minute: timeFilter() === '24h' ? '2-digit' : undefined,
-                    });
-                    const content = [
-                      `${val} alert${val !== 1 ? 's' : ''}`,
-                      `${bucketLabel} period`,
-                      timestamp,
-                    ].join('\n');
-                    showTooltip(content, rect.left + rect.width / 2, rect.top, {
-                      align: 'center',
-                      direction: 'up',
-                    });
-                  }}
-                  onMouseLeave={() => hideTooltip()}
-                />
+        {(() => {
+          const trends = alertTrends();
+          return (
+            <div class="rounded bg-gray-100 p-1 dark:bg-gray-800">
+              <div class="flex h-12 items-end gap-1">
+                {trends.buckets.map((val, i) => {
+                  const scaledHeight =
+                    val > 0 ? Math.min(100, Math.max(20, Math.log(val + 1) * 20)) : 0;
+                  const pixelHeight =
+                    val > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0; // 40px is roughly the inner height
+                  const isSelected = selectedBarIndex() === i;
+                  const bucketStart = trends.bucketTimes[i];
+                  const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
+                  const bucketRangeLabel = formatBucketRange(bucketStart, bucketEnd);
+                  const bucketDurationText =
+                    trends.bucketSize % 24 === 0
+                      ? `${trends.bucketSize / 24} day${trends.bucketSize / 24 === 1 ? '' : 's'}`
+                      : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
+                  const countLabel =
+                    val === 0 ? 'No alerts' : `${val} alert${val === 1 ? '' : 's'}`;
+                  const tooltipContent = [countLabel, `${bucketDurationText} period`, bucketRangeLabel].join('\n');
+                  return (
+                    <div
+                      class="flex-1 relative flex items-end cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSelected}
+                      aria-label={`${countLabel} between ${bucketRangeLabel}`}
+                      onClick={() => setSelectedBarIndex(i === selectedBarIndex() ? null : i)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedBarIndex(i === selectedBarIndex() ? null : i);
+                        }
+                      }}
+                    >
+                      {/* Background track for all slots */}
+                      <div class="absolute bottom-0 h-1 w-full rounded-full bg-gray-300 opacity-30 dark:bg-gray-600"></div>
+                      {/* Actual bar */}
+                      <div
+                        class="relative w-full rounded-sm transition-all"
+                        style={{
+                          height: `${pixelHeight}px`,
+                          'background-color':
+                            val > 0 ? (isSelected ? '#2563eb' : '#3b82f6') : 'transparent',
+                          opacity: isSelected ? '1' : '0.8',
+                          'box-shadow': isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.4)' : 'none',
+                        }}
+                        title={bucketRangeLabel}
+                        onMouseEnter={(e) => {
+                          if (val <= 0) {
+                            hideTooltip();
+                            return;
+                          }
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          showTooltip(tooltipContent, rect.left + rect.width / 2, rect.top, {
+                            align: 'center',
+                            direction: 'up',
+                          });
+                        }}
+                        onMouseLeave={() => hideTooltip()}
+                      />
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })()}
 
-        {/* Time labels */}
-        <div class="flex justify-between mt-1 text-[10px] text-gray-400 dark:text-gray-500">
-          <span>
-            {chartRangeLabel()}
-          </span>
-          <span>Now</span>
-        </div>
+        <Show when={axisTicks().length > 0}>
+          <div class="relative mt-3 h-10">
+            <div class="absolute inset-x-0 top-0 h-px bg-gray-200 dark:bg-gray-700"></div>
+            <For each={axisTicks()}>
+              {(tick) => (
+                <div
+                  class="pointer-events-none absolute top-0 flex h-full flex-col items-center"
+                  style={{ left: `${tick.position * 100}%` }}
+                >
+                  <div class="h-3 w-px bg-gray-300 dark:bg-gray-600"></div>
+                  <div
+                    class="mt-1 whitespace-nowrap text-[10px] text-gray-500 dark:text-gray-400 transform"
+                    classList={{
+                      '-translate-x-1/2': tick.align === 'center',
+                      '-translate-x-full': tick.align === 'end',
+                    }}
+                  >
+                    {tick.label}
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
       </Card>
 
       {/* Filters */}
