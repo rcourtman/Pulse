@@ -119,15 +119,13 @@
 
 @layer components {
   .pulse-shell {
-    width: min(98vw, 120rem);
-    max-width: 100%;
+    width: 95%;
+    max-width: 80rem;
     margin-inline: auto;
-    padding-inline: clamp(0.5rem, 1.5vw, 1rem);
-    transition: padding-inline 0.3s ease;
   }
 
   .pulse-panel {
-    padding: clamp(0.5rem, 1vw, 0.75rem);
+    padding: 0.75rem;
   }
 
   /* Card styles */
