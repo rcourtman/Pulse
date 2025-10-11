@@ -22,6 +22,23 @@ const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'restart window (s)': 'Time window used to evaluate the restart count threshold.',
   'memory warn %': 'Warning threshold for container memory usage.',
   'memory critical %': 'Critical threshold for container memory usage.',
+  // PMG (Proxmox Mail Gateway) thresholds
+  'queue warn': 'Early warning when total mail queue exceeds this message count.',
+  'queue crit': 'Critical alert requiring urgent action when queue reaches this size.',
+  'deferred warn': 'Early warning for messages stuck in deferred queue (waiting to retry delivery).',
+  'deferred crit': 'Critical threshold for deferred messages indicating serious delivery problems.',
+  'hold warn': 'Early warning when administratively held messages exceed this count.',
+  'hold crit': 'Critical alert for held messages requiring immediate moderation attention.',
+  'oldest warn (min)': 'Early warning when oldest queued message exceeds this age in minutes.',
+  'oldest crit (min)': 'Critical alert when message queue age indicates delivery has stalled.',
+  'spam warn': 'Early warning for spam messages accumulating in quarantine.',
+  'spam crit': 'Critical spam quarantine level requiring urgent intervention.',
+  'virus warn': 'Early warning for virus-positive messages in quarantine.',
+  'virus crit': 'Critical virus quarantine threshold indicating potential outbreak.',
+  'growth warn %': 'Early warning when quarantine growth rate exceeds this percentage.',
+  'growth warn min': 'Minimum new messages required before growth percentage triggers warning.',
+  'growth crit %': 'Critical quarantine growth rate requiring immediate investigation.',
+  'growth crit min': 'Minimum new messages required before growth percentage triggers critical alert.',
 };
 
 const OFFLINE_ALERTS_TOOLTIP =
