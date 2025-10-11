@@ -66,7 +66,13 @@ restart_backend() {
     source "$MOCK_ENV_FILE"
     set +a
 
-    export PULSE_DATA_DIR=/etc/pulse
+    # Set data directory based on mock mode
+    if [ "$PULSE_MOCK_MODE" = "true" ]; then
+        export PULSE_DATA_DIR=/opt/pulse/tmp/mock-data
+    else
+        export PULSE_DATA_DIR=/etc/pulse
+    fi
+
     export PORT=$BACKEND_PORT
 
     nohup ./pulse > /tmp/pulse-backend.log 2>&1 &
@@ -92,13 +98,24 @@ show_status() {
 		echo "  LXCs per node: $PULSE_MOCK_LXCS_PER_NODE"
 		echo "  Docker hosts: ${PULSE_MOCK_DOCKER_HOSTS:-0}"
 		echo "  Docker containers/host: ${PULSE_MOCK_DOCKER_CONTAINERS:-0}"
+		echo "  Data dir: ${PULSE_DATA_DIR:-/opt/pulse/tmp/mock-data}"
     else
         echo -e "${BLUE}Mock Mode: DISABLED${NC} (using real Proxmox nodes)"
+		echo "  Data dir: /etc/pulse"
     fi
 }
 
 enable_mock() {
     echo -e "${YELLOW}Enabling mock mode...${NC}"
+
+    # Ensure mock data directory exists
+    source "$MOCK_ENV_FILE"
+    MOCK_DATA_DIR=$(grep PULSE_DATA_DIR "$MOCK_ENV_FILE" | cut -d= -f2)
+    if [ -n "$MOCK_DATA_DIR" ] && [ "$MOCK_DATA_DIR" != "/etc/pulse" ]; then
+        mkdir -p "$MOCK_DATA_DIR"
+        echo "Created mock data directory: $MOCK_DATA_DIR"
+    fi
+
     sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=true/' "$MOCK_ENV_FILE"
     touch "$MOCK_ENV_FILE"
     echo -e "${GREEN}✓ Mock mode enabled!${NC}"
