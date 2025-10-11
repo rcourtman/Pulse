@@ -1,4 +1,4 @@
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show, createSignal, createEffect } from 'solid-js';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import type { Alert } from '@/types/api';
@@ -138,14 +138,38 @@ export function ResourceTable(props: ResourceTableProps) {
   const [activeMetricInput, setActiveMetricInput] = createSignal<{ resourceId: string; metric: string } | null>(null);
   const [showDelayRow, setShowDelayRow] = createSignal(false);
 
+  // Track changes to global defaults and factory defaults for debugging
+  createEffect(() => {
+    console.log('[ResourceTable] createEffect triggered - props changed:', {
+      title: props.title,
+      globalDefaults: props.globalDefaults,
+      factoryDefaults: props.factoryDefaults,
+      onResetDefaults: !!props.onResetDefaults,
+    });
+  });
+
   // Check if global defaults have been customized from factory defaults
   const hasCustomGlobalDefaults = () => {
-    if (!props.globalDefaults || !props.factoryDefaults) return false;
-    return Object.keys(props.factoryDefaults).some(key => {
+    console.log('[ResourceTable] hasCustomGlobalDefaults check:', {
+      globalDefaults: props.globalDefaults,
+      factoryDefaults: props.factoryDefaults,
+      title: props.title,
+    });
+    if (!props.globalDefaults || !props.factoryDefaults) {
+      console.log('[ResourceTable] Missing props, returning false');
+      return false;
+    }
+    const result = Object.keys(props.factoryDefaults).some(key => {
       const current = props.globalDefaults?.[key];
       const factory = props.factoryDefaults?.[key];
-      return current !== undefined && current !== factory;
+      const differs = current !== undefined && current !== factory;
+      if (differs) {
+        console.log(`[ResourceTable] Difference found: ${key} current=${current} factory=${factory}`);
+      }
+      return differs;
     });
+    console.log(`[ResourceTable] hasCustomGlobalDefaults result: ${result}`);
+    return result;
   };
 
   const normalizeMetricKey = (column: string): string => {

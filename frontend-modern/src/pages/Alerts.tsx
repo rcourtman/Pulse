@@ -1895,6 +1895,15 @@ interface ThresholdsTabProps {
   setDisableAllPMGOffline: (value: boolean) => void;
   disableAllDockerHostsOffline: () => boolean;
   setDisableAllDockerHostsOffline: (value: boolean) => void;
+  // Reset functions and factory defaults
+  resetGuestDefaults?: () => void;
+  resetNodeDefaults?: () => void;
+  resetDockerDefaults?: () => void;
+  resetStorageDefault?: () => void;
+  factoryGuestDefaults?: Record<string, number | undefined>;
+  factoryNodeDefaults?: Record<string, number | undefined>;
+  factoryDockerDefaults?: Record<string, number | undefined>;
+  factoryStorageDefault?: number;
 }
 
 function ThresholdsTab(props: ThresholdsTabProps) {
@@ -1955,6 +1964,14 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllPMGOffline={props.setDisableAllPMGOffline}
       disableAllDockerHostsOffline={props.disableAllDockerHostsOffline}
       setDisableAllDockerHostsOffline={props.setDisableAllDockerHostsOffline}
+      resetGuestDefaults={props.resetGuestDefaults}
+      resetNodeDefaults={props.resetNodeDefaults}
+      resetDockerDefaults={props.resetDockerDefaults}
+      resetStorageDefault={props.resetStorageDefault}
+      factoryGuestDefaults={props.factoryGuestDefaults}
+      factoryNodeDefaults={props.factoryNodeDefaults}
+      factoryDockerDefaults={props.factoryDockerDefaults}
+      factoryStorageDefault={props.factoryStorageDefault}
     />
   );
 }

@@ -1681,7 +1681,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div class="text-sm text-blue-900 dark:text-blue-100">
-            <span class="font-medium">Quick tips:</span> Set any threshold to <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">-1</code> to disable alerts for that metric. Click on disabled thresholds showing <span class="italic">Off</span> to re-enable them. Resources with custom settings show a <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">Custom</span> badge.
+            <span class="font-medium">Quick tips:</span> Set any threshold to <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">0</code> to disable alerts for that metric. Click on disabled thresholds showing <span class="italic">Off</span> to re-enable them. Resources with custom settings show a <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">Custom</span> badge.
           </div>
         </div>
       </div>
@@ -1759,6 +1759,50 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 metricDelaySeconds={props.metricTimeThresholds().node ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('node', metric, value)}
                 factoryDefaults={props.factoryNodeDefaults}
+                onResetDefaults={props.resetNodeDefaults}
+              />
+            </div>
+          </Show>
+
+          <Show when={hasSection('pbs')}>
+            <div ref={registerSection('pbs')} class="scroll-mt-24">
+              <ResourceTable
+                title="PBS Servers"
+                resources={pbsServersWithOverrides()}
+                columns={['CPU %', 'Memory %']}
+                activeAlerts={props.activeAlerts}
+                emptyMessage="No PBS servers match the current filters."
+                onEdit={startEditing}
+                onSaveEdit={saveEdit}
+                onCancelEdit={cancelEdit}
+                onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
+                onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
+                editingId={editingId}
+                editingThresholds={editingThresholds}
+                setEditingThresholds={setEditingThresholds}
+                formatMetricValue={formatMetricValue}
+                hasActiveAlert={hasActiveAlert}
+                globalDefaults={{ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
+                setGlobalDefaults={(value) => {
+                  if (typeof value === 'function') {
+                    const newValue = value({ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory });
+                    props.setNodeDefaults((prev) => ({ ...prev, cpu: newValue.cpu ?? prev.cpu, memory: newValue.memory ?? prev.memory }));
+                  } else {
+                    props.setNodeDefaults((prev) => ({ ...prev, cpu: value.cpu ?? prev.cpu, memory: value.memory ?? prev.memory }));
+                  }
+                }}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllPBS}
+                onToggleGlobalDisable={() => props.setDisableAllPBS(!props.disableAllPBS())}
+                globalDisableOfflineFlag={props.disableAllPBSOffline}
+                onToggleGlobalDisableOffline={() => props.setDisableAllPBSOffline(!props.disableAllPBSOffline())}
+                showDelayColumn={true}
+                globalDelaySeconds={props.timeThresholds().pbs}
+                metricDelaySeconds={props.metricTimeThresholds().pbs ?? {}}
+                onMetricDelayChange={(metric, value) => updateMetricDelay('pbs', metric, value)}
+                factoryDefaults={props.factoryNodeDefaults ? { cpu: props.factoryNodeDefaults.cpu, memory: props.factoryNodeDefaults.memory } : undefined}
                 onResetDefaults={props.resetNodeDefaults}
               />
             </div>
@@ -1853,48 +1897,6 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
                 factoryDefaults={props.factoryStorageDefault !== undefined ? { usage: props.factoryStorageDefault } : undefined}
                 onResetDefaults={props.resetStorageDefault}
-              />
-            </div>
-          </Show>
-
-          <Show when={hasSection('pbs')}>
-            <div ref={registerSection('pbs')} class="scroll-mt-24">
-              <ResourceTable
-                title="PBS Servers"
-                resources={pbsServersWithOverrides()}
-                columns={['CPU %', 'Memory %']}
-                activeAlerts={props.activeAlerts}
-                emptyMessage="No PBS servers match the current filters."
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                onToggleDisabled={toggleDisabled}
-                onToggleNodeConnectivity={toggleNodeConnectivity}
-                showOfflineAlertsColumn={true}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDefaults={{ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
-                setGlobalDefaults={(value) => {
-                  if (typeof value === 'function') {
-                    const newValue = value({ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory });
-                    props.setNodeDefaults((prev) => ({ ...prev, cpu: newValue.cpu ?? prev.cpu, memory: newValue.memory ?? prev.memory }));
-                  } else {
-                    props.setNodeDefaults((prev) => ({ ...prev, cpu: value.cpu ?? prev.cpu, memory: value.memory ?? prev.memory }));
-                  }
-                }}
-                setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={props.disableAllPBS}
-                onToggleGlobalDisable={() => props.setDisableAllPBS(!props.disableAllPBS())}
-                globalDisableOfflineFlag={props.disableAllPBSOffline}
-                onToggleGlobalDisableOffline={() => props.setDisableAllPBSOffline(!props.disableAllPBSOffline())}
-                showDelayColumn={true}
-                globalDelaySeconds={props.timeThresholds().pbs}
-                metricDelaySeconds={props.metricTimeThresholds().pbs ?? {}}
-                onMetricDelayChange={(metric, value) => updateMetricDelay('pbs', metric, value)}
               />
             </div>
           </Show>
