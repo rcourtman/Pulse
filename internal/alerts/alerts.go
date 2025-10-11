@@ -170,11 +170,19 @@ type ThresholdConfig struct {
 
 // QuietHours represents quiet hours configuration
 type QuietHours struct {
-	Enabled  bool            `json:"enabled"`
-	Start    string          `json:"start"` // 24-hour format "HH:MM"
-	End      string          `json:"end"`   // 24-hour format "HH:MM"
-	Timezone string          `json:"timezone"`
-	Days     map[string]bool `json:"days"` // monday, tuesday, etc.
+	Enabled  bool                  `json:"enabled"`
+	Start    string                `json:"start"` // 24-hour format "HH:MM"
+	End      string                `json:"end"`   // 24-hour format "HH:MM"
+	Timezone string                `json:"timezone"`
+	Days     map[string]bool       `json:"days"` // monday, tuesday, etc.
+	Suppress QuietHoursSuppression `json:"suppress"`
+}
+
+// QuietHoursSuppression controls which alert categories are silenced during quiet hours.
+type QuietHoursSuppression struct {
+	Performance bool `json:"performance"`
+	Storage     bool `json:"storage"`
+	Offline     bool `json:"offline"`
 }
 
 // EscalationLevel represents an escalation rule
@@ -333,10 +341,10 @@ type pmgBaselineCache struct {
 
 // pmgAnomalyTracker tracks history and baselines for anomaly detection
 type pmgAnomalyTracker struct {
-	Samples         []pmgMailMetricSample            // Ring buffer (max 48 samples)
-	Baselines       map[string]pmgBaselineCache      // Cached baselines per metric (spamIn, spamOut, virusIn, virusOut)
-	LastSampleTime  time.Time                        // Timestamp of most recent sample
-	SampleCount     int                              // Total samples collected (for warmup check)
+	Samples        []pmgMailMetricSample       // Ring buffer (max 48 samples)
+	Baselines      map[string]pmgBaselineCache // Cached baselines per metric (spamIn, spamOut, virusIn, virusOut)
+	LastSampleTime time.Time                   // Timestamp of most recent sample
+	SampleCount    int                         // Total samples collected (for warmup check)
 }
 
 // Manager handles alert monitoring and state
@@ -381,7 +389,7 @@ type Manager struct {
 	// PMG quarantine growth tracking
 	pmgQuarantineHistory map[string][]pmgQuarantineSnapshot // Track quarantine snapshots for growth detection
 	// PMG anomaly detection tracking
-	pmgAnomalyTrackers   map[string]*pmgAnomalyTracker      // Track mail metrics for anomaly detection per PMG instance
+	pmgAnomalyTrackers map[string]*pmgAnomalyTracker // Track mail metrics for anomaly detection per PMG instance
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
 	ackState map[string]ackRecord
 }
@@ -468,7 +476,7 @@ func NewManager() *Manager {
 			MinimumDelta:      2.0, // 2% minimum change
 			SuppressionWindow: 5,   // 5 minutes
 			HysteresisMargin:  5.0, // 5% default margin
-			TimeThreshold: 5,
+			TimeThreshold:     5,
 			TimeThresholds: map[string]int{
 				"guest":   5,
 				"node":    5,
@@ -491,6 +499,7 @@ func NewManager() *Manager {
 						"saturday":  false,
 						"sunday":    false,
 					},
+					Suppress: QuietHoursSuppression{},
 				},
 				Cooldown:       5,  // ON - 5 minutes prevents spam
 				GroupingWindow: 30, // ON - 30 seconds groups related alerts
@@ -565,9 +574,19 @@ func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
 
 // dispatchAlert delivers an alert to the configured callback, cloning it first to
 // prevent concurrent mutations from racing with consumers.
-func (m *Manager) dispatchAlert(alert *Alert, async bool) {
+func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	if m.onAlert == nil || alert == nil {
-		return
+		return false
+	}
+
+	if suppressed, reason := m.shouldSuppressNotification(alert); suppressed {
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("type", alert.Type).
+			Str("level", string(alert.Level)).
+			Str("quietHoursRule", reason).
+			Msg("Alert notification suppressed during quiet hours")
+		return false
 	}
 
 	alertCopy := alert.Clone()
@@ -576,6 +595,7 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) {
 	} else {
 		m.onAlert(alertCopy)
 	}
+	return true
 }
 
 // UpdateConfig updates the alert configuration
@@ -1208,6 +1228,66 @@ func (m *Manager) isInQuietHours() bool {
 	}
 
 	return false
+}
+
+func quietHoursCategoryForAlert(alert *Alert) string {
+	if alert == nil {
+		return ""
+	}
+
+	switch alert.Type {
+	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature":
+		return "performance"
+	case "queue-depth", "queue-deferred", "queue-hold", "message-age",
+		"docker-container-health", "docker-container-restart-loop",
+		"docker-container-oom-kill", "docker-container-memory-limit":
+		return "performance"
+	case "usage", "disk-health", "disk-wearout", "zfs-pool-state", "zfs-pool-errors", "zfs-device":
+		return "storage"
+	case "connectivity", "offline", "powered-off", "docker-host-offline":
+		return "offline"
+	}
+
+	if strings.HasPrefix(alert.Type, "docker-container-") {
+		if alert.Type == "docker-container-state" {
+			return "offline"
+		}
+		return "performance"
+	}
+
+	return ""
+}
+
+func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
+	if alert == nil {
+		return false, ""
+	}
+
+	if !m.isInQuietHours() {
+		return false, ""
+	}
+
+	if alert.Level != AlertLevelCritical {
+		return true, "non-critical"
+	}
+
+	category := quietHoursCategoryForAlert(alert)
+	switch category {
+	case "performance":
+		if m.config.Schedule.QuietHours.Suppress.Performance {
+			return true, category
+		}
+	case "storage":
+		if m.config.Schedule.QuietHours.Suppress.Storage {
+			return true, category
+		}
+	case "offline":
+		if m.config.Schedule.QuietHours.Suppress.Offline {
+			return true, category
+		}
+	}
+
+	return false, ""
 }
 
 // shouldNotifyAfterCooldown checks if enough time has passed since the last notification
@@ -3099,21 +3179,17 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				return
 			}
 
-			// Check if we should suppress notifications due to quiet hours
-			if m.isInQuietHours() && alert.Level != AlertLevelCritical {
-				log.Debug().
-					Str("alertID", alertID).
-					Msg("Alert notification suppressed due to quiet hours (non-critical)")
-			} else {
-				// Notify callback
-				if m.onAlert != nil {
+			// Notify callback (may be suppressed by quiet hours)
+			if m.onAlert != nil {
+				now := time.Now()
+				alert.LastNotified = &now
+				if m.dispatchAlert(alert, true) {
 					log.Info().Str("alertID", alertID).Msg("Calling onAlert callback")
-					now := time.Now()
-					alert.LastNotified = &now
-					m.dispatchAlert(alert, true)
 				} else {
-					log.Warn().Msg("No onAlert callback set!")
+					alert.LastNotified = nil
 				}
+			} else {
+				log.Warn().Msg("No onAlert callback set!")
 			}
 		} else {
 			// Update existing alert
@@ -3159,16 +3235,17 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					Msg("Alert escalated to critical, will re-notify despite cooldown")
 			}
 
-			// Send re-notification if appropriate
-			if shouldRenotify && !m.isInQuietHours() {
-				if m.onAlert != nil {
+			// Send re-notification if appropriate (may be suppressed by quiet hours)
+			if shouldRenotify && m.onAlert != nil {
+				now := time.Now()
+				existingAlert.LastNotified = &now
+				if m.dispatchAlert(existingAlert, false) {
 					log.Info().
 						Str("alertID", alertID).
 						Str("level", string(existingAlert.Level)).
 						Msg("Re-notifying for existing alert")
-					now := time.Now()
-					existingAlert.LastNotified = &now
-					m.dispatchAlert(existingAlert, false) // false = not a new alert
+				} else {
+					existingAlert.LastNotified = nil
 				}
 			}
 		}

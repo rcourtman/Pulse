@@ -127,6 +127,11 @@ export interface AlertConfig {
       end: string;
       timezone?: string;
       days: number[] | Record<string, boolean>;
+      suppress?: {
+        performance?: boolean;
+        storage?: boolean;
+        offline?: boolean;
+      };
     };
     cooldown?: number;
     groupingWindow?: number;
