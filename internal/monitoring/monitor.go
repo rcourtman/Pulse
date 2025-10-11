@@ -4468,6 +4468,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	var allBackups []models.StorageBackup
 	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
+	hadSuccessfulNode := false          // Track if at least one node responded successfully
+	storagesWithBackup := 0             // Number of storages that should contain backups
+	contentSuccess := 0                 // Number of successful storage content fetches
+	contentFailures := 0                // Number of failed storage content fetches
+	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
@@ -4504,8 +4509,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("Failed to get storage for backups - skipping node")
+			storageQueryErrors++
 			continue
 		}
+
+		hadSuccessfulNode = true
 
 		// For each storage that can contain backups or templates
 		for _, storage := range storages {
@@ -4513,6 +4521,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if !strings.Contains(storage.Content, "backup") {
 				continue
 			}
+
+			storagesWithBackup++
 
 			// Get storage content
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
@@ -4522,8 +4532,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					Str("node", node.Node).
 					Str("storage", storage.Storage).
 					Msg("Failed to get storage content")
+				contentFailures++
 				continue
 			}
+
+			contentSuccess++
 
 			// Convert to models
 			for _, content := range contents {
@@ -4599,6 +4612,24 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 	}
 
+	// Decide whether to keep existing backups when every query failed
+	if shouldPreserveBackups(len(nodes), hadSuccessfulNode, storagesWithBackup, contentSuccess) {
+		if len(nodes) > 0 && !hadSuccessfulNode {
+			log.Warn().
+				Str("instance", instanceName).
+				Int("nodes", len(nodes)).
+				Int("errors", storageQueryErrors).
+				Msg("Failed to query storage on all nodes; keeping previous backup list")
+		} else if storagesWithBackup > 0 && contentSuccess == 0 {
+			log.Warn().
+				Str("instance", instanceName).
+				Int("storages", storagesWithBackup).
+				Int("failures", contentFailures).
+				Msg("All storage content queries failed; keeping previous backup list")
+		}
+		return
+	}
+
 	// Update state with storage backups for this instance
 	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
 
@@ -4606,6 +4637,16 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		Str("instance", instanceName).
 		Int("count", len(allBackups)).
 		Msg("Storage backups polled")
+}
+
+func shouldPreserveBackups(nodeCount int, hadSuccessfulNode bool, storagesWithBackup, contentSuccess int) bool {
+	if nodeCount > 0 && !hadSuccessfulNode {
+		return true
+	}
+	if storagesWithBackup > 0 && contentSuccess == 0 {
+		return true
+	}
+	return false
 }
 
 func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Duration {
