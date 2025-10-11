@@ -1,4 +1,5 @@
 import { createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
@@ -17,6 +18,11 @@ import type { EmailConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container, DockerHost, DockerContainer } from '@/types/api';
 import { useNavigate, useLocation } from '@solidjs/router';
+import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
+import History from 'lucide-solid/icons/history';
+import Gauge from 'lucide-solid/icons/gauge';
+import Send from 'lucide-solid/icons/send';
+import Calendar from 'lucide-solid/icons/calendar';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
@@ -1025,23 +1031,23 @@ const [timeThresholds, setTimeThresholds] = createSignal({
   const tabGroups: {
     id: 'status' | 'configuration';
     label: string;
-    items: { id: AlertTab; label: string }[];
+    items: { id: AlertTab; label: string; icon: JSX.Element }[];
   }[] = [
     {
       id: 'status',
       label: 'Status',
       items: [
-        { id: 'overview', label: 'Overview' },
-        { id: 'history', label: 'History' },
+        { id: 'overview', label: 'Overview', icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
       ],
     },
     {
       id: 'configuration',
       label: 'Configuration',
       items: [
-        { id: 'thresholds', label: 'Thresholds' },
-        { id: 'destinations', label: 'Notifications' },
-        { id: 'schedule', label: 'Schedule' },
+        { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'destinations', label: 'Notifications', icon: <Send class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
       ],
     },
   ];
@@ -1219,67 +1225,62 @@ const [timeThresholds, setTimeThresholds] = createSignal({
       </Show>
 
       <Card padding="none" class="relative lg:flex">
-        <Show when={!sidebarCollapsed()}>
-          <div class="hidden lg:flex lg:flex-col w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem] relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0">
-            <button
-              type="button"
-              class="hidden lg:flex absolute top-6 right-0 translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
-              onClick={() => setSidebarCollapsed(true)}
-              aria-label="Collapse alerts navigation"
-              aria-expanded="true"
-              aria-controls="alerts-sidebar-menu"
-            >
-              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-            <div class="sticky top-24 px-5 py-6 space-y-6">
-              <div id="alerts-sidebar-menu" class="space-y-6">
-                <For each={tabGroups}>
-                  {(group) => (
-                    <div class="space-y-2">
-                      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        {group.label}
-                      </p>
-                      <div class="space-y-1.5">
-                        <For each={group.items}>
-                          {(item) => (
-                            <button
-                              type="button"
-                              aria-current={activeTab() === item.id ? 'page' : undefined}
-                              class={`flex w-full items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                                activeTab() === item.id
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
-                              }`}
-                              onClick={() => handleTabChange(item.id)}
-                            >
-                              <span class="truncate">{item.label}</span>
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </div>
-          </div>
-        </Show>
-        <Show when={sidebarCollapsed()}>
+        <div class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}>
           <button
             type="button"
-            class="hidden lg:flex absolute top-6 left-0 -translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
-            onClick={() => setSidebarCollapsed(false)}
-            aria-label="Expand alerts navigation"
-            aria-expanded="false"
+            class="hidden lg:flex absolute top-6 right-0 translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed())}
+            aria-label={sidebarCollapsed() ? "Expand alerts navigation" : "Collapse alerts navigation"}
+            aria-expanded={!sidebarCollapsed()}
             aria-controls="alerts-sidebar-menu"
           >
             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 6l6 6-6 6" />
+              <Show when={sidebarCollapsed()}>
+                <path d="M9 6l6 6-6 6" />
+              </Show>
+              <Show when={!sidebarCollapsed()}>
+                <path d="M15 18l-6-6 6-6" />
+              </Show>
             </svg>
           </button>
-        </Show>
+          <div class={`sticky top-24 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
+            <div id="alerts-sidebar-menu" class="space-y-6">
+              <For each={tabGroups}>
+                {(group) => (
+                  <div class="space-y-2">
+                    <Show when={!sidebarCollapsed()}>
+                      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        {group.label}
+                      </p>
+                    </Show>
+                    <div class="space-y-1.5">
+                      <For each={group.items}>
+                        {(item) => (
+                          <button
+                            type="button"
+                            aria-current={activeTab() === item.id ? 'page' : undefined}
+                            class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${
+                              activeTab() === item.id
+                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                            }`}
+                            onClick={() => handleTabChange(item.id)}
+                            title={sidebarCollapsed() ? item.label : undefined}
+                          >
+                            {item.icon}
+                            <Show when={!sidebarCollapsed()}>
+                              <span class="truncate">{item.label}</span>
+                            </Show>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        </div>
 
         <div class="flex-1 min-w-0">
           <Show when={flatTabs.length > 0}>
