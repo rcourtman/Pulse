@@ -592,6 +592,16 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 				return
 			}
 
+			vmIDs := make([]int, 0, len(containers))
+			for _, ct := range containers {
+				if ct.Template == 1 {
+					continue
+				}
+				vmIDs = append(vmIDs, int(ct.VMID))
+			}
+
+			rootUsageOverrides := m.collectContainerRootUsage(ctx, client, n.Node, vmIDs)
+
 			var nodeContainers []models.Container
 
 			// Process each container
@@ -631,6 +641,28 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 					cpuUsage = 0
 				}
 
+				memTotalBytes := clampToInt64(container.MaxMem)
+				memUsedBytes := clampToInt64(container.Mem)
+				if memTotalBytes > 0 && memUsedBytes > memTotalBytes {
+					memUsedBytes = memTotalBytes
+				}
+				memFreeBytes := memTotalBytes - memUsedBytes
+				if memFreeBytes < 0 {
+					memFreeBytes = 0
+				}
+				memUsagePercent := safePercentage(float64(memUsedBytes), float64(memTotalBytes))
+
+				diskTotalBytes := clampToInt64(container.MaxDisk)
+				diskUsedBytes := clampToInt64(container.Disk)
+				if diskTotalBytes > 0 && diskUsedBytes > diskTotalBytes {
+					diskUsedBytes = diskTotalBytes
+				}
+				diskFreeBytes := diskTotalBytes - diskUsedBytes
+				if diskFreeBytes < 0 {
+					diskFreeBytes = 0
+				}
+				diskUsagePercent := safePercentage(float64(diskUsedBytes), float64(diskTotalBytes))
+
 				// Create container model
 				modelContainer := models.Container{
 					ID:       guestID,
@@ -643,16 +675,16 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 					CPU:      cpuUsage,
 					CPUs:     int(container.CPUs),
 					Memory: models.Memory{
-						Total: int64(container.MaxMem),
-						Used:  int64(container.Mem),
-						Free:  int64(container.MaxMem - container.Mem),
-						Usage: safePercentage(float64(container.Mem), float64(container.MaxMem)),
+						Total: memTotalBytes,
+						Used:  memUsedBytes,
+						Free:  memFreeBytes,
+						Usage: memUsagePercent,
 					},
 					Disk: models.Disk{
-						Total: int64(container.MaxDisk),
-						Used:  int64(container.Disk),
-						Free:  int64(container.MaxDisk - container.Disk),
-						Usage: safePercentage(float64(container.Disk), float64(container.MaxDisk)),
+						Total: diskTotalBytes,
+						Used:  diskUsedBytes,
+						Free:  diskFreeBytes,
+						Usage: diskUsagePercent,
 					},
 					NetworkIn:  maxInt64(0, int64(netInRate)),
 					NetworkOut: maxInt64(0, int64(netOutRate)),
@@ -662,6 +694,30 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 					Template:   container.Template == 1,
 					LastSeen:   time.Now(),
 					Tags:       tags,
+				}
+
+				if override, ok := rootUsageOverrides[int(container.VMID)]; ok {
+					overrideUsed := clampToInt64(override.Used)
+					overrideTotal := clampToInt64(override.Total)
+
+					if overrideUsed > 0 && (modelContainer.Disk.Used == 0 || overrideUsed < modelContainer.Disk.Used) {
+						modelContainer.Disk.Used = overrideUsed
+					}
+
+					if overrideTotal > 0 {
+						modelContainer.Disk.Total = overrideTotal
+					}
+
+					if modelContainer.Disk.Total > 0 && modelContainer.Disk.Used > modelContainer.Disk.Total {
+						modelContainer.Disk.Used = modelContainer.Disk.Total
+					}
+
+					modelContainer.Disk.Free = modelContainer.Disk.Total - modelContainer.Disk.Used
+					if modelContainer.Disk.Free < 0 {
+						modelContainer.Disk.Free = 0
+					}
+
+					modelContainer.Disk.Usage = safePercentage(float64(modelContainer.Disk.Used), float64(modelContainer.Disk.Total))
 				}
 
 				// Zero out metrics for non-running containers

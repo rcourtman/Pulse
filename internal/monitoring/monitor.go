@@ -3401,6 +3401,16 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			continue
 		}
 
+		vmIDs := make([]int, 0, len(containers))
+		for _, ct := range containers {
+			if ct.Template == 1 {
+				continue
+			}
+			vmIDs = append(vmIDs, int(ct.VMID))
+		}
+
+		rootUsageOverrides := m.collectContainerRootUsage(ctx, client, node.Node, vmIDs)
+
 		for _, ct := range containers {
 			// Skip templates if configured
 			if ct.Template == 1 {
@@ -3459,6 +3469,28 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 				memUsed = ct.Mem
 			}
 
+			memTotalBytes := clampToInt64(memTotal)
+			memUsedBytes := clampToInt64(memUsed)
+			if memTotalBytes > 0 && memUsedBytes > memTotalBytes {
+				memUsedBytes = memTotalBytes
+			}
+			memFreeBytes := memTotalBytes - memUsedBytes
+			if memFreeBytes < 0 {
+				memFreeBytes = 0
+			}
+			memUsagePercent := safePercentage(float64(memUsedBytes), float64(memTotalBytes))
+
+			diskTotalBytes := clampToInt64(ct.MaxDisk)
+			diskUsedBytes := clampToInt64(ct.Disk)
+			if diskTotalBytes > 0 && diskUsedBytes > diskTotalBytes {
+				diskUsedBytes = diskTotalBytes
+			}
+			diskFreeBytes := diskTotalBytes - diskUsedBytes
+			if diskFreeBytes < 0 {
+				diskFreeBytes = 0
+			}
+			diskUsagePercent := safePercentage(float64(diskUsedBytes), float64(diskTotalBytes))
+
 			// Convert -1 to nil for I/O metrics when VM is not running
 			// We'll use -1 to indicate "no data" which will be converted to null for the frontend
 			modelCT := models.Container{
@@ -3472,16 +3504,16 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 				CPU:      cpuUsage, // Already in percentage
 				CPUs:     int(ct.CPUs),
 				Memory: models.Memory{
-					Total: int64(memTotal),
-					Used:  int64(memUsed),
-					Free:  int64(memTotal - memUsed),
-					Usage: safePercentage(float64(memUsed), float64(memTotal)),
+					Total: memTotalBytes,
+					Used:  memUsedBytes,
+					Free:  memFreeBytes,
+					Usage: memUsagePercent,
 				},
 				Disk: models.Disk{
-					Total: int64(ct.MaxDisk),
-					Used:  int64(ct.Disk),
-					Free:  int64(ct.MaxDisk - ct.Disk),
-					Usage: safePercentage(float64(ct.Disk), float64(ct.MaxDisk)),
+					Total: diskTotalBytes,
+					Used:  diskUsedBytes,
+					Free:  diskFreeBytes,
+					Usage: diskUsagePercent,
 				},
 				NetworkIn:  maxInt64(0, int64(netInRate)),
 				NetworkOut: maxInt64(0, int64(netOutRate)),
@@ -3493,6 +3525,31 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 				Lock:       ct.Lock,
 				LastSeen:   time.Now(),
 			}
+
+			if override, ok := rootUsageOverrides[int(ct.VMID)]; ok {
+				overrideUsed := clampToInt64(override.Used)
+				overrideTotal := clampToInt64(override.Total)
+
+				if overrideUsed > 0 && (modelCT.Disk.Used == 0 || overrideUsed < modelCT.Disk.Used) {
+					modelCT.Disk.Used = overrideUsed
+				}
+
+				if overrideTotal > 0 {
+					modelCT.Disk.Total = overrideTotal
+				}
+
+				if modelCT.Disk.Total > 0 && modelCT.Disk.Used > modelCT.Disk.Total {
+					modelCT.Disk.Used = modelCT.Disk.Total
+				}
+
+				modelCT.Disk.Free = modelCT.Disk.Total - modelCT.Disk.Used
+				if modelCT.Disk.Free < 0 {
+					modelCT.Disk.Free = 0
+				}
+
+				modelCT.Disk.Usage = safePercentage(float64(modelCT.Disk.Used), float64(modelCT.Disk.Total))
+			}
+
 			allContainers = append(allContainers, modelCT)
 
 			// Record metrics history
@@ -4100,6 +4157,12 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PMG instance")
 		m.state.SetConnectionHealth("pmg-"+instanceName, false)
 		m.state.UpdatePMGInstance(pmgInst)
+
+		// Check PMG offline status against alert thresholds
+		if m.alertManager != nil {
+			m.alertManager.CheckPMG(pmgInst)
+		}
+
 		if errors.IsAuthError(err) {
 			m.recordAuthFailure(instanceName, "pmg")
 		}
@@ -4235,6 +4298,11 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		Str("status", pmgInst.Status).
 		Int("nodes", len(pmgInst.Nodes)).
 		Msg("PMG instance updated in state")
+
+	// Check PMG metrics against alert thresholds
+	if m.alertManager != nil {
+		m.alertManager.CheckPMG(pmgInst)
+	}
 }
 
 // GetState returns the current state
@@ -5112,6 +5180,18 @@ func (m *Monitor) checkMockAlerts() {
 			Float64("usage", storage.Usage).
 			Msg("Checking storage for alerts")
 		m.alertManager.CheckStorage(storage)
+	}
+
+	// Check alerts for PBS instances
+	log.Info().Int("pbsCount", len(state.PBSInstances)).Msg("Checking PBS alerts")
+	for _, pbsInst := range state.PBSInstances {
+		m.alertManager.CheckPBS(pbsInst)
+	}
+
+	// Check alerts for PMG instances
+	log.Info().Int("pmgCount", len(state.PMGInstances)).Msg("Checking PMG alerts")
+	for _, pmgInst := range state.PMGInstances {
+		m.alertManager.CheckPMG(pmgInst)
 	}
 
 	// Cache the latest alert snapshots directly in the mock data so the API can serve
