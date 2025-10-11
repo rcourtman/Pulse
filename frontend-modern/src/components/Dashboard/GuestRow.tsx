@@ -316,7 +316,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* CPU */}
-      <td class="py-0.5 px-2 w-[140px]">
+      <td class="py-0.5 px-2 w-[160px] xl:w-[200px]">
         <Show when={showGuestMetrics()} fallback={<span class="text-sm text-gray-400">-</span>}>
           <MetricBar
             value={cpuPercent()}
@@ -332,7 +332,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Memory */}
-      <td class="py-0.5 px-2 w-[140px]">
+      <td class="py-0.5 px-2 w-[160px] xl:w-[200px]">
         <div title={memoryTooltip() ?? undefined}>
           <Show when={showGuestMetrics()} fallback={<span class="text-sm text-gray-400">-</span>}>
             <MetricBar
@@ -346,7 +346,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Disk – surface usage even if guest is currently stopped so users can see last reported values */}
-      <td class="py-0.5 px-2 w-[140px]">
+      <td class="py-0.5 px-2 w-[160px] xl:w-[200px]">
         <Show
           when={hasDiskUsage()}
           fallback={
