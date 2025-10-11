@@ -891,7 +891,7 @@ function AppLayout(props: {
               const isActive = () => getActiveTab() === platform.id;
               const disabled = () => !platform.enabled;
               const baseClasses =
-                'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap';
+                'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
               const className = () => {
                 if (isActive()) {
@@ -932,7 +932,7 @@ function AppLayout(props: {
               {(tab) => {
                 const isActive = () => getActiveTab() === tab.id;
                 const baseClasses =
-                  'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap';
+                  'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
               const className = () => {
                 if (isActive()) {

@@ -16,10 +16,11 @@ import (
 
 // SystemSettingsHandler handles system settings
 type SystemSettingsHandler struct {
-	config      *config.Config
-	persistence *config.ConfigPersistence
-	wsHub       *websocket.Hub
-	monitor     interface {
+	config                   *config.Config
+	persistence              *config.ConfigPersistence
+	wsHub                    *websocket.Hub
+	reloadSystemSettingsFunc func() // Function to reload cached system settings
+	monitor                  interface {
 		GetDiscoveryService() *discovery.Service
 		StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
 		StopDiscoveryService()
@@ -31,12 +32,13 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	GetDiscoveryService() *discovery.Service
 	StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
 	StopDiscoveryService()
-}) *SystemSettingsHandler {
+}, reloadSystemSettingsFunc func()) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
-		config:      cfg,
-		persistence: persistence,
-		wsHub:       wsHub,
-		monitor:     monitor,
+		config:                   cfg,
+		persistence:              persistence,
+		wsHub:                    wsHub,
+		monitor:                  monitor,
+		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
 	}
 }
 
@@ -378,6 +380,11 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		log.Error().Err(err).Msg("Failed to save system settings")
 		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
 		return
+	}
+
+	// Reload cached system settings after successful save
+	if h.reloadSystemSettingsFunc != nil {
+		h.reloadSystemSettingsFunc()
 	}
 
 	log.Info().Msg("System settings updated")

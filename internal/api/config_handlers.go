@@ -45,32 +45,34 @@ type SetupCode struct {
 
 // ConfigHandlers handles configuration-related API endpoints
 type ConfigHandlers struct {
-	config               *config.Config
-	persistence          *config.ConfigPersistence
-	monitor              *monitoring.Monitor
-	reloadFunc           func() error
-	wsHub                *websocket.Hub
-	guestMetadataHandler *GuestMetadataHandler
-	setupCodes           map[string]*SetupCode // Map of code hash -> setup code details
-	codeMutex            sync.RWMutex          // Mutex for thread-safe code access
-	clusterDetectMutex   sync.Mutex
-	lastClusterDetection map[string]time.Time
-	recentAutoRegistered map[string]time.Time
-	recentAutoRegMutex   sync.Mutex
+	config                    *config.Config
+	persistence               *config.ConfigPersistence
+	monitor                   *monitoring.Monitor
+	reloadFunc                func() error
+	reloadSystemSettingsFunc  func() // Function to reload cached system settings
+	wsHub                     *websocket.Hub
+	guestMetadataHandler      *GuestMetadataHandler
+	setupCodes                map[string]*SetupCode // Map of code hash -> setup code details
+	codeMutex                 sync.RWMutex          // Mutex for thread-safe code access
+	clusterDetectMutex        sync.Mutex
+	lastClusterDetection      map[string]time.Time
+	recentAutoRegistered      map[string]time.Time
+	recentAutoRegMutex        sync.Mutex
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
-func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub, guestMetadataHandler *GuestMetadataHandler) *ConfigHandlers {
+func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub, guestMetadataHandler *GuestMetadataHandler, reloadSystemSettingsFunc func()) *ConfigHandlers {
 	h := &ConfigHandlers{
-		config:               cfg,
-		persistence:          config.NewConfigPersistence(cfg.DataPath),
-		monitor:              monitor,
-		reloadFunc:           reloadFunc,
-		wsHub:                wsHub,
-		guestMetadataHandler: guestMetadataHandler,
-		setupCodes:           make(map[string]*SetupCode),
-		lastClusterDetection: make(map[string]time.Time),
-		recentAutoRegistered: make(map[string]time.Time),
+		config:                   cfg,
+		persistence:              config.NewConfigPersistence(cfg.DataPath),
+		monitor:                  monitor,
+		reloadFunc:               reloadFunc,
+		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
+		wsHub:                    wsHub,
+		guestMetadataHandler:     guestMetadataHandler,
+		setupCodes:               make(map[string]*SetupCode),
+		lastClusterDetection:     make(map[string]time.Time),
+		recentAutoRegistered:     make(map[string]time.Time),
 	}
 
 	// Clean up expired codes periodically
@@ -2384,6 +2386,9 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 	if err := h.persistence.SaveSystemSettings(settings); err != nil {
 		log.Error().Err(err).Msg("Failed to persist system settings")
 		// Continue anyway - settings are applied in memory
+	} else if h.reloadSystemSettingsFunc != nil {
+		// Reload cached system settings after successful save
+		h.reloadSystemSettingsFunc()
 	}
 
 	log.Info().

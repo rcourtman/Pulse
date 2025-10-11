@@ -45,6 +45,10 @@ type Router struct {
 	oidcMu                sync.Mutex
 	oidcService           *OIDCService
 	wrapped               http.Handler
+	// Cached system settings to avoid loading from disk on every request
+	settingsMu           sync.RWMutex
+	cachedAllowEmbedding bool
+	cachedAllowedOrigins string
 }
 
 // NewRouter creates a new router instance
@@ -72,13 +76,14 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	// Start background update checker
 	go r.backgroundUpdateChecker()
 
-	// Load system settings to configure security headers
-	allowEmbedding := false
-	allowedOrigins := ""
-	if systemSettings, err := r.persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
-		allowEmbedding = systemSettings.AllowEmbedding
-		allowedOrigins = systemSettings.AllowedEmbedOrigins
-	}
+	// Load system settings once at startup and cache them
+	r.reloadSystemSettings()
+
+	// Get cached values for middleware configuration
+	r.settingsMu.RLock()
+	allowEmbedding := r.cachedAllowEmbedding
+	allowedOrigins := r.cachedAllowedOrigins
+	r.settingsMu.RUnlock()
 
 	// Apply middleware chain:
 	// 1. Universal rate limiting (outermost to stop attacks early)
@@ -100,7 +105,7 @@ func (r *Router) setupRoutes() {
 	r.alertHandlers = NewAlertHandlers(r.monitor, r.wsHub)
 	r.notificationHandlers = NewNotificationHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
-	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler)
+	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.config.DataPath)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
 
@@ -828,7 +833,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/settings/update", updateSettings)
 
 	// System settings and API token management
-	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor)
+	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings)
 	r.mux.HandleFunc("/api/system/settings", r.systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", r.systemSettingsHandler.HandleUpdateSystemSettings)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
@@ -880,6 +885,22 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	}
 }
 
+// reloadSystemSettings loads system settings from disk and caches them
+func (r *Router) reloadSystemSettings() {
+	r.settingsMu.Lock()
+	defer r.settingsMu.Unlock()
+
+	// Load from disk
+	if systemSettings, err := r.persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
+		r.cachedAllowEmbedding = systemSettings.AllowEmbedding
+		r.cachedAllowedOrigins = systemSettings.AllowedEmbedOrigins
+	} else {
+		// On error, use safe defaults
+		r.cachedAllowEmbedding = false
+		r.cachedAllowedOrigins = ""
+	}
+}
+
 // ServeHTTP implements http.Handler
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Prevent path traversal attacks by cleaning the path
@@ -900,13 +921,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Load system settings to get embedding configuration
-	var allowEmbedding bool
-	var allowedEmbedOrigins string
-	if systemSettings, err := r.persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
-		allowEmbedding = systemSettings.AllowEmbedding
-		allowedEmbedOrigins = systemSettings.AllowedEmbedOrigins
-	}
+	// Get cached system settings (loaded once at startup, not from disk every request)
+	r.settingsMu.RLock()
+	allowEmbedding := r.cachedAllowEmbedding
+	allowedEmbedOrigins := r.cachedAllowedOrigins
+	r.settingsMu.RUnlock()
 
 	// Apply security headers with embedding configuration
 	SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
