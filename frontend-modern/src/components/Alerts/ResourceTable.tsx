@@ -227,6 +227,13 @@ export function ResourceTable(props: ResourceTableProps) {
     return { min: -1, max: 10000 };
   };
 
+  const metricStep = (metric: string): string | number => {
+    if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
+      return 'any';
+    }
+    return 1;
+  };
+
   const getEnabledDefaultValue = (metric: string): number => {
     if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
       return 100;
@@ -510,11 +517,12 @@ export function ResourceTable(props: ResourceTableProps) {
                             type="number"
                             min={bounds.min}
                             max={bounds.max}
+                            step={metricStep(metric)}
                             value={isOff() ? '' : val()}
                             placeholder={isOff() ? 'Off' : ''}
                             disabled={isOff()}
                             onInput={(e) => {
-                              const value = parseInt(e.currentTarget.value, 10);
+                              const value = parseFloat(e.currentTarget.value);
                               if (props.setGlobalDefaults) {
                                 props.setGlobalDefaults((prev) => ({
                                   ...prev,
@@ -885,7 +893,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 };
 
                                 return (
-                  <td class="p-1 px-2 text-center align-middle">
+                                  <td class="p-1 px-2 text-center align-middle">
                                     <Show
                                       when={showMetric()}
                                       fallback={
@@ -894,77 +902,78 @@ export function ResourceTable(props: ResourceTableProps) {
                                         </span>
                                       }
                                     >
-                                        <Show
-                                          when={isEditing()}
-                                          fallback={
-                                            <div
-                                              onClick={(event) => {
-                                                openMetricEditor(event);
-                                              }}
-                                              class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 py-0.5 transition-colors"
-                                              title="Click to edit this metric"
-                                            >
-                                              <MetricValueWithHeat
-                                                resourceId={resource.id}
-                                                metric={metric}
-                                                value={displayValue(metric)}
-                                                isOverridden={isOverridden(metric)}
-                                              />
-                                            </div>
-                                          }
-                                        >
-                                          <div class="flex items-center justify-center">
-                                            <input
-                                              type="number"
-                                              min={bounds.min}
-                                              max={bounds.max}
-                                              value={thresholds()?.[metric] ?? ''}
-                                              placeholder={isDisabled() ? 'Off' : ''}
-                                              title="Set to -1 to disable alerts for this metric"
-                                              ref={(el) => {
-                                                if (
-                                                  isEditing() &&
-                                                  activeMetricInput()?.resourceId === resource.id &&
-                                                  activeMetricInput()?.metric === metric
-                                                ) {
-                                                  queueMicrotask(() => {
-                                                    el.focus();
-                                                    el.select();
-                                                  });
-                                                }
-                                              }}
-                                              onInput={(e) => {
-                                                const raw = e.currentTarget.value;
-                                                if (raw === '') {
-                                                  props.setEditingThresholds({
-                                                    ...props.editingThresholds(),
-                                                    [metric]: undefined,
-                                                  });
-                                                  return;
-                                                }
-                                                const val = parseInt(raw, 10);
-                                                if (!Number.isNaN(val)) {
-                                                  props.setEditingThresholds({
-                                                    ...props.editingThresholds(),
-                                                    [metric]: val,
-                                                  });
-                                                }
-                                              }}
-                                              onBlur={() => {
-                                                if (props.editingId() === resource.id) {
-                                                  props.onSaveEdit(resource.id);
-                                                }
-                                                setActiveMetricInput(null);
-                                              }}
-                                              class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                                                isDisabled()
-                                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
-                                                  : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
-                                              }`}
+                                      <Show
+                                        when={isEditing()}
+                                        fallback={
+                                          <div
+                                            onClick={(event) => {
+                                              openMetricEditor(event);
+                                            }}
+                                            class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 py-0.5 transition-colors"
+                                            title="Click to edit this metric"
+                                          >
+                                            <MetricValueWithHeat
+                                              resourceId={resource.id}
+                                              metric={metric}
+                                              value={displayValue(metric)}
+                                              isOverridden={isOverridden(metric)}
                                             />
                                           </div>
-                                        </Show>
-                                     </Show>
+                                        }
+                                      >
+                                        <div class="flex items-center justify-center">
+                                          <input
+                                            type="number"
+                                            min={bounds.min}
+                                            max={bounds.max}
+                                            step={metricStep(metric)}
+                                            value={thresholds()?.[metric] ?? ''}
+                                            placeholder={isDisabled() ? 'Off' : ''}
+                                            title="Set to -1 to disable alerts for this metric"
+                                            ref={(el) => {
+                                              if (
+                                                isEditing() &&
+                                                activeMetricInput()?.resourceId === resource.id &&
+                                                activeMetricInput()?.metric === metric
+                                              ) {
+                                                queueMicrotask(() => {
+                                                  el.focus();
+                                                  el.select();
+                                                });
+                                              }
+                                            }}
+                                            onInput={(e) => {
+                                              const raw = e.currentTarget.value;
+                                              if (raw === '') {
+                                                props.setEditingThresholds({
+                                                  ...props.editingThresholds(),
+                                                  [metric]: undefined,
+                                                });
+                                                return;
+                                              }
+                                              const val = parseFloat(raw);
+                                              if (!Number.isNaN(val)) {
+                                                props.setEditingThresholds({
+                                                  ...props.editingThresholds(),
+                                                  [metric]: val,
+                                                });
+                                              }
+                                            }}
+                                            onBlur={() => {
+                                              if (props.editingId() === resource.id) {
+                                                props.onSaveEdit(resource.id);
+                                              }
+                                              setActiveMetricInput(null);
+                                            }}
+                                            class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
+                                              isDisabled()
+                                                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
+                                                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+                                            }`}
+                                          />
+                                        </div>
+                                      </Show>
+                                    </Show>
                                   </td>
                                 );
                               }}
@@ -1342,6 +1351,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                               ? 100
                                               : 10000
                                           }
+                                          step={metricStep(metric)}
                                           value={thresholds()?.[metric] ?? ''}
                                           placeholder={isDisabled() ? 'Off' : ''}
                                           title="Set to -1 to disable alerts for this metric"
@@ -1366,7 +1376,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                               });
                                               return;
                                             }
-                                            const val = parseInt(raw, 10);
+                                            const val = parseFloat(raw);
                                             if (!Number.isNaN(val)) {
                                               props.setEditingThresholds({
                                                 ...props.editingThresholds(),
