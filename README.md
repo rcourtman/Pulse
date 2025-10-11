@@ -43,6 +43,8 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - Example: "VM 'webserver' is down on node 'pve1'"
   - Example: "Storage 'local-lvm' at 85% capacity"
   - Example: "VM 'database' is back online"
+- **Adaptive Thresholds**: Hysteresis-based trigger/clear levels, fractional network thresholds, per-metric search, reset-to-defaults, and Custom overrides with inline audit trail
+- **Ceph Awareness**: Surface Ceph health, pool utilisation, and daemon status automatically when Proxmox exposes Ceph-backed storage
 - Unified view of PBS backups, PVE backups, and snapshots
 - Proxmox Mail Gateway analytics: mail volume, spam/virus trends, quarantine health, and cluster node status
 - Optional Docker container monitoring via lightweight agent
@@ -153,7 +155,7 @@ The script handles user creation, permissions, token generation, and registratio
 
 ### Monitor Docker Containers (optional)
 
-Deploy the lightweight [Pulse Docker agent](docs/DOCKER_MONITORING.md) on any host running Docker to stream container status and resource data back to Pulse. Install the agent alongside your stack, point it at your Pulse URL and API token, and the new **Docker** tab in the UI will light up with per-container CPU, memory, health, and restart insights.
+Deploy the lightweight [Pulse Docker agent](docs/DOCKER_MONITORING.md) on any host running Docker to stream container status and resource data back to Pulse. Install the agent alongside your stack, point it at your Pulse URL and API token, and the **Docker** workspace lights up with host summaries, restart loop detection, per-container CPU/memory charts, and quick filters for stacks and unhealthy workloads.
 
 ## Docker
 
@@ -542,9 +544,13 @@ npm run mock:edit
 # Create local overrides (not committed to git)
 cp mock.env mock.env.local
 # Edit mock.env.local with your personal preferences
+
+# Data directories are isolated automatically:
+# - Mock mode:   /opt/pulse/tmp/mock-data
+# - Production:  /etc/pulse
 ```
 
-**Backend auto-reloads when mock.env changes - no manual restarts!**
+**Backend auto-reloads when mock.env changes - no manual restarts!** The toggle scripts keep mock data isolated from `/etc/pulse` so your real credentials stay untouched.
 
 See [docs/development/MOCK_MODE.md](docs/development/MOCK_MODE.md) for full details.
 

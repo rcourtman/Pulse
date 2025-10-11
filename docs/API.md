@@ -128,7 +128,57 @@ Get complete system state including all nodes and their metrics.
 GET /api/state
 ```
 
-Response includes all monitored nodes (PVE, PMG, PBS), VMs, containers, storage, PMG mail analytics, and backups.
+Response payload includes dedicated collections for each subsystem:
+
+- `nodes`: Proxmox VE nodes with live resource metrics and connection health
+- `vms` / `containers`: Guest workloads with CPU, memory, disk, network, and power state
+- `dockerHosts`: Hosts that report through the Docker agent, including container inventory
+- `storage`: Per-node storage with capacity and usage metadata
+- `cephClusters`: Ceph health summaries, daemon counts, and pool capacity (see below)
+- `physicalDisks`: SMART/enclosure telemetry when physical disk monitoring is enabled
+- `pbs`: Proxmox Backup Server inventory, job status, and datastore utilisation
+- `pmg`: Proxmox Mail Gateway health and analytics (mail totals, queues, spam distribution)
+- `pveBackups` / `pbsBackups`: Backup history across snapshots, storage jobs, and PBS
+- `stats`: System-wide aggregates (uptime, versions, counts)
+- `activeAlerts`: Currently firing alerts with hysteresis-aware metadata
+- `performance`: Cached chart series for the dashboard
+
+#### Ceph Cluster Data
+
+When Pulse detects Ceph-backed storage (RBD, CephFS, etc.), the `cephClusters` array surfaces detailed health information gathered via `/cluster/ceph/status` and `/cluster/ceph/df`:
+
+```json
+{
+  "cephClusters": [
+    {
+      "id": "pve-cluster-4f7c...",
+      "instance": "pve-cluster",
+      "health": "HEALTH_OK",
+      "healthMessage": "All OSDs are running",
+      "totalBytes": 128178802368000,
+      "usedBytes": 87236608000000,
+      "availableBytes": 40942194432000,
+      "usagePercent": 68.1,
+      "numMons": 3,
+      "numMgrs": 2,
+      "numOsds": 12,
+      "numOsdsUp": 12,
+      "numOsdsIn": 12,
+      "numPGs": 768,
+      "pools": [
+        { "id": 1, "name": "cephfs_data", "storedBytes": 7130316800000, "availableBytes": 1239814144000, "objects": 1024, "percentUsed": 64.2 }
+      ],
+      "services": [
+        { "type": "mon", "running": 3, "total": 3 },
+        { "type": "mgr", "running": 2, "total": 2 }
+      ],
+      "lastUpdated": 1760219854
+    }
+  ]
+}
+```
+
+Each service entry lists offline daemons in `message` when present (for example, `Offline: mgr.x@pve2`), making it easy to highlight degraded components in custom tooling.
 
 #### PMG Mail Gateway Data
 
@@ -210,7 +260,7 @@ GET /install-docker-agent.sh          # Download the installation convenience sc
 GET /download/pulse-docker-agent      # Download the standalone Docker agent binary
 ```
 
-Agent routes require authentication. Use an API token or an authenticated session when calling them from automation.
+Agent routes require authentication. Use an API token or an authenticated session when calling them from automation. The payload reports restart loops, exit codes, memory pressure, and health probes per container, and Pulse de-duplicates heartbeats per agent ID so you can fan out to multiple Pulse instances safely.
 
 ## Monitoring Data
 
@@ -330,7 +380,7 @@ POST /api/system/mock-mode      # Enable/disable mock mode (admin only)
 PUT /api/system/mock-mode       # Same as POST, but idempotent for tooling
 ```
 
-These endpoints back the `npm run mock:on|off|status` scripts and trigger the same hot reload behavior.
+These endpoints back the `npm run mock:on|off|status` scripts and trigger the same hot reload behavior. Responses include both `enabled` and the full mock configuration so tooling can preview generated node/guest counts before flipping the switch.
 
 ### Security Configuration
 
@@ -546,7 +596,16 @@ DELETE /api/alerts/history            # Clear alert history
 # Alert Actions
 POST /api/alerts/<id>/acknowledge    # Acknowledge an alert
 POST /api/alerts/<id>/clear          # Clear a specific alert
+POST /api/alerts/<id>/unacknowledge  # Remove acknowledgement
 ```
+
+Alert configuration responses model Pulse's hysteresis thresholds and advanced behaviour:
+
+- `guestDefaults`, `nodeDefaults`, `storageDefault`, `dockerDefaults`, `pmgThresholds` expose the baseline trigger/clear values applied globally. Each metric uses `{ "trigger": 90, "clear": 85 }`, so fractional thresholds (e.g. `12.5`) are supported.
+- `overrides` is keyed by resource ID for bespoke thresholds. Setting a threshold to `-1` disables that signal for that resource.
+- `timeThresholds` and `metricTimeThresholds` provide per-resource/per-metric grace periods, reducing alert noise on bursty workloads.
+- `aggregation`, `flapping`, `schedule` configure deduplication, cooldown, and quiet hours. These values are shared with the notification pipeline.
+- Active and historical alerts include `metadata.clearThreshold`, `resourceType`, and other context so UIs can render the trigger/clear pair and supply timeline explanations.
 
 ### Notification Management
 Manage notification destinations and history.
@@ -801,34 +860,63 @@ System settings include:
 ## Updates
 
 ### Check for Updates
-Check if a new version is available. Returns version info and deployment-specific update instructions.
+Check if a new version is available. Returns version info, release notes, and deployment-specific instructions.
 
 ```bash
 GET /api/updates/check
+GET /api/updates/check?channel=rc   # Override channel (stable/rc)
 ```
 
-Response includes `deploymentType` field indicating how to update:
-- `proxmoxve`: Type `update` in LXC console
-- `docker`: Pull new image and recreate container  
-- `systemd`: Re-run install script
-- `manual`: Re-run install script
+The response includes `deploymentType` so the UI/automation can decide whether a self-service update is possible (`systemd`, `proxmoxve`, `aur`) or if a manual Docker image pull is required.
 
-### Apply Update (Deprecated)
-**⚠️ DEPRECATED**: This endpoint exists for backwards compatibility but is no longer used.
-Updates cannot be performed through the API due to security constraints (no sudo access, 
-containers can't restart themselves). Use deployment-specific update methods instead.
+### Prepare Update Plan
+Fetch scripted steps for a target version. Useful when presenting the release picker in the UI.
+
+```bash
+GET /api/updates/plan?version=v4.30.0
+GET /api/updates/plan?version=v4.30.0&channel=rc
+```
+
+Response example (systemd deployment):
+
+```json
+{
+  "version": "v4.30.0",
+  "channel": "stable",
+  "steps": [
+    "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.30.0"
+  ]
+}
+```
+
+### Apply Update
+Kick off an update using the download URL returned by the release metadata. Pulse runs the install script asynchronously and streams progress via WebSocket.
 
 ```bash
 POST /api/updates/apply
+Content-Type: application/json
+
+{ "downloadUrl": "https://github.com/rcourtman/Pulse/releases/download/v4.30.0/pulse-linux-amd64.tar.gz" }
 ```
 
-### Update Status (Deprecated)
-**⚠️ DEPRECATED**: Since updates are no longer performed through the API, this endpoint
-is not used by the UI.
+Only deployments that can self-update (systemd, Proxmox VE appliance, AUR) will honour this call. Docker users should continue to pull a new image manually.
+
+### Update Status
+Retrieve the last known update status or in-flight progress. Possible values: `idle`, `checking`, `downloading`, `installing`, `completed`, `error`.
 
 ```bash
 GET /api/updates/status
 ```
+
+### Update History
+Pulse captures each self-update attempt in a local history file.
+
+```bash
+GET /api/updates/history                 # List recent update attempts (optional ?limit=&status=)
+GET /api/updates/history/entry?id=<uuid> # Inspect a specific update event
+```
+
+Entries include version, channel, timestamps, status, and error messaging for failed attempts.
 
 ## Real-time Updates
 

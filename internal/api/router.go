@@ -2536,7 +2536,9 @@ func (r *Router) forwardUpdateProgress() {
 
 // backgroundUpdateChecker periodically checks for updates and caches the result
 func (r *Router) backgroundUpdateChecker() {
-	// Check immediately on startup
+	// Delay initial check to allow WebSocket clients to receive welcome messages first
+	time.Sleep(1 * time.Second)
+
 	ctx := context.Background()
 	if _, err := r.updateManager.CheckForUpdates(ctx); err != nil {
 		log.Debug().Err(err).Msg("Initial update check failed")
