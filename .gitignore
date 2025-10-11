@@ -12,6 +12,7 @@ Thumbs.db
 # Development environment files
 .dev-mode
 .tmux.conf
+.dev-aliases
 
 # IDE
 .idea/
