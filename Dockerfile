@@ -75,7 +75,10 @@ COPY --from=backend-builder /app/VERSION .
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Service files not needed in container
+# Provide docker-agent installer script for HTTP download endpoint
+RUN mkdir -p /opt/pulse/scripts
+COPY scripts/install-docker-agent.sh /opt/pulse/scripts/install-docker-agent.sh
+RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh
 
 # Create config directory
 RUN mkdir -p /etc/pulse /data
@@ -90,7 +93,7 @@ ENV PULSE_DOCKER=true
 
 # Create default user (will be adjusted by entrypoint if PUID/PGID are set)
 RUN adduser -D -u 1000 -g 1000 pulse && \
-    chown -R pulse:pulse /app /etc/pulse /data
+    chown -R pulse:pulse /app /etc/pulse /data /opt/pulse
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
