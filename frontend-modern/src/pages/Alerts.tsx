@@ -269,7 +269,11 @@ export function Alerts() {
     }
 
     const expectedPath = pathForTab(tab);
-    if (currentPath !== expectedPath) {
+
+    // Allow sub-paths for thresholds tab (e.g., /alerts/thresholds/proxmox)
+    const isThresholdsSubPath = tab === 'thresholds' && currentPath.startsWith('/alerts/thresholds/');
+
+    if (currentPath !== expectedPath && !isThresholdsSubPath) {
       navigate(expectedPath, { replace: true });
     }
   });
