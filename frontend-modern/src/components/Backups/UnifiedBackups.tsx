@@ -471,6 +471,8 @@ const UnifiedBackups: Component = () => {
     return data.some((backup) => backup.type === 'Host');
   });
 
+  const hasAnyBackups = createMemo(() => normalizedData().length > 0);
+
   // Apply filters
   const filteredData = createMemo(() => {
     let data = normalizedData();
@@ -1314,8 +1316,8 @@ const UnifiedBackups: Component = () => {
 
       {/* Main Content - show when any nodes or PBS are configured */}
       <Show when={(state.nodes || []).length > 0 || (state.pbs && state.pbs.length > 0)}>
-        {/* Available Backups chart - hide when no backups match the filter */}
-        <Show when={filteredData().length > 0}>
+        {/* Available Backups chart - keep visible while backups exist or a date filter is active */}
+        <Show when={hasAnyBackups() || selectedDateRange() !== null}>
           <Card padding="md">
             <div class="mb-3 flex items-start justify-between gap-3">
               <SectionHeader
@@ -1432,7 +1434,10 @@ const UnifiedBackups: Component = () => {
                   <Show when={selectedDateRange()}>
                     <button
                       type="button"
-                      onClick={() => setSelectedDateRange(null)}
+                      onClick={() => {
+                        setSelectedDateRange(null);
+                        hideTooltip();
+                      }}
                       class="p-0.5 px-1.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
                     >
                       Clear filter
@@ -1774,10 +1779,23 @@ const UnifiedBackups: Component = () => {
                             startOfDay.setHours(0, 0, 0, 0);
                             const endOfDay = new Date(barDate);
                             endOfDay.setHours(23, 59, 59, 999);
-                            setSelectedDateRange({
+                            const clickedRange = {
                               start: startOfDay.getTime() / 1000,
                               end: endOfDay.getTime() / 1000,
-                            });
+                            };
+
+                            const currentRange = selectedDateRange();
+                            if (
+                              currentRange &&
+                              currentRange.start === clickedRange.start &&
+                              currentRange.end === clickedRange.end
+                            ) {
+                              setSelectedDateRange(null);
+                            } else {
+                              setSelectedDateRange(clickedRange);
+                            }
+
+                            hideTooltip();
                           });
 
                           barsGroup.appendChild(barGroup);
