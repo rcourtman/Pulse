@@ -1,4 +1,5 @@
-import { createSignal, createMemo, Show, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, createMemo, Show, For, onMount, onCleanup, createEffect } from 'solid-js';
+import { useNavigate, useLocation } from '@solidjs/router';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
@@ -192,6 +193,9 @@ interface ThresholdsTableProps {
 }
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [searchTerm, setSearchTerm] = createSignal('');
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editingThresholds, setEditingThresholds] = createSignal<
@@ -199,6 +203,38 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   >({});
   const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'docker'>('proxmox');
   let searchInputRef: HTMLInputElement | undefined;
+
+  // Determine active tab from URL
+  const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'docker' => {
+    const path = location.pathname;
+    if (path.includes('/thresholds/docker')) return 'docker';
+    if (path.includes('/thresholds/mail-gateway')) return 'pmg';
+    return 'proxmox'; // default
+  };
+
+  // Sync active tab with route on mount and route changes
+  createEffect(() => {
+    const tabFromRoute = getActiveTabFromRoute();
+    if (activeTab() !== tabFromRoute) {
+      setActiveTab(tabFromRoute);
+    }
+  });
+
+  // Handle default redirect - if at /alerts/thresholds exactly, redirect to /alerts/thresholds/proxmox
+  createEffect(() => {
+    if (location.pathname === '/alerts/thresholds') {
+      navigate('/alerts/thresholds/proxmox', { replace: true });
+    }
+  });
+
+  const handleTabClick = (tab: 'proxmox' | 'pmg' | 'docker') => {
+    const tabRoutes = {
+      proxmox: '/alerts/thresholds/proxmox',
+      pmg: '/alerts/thresholds/mail-gateway',
+      docker: '/alerts/thresholds/docker',
+    };
+    navigate(tabRoutes[tab]);
+  };
 
   // Set up keyboard shortcuts
   onMount(() => {
@@ -1635,8 +1671,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
         <nav class="-mb-px flex gap-6" aria-label="Tabs">
           <button
             type="button"
-            onClick={() => setActiveTab('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+            onClick={() => handleTabClick('proxmox')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
               activeTab() === 'proxmox'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
@@ -1646,8 +1682,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('pmg')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+            onClick={() => handleTabClick('pmg')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
               activeTab() === 'pmg'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
@@ -1657,8 +1693,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+            onClick={() => handleTabClick('docker')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
               activeTab() === 'docker'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
