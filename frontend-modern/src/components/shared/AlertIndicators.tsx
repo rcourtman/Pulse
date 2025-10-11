@@ -2,6 +2,67 @@ import { Component } from 'solid-js';
 import type { Alert } from '@/types/api';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 
+const getMetadataUnit = (alert: Alert): string | undefined => {
+  const rawUnit = alert.metadata?.['unit'];
+  if (typeof rawUnit === 'string') {
+    const trimmed = rawUnit.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return undefined;
+};
+
+const formatAlertValue = (alert: Alert): string => {
+  const metric = alert.type.toLowerCase();
+  const unitFromMetadata = getMetadataUnit(alert);
+
+  switch (metric) {
+    case 'temperature':
+      return `${alert.value.toFixed(1)}°C`;
+    case 'diskread':
+    case 'diskwrite':
+    case 'networkin':
+    case 'networkout':
+      return `${alert.value.toFixed(1)} MB/s`;
+    case 'cpu':
+    case 'memory':
+    case 'disk':
+    case 'usage':
+      return `${alert.value.toFixed(1)}%`;
+    default:
+      if (unitFromMetadata) {
+        return `${alert.value.toFixed(1)} ${unitFromMetadata}`;
+      }
+      return alert.value.toFixed(1);
+  }
+};
+
+const formatAlertThreshold = (alert: Alert): string => {
+  const metric = alert.type.toLowerCase();
+  const unitFromMetadata = getMetadataUnit(alert);
+
+  switch (metric) {
+    case 'temperature':
+      return `${alert.threshold.toFixed(0)}°C`;
+    case 'diskread':
+    case 'diskwrite':
+    case 'networkin':
+    case 'networkout':
+      return `${alert.threshold.toFixed(0)} MB/s`;
+    case 'cpu':
+    case 'memory':
+    case 'disk':
+    case 'usage':
+      return `${alert.threshold.toFixed(0)}%`;
+    default:
+      if (unitFromMetadata) {
+        return `${alert.threshold.toFixed(0)} ${unitFromMetadata}`;
+      }
+      return alert.threshold.toFixed(0);
+  }
+};
+
 interface AlertIndicatorProps {
   severity: 'critical' | 'warning' | null;
   alerts?: Alert[];
@@ -16,7 +77,9 @@ export const AlertIndicator: Component<AlertIndicatorProps> = (props) => {
     if (!props.alerts || props.alerts.length === 0) return;
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     const content = props.alerts
-      .map((alert) => `${alert.type}: ${alert.value.toFixed(1)}% (threshold: ${alert.threshold}%)`)
+      .map(
+        (alert) => `${alert.type}: ${formatAlertValue(alert)} (threshold: ${formatAlertThreshold(alert)})`,
+      )
       .join('\n');
     showTooltip(content, rect.left + rect.width / 2, rect.top, {
       align: 'center',
@@ -55,7 +118,10 @@ export const AlertCountBadge: Component<AlertCountBadgeProps> = (props) => {
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     const header = `${props.count} Active Alert${props.count === 1 ? '' : 's'}:`;
     const details = props.alerts
-      .map((alert, index) => `${index + 1}. ${alert.type}: ${alert.value.toFixed(1)}% (threshold: ${alert.threshold}%)`)
+      .map(
+        (alert, index) =>
+          `${index + 1}. ${alert.type}: ${formatAlertValue(alert)} (threshold: ${formatAlertThreshold(alert)})`,
+      )
       .join('\n');
     const content = [header, details].filter(Boolean).join('\n');
     showTooltip(content, rect.left + rect.width / 2, rect.top, {

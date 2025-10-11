@@ -623,7 +623,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
               {/* Master-Detail Layout */}
               <div class="flex gap-4">
                 {/* Left: Host List */}
-                <Card padding="none" class="w-80 flex-shrink-0 overflow-hidden">
+                <Card padding="none" class="w-72 flex-shrink-0 overflow-hidden">
                   <div class="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Docker Hosts</h3>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sortedHosts().length} {sortedHosts().length === 1 ? 'host' : 'hosts'}</p>
@@ -635,28 +635,92 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                         const containerCount = (host.containers || []).length;
                         const runningCount = (host.containers || []).filter(c => c.state?.toLowerCase() === 'running').length;
 
+                        // Check for alerts on this host's containers
+                        const hostAlerts = createMemo(() => {
+                          if (!props.activeAlerts) return { hasAlerts: false, criticalCount: 0, warningCount: 0 };
+
+                          const containers = host.containers || [];
+                          let criticalCount = 0;
+                          let warningCount = 0;
+
+                          containers.forEach(container => {
+                            const resourceId = `docker:${host.id}/${container.id}`;
+                            try {
+                              const alertsObj = typeof props.activeAlerts === 'object' ? { ...props.activeAlerts } : props.activeAlerts;
+                              const alerts = Object.values(alertsObj).filter((alert: any) => alert?.resourceId === resourceId);
+                              alerts.forEach((alert: any) => {
+                                if (alert.level === 'critical') criticalCount++;
+                                else if (alert.level === 'warning') warningCount++;
+                              });
+                            } catch (e) {
+                              // Ignore errors
+                            }
+                          });
+
+                          return { hasAlerts: criticalCount > 0 || warningCount > 0, criticalCount, warningCount };
+                        });
+
+                        const buttonClass = () => {
+                          const alerts = hostAlerts();
+                          let base = 'w-full text-left px-4 py-2.5 transition-all duration-200 relative';
+
+                          if (isSelected()) {
+                            base += ' bg-blue-100 dark:bg-blue-900/40';
+                          } else if (alerts.criticalCount > 0) {
+                            base += ' bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/40';
+                          } else if (alerts.warningCount > 0) {
+                            base += ' bg-yellow-50 dark:bg-yellow-950/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/30';
+                          } else {
+                            base += ' hover:bg-blue-50 dark:hover:bg-blue-900/20';
+                          }
+
+                          return base;
+                        };
+
+                        const buttonStyle = () => {
+                          const alerts = hostAlerts();
+                          if (!alerts.hasAlerts) return {};
+
+                          const color = alerts.criticalCount > 0 ? '#ef4444' : '#eab308';
+                          return {
+                            'box-shadow': `inset 4px 0 0 0 ${color}`,
+                          };
+                        };
+
                         return (
                           <button
                             type="button"
                             onClick={() => toggleHostSelection(host.id)}
-                            class={`w-full text-left px-4 py-3 transition-colors ${
-                              isSelected()
-                                ? 'bg-blue-100 dark:bg-blue-900/40'
-                                : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                            }`}
+                            class={buttonClass()}
+                            style={buttonStyle()}
                           >
-                            <div class="flex items-center justify-between mb-1">
-                              <div class="flex items-center gap-2">
-                                <span class={`text-sm font-medium ${isSelected() ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>
+                            {/* Host name and status */}
+                            <div class="flex items-center justify-between gap-2">
+                              <div class="flex items-center gap-2 min-w-0 flex-1">
+                                <span class={`text-sm font-medium truncate ${isSelected() ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-gray-100'}`} title={host.displayName}>
                                   {host.displayName}
                                 </span>
                                 {renderDockerStatusBadge(host.status)}
                               </div>
+                              <Show when={hostAlerts().hasAlerts}>
+                                <span
+                                  class={`text-[9px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
+                                    hostAlerts().criticalCount > 0
+                                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                      : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                  }`}
+                                  title={`${hostAlerts().criticalCount} critical, ${hostAlerts().warningCount} warning alerts`}
+                                >
+                                  ⚠ {hostAlerts().criticalCount + hostAlerts().warningCount}
+                                </span>
+                              </Show>
                             </div>
-                            <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+
+                            {/* Container count */}
+                            <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mt-1">
                               <span>{runningCount}/{containerCount} running</span>
                               <Show when={host.lastSeen}>
-                                <span>{formatRelativeTime(host.lastSeen!)}</span>
+                                <span class="text-[10px] text-gray-500 dark:text-gray-400">{formatRelativeTime(host.lastSeen!)}</span>
                               </Show>
                             </div>
                           </button>
@@ -777,7 +841,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                         <Card padding="none" class="overflow-hidden">
                           {/* Host Info Header */}
                           <div class="bg-gray-50 dark:bg-gray-900/40 border-b-2 border-gray-200 dark:border-gray-700 px-4 py-3">
-                            <div class="flex items-center justify-between">
+                            <div class="flex items-center justify-between mb-3">
                               <div class="flex items-center gap-3">
                                 <h3 class="text-base font-bold text-gray-900 dark:text-gray-100">{host().displayName}</h3>
                                 <Show when={host().displayName !== host().hostname}>
@@ -788,15 +852,82 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                   {selectedHostContainers().length} {selectedHostContainers().length === 1 ? 'container' : 'containers'}
                                 </span>
                               </div>
-                              <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                                <Show when={host().lastSeen}>
-                                  <span>Updated {formatRelativeTime(host().lastSeen!)}</span>
-                                </Show>
+                              <div class="flex items-center gap-3">
                                 <Show when={host().agentVersion}>
-                                  <span>Agent {host().agentVersion}</span>
+                                  <span
+                                    class={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                                      host().agentVersion?.includes('dev') || host().agentVersion?.startsWith('0.1')
+                                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                        : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                    }`}
+                                  >
+                                    Agent {host().agentVersion}
+                                  </span>
+                                </Show>
+                                <Show when={host().lastSeen}>
+                                  <span class="text-xs text-gray-500 dark:text-gray-400">Updated {formatRelativeTime(host().lastSeen!)}</span>
                                 </Show>
                               </div>
                             </div>
+
+                            {/* Host Metrics */}
+                            <Show when={host().status?.toLowerCase() === 'online' || host().status?.toLowerCase() === 'running'}>
+                              <div class="grid grid-cols-3 gap-4">
+                                {/* CPU */}
+                                <div>
+                                  <div class="text-[10px] text-gray-500 dark:text-gray-400 mb-1">CPU Usage</div>
+                                  <MetricBar
+                                    value={(() => {
+                                      const total = (host().containers || [])
+                                        .filter(c => c.state?.toLowerCase() === 'running')
+                                        .reduce((sum, c) => sum + (c.cpuPercent || 0), 0);
+                                      return Math.min(100, Math.max(0, total));
+                                    })()}
+                                    label={`${(() => {
+                                      const total = (host().containers || [])
+                                        .filter(c => c.state?.toLowerCase() === 'running')
+                                        .reduce((sum, c) => sum + (c.cpuPercent || 0), 0);
+                                      return Math.min(100, Math.max(0, total)).toFixed(0);
+                                    })()}%`}
+                                    type="cpu"
+                                  />
+                                </div>
+
+                                {/* Memory */}
+                                <div>
+                                  <div class="text-[10px] text-gray-500 dark:text-gray-400 mb-1">Memory Usage</div>
+                                  <MetricBar
+                                    value={(() => {
+                                      if (!host().totalMemoryBytes) return 0;
+                                      const usedBytes = (host().containers || [])
+                                        .reduce((sum, c) => sum + (c.memoryUsageBytes || 0), 0);
+                                      return Math.min(100, Math.max(0, (usedBytes / host().totalMemoryBytes) * 100));
+                                    })()}
+                                    label={`${(() => {
+                                      if (!host().totalMemoryBytes) return '0';
+                                      const usedBytes = (host().containers || [])
+                                        .reduce((sum, c) => sum + (c.memoryUsageBytes || 0), 0);
+                                      return Math.min(100, Math.max(0, (usedBytes / host().totalMemoryBytes) * 100)).toFixed(0);
+                                    })()}%`}
+                                    sublabel={(() => {
+                                      if (!host().totalMemoryBytes) return undefined;
+                                      const usedBytes = (host().containers || [])
+                                        .reduce((sum, c) => sum + (c.memoryUsageBytes || 0), 0);
+                                      return `${formatBytes(usedBytes)}/${formatBytes(host().totalMemoryBytes)}`;
+                                    })()}
+                                    type="memory"
+                                  />
+                                </div>
+
+                                {/* Uptime */}
+                                <div>
+                                  <div class="text-[10px] text-gray-500 dark:text-gray-400 mb-1">Host Uptime</div>
+                                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    {host().uptimeSeconds ? formatUptime(host().uptimeSeconds) : '—'}
+                                  </div>
+                                </div>
+                              </div>
+                            </Show>
                           </div>
 
                           {/* Containers Table */}

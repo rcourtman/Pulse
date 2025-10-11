@@ -3090,6 +3090,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 			// New alert
 			message := ""
+			var unit string
 			if opts != nil && opts.Message != "" {
 				message = opts.Message
 			} else {
@@ -3098,6 +3099,10 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					message = fmt.Sprintf("%s at %.1f%%", resourceType, value)
 				case "diskRead", "diskWrite", "networkIn", "networkOut":
 					message = fmt.Sprintf("%s %s at %.1f MB/s", resourceType, metricType, value)
+					unit = "MB/s"
+				case "temperature":
+					message = fmt.Sprintf("%s %s at %.1f°C", resourceType, metricType, value)
+					unit = "°C"
 				default:
 					message = fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
 				}
@@ -3106,6 +3111,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			alertMetadata := map[string]interface{}{
 				"resourceType":   resourceType,
 				"clearThreshold": threshold.Clear,
+			}
+			if unit != "" {
+				alertMetadata["unit"] = unit
 			}
 			if opts != nil && opts.Metadata != nil {
 				for k, v := range opts.Metadata {
