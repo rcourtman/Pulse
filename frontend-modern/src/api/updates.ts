@@ -9,6 +9,7 @@ export interface UpdateInfo {
   releaseDate: string;
   downloadUrl: string;
   isPrerelease: boolean;
+  warning?: string;
 }
 
 export interface UpdateStatus {

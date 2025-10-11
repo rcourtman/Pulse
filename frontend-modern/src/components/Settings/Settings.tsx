@@ -2894,6 +2894,14 @@ const Settings: Component<SettingsProps> = (props) => {
                           </div>
                         </Show>
 
+                        <Show when={Boolean(updateInfo()?.warning)}>
+                          <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                            <p class="text-xs text-amber-800 dark:text-amber-200">
+                              {updateInfo()?.warning}
+                            </p>
+                          </div>
+                        </Show>
+
                         <Show when={updateInfo()?.available}>
                           <div class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
                             <div>

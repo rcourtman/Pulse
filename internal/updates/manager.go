@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,7 +54,10 @@ type UpdateInfo struct {
 	ReleaseDate    time.Time `json:"releaseDate"`
 	DownloadURL    string    `json:"downloadUrl"`
 	IsPrerelease   bool      `json:"isPrerelease"`
+	Warning        string    `json:"warning,omitempty"`
 }
+
+var errGitHubRateLimited = errors.New("GitHub API rate limit exceeded")
 
 // Manager handles update operations
 type Manager struct {
@@ -170,6 +174,31 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	// Get latest release from GitHub with specified channel and current version
 	release, err := m.getLatestReleaseForChannel(ctx, channel, currentVer)
 	if err != nil {
+		if errors.Is(err, errGitHubRateLimited) {
+			log.Warn().Err(err).Str("channel", channel).Msg("GitHub rate limit encountered while checking for updates")
+
+			if useCache {
+				m.statusMu.RLock()
+				cachedInfo, hasCached := m.checkCache[channel]
+				m.statusMu.RUnlock()
+				if hasCached && cachedInfo != nil {
+					m.updateStatus("idle", 0, "Using cached update info (GitHub rate limit)")
+					return cachedInfo, nil
+				}
+			}
+
+			info := &UpdateInfo{
+				Available:      false,
+				CurrentVersion: currentInfo.Version,
+				LatestVersion:  currentInfo.Version,
+				DownloadURL:    "",
+				IsPrerelease:   currentVer.IsPrerelease(),
+				Warning:        "Update check temporarily unavailable because GitHub rate limit was reached. Try again in a few minutes.",
+			}
+			m.updateStatus("idle", 0, "GitHub rate limit reached during update check")
+			return info, nil
+		}
+
 		// Check if this is a "no releases found" error - handle gracefully
 		if strings.Contains(err.Error(), "no releases found") {
 			// No releases available for this channel - return "no update available"
@@ -461,8 +490,29 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusForbidden {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		log.Warn().
+			Str("channel", channel).
+			Str("rateLimitRemaining", resp.Header.Get("X-RateLimit-Remaining")).
+			Str("rateLimitReset", resp.Header.Get("X-RateLimit-Reset")).
+			Msg("GitHub API rate limit encountered while fetching releases")
+
+		detail := strings.TrimSpace(string(body))
+		if detail == "" {
+			detail = resp.Status
+		}
+
+		return nil, fmt.Errorf("%w: %s", errGitHubRateLimited, detail)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(body))
+		if detail == "" {
+			detail = resp.Status
+		}
+		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, detail)
 	}
 
 	var releases []ReleaseInfo
