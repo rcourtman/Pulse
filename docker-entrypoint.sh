@@ -13,7 +13,7 @@ if [ "$(id -u)" = "0" ]; then
     if [ "$PUID" = "0" ]; then
         echo "Running as root user"
         # Fix ownership to root
-        chown -R root:root /data /app /etc/pulse
+        chown -R root:root /data /app /etc/pulse /opt/pulse
         exec "$@"
     fi
     
@@ -33,7 +33,7 @@ if [ "$(id -u)" = "0" ]; then
     fi
     
     # Fix ownership of data directory
-    chown -R pulse:pulse /data /app /etc/pulse
+    chown -R pulse:pulse /data /app /etc/pulse /opt/pulse
     
     # Switch to pulse user
     exec su-exec pulse "$@"
