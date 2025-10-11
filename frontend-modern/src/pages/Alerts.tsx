@@ -104,6 +104,11 @@ interface QuietHoursConfig {
   end: string;
   timezone: string;
   days: Record<string, boolean>;
+  suppress: {
+    performance: boolean;
+    storage: boolean;
+    offline: boolean;
+  };
 }
 
 interface CooldownConfig {
@@ -147,6 +152,11 @@ const createDefaultQuietHours = (): QuietHoursConfig => ({
     friday: true,
     saturday: false,
     sunday: false,
+  },
+  suppress: {
+    performance: false,
+    storage: false,
+    offline: false,
   },
 });
 
@@ -730,6 +740,11 @@ export function Alerts() {
           } else {
             days = (qh.days as Record<string, boolean>) || createDefaultQuietHours().days;
           }
+          const suppress = {
+            performance: qh.suppress?.performance ?? false,
+            storage: qh.suppress?.storage ?? false,
+            offline: qh.suppress?.offline ?? false,
+          };
 
           setScheduleQuietHours({
             enabled: qh.enabled || false,
@@ -737,6 +752,7 @@ export function Alerts() {
             end: qh.end || '08:00',
             timezone: qh.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
             days,
+            suppress,
           });
         }
 
@@ -2172,6 +2188,28 @@ function ScheduleTab(props: ScheduleTabProps) {
     'Pacific/Honolulu',
   ];
 
+  const quietHourSuppressOptions: Array<{
+    key: keyof QuietHoursConfig['suppress'];
+    label: string;
+    description: string;
+  }> = [
+    {
+      key: 'performance',
+      label: 'Performance alerts',
+      description: 'CPU, memory, disk, and network thresholds stay quiet.',
+    },
+    {
+      key: 'storage',
+      label: 'Storage alerts',
+      description: 'Silence storage usage, disk health, and ZFS events.',
+    },
+    {
+      key: 'offline',
+      label: 'Offline & power state',
+      description: 'Skip connectivity and powered-off alerts during backups.',
+    },
+  ];
+
   const days = [
     { id: 'monday', label: 'M', fullLabel: 'Monday' },
     { id: 'tuesday', label: 'T', fullLabel: 'Tuesday' },
@@ -2339,6 +2377,71 @@ function ScheduleTab(props: ScheduleTabProps) {
                     Weekends only
                   </Show>
                 </p>
+              </div>
+
+              <div class="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+                <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} block`}>
+                  Suppress categories
+                </span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Critical alerts in selected categories will stay silent during quiet hours.
+                </p>
+                <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
+                  <For each={quietHourSuppressOptions}>
+                    {(option) => (
+                      <label
+                        class={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                          quietHours().suppress[option.key]
+                            ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500/10'
+                            : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={quietHours().suppress[option.key]}
+                          onChange={(e) => {
+                            setQuietHours({
+                              ...quietHours(),
+                              suppress: {
+                                ...quietHours().suppress,
+                                [option.key]: e.currentTarget.checked,
+                              },
+                            });
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="sr-only"
+                        />
+                        <div
+                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${
+                            quietHours().suppress[option.key]
+                              ? 'border-blue-500 bg-blue-500'
+                              : 'border-gray-300 dark:border-gray-600'
+                          }`}
+                        >
+                          <Show when={quietHours().suppress[option.key]}>
+                            <svg
+                              class="h-3 w-3 text-white"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              stroke-width="3"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </Show>
+                        </div>
+                        <div>
+                          <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                            {option.label}
+                          </p>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">
+                            {option.description}
+                          </p>
+                        </div>
+                      </label>
+                    )}
+                  </For>
+                </div>
               </div>
             </div>
           </Show>
@@ -2698,6 +2801,23 @@ function ScheduleTab(props: ScheduleTabProps) {
             <p>
               • Quiet hours active from {quietHours().start} to {quietHours().end} (
               {quietHours().timezone})
+            </p>
+          </Show>
+          <Show
+            when={
+              quietHours().enabled &&
+              (quietHours().suppress.performance ||
+                quietHours().suppress.storage ||
+                quietHours().suppress.offline)
+            }
+          >
+            <p>
+              • Suppressing{' '}
+              {quietHourSuppressOptions
+                .filter((option) => quietHours().suppress[option.key])
+                .map((option) => option.label)
+                .join(', ')}{' '}
+              during quiet hours
             </p>
           </Show>
           <Show when={cooldown().enabled}>
