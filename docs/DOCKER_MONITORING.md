@@ -1,0 +1,148 @@
+# Docker Monitoring Agent
+
+Pulse is focused on Proxmox VE and PBS, but many homelabs also run application stacks in Docker. The optional Pulse Docker agent turns container health and resource usage into first-class metrics that show up alongside your hypervisor data.
+
+## What the agent reports
+
+Every check interval (30s by default) the agent collects:
+
+- Host metadata (hostname, Docker version, CPU count, total memory, uptime)
+- Container status (`running`, `exited`, `paused`) and health probe state
+- Restart counters and exit codes
+- CPU usage, memory consumption and limits
+- Images, port mappings, network addresses, and start times
+- Health-check failures, restart-loop windows, and recent exit codes (displayed in the UI under each container drawer)
+
+Data is pushed to Pulse over HTTPS using your existing API token – no inbound firewall rules required.
+
+## Prerequisites
+
+- Pulse v4.22.0 or newer with an API token enabled (`Settings → Security`)
+- Docker 20.10+ on Linux (the agent uses the Docker Engine API via the local socket)
+- Access to the Docker socket (`/var/run/docker.sock`) or a configured `DOCKER_HOST`
+- Go 1.24+ if you plan to build the binary from source
+
+## Installation
+
+Grab the `pulse-docker-agent` binary from the release assets (or build it yourself):
+
+```bash
+# Build from source
+cd /opt/pulse
+GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
+```
+
+Copy the binary to your Docker host (e.g. `/usr/local/bin/pulse-docker-agent`) and make it executable.
+
+### Quick install from your Pulse server
+
+Use the bundled installation script (ships with Pulse v4.22.0+) to deploy and manage the agent. Replace the token placeholder with an API token generated in **Settings → Security**.
+
+```bash
+curl -fsSL http://pulse.example.com/install-docker-agent.sh \
+  | sudo bash -s -- --url http://pulse.example.com --token <api-token>
+```
+
+Running the one-liner again from another Pulse server (with its own URL/token) will merge that server into the same agent automatically—no extra flags required.
+
+To report to more than one Pulse instance from the same Docker host, repeat the `--target` flag (format: `https://pulse.example.com|<api-token>`) or export `PULSE_TARGETS` before running the script:
+
+```bash
+curl -fsSL http://pulse.example.com/install-docker-agent.sh \
+  | sudo bash -s -- \
+    --target https://pulse.example.com|<primary-token> \
+    --target https://pulse-dr.example.com|<dr-token>
+```
+
+## Running the agent
+
+The agent needs to know where Pulse lives and which API token to use.
+
+**Single instance:**
+
+```bash
+export PULSE_URL="http://pulse.lan:7655"
+export PULSE_TOKEN="<your-api-token>"
+
+sudo /usr/local/bin/pulse-docker-agent --interval 30s
+```
+
+**Multiple instances (one agent fan-out):**
+
+```bash
+export PULSE_TARGETS="https://pulse-primary.lan:7655|<token-primary>;https://pulse-dr.lan:7655|<token-dr>"
+
+sudo /usr/local/bin/pulse-docker-agent --interval 30s
+```
+
+You can also repeat `--target https://pulse.example.com|<token>` on the command line instead of using `PULSE_TARGETS`; the agent will broadcast each heartbeat to every configured URL.
+
+The binary reads standard Docker environment variables. If you already use TLS-secured remote sockets set `DOCKER_HOST`, `DOCKER_TLS_VERIFY`, etc. as normal. To skip TLS verification for Pulse (not recommended) add `--insecure` or `PULSE_INSECURE_SKIP_VERIFY=true`.
+
+### Multiple Pulse instances
+
+A single `pulse-docker-agent` process can now serve any number of Pulse backends. Each target entry keeps its own API token and TLS preference, and Pulse de-duplicates reports using the shared agent ID / machine ID. This avoids running duplicate agents on busy Docker hosts.
+
+### Systemd unit example
+
+```ini
+[Unit]
+Description=Pulse Docker Agent
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+Environment=PULSE_URL=https://pulse.example.com
+Environment=PULSE_TOKEN=replace-me
+Environment=PULSE_TARGETS=https://pulse.example.com|replace-me;https://pulse-dr.example.com|replace-me-dr
+ExecStart=/usr/local/bin/pulse-docker-agent --interval 30s
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Containerised agent (advanced)
+
+If you prefer to run the agent inside a container, mount the Docker socket and supply the same environment variables:
+
+```bash
+docker run -d \
+  --name pulse-docker-agent \
+  -e PULSE_URL="https://pulse.example.com" \
+  -e PULSE_TOKEN="<token>" \
+  -e PULSE_TARGETS="https://pulse.example.com|<token>;https://pulse-dr.example.com|<token-dr>" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --restart unless-stopped \
+  ghcr.io/rcourtman/pulse-docker-agent:latest
+```
+
+> **Note**: Official images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/rcourtman/pulse-docker-agent`. To test local changes, run `docker build --target agent_runtime -t pulse-docker-agent:test .` from the repository root.
+
+## Configuration reference
+
+| Flag / Env var          | Description                                               | Default         |
+| ----------------------- | --------------------------------------------------------- | --------------- |
+| `--url`, `PULSE_URL`    | Pulse base URL (http/https).                              | `http://localhost:7655` |
+| `--token`, `PULSE_TOKEN`| Pulse API token (required).                               | —               |
+| `--target`, `PULSE_TARGETS` | One or more `url|token[|insecure]` entries to fan-out reports to multiple Pulse servers. Separate entries with `;` or repeat the flag. | — |
+| `--interval`, `PULSE_INTERVAL` | Reporting cadence (supports `30s`, `1m`, etc.).     | `30s`           |
+| `--hostname`, `PULSE_HOSTNAME` | Override host name reported to Pulse.              | Docker info / OS hostname |
+| `--agent-id`, `PULSE_AGENT_ID` | Stable ID for the agent (useful for clustering).   | Docker engine ID / machine-id |
+| `--insecure`, `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS cert validation (unsafe).     | `false`         |
+
+The agent automatically discovers the Docker socket via the usual environment variables. To use SSH tunnels or TCP sockets, export `DOCKER_HOST` as you would for the Docker CLI.
+
+## Testing and troubleshooting
+
+- Run with `--interval 15s --insecure` in a terminal to see log output while testing.
+- Ensure the Pulse API token has not expired or been regenerated.
+- If `pulse-docker-agent` reports `Cannot connect to the Docker daemon`, verify the socket path and permissions.
+- Check Pulse (`/docker` tab) for the latest heartbeat time. Hosts are marked offline if they stop reporting for >4× the configured interval.
+- Use the search box above the host grid to filter by host name, stack label, or container name. Restart loops surface in the “Issues” column and display the last five exit codes.
+
+## Removing the agent
+
+Stop the systemd service or container and remove the binary. Pulse retains the last reported state until it ages out after a few minutes of inactivity.

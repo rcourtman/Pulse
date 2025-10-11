@@ -1,0 +1,146 @@
+# Binaries
+/bin/
+pulse
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Development environment files
+.dev-mode
+.tmux.conf
+.dev-aliases
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+pulse-test
+test-pulse
+
+# Node.js (for frontend-modern)
+node_modules/
+.npm/
+.yarn/
+frontend-modern/.vite/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+*.tar.gz
+pulse-fixes*.tar.gz
+
+# Frontend copy for embedding (generated during build)
+# Frontend build artifact for Go embedding
+# This is auto-generated, DO NOT EDIT
+internal/api/frontend-modern/
+
+# AI assistant files (local development environment docs)
+CLAUDE.md
+.claude*
+claude-*
+fix-claude-*
+backend
+AGENTS.md
+AI_DEVELOPMENT.md
+.ai-coordination/
+scripts/pulse-watchdog.sh
+pulse-watchdog.log
+
+# Release process files
+CHANGELOG.md
+pulse-release/
+pulse-release-staging/
+release/
+
+# Development scripts
+scripts/backend-watch.sh
+temp/
+RELEASE_CHECKLIST.md
+DOCKER_PUSH_INSTRUCTIONS.md
+
+# Testing and temporary files
+testing-tools/
+manual-test*.md
+verify-*.md
+test-*.md
+package.json
+package-lock.json
+*.test.js
+*.test.md
+screenshots/
+.devdata/
+test-*.js
+test-*.sh
+test-*.html
+*.backup.*
+.env.dev
+.env.backup*
+PMG_BACKUP_DETECTION.md
+SAFE_TESTING.md
+tmp/
+
+# Master plan documents (local only)
+PULSE_V4_ISSUES_MASTER_PLAN.md
+FIX_SUMMARY_*.md
+
+# Development documentation
+TYPING_*.md
+test-config.json
+
+# Local test scripts
+scripts/test-*.sh
+!scripts/test-vm-disk.sh
+scripts/run-tests.sh
+scripts/TEST_*.md
+
+# Mock mode - exclude local overrides but keep the base file
+mock.env.local
+mock.env.backup
+
+# Legacy mock mode files (no longer used)
+internal/monitoring/mock_integration.go
+internal/monitoring/mock_stub.go
+scripts/mock-dev.sh
+scripts/toggle-mock-pure.sh
+MOCK_MODE_GUIDE.md
+
+# Claude Code Safety Hooks (local only)
+.claudecode-settings.json
+.claudecode-hooks/
+
+# Sensitive files - DO NOT COMMIT
+secrets.env
+*secret*.env
+
+# Development documentation (local only)
+CLAUDE_DEV_SETUP.md
+AGENT_METRICS_*.md
+
+# Temporary scripts
+tmp_*.py
+tmp_*.sh
+
+# Experimental/abandoned features (not part of main project)
+cloud-relay/
+scripts/agent/
+docs/internal/
+claude.md

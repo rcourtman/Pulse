@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+dev-docs/
+
+# Binaries and build artifacts
+pulse
+backend
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Dependencies
+node_modules/
+vendor/
+
+# Logs
+*.log
+
+# Test files
+testing-tools/
+*_test.go
+*.test
+
+# Development files
+.env
+.env.local
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Temporary files
+*.tmp
+*.temp
+*~

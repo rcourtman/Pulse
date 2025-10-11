@@ -1,0 +1,405 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Update banner animation */
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out;
+}
+
+/* Notification animations */
+@keyframes slide-in-glass {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.animate-slide-in-glass {
+  animation: slide-in-glass 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Support for backdrop blur in browsers */
+@supports (backdrop-filter: blur(0px)) {
+  .backdrop-blur-xl {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
+/* Custom styles */
+@layer base {
+  body {
+    @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    /* Ensure body scrollbar follows our styling */
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Hide scrollbars during transitions to prevent flicker */
+  html {
+    overflow-y: scroll;
+    scroll-behavior: smooth;
+  }
+
+  /* Threshold slider styles */
+  .threshold-slider-container {
+    @apply relative w-full;
+  }
+
+  .threshold-slider {
+    @apply w-full h-3.5 appearance-none bg-transparent relative z-10;
+  }
+
+  /* Slider track styles - match progress bar height */
+  .threshold-slider::-webkit-slider-runnable-track {
+    @apply h-3.5 rounded bg-gray-200 dark:bg-gray-600;
+  }
+
+  .threshold-slider::-moz-range-track {
+    @apply h-3.5 rounded bg-gray-200 dark:bg-gray-600;
+  }
+
+  /* Slider thumb styles with value display */
+  .threshold-slider::-webkit-slider-thumb {
+    @apply appearance-none w-12 h-5 rounded-full cursor-pointer relative;
+    margin-top: -2.5px; /* Center thumb on track */
+    background: white;
+    border: 2px solid currentColor;
+    box-shadow:
+      0 1px 3px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  .threshold-slider::-moz-range-thumb {
+    @apply appearance-none w-12 h-5 rounded-full cursor-pointer relative border-0;
+    background: white;
+    border: 2px solid currentColor;
+    box-shadow:
+      0 1px 3px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  /* Color coding for different metrics */
+  .threshold-slider.slider-cpu {
+    color: #3b82f6; /* blue-500 */
+  }
+
+  .threshold-slider.slider-memory {
+    color: #10b981; /* green-500 */
+  }
+
+  .threshold-slider.slider-disk {
+    color: #f59e0b; /* amber-500 */
+  }
+
+  /* Value display inside thumb */
+  .threshold-value {
+    @apply absolute inset-0 flex items-center justify-center text-[10px] font-semibold pointer-events-none;
+    color: currentColor;
+  }
+}
+
+@layer components {
+  .pulse-shell {
+    width: min(95.5vw, 95rem);
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 3vw, 3.25rem);
+    transition: padding-inline 0.3s ease;
+  }
+
+  .pulse-panel {
+    padding: clamp(0.75rem, 1.6vw, 1.5rem);
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;
+  }
+
+  /* Table styles */
+  .table-header {
+    @apply text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider;
+  }
+
+  .table-row {
+    @apply border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750;
+  }
+
+  /* Status indicators */
+  .status-running {
+    @apply text-green-600 dark:text-green-400;
+  }
+
+  .status-stopped {
+    @apply text-gray-600 dark:text-gray-400;
+  }
+
+  .status-error {
+    @apply text-red-600 dark:text-red-400;
+  }
+
+  /* Progress bars */
+  .progress-bar {
+    @apply bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full;
+    transition: width 300ms ease-out;
+  }
+
+  /* Stable chart containers */
+  .chart-stable-container {
+    contain: layout style;
+    will-change: contents;
+  }
+
+  /* Prevent chart SVG flicker */
+  .sparkline {
+    backface-visibility: hidden;
+    transform: translateZ(0);
+  }
+
+  /* Disable animations in charts mode to prevent blinking */
+  .charts-mode .sparkline path {
+    transition: none !important;
+  }
+
+  /* Custom scrollbar - subtle styling */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gray.300') theme('colors.gray.100');
+  }
+
+  .dark .custom-scrollbar {
+    scrollbar-color: theme('colors.gray.700') theme('colors.gray.800');
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-800;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-600;
+  }
+}
+
+/* Global scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent; /* gray-400 with transparency */
+}
+
+.dark * {
+  scrollbar-color: rgba(55, 65, 81, 0.5) transparent; /* gray-700 with transparency */
+}
+
+/* Make scrollbars even more subtle on hover */
+*:hover {
+  scrollbar-color: rgba(156, 163, 175, 0.7) rgba(243, 244, 246, 0.5); /* Slightly more visible on hover */
+}
+
+.dark *:hover {
+  scrollbar-color: rgba(75, 85, 99, 0.7) rgba(31, 41, 55, 0.3); /* dark mode hover */
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 10px;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgba(55, 65, 81, 0.5);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.8);
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(75, 85, 99, 0.8);
+}
+
+/* Dark mode transitions - Only apply to elements that actually change colors */
+body,
+.card,
+.table-row,
+.table-header,
+.bg-white,
+.bg-gray-50,
+.bg-gray-100,
+.bg-gray-200,
+.bg-gray-300,
+.bg-gray-700,
+.bg-gray-800,
+.bg-gray-900,
+.text-gray-500,
+.text-gray-600,
+.text-gray-700,
+.text-gray-800,
+.text-gray-900,
+.border-gray-200,
+.border-gray-300,
+.border-gray-600,
+.border-gray-700,
+.dark\:bg-gray-700,
+.dark\:bg-gray-800,
+.dark\:bg-gray-900,
+.dark\:text-gray-100,
+.dark\:text-gray-200,
+.dark\:text-gray-300,
+.dark\:text-gray-400,
+.dark\:border-gray-600,
+.dark\:border-gray-700 {
+  transition:
+    background-color 150ms ease-in-out,
+    color 150ms ease-in-out,
+    border-color 150ms ease-in-out;
+}
+
+/* Pulse logo animation - subtle ripple effect */
+@keyframes pulse-logo {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.05);
+  }
+  50% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-ring {
+  0%,
+  100% {
+    opacity: 0.92;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+.animate-pulse-logo {
+  animation: pulse-logo 0.8s cubic-bezier(0.4, 0, 0.6, 1);
+  transform-origin: center;
+}
+
+.animate-pulse-logo .pulse-ring {
+  animation: pulse-ring 0.8s cubic-bezier(0.4, 0, 0.6, 1);
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* Stable table layout */
+.table-fixed {
+  table-layout: fixed;
+}
+
+/* Prevent text from affecting column widths */
+.table-fixed td,
+.table-fixed th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keep name column slightly flexible while maintaining stability */
+.table-fixed td:first-child {
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* Hide scrollbars but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Login page animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-slow {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

@@ -1,0 +1,23 @@
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    container_name: pulse
+    ports:
+      - "7655:7655"  # Web UI and API
+    volumes:
+      - pulse_data:/data
+    environment:
+      - TZ=UTC  # Set your timezone
+      # - PUID=1000  # Optional: Set user ID (uncomment and adjust as needed)
+      # - PGID=1000  # Optional: Set group ID (uncomment and adjust as needed)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7655"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  pulse_data:
+    driver: local

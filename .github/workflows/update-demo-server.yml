@@ -1,0 +1,58 @@
+name: Update Demo Server
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-demo:
+    # Only run for stable releases (not pre-releases)
+    if: github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check release type
+        run: |
+          echo "Release: ${{ github.event.release.tag_name }}"
+          echo "Prerelease: ${{ github.event.release.prerelease }}"
+          echo "Updating demo server to latest stable release..."
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEMO_SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.DEMO_SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Update demo server
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
+            'curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash'
+
+      - name: Verify update
+        run: |
+          # Wait a moment for service to restart
+          sleep 5
+
+          # Check version endpoint
+          VERSION=$(ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
+            "curl -s http://localhost:7655/api/version | grep -o '\"version\":\"[^\"]*' | cut -d'\"' -f4")
+
+          echo "Demo server is now running version: $VERSION"
+
+          # Verify mock mode is active
+          NODES=$(ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
+            "curl -s http://localhost:7655/api/state | grep -o '\"nodes\":\[[^]]*\]' | grep -o 'pve[0-9]' | wc -l")
+
+          echo "Mock nodes detected: $NODES"
+
+          if [ "$NODES" -ge 1 ]; then
+            echo "✅ Demo server successfully updated and verified!"
+          else
+            echo "⚠️  Demo server updated but mock mode may not be active"
+            exit 1
+          fi
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

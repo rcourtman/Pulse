@@ -1,0 +1,180 @@
+# Installation Guide
+
+## Quick Install
+
+The official installer automatically detects your environment and chooses the best installation method:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+```
+
+The installer will prompt you for the port (default: 7655). To skip the prompt, set the environment variable:
+```bash
+FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+```
+
+## Installation Methods
+
+### Proxmox VE Hosts
+
+When run on a Proxmox VE host, the installer automatically:
+1. Creates a lightweight LXC container
+2. Installs Pulse inside the container
+3. Configures networking and security
+
+**Quick Mode** (recommended):
+- 1GB RAM, 4GB disk, 2 CPU cores
+- Unprivileged container with firewall
+- Auto-starts with your host
+- Takes about 1 minute
+
+**Advanced Mode**:
+- Customize all container settings
+- Choose specific network bridges and storage
+- Configure static IP if needed
+- Set custom port (default: 7655)
+
+### Standard Linux Systems
+
+On Debian/Ubuntu systems, the installer:
+1. Installs required dependencies
+2. Downloads the latest Pulse binary
+3. Creates a systemd service
+4. Starts Pulse automatically
+
+### Docker
+
+For containerized deployments:
+
+```bash
+docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
+```
+
+See [Docker Guide](DOCKER.md) for advanced options.
+
+## Updating
+
+### Automatic Updates (Recommended)
+
+Pulse can automatically install stable updates to ensure you're always running the latest secure version:
+
+#### Enable During Installation
+```bash
+# Interactive prompt during fresh install
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+
+# Or force enable with flag
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --enable-auto-updates
+```
+
+#### Enable/Disable After Installation
+```bash
+# Via systemctl
+systemctl enable --now pulse-update.timer   # Enable auto-updates
+systemctl disable --now pulse-update.timer  # Disable auto-updates
+systemctl status pulse-update.timer         # Check status
+
+# Via Settings UI
+# Navigate to Settings → System → Enable "Automatic Updates"
+```
+
+#### How It Works
+- Checks daily between 2-6 AM (randomized to avoid server load)
+- Only installs stable releases (never release candidates)
+- Creates backup before updating
+- Automatically rolls back if update fails
+- Logs all activity to systemd journal
+
+#### View Update Logs
+```bash
+journalctl -u pulse-update      # View all update logs
+journalctl -u pulse-update -f   # Follow logs in real-time
+systemctl list-timers pulse-update  # See next scheduled check
+```
+
+### Manual Updates
+
+#### For LXC Containers
+```bash
+pct exec <container-id> -- update
+```
+
+#### For Standard Installations
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+```
+
+#### For Docker
+```bash
+docker pull rcourtman/pulse:latest
+docker stop pulse
+docker rm pulse
+docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
+```
+
+## Version Management
+
+### Install Specific Version
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.8.0
+```
+
+### Install Release Candidate
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --rc
+```
+
+### Install from Source (Testing)
+Build and install directly from the main branch to test the latest fixes before they're released:
+```bash
+# Install from main branch (latest development code)
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --main
+
+# Install from a specific branch
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --source develop
+```
+**Note:** This builds Pulse from source code on your machine. Requires Go, Node.js, and npm.
+
+## Troubleshooting
+
+### Permission Denied
+If you encounter permission errors, you may need to run with `sudo` on some systems, though most installations (including LXC containers) run as root and don't need it.
+
+### Container Creation Failed
+Ensure you have:
+- Available container IDs (check with `pct list`)
+- Sufficient storage space
+- Network bridge configured
+
+### Port Already in Use
+Pulse uses port 7655 by default. You can change it during installation or check current usage with:
+```bash
+sudo netstat -tlnp | grep 7655
+```
+To use a different port during installation:
+```bash
+FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+```
+
+## Uninstalling
+
+### From LXC Container
+```bash
+pct stop <container-id>
+pct destroy <container-id>
+```
+
+### From Standard System
+```bash
+sudo systemctl stop pulse
+sudo systemctl disable pulse
+sudo rm -rf /opt/pulse /etc/pulse
+sudo rm /etc/systemd/system/pulse.service
+```
+
+### Docker
+```bash
+docker stop pulse
+docker rm pulse
+docker volume rm pulse_data  # Warning: deletes all data
+```

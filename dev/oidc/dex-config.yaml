@@ -1,0 +1,30 @@
+issuer: http://127.0.0.1:5556/dex
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+frontend:
+  issuer: Pulse Mock IDP
+  dir: /srv/dex/web
+logger:
+  level: info
+  format: text
+oauth2:
+  skipApprovalScreen: true
+  responseTypes: ["code", "token", "id_token"]
+  alwaysShowLoginScreen: true
+staticClients:
+  - id: pulse-dev
+    name: Pulse Dev
+    secret: pulse-secret
+    redirectURIs:
+      - http://127.0.0.1:5173/api/oidc/callback
+      - http://127.0.0.1:7655/api/oidc/callback
+      - http://127.0.0.1:8765/api/oidc/callback
+staticPasswords:
+  - email: admin@example.com
+    hash: "$2a$10$uo8fC/3BtvIULFvS7/NuRe6Bn3NmidSXHHiAchpdZEiBBV3IcJKfy"
+    username: admin
+    userID: 19d82f09-9a6b-4f38-a6d8-2c4ed1faff42
+    displayName: Admin User
+enablePasswordDB: true
