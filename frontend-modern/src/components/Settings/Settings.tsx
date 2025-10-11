@@ -211,7 +211,7 @@ const Settings: Component<SettingsProps> = (props) => {
   });
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(true);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
@@ -1145,24 +1145,13 @@ const Settings: Component<SettingsProps> = (props) => {
         </Show>
 
         <Card padding="none" class="relative lg:flex">
-          <div class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}>
-            <button
-              type="button"
-              class="hidden lg:flex absolute top-6 right-0 translate-x-1/2 transform z-20 h-7 w-7 items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md transition-all duration-200"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed())}
-              aria-label={sidebarCollapsed() ? "Expand settings navigation" : "Collapse settings navigation"}
-              aria-expanded={!sidebarCollapsed()}
-              aria-controls="settings-sidebar-menu"
-            >
-              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <Show when={sidebarCollapsed()}>
-                  <path d="M9 6l6 6-6 6" />
-                </Show>
-                <Show when={!sidebarCollapsed()}>
-                  <path d="M15 18l-6-6 6-6" />
-                </Show>
-              </svg>
-            </button>
+          <div
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}
+            onMouseEnter={() => setSidebarCollapsed(false)}
+            onMouseLeave={() => setSidebarCollapsed(true)}
+            aria-label="Settings navigation"
+            aria-expanded={!sidebarCollapsed()}
+          >
             <div class={`sticky top-24 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
               <div id="settings-sidebar-menu" class="space-y-6">
                 <For each={tabGroups}>
