@@ -44,8 +44,10 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - Example: "Storage 'local-lvm' at 85% capacity"
   - Example: "VM 'database' is back online"
 - **Adaptive Thresholds**: Hysteresis-based trigger/clear levels, fractional network thresholds, per-metric search, reset-to-defaults, and Custom overrides with inline audit trail
+- **Alert Timeline Analytics**: Rich history explorer with acknowledgement/clear markers, escalation breadcrumbs, and quick filters for noisy resources
 - **Ceph Awareness**: Surface Ceph health, pool utilisation, and daemon status automatically when Proxmox exposes Ceph-backed storage
 - Unified view of PBS backups, PVE backups, and snapshots
+- **Interactive Backup Explorer**: Cross-highlighted bar chart + grid with quick time-range pivots (24h/7d/30d/custom) and contextual tooltips for the busiest jobs
 - Proxmox Mail Gateway analytics: mail volume, spam/virus trends, quarantine health, and cluster node status
 - Optional Docker container monitoring via lightweight agent
 - Config export/import with encryption and authentication

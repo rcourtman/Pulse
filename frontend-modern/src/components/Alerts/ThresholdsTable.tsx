@@ -89,13 +89,6 @@ const PMG_THRESHOLD_COLUMNS = [
   pmgColumn('quarantineGrowthCritMin', 'Growth Crit Min'),
 ] as const;
 
-const PMG_COLUMN_GROUPS = [
-  ['Queue Warn', 'Queue Crit', 'Deferred Warn', 'Deferred Crit'],
-  ['Hold Warn', 'Hold Crit', 'Oldest Warn (min)', 'Oldest Crit (min)'],
-  ['Spam Warn', 'Spam Crit', 'Virus Warn', 'Virus Crit'],
-  ['Growth Warn %', 'Growth Warn Min', 'Growth Crit %', 'Growth Crit Min'],
-] as const;
-
 const PMG_NORMALIZED_TO_KEY = new Map(
   PMG_THRESHOLD_COLUMNS.map((column) => [column.normalized, column.key]),
 );

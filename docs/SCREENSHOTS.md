@@ -10,7 +10,7 @@
 
 ## Backup Central
 ![Unified Backup View](images/03-backups.png)
-*Centralized backup management showing PBS backups, PVE backup tasks, and VM snapshots in one place. Track backup status, sizes, retention, and quickly identify failed or missing backups across your entire infrastructure.*
+*Centralized backup management showing PBS backups, PVE backup tasks, and VM snapshots in one place. Track backup status, sizes, retention, and quickly identify failed or missing backups across your entire infrastructure. Time-range buttons (24h/7d/30d/custom) and the synchronized bar chart make it easy to focus on exactly the window you care about.*
 
 ## Alerts & Configuration
 ![Alerts and Configuration](images/04-alerts.png)
