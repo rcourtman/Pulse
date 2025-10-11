@@ -595,6 +595,7 @@ type StorageContent struct {
 	CTime        int64                  `json:"ctime"`
 	Format       string                 `json:"format"`
 	Size         uint64                 `json:"size"`
+	Used         uint64                 `json:"used"`
 	VMID         int                    `json:"vmid"`
 	Notes        string                 `json:"notes"`
 	Protected    int                    `json:"protected"`
