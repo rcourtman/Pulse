@@ -1363,64 +1363,82 @@ const UnifiedBackups: Component = () => {
                 size="sm"
                 class="flex-1"
               />
-              <div class="flex items-center gap-2 text-xs">
-                <div class="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setChartTimeRange(7)}
-                    class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
-                      chartTimeRange() === 7
-                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    7d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartTimeRange(30)}
-                    class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
-                      chartTimeRange() === 30
-                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    30d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartTimeRange(90)}
-                    class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
-                      chartTimeRange() === 90
-                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    90d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartTimeRange(365)}
-                    class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
-                      chartTimeRange() === 365
-                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    1y
-                  </button>
-                </div>
-                <div class="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-                <span class="text-gray-500 dark:text-gray-400">Last {chartTimeRange()} days</span>
+              <div class="flex flex-col items-start gap-2 sm:items-end">
                 <Show when={selectedDateRange()}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDateRange(null)}
-                    class="p-0.5 px-1.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
-                  >
-                    Clear filter
-                  </button>
+                  {(selection) => (
+                    <div class="inline-flex items-center gap-2 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 text-xs text-blue-700 dark:text-blue-200">
+                      <span class="font-medium uppercase tracking-wide text-[10px] text-blue-600 dark:text-blue-300">
+                        Filtered Date
+                      </span>
+                      <span class="font-mono text-[11px]">
+                        {new Date(selection().start * 1000).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                  )}
                 </Show>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                  <div class="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setChartTimeRange(7)}
+                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
+                        chartTimeRange() === 7
+                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      7d
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartTimeRange(30)}
+                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
+                        chartTimeRange() === 30
+                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      30d
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartTimeRange(90)}
+                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
+                        chartTimeRange() === 90
+                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      90d
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartTimeRange(365)}
+                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
+                        chartTimeRange() === 365
+                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      1y
+                    </button>
+                  </div>
+                  <div class="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                  <span class="text-gray-500 dark:text-gray-400">Last {chartTimeRange()} days</span>
+                  <Show when={selectedDateRange()}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDateRange(null)}
+                      class="p-0.5 px-1.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+                    >
+                      Clear filter
+                    </button>
+                  </Show>
+                </div>
               </div>
             </div>
             <div class="h-32 relative bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
@@ -1626,16 +1644,22 @@ const UnifiedBackups: Component = () => {
                           else if (d.total > 10) barColor = '#a78bfa';
 
                           rect.setAttribute('fill', barColor);
-                          rect.setAttribute('fill-opacity', '0.8');
-                          rect.style.transition = 'fill-opacity 0.2s ease';
+                          rect.style.transition = 'all 0.2s ease';
 
                           // Highlight selected date
-                          if (
+                          const isSelected =
                             selectedDateRange() &&
                             barDateMs >= selectedDateRange()!.start * 1000 &&
-                            barDateMs <= selectedDateRange()!.end * 1000
-                          ) {
-                            rect.classList.add('ring-2', 'ring-blue-500');
+                            barDateMs <= selectedDateRange()!.end * 1000;
+
+                          if (isSelected) {
+                            rect.setAttribute('fill-opacity', '1');
+                            rect.setAttribute('stroke', '#2563eb');
+                            rect.setAttribute('stroke-width', '2');
+                            rect.setAttribute('filter', 'brightness(1.1)');
+                          } else {
+                            rect.setAttribute('fill-opacity', '0.8');
+                            rect.setAttribute('stroke', 'none');
                           }
 
                           barGroup.appendChild(rect);
