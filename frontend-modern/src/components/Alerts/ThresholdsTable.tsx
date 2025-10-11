@@ -1848,41 +1848,50 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
               </div>
             }
           >
-            <div class="space-y-6">
-              <For each={PMG_COLUMN_GROUPS}>
-                {(group, index) => (
-                  <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                    <ResourceTable
-                      title={`Mail Gateway Thresholds (${group
-                        .map((label) => label.split(' ')[0])
-                        .join(' / ')})`}
-                      resources={pmgServersWithOverrides()}
-                      columns={group}
-                      activeAlerts={props.activeAlerts}
-                      emptyMessage=""
-                      onEdit={startEditing}
-                      onSaveEdit={saveEdit}
-                      onCancelEdit={cancelEdit}
-                      onRemoveOverride={removeOverride}
-                      onToggleDisabled={toggleDisabled}
-                      onToggleNodeConnectivity={toggleNodeConnectivity}
-                      showOfflineAlertsColumn={index() === 0}
-                      editingId={editingId}
-                      editingThresholds={editingThresholds}
-                      setEditingThresholds={setEditingThresholds}
-                      formatMetricValue={formatMetricValue}
-                      hasActiveAlert={hasActiveAlert}
-                      globalDefaults={pmgGlobalDefaults()}
-                      setGlobalDefaults={setPMGGlobalDefaults}
-                      setHasUnsavedChanges={props.setHasUnsavedChanges}
-                      globalDisableFlag={props.disableAllPMG}
-                      onToggleGlobalDisable={() => props.setDisableAllPMG(!props.disableAllPMG())}
-                      globalDisableOfflineFlag={props.disableAllPMGOffline}
-                      onToggleGlobalDisableOffline={() => props.setDisableAllPMGOffline(!props.disableAllPMGOffline())}
-                    />
-                  </div>
-                )}
-              </For>
+            <div ref={registerSection('pmg')} class="scroll-mt-24">
+              <ResourceTable
+                title="Mail Gateway Thresholds"
+                resources={pmgServersWithOverrides()}
+                columns={[
+                  'Queue Warn',
+                  'Queue Crit',
+                  'Deferred Warn',
+                  'Deferred Crit',
+                  'Hold Warn',
+                  'Hold Crit',
+                  'Oldest Warn (min)',
+                  'Oldest Crit (min)',
+                  'Spam Warn',
+                  'Spam Crit',
+                  'Virus Warn',
+                  'Virus Crit',
+                  'Growth Warn %',
+                  'Growth Warn Min',
+                  'Growth Crit %',
+                  'Growth Crit Min',
+                ]}
+                activeAlerts={props.activeAlerts}
+                emptyMessage="No mail gateways match the current filters."
+                onEdit={startEditing}
+                onSaveEdit={saveEdit}
+                onCancelEdit={cancelEdit}
+                onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
+                onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
+                editingId={editingId}
+                editingThresholds={editingThresholds}
+                setEditingThresholds={setEditingThresholds}
+                formatMetricValue={formatMetricValue}
+                hasActiveAlert={hasActiveAlert}
+                globalDefaults={pmgGlobalDefaults()}
+                setGlobalDefaults={setPMGGlobalDefaults}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllPMG}
+                onToggleGlobalDisable={() => props.setDisableAllPMG(!props.disableAllPMG())}
+                globalDisableOfflineFlag={props.disableAllPMGOffline}
+                onToggleGlobalDisableOffline={() => props.setDisableAllPMGOffline(!props.disableAllPMGOffline())}
+              />
             </div>
           </Show>
         </Show>
