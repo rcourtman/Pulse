@@ -199,6 +199,58 @@ Or if Pulse is installed:
 /opt/pulse/scripts/test-vm-disk.sh
 ```
 
+### Ceph Cluster Data Missing
+
+**Symptoms**: Ceph pools or health section missing in Storage view even though the cluster uses Ceph.
+
+**Checklist:**
+1. Confirm the Proxmox node exposes Ceph-backed storage (`Datacenter → Storage`). Types must be `rbd`, `cephfs`, or `ceph`.
+2. Ensure Pulse has permission to call `/cluster/ceph/status` (Pulse’s Proxmox account needs `Sys.Audit` as part of `PVEAuditor`, provided by the setup script).
+3. Check the backend logs for `Ceph status unavailable – preserving previous Ceph state`. Intermittent errors are usually network timeouts; steady errors point to permissions.
+4. Run from the Pulse host:
+   ```bash
+   curl -sk https://pve-node:8006/api2/json/cluster/ceph/status \
+     -H "Authorization: PVEAPIToken=pulse-monitor@pam!token=<value>"
+   ```
+   If this fails, verify firewall / token scope.
+
+**Tip**: Pulse polls Ceph after storage refresh. If you recently added Ceph storage, wait one poll cycle or restart the backend to force detection.
+
+### Backup View Filters Not Working
+
+**Symptoms**: Backup chart does not highlight the selected time range or the grid ignores the picker.
+
+**Checklist:**
+1. Make sure you are running Pulse v4.29.0 or newer (the interactive picker was introduced alongside the new timeline). Check **Settings → System → About**.
+2. Verify your browser is not forcing Legacy mode – if the top-right toggle shows “Lightweight UI”, switch back to default.
+3. When filters appear stuck:
+   - Click **Reset Filters** in the toolbar.
+   - Clear any search chips under the chart.
+   - Pick a preset (24h / 7d / 30d) to re-seed the view, then move back to Custom.
+4. If the grid still shows stale data, open DevTools console and ensure no errors mentioning `chartsSelection` appear. Any error here usually means a stale service worker; hard refresh (Ctrl+Shift+R) clears it.
+
+**Tip**: Selecting bars in the chart cross-highlights matching rows. If that does not happen, confirm you do not have browser extensions that block pointer events on canvas elements.
+
+### Docker Agent Shows Hosts Offline
+
+**Symptoms**: `/docker` tab marks hosts as offline or missing container metrics.
+
+**Checklist:**
+1. Run the agent manually with verbose logs:
+   ```bash
+   sudo /usr/local/bin/pulse-docker-agent --interval 15s --debug
+   ```
+   Look for HTTP 401 (token mismatch) or socket errors.
+2. Confirm the host sees Docker:
+   ```bash
+   sudo docker info | head -n 20
+   ```
+3. Make sure the agent ID is stable. If running inside transient containers, set `--agent-id` explicitly so Pulse does not treat each restart as a new host.
+4. Verify Pulse shows a recent heartbeat (`lastSeen`) in `/api/state` → `dockerHosts`. Hosts are marked offline after 4× the configured interval with no update.
+5. For reverse proxies/TLS issues, append `--insecure` temporarily to confirm whether certificate validation is the culprit.
+
+**Restart loops**: The Docker workspace Issues column lists the last exit codes. Investigate recurring non-zero codes in `docker logs <container>` and adjust restart policy if needed.
+
 **Step 3: Check Pulse logs**
 
 ```bash

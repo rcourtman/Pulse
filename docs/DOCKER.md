@@ -169,6 +169,17 @@ docker run --rm -v pulse_data:/data -v $(pwd):/backup alpine tar czf /backup/pul
 docker run --rm -v pulse_data:/data -v $(pwd):/backup alpine tar xzf /backup/pulse-backup.tar.gz -C /data
 ```
 
+## Docker Workspace Highlights
+
+Once the agent is reporting, open the **Docker** tab in Pulse to explore:
+
+- **Host grid with issues column** – surfaces restart loops, health-check failures, and highlights hosts that have missed their heartbeat.
+- **Inline search** – filter by host name, stack label, or container name; results update instantly in the grid and side drawer.
+- **Container drawers** – show CPU/memory charts, restart counters, last exit codes, mounted ports, and environment labels at a glance.
+- **Time-since heartbeat** – every host entry shows the last heartbeat timestamp so you can spot telemetry gaps quickly.
+
+If a host remains offline, review [Troubleshooting → Docker Agent Shows Hosts Offline](TROUBLESHOOTING.md#docker-agent-shows-hosts-offline).
+
 ## Network Discovery
 
 **New in v4.5.0+**: Pulse automatically scans common home/office networks when running in Docker!

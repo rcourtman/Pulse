@@ -51,6 +51,7 @@ Settings → Security → Backup & Restore → Export Backup
 
 ### Can I filter backup history or focus on a specific time window?
 Yes. The **Backups** workspace exposes a time-range picker above the chart (Last 24 h / 7 d / 30 d / Custom). Selecting a range reflows the chart, highlights matching bars, and filters the grid below. Hovering the chart shows tooltips with the top jobs inside that window so you can jump directly to a backup task or snapshot.
+Trouble with the picker? See [Troubleshooting → Backup View Filters Not Working](TROUBLESHOOTING.md#backup-view-filters-not-working).
 
 ### Can Pulse detect Proxmox clusters?
 Yes! When you add one cluster node, Pulse automatically discovers and monitors all nodes
@@ -165,6 +166,10 @@ Open **Alerts → History** and click an entry. The right-hand panel now shows a
 
 ### Does Pulse monitor Ceph clusters?
 Yes. When Ceph-backed storage (RBD or CephFS) is detected, Pulse queries `/cluster/ceph/status` and `/cluster/ceph/df` and surfaces the results on the **Storage → Ceph** drawer and via `/api/state` → `cephClusters`. You get cluster health, daemon counts, placement groups, and per-pool capacity without any additional configuration.
+If those sections stay empty, follow [Troubleshooting → Ceph Cluster Data Missing](TROUBLESHOOTING.md#ceph-cluster-data-missing).
+
+### Why does a Docker host show as offline in the Docker tab?
+First, confirm the agent is still running (`systemctl status pulse-docker-agent` or `docker ps`). If it is, check the Issues column for restart-loop notes and verify the host’s last heartbeat under **Details**. Still stuck? Walk through [Troubleshooting → Docker Agent Shows Hosts Offline](TROUBLESHOOTING.md#docker-agent-shows-hosts-offline) for a step-by-step checklist.
 
 ## Updates
 

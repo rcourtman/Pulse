@@ -133,6 +133,7 @@ Response payload includes dedicated collections for each subsystem:
 - `nodes`: Proxmox VE nodes with live resource metrics and connection health
 - `vms` / `containers`: Guest workloads with CPU, memory, disk, network, and power state
 - `dockerHosts`: Hosts that report through the Docker agent, including container inventory
+  - Each host entry includes `issues` (restart loops, health check failures), `lastSeen`, `agentVersion`, and a flattened list of labelled containers so you can display the same insights the UI shows.
 - `storage`: Per-node storage with capacity and usage metadata
 - `cephClusters`: Ceph health summaries, daemon counts, and pool capacity (see below)
 - `physicalDisks`: SMART/enclosure telemetry when physical disk monitoring is enabled
@@ -260,7 +261,7 @@ GET /install-docker-agent.sh          # Download the installation convenience sc
 GET /download/pulse-docker-agent      # Download the standalone Docker agent binary
 ```
 
-Agent routes require authentication. Use an API token or an authenticated session when calling them from automation. The payload reports restart loops, exit codes, memory pressure, and health probes per container, and Pulse de-duplicates heartbeats per agent ID so you can fan out to multiple Pulse instances safely.
+Agent routes require authentication. Use an API token or an authenticated session when calling them from automation. The payload reports restart loops, exit codes, memory pressure, and health probes per container, and Pulse de-duplicates heartbeats per agent ID so you can fan out to multiple Pulse instances safely. Host responses mirror the `/api/state` data, including `issues`, `recentExitCodes`, and `lastSeen` timestamps so external tooling can mimic the built-in Docker workspace.
 
 ## Monitoring Data
 
