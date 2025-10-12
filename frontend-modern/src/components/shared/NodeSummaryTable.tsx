@@ -6,7 +6,7 @@ import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { Card } from '@/components/shared/Card';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
-import { getPrimaryTemperature, type PrimaryTemperatureReading } from '@/utils/temperature';
+import { getCpuTemperature } from '@/utils/temperature';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -107,13 +107,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return counts;
   });
 
-  const roundTemperature = (reading: PrimaryTemperatureReading | null) =>
-    reading ? Math.round(reading.value) : null;
-
-  const getTemperatureReading = (item: SortableItem): PrimaryTemperatureReading | null => {
+  const getCpuTemperatureValue = (item: SortableItem) => {
     if (item.type !== 'pve') return null;
     const node = item.data as Node;
-    return getPrimaryTemperature(node.temperature);
+    const value = getCpuTemperature(node.temperature);
+    return value !== null ? Math.round(value) : null;
   };
 
   const getDefaultSortDirection = (key: Exclude<SortKey, 'default'>) => {
@@ -203,10 +201,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   };
 
   const getTemperatureValue = (item: SortableItem) => {
-    if (item.type === 'pve') {
-      return roundTemperature(getTemperatureReading(item));
-    }
-    return null;
+    return getCpuTemperatureValue(item);
   };
 
   const getCountValue = (item: SortableItem, key: CountSortKey): number | null => {
@@ -385,7 +380,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('temperature')}
                 >
-                  Temp {sortKey() === 'temperature' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  Temp{' '}
+                  {sortKey() === 'temperature' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
               </Show>
               <For each={countColumns()}>
@@ -414,8 +410,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const memoryPercentValue = getMemoryPercent(item);
                 const diskPercentValue = getDiskPercent(item);
                 const diskSublabel = getDiskSublabel(item);
-                const temperatureReading = getTemperatureReading(item);
-                const temperatureValue = roundTemperature(temperatureReading);
+                const cpuTemperatureValue = getCpuTemperatureValue(item);
                 const uptimeValue = isPVE ? node?.uptime ?? 0 : isPBS ? pbs?.uptime ?? 0 : 0;
                 const displayName = () => {
                   if (isPVE) return getNodeDisplayName(node as Node);
@@ -610,33 +605,26 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             online &&
                             isPVE &&
                             node!.temperature?.available &&
-                            temperatureValue !== null
+                            cpuTemperatureValue !== null
                           }
-                          fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                          fallback={
+                            <span class="text-xs text-gray-400 dark:text-gray-500">
+                              {online && isPVE && node!.temperature?.available
+                                ? 'No CPU sensor'
+                                : '-'}
+                            </span>
+                          }
                         >
-                          <div class="flex items-center justify-center gap-1">
-                            {(() => {
-                              const value = temperatureValue as number;
-                              const severityClass =
-                                value >= 80
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : value >= 70
-                                    ? 'text-yellow-600 dark:text-yellow-400'
-                                    : 'text-green-600 dark:text-green-400';
-                              return (
-                                <>
-                                  <span class={`text-xs font-medium ${severityClass}`}>
-                                    {value}°C
-                                  </span>
-                                  <Show when={temperatureReading?.source === 'nvme'}>
-                                    <span class="text-[9px] uppercase text-gray-500 dark:text-gray-400">
-                                      {temperatureReading?.device ?? 'NVMe'}
-                                    </span>
-                                  </Show>
-                                </>
-                              );
-                            })()}
-                          </div>
+                          {(() => {
+                            const value = cpuTemperatureValue as number;
+                            const severityClass =
+                              value >= 80
+                                ? 'text-red-600 dark:text-red-400'
+                                : value >= 70
+                                  ? 'text-yellow-600 dark:text-yellow-400'
+                                  : 'text-green-600 dark:text-green-400';
+                            return <span class={`text-xs font-medium ${severityClass}`}>{value}°C</span>;
+                          })()}
                         </Show>
                       </td>
                     </Show>

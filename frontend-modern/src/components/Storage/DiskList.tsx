@@ -224,8 +224,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </td>
                           <td class="px-2 py-1.5 text-xs hidden sm:table-cell">
                             <Show
-                              when={disk.temperature > 0}
-                              fallback={<span class="text-gray-400">-</span>}
+                              when={typeof disk.temperature === 'number' && disk.temperature !== 0}
+                              fallback={<span class="font-medium text-gray-400">-</span>}
                             >
                               <span
                                 class={`font-medium ${
@@ -233,7 +233,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                     ? 'text-red-600 dark:text-red-400'
                                     : disk.temperature > 60
                                       ? 'text-yellow-600 dark:text-yellow-400'
-                                      : 'text-gray-600 dark:text-gray-400'
+                                      : 'text-green-600 dark:text-green-400'
                                 }`}
                               >
                                 {disk.temperature}°C

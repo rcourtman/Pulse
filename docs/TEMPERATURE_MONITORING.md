@@ -4,9 +4,9 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
 
 ## Features
 
-- **CPU Package Temperature**: Shows the overall CPU temperature
+- **CPU Package Temperature**: Shows the overall CPU temperature when available
 - **Individual Core Temperatures**: Tracks each CPU core
-- **NVMe Drive Temperatures**: Monitors NVMe SSD temperatures
+- **NVMe Drive Temperatures**: Monitors NVMe SSD temperatures (visible in the Storage tab's disk list)
 - **Color-Coded Display**: 
   - Green: < 60°C (normal)
   - Yellow: 60-80°C (warm)
@@ -39,6 +39,8 @@ The auto-setup script (Settings → Nodes → Setup Script) will prompt you to c
    - Add the key to `/root/.ssh/authorized_keys`
    - Install `lm-sensors`
    - Run `sensors-detect --auto`
+
+If the node is part of a Proxmox cluster, the script will now detect the other members and offer to configure the same SSH/lm-sensors setup on each of them automatically—confirm when prompted to roll it out cluster-wide.
 
 ## Setup (Manual)
 
@@ -88,7 +90,7 @@ You should see JSON output with temperature data.
 2. Runs `sensors -j` to get temperature data in JSON format
 3. Parses CPU temperatures (coretemp/k10temp)
 4. Parses NVMe temperatures (nvme-pci-*)
-5. Displays the data in node cards with color coding
+5. Displays CPU temperatures on the overview dashboard and lists NVMe drive temperatures in the Storage tab's disk table when available
 
 ## Troubleshooting
 

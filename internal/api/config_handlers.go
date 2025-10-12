@@ -3072,6 +3072,7 @@ echo ""
 # SSH public key embedded from Pulse server
 SSH_PUBLIC_KEY="%s"
 SSH_RESTRICTED_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_PUBLIC_KEY"
+TEMPERATURE_ENABLED=false
 
 # Check if SSH key is already configured and whether it needs upgrading
 SSH_ALREADY_CONFIGURED=false
@@ -3087,6 +3088,7 @@ if [ -n "$SSH_PUBLIC_KEY" ] && [ -f /root/.ssh/authorized_keys ]; then
 fi
 
 if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
+    TEMPERATURE_ENABLED=true
     echo "Temperature monitoring is currently ENABLED on this node."
     echo ""
     echo "What would you like to do?"
@@ -3127,6 +3129,7 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
         echo ""
         echo "To completely remove lm-sensors (optional):"
         echo "  apt-get remove --purge lm-sensors"
+        TEMPERATURE_ENABLED=false
     elif [[ $SSH_ACTION =~ ^[Ss]$ ]]; then
         echo "Temperature monitoring configuration unchanged."
     else
@@ -3207,6 +3210,7 @@ else
             echo ""
             echo "To disable later, re-run this setup script or manually remove the key:"
             echo "  grep -v 'pulse' /root/.ssh/authorized_keys > /tmp/ak && mv /tmp/ak /root/.ssh/authorized_keys"
+            TEMPERATURE_ENABLED=true
         else
             echo ""
             echo "Warning: SSH key not available from Pulse server."
@@ -3215,6 +3219,126 @@ else
     else
         echo ""
         echo "Temperature monitoring skipped."
+    fi
+fi
+
+# Offer to configure other Proxmox cluster nodes if temperature monitoring is enabled here
+if [ "$TEMPERATURE_ENABLED" = true ] && command -v pvecm >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
+    CLUSTER_OUTPUT=$(pvecm nodes 2>/dev/null || true)
+    if [ -n "$CLUSTER_OUTPUT" ]; then
+        LOCAL_NODE=$(hostname -s 2>/dev/null || hostname)
+        CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | awk 'NR>1 && $1 ~ /^[0-9]+$/ {print $3}')
+
+        if [ -n "$CLUSTER_NODES" ]; then
+            OTHER_NODES_LIST=()
+            while read -r NODE_NAME; do
+                if [ -n "$NODE_NAME" ] && [ "$NODE_NAME" != "$LOCAL_NODE" ]; then
+                    # Avoid duplicates
+                    SKIP_NODE=false
+                    for EXISTING in "${OTHER_NODES_LIST[@]}"; do
+                        if [ "$EXISTING" = "$NODE_NAME" ]; then
+                            SKIP_NODE=true
+                            break
+                        fi
+                    done
+                    if [ "$SKIP_NODE" = false ]; then
+                        OTHER_NODES_LIST+=("$NODE_NAME")
+                    fi
+                fi
+            done <<< "$CLUSTER_NODES"
+
+            if [ ${#OTHER_NODES_LIST[@]} -gt 0 ]; then
+                echo ""
+                echo "Detected additional Proxmox nodes in cluster:"
+                for NODE in "${OTHER_NODES_LIST[@]}"; do
+                    echo "  • $NODE"
+                done
+                echo ""
+                echo "Configure temperature monitoring on these nodes as well?"
+                echo -n "[y/N]: "
+
+                if [ -t 0 ]; then
+                    read -p "> " -n 1 -r REMOTE_REPLY
+                else
+                    if read -p "> " -n 1 -r REMOTE_REPLY </dev/tty 2>/dev/null; then
+                        :
+                    else
+                        echo "(No terminal available - skipping remote configuration)"
+                        REMOTE_REPLY="n"
+                    fi
+                fi
+                echo ""
+                echo ""
+
+                if [[ $REMOTE_REPLY =~ ^[Yy]$ ]]; then
+                    for NODE in "${OTHER_NODES_LIST[@]}"; do
+                        echo "Configuring temperature monitoring on $NODE..."
+                        if ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR root@"$NODE" "bash -s" <<'EOF'
+set -e
+SSH_PUBLIC_KEY='$SSH_PUBLIC_KEY'
+SSH_RESTRICTED_KEY_ENTRY='$SSH_RESTRICTED_KEY_ENTRY'
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+AUTH_KEYS=/root/.ssh/authorized_keys
+if [ -f "\$AUTH_KEYS" ] && grep -qF "\$SSH_PUBLIC_KEY" "\$AUTH_KEYS" 2>/dev/null; then
+    grep -vF "\$SSH_PUBLIC_KEY" "\$AUTH_KEYS" > "\$AUTH_KEYS.tmp"
+    mv "\$AUTH_KEYS.tmp" "\$AUTH_KEYS"
+fi
+if [ ! -f "\$AUTH_KEYS" ] || ! grep -qF "\$SSH_RESTRICTED_KEY_ENTRY" "\$AUTH_KEYS" 2>/dev/null; then
+    echo "\$SSH_RESTRICTED_KEY_ENTRY" >> "\$AUTH_KEYS"
+fi
+chmod 600 "\$AUTH_KEYS"
+if ! command -v sensors >/dev/null 2>&1; then
+    echo "  - Installing lm-sensors..."
+    export DEBIAN_FRONTEND=noninteractive
+    APT_LOG=$(mktemp)
+    if ! apt-get update -qq >"$APT_LOG" 2>&1; then
+        echo "    ! apt-get update failed."
+        if grep -qi "enterprise.proxmox.com" "$APT_LOG"; then
+            echo "    - Detected Proxmox enterprise repository without subscription; switching to no-subscription repository."
+            if [ -f /etc/apt/sources.list.d/pve-enterprise.list ]; then
+                cp /etc/apt/sources.list.d/pve-enterprise.list /etc/apt/sources.list.d/pve-enterprise.list.pulsebak 2>/dev/null || true
+                if grep -q "^[[:space:]]*deb" /etc/apt/sources.list.d/pve-enterprise.list; then
+                    sed -i 's|^[[:space:]]*deb|# Pulse auto-disabled: deb|' /etc/apt/sources.list.d/pve-enterprise.list
+                fi
+            fi
+            if [ ! -f /etc/apt/sources.list.d/pve-no-subscription.list ]; then
+                CODENAME=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
+                if [ -z "$CODENAME" ]; then
+                    CODENAME=$(lsb_release -cs 2>/dev/null || echo "bookworm")
+                fi
+                echo "deb http://download.proxmox.com/debian/pve $CODENAME pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
+            fi
+            if apt-get update -qq >>"$APT_LOG" 2>&1; then
+                echo "    ✓ Switched to no-subscription repository."
+            else
+                echo "    ! apt-get update still failed after switching repositories."
+            fi
+        else
+            echo "    ! apt-get update error was not recognized. Please review apt configuration on this node."
+        fi
+    fi
+    if apt-get install -y -qq lm-sensors >/dev/null 2>&1; then
+        sensors-detect --auto >/dev/null 2>&1 || true
+        echo "  ✓ lm-sensors installed"
+    else
+        echo "  ! Failed to install lm-sensors automatically. Please resolve apt issues and rerun this script."
+    fi
+    rm -f "$APT_LOG"
+else
+    echo "  ✓ lm-sensors package verified"
+fi
+EOF
+                        then
+                            echo "  ✓ Temperature monitoring enabled on $NODE"
+                        else
+                            echo "  ✗ Failed to configure $NODE (check SSH/cluster connectivity)"
+                        fi
+                        echo ""
+                    done
+                fi
+            fi
+        fi
     fi
 fi
 

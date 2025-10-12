@@ -6,7 +6,7 @@ import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndica
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
-import { getPrimaryTemperature } from '@/utils/temperature';
+import { getCpuTemperature } from '@/utils/temperature';
 
 interface NodeCardProps {
   node: Node;
@@ -119,33 +119,20 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   );
   const unacknowledgedNodeAlerts = createMemo(() => nodeAlerts().filter((alert) => !alert.acknowledged));
 
-  const primaryTemperature = createMemo(() => getPrimaryTemperature(props.node.temperature));
-  const primaryTemperatureValue = createMemo(() => {
-    const reading = primaryTemperature();
-    return reading ? Math.round(reading.value) : null;
-  });
-  const primaryTemperatureLabel = createMemo(() => {
-    const reading = primaryTemperature();
-    if (!reading) return null;
-    if (reading.source === 'nvme') {
-      return reading.device ?? 'NVMe';
-    }
-    return 'CPU';
+  const cpuTemperature = createMemo(() => getCpuTemperature(props.node.temperature));
+  const cpuTemperatureValue = createMemo(() => {
+    const value = cpuTemperature();
+    return value !== null ? Math.round(value) : null;
   });
   const temperatureTooltip = createMemo(() => {
-    const temp = props.node.temperature;
-    const rounded = primaryTemperatureValue();
-    if (!temp?.available || rounded === null) {
+    if (!props.node.temperature?.available) {
       return '';
     }
-    const label = primaryTemperatureLabel();
-    const primaryLabel =
-      label && label !== 'CPU' ? `${label}: ${rounded}°C` : `CPU: ${rounded}°C`;
-    const nvmeDetails =
-      temp.nvme && temp.nvme.length > 0
-        ? ` | NVMe: ${temp.nvme.map((n) => `${n.device}: ${Math.round(n.temp)}°C`).join(', ')}`
-        : '';
-    return `${primaryLabel}${nvmeDetails}`;
+    const value = cpuTemperatureValue();
+    if (value === null) {
+      return 'CPU sensor unavailable';
+    }
+    return `CPU: ${value}°C`;
   });
 
   // Determine border/ring style based on status and alerts
@@ -249,25 +236,31 @@ const NodeCard: Component<NodeCardProps> = (props) => {
           ↑{formatUptime(props.node.uptime)}
         </span>
         <Show
-          when={props.node.temperature?.available && primaryTemperatureValue() !== null}
-          fallback={<span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>}
+          when={props.node.temperature?.available && cpuTemperatureValue() !== null}
+          fallback={
+            props.node.temperature?.available ? (
+              <span
+                class="font-medium text-gray-500 dark:text-gray-400"
+                title="CPU sensor unavailable"
+              >
+                🌡--
+              </span>
+            ) : (
+              <span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>
+            )
+          }
         >
           <span
             class={`font-medium ${
-              (primaryTemperatureValue() ?? 0) > 80
+              (cpuTemperatureValue() ?? 0) > 80
                 ? 'text-red-500'
-                : (primaryTemperatureValue() ?? 0) > 60
+                : (cpuTemperatureValue() ?? 0) > 60
                   ? 'text-yellow-500'
                   : 'text-green-500'
             }`}
             title={temperatureTooltip() || undefined}
           >
-            🌡{primaryTemperatureValue()}°C
-            <Show when={primaryTemperatureLabel() && primaryTemperatureLabel() !== 'CPU'}>
-              <span class="ml-1 text-[9px] uppercase text-gray-500 dark:text-gray-400">
-                {primaryTemperatureLabel()}
-              </span>
-            </Show>
+            🌡{cpuTemperatureValue()}°C
           </span>
         </Show>
       </div>
