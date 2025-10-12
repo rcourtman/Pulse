@@ -39,20 +39,51 @@ COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-m
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
     -trimpath \
-    -o pulse ./cmd/pulse && \
-    CGO_ENABLED=0 GOOS=linux go build \
+    -o pulse ./cmd/pulse
+
+# Build docker-agent for multiple architectures so users can download any arch
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w" \
     -trimpath \
-    -o pulse-docker-agent ./cmd/pulse-docker-agent
+    -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+    -ldflags="-s -w" \
+    -trimpath \
+    -o pulse-docker-agent-linux-arm64 ./cmd/pulse-docker-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
+    -ldflags="-s -w" \
+    -trimpath \
+    -o pulse-docker-agent-linux-armv7 ./cmd/pulse-docker-agent
+
+# Keep a host-arch symlink for backward compatibility
+RUN cp pulse-docker-agent-linux-amd64 pulse-docker-agent
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
 FROM alpine:latest AS agent_runtime
+
+# Use TARGETARCH to select the correct binary for the build platform
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 
-COPY --from=backend-builder /app/pulse-docker-agent /usr/local/bin/pulse-docker-agent
+# Copy all agent binaries first
+COPY --from=backend-builder /app/pulse-docker-agent-linux-* /tmp/
+
+# Select the appropriate architecture binary
+# Docker buildx automatically sets TARGETARCH (amd64, arm64, arm) and TARGETVARIANT (v7)
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        cp /tmp/pulse-docker-agent-linux-arm64 /usr/local/bin/pulse-docker-agent; \
+    elif [ "$TARGETARCH" = "arm" ]; then \
+        cp /tmp/pulse-docker-agent-linux-armv7 /usr/local/bin/pulse-docker-agent; \
+    else \
+        cp /tmp/pulse-docker-agent-linux-amd64 /usr/local/bin/pulse-docker-agent; \
+    fi && \
+    chmod +x /usr/local/bin/pulse-docker-agent && \
+    rm -rf /tmp/pulse-docker-agent-*
+
 COPY --from=backend-builder /app/VERSION /VERSION
 
 ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
@@ -79,6 +110,12 @@ RUN chmod +x /docker-entrypoint.sh
 RUN mkdir -p /opt/pulse/scripts
 COPY scripts/install-docker-agent.sh /opt/pulse/scripts/install-docker-agent.sh
 RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh
+
+# Copy multi-arch docker-agent binaries for download endpoint
+RUN mkdir -p /opt/pulse/bin
+COPY --from=backend-builder /app/pulse-docker-agent-linux-amd64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-docker-agent-linux-arm64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-docker-agent-linux-armv7 /opt/pulse/bin/
 
 # Create config directory
 RUN mkdir -p /etc/pulse /data
