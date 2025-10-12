@@ -1,10 +1,12 @@
-import { createSignal, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, Show, onMount, onCleanup, createEffect } from 'solid-js';
 import { UpdatesAPI, type UpdateStatus } from '@/api/updates';
 
 interface UpdateProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
   onViewHistory: () => void;
+  connected?: () => boolean;
+  reconnecting?: () => boolean;
 }
 
 export function UpdateProgressModal(props: UpdateProgressModalProps) {
@@ -12,6 +14,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   const [isComplete, setIsComplete] = createSignal(false);
   const [hasError, setHasError] = createSignal(false);
   const [isRestarting, setIsRestarting] = createSignal(false);
+  const [wsDisconnected, setWsDisconnected] = createSignal(false);
   let pollInterval: number | undefined;
   let healthCheckTimer: number | undefined;
   let healthCheckAttempts = 0;
@@ -112,6 +115,36 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     // Start checking immediately
     healthCheckTimer = window.setTimeout(checkHealth, 0);
   };
+
+  // Watch websocket status during restart
+  createEffect(() => {
+    if (!isRestarting()) return;
+
+    const connected = props.connected?.();
+    const reconnecting = props.reconnecting?.();
+
+    // Track if websocket disconnected during restart
+    if (connected === false && !reconnecting) {
+      setWsDisconnected(true);
+    }
+
+    // If websocket reconnected after being disconnected, the backend is likely back
+    if (wsDisconnected() && connected === true && !reconnecting) {
+      console.log('WebSocket reconnected after restart, verifying health...');
+      // Give it a moment for the backend to fully initialize
+      setTimeout(async () => {
+        try {
+          const response = await fetch('/api/health', { cache: 'no-store' });
+          if (response.ok) {
+            console.log('Backend healthy after websocket reconnect, reloading...');
+            window.location.reload();
+          }
+        } catch (error) {
+          console.warn('Health check failed after websocket reconnect, will keep trying');
+        }
+      }, 1000);
+    }
+  });
 
   onMount(() => {
     if (props.isOpen) {
@@ -252,7 +285,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div class="text-sm text-blue-800 dark:text-blue-200">
-                      Pulse is restarting with the new version. This page will reload automatically when ready.
+                      <Show when={wsDisconnected()} fallback={
+                        <span>Pulse is restarting with the new version...</span>
+                      }>
+                        <span>Waiting for Pulse to complete restart. This page will reload automatically.</span>
+                      </Show>
                     </div>
                   </div>
                 </div>

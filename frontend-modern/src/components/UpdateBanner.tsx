@@ -1,12 +1,14 @@
-import { Show, createSignal, createEffect, For } from 'solid-js';
+import { Show, createSignal, createEffect, For, useContext } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
 import { UpdateProgressModal } from './UpdateProgressModal';
+import { WebSocketContext } from '@/App';
 
 export function UpdateBanner() {
   const navigate = useNavigate();
+  const wsContext = useContext(WebSocketContext);
   const [isExpanded, setIsExpanded] = createSignal(false);
   const [updatePlan, setUpdatePlan] = createSignal<UpdatePlan | null>(null);
   const [showConfirmModal, setShowConfirmModal] = createSignal(false);
@@ -300,6 +302,8 @@ export function UpdateBanner() {
           setShowProgressModal(false);
           navigate('/settings/updates');
         }}
+        connected={wsContext?.connected}
+        reconnecting={wsContext?.reconnecting}
       />
     </Show>
   );
