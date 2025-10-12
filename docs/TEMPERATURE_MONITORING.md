@@ -297,7 +297,7 @@ To check if your deployment is using the secure proxy:
 systemctl status pulse-temp-proxy
 
 # Check if socket exists
-ls -l /var/run/pulse-temp-proxy.sock
+ls -l /run/pulse-temp-proxy/pulse-temp-proxy.sock
 
 # View proxy logs
 journalctl -u pulse-temp-proxy -f
@@ -427,9 +427,9 @@ ssh root@old-node "sed -i '/pulse-temp-proxy/d' /root/.ssh/authorized_keys"
 
 **Socket Not Accessible in Container:**
 - Symptom: Pulse logs show "Temperature proxy not available - using direct SSH"
-- Check: `ls -l /var/run/pulse-temp-proxy.sock` in container
+- Check: `ls -l /run/pulse-temp-proxy/pulse-temp-proxy.sock` in container
 - Fix: Verify bind mount in LXC config (`/etc/pve/lxc/<CTID>.conf`)
-- Should have: `lxc.mount.entry: /var/run/pulse-temp-proxy.sock var/run/pulse-temp-proxy.sock none bind,create=file 0 0`
+- Should have: `lxc.mount.entry: /run/pulse-temp-proxy run/pulse-temp-proxy none bind,create=dir 0 0`
 
 **pvecm Not Available:**
 - Symptom: Proxy fails to discover cluster nodes
@@ -446,6 +446,30 @@ ssh root@old-node "sed -i '/pulse-temp-proxy/d' /root/.ssh/authorized_keys"
 - Cause: Process with non-root UID trying to access socket
 - Normal: Only root (UID 0) or proxy's own user can access socket
 - Check: Look for suspicious processes trying to access the socket
+
+### Monitoring the Proxy
+
+**Manual Monitoring (v1):**
+
+The proxy service includes systemd restart-on-failure, which handles most issues automatically. For additional monitoring:
+
+```bash
+# Check proxy health
+systemctl is-active pulse-temp-proxy && echo "Proxy is running" || echo "Proxy is down"
+
+# Monitor logs for errors
+journalctl -u pulse-temp-proxy --since "1 hour ago" | grep -i error
+
+# Verify socket exists and is accessible
+test -S /run/pulse-temp-proxy/pulse-temp-proxy.sock && echo "Socket OK" || echo "Socket missing"
+```
+
+**Alerting:**
+- Rely on systemd's automatic restart (`Restart=on-failure`)
+- Monitor via journalctl for persistent failures
+- Check Pulse UI for missing temperature data
+
+**Future:** Integration with pulse-watchdog is planned for automated health checks and alerting (see #528).
 
 ### Known Limitations
 
@@ -475,7 +499,7 @@ ssh root@old-node "sed -i '/pulse-temp-proxy/d' /root/.ssh/authorized_keys"
 1. Check proxy service: `systemctl status pulse-temp-proxy`
 2. Check proxy logs: `journalctl -u pulse-temp-proxy -n 50`
 3. Test SSH manually: `ssh root@node "sensors -j"`
-4. Verify socket exists: `ls -l /var/run/pulse-temp-proxy.sock`
+4. Verify socket exists: `ls -l /run/pulse-temp-proxy/pulse-temp-proxy.sock`
 
 **New Cluster Node Not Showing Temperatures:**
 1. Ensure lm-sensors installed: `ssh root@new-node "sensors -j"`
@@ -483,7 +507,7 @@ ssh root@old-node "sed -i '/pulse-temp-proxy/d' /root/.ssh/authorized_keys"
 3. Force refresh by restarting Pulse: `pct restart <CTID>`
 
 **Permission Denied Errors:**
-1. Verify socket permissions: `ls -l /var/run/pulse-temp-proxy.sock`
+1. Verify socket permissions: `ls -l /run/pulse-temp-proxy/pulse-temp-proxy.sock`
 2. Should be: `srw-rw---- 1 root root`
 3. Check Pulse runs as root in container: `pct exec <CTID> -- whoami`
 
@@ -502,7 +526,7 @@ If temperature monitoring isn't working:
    # On Proxmox host
    systemctl status pulse-temp-proxy
    journalctl -u pulse-temp-proxy -n 100 > /tmp/proxy-logs.txt
-   ls -la /var/run/pulse-temp-proxy.sock
+   ls -la /run/pulse-temp-proxy/pulse-temp-proxy.sock
 
    # In Pulse container
    journalctl -u pulse -n 100 | grep -i temp > /tmp/pulse-temp-logs.txt
