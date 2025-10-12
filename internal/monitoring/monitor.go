@@ -2145,183 +2145,186 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Poll physical disks for health monitoring (only if enabled and interval elapsed)
-	if instanceCfg.MonitorPhysicalDisks {
+	// Poll physical disks for health monitoring (enabled by default unless explicitly disabled)
+	// Skip if MonitorPhysicalDisks is explicitly set to false
+	if instanceCfg.MonitorPhysicalDisks != nil && !*instanceCfg.MonitorPhysicalDisks {
+		log.Debug().Str("instance", instanceName).Msg("Physical disk monitoring explicitly disabled")
+		// Keep any existing disk data visible (don't clear it)
+	} else {
+		// Enabled by default (when nil or true)
 		// Determine polling interval (default 5 minutes to avoid spinning up HDDs too frequently)
 		pollingInterval := 5 * time.Minute
-		if instanceCfg.PhysicalDiskPollingMinutes > 0 {
-			pollingInterval = time.Duration(instanceCfg.PhysicalDiskPollingMinutes) * time.Minute
+	if instanceCfg.PhysicalDiskPollingMinutes > 0 {
+		pollingInterval = time.Duration(instanceCfg.PhysicalDiskPollingMinutes) * time.Minute
+	}
+
+	// Check if enough time has elapsed since last poll
+	m.mu.Lock()
+	lastPoll, exists := m.lastPhysicalDiskPoll[instanceName]
+	shouldPoll := !exists || time.Since(lastPoll) >= pollingInterval
+	if shouldPoll {
+		m.lastPhysicalDiskPoll[instanceName] = time.Now()
+	}
+	m.mu.Unlock()
+
+	if !shouldPoll {
+		log.Debug().
+			Str("instance", instanceName).
+			Dur("sinceLastPoll", time.Since(lastPoll)).
+			Dur("interval", pollingInterval).
+			Msg("Skipping physical disk poll - interval not elapsed")
+		// Refresh NVMe temperatures using the latest sensor data even when we skip the disk poll
+		currentState := m.state.GetSnapshot()
+		existing := make([]models.PhysicalDisk, 0)
+		for _, disk := range currentState.PhysicalDisks {
+			if disk.Instance == instanceName {
+				existing = append(existing, disk)
+			}
+		}
+		if len(existing) > 0 {
+			updated := mergeNVMeTempsIntoDisks(existing, modelNodes)
+			m.state.UpdatePhysicalDisks(instanceName, updated)
+		}
+	} else {
+		log.Debug().
+			Int("nodeCount", len(nodes)).
+			Dur("interval", pollingInterval).
+			Msg("Starting disk health polling")
+
+		// Get existing disks from state to preserve data for offline nodes
+		currentState := m.state.GetSnapshot()
+		existingDisksMap := make(map[string]models.PhysicalDisk)
+		for _, disk := range currentState.PhysicalDisks {
+			if disk.Instance == instanceName {
+				existingDisksMap[disk.ID] = disk
+			}
 		}
 
-		// Check if enough time has elapsed since last poll
-		m.mu.Lock()
-		lastPoll, exists := m.lastPhysicalDiskPoll[instanceName]
-		shouldPoll := !exists || time.Since(lastPoll) >= pollingInterval
-		if shouldPoll {
-			m.lastPhysicalDiskPoll[instanceName] = time.Now()
-		}
-		m.mu.Unlock()
+		var allDisks []models.PhysicalDisk
+		polledNodes := make(map[string]bool) // Track which nodes we successfully polled
 
-		if !shouldPoll {
+		for _, node := range nodes {
+			// Skip offline nodes but preserve their existing disk data
+			if node.Status != "online" {
+				log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
+				continue
+			}
+
+			// Get disk list for this node
+			log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
+			disks, err := client.GetDisks(ctx, node.Node)
+			if err != nil {
+				// Check if it's a permission error or if the endpoint doesn't exist
+				if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
+					log.Warn().
+						Str("node", node.Node).
+						Err(err).
+						Msg("Insufficient permissions to access disk information - check API token permissions")
+				} else if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "501") {
+					log.Info().
+						Str("node", node.Node).
+						Msg("Disk monitoring not available on this node (may be using non-standard storage)")
+				} else {
+					log.Warn().
+						Str("node", node.Node).
+						Err(err).
+						Msg("Failed to get disk list")
+				}
+				continue
+			}
+
 			log.Debug().
-				Str("instance", instanceName).
-				Dur("sinceLastPoll", time.Since(lastPoll)).
-				Dur("interval", pollingInterval).
-				Msg("Skipping physical disk poll - interval not elapsed")
-			// Refresh NVMe temperatures using the latest sensor data even when we skip the disk poll
-			currentState := m.state.GetSnapshot()
-			existing := make([]models.PhysicalDisk, 0)
-			for _, disk := range currentState.PhysicalDisks {
-				if disk.Instance == instanceName {
-					existing = append(existing, disk)
-				}
-			}
-			if len(existing) > 0 {
-				updated := mergeNVMeTempsIntoDisks(existing, modelNodes)
-				m.state.UpdatePhysicalDisks(instanceName, updated)
-			}
-		} else {
-			log.Debug().
-				Int("nodeCount", len(nodes)).
-				Dur("interval", pollingInterval).
-				Msg("Starting disk health polling")
+				Str("node", node.Node).
+				Int("diskCount", len(disks)).
+				Msg("Got disk list for node")
 
-			// Get existing disks from state to preserve data for offline nodes
-			currentState := m.state.GetSnapshot()
-			existingDisksMap := make(map[string]models.PhysicalDisk)
-			for _, disk := range currentState.PhysicalDisks {
-				if disk.Instance == instanceName {
-					existingDisksMap[disk.ID] = disk
-				}
-			}
+			// Mark this node as successfully polled
+			polledNodes[node.Node] = true
 
-			var allDisks []models.PhysicalDisk
-			polledNodes := make(map[string]bool) // Track which nodes we successfully polled
-
-			for _, node := range nodes {
-				// Skip offline nodes but preserve their existing disk data
-				if node.Status != "online" {
-					log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
-					continue
+			// Check each disk for health issues and add to state
+			for _, disk := range disks {
+				// Create PhysicalDisk model
+				diskID := fmt.Sprintf("%s-%s-%s", instanceName, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
+				physicalDisk := models.PhysicalDisk{
+					ID:          diskID,
+					Node:        node.Node,
+					Instance:    instanceName,
+					DevPath:     disk.DevPath,
+					Model:       disk.Model,
+					Serial:      disk.Serial,
+					Type:        disk.Type,
+					Size:        disk.Size,
+					Health:      disk.Health,
+					Wearout:     disk.Wearout,
+					RPM:         disk.RPM,
+					Used:        disk.Used,
+					LastChecked: time.Now(),
 				}
 
-				// Get disk list for this node
-				log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
-				disks, err := client.GetDisks(ctx, node.Node)
-				if err != nil {
-					// Check if it's a permission error or if the endpoint doesn't exist
-					if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
-						log.Warn().
-							Str("node", node.Node).
-							Err(err).
-							Msg("Insufficient permissions to access disk information - check API token permissions")
-					} else if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "501") {
-						log.Info().
-							Str("node", node.Node).
-							Msg("Disk monitoring not available on this node (may be using non-standard storage)")
-					} else {
-						log.Warn().
-							Str("node", node.Node).
-							Err(err).
-							Msg("Failed to get disk list")
-					}
-					continue
-				}
+				allDisks = append(allDisks, physicalDisk)
 
 				log.Debug().
 					Str("node", node.Node).
-					Int("diskCount", len(disks)).
-					Msg("Got disk list for node")
+					Str("disk", disk.DevPath).
+					Str("model", disk.Model).
+					Str("health", disk.Health).
+					Int("wearout", disk.Wearout).
+					Msg("Checking disk health")
 
-				// Mark this node as successfully polled
-				polledNodes[node.Node] = true
-
-				// Check each disk for health issues and add to state
-				for _, disk := range disks {
-					// Create PhysicalDisk model
-					diskID := fmt.Sprintf("%s-%s-%s", instanceName, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
-					physicalDisk := models.PhysicalDisk{
-						ID:          diskID,
-						Node:        node.Node,
-						Instance:    instanceName,
-						DevPath:     disk.DevPath,
-						Model:       disk.Model,
-						Serial:      disk.Serial,
-						Type:        disk.Type,
-						Size:        disk.Size,
-						Health:      disk.Health,
-						Wearout:     disk.Wearout,
-						RPM:         disk.RPM,
-						Used:        disk.Used,
-						LastChecked: time.Now(),
-					}
-
-					allDisks = append(allDisks, physicalDisk)
-
-					log.Debug().
+				normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
+				if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
+					// Disk has failed or is failing - alert manager will handle this
+					log.Warn().
 						Str("node", node.Node).
 						Str("disk", disk.DevPath).
 						Str("model", disk.Model).
 						Str("health", disk.Health).
 						Int("wearout", disk.Wearout).
-						Msg("Checking disk health")
+						Msg("Disk health issue detected")
 
-					normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
-					if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
-						// Disk has failed or is failing - alert manager will handle this
-						log.Warn().
-							Str("node", node.Node).
-							Str("disk", disk.DevPath).
-							Str("model", disk.Model).
-							Str("health", disk.Health).
-							Int("wearout", disk.Wearout).
-							Msg("Disk health issue detected")
+					// Pass disk info to alert manager
+					m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
+				} else if disk.Wearout > 0 && disk.Wearout < 10 {
+					// Low wearout warning (less than 10% life remaining)
+					log.Warn().
+						Str("node", node.Node).
+						Str("disk", disk.DevPath).
+						Str("model", disk.Model).
+						Int("wearout", disk.Wearout).
+						Msg("SSD wearout critical - less than 10% life remaining")
 
-						// Pass disk info to alert manager
-						m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
-					} else if disk.Wearout > 0 && disk.Wearout < 10 {
-						// Low wearout warning (less than 10% life remaining)
-						log.Warn().
-							Str("node", node.Node).
-							Str("disk", disk.DevPath).
-							Str("model", disk.Model).
-							Int("wearout", disk.Wearout).
-							Msg("SSD wearout critical - less than 10% life remaining")
-
-						// Pass to alert manager for wearout alert
-						m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
-					}
+					// Pass to alert manager for wearout alert
+					m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
 				}
 			}
-
-			// Preserve existing disk data for nodes that weren't polled (offline or error)
-			for _, existingDisk := range existingDisksMap {
-				// Only preserve if we didn't poll this node
-				if !polledNodes[existingDisk.Node] {
-					// Keep the existing disk data but update the LastChecked to indicate it's stale
-					allDisks = append(allDisks, existingDisk)
-					log.Debug().
-						Str("node", existingDisk.Node).
-						Str("disk", existingDisk.DevPath).
-						Msg("Preserving existing disk data for unpolled node")
-				}
-			}
-
-			allDisks = mergeNVMeTempsIntoDisks(allDisks, modelNodes)
-
-			// Update physical disks in state
-			log.Debug().
-				Str("instance", instanceName).
-				Int("diskCount", len(allDisks)).
-				Int("preservedCount", len(existingDisksMap)-len(polledNodes)).
-				Msg("Updating physical disks in state")
-			m.state.UpdatePhysicalDisks(instanceName, allDisks)
 		}
-	} else {
-		// Physical disk monitoring is disabled - clear any existing disk data for this instance
-		log.Debug().Str("instance", instanceName).Msg("Physical disk monitoring disabled - clearing disk data")
-		m.state.UpdatePhysicalDisks(instanceName, []models.PhysicalDisk{})
+
+		// Preserve existing disk data for nodes that weren't polled (offline or error)
+		for _, existingDisk := range existingDisksMap {
+			// Only preserve if we didn't poll this node
+			if !polledNodes[existingDisk.Node] {
+				// Keep the existing disk data but update the LastChecked to indicate it's stale
+				allDisks = append(allDisks, existingDisk)
+				log.Debug().
+					Str("node", existingDisk.Node).
+					Str("disk", existingDisk.DevPath).
+					Msg("Preserving existing disk data for unpolled node")
+			}
+		}
+
+		allDisks = mergeNVMeTempsIntoDisks(allDisks, modelNodes)
+
+		// Update physical disks in state
+		log.Debug().
+			Str("instance", instanceName).
+			Int("diskCount", len(allDisks)).
+			Int("preservedCount", len(existingDisksMap)-len(polledNodes)).
+			Msg("Updating physical disks in state")
+		m.state.UpdatePhysicalDisks(instanceName, allDisks)
+		}
 	}
+	// Note: Physical disk monitoring is now enabled by default with a 5-minute polling interval.
+	// Users can explicitly disable it in node settings. Disk data is preserved between polls.
 
 	// Update nodes with storage fallback if rootfs was not available
 	for i := range modelNodes {

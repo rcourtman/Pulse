@@ -290,7 +290,7 @@ type NodeConfigRequest struct {
 	MonitorContainers    bool   `json:"monitorContainers,omitempty"`    // PVE only
 	MonitorStorage       bool   `json:"monitorStorage,omitempty"`       // PVE only
 	MonitorBackups       bool   `json:"monitorBackups,omitempty"`       // PVE only
-	MonitorPhysicalDisks bool   `json:"monitorPhysicalDisks,omitempty"` // PVE only
+	MonitorPhysicalDisks *bool  `json:"monitorPhysicalDisks,omitempty"` // PVE only (nil = enabled by default)
 	MonitorDatastores    bool   `json:"monitorDatastores,omitempty"`    // PBS only
 	MonitorSyncJobs      bool   `json:"monitorSyncJobs,omitempty"`      // PBS only
 	MonitorVerifyJobs    bool   `json:"monitorVerifyJobs,omitempty"`    // PBS only
@@ -318,7 +318,7 @@ type NodeResponse struct {
 	MonitorContainers    bool                     `json:"monitorContainers,omitempty"`
 	MonitorStorage       bool                     `json:"monitorStorage,omitempty"`
 	MonitorBackups       bool                     `json:"monitorBackups,omitempty"`
-	MonitorPhysicalDisks bool                     `json:"monitorPhysicalDisks,omitempty"`
+	MonitorPhysicalDisks *bool                    `json:"monitorPhysicalDisks,omitempty"`
 	MonitorDatastores    bool                     `json:"monitorDatastores,omitempty"`
 	MonitorSyncJobs      bool                     `json:"monitorSyncJobs,omitempty"`
 	MonitorVerifyJobs    bool                     `json:"monitorVerifyJobs,omitempty"`
@@ -720,7 +720,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 				MonitorContainers:    true,
 				MonitorStorage:       true,
 				MonitorBackups:       true,
-				MonitorPhysicalDisks: true,
+				MonitorPhysicalDisks: nil, // nil = enabled by default
 				Status:               "connected",
 				IsCluster:            true,
 				ClusterName:          "mock-cluster",
@@ -746,7 +746,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 				MonitorContainers:    true,
 				MonitorStorage:       true,
 				MonitorBackups:       true,
-				MonitorPhysicalDisks: true,
+				MonitorPhysicalDisks: nil, // nil = enabled by default
 				Status:               "connected",
 				IsCluster:            false, // Not part of a cluster
 				ClusterName:          "",
@@ -1437,7 +1437,11 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	// Update the node
 	if nodeType == "pve" && index < len(h.config.PVEInstances) {
 		pve := &h.config.PVEInstances[index]
-		pve.Name = req.Name
+
+		// Only update name if provided
+		if req.Name != "" {
+			pve.Name = req.Name
+		}
 
 		if req.Host != "" {
 			host := req.Host
@@ -1456,30 +1460,37 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			pve.Host = host
 		}
 
+		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" || req.TokenValue != "" {
+			// Switching to or updating token authentication
 			if req.TokenName != "" {
 				pve.TokenName = req.TokenName
 			}
 			if req.TokenValue != "" {
 				pve.TokenValue = req.TokenValue
 			}
-			// When using token authentication, clear password to avoid conflicts
+			// Clear password to avoid conflicts
 			pve.Password = ""
 			if req.User != "" {
 				pve.User = req.User
 			}
-		} else {
+		} else if req.Password != "" {
+			// Explicitly switching to password authentication
 			if req.User != "" {
 				pve.User = normalizePVEUser(req.User)
 			} else if pve.User != "" {
 				pve.User = normalizePVEUser(pve.User)
 			}
-			if req.Password != "" {
-				pve.Password = req.Password
-			}
-			// Clear token fields when using password authentication
+			pve.Password = req.Password
+			// Clear token fields when switching to password auth
 			pve.TokenName = ""
 			pve.TokenValue = ""
+		} else {
+			// No authentication changes - preserve existing auth fields
+			// Only normalize user if it exists
+			if pve.User != "" {
+				pve.User = normalizePVEUser(pve.User)
+			}
 		}
 
 		pve.Fingerprint = req.Fingerprint
@@ -1511,22 +1522,22 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 		pbs.Host = host
 
-		// Determine authentication method and clear the unused fields
+		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" && req.TokenValue != "" {
-			// Using token authentication - clear user/password
-			pbs.User = ""
-			pbs.Password = ""
+			// Switching to token authentication
 			pbs.TokenName = req.TokenName
 			pbs.TokenValue = req.TokenValue
-		} else if req.TokenName != "" {
-			// Token name provided without new value - keep existing token value
+			// Clear user/password when switching to token auth
 			pbs.User = ""
 			pbs.Password = ""
+		} else if req.TokenName != "" {
+			// Token name provided without new value - keep existing token value
 			pbs.TokenName = req.TokenName
+			// Clear user/password when using token auth
+			pbs.User = ""
+			pbs.Password = ""
 		} else if req.Password != "" {
-			// Using password authentication - clear token fields
-			pbs.TokenName = ""
-			pbs.TokenValue = ""
+			// Switching to password authentication
 			pbs.Password = req.Password
 			// Ensure user has realm for PBS
 			pbsUser := req.User
@@ -1534,17 +1545,22 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 				pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
 			}
 			pbs.User = pbsUser
-		} else if req.User != "" {
-			// User provided without password - keep existing password if any
+			// Clear token fields when switching to password auth
 			pbs.TokenName = ""
 			pbs.TokenValue = ""
+		} else if req.User != "" {
+			// User provided - assume password auth but keep existing password
 			// Ensure user has realm for PBS
 			pbsUser := req.User
 			if !strings.Contains(req.User, "@") {
 				pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
 			}
 			pbs.User = pbsUser
+			// Clear token fields when using password auth
+			pbs.TokenName = ""
+			pbs.TokenValue = ""
 		}
+		// else: No authentication changes - preserve existing auth fields
 
 		pbs.Fingerprint = req.Fingerprint
 		pbs.VerifySSL = req.VerifySSL
@@ -1575,12 +1591,16 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			pmgInst.Host = host
 		}
 
+		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" && req.TokenValue != "" {
-			pmgInst.User = ""
-			pmgInst.Password = ""
+			// Switching to token authentication
 			pmgInst.TokenName = req.TokenName
 			pmgInst.TokenValue = req.TokenValue
-		} else {
+			// Clear user/password when switching to token auth
+			pmgInst.User = ""
+			pmgInst.Password = ""
+		} else if req.Password != "" {
+			// Switching to password authentication
 			if req.User != "" {
 				user := req.User
 				if !strings.Contains(user, "@") {
@@ -1588,14 +1608,22 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 				}
 				pmgInst.User = user
 			}
-			if req.Password != "" {
-				pmgInst.Password = req.Password
+			pmgInst.Password = req.Password
+			// Clear token fields when switching to password auth
+			pmgInst.TokenName = ""
+			pmgInst.TokenValue = ""
+		} else if req.User != "" {
+			// User provided - assume password auth but keep existing password
+			user := req.User
+			if !strings.Contains(user, "@") {
+				user = user + "@pmg"
 			}
-			if req.TokenName == "" && req.TokenValue == "" {
-				pmgInst.TokenName = ""
-				pmgInst.TokenValue = ""
-			}
+			pmgInst.User = user
+			// Clear token fields when using password auth
+			pmgInst.TokenName = ""
+			pmgInst.TokenValue = ""
 		}
+		// else: No authentication changes - preserve existing auth fields
 
 		pmgInst.Fingerprint = req.Fingerprint
 		pmgInst.VerifySSL = req.VerifySSL
