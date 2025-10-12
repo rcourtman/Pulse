@@ -158,8 +158,9 @@ func (p *Proxy) Start() error {
 	}
 	p.listener = listener
 
-	// Set socket permissions so Pulse container can access it
-	if err := os.Chmod(p.socketPath, 0666); err != nil {
+	// Set socket permissions to owner+group only
+	// We use SO_PEERCRED for authentication, so we don't need world-readable
+	if err := os.Chmod(p.socketPath, 0660); err != nil {
 		log.Warn().Err(err).Msg("Failed to set socket permissions")
 	}
 
@@ -199,6 +200,13 @@ func (p *Proxy) acceptConnections() {
 // handleConnection processes a single RPC request
 func (p *Proxy) handleConnection(conn net.Conn) {
 	defer conn.Close()
+
+	// Verify peer credentials (SO_PEERCRED authentication)
+	if err := verifyPeerCredentials(conn); err != nil {
+		log.Warn().Err(err).Msg("Unauthorized connection attempt")
+		p.sendError(conn, "unauthorized")
+		return
+	}
 
 	// Decode request
 	var req RPCRequest
