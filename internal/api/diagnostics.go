@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -25,6 +26,10 @@ type DiagnosticsInfo struct {
 	PBS     []PBSDiagnostic  `json:"pbs"`
 	System  SystemDiagnostic `json:"system"`
 	Errors  []string         `json:"errors"`
+	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
+	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
+	// GuestSnapshots captures recent per-guest memory breakdowns (VM/LXC) with the raw Proxmox fields.
+	GuestSnapshots []monitoring.GuestMemorySnapshot `json:"guestSnapshots,omitempty"`
 }
 
 // NodeDiagnostic contains diagnostic info for a Proxmox node
@@ -278,6 +283,17 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 		}
 
 		diag.PBS = append(diag.PBS, pbsDiag)
+	}
+
+	// Include cached monitor snapshots for memory diagnostics if available
+	if r.monitor != nil {
+		snapshots := r.monitor.GetDiagnosticSnapshots()
+		if len(snapshots.Nodes) > 0 {
+			diag.NodeSnapshots = snapshots.Nodes
+		}
+		if len(snapshots.Guests) > 0 {
+			diag.GuestSnapshots = snapshots.Guests
+		}
 	}
 
 	// Add any recent errors from logs (this would need a log collector)

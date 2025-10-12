@@ -131,6 +131,13 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					guestID = fmt.Sprintf("%s-%s-%d", instanceName, n.Node, vm.VMID)
 				}
 
+				guestRaw := VMMemoryRaw{
+					ListingMem:    vm.Mem,
+					ListingMaxMem: vm.MaxMem,
+					Agent:         vm.Agent,
+				}
+				memorySource := "listing-mem"
+
 				// Initialize metrics from VM listing (may be 0 for disk I/O)
 				diskReadBytes := int64(vm.DiskRead)
 				diskWriteBytes := int64(vm.DiskWrite)
@@ -150,13 +157,27 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 					if status, err := client.GetVMStatus(statusCtx, n.Node, vm.VMID); err == nil {
 						vmStatus = status
+						guestRaw.StatusMaxMem = status.MaxMem
+						guestRaw.StatusMem = status.Mem
+						guestRaw.StatusFreeMem = status.FreeMem
+						guestRaw.Balloon = status.Balloon
+						guestRaw.BalloonMin = status.BalloonMin
+						guestRaw.Agent = status.Agent
+						if status.MemInfo != nil {
+							guestRaw.MemInfoUsed = status.MemInfo.Used
+							guestRaw.MemInfoFree = status.MemInfo.Free
+							guestRaw.MemInfoTotal = status.MemInfo.Total
+						}
 						if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
 							memTotal = vmStatus.Balloon
+							guestRaw.DerivedFromBall = true
 						}
 						if vmStatus.FreeMem > 0 {
 							memUsed = memTotal - vmStatus.FreeMem
+							memorySource = "status-freemem"
 						} else if vmStatus.Mem > 0 {
 							memUsed = vmStatus.Mem
+							memorySource = "status-mem"
 						}
 						// Use actual disk I/O values from detailed status
 						diskReadBytes = int64(vmStatus.DiskRead)
@@ -165,6 +186,12 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						networkOutBytes = int64(vmStatus.NetOut)
 					}
 					cancel()
+				}
+
+				if vm.Status != "running" {
+					memorySource = "powered-off"
+				} else if vmStatus == nil {
+					memorySource = "status-unavailable"
 				}
 
 				if vm.Status == "running" && vmStatus != nil {
@@ -184,12 +211,13 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				}
 
 				// Calculate I/O rates after we have the actual values
+				sampleTime := time.Now()
 				currentMetrics := IOMetrics{
 					DiskRead:   diskReadBytes,
 					DiskWrite:  diskWriteBytes,
 					NetworkIn:  networkInBytes,
 					NetworkOut: networkOutBytes,
-					Timestamp:  time.Now(),
+					Timestamp:  sampleTime,
 				}
 				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
@@ -469,7 +497,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					DiskWrite:         maxInt64(0, int64(diskWriteRate)),
 					Uptime:            int64(vm.Uptime),
 					Template:          vm.Template == 1,
-					LastSeen:          time.Now(),
+					LastSeen:          sampleTime,
 					Tags:              tags,
 					IPAddresses:       ipAddresses,
 					OSName:            osName,
@@ -489,6 +517,15 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				}
 
 				nodeVMs = append(nodeVMs, modelVM)
+
+				m.recordGuestSnapshot(instanceName, modelVM.Type, n.Node, vm.VMID, GuestMemorySnapshot{
+					Name:         vm.Name,
+					Status:       vm.Status,
+					RetrievedAt:  sampleTime,
+					MemorySource: memorySource,
+					Memory:       modelVM.Memory,
+					Raw:          guestRaw,
+				})
 
 				// Check alerts
 				m.alertManager.CheckGuest(modelVM, instanceName)
