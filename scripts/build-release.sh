@@ -62,6 +62,13 @@ for build_name in "${!builds[@]}"; do
         -trimpath \
         -o "$BUILD_DIR/pulse-docker-agent-$build_name" \
         ./cmd/pulse-docker-agent
+
+    # Build temperature proxy binary
+    env $build_env go build \
+        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit}" \
+        -trimpath \
+        -o "$BUILD_DIR/pulse-temp-proxy-$build_name" \
+        ./cmd/pulse-temp-proxy
     
     # Create release archive with proper structure
     tar_name="pulse-v${VERSION}-${build_name}.tar.gz"
@@ -75,6 +82,7 @@ for build_name in "${!builds[@]}"; do
     # Copy binaries and VERSION file
     cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$staging_dir/bin/pulse-docker-agent"
+    cp "$BUILD_DIR/pulse-temp-proxy-$build_name" "$staging_dir/bin/pulse-temp-proxy"
     cp "scripts/install-docker-agent.sh" "$staging_dir/scripts/install-docker-agent.sh"
     chmod 755 "$staging_dir/scripts/install-docker-agent.sh"
     echo "$VERSION" > "$staging_dir/VERSION"
@@ -101,6 +109,7 @@ mkdir -p "$universal_dir/scripts"
 for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/pulse-${build_name}"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$universal_dir/bin/pulse-docker-agent-${build_name}"
+    cp "$BUILD_DIR/pulse-temp-proxy-$build_name" "$universal_dir/bin/pulse-temp-proxy-${build_name}"
 done
 
 cp "scripts/install-docker-agent.sh" "$universal_dir/scripts/install-docker-agent.sh"
@@ -153,6 +162,29 @@ esac
 EOF
 chmod +x "$universal_dir/bin/pulse-docker-agent"
 
+cat > "$universal_dir/bin/pulse-temp-proxy" << 'EOF'
+#!/bin/sh
+# Auto-detect architecture and run appropriate pulse-temp-proxy binary
+
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        exec "$(dirname "$0")/pulse-temp-proxy-linux-amd64" "$@"
+        ;;
+    aarch64|arm64)
+        exec "$(dirname "$0")/pulse-temp-proxy-linux-arm64" "$@"
+        ;;
+    armv7l|armhf)
+        exec "$(dirname "$0")/pulse-temp-proxy-linux-armv7" "$@"
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH" >&2
+        exit 1
+        ;;
+esac
+EOF
+chmod +x "$universal_dir/bin/pulse-temp-proxy"
+
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
 
@@ -164,9 +196,16 @@ cd ../..
 # Cleanup
 rm -rf "$universal_dir"
 
-# Generate checksums
+# Copy standalone pulse-temp-proxy binaries to release directory
+# These are needed by install-temp-proxy.sh installer script
+echo "Copying standalone pulse-temp-proxy binaries..."
+for build_name in "${!builds[@]}"; do
+    cp "$BUILD_DIR/pulse-temp-proxy-$build_name" "$RELEASE_DIR/"
+done
+
+# Generate checksums (include tarballs and standalone binaries)
 cd $RELEASE_DIR
-sha256sum *.tar.gz > checksums.txt
+sha256sum *.tar.gz pulse-temp-proxy-* > checksums.txt
 cd ..
 
 echo
