@@ -2351,6 +2351,120 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(settings)
 }
 
+// HandleVerifyTemperatureSSH tests SSH connectivity to nodes for temperature monitoring
+func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Nodes string `json:"nodes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("⚠️  Unable to parse verification request"))
+		return
+	}
+
+	// Parse node list
+	nodeList := strings.Fields(req.Nodes)
+	if len(nodeList) == 0 {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("✓ No nodes to verify"))
+		return
+	}
+
+	// Test SSH connectivity using temperature collector
+	tempCollector := monitoring.NewTemperatureCollector("root", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	successNodes := []string{}
+	failedNodes := []string{}
+
+	for _, node := range nodeList {
+		// Try to SSH and run sensors command
+		temp, err := tempCollector.CollectTemperature(ctx, node, node)
+		if err == nil && temp != nil && temp.Available {
+			successNodes = append(successNodes, node)
+		} else {
+			failedNodes = append(failedNodes, node)
+		}
+	}
+
+	// Build response message
+	var response strings.Builder
+
+	if len(successNodes) > 0 {
+		response.WriteString("✓ SSH connectivity verified for:\n")
+		for _, node := range successNodes {
+			response.WriteString(fmt.Sprintf("  • %s\n", node))
+		}
+	}
+
+	if len(failedNodes) > 0 {
+		if len(successNodes) > 0 {
+			response.WriteString("\n")
+		}
+		response.WriteString("⚠️  SSH connectivity FAILED for:\n")
+		for _, node := range failedNodes {
+			response.WriteString(fmt.Sprintf("  • %s\n", node))
+		}
+
+		// Check if Pulse is containerized
+		isContainerized := os.Getenv("PULSE_DOCKER") == "true" || isRunningInContainer()
+
+		if isContainerized {
+			response.WriteString("\n")
+			response.WriteString("Pulse is running in a container and cannot reach these nodes directly.\n")
+			response.WriteString("\n")
+			response.WriteString("To fix this, configure SSH ProxyJump in /home/pulse/.ssh/config:\n")
+			response.WriteString("\n")
+			response.WriteString("  Host GATEWAY_NODE\n")
+			response.WriteString("      HostName <gateway-ip>\n")
+			response.WriteString("      User root\n")
+			response.WriteString("      IdentityFile ~/.ssh/id_ed25519\n")
+			response.WriteString("\n")
+			for _, node := range failedNodes {
+				response.WriteString(fmt.Sprintf("  Host %s\n", node))
+				response.WriteString(fmt.Sprintf("      HostName %%h\n"))
+				response.WriteString("      User root\n")
+				response.WriteString("      ProxyJump GATEWAY_NODE\n")
+				response.WriteString("\n")
+			}
+			response.WriteString("Replace GATEWAY_NODE and <gateway-ip> with your Proxmox host details.\n")
+		} else {
+			response.WriteString("\n")
+			response.WriteString("Temperature data will not be available for these nodes.\n")
+			response.WriteString("Ensure Pulse can SSH to these nodes as root using key-based authentication.\n")
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(response.String()))
+}
+
+// isRunningInContainer detects if Pulse is running inside a container
+func isRunningInContainer() bool {
+	// Check for /.dockerenv file
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+
+	// Check cgroup for container indicators
+	data, err := os.ReadFile("/proc/1/cgroup")
+	if err == nil {
+		content := string(data)
+		if strings.Contains(content, "docker") || strings.Contains(content, "lxc") || strings.Contains(content, "containerd") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // HandleUpdateSystemSettingsOLD updates system settings in the unified config (DEPRECATED - use SystemSettingsHandler instead)
 func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r *http.Request) {
 	var settings config.SystemSettings
@@ -3364,6 +3478,29 @@ EOF
                         fi
                         echo ""
                     done
+
+                    # Verify that Pulse can actually SSH to the configured nodes
+                    echo ""
+                    echo "Verifying temperature monitoring connectivity from Pulse..."
+                    echo ""
+
+                    CONFIGURED_NODES="${OTHER_NODES_LIST[@]}"
+                    if [ "$TEMPERATURE_ENABLED" = true ]; then
+                        # Add current node to the list
+                        CONFIGURED_NODES="$(hostname) ${CONFIGURED_NODES}"
+                    fi
+
+                    VERIFY_RESPONSE=$(curl -s -X POST "%s/api/system/verify-temperature-ssh" \
+                        -H "Content-Type: application/json" \
+                        -H "Authorization: Bearer %s" \
+                        -d "{\"nodes\": \"$CONFIGURED_NODES\"}" 2>/dev/null || echo "")
+
+                    if [ -n "$VERIFY_RESPONSE" ]; then
+                        echo "$VERIFY_RESPONSE"
+                    else
+                        echo "⚠️  Unable to verify SSH connectivity from Pulse server."
+                        echo "   Temperature data may not appear if Pulse cannot reach cluster nodes."
+                    fi
                 fi
             fi
         fi
@@ -3395,7 +3532,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, tokenName, serverHost)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, authToken, tokenName, serverHost)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash

@@ -836,6 +836,7 @@ func (r *Router) setupRoutes() {
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings)
 	r.mux.HandleFunc("/api/system/settings", r.systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", r.systemSettingsHandler.HandleUpdateSystemSettings)
+	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.configHandlers.HandleVerifyTemperatureSSH)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// Docker agent download endpoints
