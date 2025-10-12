@@ -6,6 +6,7 @@ import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndica
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
+import { getPrimaryTemperature } from '@/utils/temperature';
 
 interface NodeCardProps {
   node: Node;
@@ -118,6 +119,35 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   );
   const unacknowledgedNodeAlerts = createMemo(() => nodeAlerts().filter((alert) => !alert.acknowledged));
 
+  const primaryTemperature = createMemo(() => getPrimaryTemperature(props.node.temperature));
+  const primaryTemperatureValue = createMemo(() => {
+    const reading = primaryTemperature();
+    return reading ? Math.round(reading.value) : null;
+  });
+  const primaryTemperatureLabel = createMemo(() => {
+    const reading = primaryTemperature();
+    if (!reading) return null;
+    if (reading.source === 'nvme') {
+      return reading.device ?? 'NVMe';
+    }
+    return 'CPU';
+  });
+  const temperatureTooltip = createMemo(() => {
+    const temp = props.node.temperature;
+    const rounded = primaryTemperatureValue();
+    if (!temp?.available || rounded === null) {
+      return '';
+    }
+    const label = primaryTemperatureLabel();
+    const primaryLabel =
+      label && label !== 'CPU' ? `${label}: ${rounded}°C` : `CPU: ${rounded}°C`;
+    const nvmeDetails =
+      temp.nvme && temp.nvme.length > 0
+        ? ` | NVMe: ${temp.nvme.map((n) => `${n.device}: ${Math.round(n.temp)}°C`).join(', ')}`
+        : '';
+    return `${primaryLabel}${nvmeDetails}`;
+  });
+
   // Determine border/ring style based on status and alerts
   const getBorderClass = () => {
     // Selected nodes get blue ring
@@ -219,20 +249,25 @@ const NodeCard: Component<NodeCardProps> = (props) => {
           ↑{formatUptime(props.node.uptime)}
         </span>
         <Show
-          when={props.node.temperature?.available}
+          when={props.node.temperature?.available && primaryTemperatureValue() !== null}
           fallback={<span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>}
         >
           <span
             class={`font-medium ${
-              (props.node.temperature!.cpuPackage || props.node.temperature!.cpuMax || 0) > 80
+              (primaryTemperatureValue() ?? 0) > 80
                 ? 'text-red-500'
-                : (props.node.temperature!.cpuPackage || props.node.temperature!.cpuMax || 0) > 60
+                : (primaryTemperatureValue() ?? 0) > 60
                   ? 'text-yellow-500'
                   : 'text-green-500'
             }`}
-            title={`CPU: ${Math.round(props.node.temperature!.cpuPackage || props.node.temperature!.cpuMax || 0)}°C${props.node.temperature!.nvme && props.node.temperature!.nvme.length > 0 ? ` | NVMe: ${props.node.temperature!.nvme.map((n) => `${n.device}: ${Math.round(n.temp)}°C`).join(', ')}` : ''}`}
+            title={temperatureTooltip() || undefined}
           >
-            🌡{Math.round(props.node.temperature!.cpuPackage || props.node.temperature!.cpuMax || 0)}°C
+            🌡{primaryTemperatureValue()}°C
+            <Show when={primaryTemperatureLabel() && primaryTemperatureLabel() !== 'CPU'}>
+              <span class="ml-1 text-[9px] uppercase text-gray-500 dark:text-gray-400">
+                {primaryTemperatureLabel()}
+              </span>
+            </Show>
           </span>
         </Show>
       </div>

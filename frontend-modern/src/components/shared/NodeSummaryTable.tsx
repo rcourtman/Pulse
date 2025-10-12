@@ -6,6 +6,7 @@ import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { Card } from '@/components/shared/Card';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
+import { getPrimaryTemperature, type PrimaryTemperatureReading } from '@/utils/temperature';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -106,6 +107,15 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return counts;
   });
 
+  const roundTemperature = (reading: PrimaryTemperatureReading | null) =>
+    reading ? Math.round(reading.value) : null;
+
+  const getTemperatureReading = (item: SortableItem): PrimaryTemperatureReading | null => {
+    if (item.type !== 'pve') return null;
+    const node = item.data as Node;
+    return getPrimaryTemperature(node.temperature);
+  };
+
   const getDefaultSortDirection = (key: Exclude<SortKey, 'default'>) => {
     switch (key) {
       case 'name':
@@ -194,9 +204,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   const getTemperatureValue = (item: SortableItem) => {
     if (item.type === 'pve') {
-      const node = item.data as Node;
-      if (!node.temperature?.available) return null;
-      return Math.round(node.temperature.cpuPackage ?? node.temperature.cpuMax ?? 0);
+      return roundTemperature(getTemperatureReading(item));
     }
     return null;
   };
@@ -406,7 +414,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const memoryPercentValue = getMemoryPercent(item);
                 const diskPercentValue = getDiskPercent(item);
                 const diskSublabel = getDiskSublabel(item);
-                const temperatureValue = getTemperatureValue(item);
+                const temperatureReading = getTemperatureReading(item);
+                const temperatureValue = roundTemperature(temperatureReading);
                 const uptimeValue = isPVE ? node?.uptime ?? 0 : isPBS ? pbs?.uptime ?? 0 : 0;
                 const displayName = () => {
                   if (isPVE) return getNodeDisplayName(node as Node);
@@ -597,20 +606,37 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <Show when={hasAnyTemperatureData()}>
                       <td class="px-2 py-0.5 whitespace-nowrap text-center">
                         <Show
-                          when={online && isPVE && node!.temperature?.available}
+                          when={
+                            online &&
+                            isPVE &&
+                            node!.temperature?.available &&
+                            temperatureValue !== null
+                          }
                           fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
                         >
-                          <span
-                            class={`text-xs font-medium ${
-                              (temperatureValue ?? 0) >= 80
-                                ? 'text-red-600 dark:text-red-400'
-                                : (temperatureValue ?? 0) >= 70
-                                  ? 'text-yellow-600 dark:text-yellow-400'
-                                  : 'text-green-600 dark:text-green-400'
-                            }`}
-                          >
-                            {temperatureValue ?? 0}°C
-                          </span>
+                          <div class="flex items-center justify-center gap-1">
+                            {(() => {
+                              const value = temperatureValue as number;
+                              const severityClass =
+                                value >= 80
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : value >= 70
+                                    ? 'text-yellow-600 dark:text-yellow-400'
+                                    : 'text-green-600 dark:text-green-400';
+                              return (
+                                <>
+                                  <span class={`text-xs font-medium ${severityClass}`}>
+                                    {value}°C
+                                  </span>
+                                  <Show when={temperatureReading?.source === 'nvme'}>
+                                    <span class="text-[9px] uppercase text-gray-500 dark:text-gray-400">
+                                      {temperatureReading?.device ?? 'NVMe'}
+                                    </span>
+                                  </Show>
+                                </>
+                              );
+                            })()}
+                          </div>
                         </Show>
                       </td>
                     </Show>

@@ -53,7 +53,10 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		return &models.Temperature{Available: false}, nil
 	}
 
-	temp.Available = true
+	if !temp.Available {
+		return temp, nil
+	}
+
 	temp.LastUpdate = time.Now()
 
 	return temp, nil
@@ -143,6 +146,12 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 				temp.CPUMax = core.Temp
 			}
 		}
+	}
+
+	if temp.CPUPackage > 0 || temp.CPUMax > 0 || len(temp.Cores) > 0 || len(temp.NVMe) > 0 {
+		temp.Available = true
+	} else {
+		temp.Available = false
 	}
 
 	return temp, nil
