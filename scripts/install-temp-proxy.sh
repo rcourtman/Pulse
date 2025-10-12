@@ -32,6 +32,7 @@ fi
 # Parse arguments
 CTID=""
 VERSION="latest"
+LOCAL_BINARY=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -43,6 +44,10 @@ while [[ $# -gt 0 ]]; do
             VERSION="$2"
             shift 2
             ;;
+        --local-binary)
+            LOCAL_BINARY="$2"
+            shift 2
+            ;;
         *)
             print_error "Unknown option: $1"
             exit 1
@@ -52,7 +57,7 @@ done
 
 if [[ -z "$CTID" ]]; then
     print_error "Missing required argument: --ctid <container-id>"
-    echo "Usage: $0 --ctid <container-id> [--version <version>]"
+    echo "Usage: $0 --ctid <container-id> [--version <version>] [--local-binary <path>]"
     exit 1
 fi
 
@@ -64,55 +69,69 @@ fi
 
 print_info "Installing pulse-temp-proxy for container $CTID"
 
-# Determine download URL
-GITHUB_REPO="rcourtman/Pulse"
-if [[ "$VERSION" == "latest" ]]; then
-    RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-    print_info "Fetching latest release info..."
-    RELEASE_DATA=$(curl -fsSL "$RELEASE_URL")
-    VERSION=$(echo "$RELEASE_DATA" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
-    if [[ -z "$VERSION" ]]; then
-        print_error "Failed to determine latest version"
-        exit 1
-    fi
-    print_info "Latest version: $VERSION"
-fi
-
-# Detect architecture
-ARCH=$(uname -m)
-case $ARCH in
-    x86_64)
-        BINARY_NAME="pulse-temp-proxy-linux-amd64"
-        ;;
-    aarch64|arm64)
-        BINARY_NAME="pulse-temp-proxy-linux-arm64"
-        ;;
-    armv7l|armhf)
-        BINARY_NAME="pulse-temp-proxy-linux-armv7"
-        ;;
-    *)
-        print_error "Unsupported architecture: $ARCH"
-        exit 1
-        ;;
-esac
-
-DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
 BINARY_PATH="/usr/local/bin/pulse-temp-proxy"
 SERVICE_PATH="/etc/systemd/system/pulse-temp-proxy.service"
 SOCKET_PATH="/var/run/pulse-temp-proxy.sock"
 SSH_DIR="/var/lib/pulse-temp-proxy/ssh"
 
-# Download binary
-print_info "Downloading $BINARY_NAME..."
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp"; then
-    print_error "Failed to download binary from $DOWNLOAD_URL"
-    exit 1
-fi
+# Install binary - either from local file or download from GitHub
+if [[ -n "$LOCAL_BINARY" ]]; then
+    # Use local binary for testing
+    print_info "Using local binary: $LOCAL_BINARY"
+    if [[ ! -f "$LOCAL_BINARY" ]]; then
+        print_error "Local binary not found: $LOCAL_BINARY"
+        exit 1
+    fi
+    cp "$LOCAL_BINARY" "$BINARY_PATH"
+    chmod +x "$BINARY_PATH"
+    print_info "Binary installed to $BINARY_PATH"
+else
+    # Download from GitHub release
+    GITHUB_REPO="rcourtman/Pulse"
+    if [[ "$VERSION" == "latest" ]]; then
+        RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+        print_info "Fetching latest release info..."
+        RELEASE_DATA=$(curl -fsSL "$RELEASE_URL")
+        VERSION=$(echo "$RELEASE_DATA" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+        if [[ -z "$VERSION" ]]; then
+            print_error "Failed to determine latest version"
+            exit 1
+        fi
+        print_info "Latest version: $VERSION"
+    fi
 
-# Make executable and move to final location
-chmod +x "$BINARY_PATH.tmp"
-mv "$BINARY_PATH.tmp" "$BINARY_PATH"
-print_info "Binary installed to $BINARY_PATH"
+    # Detect architecture
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            BINARY_NAME="pulse-temp-proxy-linux-amd64"
+            ;;
+        aarch64|arm64)
+            BINARY_NAME="pulse-temp-proxy-linux-arm64"
+            ;;
+        armv7l|armhf)
+            BINARY_NAME="pulse-temp-proxy-linux-armv7"
+            ;;
+        *)
+            print_error "Unsupported architecture: $ARCH"
+            exit 1
+            ;;
+    esac
+
+    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
+
+    # Download binary
+    print_info "Downloading $BINARY_NAME..."
+    if ! curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp"; then
+        print_error "Failed to download binary from $DOWNLOAD_URL"
+        exit 1
+    fi
+
+    # Make executable and move to final location
+    chmod +x "$BINARY_PATH.tmp"
+    mv "$BINARY_PATH.tmp" "$BINARY_PATH"
+    print_info "Binary installed to $BINARY_PATH"
+fi
 
 # Create SSH key directory
 mkdir -p "$SSH_DIR"
