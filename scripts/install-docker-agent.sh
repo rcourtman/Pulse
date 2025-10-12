@@ -428,32 +428,71 @@ fi
 
 # Download agent binary
 echo "Downloading Pulse Docker agent..."
-DOWNLOAD_URL="$PRIMARY_URL/download/pulse-docker-agent"
+DOWNLOAD_URL_BASE="$PRIMARY_URL/download/pulse-docker-agent"
+DOWNLOAD_URL="$DOWNLOAD_URL_BASE"
 if [[ -n "$DOWNLOAD_ARCH" ]]; then
     DOWNLOAD_URL="$DOWNLOAD_URL?arch=$DOWNLOAD_ARCH"
 fi
-if command -v wget &> /dev/null; then
-    WGET_ARGS=(-q --show-progress -O "$AGENT_PATH" "$DOWNLOAD_URL")
-    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-        WGET_ARGS=(--no-check-certificate "${WGET_ARGS[@]}")
-    fi
-    if ! wget "${WGET_ARGS[@]}"; then
-        echo "Error: Failed to download agent binary"
-        echo "Make sure the Pulse server is accessible at: $PRIMARY_URL"
-        exit 1
-    fi
-elif command -v curl &> /dev/null; then
-    CURL_ARGS=(-fL --progress-bar -o "$AGENT_PATH" "$DOWNLOAD_URL")
-    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-        CURL_ARGS=(-k "${CURL_ARGS[@]}")
-    fi
-    if ! curl "${CURL_ARGS[@]}"; then
-        echo "Error: Failed to download agent binary"
-        echo "Make sure the Pulse server is accessible at: $PRIMARY_URL"
-        exit 1
-    fi
-else
+
+if ! command -v wget &> /dev/null && ! command -v curl &> /dev/null; then
     echo "Error: Neither wget nor curl found. Please install one of them."
+    exit 1
+fi
+
+WGET_IS_BUSYBOX="false"
+if command -v wget &> /dev/null; then
+    if wget --help 2>&1 | grep -qi "busybox"; then
+        WGET_IS_BUSYBOX="true"
+    fi
+fi
+
+download_agent_from_url() {
+    local url="$1"
+    local wget_success="false"
+
+    if command -v wget &> /dev/null; then
+        local wget_args=(-O "$AGENT_PATH" "$url")
+        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+            wget_args=(--no-check-certificate "${wget_args[@]}")
+        fi
+        if [[ "$WGET_IS_BUSYBOX" == "true" ]]; then
+            wget_args=(-q "${wget_args[@]}")
+        else
+            wget_args=(-q --show-progress "${wget_args[@]}")
+        fi
+
+        if wget "${wget_args[@]}"; then
+            wget_success="true"
+        else
+            rm -f "$AGENT_PATH"
+        fi
+    fi
+
+    if [[ "$wget_success" == "true" ]]; then
+        return 0
+    fi
+
+    if command -v curl &> /dev/null; then
+        local curl_args=(-fL --progress-bar -o "$AGENT_PATH" "$url")
+        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+            curl_args=(-k "${curl_args[@]}")
+        fi
+        if curl "${curl_args[@]}"; then
+            return 0
+        fi
+        rm -f "$AGENT_PATH"
+    fi
+
+    return 1
+}
+
+if download_agent_from_url "$DOWNLOAD_URL"; then
+    :
+elif [[ "$DOWNLOAD_URL" != "$DOWNLOAD_URL_BASE" ]] && download_agent_from_url "$DOWNLOAD_URL_BASE"; then
+    echo "Falling back to server default agent binary..."
+else
+    echo "Error: Failed to download agent binary"
+    echo "Make sure the Pulse server is accessible at: $PRIMARY_URL"
     exit 1
 fi
 
