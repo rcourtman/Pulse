@@ -43,6 +43,7 @@ For native (non-containerized) installations, Pulse connects directly via SSH:
 
 1. **SSH Key Authentication**: Your Pulse server needs SSH key access to nodes (no passwords)
 2. **lm-sensors Package**: Installed on nodes to read hardware sensors
+3. **Passwordless root SSH** (Proxmox clusters only): For proxy architecture, the Proxmox host running Pulse must have passwordless root SSH access to all cluster nodes. This is standard for Proxmox clusters but hardened environments may need to create an alternate service account.
 
 ## Setup (Automatic)
 
