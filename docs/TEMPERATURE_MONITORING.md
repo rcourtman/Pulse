@@ -14,9 +14,30 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
 
 ## How It Works
 
-Temperature monitoring uses standard SSH key authentication (just like Ansible, Saltstack, and other automation tools) to securely collect sensor data from your nodes. Pulse connects via SSH and runs the `sensors` command to read hardware temperatures - that's it!
+### Secure Architecture (v4.24.0+)
 
-> **Important:** Run every setup command as the same user account that executes the Pulse service (typically `pulse`). The backend reads the SSH key from that user’s home directory; keys under `root` or other accounts will be ignored.
+For **containerized deployments** (LXC/Docker), Pulse uses a secure proxy architecture:
+
+1. **pulse-temp-proxy** runs on the Proxmox host (outside the container)
+2. SSH keys are stored on the host filesystem (`/var/lib/pulse-temp-proxy/ssh/`)
+3. Pulse communicates with the proxy via unix socket
+4. The proxy handles all SSH connections to cluster nodes
+
+**Benefits:**
+- SSH keys never enter the container
+- Container compromise doesn't expose infrastructure credentials
+- Automatically configured during installation
+- Transparent to users - no setup changes
+
+### Legacy Architecture (Pre-v4.24.0 / Native Installs)
+
+For native (non-containerized) installations, Pulse connects directly via SSH:
+
+1. Pulse uses SSH key authentication (like Ansible, Terraform, etc.)
+2. Runs `sensors -j` command to read hardware temperatures
+3. SSH key stored in Pulse's home directory
+
+> **Important for native installs:** Run every setup command as the same user account that executes the Pulse service (typically `pulse`). The backend reads the SSH key from that user's home directory.
 
 ## Requirements
 
@@ -176,27 +197,36 @@ You can still manage the entry manually if you prefer, but no extra steps are re
 
 ## Container Security Considerations
 
-⚠️ **Important for Docker/LXC deployments**
+✅ **Resolved in v4.24.0**
 
-If you run Pulse in a container (Docker or LXC), SSH private keys are stored inside the container filesystem. This creates additional security considerations:
+### Secure Proxy Architecture (Current)
 
-### Risk
+As of v4.24.0, containerized deployments use **pulse-temp-proxy** which eliminates the security concerns:
 
-A compromised Pulse container could expose SSH keys that access your Proxmox hosts, even with forced command restrictions.
+- **SSH keys stored on host** - Not accessible from container
+- **Unix socket communication** - Pulse never touches SSH keys
+- **Automatic during installation** - No manual configuration needed
+- **Container compromise = No credential exposure** - Attacker gains nothing
 
-### Opt-In Required (v4.23.1+)
+**For new installations:** The proxy is installed automatically during LXC setup. No action required.
 
-Temperature monitoring now requires explicit confirmation during setup. The setup script displays a security notice and asks for your consent before enabling SSH access.
+**For existing installations (pre-v4.24.0):** Upgrade your deployment to use the proxy:
 
-### Runtime Warning
+```bash
+# On your Proxmox host
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-temp-proxy.sh | \
+  bash -s -- --ctid <your-pulse-container-id>
+```
 
-Pulse logs a security warning at startup if it detects:
-- Running in a container (Docker/LXC/containerd)
-- SSH keys present for temperature monitoring
+### Legacy Security Concerns (Pre-v4.24.0)
 
-This reminds you to review security hardening recommendations.
+Older versions stored SSH keys inside the container, creating security risks:
 
-### Hardening Recommendations
+- Compromised container = exposed SSH keys
+- Even with forced commands, keys could be extracted
+- Required manual hardening (key rotation, IP restrictions, etc.)
+
+### Hardening Recommendations (Legacy/Native Installs Only)
 
 #### 1. Key Rotation
 Rotate SSH keys periodically (e.g., every 90 days):
@@ -257,31 +287,26 @@ Match User root Address 192.168.1.100
     AllowTcpForwarding no
 ```
 
-### Future: Agent-Based Architecture
+### Verifying Proxy Installation
 
-**Status:** Planned for future release
+To check if your deployment is using the secure proxy:
 
-The current SSH approach is a legacy implementation. Future versions will use agent-based monitoring where:
+```bash
+# On Proxmox host - check proxy service
+systemctl status pulse-temp-proxy
 
-- Lightweight temperature agents run on each Proxmox node
-- Agents **push** metrics to Pulse over authenticated HTTPS
-- No SSH keys stored in Pulse
-- Better security boundary between monitoring and infrastructure
+# Check if socket exists
+ls -l /var/run/pulse-temp-proxy.sock
 
-This is the recommended architecture for production deployments. The SSH method will be maintained as a fallback for simple setups.
+# View proxy logs
+journalctl -u pulse-temp-proxy -f
+```
 
-### When to Use SSH vs Waiting for Agents
-
-**SSH Method (Current) - Acceptable for:**
-- Home labs and trusted networks
-- Non-containerized Pulse deployments
-- Environments where you trust the container host
-
-**Wait for Agents - Better for:**
-- Production infrastructure
-- Multi-tenant environments
-- High-security requirements
-- Containerized Pulse with untrusted container hosts
+In the Pulse container, check the logs at startup:
+```bash
+# Should see: "Temperature proxy detected - using secure host-side bridge"
+journalctl -u pulse | grep -i proxy
+```
 
 ### Disabling Temperature Monitoring
 

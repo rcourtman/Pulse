@@ -1,0 +1,161 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+// execCommand executes a shell command and returns output
+func execCommand(cmd string) (string, error) {
+	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	return string(out), err
+}
+
+// getPublicKey reads the SSH public key
+func (p *Proxy) getPublicKey() (string, error) {
+	pubKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519.pub")
+	data, err := os.ReadFile(pubKeyPath)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// pushSSHKey adds the proxy's public key to a node's authorized_keys with restrictions
+func (p *Proxy) pushSSHKey(nodeHost string) error {
+	pubKey, err := p.getPublicKey()
+	if err != nil {
+		return fmt.Errorf("failed to get public key: %w", err)
+	}
+
+	// Create forced command entry with restrictions
+	// This limits the key to only running "sensors -j"
+	authorizedKey := fmt.Sprintf(`command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty %s`, pubKey)
+
+	// Build SSH command to add key to remote node
+	// First, check if key already exists to avoid duplicates
+	checkCmd := fmt.Sprintf(
+		`ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@%s "grep -F '%s' /root/.ssh/authorized_keys 2>/dev/null"`,
+		nodeHost,
+		pubKey,
+	)
+
+	if output, _ := execCommand(checkCmd); strings.Contains(output, pubKey) {
+		return nil // Key already exists
+	}
+
+	// Add the key
+	addCmd := fmt.Sprintf(
+		`ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@%s "mkdir -p /root/.ssh && chmod 700 /root/.ssh && echo '%s' >> /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys"`,
+		nodeHost,
+		authorizedKey,
+	)
+
+	if _, err := execCommand(addCmd); err != nil {
+		return fmt.Errorf("failed to add SSH key to %s: %w", nodeHost, err)
+	}
+
+	return nil
+}
+
+// testSSHConnection verifies SSH connectivity to a node
+func (p *Proxy) testSSHConnection(nodeHost string) error {
+	privKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519")
+	cmd := fmt.Sprintf(
+		`ssh -i %s -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@%s "echo test"`,
+		privKeyPath,
+		nodeHost,
+	)
+
+	output, err := execCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("SSH test failed: %w (output: %s)", err, output)
+	}
+
+	// The forced command will run "sensors -j" instead of "echo test"
+	// So we should get JSON output, not "test"
+	// For now, just check that connection succeeded
+	return nil
+}
+
+// getTemperatureViaSSH fetches temperature data from a node
+func (p *Proxy) getTemperatureViaSSH(nodeHost string) (string, error) {
+	privKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519")
+
+	// Since we use ForceCommand="sensors -j", any SSH command will run sensors
+	// We don't need to specify the command
+	cmd := fmt.Sprintf(
+		`ssh -i %s -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@%s ""`,
+		privKeyPath,
+		nodeHost,
+	)
+
+	output, err := execCommand(cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch temperatures: %w", err)
+	}
+
+	return output, nil
+}
+
+// discoverClusterNodes discovers all nodes in the Proxmox cluster
+func discoverClusterNodes() ([]string, error) {
+	// Check if pvecm is available (only on Proxmox hosts)
+	if _, err := exec.LookPath("pvecm"); err != nil {
+		return nil, fmt.Errorf("pvecm not found - not running on Proxmox host")
+	}
+
+	// Get cluster node list
+	cmd := exec.Command("pvecm", "nodes")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to get cluster nodes: %w", err)
+	}
+
+	// Parse output
+	// Format:
+	// Membership information
+	// ----------------------
+	//     Nodeid      Votes Name
+	//          1          1 node1
+	//          2          1 node2
+
+	var nodes []string
+	lines := strings.Split(out.String(), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		// Skip header lines and empty lines
+		if len(fields) < 3 {
+			continue
+		}
+		// Check if first field is numeric (node ID)
+		if fields[0][0] >= '0' && fields[0][0] <= '9' {
+			nodeName := fields[2]
+			nodes = append(nodes, nodeName)
+		}
+	}
+
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("no cluster nodes found")
+	}
+
+	return nodes, nil
+}
+
+// isProxmoxHost checks if we're running on a Proxmox host
+func isProxmoxHost() bool {
+	// Check for pvecm command
+	if _, err := exec.LookPath("pvecm"); err == nil {
+		return true
+	}
+	// Check for /etc/pve directory
+	if info, err := os.Stat("/etc/pve"); err == nil && info.IsDir() {
+		return true
+	}
+	return false
+}
