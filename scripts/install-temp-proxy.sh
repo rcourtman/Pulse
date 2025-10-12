@@ -155,7 +155,7 @@ RestartSec=5s
 
 # Runtime directory for socket
 RuntimeDirectory=pulse-temp-proxy
-RuntimeDirectoryMode=0770
+RuntimeDirectoryMode=0775
 
 # Security hardening
 NoNewPrivileges=true
