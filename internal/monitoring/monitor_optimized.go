@@ -163,21 +163,51 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						guestRaw.Balloon = status.Balloon
 						guestRaw.BalloonMin = status.BalloonMin
 						guestRaw.Agent = status.Agent
+						memAvailable := uint64(0)
 						if status.MemInfo != nil {
 							guestRaw.MemInfoUsed = status.MemInfo.Used
 							guestRaw.MemInfoFree = status.MemInfo.Free
 							guestRaw.MemInfoTotal = status.MemInfo.Total
+							guestRaw.MemInfoAvailable = status.MemInfo.Available
+							guestRaw.MemInfoBuffers = status.MemInfo.Buffers
+							guestRaw.MemInfoCached = status.MemInfo.Cached
+							guestRaw.MemInfoShared = status.MemInfo.Shared
+
+							switch {
+							case status.MemInfo.Available > 0:
+								memAvailable = status.MemInfo.Available
+								memorySource = "meminfo-available"
+							case status.MemInfo.Free > 0 ||
+								status.MemInfo.Buffers > 0 ||
+								status.MemInfo.Cached > 0:
+								memAvailable = status.MemInfo.Free +
+									status.MemInfo.Buffers +
+									status.MemInfo.Cached
+								memorySource = "meminfo-derived"
+							}
 						}
 						if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
 							memTotal = vmStatus.Balloon
 							guestRaw.DerivedFromBall = true
 						}
-						if vmStatus.FreeMem > 0 {
+						switch {
+						case memAvailable > 0:
+							if memAvailable > memTotal {
+								memAvailable = memTotal
+							}
+							memUsed = memTotal - memAvailable
+						case vmStatus.FreeMem > 0:
 							memUsed = memTotal - vmStatus.FreeMem
 							memorySource = "status-freemem"
-						} else if vmStatus.Mem > 0 {
+						case vmStatus.Mem > 0:
 							memUsed = vmStatus.Mem
 							memorySource = "status-mem"
+						default:
+							memUsed = 0
+							memorySource = "status-unavailable"
+						}
+						if memUsed > memTotal {
+							memUsed = memTotal
 						}
 						// Use actual disk I/O values from detailed status
 						diskReadBytes = int64(vmStatus.DiskRead)
@@ -461,14 +491,23 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					diskStatusReason = "no-status"
 				}
 
+				memTotalBytes := clampToInt64(memTotal)
+				memUsedBytes := clampToInt64(memUsed)
+				if memTotalBytes > 0 && memUsedBytes > memTotalBytes {
+					memUsedBytes = memTotalBytes
+				}
+				memFreeBytes := memTotalBytes - memUsedBytes
+				if memFreeBytes < 0 {
+					memFreeBytes = 0
+				}
 				memory := models.Memory{
-					Total: int64(memTotal),
-					Used:  int64(memUsed),
-					Free:  int64(memTotal - memUsed),
+					Total: memTotalBytes,
+					Used:  memUsedBytes,
+					Free:  memFreeBytes,
 					Usage: safePercentage(float64(memUsed), float64(memTotal)),
 				}
-				if vmStatus != nil && vmStatus.Balloon > 0 {
-					memory.Balloon = int64(vmStatus.Balloon)
+				if guestRaw.Balloon > 0 {
+					memory.Balloon = clampToInt64(guestRaw.Balloon)
 				}
 
 				// Create VM model

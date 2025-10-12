@@ -1243,28 +1243,39 @@ type ZFSPoolDevice struct {
 }
 
 // VMStatus represents detailed VM status
+// VMMemInfo describes memory statistics reported by the guest agent.
+// Proxmox surfaces guest /proc/meminfo values (in bytes). The available
+// field is only present on newer agent versions, so we keep the raw
+// components to reconstruct it when missing.
+type VMMemInfo struct {
+	Total     uint64 `json:"total,omitempty"`
+	Used      uint64 `json:"used,omitempty"`
+	Free      uint64 `json:"free,omitempty"`
+	Available uint64 `json:"available,omitempty"`
+	Buffers   uint64 `json:"buffers,omitempty"`
+	Cached    uint64 `json:"cached,omitempty"`
+	Shared    uint64 `json:"shared,omitempty"`
+}
+
+// VMStatus represents detailed VM status returned by Proxmox.
 type VMStatus struct {
-	Status     string  `json:"status"`
-	CPU        float64 `json:"cpu"`
-	CPUs       int     `json:"cpus"`
-	Mem        uint64  `json:"mem"`
-	MaxMem     uint64  `json:"maxmem"`
-	Balloon    uint64  `json:"balloon"`
-	BalloonMin uint64  `json:"balloon_min"`
-	FreeMem    uint64  `json:"freemem"`
-	MemInfo    *struct {
-		Used  uint64 `json:"used"`
-		Free  uint64 `json:"free"`
-		Total uint64 `json:"total"`
-	} `json:"meminfo,omitempty"`
-	Disk      uint64 `json:"disk"`
-	MaxDisk   uint64 `json:"maxdisk"`
-	DiskRead  uint64 `json:"diskread"`
-	DiskWrite uint64 `json:"diskwrite"`
-	NetIn     uint64 `json:"netin"`
-	NetOut    uint64 `json:"netout"`
-	Uptime    uint64 `json:"uptime"`
-	Agent     int    `json:"agent"`
+	Status     string     `json:"status"`
+	CPU        float64    `json:"cpu"`
+	CPUs       int        `json:"cpus"`
+	Mem        uint64     `json:"mem"`
+	MaxMem     uint64     `json:"maxmem"`
+	Balloon    uint64     `json:"balloon"`
+	BalloonMin uint64     `json:"balloon_min"`
+	FreeMem    uint64     `json:"freemem"`
+	MemInfo    *VMMemInfo `json:"meminfo,omitempty"`
+	Disk       uint64     `json:"disk"`
+	MaxDisk    uint64     `json:"maxdisk"`
+	DiskRead   uint64     `json:"diskread"`
+	DiskWrite  uint64     `json:"diskwrite"`
+	NetIn      uint64     `json:"netin"`
+	NetOut     uint64     `json:"netout"`
+	Uptime     uint64     `json:"uptime"`
+	Agent      int        `json:"agent"`
 }
 
 // GetZFSPoolStatus gets the status of ZFS pools on a node

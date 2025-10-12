@@ -2527,10 +2527,28 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					guestRaw.Balloon = detailedStatus.Balloon
 					guestRaw.BalloonMin = detailedStatus.BalloonMin
 					guestRaw.Agent = detailedStatus.Agent
+					memAvailable := uint64(0)
 					if detailedStatus.MemInfo != nil {
 						guestRaw.MemInfoUsed = detailedStatus.MemInfo.Used
 						guestRaw.MemInfoFree = detailedStatus.MemInfo.Free
 						guestRaw.MemInfoTotal = detailedStatus.MemInfo.Total
+						guestRaw.MemInfoAvailable = detailedStatus.MemInfo.Available
+						guestRaw.MemInfoBuffers = detailedStatus.MemInfo.Buffers
+						guestRaw.MemInfoCached = detailedStatus.MemInfo.Cached
+						guestRaw.MemInfoShared = detailedStatus.MemInfo.Shared
+
+						switch {
+						case detailedStatus.MemInfo.Available > 0:
+							memAvailable = detailedStatus.MemInfo.Available
+							memorySource = "meminfo-available"
+						case detailedStatus.MemInfo.Free > 0 ||
+							detailedStatus.MemInfo.Buffers > 0 ||
+							detailedStatus.MemInfo.Cached > 0:
+							memAvailable = detailedStatus.MemInfo.Free +
+								detailedStatus.MemInfo.Buffers +
+								detailedStatus.MemInfo.Cached
+							memorySource = "meminfo-derived"
+						}
 					}
 
 					// Use actual disk I/O values from detailed status
@@ -2547,10 +2565,16 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						guestRaw.DerivedFromBall = false
 					}
 
-					if detailedStatus.FreeMem > 0 && memTotal >= detailedStatus.FreeMem {
+					switch {
+					case memAvailable > 0:
+						if memAvailable > memTotal {
+							memAvailable = memTotal
+						}
+						memUsed = memTotal - memAvailable
+					case detailedStatus.FreeMem > 0 && memTotal >= detailedStatus.FreeMem:
 						memUsed = memTotal - detailedStatus.FreeMem
 						memorySource = "status-freemem"
-					} else if detailedStatus.Mem > 0 {
+					case detailedStatus.Mem > 0:
 						memUsed = detailedStatus.Mem
 						memorySource = "status-mem"
 					}
@@ -3180,10 +3204,28 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					guestRaw.Balloon = status.Balloon
 					guestRaw.BalloonMin = status.BalloonMin
 					guestRaw.Agent = status.Agent
+					memAvailable := uint64(0)
 					if status.MemInfo != nil {
 						guestRaw.MemInfoUsed = status.MemInfo.Used
 						guestRaw.MemInfoFree = status.MemInfo.Free
 						guestRaw.MemInfoTotal = status.MemInfo.Total
+						guestRaw.MemInfoAvailable = status.MemInfo.Available
+						guestRaw.MemInfoBuffers = status.MemInfo.Buffers
+						guestRaw.MemInfoCached = status.MemInfo.Cached
+						guestRaw.MemInfoShared = status.MemInfo.Shared
+
+						switch {
+						case status.MemInfo.Available > 0:
+							memAvailable = status.MemInfo.Available
+							memorySource = "meminfo-available"
+						case status.MemInfo.Free > 0 ||
+							status.MemInfo.Buffers > 0 ||
+							status.MemInfo.Cached > 0:
+							memAvailable = status.MemInfo.Free +
+								status.MemInfo.Buffers +
+								status.MemInfo.Cached
+							memorySource = "meminfo-derived"
+						}
 					}
 
 					// Use actual disk I/O values from detailed status
@@ -3201,18 +3243,28 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					}
 
 					// If we have free memory from guest agent, calculate actual usage
-					if status.FreeMem > 0 {
+					switch {
+					case memAvailable > 0:
+						if memAvailable > memTotal {
+							memAvailable = memTotal
+						}
+						memUsed = memTotal - memAvailable
+					case status.FreeMem > 0:
 						// Guest agent reports free memory, so calculate used
 						memUsed = memTotal - status.FreeMem
 						memorySource = "status-freemem"
-					} else if status.Mem > 0 {
+					case status.Mem > 0:
 						// No guest agent free memory data, but we have actual memory usage
 						// Use the reported memory usage from Proxmox
 						memUsed = status.Mem
 						memorySource = "status-mem"
-					} else {
+					default:
 						// No memory data available at all - show 0% usage
 						memUsed = 0
+						memorySource = "status-unavailable"
+					}
+					if memUsed > memTotal {
+						memUsed = memTotal
 					}
 
 					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, node.Node, vm.Name, vm.VMID, status)
@@ -3456,6 +3508,25 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			}
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
+			memTotalBytes := clampToInt64(memTotal)
+			memUsedBytes := clampToInt64(memUsed)
+			if memTotalBytes > 0 && memUsedBytes > memTotalBytes {
+				memUsedBytes = memTotalBytes
+			}
+			memFreeBytes := memTotalBytes - memUsedBytes
+			if memFreeBytes < 0 {
+				memFreeBytes = 0
+			}
+			memory := models.Memory{
+				Total: memTotalBytes,
+				Used:  memUsedBytes,
+				Free:  memFreeBytes,
+				Usage: safePercentage(float64(memUsed), float64(memTotal)),
+			}
+			if guestRaw.Balloon > 0 {
+				memory.Balloon = clampToInt64(guestRaw.Balloon)
+			}
+
 			modelVM := models.VM{
 				ID:       guestID,
 				VMID:     vm.VMID,
@@ -3466,12 +3537,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				Type:     "qemu",
 				CPU:      cpuUsage, // Already in percentage
 				CPUs:     vm.CPUs,
-				Memory: models.Memory{
-					Total: int64(memTotal),
-					Used:  int64(memUsed),
-					Free:  int64(memTotal - memUsed),
-					Usage: safePercentage(float64(memUsed), float64(memTotal)),
-				},
+				Memory:   memory,
 				Disk: models.Disk{
 					Total: int64(diskTotal),
 					Used:  int64(diskUsed),
