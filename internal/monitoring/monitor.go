@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -808,11 +809,63 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 	return statuses
 }
 
+// checkContainerizedTempMonitoring logs a security warning if Pulse is running
+// in a container with SSH-based temperature monitoring enabled
+func checkContainerizedTempMonitoring() {
+	// Check if running in container
+	isContainer := os.Getenv("PULSE_DOCKER") == "true" || isRunningInContainer()
+	if !isContainer {
+		return
+	}
+
+	// Check if SSH keys exist (indicates temperature monitoring is configured)
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		homeDir = "/home/pulse"
+	}
+	sshKeyPath := homeDir + "/.ssh/id_ed25519"
+	if _, err := os.Stat(sshKeyPath); err != nil {
+		// No SSH key found, temperature monitoring not configured
+		return
+	}
+
+	// Log warning
+	log.Warn().
+		Msg("🔐 SECURITY NOTICE: Pulse is running in a container with SSH-based temperature monitoring enabled. " +
+			"SSH private keys are stored inside the container, which could be a security risk if the container is compromised. " +
+			"Future versions will use agent-based architecture for better security. " +
+			"See documentation for hardening recommendations.")
+}
+
+// isRunningInContainer detects if running inside a container
+func isRunningInContainer() bool {
+	// Check for /.dockerenv
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+
+	// Check cgroup for container indicators
+	data, err := os.ReadFile("/proc/1/cgroup")
+	if err == nil {
+		content := string(data)
+		if strings.Contains(content, "docker") ||
+			strings.Contains(content, "lxc") ||
+			strings.Contains(content, "containerd") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // New creates a new Monitor instance
 func New(cfg *config.Config) (*Monitor, error) {
 	// Initialize temperature collector with default SSH settings
 	// Will use root user for now - can be made configurable later
 	tempCollector := NewTemperatureCollector("root", "")
+
+	// Security warning if running in container with SSH temperature monitoring
+	checkContainerizedTempMonitoring()
 
 	m := &Monitor{
 		config:               cfg,

@@ -3211,6 +3211,54 @@ echo "Temperature Monitoring Setup (Optional)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+# Check if Pulse is running in a container
+PULSE_IS_CONTAINERIZED=false
+if grep -q "pulse.lan\|pulse.home\|192.168" <<< "%s"; then
+    # Try to detect if target Pulse is containerized
+    # This is a heuristic - we can't know for sure from the setup script
+    :
+fi
+
+echo "⚠️  SECURITY NOTICE"
+echo ""
+echo "Temperature monitoring requires SSH access from Pulse to this node."
+echo "This creates the following security considerations:"
+echo ""
+echo "  • SSH private keys will be stored on the Pulse server"
+echo "  • If Pulse runs in a container (LXC/Docker), keys live inside it"
+echo "  • Compromised Pulse = potential access to Proxmox hosts"
+echo ""
+echo "Mitigations in place:"
+echo "  • Forced command restriction (only 'sensors -j' can run)"
+echo "  • No port forwarding, X11, or PTY allocation"
+echo ""
+echo "This is a legacy feature. Future versions will use agent-based"
+echo "architecture where nodes push metrics to Pulse (more secure)."
+echo ""
+echo "Do you want to enable temperature monitoring? [y/N]"
+echo -n "> "
+
+ENABLE_TEMP_MONITORING="n"
+if [ -t 0 ]; then
+    read -n 1 -r ENABLE_TEMP_MONITORING
+else
+    if read -n 1 -r ENABLE_TEMP_MONITORING </dev/tty 2>/dev/null; then
+        :
+    else
+        echo "(No terminal available - skipping temperature monitoring)"
+        ENABLE_TEMP_MONITORING="n"
+    fi
+fi
+echo ""
+echo ""
+
+if [[ ! $ENABLE_TEMP_MONITORING =~ ^[Yy]$ ]]; then
+    echo "Temperature monitoring skipped."
+    echo ""
+    # Jump to the end of temperature setup section
+    SSH_PUBLIC_KEY=""
+else
+
 # SSH public key embedded from Pulse server
 SSH_PUBLIC_KEY="%s"
 SSH_RESTRICTED_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_PUBLIC_KEY"
@@ -3506,6 +3554,7 @@ EOF
         fi
     fi
 fi
+fi  # End of ENABLE_TEMP_MONITORING check
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -3532,7 +3581,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, authToken, tokenName, serverHost)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, pulseURL, sshPublicKey, sshPublicKey, pulseURL, authToken, tokenName, serverHost)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
