@@ -10,21 +10,37 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rs/zerolog/log"
 )
 
 // TemperatureCollector handles SSH-based temperature collection from Proxmox nodes
 type TemperatureCollector struct {
-	sshUser    string // SSH user (typically "root" or "pulse-monitor")
-	sshKeyPath string // Path to SSH private key
+	sshUser    string             // SSH user (typically "root" or "pulse-monitor")
+	sshKeyPath string             // Path to SSH private key
+	proxyClient *tempproxy.Client // Optional: unix socket client for proxy
+	useProxy   bool               // Whether to use proxy for temperature collection
 }
 
 // NewTemperatureCollector creates a new temperature collector
 func NewTemperatureCollector(sshUser, sshKeyPath string) *TemperatureCollector {
-	return &TemperatureCollector{
+	tc := &TemperatureCollector{
 		sshUser:    sshUser,
 		sshKeyPath: sshKeyPath,
 	}
+
+	// Check if proxy is available
+	proxyClient := tempproxy.NewClient()
+	if proxyClient.IsAvailable() {
+		log.Info().Msg("Temperature proxy detected - using secure host-side bridge")
+		tc.proxyClient = proxyClient
+		tc.useProxy = true
+	} else {
+		log.Debug().Msg("Temperature proxy not available - using direct SSH")
+		tc.useProxy = false
+	}
+
+	return tc
 }
 
 // CollectTemperature collects temperature data from a node via SSH
@@ -32,15 +48,31 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 	// Extract hostname/IP from the host URL (might be https://hostname:8006)
 	host := extractHostname(nodeHost)
 
-	// Try to get sensors JSON output
-	output, err := tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null")
-	if err != nil {
-		log.Debug().
-			Str("node", nodeName).
-			Str("host", host).
-			Err(err).
-			Msg("Failed to collect temperature data via SSH")
-		return &models.Temperature{Available: false}, nil
+	var output string
+	var err error
+
+	// Use proxy if available, otherwise fall back to direct SSH
+	if tc.useProxy && tc.proxyClient != nil {
+		output, err = tc.proxyClient.GetTemperature(host)
+		if err != nil {
+			log.Debug().
+				Str("node", nodeName).
+				Str("host", host).
+				Err(err).
+				Msg("Failed to collect temperature data via proxy")
+			return &models.Temperature{Available: false}, nil
+		}
+	} else {
+		// Direct SSH (legacy method)
+		output, err = tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null")
+		if err != nil {
+			log.Debug().
+				Str("node", nodeName).
+				Str("host", host).
+				Err(err).
+				Msg("Failed to collect temperature data via SSH")
+			return &models.Temperature{Available: false}, nil
+		}
 	}
 
 	// Parse sensors JSON output
