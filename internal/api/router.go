@@ -2566,6 +2566,11 @@ func (r *Router) handleDownloadInstallScript(w http.ResponseWriter, req *http.Re
 		return
 	}
 
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
 	scriptPath := "/opt/pulse/scripts/install-docker-agent.sh"
 	http.ServeFile(w, req, scriptPath)
 }
@@ -2576,6 +2581,11 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
 	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
 	searchPaths := make([]string, 0, 4)
