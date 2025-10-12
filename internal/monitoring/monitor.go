@@ -98,6 +98,74 @@ func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 	return baseName
 }
 
+func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) []models.PhysicalDisk {
+	if len(disks) == 0 || len(nodes) == 0 {
+		return disks
+	}
+
+	nvmeTempsByNode := make(map[string][]models.NVMeTemp)
+	for _, node := range nodes {
+		if node.Temperature == nil || !node.Temperature.Available || len(node.Temperature.NVMe) == 0 {
+			continue
+		}
+
+		temps := make([]models.NVMeTemp, len(node.Temperature.NVMe))
+		copy(temps, node.Temperature.NVMe)
+		sort.Slice(temps, func(i, j int) bool {
+			return temps[i].Device < temps[j].Device
+		})
+
+		nvmeTempsByNode[node.Name] = temps
+	}
+
+	if len(nvmeTempsByNode) == 0 {
+		return disks
+	}
+
+	updated := make([]models.PhysicalDisk, len(disks))
+	copy(updated, disks)
+
+	disksByNode := make(map[string][]int)
+	for i := range updated {
+		if strings.EqualFold(updated[i].Type, "nvme") {
+			disksByNode[updated[i].Node] = append(disksByNode[updated[i].Node], i)
+		}
+	}
+
+	for nodeName, diskIndexes := range disksByNode {
+		temps, ok := nvmeTempsByNode[nodeName]
+		if !ok || len(temps) == 0 {
+			for _, idx := range diskIndexes {
+				updated[idx].Temperature = 0
+			}
+			continue
+		}
+
+		sort.Slice(diskIndexes, func(i, j int) bool {
+			return updated[diskIndexes[i]].DevPath < updated[diskIndexes[j]].DevPath
+		})
+
+		for _, idx := range diskIndexes {
+			updated[idx].Temperature = 0
+		}
+
+		for idx, diskIdx := range diskIndexes {
+			if idx >= len(temps) {
+				break
+			}
+
+			tempVal := temps[idx].Temp
+			if tempVal <= 0 || math.IsNaN(tempVal) {
+				continue
+			}
+
+			updated[diskIdx].Temperature = int(math.Round(tempVal))
+		}
+	}
+
+	return updated
+}
+
 func lookupClusterEndpointLabel(instance *config.PVEInstance, nodeName string) string {
 	if instance == nil {
 		return ""
@@ -2100,7 +2168,18 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				Dur("sinceLastPoll", time.Since(lastPoll)).
 				Dur("interval", pollingInterval).
 				Msg("Skipping physical disk poll - interval not elapsed")
-			// Don't clear existing data, just skip the poll
+			// Refresh NVMe temperatures using the latest sensor data even when we skip the disk poll
+			currentState := m.state.GetSnapshot()
+			existing := make([]models.PhysicalDisk, 0)
+			for _, disk := range currentState.PhysicalDisks {
+				if disk.Instance == instanceName {
+					existing = append(existing, disk)
+				}
+			}
+			if len(existing) > 0 {
+				updated := mergeNVMeTempsIntoDisks(existing, modelNodes)
+				m.state.UpdatePhysicalDisks(instanceName, updated)
+			}
 		} else {
 			log.Debug().
 				Int("nodeCount", len(nodes)).
@@ -2227,6 +2306,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						Msg("Preserving existing disk data for unpolled node")
 				}
 			}
+
+			allDisks = mergeNVMeTempsIntoDisks(allDisks, modelNodes)
 
 			// Update physical disks in state
 			log.Debug().
