@@ -173,3 +173,126 @@ You can still manage the entry manually if you prefer, but no extra steps are re
 - Timeout: 5 seconds (non-blocking)
 - Falls back gracefully if SSH fails
 - No impact if SSH is not configured
+
+## Container Security Considerations
+
+⚠️ **Important for Docker/LXC deployments**
+
+If you run Pulse in a container (Docker or LXC), SSH private keys are stored inside the container filesystem. This creates additional security considerations:
+
+### Risk
+
+A compromised Pulse container could expose SSH keys that access your Proxmox hosts, even with forced command restrictions.
+
+### Opt-In Required (v4.23.1+)
+
+Temperature monitoring now requires explicit confirmation during setup. The setup script displays a security notice and asks for your consent before enabling SSH access.
+
+### Runtime Warning
+
+Pulse logs a security warning at startup if it detects:
+- Running in a container (Docker/LXC/containerd)
+- SSH keys present for temperature monitoring
+
+This reminds you to review security hardening recommendations.
+
+### Hardening Recommendations
+
+#### 1. Key Rotation
+Rotate SSH keys periodically (e.g., every 90 days):
+
+```bash
+# On Pulse server
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_new -N ""
+
+# Update all nodes' authorized_keys
+# Test connectivity
+ssh -i ~/.ssh/id_ed25519_new node "sensors -j"
+
+# Replace old key
+mv ~/.ssh/id_ed25519_new ~/.ssh/id_ed25519
+```
+
+#### 2. Secret Mounts (Docker)
+Mount SSH keys from secure volumes:
+
+```yaml
+version: '3'
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    volumes:
+      - pulse-ssh-keys:/home/pulse/.ssh:ro  # Read-only
+      - pulse-data:/data
+volumes:
+  pulse-ssh-keys:
+    driver: local
+    driver_opts:
+      type: tmpfs  # Memory-only, not persisted
+      device: tmpfs
+```
+
+#### 3. Monitoring & Alerts
+Enable SSH audit logging on Proxmox nodes:
+
+```bash
+# Install auditd
+apt-get install auditd
+
+# Watch SSH access
+auditctl -w /root/.ssh -p wa -k ssh_access
+
+# Monitor for unexpected commands
+tail -f /var/log/audit/audit.log | grep ssh
+```
+
+#### 4. IP Restrictions
+Limit SSH access to your Pulse server IP in `/etc/ssh/sshd_config`:
+
+```ssh
+Match User root Address 192.168.1.100
+    ForceCommand sensors -j
+    PermitOpen none
+    AllowAgentForwarding no
+    AllowTcpForwarding no
+```
+
+### Future: Agent-Based Architecture
+
+**Status:** Planned for future release
+
+The current SSH approach is a legacy implementation. Future versions will use agent-based monitoring where:
+
+- Lightweight temperature agents run on each Proxmox node
+- Agents **push** metrics to Pulse over authenticated HTTPS
+- No SSH keys stored in Pulse
+- Better security boundary between monitoring and infrastructure
+
+This is the recommended architecture for production deployments. The SSH method will be maintained as a fallback for simple setups.
+
+### When to Use SSH vs Waiting for Agents
+
+**SSH Method (Current) - Acceptable for:**
+- Home labs and trusted networks
+- Non-containerized Pulse deployments
+- Environments where you trust the container host
+
+**Wait for Agents - Better for:**
+- Production infrastructure
+- Multi-tenant environments
+- High-security requirements
+- Containerized Pulse with untrusted container hosts
+
+### Disabling Temperature Monitoring
+
+To remove SSH access:
+
+```bash
+# On each Proxmox node
+sed -i '/pulse@/d' /root/.ssh/authorized_keys
+
+# Or remove just the forced command entry
+sed -i '/command="sensors -j"/d' /root/.ssh/authorized_keys
+```
+
+Temperature data will stop appearing in the dashboard after the next polling cycle.
