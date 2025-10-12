@@ -322,3 +322,202 @@ sed -i '/command="sensors -j"/d' /root/.ssh/authorized_keys
 ```
 
 Temperature data will stop appearing in the dashboard after the next polling cycle.
+
+## Operations & Troubleshooting
+
+### Managing the Proxy Service
+
+The pulse-temp-proxy service runs on the Proxmox host (outside the container).
+
+**Service Management:**
+```bash
+# Check service status
+systemctl status pulse-temp-proxy
+
+# Restart the proxy
+systemctl restart pulse-temp-proxy
+
+# Stop the proxy (disables temperature monitoring)
+systemctl stop pulse-temp-proxy
+
+# Start the proxy
+systemctl start pulse-temp-proxy
+
+# Enable proxy to start on boot
+systemctl enable pulse-temp-proxy
+
+# Disable proxy autostart
+systemctl disable pulse-temp-proxy
+```
+
+### Log Locations
+
+**Proxy Logs (on Proxmox host):**
+```bash
+# Follow proxy logs in real-time
+journalctl -u pulse-temp-proxy -f
+
+# View last 50 lines
+journalctl -u pulse-temp-proxy -n 50
+
+# View logs since last boot
+journalctl -u pulse-temp-proxy -b
+
+# View logs with timestamps
+journalctl -u pulse-temp-proxy --since "1 hour ago"
+```
+
+**Pulse Logs (in container):**
+```bash
+# Check if proxy is being used
+journalctl -u pulse | grep -i "proxy\|temperature"
+
+# Should see: "Temperature proxy detected - using secure host-side bridge"
+```
+
+### SSH Key Rotation
+
+Rotate SSH keys periodically for security (recommended every 90 days):
+
+```bash
+# 1. On Proxmox host, backup old keys
+cd /var/lib/pulse-temp-proxy/ssh/
+cp id_ed25519 id_ed25519.backup
+cp id_ed25519.pub id_ed25519.pub.backup
+
+# 2. Generate new keypair
+ssh-keygen -t ed25519 -f id_ed25519 -N "" -C "pulse-temp-proxy-rotated"
+
+# 3. Get the new public key
+cat id_ed25519.pub
+
+# 4. Add new key to all cluster nodes
+# For each node in your cluster:
+ssh root@node1 "echo 'NEW_PUBLIC_KEY_HERE' >> /root/.ssh/authorized_keys"
+ssh root@node2 "echo 'NEW_PUBLIC_KEY_HERE' >> /root/.ssh/authorized_keys"
+# ... repeat for all nodes
+
+# 5. Restart proxy to use new keys
+systemctl restart pulse-temp-proxy
+
+# 6. Verify temperature data still works in Pulse UI
+
+# 7. Remove old keys from nodes (after confirming new keys work)
+ssh root@node1 "sed -i '/pulse-temp-proxy-old/d' /root/.ssh/authorized_keys"
+```
+
+### Revoking Access When Nodes Leave
+
+When removing a node from your cluster:
+
+```bash
+# On the node being removed, remove the proxy's public key
+ssh root@old-node "sed -i '/pulse-temp-proxy/d' /root/.ssh/authorized_keys"
+
+# No restart needed - proxy will fail gracefully for that node
+# Temperature monitoring will continue for remaining nodes
+```
+
+### Failure Modes
+
+**Proxy Not Running:**
+- Symptom: No temperature data in Pulse UI
+- Check: `systemctl status pulse-temp-proxy` on Proxmox host
+- Fix: `systemctl start pulse-temp-proxy`
+
+**Socket Not Accessible in Container:**
+- Symptom: Pulse logs show "Temperature proxy not available - using direct SSH"
+- Check: `ls -l /var/run/pulse-temp-proxy.sock` in container
+- Fix: Verify bind mount in LXC config (`/etc/pve/lxc/<CTID>.conf`)
+- Should have: `lxc.mount.entry: /var/run/pulse-temp-proxy.sock var/run/pulse-temp-proxy.sock none bind,create=file 0 0`
+
+**pvecm Not Available:**
+- Symptom: Proxy fails to discover cluster nodes
+- Cause: Pulse runs on non-Proxmox host
+- Fallback: Use legacy direct SSH method (native installation)
+
+**Pulse Running Off-Cluster:**
+- Symptom: Proxy discovers local host but not remote cluster nodes
+- Limitation: Proxy requires passwordless SSH between cluster nodes
+- Solution: Ensure Proxmox host running Pulse has SSH access to all cluster nodes
+
+**Unauthorized Connection Attempts:**
+- Symptom: Proxy logs show "Unauthorized connection attempt"
+- Cause: Process with non-root UID trying to access socket
+- Normal: Only root (UID 0) or proxy's own user can access socket
+- Check: Look for suspicious processes trying to access the socket
+
+### Known Limitations
+
+**One Proxy Per Host:**
+- Each Proxmox host runs one pulse-temp-proxy instance
+- If multiple Pulse containers run on same host, they share the same proxy
+- All containers see the same temperature data from the same cluster
+
+**Requires Proxmox Cluster Membership:**
+- Proxy uses `pvecm nodes` to discover cluster members
+- Standalone Proxmox nodes work but only monitor that single node
+- For standalone nodes, proxy is less useful (direct SSH works fine)
+
+**Passwordless Root SSH Required:**
+- Proxy assumes passwordless root SSH between cluster nodes
+- Standard for Proxmox clusters, but hardened environments may differ
+- Alternative: Create dedicated service account with sudo access to `sensors`
+
+**No Cross-Cluster Support:**
+- Proxy only manages the cluster its host belongs to
+- Cannot bridge temperature monitoring across multiple disconnected clusters
+- Each cluster needs its own Pulse instance with its own proxy
+
+### Common Issues
+
+**Temperature Data Stops Appearing:**
+1. Check proxy service: `systemctl status pulse-temp-proxy`
+2. Check proxy logs: `journalctl -u pulse-temp-proxy -n 50`
+3. Test SSH manually: `ssh root@node "sensors -j"`
+4. Verify socket exists: `ls -l /var/run/pulse-temp-proxy.sock`
+
+**New Cluster Node Not Showing Temperatures:**
+1. Ensure lm-sensors installed: `ssh root@new-node "sensors -j"`
+2. Proxy auto-discovers on next poll (may take up to 1 minute)
+3. Force refresh by restarting Pulse: `pct restart <CTID>`
+
+**Permission Denied Errors:**
+1. Verify socket permissions: `ls -l /var/run/pulse-temp-proxy.sock`
+2. Should be: `srw-rw---- 1 root root`
+3. Check Pulse runs as root in container: `pct exec <CTID> -- whoami`
+
+**Proxy Service Won't Start:**
+1. Check logs: `journalctl -u pulse-temp-proxy -n 50`
+2. Verify binary exists: `ls -l /usr/local/bin/pulse-temp-proxy`
+3. Test manually: `/usr/local/bin/pulse-temp-proxy --version`
+4. Check socket directory: `ls -ld /var/run`
+
+### Getting Help
+
+If temperature monitoring isn't working:
+
+1. **Collect diagnostic info:**
+   ```bash
+   # On Proxmox host
+   systemctl status pulse-temp-proxy
+   journalctl -u pulse-temp-proxy -n 100 > /tmp/proxy-logs.txt
+   ls -la /var/run/pulse-temp-proxy.sock
+
+   # In Pulse container
+   journalctl -u pulse -n 100 | grep -i temp > /tmp/pulse-temp-logs.txt
+   ```
+
+2. **Test manually:**
+   ```bash
+   # On Proxmox host - test SSH to a cluster node
+   ssh root@cluster-node "sensors -j"
+   ```
+
+3. **Check GitHub Issues:** https://github.com/rcourtman/Pulse/issues
+4. **Include in bug report:**
+   - Pulse version
+   - Deployment type (LXC/Docker/native)
+   - Proxy logs
+   - Pulse logs
+   - Output of manual SSH test
