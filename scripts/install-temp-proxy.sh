@@ -71,7 +71,8 @@ print_info "Installing pulse-temp-proxy for container $CTID"
 
 BINARY_PATH="/usr/local/bin/pulse-temp-proxy"
 SERVICE_PATH="/etc/systemd/system/pulse-temp-proxy.service"
-SOCKET_PATH="/var/run/pulse-temp-proxy.sock"
+RUNTIME_DIR="/run/pulse-temp-proxy"
+SOCKET_PATH="/run/pulse-temp-proxy/pulse-temp-proxy.sock"
 SSH_DIR="/var/lib/pulse-temp-proxy/ssh"
 
 # Install binary - either from local file or download from GitHub
@@ -152,12 +153,16 @@ ExecStart=/usr/local/bin/pulse-temp-proxy
 Restart=on-failure
 RestartSec=5s
 
+# Runtime directory for socket
+RuntimeDirectory=pulse-temp-proxy
+RuntimeDirectoryMode=0770
+
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/pulse-temp-proxy /var/run
+ReadWritePaths=/var/lib/pulse-temp-proxy
 
 # Logging
 StandardOutput=journal
@@ -191,28 +196,38 @@ fi
 
 print_info "Socket ready at $SOCKET_PATH"
 
-# Configure LXC bind mount
+# Configure LXC bind mount - mount entire directory for socket stability
 LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
-BIND_ENTRY="lxc.mount.entry: /var/run/pulse-temp-proxy.sock var/run/pulse-temp-proxy.sock none bind,create=file 0 0"
+BIND_ENTRY="lxc.mount.entry: /run/pulse-temp-proxy run/pulse-temp-proxy none bind,create=dir 0 0"
 
 # Check if bind mount already exists
-if grep -q "pulse-temp-proxy.sock" "$LXC_CONFIG"; then
+if grep -q "pulse-temp-proxy" "$LXC_CONFIG"; then
     print_info "Bind mount already configured in LXC config"
+    # Remove old socket-level bind if it exists
+    if grep -q "pulse-temp-proxy.sock" "$LXC_CONFIG"; then
+        print_info "Upgrading from socket-level to directory-level bind mount..."
+        sed -i '/pulse-temp-proxy\.sock/d' "$LXC_CONFIG"
+        echo "$BIND_ENTRY" >> "$LXC_CONFIG"
+        NEEDS_RESTART=true
+    fi
 else
     print_info "Adding bind mount to LXC config..."
     echo "$BIND_ENTRY" >> "$LXC_CONFIG"
+    NEEDS_RESTART=true
+fi
 
-    # Restart container to apply bind mount
+# Restart container to apply bind mount if needed
+if [[ "${NEEDS_RESTART:-false}" == "true" ]]; then
     print_info "Restarting container to apply bind mount..."
     pct stop "$CTID" || true
     sleep 2
     pct start "$CTID"
-    sleep 3
+    sleep 5
 fi
 
 # Verify socket is accessible in container
 print_info "Verifying socket accessibility..."
-if pct exec "$CTID" -- test -S /var/run/pulse-temp-proxy.sock; then
+if pct exec "$CTID" -- test -S /run/pulse-temp-proxy/pulse-temp-proxy.sock; then
     print_info "Socket is accessible in container"
 else
     print_warn "Socket is not yet accessible in container"

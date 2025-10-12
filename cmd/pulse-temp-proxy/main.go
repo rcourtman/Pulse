@@ -22,7 +22,7 @@ var (
 )
 
 const (
-	defaultSocketPath = "/var/run/pulse-temp-proxy.sock"
+	defaultSocketPath = "/run/pulse-temp-proxy/pulse-temp-proxy.sock"
 	defaultSSHKeyPath = "/var/lib/pulse-temp-proxy/ssh"
 )
 

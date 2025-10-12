@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	defaultSocketPath = "/var/run/pulse-temp-proxy.sock"
+	defaultSocketPath = "/run/pulse-temp-proxy/pulse-temp-proxy.sock"
 	defaultTimeout    = 10 * time.Second
 )
 
