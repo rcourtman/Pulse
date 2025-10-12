@@ -203,6 +203,9 @@ type Monitor struct {
 	pbsBackupPollers     map[string]bool           // Track PBS backup polling goroutines per instance
 	runtimeCtx           context.Context           // Context used while monitor is running
 	wsHub                *websocket.Hub            // Hub used for broadcasting state
+	diagMu               sync.RWMutex              // Protects diagnostic snapshot maps
+	nodeSnapshots        map[string]NodeMemorySnapshot
+	guestSnapshots       map[string]GuestMemorySnapshot
 }
 
 // safePercentage calculates percentage safely, returning 0 if divisor is 0
@@ -763,6 +766,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastPhysicalDiskPoll: make(map[string]time.Time),
 		persistence:          config.NewConfigPersistence(cfg.DataPath),
 		pbsBackupPollers:     make(map[string]bool),
+		nodeSnapshots:        make(map[string]NodeMemorySnapshot),
+		guestSnapshots:       make(map[string]GuestMemorySnapshot),
 	}
 
 	// Load saved configurations
@@ -1698,6 +1703,19 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			ClusterName:      instanceCfg.ClusterName,
 		}
 
+		nodeSnapshotRaw := NodeMemoryRaw{
+			Total:               node.MaxMem,
+			Used:                node.Mem,
+			Free:                node.MaxMem - node.Mem,
+			FallbackTotal:       node.MaxMem,
+			FallbackUsed:        node.Mem,
+			FallbackFree:        node.MaxMem - node.Mem,
+			FallbackCalculated:  true,
+			ProxmoxMemorySource: "nodes-endpoint",
+		}
+		nodeMemorySource := "nodes-endpoint"
+		var nodeFallbackReason string
+
 		// Debug logging for disk metrics - note that these values can fluctuate
 		// due to thin provisioning and dynamic allocation
 		if node.Disk > 0 && node.MaxDisk > 0 {
@@ -1716,6 +1734,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		if node.Status == "online" {
 			nodeInfo, nodeErr := client.GetNodeStatus(ctx, node.Node)
 			if nodeErr != nil {
+				nodeFallbackReason = "node-status-unavailable"
 				// If we can't get node status, log but continue with data from /nodes endpoint
 				if node.Disk > 0 && node.MaxDisk > 0 {
 					log.Warn().
@@ -1735,6 +1754,20 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						Msg("Could not get node status - no fallback metrics available (memory will include cache/buffers)")
 				}
 			} else if nodeInfo != nil {
+				if nodeInfo.Memory != nil {
+					nodeSnapshotRaw.Total = nodeInfo.Memory.Total
+					nodeSnapshotRaw.Used = nodeInfo.Memory.Used
+					nodeSnapshotRaw.Free = nodeInfo.Memory.Free
+					nodeSnapshotRaw.Available = nodeInfo.Memory.Available
+					nodeSnapshotRaw.Avail = nodeInfo.Memory.Avail
+					nodeSnapshotRaw.Buffers = nodeInfo.Memory.Buffers
+					nodeSnapshotRaw.Cached = nodeInfo.Memory.Cached
+					nodeSnapshotRaw.Shared = nodeInfo.Memory.Shared
+					nodeSnapshotRaw.EffectiveAvailable = nodeInfo.Memory.EffectiveAvailable()
+					nodeSnapshotRaw.ProxmoxMemorySource = "node-status"
+					nodeSnapshotRaw.FallbackCalculated = false
+				}
+
 				// Convert LoadAvg from interface{} to float64
 				loadAvg := make([]float64, 0, len(nodeInfo.LoadAvg))
 				for _, val := range nodeInfo.LoadAvg {
@@ -1807,14 +1840,17 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						switch {
 						case nodeInfo.Memory.Available > 0:
 							logCtx.Msg("Node memory: using available field (excludes reclaimable cache)")
+							nodeMemorySource = "available-field"
 						case nodeInfo.Memory.Avail > 0:
 							logCtx.Msg("Node memory: using avail field (excludes reclaimable cache)")
+							nodeMemorySource = "avail-field"
 						default:
 							logCtx.
 								Uint64("free", nodeInfo.Memory.Free).
 								Uint64("buffers", nodeInfo.Memory.Buffers).
 								Uint64("cached", nodeInfo.Memory.Cached).
 								Msg("Node memory: derived available from free+buffers+cached (excludes reclaimable cache)")
+							nodeMemorySource = "derived-free-buffers-cached"
 						}
 					default:
 						// Fallback to traditional used memory if no cache-aware data is exposed
@@ -1824,6 +1860,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Uint64("total", nodeInfo.Memory.Total).
 							Uint64("used", nodeInfo.Memory.Used).
 							Msg("Node memory: no cache-aware metrics - using traditional calculation (includes cache)")
+						nodeMemorySource = "node-status-used"
 					}
 
 					free := int64(nodeInfo.Memory.Total - actualUsed)
@@ -1894,8 +1931,24 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					Str("instance", instanceName).
 					Str("node", node.Node).
 					Msg("Preserving previous memory metrics - node status unavailable this cycle")
+
+				if nodeFallbackReason == "" {
+					nodeFallbackReason = "preserved-previous-snapshot"
+				}
+				nodeMemorySource = "previous-snapshot"
+				if nodeSnapshotRaw.ProxmoxMemorySource == "node-status" && nodeSnapshotRaw.Total == 0 {
+					nodeSnapshotRaw.ProxmoxMemorySource = "previous-snapshot"
+				}
 			}
 		}
+
+		m.recordNodeSnapshot(instanceName, node.Node, NodeMemorySnapshot{
+			RetrievedAt:    time.Now(),
+			MemorySource:   nodeMemorySource,
+			FallbackReason: nodeFallbackReason,
+			Memory:         modelNode.Memory,
+			Raw:            nodeSnapshotRaw,
+		})
 
 		// Collect temperature data via SSH (non-blocking, best effort)
 		// Only attempt for online nodes
@@ -2432,6 +2485,15 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				continue
 			}
 
+			memTotal := res.MaxMem
+			memUsed := res.Mem
+			memorySource := "cluster-resources"
+			guestRaw := VMMemoryRaw{
+				ListingMem:    res.Mem,
+				ListingMaxMem: res.MaxMem,
+			}
+			var detailedStatus *proxmox.VMStatus
+
 			// Try to get actual disk usage from guest agent if VM is running
 			diskUsed := res.Disk
 			diskTotal := res.MaxDisk
@@ -2449,7 +2511,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			// We should prefer guest agent data when available for accurate metrics
 			if res.Status == "running" && res.Type == "qemu" {
 				// First check if agent is enabled by getting VM status
-				vmStatus, err := client.GetVMStatus(ctx, res.Node, res.VMID)
+				status, err := client.GetVMStatus(ctx, res.Node, res.VMID)
 				if err != nil {
 					log.Debug().
 						Err(err).
@@ -2457,15 +2519,47 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						Str("vm", res.Name).
 						Int("vmid", res.VMID).
 						Msg("Could not get VM status to check guest agent availability")
-				} else if vmStatus != nil {
+				} else if status != nil {
+					detailedStatus = status
+					guestRaw.StatusMaxMem = detailedStatus.MaxMem
+					guestRaw.StatusMem = detailedStatus.Mem
+					guestRaw.StatusFreeMem = detailedStatus.FreeMem
+					guestRaw.Balloon = detailedStatus.Balloon
+					guestRaw.BalloonMin = detailedStatus.BalloonMin
+					guestRaw.Agent = detailedStatus.Agent
+					if detailedStatus.MemInfo != nil {
+						guestRaw.MemInfoUsed = detailedStatus.MemInfo.Used
+						guestRaw.MemInfoFree = detailedStatus.MemInfo.Free
+						guestRaw.MemInfoTotal = detailedStatus.MemInfo.Total
+					}
+
 					// Use actual disk I/O values from detailed status
-					diskReadBytes = int64(vmStatus.DiskRead)
-					diskWriteBytes = int64(vmStatus.DiskWrite)
-					networkInBytes = int64(vmStatus.NetIn)
-					networkOutBytes = int64(vmStatus.NetOut)
+					diskReadBytes = int64(detailedStatus.DiskRead)
+					diskWriteBytes = int64(detailedStatus.DiskWrite)
+					networkInBytes = int64(detailedStatus.NetIn)
+					networkOutBytes = int64(detailedStatus.NetOut)
+
+					if detailedStatus.Balloon > 0 && detailedStatus.Balloon < detailedStatus.MaxMem {
+						memTotal = detailedStatus.Balloon
+						guestRaw.DerivedFromBall = true
+					} else if detailedStatus.MaxMem > 0 {
+						memTotal = detailedStatus.MaxMem
+						guestRaw.DerivedFromBall = false
+					}
+
+					if detailedStatus.FreeMem > 0 && memTotal >= detailedStatus.FreeMem {
+						memUsed = memTotal - detailedStatus.FreeMem
+						memorySource = "status-freemem"
+					} else if detailedStatus.Mem > 0 {
+						memUsed = detailedStatus.Mem
+						memorySource = "status-mem"
+					}
+					if memUsed > memTotal {
+						memUsed = memTotal
+					}
 
 					// Gather guest metadata from the agent when available
-					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, vmStatus)
+					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, detailedStatus)
 					if len(guestIPs) > 0 {
 						ipAddresses = guestIPs
 					}
@@ -2481,12 +2575,12 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 					// Always try to get filesystem info if agent is enabled
 					// Prefer guest agent data over cluster/resources data for accuracy
-					if vmStatus.Agent > 0 {
+					if detailedStatus.Agent > 0 {
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", res.Name).
 							Int("vmid", res.VMID).
-							Int("agent", vmStatus.Agent).
+							Int("agent", detailedStatus.Agent).
 							Uint64("current_disk", diskUsed).
 							Uint64("current_maxdisk", diskTotal).
 							Msg("Guest agent enabled, querying filesystem info for accurate disk usage")
@@ -2748,7 +2842,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							Str("instance", instanceName).
 							Str("vm", res.Name).
 							Int("vmid", res.VMID).
-							Int("agent", vmStatus.Agent).
+							Int("agent", detailedStatus.Agent).
 							Msg("VM does not have guest agent enabled in config")
 					}
 				} else {
@@ -2761,15 +2855,42 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				}
 			}
 
-			// Calculate I/O rates after we have the actual values
+			if res.Status != "running" {
+				memorySource = "powered-off"
+				memUsed = 0
+			}
+
+			memFree := uint64(0)
+			if memTotal >= memUsed {
+				memFree = memTotal - memUsed
+			}
+
+			sampleTime := time.Now()
 			currentMetrics := IOMetrics{
 				DiskRead:   diskReadBytes,
 				DiskWrite:  diskWriteBytes,
 				NetworkIn:  networkInBytes,
 				NetworkOut: networkOutBytes,
-				Timestamp:  time.Now(),
+				Timestamp:  sampleTime,
 			}
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+
+			memoryUsage := safePercentage(float64(memUsed), float64(memTotal))
+			memory := models.Memory{
+				Total: int64(memTotal),
+				Used:  int64(memUsed),
+				Free:  int64(memFree),
+				Usage: memoryUsage,
+			}
+			if memory.Free < 0 {
+				memory.Free = 0
+			}
+			if memory.Used > memory.Total {
+				memory.Used = memory.Total
+			}
+			if detailedStatus != nil && detailedStatus.Balloon > 0 {
+				memory.Balloon = int64(detailedStatus.Balloon)
+			}
 
 			vm := models.VM{
 				ID:       guestID,
@@ -2781,12 +2902,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				Type:     "qemu",
 				CPU:      safeFloat(res.CPU),
 				CPUs:     res.MaxCPU,
-				Memory: models.Memory{
-					Total: int64(res.MaxMem),
-					Used:  int64(res.Mem),
-					Free:  int64(res.MaxMem - res.Mem),
-					Usage: safePercentage(float64(res.Mem), float64(res.MaxMem)),
-				},
+				Memory:   memory,
 				Disk: models.Disk{
 					Total: int64(diskTotal),
 					Used:  int64(diskUsed),
@@ -2804,7 +2920,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				DiskWrite:         maxInt64(0, int64(diskWriteRate)),
 				Uptime:            int64(res.Uptime),
 				Template:          res.Template == 1,
-				LastSeen:          time.Now(),
+				LastSeen:          sampleTime,
 			}
 
 			// Parse tags
@@ -2825,6 +2941,15 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			}
 
 			allVMs = append(allVMs, vm)
+
+			m.recordGuestSnapshot(instanceName, vm.Type, res.Node, res.VMID, GuestMemorySnapshot{
+				Name:         vm.Name,
+				Status:       vm.Status,
+				RetrievedAt:  sampleTime,
+				MemorySource: memorySource,
+				Memory:       vm.Memory,
+				Raw:          guestRaw,
+			})
 
 			// For non-running VMs, zero out resource usage metrics to prevent false alerts
 			// Proxmox may report stale or residual metrics for stopped VMs
@@ -3026,6 +3151,13 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				guestID = fmt.Sprintf("%s-%s-%d", instanceName, node.Node, vm.VMID)
 			}
 
+			guestRaw := VMMemoryRaw{
+				ListingMem:    vm.Mem,
+				ListingMaxMem: vm.MaxMem,
+				Agent:         vm.Agent,
+			}
+			memorySource := "listing-mem"
+
 			// Initialize I/O metrics from VM listing (may be 0 for disk I/O)
 			diskReadBytes := int64(vm.DiskRead)
 			diskWriteBytes := int64(vm.DiskWrite)
@@ -3042,6 +3174,17 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			if vm.Status == "running" {
 				// Try to get detailed VM status for more accurate memory reporting and disk I/O
 				if status, err := client.GetVMStatus(ctx, node.Node, vm.VMID); err == nil && status != nil {
+					guestRaw.StatusMaxMem = status.MaxMem
+					guestRaw.StatusMem = status.Mem
+					guestRaw.StatusFreeMem = status.FreeMem
+					guestRaw.Balloon = status.Balloon
+					guestRaw.BalloonMin = status.BalloonMin
+					guestRaw.Agent = status.Agent
+					if status.MemInfo != nil {
+						guestRaw.MemInfoUsed = status.MemInfo.Used
+						guestRaw.MemInfoFree = status.MemInfo.Free
+						guestRaw.MemInfoTotal = status.MemInfo.Total
+					}
 
 					// Use actual disk I/O values from detailed status
 					diskReadBytes = int64(status.DiskRead)
@@ -3052,16 +3195,21 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					// If balloon is enabled, use balloon as the total available memory
 					if status.Balloon > 0 && status.Balloon < status.MaxMem {
 						memTotal = status.Balloon
+						guestRaw.DerivedFromBall = true
+					} else {
+						guestRaw.DerivedFromBall = false
 					}
 
 					// If we have free memory from guest agent, calculate actual usage
 					if status.FreeMem > 0 {
 						// Guest agent reports free memory, so calculate used
 						memUsed = memTotal - status.FreeMem
+						memorySource = "status-freemem"
 					} else if status.Mem > 0 {
 						// No guest agent free memory data, but we have actual memory usage
 						// Use the reported memory usage from Proxmox
 						memUsed = status.Mem
+						memorySource = "status-mem"
 					} else {
 						// No memory data available at all - show 0% usage
 						memUsed = 0
@@ -3083,10 +3231,12 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				} else {
 					// Failed to get detailed status - show 0% usage
 					memUsed = 0
+					memorySource = "status-unavailable"
 				}
 			} else {
 				// VM is not running, show 0 usage
 				memUsed = 0
+				memorySource = "powered-off"
 			}
 
 			// Set CPU to 0 for non-running VMs to avoid false alerts
@@ -3296,12 +3446,13 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			}
 
 			// Calculate I/O rates after we have the actual values
+			sampleTime := time.Now()
 			currentMetrics := IOMetrics{
 				DiskRead:   diskReadBytes,
 				DiskWrite:  diskWriteBytes,
 				NetworkIn:  networkInBytes,
 				NetworkOut: networkOutBytes,
-				Timestamp:  time.Now(),
+				Timestamp:  sampleTime,
 			}
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
@@ -3341,19 +3492,27 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				Template:          vm.Template == 1,
 				Tags:              tags,
 				Lock:              vm.Lock,
-				LastSeen:          time.Now(),
+				LastSeen:          sampleTime,
 			}
 			allVMs = append(allVMs, modelVM)
 
+			m.recordGuestSnapshot(instanceName, modelVM.Type, node.Node, vm.VMID, GuestMemorySnapshot{
+				Name:         vm.Name,
+				Status:       vm.Status,
+				RetrievedAt:  sampleTime,
+				MemorySource: memorySource,
+				Memory:       modelVM.Memory,
+				Raw:          guestRaw,
+			})
+
 			// Record metrics history
-			now := time.Now()
-			m.metricsHistory.AddGuestMetric(modelVM.ID, "cpu", modelVM.CPU*100, now)
-			m.metricsHistory.AddGuestMetric(modelVM.ID, "memory", modelVM.Memory.Usage, now)
-			m.metricsHistory.AddGuestMetric(modelVM.ID, "disk", modelVM.Disk.Usage, now)
-			m.metricsHistory.AddGuestMetric(modelVM.ID, "diskread", float64(modelVM.DiskRead), now)
-			m.metricsHistory.AddGuestMetric(modelVM.ID, "diskwrite", float64(modelVM.DiskWrite), now)
-			m.metricsHistory.AddGuestMetric(modelVM.ID, "netin", float64(modelVM.NetworkIn), now)
-			m.metricsHistory.AddGuestMetric(modelVM.ID, "netout", float64(modelVM.NetworkOut), now)
+			m.metricsHistory.AddGuestMetric(modelVM.ID, "cpu", modelVM.CPU*100, sampleTime)
+			m.metricsHistory.AddGuestMetric(modelVM.ID, "memory", modelVM.Memory.Usage, sampleTime)
+			m.metricsHistory.AddGuestMetric(modelVM.ID, "disk", modelVM.Disk.Usage, sampleTime)
+			m.metricsHistory.AddGuestMetric(modelVM.ID, "diskread", float64(modelVM.DiskRead), sampleTime)
+			m.metricsHistory.AddGuestMetric(modelVM.ID, "diskwrite", float64(modelVM.DiskWrite), sampleTime)
+			m.metricsHistory.AddGuestMetric(modelVM.ID, "netin", float64(modelVM.NetworkIn), sampleTime)
+			m.metricsHistory.AddGuestMetric(modelVM.ID, "netout", float64(modelVM.NetworkOut), sampleTime)
 
 			// Check thresholds for alerts
 			m.alertManager.CheckGuest(modelVM, instanceName)

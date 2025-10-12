@@ -3805,12 +3805,25 @@ const Settings: Component<SettingsProps> = (props) => {
                       {(() => {
                         const sanitizeForGitHub = (data: Record<string, unknown>) => {
                           // Deep clone the data
-                          const sanitized = JSON.parse(JSON.stringify(data)) as Record<
-                            string,
-                            unknown
-                          >;
+                        const sanitized = JSON.parse(JSON.stringify(data)) as Record<
+                          string,
+                          unknown
+                        >;
 
-                          const connectionKeyMap = new Map<string, string>();
+                        const connectionKeyMap = new Map<string, string>();
+                        const instanceKeyMap = new Map<string, string>();
+
+                        const getSanitizedInstance = (instance: string) => {
+                          if (!instance) return instance;
+                          if (instanceKeyMap.has(instance)) {
+                            return instanceKeyMap.get(instance)!;
+                          }
+                          const suffixMatch = instance.match(/\.(lan|local|home|internal)$/);
+                          const suffix = suffixMatch ? suffixMatch[0] : '';
+                          const label = `instance-REDACTED${suffix}`;
+                          instanceKeyMap.set(instance, label);
+                          return label;
+                        };
 
                           // Sanitize IP addresses (keep first octet for network type identification)
                           const sanitizeIP = (ip: string) => {
@@ -3837,6 +3850,90 @@ const Settings: Component<SettingsProps> = (props) => {
                               .replace(/https?:\/\/[^"'\s]+/g, 'https://REDACTED')
                               .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, 'xxx.xxx.xxx.xxx');
                           };
+
+                          const sanitizeNotesArray = (notes: unknown) => {
+                            if (!Array.isArray(notes)) return notes;
+                            return notes.map((note) => {
+                              if (typeof note !== 'string') return note;
+                              const sanitizedNote = sanitizeText(note);
+                              return sanitizedNote ?? note;
+                            });
+                          };
+
+                          const sanitizeNodeSnapshots = (
+                            snapshots: Array<Record<string, unknown>>,
+                          ) =>
+                            snapshots.map((snapshot, index: number) => {
+                              const sanitizedSnapshot = { ...snapshot };
+                              const originalNode =
+                                typeof sanitizedSnapshot.node === 'string'
+                                  ? (sanitizedSnapshot.node as string)
+                                  : '';
+                              if (originalNode) {
+                                sanitizedSnapshot.node =
+                                  connectionKeyMap.get(originalNode) ||
+                                  sanitizeHostname(originalNode);
+                              }
+
+                              const originalInstance =
+                                typeof sanitizedSnapshot.instance === 'string'
+                                  ? (sanitizedSnapshot.instance as string)
+                                  : '';
+                              if (originalInstance) {
+                                sanitizedSnapshot.instance = getSanitizedInstance(originalInstance);
+                              }
+
+                              if (
+                                typeof sanitizedSnapshot.id === 'string' &&
+                                sanitizedSnapshot.id
+                              ) {
+                                sanitizedSnapshot.id = `node-snapshot-${index}`;
+                              }
+
+                              return sanitizedSnapshot;
+                            });
+
+                          const sanitizeGuestSnapshots = (
+                            snapshots: Array<Record<string, unknown>>,
+                          ) =>
+                            snapshots.map((snapshot, index: number) => {
+                              const sanitizedSnapshot = { ...snapshot };
+                              const originalNode =
+                                typeof sanitizedSnapshot.node === 'string'
+                                  ? (sanitizedSnapshot.node as string)
+                                  : '';
+                              if (originalNode) {
+                                sanitizedSnapshot.node =
+                                  connectionKeyMap.get(originalNode) ||
+                                  sanitizeHostname(originalNode);
+                              }
+
+                              const originalInstance =
+                                typeof sanitizedSnapshot.instance === 'string'
+                                  ? (sanitizedSnapshot.instance as string)
+                                  : '';
+                              if (originalInstance) {
+                                sanitizedSnapshot.instance = getSanitizedInstance(originalInstance);
+                              }
+
+                              if (typeof sanitizedSnapshot.name === 'string') {
+                                sanitizedSnapshot.name = 'vm-REDACTED';
+                              }
+
+                              if (typeof sanitizedSnapshot.vmid === 'number') {
+                                sanitizedSnapshot.vmid = index + 1;
+                              } else if (typeof sanitizedSnapshot.vmid === 'string') {
+                                sanitizedSnapshot.vmid = `vm-${index + 1}`;
+                              }
+
+                              if (Array.isArray(sanitizedSnapshot.notes)) {
+                                sanitizedSnapshot.notes = sanitizeNotesArray(
+                                  sanitizedSnapshot.notes,
+                                );
+                              }
+
+                              return sanitizedSnapshot;
+                            });
 
                           // Sanitize nodes
                           if (sanitized.nodes) {
@@ -3944,12 +4041,36 @@ const Settings: Component<SettingsProps> = (props) => {
                             });
                           }
 
+                          if (Array.isArray(sanitized.nodeSnapshots)) {
+                            sanitized.nodeSnapshots = sanitizeNodeSnapshots(
+                              sanitized.nodeSnapshots as Array<Record<string, unknown>>,
+                            );
+                          }
+
+                          if (Array.isArray(sanitized.guestSnapshots)) {
+                            sanitized.guestSnapshots = sanitizeGuestSnapshots(
+                              sanitized.guestSnapshots as Array<Record<string, unknown>>,
+                            );
+                          }
+
                           // Sanitize backend diagnostics (if present)
                           if (
                             sanitized.backendDiagnostics &&
                             typeof sanitized.backendDiagnostics === 'object'
                           ) {
                             const backend = sanitized.backendDiagnostics as Record<string, unknown>;
+
+                            if (Array.isArray(backend.nodeSnapshots)) {
+                              backend.nodeSnapshots = sanitizeNodeSnapshots(
+                                backend.nodeSnapshots as Array<Record<string, unknown>>,
+                              );
+                            }
+
+                            if (Array.isArray(backend.guestSnapshots)) {
+                              backend.guestSnapshots = sanitizeGuestSnapshots(
+                                backend.guestSnapshots as Array<Record<string, unknown>>,
+                              );
+                            }
 
                             if (Array.isArray(backend.nodes)) {
                               backend.nodes = backend.nodes.map((rawNode, index: number) => {

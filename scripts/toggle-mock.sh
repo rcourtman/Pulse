@@ -31,6 +31,21 @@ fi
 restart_backend() {
     echo -e "${YELLOW}Restarting backend...${NC}"
 
+    # Check if running under systemd
+    if systemctl is-active --quiet pulse-hot-dev; then
+        echo "Detected systemd hot-dev service, restarting it..."
+        sudo systemctl restart pulse-hot-dev
+        sleep 3
+        if systemctl is-active --quiet pulse-hot-dev; then
+            echo -e "${GREEN}✓ Hot-dev service restarted successfully${NC}"
+            return 0
+        else
+            echo -e "${RED}✗ Hot-dev service failed to start. Check: sudo journalctl -u pulse-hot-dev -n 50${NC}"
+            return 1
+        fi
+    fi
+
+    # Fallback: manual restart (for standalone hot-dev.sh)
     # Kill existing pulse backend
     pkill -x pulse 2>/dev/null || true
     sleep 1
