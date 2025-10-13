@@ -544,7 +544,7 @@ systemctl restart pulse-sensor-proxy
 4. **Reinstall proxy:**
    ```bash
    # Re-run installation script
-   /opt/pulse/scripts/install-temp-proxy.sh
+   /opt/pulse/scripts/install-sensor-proxy.sh
 
    # Verify service status
    systemctl status pulse-sensor-proxy

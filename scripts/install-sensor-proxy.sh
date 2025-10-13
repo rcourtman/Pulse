@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# install-temp-proxy.sh - Installs pulse-sensor-proxy on Proxmox host for secure temperature monitoring
+# install-sensor-proxy.sh - Installs pulse-sensor-proxy on Proxmox host for secure temperature monitoring
 # This script is idempotent and can be safely re-run
 
 set -euo pipefail

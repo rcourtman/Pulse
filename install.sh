@@ -1088,22 +1088,22 @@ create_lxc_container() {
     # Install temperature proxy on host for secure monitoring
     echo
     print_info "Installing temperature monitoring proxy on host..."
-    local proxy_script="/tmp/install-temp-proxy-$$.sh"
+    local proxy_script="/tmp/install-sensor-proxy-$$.sh"
 
     # Download proxy installer
     if command -v timeout >/dev/null 2>&1; then
         if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 \
-            "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-temp-proxy.sh" \
+            "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
             > "$proxy_script" 2>/dev/null; then
             print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-            print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-temp-proxy.sh | bash -s -- --ctid $CTID"
+            print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
         fi
     else
         if ! curl -fsSL --connect-timeout 5 --max-time 15 \
-            "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-temp-proxy.sh" \
+            "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
             > "$proxy_script" 2>/dev/null; then
             print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-            print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-temp-proxy.sh | bash -s -- --ctid $CTID"
+            print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
         fi
     fi
 
@@ -1115,7 +1115,7 @@ create_lxc_container() {
         else
             print_warn "Proxy installation failed - temperature monitoring will use fallback method"
             print_info "Check logs: /tmp/proxy-install-${CTID}.log"
-            print_info "Or run manually: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-temp-proxy.sh | bash -s -- --ctid $CTID"
+            print_info "Or run manually: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
         fi
         rm -f "$proxy_script"
     fi

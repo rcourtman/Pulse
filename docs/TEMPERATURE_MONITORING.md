@@ -215,7 +215,7 @@ As of v4.24.0, containerized deployments use **pulse-sensor-proxy** which elimin
 
 ```bash
 # On your Proxmox host
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-temp-proxy.sh | \
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
   bash -s -- --ctid <your-pulse-container-id>
 ```
 
