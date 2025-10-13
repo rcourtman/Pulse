@@ -1129,7 +1129,21 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 // detectLegacySSH checks if Pulse is using legacy SSH for temperature monitoring
+//
+// ⚠️ MIGRATION SCAFFOLDING - TEMPORARY CODE
+// This detection exists only to handle migration from legacy SSH-in-container
+// to the secure pulse-sensor-proxy architecture introduced in v4.23.0.
+//
+// REMOVAL CRITERIA: Remove after v5.0 or when banner telemetry shows <1% fire rate
+// for 30+ days. This code serves no functional purpose beyond migration assistance.
+//
+// Can be disabled via environment variable: PULSE_LEGACY_DETECTION=false
 func (r *Router) detectLegacySSH() (legacyDetected, recommendProxy bool) {
+	// Check if detection is disabled via environment variable
+	if os.Getenv("PULSE_LEGACY_DETECTION") == "false" {
+		return false, false
+	}
+
 	// Check if running in a container
 	inContainer := false
 	if _, err := os.Stat("/.dockerenv"); err == nil {

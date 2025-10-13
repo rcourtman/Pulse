@@ -34,6 +34,7 @@ import { SettingsAPI } from './api/settings';
 import { eventBus } from './stores/events';
 import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
+import { LegacySSHBanner } from './components/LegacySSHBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
@@ -548,6 +549,7 @@ function App() {
                   <SecurityWarning />
                   <DemoBanner />
                   <UpdateBanner />
+                  <LegacySSHBanner />
                   <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6">
                     <AppLayout
                       connected={connected}
