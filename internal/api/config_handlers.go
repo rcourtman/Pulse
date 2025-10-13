@@ -3558,6 +3558,95 @@ EOF
 fi
 fi  # End of ENABLE_TEMP_MONITORING check
 
+# Check if Pulse is running in a container and offer to install pulse-sensor-proxy
+if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
+    # Extract Pulse IP from URL
+    PULSE_IP=$(echo "%s" | sed -E 's|^https?://([^:/]+).*|\1|')
+
+    # Find container with this IP
+    PULSE_CTID=""
+    if [[ "$PULSE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # Check all containers for matching IP
+        for CTID in $(pct list | awk 'NR>1 {print $1}'); do
+            CT_IP=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}' || true)
+            if [ "$CT_IP" = "$PULSE_IP" ]; then
+                PULSE_CTID="$CTID"
+                break
+            fi
+        done
+    fi
+
+    if [ -n "$PULSE_CTID" ]; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📦 Container Detection"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "Detected Pulse running in LXC container $PULSE_CTID"
+        echo ""
+        echo "For enhanced security, install pulse-sensor-proxy on this host."
+        echo "This keeps SSH keys outside the container for better isolation."
+        echo ""
+        echo "Install pulse-sensor-proxy for container $PULSE_CTID? [Y/n]"
+        echo -n "> "
+
+        INSTALL_PROXY="y"
+        if [ -t 0 ]; then
+            read -n 1 -r INSTALL_PROXY
+        else
+            if read -n 1 -r INSTALL_PROXY </dev/tty 2>/dev/null; then
+                :
+            else
+                echo "(No terminal available - skipping proxy installation)"
+                INSTALL_PROXY="n"
+            fi
+        fi
+        echo ""
+        echo ""
+
+        if [[ $INSTALL_PROXY =~ ^[Yy]$|^$ ]]; then
+            echo "Installing pulse-sensor-proxy..."
+
+            # Download installer script
+            PROXY_INSTALLER="/tmp/install-sensor-proxy-$$.sh"
+            if curl -fsSL "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" -o "$PROXY_INSTALLER" 2>/dev/null; then
+                chmod +x "$PROXY_INSTALLER"
+
+                # Run installer
+                if "$PROXY_INSTALLER" --ctid "$PULSE_CTID" 2>&1; then
+                    echo ""
+                    echo "✓ pulse-sensor-proxy installed successfully"
+                    echo ""
+                    echo "Temperature monitoring will now use the secure proxy architecture."
+                    echo "SSH keys are stored on the host, not inside the container."
+                else
+                    echo ""
+                    echo "⚠️  Proxy installation failed. Temperature monitoring will use direct SSH."
+                    echo ""
+                    echo "To install manually later:"
+                    echo "  curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $PULSE_CTID"
+                fi
+
+                # Cleanup
+                rm -f "$PROXY_INSTALLER"
+            else
+                echo ""
+                echo "⚠️  Could not download proxy installer. Temperature monitoring will use direct SSH."
+                echo ""
+                echo "To install manually later:"
+                echo "  curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $PULSE_CTID"
+            fi
+        else
+            echo "Proxy installation skipped."
+            echo ""
+            echo "Temperature monitoring will use direct SSH (keys stored in container)."
+            echo ""
+            echo "To install proxy later for enhanced security:"
+            echo "  curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $PULSE_CTID"
+        fi
+    fi
+fi
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Setup Complete"
@@ -3583,7 +3672,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, pulseURL, sshPublicKey, pulseURL, authToken, tokenName, serverHost)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, pulseURL, sshPublicKey, pulseURL, authToken, pulseURL, tokenName, serverHost)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
