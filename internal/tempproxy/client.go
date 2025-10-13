@@ -11,11 +11,11 @@ import (
 )
 
 const (
-	defaultSocketPath = "/run/pulse-temp-proxy/pulse-temp-proxy.sock"
+	defaultSocketPath = "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
 	defaultTimeout    = 10 * time.Second
 )
 
-// Client communicates with pulse-temp-proxy via unix socket
+// Client communicates with pulse-sensor-proxy via unix socket
 type Client struct {
 	socketPath string
 	timeout    time.Duration
@@ -23,7 +23,7 @@ type Client struct {
 
 // NewClient creates a new proxy client
 func NewClient() *Client {
-	socketPath := os.Getenv("PULSE_TEMP_PROXY_SOCKET")
+	socketPath := os.Getenv("PULSE_SENSOR_PROXY_SOCKET")
 	if socketPath == "" {
 		socketPath = defaultSocketPath
 	}
