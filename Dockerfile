@@ -116,6 +116,7 @@ RUN mkdir -p /opt/pulse/bin
 COPY --from=backend-builder /app/pulse-docker-agent-linux-amd64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent-linux-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent-linux-armv7 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-docker-agent /opt/pulse/bin/pulse-docker-agent
 
 # Create config directory
 RUN mkdir -p /etc/pulse /data
