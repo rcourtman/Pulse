@@ -3111,7 +3111,11 @@ if [[ $MAIN_ACTION =~ ^[Rr]$ ]]; then
         TMP_AUTH_KEYS=$(mktemp)
         if [ -f "$TMP_AUTH_KEYS" ]; then
             # Remove only lines with pulse-managed-key marker (preserves user keys)
-            if grep -vF '# pulse-managed-key' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null; then
+            grep -vF '# pulse-managed-key' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null
+            GREP_EXIT=$?
+
+            # Exit 0 = lines remain, Exit 1 = all lines removed (both are success)
+            if [ $GREP_EXIT -eq 0 ] || [ $GREP_EXIT -eq 1 ]; then
                 # Preserve ownership and permissions from original
                 chmod --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || chmod 600 "$TMP_AUTH_KEYS"
                 chown --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || true
@@ -3123,7 +3127,7 @@ if [[ $MAIN_ACTION =~ ^[Rr]$ ]]; then
                     rm -f "$TMP_AUTH_KEYS"
                 fi
             else
-                # Cleanup temp file if grep failed
+                # Cleanup temp file if grep had a real error (exit > 1)
                 rm -f "$TMP_AUTH_KEYS"
             fi
         fi
