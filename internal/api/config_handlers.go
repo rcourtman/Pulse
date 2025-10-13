@@ -2997,6 +2997,160 @@ if ! command -v pveum &> /dev/null; then
    exit 1
 fi
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Main Menu
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+echo ""
+echo "What would you like to do?"
+echo ""
+echo "  [I] Install/Configure - Set up Pulse monitoring"
+echo "  [R] Remove All        - Uninstall everything Pulse has configured"
+echo "  [C] Cancel            - Exit without changes"
+echo ""
+echo -n "Your choice [I/r/c]: "
+
+MAIN_ACTION=""
+if [ -t 0 ]; then
+    read -n 1 -r MAIN_ACTION
+else
+    if read -n 1 -r MAIN_ACTION </dev/tty 2>/dev/null; then
+        :
+    else
+        echo "(No terminal available - defaulting to Install)"
+        MAIN_ACTION="I"
+    fi
+fi
+echo ""
+echo ""
+
+# Handle Cancel
+if [[ $MAIN_ACTION =~ ^[Cc]$ ]]; then
+    echo "Cancelled. No changes made."
+    exit 0
+fi
+
+# Handle Remove All
+if [[ $MAIN_ACTION =~ ^[Rr]$ ]]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🗑️  Complete Removal"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "This will remove:"
+    echo "  • pulse-sensor-proxy service and systemd unit"
+    echo "  • pulse-sensor-proxy system user"
+    echo "  • All SSH keys from authorized_keys (current and legacy)"
+    echo "  • LXC bind mounts from all container configs"
+    echo "  • Pulse monitoring API tokens and user"
+    echo "  • All Pulse-related files and directories"
+    echo ""
+    echo "⚠️  WARNING: This is a destructive operation!"
+    echo ""
+    echo -n "Are you sure? [y/N]: "
+
+    CONFIRM_REMOVE=""
+    if [ -t 0 ]; then
+        read -n 1 -r CONFIRM_REMOVE
+    else
+        if read -n 1 -r CONFIRM_REMOVE </dev/tty 2>/dev/null; then
+            :
+        else
+            echo "(No terminal available - cancelling removal)"
+            CONFIRM_REMOVE="n"
+        fi
+    fi
+    echo ""
+    echo ""
+
+    if [[ ! $CONFIRM_REMOVE =~ ^[Yy]$ ]]; then
+        echo "Removal cancelled. No changes made."
+        exit 0
+    fi
+
+    echo "Removing Pulse monitoring components..."
+    echo ""
+
+    # Stop and remove pulse-sensor-proxy service
+    if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+        echo "  • Stopping pulse-sensor-proxy service..."
+        systemctl stop pulse-sensor-proxy
+    fi
+    if systemctl is-enabled --quiet pulse-sensor-proxy 2>/dev/null; then
+        echo "  • Disabling pulse-sensor-proxy service..."
+        systemctl disable pulse-sensor-proxy
+    fi
+    if [ -f /etc/systemd/system/pulse-sensor-proxy.service ]; then
+        echo "  • Removing systemd unit file..."
+        rm -f /etc/systemd/system/pulse-sensor-proxy.service
+        systemctl daemon-reload
+    fi
+
+    # Remove pulse-sensor-proxy binary
+    if [ -f /usr/local/bin/pulse-sensor-proxy ]; then
+        echo "  • Removing pulse-sensor-proxy binary..."
+        rm -f /usr/local/bin/pulse-sensor-proxy
+    fi
+
+    # Remove pulse-sensor-proxy data directory
+    if [ -d /var/lib/pulse-sensor-proxy ]; then
+        echo "  • Removing pulse-sensor-proxy data directory..."
+        rm -rf /var/lib/pulse-sensor-proxy
+    fi
+
+    # Remove pulse-sensor-proxy user
+    if id -u pulse-sensor-proxy >/dev/null 2>&1; then
+        echo "  • Removing pulse-sensor-proxy system user..."
+        userdel pulse-sensor-proxy 2>/dev/null || true
+    fi
+
+    # Remove SSH keys from authorized_keys (all variants)
+    if [ -f /root/.ssh/authorized_keys ]; then
+        echo "  • Removing SSH keys from authorized_keys..."
+        # Remove any line containing "sensors -j" (forced command entries)
+        sed -i '/sensors -j/d' /root/.ssh/authorized_keys 2>/dev/null || true
+        # Remove any line containing "pulse-monitor" or "Pulse monitoring" comments
+        sed -i '/pulse-monitor/d' /root/.ssh/authorized_keys 2>/dev/null || true
+        sed -i '/Pulse monitoring/d' /root/.ssh/authorized_keys 2>/dev/null || true
+    fi
+
+    # Remove LXC bind mounts from all container configs
+    if [ -d /etc/pve/lxc ]; then
+        echo "  • Removing LXC bind mounts from container configs..."
+        for conf in /etc/pve/lxc/*.conf; do
+            if [ -f "$conf" ] && grep -q "pulse-sensor-proxy" "$conf"; then
+                sed -i '/pulse-sensor-proxy/d' "$conf"
+            fi
+        done
+    fi
+
+    # Remove Pulse monitoring API tokens and user
+    echo "  • Removing Pulse monitoring API tokens and user..."
+    if command -v pveum &> /dev/null; then
+        # List all tokens for pulse-monitor@pam and remove them
+        TOKEN_LIST=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk 'NR>3 {print $2}' | grep -v '^$' || true)
+        if [ -n "$TOKEN_LIST" ]; then
+            while IFS= read -r TOKEN; do
+                if [ -n "$TOKEN" ]; then
+                    pveum user token remove pulse-monitor@pam "$TOKEN" 2>/dev/null || true
+                fi
+            done <<< "$TOKEN_LIST"
+        fi
+        # Remove the user
+        pveum user delete pulse-monitor@pam 2>/dev/null || true
+        # Remove custom roles
+        pveum role delete PulseMonitor 2>/dev/null || true
+    fi
+
+    echo ""
+    echo "✓ Complete removal finished"
+    echo ""
+    echo "All Pulse monitoring components have been removed from this host."
+    exit 0
+fi
+
+# If we get here, user chose Install (or default)
+echo "Proceeding with installation..."
+echo ""
+
 # Extract Pulse server IP from the URL for token matching
 PULSE_IP_PATTERN=$(echo "%s" | sed 's/\./\-/g')
 
