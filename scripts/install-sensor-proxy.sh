@@ -12,7 +12,9 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 print_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    if [ "$QUIET" != true ]; then
+        echo -e "${GREEN}[INFO]${NC} $1"
+    fi
 }
 
 print_warn() {
@@ -21,6 +23,10 @@ print_warn() {
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
 }
 
 # Check if running on Proxmox host
@@ -33,6 +39,7 @@ fi
 CTID=""
 VERSION="latest"
 LOCAL_BINARY=""
+QUIET=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -47,6 +54,10 @@ while [[ $# -gt 0 ]]; do
         --local-binary)
             LOCAL_BINARY="$2"
             shift 2
+            ;;
+        --quiet)
+            QUIET=true
+            shift
             ;;
         *)
             print_error "Unknown option: $1"
@@ -287,32 +298,29 @@ LEGACY_KEYS_FOUND=false
 for key_type in id_rsa id_dsa id_ecdsa id_ed25519; do
     if pct exec "$CTID" -- test -f "/root/.ssh/$key_type" 2>/dev/null; then
         LEGACY_KEYS_FOUND=true
-        print_warn "Found legacy SSH key: /root/.ssh/$key_type"
+        if [ "$QUIET" != true ]; then
+            print_warn "Found legacy SSH key: /root/.ssh/$key_type"
+        fi
         pct exec "$CTID" -- rm -f "/root/.ssh/$key_type" "/root/.ssh/${key_type}.pub"
-        print_info "  Removed /root/.ssh/$key_type (proxy will handle SSH)"
+        print_info "  Removed /root/.ssh/$key_type"
     fi
 done
 
-if [ "$LEGACY_KEYS_FOUND" = true ]; then
+if [ "$LEGACY_KEYS_FOUND" = true ] && [ "$QUIET" != true ]; then
     print_info ""
-    print_info "${YELLOW}Legacy SSH keys removed from container${NC}"
-    print_info "The proxy on the host now handles all SSH connections"
-    print_info "This improves security by keeping keys outside the container"
+    print_info "Legacy SSH keys removed from container for security"
     print_info ""
 fi
 
-print_info "${GREEN}Installation complete!${NC}"
-print_info ""
-print_info "Temperature monitoring will now use the secure host-side proxy"
-print_info "SSH keys are stored on the Proxmox host, not in the container"
-print_info ""
-print_info "To configure temperature monitoring for cluster nodes:"
-print_info "  1. Access Pulse UI in container $CTID"
-print_info "  2. Go to Settings → Enable Temperature Monitoring"
-print_info "  3. The proxy will automatically discover and configure cluster nodes"
-print_info ""
-print_info "To check proxy status:"
-print_info "  systemctl status pulse-sensor-proxy"
-print_info "  journalctl -u pulse-sensor-proxy -f"
+if [ "$QUIET" = true ]; then
+    print_success "pulse-sensor-proxy installed and running"
+else
+    print_info "${GREEN}Installation complete!${NC}"
+    print_info ""
+    print_info "Temperature monitoring will use the secure host-side proxy"
+    print_info ""
+    print_info "To check proxy status:"
+    print_info "  systemctl status pulse-sensor-proxy"
+fi
 
 exit 0
