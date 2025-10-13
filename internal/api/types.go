@@ -11,9 +11,12 @@ import (
 
 // HealthResponse represents the health check response
 type HealthResponse struct {
-	Status    string  `json:"status"`
-	Timestamp int64   `json:"timestamp"`
-	Uptime    float64 `json:"uptime"`
+	Status                     string  `json:"status"`
+	Timestamp                  int64   `json:"timestamp"`
+	Uptime                     float64 `json:"uptime"`
+	LegacySSHDetected          bool    `json:"legacySSHDetected,omitempty"`
+	RecommendProxyUpgrade      bool    `json:"recommendProxyUpgrade,omitempty"`
+	ProxyInstallScriptAvailable bool   `json:"proxyInstallScriptAvailable,omitempty"`
 }
 
 // VersionResponse represents version information
