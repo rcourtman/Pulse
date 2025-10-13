@@ -64,6 +64,7 @@ AI_DEVELOPMENT.md
 .ai-coordination/
 scripts/pulse-watchdog.sh
 pulse-watchdog.log
+.mcp-servers/
 
 # Release process files
 CHANGELOG.md
@@ -144,3 +145,4 @@ cloud-relay/
 scripts/agent/
 docs/internal/
 claude.md
+pulse-temp-proxy
