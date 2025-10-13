@@ -3579,15 +3579,15 @@ if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
     if [ -n "$PULSE_CTID" ]; then
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "📦 Container Detection"
+        echo "🔒 Enhanced Security"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        echo "Detected Pulse running in LXC container $PULSE_CTID"
+        echo "Detected: Pulse running in container $PULSE_CTID"
         echo ""
-        echo "For enhanced security, install pulse-sensor-proxy on this host."
-        echo "This keeps SSH keys outside the container for better isolation."
+        echo "Recommended: Install secure proxy for temperature monitoring"
+        echo "This keeps credentials isolated outside the container."
         echo ""
-        echo "Install pulse-sensor-proxy for container $PULSE_CTID? [Y/n]"
+        echo "Enable secure proxy? [Y/n]"
         echo -n "> "
 
         INSTALL_PROXY="y"
@@ -3605,21 +3605,14 @@ if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
         echo ""
 
         if [[ $INSTALL_PROXY =~ ^[Yy]$|^$ ]]; then
-            echo "Installing pulse-sensor-proxy..."
-
             # Download installer script
             PROXY_INSTALLER="/tmp/install-sensor-proxy-$$.sh"
             if curl -fsSL "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" -o "$PROXY_INSTALLER" 2>/dev/null; then
                 chmod +x "$PROXY_INSTALLER"
 
-                # Run installer
-                if "$PROXY_INSTALLER" --ctid "$PULSE_CTID" 2>&1; then
-                    echo ""
-                    echo "✓ pulse-sensor-proxy installed successfully"
-                    echo ""
-
-                    # Clean up old container-based SSH keys from nodes
-                    echo "Cleaning up legacy SSH keys from cluster nodes..."
+                # Run installer (suppress verbose output)
+                if "$PROXY_INSTALLER" --ctid "$PULSE_CTID" --quiet 2>&1 | grep -E "✓|⚠️|ERROR" || "$PROXY_INSTALLER" --ctid "$PULSE_CTID" 2>&1 | grep -E "✓|⚠️|ERROR"; then
+                    # Clean up old container-based SSH keys from nodes (silent)
                     CLEANUP_NODES=""
                     if [ "$TEMPERATURE_ENABLED" = true ]; then
                         CLEANUP_NODES="$(hostname)"
@@ -3630,41 +3623,29 @@ if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
 
                     for NODE in $CLEANUP_NODES; do
                         if [ -n "$NODE" ] && [ -n "$SSH_PUBLIC_KEY" ]; then
-                            # Remove the old pulse@ keys (but not pulse-sensor-proxy keys)
                             ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR \
                                 root@"$NODE" \
                                 "sed -i '/$SSH_PUBLIC_KEY/d' /root/.ssh/authorized_keys 2>/dev/null || true" \
-                                >/dev/null 2>&1 && echo "  ✓ Cleaned up legacy key on $NODE" || true
+                                >/dev/null 2>&1
                         fi
                     done
 
                     echo ""
-                    echo "Temperature monitoring will now use the secure proxy architecture."
-                    echo "SSH keys are stored on the host, not inside the container."
+                    echo "✓ Secure proxy architecture enabled"
+                    echo "  SSH keys are managed on the host for enhanced security"
                 else
                     echo ""
-                    echo "⚠️  Proxy installation failed. Temperature monitoring will use direct SSH."
-                    echo ""
-                    echo "To install manually later:"
-                    echo "  curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $PULSE_CTID"
+                    echo "⚠️  Installation incomplete - using standard configuration"
                 fi
 
-                # Cleanup
                 rm -f "$PROXY_INSTALLER"
             else
                 echo ""
-                echo "⚠️  Could not download proxy installer. Temperature monitoring will use direct SSH."
-                echo ""
-                echo "To install manually later:"
-                echo "  curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $PULSE_CTID"
+                echo "⚠️  Network issue - using standard configuration"
+                echo "  (Proxy can be installed later for enhanced security)"
             fi
         else
-            echo "Proxy installation skipped."
-            echo ""
-            echo "Temperature monitoring will use direct SSH (keys stored in container)."
-            echo ""
-            echo "To install proxy later for enhanced security:"
-            echo "  curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $PULSE_CTID"
+            echo "Using standard configuration"
         fi
     fi
 fi
