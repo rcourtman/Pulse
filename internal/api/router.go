@@ -1144,13 +1144,43 @@ func (r *Router) detectLegacySSH() (legacyDetected, recommendProxy bool) {
 		return false, false
 	}
 
-	// Check if running in a container
+	// Check if running in a container using multiple detection methods
 	inContainer := false
+
+	// Method 1: Check for /.dockerenv (Docker)
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		inContainer = true
-	} else if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
-		if strings.Contains(string(data), "docker") || strings.Contains(string(data), "lxc") {
+	}
+
+	// Method 2: Check /proc/1/cgroup (Docker/LXC)
+	if !inContainer {
+		if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+			cgroupStr := string(data)
+			if strings.Contains(cgroupStr, "docker") ||
+			   strings.Contains(cgroupStr, "lxc") ||
+			   strings.Contains(cgroupStr, "/docker/") ||
+			   strings.Contains(cgroupStr, "/lxc/") {
+				inContainer = true
+			}
+		}
+	}
+
+	// Method 3: Check /run/systemd/container (systemd containers)
+	if !inContainer {
+		if _, err := os.Stat("/run/systemd/container"); err == nil {
 			inContainer = true
+		}
+	}
+
+	// Method 4: Check /proc/1/environ for container indicators
+	if !inContainer {
+		if data, err := os.ReadFile("/proc/1/environ"); err == nil {
+			environStr := string(data)
+			if strings.Contains(environStr, "container=") ||
+			   strings.Contains(environStr, "DOCKER") ||
+			   strings.Contains(environStr, "LXC") {
+				inContainer = true
+			}
 		}
 	}
 
@@ -1179,13 +1209,25 @@ func (r *Router) detectLegacySSH() (legacyDetected, recommendProxy bool) {
 		sshKeysConfigured = true
 	}
 
-	// If SSH keys exist, check if proxy is running
+	// If SSH keys exist, check if proxy is configured vs just temporarily down
 	if sshKeysConfigured {
 		// Check if pulse-sensor-proxy is available via unix socket
 		proxySocket := "/run/pulse-sensor-proxy/sensor.sock"
+		proxyBinary := "/usr/local/bin/pulse-sensor-proxy"
+
+		// If socket doesn't exist, need to distinguish:
+		// - Legacy setup: proxy never installed (binary doesn't exist)
+		// - Migrated setup: proxy installed but temporarily down
 		if _, err := os.Stat(proxySocket); err != nil {
-			// Socket doesn't exist - legacy SSH method detected
-			return true, true
+			// Socket missing - check if proxy was ever installed
+			if _, err := os.Stat(proxyBinary); err != nil {
+				// Proxy binary doesn't exist - this is legacy SSH setup
+				// User needs to remove nodes and re-add them
+				return true, true
+			}
+			// Proxy binary exists but socket is missing - likely just restarting/down
+			// Don't show banner - this is a transient issue, not a configuration problem
+			return false, false
 		}
 	}
 
@@ -1201,6 +1243,14 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 
 	// Detect legacy SSH setup
 	legacySSH, recommendProxy := r.detectLegacySSH()
+
+	// Log when legacy SSH is detected for telemetry/metrics
+	// This helps track removal criteria: <1% detection rate for 30+ days
+	if legacySSH && recommendProxy {
+		log.Warn().
+			Str("detection_type", "legacy_ssh_migration").
+			Msg("Legacy SSH configuration detected - user should migrate to proxy architecture")
+	}
 
 	response := HealthResponse{
 		Status:                 "healthy",
