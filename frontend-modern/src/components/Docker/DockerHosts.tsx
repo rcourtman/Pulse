@@ -652,7 +652,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                 if (alert.level === 'critical') criticalCount++;
                                 else if (alert.level === 'warning') warningCount++;
                               });
-                            } catch (e) {
+                            } catch (_e) {
                               // Ignore errors
                             }
                           });

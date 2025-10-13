@@ -530,7 +530,7 @@ func readExpectedVersion(t *testing.T) string {
 	data, err := os.ReadFile(versionPath)
 	if err != nil {
 		// Fall back to the hard-coded fallback in version manager
-		return "4.22.0"
+		return "4.24.0-rc.1"
 	}
 	return strings.TrimSpace(string(data))
 }

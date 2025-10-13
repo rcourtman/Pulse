@@ -39,7 +39,7 @@ export function LegacySSHBanner() {
         // Log banner impression for telemetry (removal criteria tracking)
         console.info('[Migration] Legacy SSH banner shown to user');
       }
-    } catch (error) {
+    } catch (_error) {
       // Silently fail - health check failures shouldn't break the UI
     }
   });

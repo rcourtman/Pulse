@@ -139,7 +139,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
             console.log('Backend healthy after websocket reconnect, reloading...');
             window.location.reload();
           }
-        } catch (error) {
+        } catch (_error) {
           console.warn('Health check failed after websocket reconnect, will keep trying');
         }
       }, 1000);
