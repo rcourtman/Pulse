@@ -29,6 +29,100 @@ For **containerized deployments** (LXC/Docker), Pulse uses a secure proxy archit
 - Automatically configured during installation
 - Transparent to users - no setup changes
 
+#### Manual installation (host-side)
+
+When you need to provision the proxy yourself (for example via your own automation), run these steps on the host that runs your Pulse container:
+
+1. **Install the binary**
+   ```bash
+   curl -L https://github.com/rcourtman/Pulse/releases/download/<TAG>/pulse-sensor-proxy-linux-amd64 \
+     -o /usr/local/bin/pulse-sensor-proxy
+   chmod 0755 /usr/local/bin/pulse-sensor-proxy
+   ```
+   Use the arm64/armv7 artefact if required.
+
+2. **Create the service account if missing**
+   ```bash
+   id pulse-sensor-proxy >/dev/null 2>&1 || \
+     useradd --system --user-group --no-create-home --shell /usr/sbin/nologin pulse-sensor-proxy
+   ```
+
+3. **Provision the data directories**
+   ```bash
+   install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy
+   install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 /var/lib/pulse-sensor-proxy/ssh
+   ```
+
+4. **(Optional) Add `/etc/pulse-sensor-proxy/config.yaml`**  
+   Only needed if you want explicit subnet/metrics settings; otherwise the proxy auto-detects host CIDRs.
+   ```yaml
+   allowed_source_subnets:
+     - 192.168.1.0/24
+   metrics_address: 0.0.0.0:9127   # use "disabled" to switch metrics off
+   ```
+
+5. **Install the hardened systemd unit**  
+   Copy the unit from `scripts/install-sensor-proxy.sh` or create `/etc/systemd/system/pulse-sensor-proxy.service` with:
+   ```ini
+   [Unit]
+   Description=Pulse Temperature Proxy
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=pulse-sensor-proxy
+   Group=pulse-sensor-proxy
+   WorkingDirectory=/var/lib/pulse-sensor-proxy
+   ExecStart=/usr/local/bin/pulse-sensor-proxy
+   Restart=on-failure
+   RestartSec=5s
+   RuntimeDirectory=pulse-sensor-proxy
+   RuntimeDirectoryMode=0775
+   UMask=0007
+   NoNewPrivileges=true
+   ProtectSystem=strict
+   ProtectHome=read-only
+   ReadWritePaths=/var/lib/pulse-sensor-proxy
+   ProtectKernelTunables=true
+   ProtectKernelModules=true
+   ProtectControlGroups=true
+   ProtectClock=true
+   PrivateTmp=true
+   PrivateDevices=true
+   ProtectProc=invisible
+   ProcSubset=pid
+   LockPersonality=true
+   RemoveIPC=true
+   RestrictSUIDSGID=true
+   RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+   RestrictNamespaces=true
+   SystemCallFilter=@system-service
+   SystemCallErrorNumber=EPERM
+   CapabilityBoundingSet=
+   AmbientCapabilities=
+   KeyringMode=private
+   LimitNOFILE=1024
+   StandardOutput=journal
+   StandardError=journal
+   SyslogIdentifier=pulse-sensor-proxy
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+6. **Enable the service**
+   ```bash
+   systemctl daemon-reload
+   systemctl enable --now pulse-sensor-proxy.service
+   ```
+   Confirm the socket appears at `/run/pulse-sensor-proxy/pulse-sensor-proxy.sock`.
+
+7. **Expose the socket to Pulse**
+   - **Proxmox LXC:** append `lxc.mount.entry: /run/pulse-sensor-proxy run/pulse-sensor-proxy none bind,create=dir 0 0` to `/etc/pve/lxc/<CTID>.conf` and restart the container.
+   - **Docker:** bind mount `/run/pulse-sensor-proxy` into the container (`- /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw`).
+
+After the container restarts, the backend will automatically use the proxy; if you want to refresh SSH restrictions, re-run node setup from **Settings → Nodes**.
+
 ### Legacy Architecture (Pre-v4.24.0 / Native Installs)
 
 For native (non-containerized) installations, Pulse connects directly via SSH:
