@@ -1128,6 +1128,56 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}), allowEmbedding, allowedEmbedOrigins).ServeHTTP(w, req)
 }
 
+// detectLegacySSH checks if Pulse is using legacy SSH for temperature monitoring
+func (r *Router) detectLegacySSH() (legacyDetected, recommendProxy bool) {
+	// Check if running in a container
+	inContainer := false
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		inContainer = true
+	} else if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+		if strings.Contains(string(data), "docker") || strings.Contains(string(data), "lxc") {
+			inContainer = true
+		}
+	}
+
+	// If not in container, no need for proxy
+	if !inContainer {
+		return false, false
+	}
+
+	// Check if SSH keys are configured in the data directory
+	sshKeysConfigured := false
+
+	// Check for SSH keys in the configured data directory
+	dataDir := r.config.DataPath
+	if dataDir == "" {
+		dataDir = "/etc/pulse"
+	}
+
+	sshPrivKeyPath := filepath.Join(dataDir, ".ssh", "id_ed25519")
+	if _, err := os.Stat(sshPrivKeyPath); err == nil {
+		sshKeysConfigured = true
+	}
+
+	// Also check for RSA keys
+	sshPrivKeyPathRSA := filepath.Join(dataDir, ".ssh", "id_rsa")
+	if _, err := os.Stat(sshPrivKeyPathRSA); err == nil {
+		sshKeysConfigured = true
+	}
+
+	// If SSH keys exist, check if proxy is running
+	if sshKeysConfigured {
+		// Check if pulse-sensor-proxy is available via unix socket
+		proxySocket := "/run/pulse-sensor-proxy/sensor.sock"
+		if _, err := os.Stat(proxySocket); err != nil {
+			// Socket doesn't exist - legacy SSH method detected
+			return true, true
+		}
+	}
+
+	return false, false
+}
+
 // handleHealth handles health check requests
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
@@ -1135,10 +1185,16 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Detect legacy SSH setup
+	legacySSH, recommendProxy := r.detectLegacySSH()
+
 	response := HealthResponse{
-		Status:    "healthy",
-		Timestamp: time.Now().Unix(),
-		Uptime:    time.Since(r.monitor.GetStartTime()).Seconds(),
+		Status:                 "healthy",
+		Timestamp:              time.Now().Unix(),
+		Uptime:                 time.Since(r.monitor.GetStartTime()).Seconds(),
+		LegacySSHDetected:      legacySSH,
+		RecommendProxyUpgrade:  recommendProxy,
+		ProxyInstallScriptAvailable: true, // Install script is always available
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
