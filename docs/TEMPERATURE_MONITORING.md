@@ -18,8 +18,8 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
 
 For **containerized deployments** (LXC/Docker), Pulse uses a secure proxy architecture:
 
-1. **pulse-temp-proxy** runs on the Proxmox host (outside the container)
-2. SSH keys are stored on the host filesystem (`/var/lib/pulse-temp-proxy/ssh/`)
+1. **pulse-sensor-proxy** runs on the Proxmox host (outside the container)
+2. SSH keys are stored on the host filesystem (`/var/lib/pulse-sensor-proxy/ssh/`)
 3. Pulse communicates with the proxy via unix socket
 4. The proxy handles all SSH connections to cluster nodes
 
@@ -202,7 +202,7 @@ You can still manage the entry manually if you prefer, but no extra steps are re
 
 ### Secure Proxy Architecture (Current)
 
-As of v4.24.0, containerized deployments use **pulse-temp-proxy** which eliminates the security concerns:
+As of v4.24.0, containerized deployments use **pulse-sensor-proxy** which eliminates the security concerns:
 
 - **SSH keys stored on host** - Not accessible from container
 - **Unix socket communication** - Pulse never touches SSH keys
@@ -294,13 +294,13 @@ To check if your deployment is using the secure proxy:
 
 ```bash
 # On Proxmox host - check proxy service
-systemctl status pulse-temp-proxy
+systemctl status pulse-sensor-proxy
 
 # Check if socket exists
-ls -l /run/pulse-temp-proxy/pulse-temp-proxy.sock
+ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock
 
 # View proxy logs
-journalctl -u pulse-temp-proxy -f
+journalctl -u pulse-sensor-proxy -f
 ```
 
 In the Pulse container, check the logs at startup:
@@ -327,27 +327,27 @@ Temperature data will stop appearing in the dashboard after the next polling cyc
 
 ### Managing the Proxy Service
 
-The pulse-temp-proxy service runs on the Proxmox host (outside the container).
+The pulse-sensor-proxy service runs on the Proxmox host (outside the container).
 
 **Service Management:**
 ```bash
 # Check service status
-systemctl status pulse-temp-proxy
+systemctl status pulse-sensor-proxy
 
 # Restart the proxy
-systemctl restart pulse-temp-proxy
+systemctl restart pulse-sensor-proxy
 
 # Stop the proxy (disables temperature monitoring)
-systemctl stop pulse-temp-proxy
+systemctl stop pulse-sensor-proxy
 
 # Start the proxy
-systemctl start pulse-temp-proxy
+systemctl start pulse-sensor-proxy
 
 # Enable proxy to start on boot
-systemctl enable pulse-temp-proxy
+systemctl enable pulse-sensor-proxy
 
 # Disable proxy autostart
-systemctl disable pulse-temp-proxy
+systemctl disable pulse-sensor-proxy
 ```
 
 ### Log Locations
@@ -355,16 +355,16 @@ systemctl disable pulse-temp-proxy
 **Proxy Logs (on Proxmox host):**
 ```bash
 # Follow proxy logs in real-time
-journalctl -u pulse-temp-proxy -f
+journalctl -u pulse-sensor-proxy -f
 
 # View last 50 lines
-journalctl -u pulse-temp-proxy -n 50
+journalctl -u pulse-sensor-proxy -n 50
 
 # View logs since last boot
-journalctl -u pulse-temp-proxy -b
+journalctl -u pulse-sensor-proxy -b
 
 # View logs with timestamps
-journalctl -u pulse-temp-proxy --since "1 hour ago"
+journalctl -u pulse-sensor-proxy --since "1 hour ago"
 ```
 
 **Pulse Logs (in container):**
@@ -381,12 +381,12 @@ Rotate SSH keys periodically for security (recommended every 90 days):
 
 ```bash
 # 1. On Proxmox host, backup old keys
-cd /var/lib/pulse-temp-proxy/ssh/
+cd /var/lib/pulse-sensor-proxy/ssh/
 cp id_ed25519 id_ed25519.backup
 cp id_ed25519.pub id_ed25519.pub.backup
 
 # 2. Generate new keypair
-ssh-keygen -t ed25519 -f id_ed25519 -N "" -C "pulse-temp-proxy-rotated"
+ssh-keygen -t ed25519 -f id_ed25519 -N "" -C "pulse-sensor-proxy-rotated"
 
 # 3. Get the new public key
 cat id_ed25519.pub
@@ -398,12 +398,12 @@ ssh root@node2 "echo 'NEW_PUBLIC_KEY_HERE' >> /root/.ssh/authorized_keys"
 # ... repeat for all nodes
 
 # 5. Restart proxy to use new keys
-systemctl restart pulse-temp-proxy
+systemctl restart pulse-sensor-proxy
 
 # 6. Verify temperature data still works in Pulse UI
 
 # 7. Remove old keys from nodes (after confirming new keys work)
-ssh root@node1 "sed -i '/pulse-temp-proxy-old/d' /root/.ssh/authorized_keys"
+ssh root@node1 "sed -i '/pulse-sensor-proxy-old/d' /root/.ssh/authorized_keys"
 ```
 
 ### Revoking Access When Nodes Leave
@@ -412,7 +412,7 @@ When removing a node from your cluster:
 
 ```bash
 # On the node being removed, remove the proxy's public key
-ssh root@old-node "sed -i '/pulse-temp-proxy/d' /root/.ssh/authorized_keys"
+ssh root@old-node "sed -i '/pulse-sensor-proxy/d' /root/.ssh/authorized_keys"
 
 # No restart needed - proxy will fail gracefully for that node
 # Temperature monitoring will continue for remaining nodes
@@ -422,14 +422,14 @@ ssh root@old-node "sed -i '/pulse-temp-proxy/d' /root/.ssh/authorized_keys"
 
 **Proxy Not Running:**
 - Symptom: No temperature data in Pulse UI
-- Check: `systemctl status pulse-temp-proxy` on Proxmox host
-- Fix: `systemctl start pulse-temp-proxy`
+- Check: `systemctl status pulse-sensor-proxy` on Proxmox host
+- Fix: `systemctl start pulse-sensor-proxy`
 
 **Socket Not Accessible in Container:**
 - Symptom: Pulse logs show "Temperature proxy not available - using direct SSH"
-- Check: `ls -l /run/pulse-temp-proxy/pulse-temp-proxy.sock` in container
+- Check: `ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock` in container
 - Fix: Verify bind mount in LXC config (`/etc/pve/lxc/<CTID>.conf`)
-- Should have: `lxc.mount.entry: /run/pulse-temp-proxy run/pulse-temp-proxy none bind,create=dir 0 0`
+- Should have: `lxc.mount.entry: /run/pulse-sensor-proxy run/pulse-sensor-proxy none bind,create=dir 0 0`
 
 **pvecm Not Available:**
 - Symptom: Proxy fails to discover cluster nodes
@@ -455,13 +455,13 @@ The proxy service includes systemd restart-on-failure, which handles most issues
 
 ```bash
 # Check proxy health
-systemctl is-active pulse-temp-proxy && echo "Proxy is running" || echo "Proxy is down"
+systemctl is-active pulse-sensor-proxy && echo "Proxy is running" || echo "Proxy is down"
 
 # Monitor logs for errors
-journalctl -u pulse-temp-proxy --since "1 hour ago" | grep -i error
+journalctl -u pulse-sensor-proxy --since "1 hour ago" | grep -i error
 
 # Verify socket exists and is accessible
-test -S /run/pulse-temp-proxy/pulse-temp-proxy.sock && echo "Socket OK" || echo "Socket missing"
+test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || echo "Socket missing"
 ```
 
 **Alerting:**
@@ -474,7 +474,7 @@ test -S /run/pulse-temp-proxy/pulse-temp-proxy.sock && echo "Socket OK" || echo 
 ### Known Limitations
 
 **One Proxy Per Host:**
-- Each Proxmox host runs one pulse-temp-proxy instance
+- Each Proxmox host runs one pulse-sensor-proxy instance
 - If multiple Pulse containers run on same host, they share the same proxy
 - All containers see the same temperature data from the same cluster
 
@@ -496,10 +496,10 @@ test -S /run/pulse-temp-proxy/pulse-temp-proxy.sock && echo "Socket OK" || echo 
 ### Common Issues
 
 **Temperature Data Stops Appearing:**
-1. Check proxy service: `systemctl status pulse-temp-proxy`
-2. Check proxy logs: `journalctl -u pulse-temp-proxy -n 50`
+1. Check proxy service: `systemctl status pulse-sensor-proxy`
+2. Check proxy logs: `journalctl -u pulse-sensor-proxy -n 50`
 3. Test SSH manually: `ssh root@node "sensors -j"`
-4. Verify socket exists: `ls -l /run/pulse-temp-proxy/pulse-temp-proxy.sock`
+4. Verify socket exists: `ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock`
 
 **New Cluster Node Not Showing Temperatures:**
 1. Ensure lm-sensors installed: `ssh root@new-node "sensors -j"`
@@ -507,14 +507,14 @@ test -S /run/pulse-temp-proxy/pulse-temp-proxy.sock && echo "Socket OK" || echo 
 3. Force refresh by restarting Pulse: `pct restart <CTID>`
 
 **Permission Denied Errors:**
-1. Verify socket permissions: `ls -l /run/pulse-temp-proxy/pulse-temp-proxy.sock`
+1. Verify socket permissions: `ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock`
 2. Should be: `srw-rw---- 1 root root`
 3. Check Pulse runs as root in container: `pct exec <CTID> -- whoami`
 
 **Proxy Service Won't Start:**
-1. Check logs: `journalctl -u pulse-temp-proxy -n 50`
-2. Verify binary exists: `ls -l /usr/local/bin/pulse-temp-proxy`
-3. Test manually: `/usr/local/bin/pulse-temp-proxy --version`
+1. Check logs: `journalctl -u pulse-sensor-proxy -n 50`
+2. Verify binary exists: `ls -l /usr/local/bin/pulse-sensor-proxy`
+3. Test manually: `/usr/local/bin/pulse-sensor-proxy --version`
 4. Check socket directory: `ls -ld /var/run`
 
 ### Getting Help
@@ -524,9 +524,9 @@ If temperature monitoring isn't working:
 1. **Collect diagnostic info:**
    ```bash
    # On Proxmox host
-   systemctl status pulse-temp-proxy
-   journalctl -u pulse-temp-proxy -n 100 > /tmp/proxy-logs.txt
-   ls -la /run/pulse-temp-proxy/pulse-temp-proxy.sock
+   systemctl status pulse-sensor-proxy
+   journalctl -u pulse-sensor-proxy -n 100 > /tmp/proxy-logs.txt
+   ls -la /run/pulse-sensor-proxy/pulse-sensor-proxy.sock
 
    # In Pulse container
    journalctl -u pulse -n 100 | grep -i temp > /tmp/pulse-temp-logs.txt

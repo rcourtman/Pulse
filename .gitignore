@@ -145,4 +145,4 @@ cloud-relay/
 scripts/agent/
 docs/internal/
 claude.md
-pulse-temp-proxy
+/pulse-sensor-proxy

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# install-temp-proxy.sh - Installs pulse-temp-proxy on Proxmox host for secure temperature monitoring
+# install-temp-proxy.sh - Installs pulse-sensor-proxy on Proxmox host for secure temperature monitoring
 # This script is idempotent and can be safely re-run
 
 set -euo pipefail
@@ -67,13 +67,22 @@ if ! pct status "$CTID" >/dev/null 2>&1; then
     exit 1
 fi
 
-print_info "Installing pulse-temp-proxy for container $CTID"
+print_info "Installing pulse-sensor-proxy for container $CTID"
 
-BINARY_PATH="/usr/local/bin/pulse-temp-proxy"
-SERVICE_PATH="/etc/systemd/system/pulse-temp-proxy.service"
-RUNTIME_DIR="/run/pulse-temp-proxy"
-SOCKET_PATH="/run/pulse-temp-proxy/pulse-temp-proxy.sock"
-SSH_DIR="/var/lib/pulse-temp-proxy/ssh"
+BINARY_PATH="/usr/local/bin/pulse-sensor-proxy"
+SERVICE_PATH="/etc/systemd/system/pulse-sensor-proxy.service"
+RUNTIME_DIR="/run/pulse-sensor-proxy"
+SOCKET_PATH="/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+SSH_DIR="/var/lib/pulse-sensor-proxy/ssh"
+
+# Create dedicated service account if it doesn't exist
+if ! id -u pulse-sensor-proxy >/dev/null 2>&1; then
+    print_info "Creating pulse-sensor-proxy service account..."
+    useradd --system --user-group --no-create-home --shell /usr/sbin/nologin pulse-sensor-proxy
+    print_info "Service account created"
+else
+    print_info "Service account pulse-sensor-proxy already exists"
+fi
 
 # Install binary - either from local file or download from GitHub
 if [[ -n "$LOCAL_BINARY" ]]; then
@@ -105,13 +114,13 @@ else
     ARCH=$(uname -m)
     case $ARCH in
         x86_64)
-            BINARY_NAME="pulse-temp-proxy-linux-amd64"
+            BINARY_NAME="pulse-sensor-proxy-linux-amd64"
             ;;
         aarch64|arm64)
-            BINARY_NAME="pulse-temp-proxy-linux-arm64"
+            BINARY_NAME="pulse-sensor-proxy-linux-arm64"
             ;;
         armv7l|armhf)
-            BINARY_NAME="pulse-temp-proxy-linux-armv7"
+            BINARY_NAME="pulse-sensor-proxy-linux-armv7"
             ;;
         *)
             print_error "Unsupported architecture: $ARCH"
@@ -134,12 +143,19 @@ else
     print_info "Binary installed to $BINARY_PATH"
 fi
 
-# Create SSH key directory
-mkdir -p "$SSH_DIR"
-chmod 700 "$SSH_DIR"
+# Create directories with proper ownership (handles fresh installs and upgrades)
+print_info "Setting up directories with proper ownership..."
+install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy
+install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 "$SSH_DIR"
 
-# Install systemd service
-print_info "Installing systemd service..."
+# Stop existing service if running (for upgrades)
+if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+    print_info "Stopping existing service for upgrade..."
+    systemctl stop pulse-sensor-proxy
+fi
+
+# Install hardened systemd service
+print_info "Installing hardened systemd service..."
 cat > "$SERVICE_PATH" << 'EOF'
 [Unit]
 Description=Pulse Temperature Proxy
@@ -148,26 +164,47 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
-ExecStart=/usr/local/bin/pulse-temp-proxy
+User=pulse-sensor-proxy
+Group=pulse-sensor-proxy
+WorkingDirectory=/var/lib/pulse-sensor-proxy
+ExecStart=/usr/local/bin/pulse-sensor-proxy
 Restart=on-failure
 RestartSec=5s
 
-# Runtime directory for socket
-RuntimeDirectory=pulse-temp-proxy
+# Runtime dirs/sockets
+RuntimeDirectory=pulse-sensor-proxy
 RuntimeDirectoryMode=0775
+UMask=0007
 
-# Security hardening
+# Core hardening
 NoNewPrivileges=true
-PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/pulse-temp-proxy
+ProtectHome=read-only
+ReadWritePaths=/var/lib/pulse-sensor-proxy
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectProc=invisible
+ProcSubset=pid
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+AmbientCapabilities=
+KeyringMode=private
+LimitNOFILE=1024
 
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=pulse-temp-proxy
+SyslogIdentifier=pulse-sensor-proxy
 
 [Install]
 WantedBy=multi-user.target
@@ -176,8 +213,8 @@ EOF
 # Reload systemd and start service
 print_info "Enabling and starting service..."
 systemctl daemon-reload
-systemctl enable pulse-temp-proxy.service
-systemctl restart pulse-temp-proxy.service
+systemctl enable pulse-sensor-proxy.service
+systemctl restart pulse-sensor-proxy.service
 
 # Wait for socket to appear
 print_info "Waiting for socket..."
@@ -190,7 +227,7 @@ done
 
 if [[ ! -S "$SOCKET_PATH" ]]; then
     print_error "Socket did not appear after 10 seconds"
-    print_info "Check service status: systemctl status pulse-temp-proxy"
+    print_info "Check service status: systemctl status pulse-sensor-proxy"
     exit 1
 fi
 
@@ -198,15 +235,15 @@ print_info "Socket ready at $SOCKET_PATH"
 
 # Configure LXC bind mount - mount entire directory for socket stability
 LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
-BIND_ENTRY="lxc.mount.entry: /run/pulse-temp-proxy run/pulse-temp-proxy none bind,create=dir 0 0"
+BIND_ENTRY="lxc.mount.entry: /run/pulse-sensor-proxy run/pulse-sensor-proxy none bind,create=dir 0 0"
 
 # Check if bind mount already exists
-if grep -q "pulse-temp-proxy" "$LXC_CONFIG"; then
+if grep -q "pulse-sensor-proxy" "$LXC_CONFIG"; then
     print_info "Bind mount already configured in LXC config"
     # Remove old socket-level bind if it exists
-    if grep -q "pulse-temp-proxy.sock" "$LXC_CONFIG"; then
+    if grep -q "pulse-sensor-proxy.sock" "$LXC_CONFIG"; then
         print_info "Upgrading from socket-level to directory-level bind mount..."
-        sed -i '/pulse-temp-proxy\.sock/d' "$LXC_CONFIG"
+        sed -i '/pulse-sensor-proxy\.sock/d' "$LXC_CONFIG"
         echo "$BIND_ENTRY" >> "$LXC_CONFIG"
         NEEDS_RESTART=true
     fi
@@ -227,7 +264,7 @@ fi
 
 # Verify socket is accessible in container
 print_info "Verifying socket accessibility..."
-if pct exec "$CTID" -- test -S /run/pulse-temp-proxy/pulse-temp-proxy.sock; then
+if pct exec "$CTID" -- test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock; then
     print_info "Socket is accessible in container"
 else
     print_warn "Socket is not yet accessible in container"
@@ -236,11 +273,11 @@ fi
 
 # Test proxy status
 print_info "Testing proxy status..."
-if systemctl is-active --quiet pulse-temp-proxy; then
-    print_info "${GREEN}✓${NC} pulse-temp-proxy is running"
+if systemctl is-active --quiet pulse-sensor-proxy; then
+    print_info "${GREEN}✓${NC} pulse-sensor-proxy is running"
 else
-    print_error "pulse-temp-proxy is not running"
-    print_info "Check logs: journalctl -u pulse-temp-proxy -n 50"
+    print_error "pulse-sensor-proxy is not running"
+    print_info "Check logs: journalctl -u pulse-sensor-proxy -n 50"
     exit 1
 fi
 
@@ -255,7 +292,7 @@ print_info "  2. Go to Settings → Enable Temperature Monitoring"
 print_info "  3. The proxy will automatically discover and configure cluster nodes"
 print_info ""
 print_info "To check proxy status:"
-print_info "  systemctl status pulse-temp-proxy"
-print_info "  journalctl -u pulse-temp-proxy -f"
+print_info "  systemctl status pulse-sensor-proxy"
+print_info "  journalctl -u pulse-sensor-proxy -f"
 
 exit 0
