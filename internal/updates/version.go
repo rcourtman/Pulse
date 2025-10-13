@@ -119,7 +119,37 @@ func (v *Version) IsPrerelease() bool {
 
 // GetCurrentVersion gets the current running version
 func GetCurrentVersion() (*VersionInfo, error) {
-	// Try to get version from git first (development)
+	// Try to read from VERSION file first (release builds)
+	versionPaths := []string{
+		"VERSION",
+		"/opt/pulse/VERSION",
+		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
+	}
+
+	for _, path := range versionPaths {
+		versionBytes, err := os.ReadFile(path)
+		if err == nil {
+			version := strings.TrimSpace(string(versionBytes))
+			if version != "" {
+				// Determine channel from version string
+				channel := "stable"
+				if strings.Contains(strings.ToLower(version), "rc") {
+					channel = "rc"
+				}
+				return &VersionInfo{
+					Version:        version,
+					Build:          "release",
+					Runtime:        "go",
+					Channel:        channel,
+					IsDevelopment:  false,
+					IsDocker:       isDockerEnvironment(),
+					DeploymentType: GetDeploymentType(),
+				}, nil
+			}
+		}
+	}
+
+	// Fall back to git (development builds)
 	gitVersion, err := getGitVersion()
 	if err == nil && gitVersion != "" {
 		// Determine channel from git version
@@ -136,34 +166,6 @@ func GetCurrentVersion() (*VersionInfo, error) {
 			IsDocker:       isDockerEnvironment(),
 			DeploymentType: GetDeploymentType(),
 		}, nil
-	}
-
-	// Try to read from VERSION file in multiple locations
-	versionPaths := []string{
-		"VERSION",
-		"/opt/pulse/VERSION",
-		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
-	}
-
-	for _, path := range versionPaths {
-		versionBytes, err := os.ReadFile(path)
-		if err == nil {
-			version := strings.TrimSpace(string(versionBytes))
-			// Determine channel from version string
-			channel := "stable"
-			if strings.Contains(strings.ToLower(version), "rc") {
-				channel = "rc"
-			}
-			return &VersionInfo{
-				Version:        version,
-				Build:          "release",
-				Runtime:        "go",
-				Channel:        channel,
-				IsDevelopment:  false,
-				IsDocker:       isDockerEnvironment(),
-				DeploymentType: GetDeploymentType(),
-			}, nil
-		}
 	}
 
 	// Final fallback
