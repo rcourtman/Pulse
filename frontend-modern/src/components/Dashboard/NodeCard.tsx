@@ -125,7 +125,8 @@ const NodeCard: Component<NodeCardProps> = (props) => {
     return value !== null ? Math.round(value) : null;
   });
   const temperatureTooltip = createMemo(() => {
-    if (!props.node.temperature?.available) {
+    const hasCPU = props.node.temperature?.hasCPU ?? props.node.temperature?.available;
+    if (!hasCPU) {
       return '';
     }
     const value = cpuTemperatureValue();
@@ -236,18 +237,12 @@ const NodeCard: Component<NodeCardProps> = (props) => {
           ↑{formatUptime(props.node.uptime)}
         </span>
         <Show
-          when={props.node.temperature?.available && cpuTemperatureValue() !== null}
+          when={
+            cpuTemperatureValue() !== null &&
+            (props.node.temperature?.hasCPU ?? props.node.temperature?.available)
+          }
           fallback={
-            props.node.temperature?.available ? (
-              <span
-                class="font-medium text-gray-500 dark:text-gray-400"
-                title="CPU sensor unavailable"
-              >
-                🌡--
-              </span>
-            ) : (
-              <span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>
-            )
+            <span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>
           }
         >
           <span

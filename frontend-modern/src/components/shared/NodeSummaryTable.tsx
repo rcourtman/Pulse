@@ -604,15 +604,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           when={
                             online &&
                             isPVE &&
-                            node!.temperature?.available &&
-                            cpuTemperatureValue !== null
+                            cpuTemperatureValue !== null &&
+                            (node!.temperature?.hasCPU ?? node!.temperature?.available)
                           }
                           fallback={
-                            <span class="text-xs text-gray-400 dark:text-gray-500">
-                              {online && isPVE && node!.temperature?.available
-                                ? 'No CPU sensor'
-                                : '-'}
-                            </span>
+                            <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
                           }
                         >
                           {(() => {

@@ -491,6 +491,8 @@ func generateNodeTemperature(cores int) *models.Temperature {
 	if rand.Float64() < 0.3 {
 		return &models.Temperature{
 			Available: false,
+			HasCPU:    false,
+			HasNVMe:   false,
 		}
 	}
 
@@ -537,6 +539,8 @@ func generateNodeTemperature(cores int) *models.Temperature {
 		Cores:      coreTemps,
 		NVMe:       nvmeTemps,
 		Available:  true,
+		HasCPU:     true,
+		HasNVMe:    len(nvmeTemps) > 0,
 		LastUpdate: time.Now(),
 	}
 }
