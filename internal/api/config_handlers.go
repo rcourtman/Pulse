@@ -3070,18 +3070,20 @@ if [[ $MAIN_ACTION =~ ^[Rr]$ ]]; then
     echo ""
 
     # Stop and remove pulse-sensor-proxy service
-    if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
-        echo "  • Stopping pulse-sensor-proxy service..."
-        systemctl stop pulse-sensor-proxy
-    fi
-    if systemctl is-enabled --quiet pulse-sensor-proxy 2>/dev/null; then
-        echo "  • Disabling pulse-sensor-proxy service..."
-        systemctl disable pulse-sensor-proxy
-    fi
-    if [ -f /etc/systemd/system/pulse-sensor-proxy.service ]; then
-        echo "  • Removing systemd unit file..."
-        rm -f /etc/systemd/system/pulse-sensor-proxy.service
-        systemctl daemon-reload
+    if command -v systemctl &> /dev/null; then
+        if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+            echo "  • Stopping pulse-sensor-proxy service..."
+            systemctl stop pulse-sensor-proxy || true
+        fi
+        if systemctl is-enabled --quiet pulse-sensor-proxy 2>/dev/null; then
+            echo "  • Disabling pulse-sensor-proxy service..."
+            systemctl disable pulse-sensor-proxy || true
+        fi
+        if [ -f /etc/systemd/system/pulse-sensor-proxy.service ]; then
+            echo "  • Removing systemd unit file..."
+            rm -f /etc/systemd/system/pulse-sensor-proxy.service
+            systemctl daemon-reload || true
+        fi
     fi
 
     # Remove pulse-sensor-proxy binary
@@ -3102,31 +3104,37 @@ if [[ $MAIN_ACTION =~ ^[Rr]$ ]]; then
         userdel pulse-sensor-proxy 2>/dev/null || true
     fi
 
-    # Remove SSH keys from authorized_keys (all variants)
+    # Remove SSH keys from authorized_keys (only Pulse-managed entries)
     if [ -f /root/.ssh/authorized_keys ]; then
         echo "  • Removing SSH keys from authorized_keys..."
-        # Remove any line containing "sensors -j" (forced command entries)
-        sed -i '/sensors -j/d' /root/.ssh/authorized_keys 2>/dev/null || true
-        # Remove any line containing "pulse-monitor" or "Pulse monitoring" comments
-        sed -i '/pulse-monitor/d' /root/.ssh/authorized_keys 2>/dev/null || true
-        sed -i '/Pulse monitoring/d' /root/.ssh/authorized_keys 2>/dev/null || true
+        # Create temporary file for safe atomic update
+        TMP_AUTH_KEYS=$(mktemp)
+        if [ -f "$TMP_AUTH_KEYS" ]; then
+            # Remove only lines with pulse-managed-key marker (preserves user keys)
+            grep -vF '# pulse-managed-key' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null || true
+            # Preserve permissions and atomically replace
+            chmod 600 "$TMP_AUTH_KEYS"
+            mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys
+        fi
     fi
 
     # Remove LXC bind mounts from all container configs
     if [ -d /etc/pve/lxc ]; then
         echo "  • Removing LXC bind mounts from container configs..."
+        shopt -s nullglob
         for conf in /etc/pve/lxc/*.conf; do
-            if [ -f "$conf" ] && grep -q "pulse-sensor-proxy" "$conf"; then
-                sed -i '/pulse-sensor-proxy/d' "$conf"
+            if [ -f "$conf" ] && grep -q "pulse-sensor-proxy" "$conf" 2>/dev/null; then
+                sed -i '/pulse-sensor-proxy/d' "$conf" || true
             fi
         done
+        shopt -u nullglob
     fi
 
     # Remove Pulse monitoring API tokens and user
     echo "  • Removing Pulse monitoring API tokens and user..."
     if command -v pveum &> /dev/null; then
-        # List all tokens for pulse-monitor@pam and remove them
-        TOKEN_LIST=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk 'NR>3 {print $2}' | grep -v '^$' || true)
+        # List all tokens for pulse-monitor@pam and remove them (idempotent)
+        TOKEN_LIST=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk 'NR>3 {print $2}' | grep -v '^$' || printf '')
         if [ -n "$TOKEN_LIST" ]; then
             while IFS= read -r TOKEN; do
                 if [ -n "$TOKEN" ]; then
@@ -3134,9 +3142,9 @@ if [[ $MAIN_ACTION =~ ^[Rr]$ ]]; then
                 fi
             done <<< "$TOKEN_LIST"
         fi
-        # Remove the user
+        # Remove the user (idempotent)
         pveum user delete pulse-monitor@pam 2>/dev/null || true
-        # Remove custom roles
+        # Remove custom roles (idempotent)
         pveum role delete PulseMonitor 2>/dev/null || true
     fi
 
@@ -3417,7 +3425,7 @@ else
 
 # SSH public key embedded from Pulse server
 SSH_PUBLIC_KEY="%s"
-SSH_RESTRICTED_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_PUBLIC_KEY"
+SSH_RESTRICTED_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_PUBLIC_KEY # pulse-managed-key"
 TEMPERATURE_ENABLED=false
 
 # Check if SSH key is already configured and whether it needs upgrading
@@ -3722,10 +3730,20 @@ if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
     if [[ "$PULSE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         # Check all containers for matching IP
         for CTID in $(pct list | awk 'NR>1 {print $1}'); do
-            CT_IP=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}' || true)
+            # Verify container is running before attempting connection
+            if ! pct status "$CTID" 2>/dev/null | grep -q "running"; then
+                continue
+            fi
+
+            # Get container IP (handles both IPv4 and IPv6)
+            CT_IP=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}' || printf '')
+
             if [ "$CT_IP" = "$PULSE_IP" ]; then
-                PULSE_CTID="$CTID"
-                break
+                # Validate with pct config to ensure it's the right container
+                if pct config "$CTID" >/dev/null 2>&1; then
+                    PULSE_CTID="$CTID"
+                    break
+                fi
             fi
         done
     fi
@@ -3761,32 +3779,51 @@ if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
         if [[ $INSTALL_PROXY =~ ^[Yy]$|^$ ]]; then
             # Download installer script
             PROXY_INSTALLER="/tmp/install-sensor-proxy-$$.sh"
-            if curl -fsSL "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" -o "$PROXY_INSTALLER" 2>/dev/null; then
+            if curl --fail --show-error --silent --location \
+                "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" \
+                -o "$PROXY_INSTALLER" 2>&1; then
                 chmod +x "$PROXY_INSTALLER"
 
                 # Run installer (suppress verbose output)
                 if "$PROXY_INSTALLER" --ctid "$PULSE_CTID" --quiet 2>&1 | grep -E "✓|⚠️|ERROR" || "$PROXY_INSTALLER" --ctid "$PULSE_CTID" 2>&1 | grep -E "✓|⚠️|ERROR"; then
-                    # Clean up old container-based SSH keys from nodes (silent)
-                    CLEANUP_NODES=""
-                    if [ "$TEMPERATURE_ENABLED" = true ]; then
-                        CLEANUP_NODES="$(hostname)"
-                    fi
-                    if [ -n "${OTHER_NODES_LIST+x}" ] && [ ${#OTHER_NODES_LIST[@]} -gt 0 ]; then
-                        CLEANUP_NODES="$CLEANUP_NODES ${OTHER_NODES_LIST[*]}"
-                    fi
-
-                    for NODE in $CLEANUP_NODES; do
-                        if [ -n "$NODE" ] && [ -n "$SSH_PUBLIC_KEY" ]; then
-                            ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR \
-                                root@"$NODE" \
-                                "sed -i '/$SSH_PUBLIC_KEY/d' /root/.ssh/authorized_keys 2>/dev/null || true" \
-                                >/dev/null 2>&1
+                    # Verify proxy health before removing legacy keys
+                    PROXY_HEALTHY=false
+                    if command -v systemctl >/dev/null 2>&1; then
+                        if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                            PROXY_HEALTHY=true
                         fi
-                    done
+                    elif [ -x /usr/local/bin/pulse-sensor-proxy ]; then
+                        # Binary exists and is executable
+                        PROXY_HEALTHY=true
+                    fi
 
-                    echo ""
-                    echo "✓ Secure proxy architecture enabled"
-                    echo "  SSH keys are managed on the host for enhanced security"
+                    if [ "$PROXY_HEALTHY" = true ]; then
+                        # Clean up old container-based SSH keys from nodes (silent)
+                        CLEANUP_NODES=""
+                        if [ "$TEMPERATURE_ENABLED" = true ]; then
+                            CLEANUP_NODES="$(hostname)"
+                        fi
+                        if [ -n "${OTHER_NODES_LIST+x}" ] && [ ${#OTHER_NODES_LIST[@]} -gt 0 ]; then
+                            CLEANUP_NODES="$CLEANUP_NODES ${OTHER_NODES_LIST[*]}"
+                        fi
+
+                        for NODE in $CLEANUP_NODES; do
+                            if [ -n "$NODE" ] && [ -n "$SSH_PUBLIC_KEY" ]; then
+                                ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR \
+                                    root@"$NODE" \
+                                    "sed -i '/$SSH_PUBLIC_KEY/d' /root/.ssh/authorized_keys 2>/dev/null || true" \
+                                    >/dev/null 2>&1
+                            fi
+                        done
+
+                        echo ""
+                        echo "✓ Secure proxy architecture enabled"
+                        echo "  SSH keys are managed on the host for enhanced security"
+                    else
+                        echo ""
+                        echo "⚠️  Proxy installed but not yet active - keeping existing SSH keys"
+                        echo "  Legacy keys will be removed automatically on next setup run"
+                    fi
                 else
                     echo ""
                     echo "⚠️  Installation incomplete - using standard configuration"
