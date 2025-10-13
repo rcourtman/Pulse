@@ -3003,11 +3003,11 @@ fi
 echo ""
 echo "What would you like to do?"
 echo ""
-echo "  [I] Install/Configure - Set up Pulse monitoring"
-echo "  [R] Remove All        - Uninstall everything Pulse has configured"
-echo "  [C] Cancel            - Exit without changes"
+echo "  [1] Install/Configure - Set up Pulse monitoring"
+echo "  [2] Remove All        - Uninstall everything Pulse has configured"
+echo "  [3] Cancel            - Exit without changes"
 echo ""
-echo -n "Your choice [I/r/c]: "
+echo -n "Your choice [1/2/3]: "
 
 MAIN_ACTION=""
 if [ -t 0 ]; then
@@ -3017,20 +3017,20 @@ else
         :
     else
         echo "(No terminal available - defaulting to Install)"
-        MAIN_ACTION="I"
+        MAIN_ACTION="1"
     fi
 fi
 echo ""
 echo ""
 
 # Handle Cancel
-if [[ $MAIN_ACTION =~ ^[Cc]$ ]]; then
+if [[ $MAIN_ACTION =~ ^[3Cc]$ ]]; then
     echo "Cancelled. No changes made."
     exit 0
 fi
 
 # Handle Remove All
-if [[ $MAIN_ACTION =~ ^[Rr]$ ]]; then
+if [[ $MAIN_ACTION =~ ^[2Rr]$ ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🗑️  Complete Removal"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
