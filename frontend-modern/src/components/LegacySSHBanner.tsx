@@ -1,4 +1,5 @@
 import { Show, createSignal, createEffect, onMount } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 
 /**
  * ⚠️ MIGRATION SCAFFOLDING - TEMPORARY COMPONENT
@@ -12,6 +13,7 @@ import { Show, createSignal, createEffect, onMount } from 'solid-js';
  * Can be disabled by setting PULSE_LEGACY_DETECTION=false on backend.
  */
 export function LegacySSHBanner() {
+  const navigate = useNavigate();
   const [isVisible, setIsVisible] = createSignal(false);
   const [isDismissed, setIsDismissed] = createSignal(false);
 
@@ -34,6 +36,8 @@ export function LegacySSHBanner() {
 
       if (health.legacySSHDetected && health.recommendProxyUpgrade) {
         setIsVisible(true);
+        // Log banner impression for telemetry (removal criteria tracking)
+        console.info('[Migration] Legacy SSH banner shown to user');
       }
     } catch (error) {
       // Silently fail - health check failures shouldn't break the UI
@@ -45,6 +49,8 @@ export function LegacySSHBanner() {
     setIsVisible(false);
     // Store dismissal in localStorage so it persists
     localStorage.setItem('legacySSHBannerDismissed', 'true');
+    // Log dismissal for telemetry
+    console.info('[Migration] Legacy SSH banner dismissed by user');
   };
 
   return (
@@ -70,10 +76,18 @@ export function LegacySSHBanner() {
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
 
-              <div class="text-sm">
-                <span class="font-medium">Legacy temperature monitoring detected.</span>
-                {' '}
-                <span>Remove and re-add your nodes to upgrade to the secure proxy architecture.</span>
+              <div class="flex items-center gap-3 flex-wrap">
+                <div class="text-sm">
+                  <span class="font-medium">Legacy temperature monitoring detected.</span>
+                  {' '}
+                  <span>Remove and re-add your nodes to upgrade to the secure proxy architecture.</span>
+                </div>
+                <button
+                  onClick={() => navigate('/settings/nodes')}
+                  class="px-3 py-1 text-xs font-medium bg-orange-600 hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-800 text-white rounded transition-colors"
+                >
+                  Go to Nodes →
+                </button>
               </div>
             </div>
 
