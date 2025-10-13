@@ -3617,6 +3617,28 @@ if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
                     echo ""
                     echo "✓ pulse-sensor-proxy installed successfully"
                     echo ""
+
+                    # Clean up old container-based SSH keys from nodes
+                    echo "Cleaning up legacy SSH keys from cluster nodes..."
+                    CLEANUP_NODES=""
+                    if [ "$TEMPERATURE_ENABLED" = true ]; then
+                        CLEANUP_NODES="$(hostname)"
+                    fi
+                    if [ -n "${OTHER_NODES_LIST+x}" ] && [ ${#OTHER_NODES_LIST[@]} -gt 0 ]; then
+                        CLEANUP_NODES="$CLEANUP_NODES ${OTHER_NODES_LIST[*]}"
+                    fi
+
+                    for NODE in $CLEANUP_NODES; do
+                        if [ -n "$NODE" ] && [ -n "$SSH_PUBLIC_KEY" ]; then
+                            # Remove the old pulse@ keys (but not pulse-sensor-proxy keys)
+                            ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR \
+                                root@"$NODE" \
+                                "sed -i '/$SSH_PUBLIC_KEY/d' /root/.ssh/authorized_keys 2>/dev/null || true" \
+                                >/dev/null 2>&1 && echo "  ✓ Cleaned up legacy key on $NODE" || true
+                        fi
+                    done
+
+                    echo ""
                     echo "Temperature monitoring will now use the secure proxy architecture."
                     echo "SSH keys are stored on the host, not inside the container."
                 else
