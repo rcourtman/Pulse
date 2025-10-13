@@ -3111,23 +3111,34 @@ if [[ $MAIN_ACTION =~ ^[Rr]$ ]]; then
         TMP_AUTH_KEYS=$(mktemp)
         if [ -f "$TMP_AUTH_KEYS" ]; then
             # Remove only lines with pulse-managed-key marker (preserves user keys)
-            grep -vF '# pulse-managed-key' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null || true
-            # Preserve permissions and atomically replace
-            chmod 600 "$TMP_AUTH_KEYS"
-            mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys
+            if grep -vF '# pulse-managed-key' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null; then
+                # Preserve ownership and permissions from original
+                chmod --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || chmod 600 "$TMP_AUTH_KEYS"
+                chown --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || true
+                # Atomically replace (abort if mv fails)
+                if mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys; then
+                    :
+                else
+                    # Cleanup temp file if move failed
+                    rm -f "$TMP_AUTH_KEYS"
+                fi
+            else
+                # Cleanup temp file if grep failed
+                rm -f "$TMP_AUTH_KEYS"
+            fi
         fi
     fi
 
     # Remove LXC bind mounts from all container configs
     if [ -d /etc/pve/lxc ]; then
         echo "  • Removing LXC bind mounts from container configs..."
-        shopt -s nullglob
-        for conf in /etc/pve/lxc/*.conf; do
-            if [ -f "$conf" ] && grep -q "pulse-sensor-proxy" "$conf" 2>/dev/null; then
-                sed -i '/pulse-sensor-proxy/d' "$conf" || true
-            fi
-        done
-        shopt -u nullglob
+        if compgen -G "/etc/pve/lxc/*.conf" > /dev/null; then
+            for conf in /etc/pve/lxc/*.conf; do
+                if [ -f "$conf" ] && grep -q "pulse-sensor-proxy" "$conf" 2>/dev/null; then
+                    sed -i '/pulse-sensor-proxy/d' "$conf" || true
+                fi
+            done
+        fi
     fi
 
     # Remove Pulse monitoring API tokens and user
@@ -3735,16 +3746,19 @@ if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
                 continue
             fi
 
-            # Get container IP (handles both IPv4 and IPv6)
-            CT_IP=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}' || printf '')
+            # Get all container IPs (handles both IPv4 and IPv6)
+            CT_IPS=$(pct exec "$CTID" -- hostname -I 2>/dev/null || printf '')
 
-            if [ "$CT_IP" = "$PULSE_IP" ]; then
-                # Validate with pct config to ensure it's the right container
-                if pct config "$CTID" >/dev/null 2>&1; then
-                    PULSE_CTID="$CTID"
-                    break
+            # Check if any of the container's IPs match the Pulse IP
+            for CT_IP in $CT_IPS; do
+                if [ "$CT_IP" = "$PULSE_IP" ]; then
+                    # Validate with pct config to ensure it's the right container
+                    if pct config "$CTID" >/dev/null 2>&1; then
+                        PULSE_CTID="$CTID"
+                        break 2  # Break out of both loops
+                    fi
                 fi
-            fi
+            done
         done
     fi
 
