@@ -197,7 +197,7 @@ cd ../..
 rm -rf "$universal_dir"
 
 # Copy standalone pulse-sensor-proxy binaries to release directory
-# These are needed by install-temp-proxy.sh installer script
+# These are needed by install-sensor-proxy.sh installer script
 echo "Copying standalone pulse-sensor-proxy binaries..."
 for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$RELEASE_DIR/"
