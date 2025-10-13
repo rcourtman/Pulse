@@ -281,6 +281,26 @@ else
     exit 1
 fi
 
+# Check for and remove legacy SSH keys from container
+print_info "Checking for legacy SSH keys in container..."
+LEGACY_KEYS_FOUND=false
+for key_type in id_rsa id_dsa id_ecdsa id_ed25519; do
+    if pct exec "$CTID" -- test -f "/root/.ssh/$key_type" 2>/dev/null; then
+        LEGACY_KEYS_FOUND=true
+        print_warn "Found legacy SSH key: /root/.ssh/$key_type"
+        pct exec "$CTID" -- rm -f "/root/.ssh/$key_type" "/root/.ssh/${key_type}.pub"
+        print_info "  Removed /root/.ssh/$key_type (proxy will handle SSH)"
+    fi
+done
+
+if [ "$LEGACY_KEYS_FOUND" = true ]; then
+    print_info ""
+    print_info "${YELLOW}Legacy SSH keys removed from container${NC}"
+    print_info "The proxy on the host now handles all SSH connections"
+    print_info "This improves security by keeping keys outside the container"
+    print_info ""
+fi
+
 print_info "${GREEN}Installation complete!${NC}"
 print_info ""
 print_info "Temperature monitoring will now use the secure host-side proxy"
