@@ -549,7 +549,9 @@ type Temperature struct {
 	CPUMax     float64    `json:"cpuMax,omitempty"`     // Highest core temperature
 	Cores      []CoreTemp `json:"cores,omitempty"`      // Individual core temperatures
 	NVMe       []NVMeTemp `json:"nvme,omitempty"`       // NVMe drive temperatures
-	Available  bool       `json:"available"`            // Whether temperature data is available
+	Available  bool       `json:"available"`            // Whether any temperature data is available
+	HasCPU     bool       `json:"hasCPU"`               // Whether CPU temperature data is available
+	HasNVMe    bool       `json:"hasNVMe"`              // Whether NVMe temperature data is available
 	LastUpdate time.Time  `json:"lastUpdate"`           // When this data was collected
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -153,6 +154,8 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 		NVMe:  []models.NVMeTemp{},
 	}
 
+	foundCPUChip := false
+
 	// Parse each sensor chip
 	for chipName, chipData := range sensorsData {
 		chipMap, ok := chipData.(map[string]interface{})
@@ -160,8 +163,15 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 			continue
 		}
 
-		// Handle CPU temperature sensors (coretemp, k10temp, etc.)
-		if strings.Contains(chipName, "coretemp") || strings.Contains(chipName, "k10temp") {
+		// Handle CPU temperature sensors
+		chipLower := strings.ToLower(chipName)
+		if strings.Contains(chipLower, "coretemp") ||
+		   strings.Contains(chipLower, "k10temp") ||
+		   strings.Contains(chipLower, "zenpower") ||
+		   strings.Contains(chipLower, "k8temp") ||
+		   strings.Contains(chipLower, "acpitz") ||
+		   strings.Contains(chipLower, "it87") {
+			foundCPUChip = true
 			tc.parseCPUTemps(chipMap, temp)
 		}
 
@@ -180,11 +190,13 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 		}
 	}
 
-	if temp.CPUPackage > 0 || temp.CPUMax > 0 || len(temp.Cores) > 0 || len(temp.NVMe) > 0 {
-		temp.Available = true
-	} else {
-		temp.Available = false
-	}
+	// Set individual sensor type flags based on chip presence, not value thresholds
+	// This prevents false negatives when sensors report 0°C during resets or temporarily
+	temp.HasCPU = foundCPUChip
+	temp.HasNVMe = len(temp.NVMe) > 0
+
+	// Available means any temperature data exists (backward compatibility)
+	temp.Available = temp.HasCPU || temp.HasNVMe
 
 	return temp, nil
 }
@@ -199,7 +211,7 @@ func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, te
 
 		// Look for Package id (Intel) or Tdie (AMD)
 		if strings.Contains(sensorName, "Package id") || strings.Contains(sensorName, "Tdie") {
-			if tempVal := extractTempInput(sensorMap); tempVal > 0 {
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) {
 				temp.CPUPackage = tempVal
 			}
 		}
@@ -207,7 +219,7 @@ func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, te
 		// Look for individual cores
 		if strings.HasPrefix(sensorName, "Core ") {
 			coreNum := extractCoreNumber(sensorName)
-			if tempVal := extractTempInput(sensorMap); tempVal > 0 {
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) {
 				temp.Cores = append(temp.Cores, models.CoreTemp{
 					Core: coreNum,
 					Temp: tempVal,
@@ -233,7 +245,7 @@ func (tc *TemperatureCollector) parseNVMeTemps(chipName string, chipMap map[stri
 
 		// Look for Composite temperature (main NVMe temp)
 		if strings.Contains(sensorName, "Composite") || strings.Contains(sensorName, "Sensor 1") {
-			if tempVal := extractTempInput(sensorMap); tempVal > 0 {
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
 				temp.NVMe = append(temp.NVMe, models.NVMeTemp{
 					Device: device,
 					Temp:   tempVal,
@@ -261,7 +273,7 @@ func extractTempInput(sensorMap map[string]interface{}) float64 {
 			}
 		}
 	}
-	return 0
+	return math.NaN()
 }
 
 // extractCoreNumber extracts the core number from a sensor name like "Core 0"

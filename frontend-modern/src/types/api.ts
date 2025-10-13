@@ -491,7 +491,9 @@ export interface Temperature {
   cpuMax?: number; // Highest core temperature
   cores?: CoreTemp[]; // Individual core temperatures
   nvme?: NVMeTemp[]; // NVMe drive temperatures
-  available: boolean; // Whether temperature data is available
+  available: boolean; // Whether any temperature data is available
+  hasCPU?: boolean; // Whether CPU temperature data is available
+  hasNVMe?: boolean; // Whether NVMe temperature data is available
   lastUpdate: string; // When this data was collected
 }
 
