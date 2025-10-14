@@ -77,10 +77,17 @@ export function LegacySSHBanner() {
               </svg>
 
               <div class="flex items-center gap-3 flex-wrap">
-                <div class="text-sm">
+                <div class="text-sm space-x-1">
                   <span class="font-medium">Legacy temperature monitoring detected.</span>
-                  {' '}
-                  <span>Remove and re-add your nodes to upgrade to the secure proxy architecture.</span>
+                  <span>Re-run the proxy installer to migrate to the secure host bridge.</span>
+                  <a
+                    href="https://github.com/rcourtman/Pulse/blob/main/docs/PULSE_SENSOR_PROXY_HARDENING.md#upgrading-existing-installations"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="underline decoration-dashed underline-offset-2 hover:decoration-solid"
+                  >
+                    View upgrade guide ↗
+                  </a>
                 </div>
                 <button
                   onClick={() => navigate('/settings/nodes')}
