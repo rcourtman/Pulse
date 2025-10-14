@@ -244,43 +244,67 @@ fi
 
 print_info "Socket ready at $SOCKET_PATH"
 
-# Configure LXC bind mount - mount entire directory for socket stability
-LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
-BIND_ENTRY="lxc.mount.entry: /run/pulse-sensor-proxy run/pulse-sensor-proxy none bind,create=dir 0 0"
+# Ensure container mount via mp configuration
+print_info "Ensuring container socket mount configuration..."
+MOUNT_TARGET="/mnt/pulse-proxy"
+CONFIG_CONTENT=$(pct config "$CTID")
+CURRENT_MP=$(pct config "$CTID" | awk -v target="$MOUNT_TARGET" '$1 ~ /^mp[0-9]+:$/ && index($0, "mp=" target) {split($1, arr, ":"); print arr[1]; exit}')
+MOUNT_UPDATED=false
 
-# Check if bind mount already exists
-if grep -q "pulse-sensor-proxy" "$LXC_CONFIG"; then
-    print_info "Bind mount already configured in LXC config"
-    # Remove old socket-level bind if it exists
-    if grep -q "pulse-sensor-proxy.sock" "$LXC_CONFIG"; then
-        print_info "Upgrading from socket-level to directory-level bind mount..."
-        sed -i '/pulse-sensor-proxy\.sock/d' "$LXC_CONFIG"
-        echo "$BIND_ENTRY" >> "$LXC_CONFIG"
-        NEEDS_RESTART=true
+if [[ -z "$CURRENT_MP" ]]; then
+    for idx in $(seq 0 9); do
+        if ! printf "%s\n" "$CONFIG_CONTENT" | grep -q "^mp${idx}:"; then
+            CURRENT_MP="mp${idx}"
+            break
+        fi
+    done
+    if [[ -z "$CURRENT_MP" ]]; then
+        print_error "Unable to find available mp slot for container mount"
+        exit 1
     fi
+    print_info "Configuring container mount using $CURRENT_MP..."
+    pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0"
+    MOUNT_UPDATED=true
 else
-    print_info "Adding bind mount to LXC config..."
-    echo "$BIND_ENTRY" >> "$LXC_CONFIG"
-    NEEDS_RESTART=true
+    print_info "Container already has socket mount configured ($CURRENT_MP)"
+    pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0"
+    MOUNT_UPDATED=true
 fi
 
-# Restart container to apply bind mount if needed
-if [[ "${NEEDS_RESTART:-false}" == "true" ]]; then
-    print_info "Restarting container to apply bind mount..."
+# Remove legacy lxc.mount.entry directives if present
+LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
+if grep -q "lxc.mount.entry: /run/pulse-sensor-proxy" "$LXC_CONFIG"; then
+    print_info "Removing legacy lxc.mount.entry directives for pulse-sensor-proxy"
+    sed -i '/lxc\.mount\.entry: \/run\/pulse-sensor-proxy/d' "$LXC_CONFIG"
+    MOUNT_UPDATED=true
+fi
+
+# Restart container to apply mount if configuration changed or mount missing
+if [[ "$MOUNT_UPDATED" = true ]]; then
+    print_info "Restarting container to apply socket mount..."
     pct stop "$CTID" || true
     sleep 2
     pct start "$CTID"
     sleep 5
 fi
 
-# Verify socket is accessible in container
+# Verify socket directory and file inside container
 print_info "Verifying socket accessibility..."
-if pct exec "$CTID" -- test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock; then
-    print_info "Socket is accessible in container"
+if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
+    print_info "Socket is accessible in container at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
 else
-    print_warn "Socket is not yet accessible in container"
-    print_info "Container may need additional restart or configuration"
+    print_warn "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+    print_info "Check container configuration and restart if necessary"
 fi
+
+# Configure Pulse backend environment override inside container
+print_info "Configuring Pulse backend to use mounted proxy socket..."
+pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse-backend.service.d"
+pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse-backend.service.d/10-pulse-proxy.conf
+[Service]
+Environment=PULSE_SENSOR_PROXY_SOCKET=${MOUNT_TARGET}/pulse-sensor-proxy.sock
+EOF"
+pct exec "$CTID" -- systemctl daemon-reload || true
 
 # Test proxy status
 print_info "Testing proxy status..."

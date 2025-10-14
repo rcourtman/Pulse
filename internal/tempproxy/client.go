@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	defaultSocketPath = "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
-	defaultTimeout    = 10 * time.Second
+	defaultSocketPath   = "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+	containerSocketPath = "/mnt/pulse-proxy/pulse-sensor-proxy.sock"
+	defaultTimeout      = 10 * time.Second
 )
 
 // Client communicates with pulse-sensor-proxy via unix socket
@@ -25,7 +26,13 @@ type Client struct {
 func NewClient() *Client {
 	socketPath := os.Getenv("PULSE_SENSOR_PROXY_SOCKET")
 	if socketPath == "" {
-		socketPath = defaultSocketPath
+		if _, err := os.Stat(defaultSocketPath); err == nil {
+			socketPath = defaultSocketPath
+		} else if _, err := os.Stat(containerSocketPath); err == nil {
+			socketPath = containerSocketPath
+		} else {
+			socketPath = defaultSocketPath
+		}
 	}
 
 	return &Client{

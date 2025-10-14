@@ -70,14 +70,19 @@ func main() {
 
 // Proxy manages the temperature monitoring proxy
 type Proxy struct {
-	socketPath   string
-	sshKeyPath   string
-	listener     net.Listener
-	rateLimiter  *rateLimiter
-	nodeGate     *nodeGate
-	router       map[string]handlerFunc
-	config       *Config
-	metrics      *ProxyMetrics
+	socketPath  string
+	sshKeyPath  string
+	listener    net.Listener
+	rateLimiter *rateLimiter
+	nodeGate    *nodeGate
+	router      map[string]handlerFunc
+	config      *Config
+	metrics     *ProxyMetrics
+
+	allowedPeerUIDs   map[uint32]struct{}
+	allowedPeerGIDs   map[uint32]struct{}
+	idMappedUIDRanges []idRange
+	idMappedGIDRanges []idRange
 }
 
 // RPC request types
@@ -159,6 +164,10 @@ func runProxy() {
 		RPCGetTemperature:    proxy.handleGetTemperatureV2,
 	}
 
+	if err := proxy.initAuthRules(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize authentication rules")
+	}
+
 	if err := proxy.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start proxy")
 	}
@@ -210,9 +219,8 @@ func (p *Proxy) Start() error {
 	}
 	p.listener = listener
 
-	// Set socket permissions to owner+group only
-	// We use SO_PEERCRED for authentication, so we don't need world-readable
-	if err := os.Chmod(p.socketPath, 0660); err != nil {
+	// Set liberal socket permissions; SO_PEERCRED enforces auth
+	if err := os.Chmod(p.socketPath, 0666); err != nil {
 		log.Warn().Err(err).Msg("Failed to set socket permissions")
 	}
 
@@ -272,6 +280,16 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	cred, err := extractPeerCredentials(conn)
 	if err != nil {
 		log.Warn().Err(err).Msg("Peer credentials unavailable")
+		p.sendErrorV2(conn, "unauthorized", "")
+		return
+	}
+
+	if err := p.authorizePeer(cred); err != nil {
+		log.Warn().
+			Err(err).
+			Uint32("uid", cred.uid).
+			Uint32("gid", cred.gid).
+			Msg("Peer authorization failed")
 		p.sendErrorV2(conn, "unauthorized", "")
 		return
 	}
