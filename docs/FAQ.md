@@ -33,8 +33,8 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 Remove the env var (check `sudo systemctl show pulse | grep Environment`) and restart to enable UI configuration.
 
 ### What permissions needed?
-- PVE: `PVEAuditor` minimum (includes VM.GuestAgent.Audit for disk usage in PVE 9+)
-- PVE 8: Also needs `VM.Monitor` permission for VM disk usage via QEMU agent
+- PVE core API access: `PVEAuditor`
+- PVE guest metrics: `VM.GuestAgent.Audit` (PVE 9+) or `VM.Monitor` (PVE 8) plus `Sys.Audit` for Ceph — Pulse setup script adds these to the `PulseMonitor` role automatically
 - PBS: `DatastoreReader` minimum
 
 ### API tokens vs passwords?
@@ -123,9 +123,10 @@ VMs show "-" because the QEMU Guest Agent is not installed or not working. This 
    ```
 
 5. **Check Pulse has permissions:**
-   - Proxmox 9: `PVEAuditor` role (includes `VM.GuestAgent.Audit`)
-   - Proxmox 8: `VM.Monitor` permission
-   - The setup script adds these automatically
+   - Proxmox 9: `VM.GuestAgent.Audit` privilege (Pulse setup adds via `PulseMonitor`)
+   - Proxmox 8: `VM.Monitor` privilege (Pulse setup adds via `PulseMonitor`)
+   - `Sys.Audit` is recommended for Ceph metrics and included when available
+   - The setup script applies all of the above automatically
 
 **Note:** Container (LXC) disk usage always works without guest agent because containers share the host kernel.
 

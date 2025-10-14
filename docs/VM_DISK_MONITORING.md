@@ -79,25 +79,62 @@ qm agent <vmid> get-fsinfo
 Pulse needs the right permissions to query the guest agent:
 
 **Proxmox VE 8 and below:**
-- Requires `VM.Monitor` permission
-- Setup script automatically adds this
+- Requires `VM.Monitor` for guest agent access
+- `Sys.Audit` adds Ceph/cluster metrics and is applied when available
+- Pulse setup script creates a `PulseMonitor` role with these privileges automatically
 
 **Proxmox VE 9+:**
-- Requires `VM.GuestAgent.Audit` permission (included in `PVEAuditor` role)
-- Setup script automatically configures this
+- Requires `VM.GuestAgent.Audit` for guest agent access
+- `Sys.Audit` remains recommended for Ceph/cluster metrics
+- Pulse setup script applies both via the `PulseMonitor` role (even if `PVEAuditor` lacks them)
 
 **Both API tokens and passwords work** - tokens do NOT have any limitation accessing guest agent data.
 
 When you run the Pulse setup script, it automatically detects your Proxmox version and sets the correct permissions. If setting up manually:
 
 ```bash
-# Proxmox 9+
+# Shared read-only access
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
-# PVEAuditor includes VM.GuestAgent.Audit in PVE 9+
 
-# Proxmox 8 and below
-pveum role add PulseMonitor -privs VM.Monitor
-pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+# Extra privileges for guest metrics and Ceph
+EXTRA_PRIVS=()
+
+# Sys.Audit (Ceph, cluster status)
+if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
+  EXTRA_PRIVS+=(Sys.Audit)
+else
+  if pveum role add PulseTmpSysAudit -privs Sys.Audit 2>/dev/null; then
+    EXTRA_PRIVS+=(Sys.Audit)
+    pveum role delete PulseTmpSysAudit 2>/dev/null
+  fi
+fi
+
+# VM guest agent / monitor privileges
+VM_PRIV=""
+if pveum role list 2>/dev/null | grep -q "VM.Monitor"; then
+  VM_PRIV="VM.Monitor"
+elif pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
+  VM_PRIV="VM.GuestAgent.Audit"
+else
+  if pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then
+    VM_PRIV="VM.Monitor"
+    pveum role delete PulseTmpVMMonitor 2>/dev/null
+  elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
+    VM_PRIV="VM.GuestAgent.Audit"
+    pveum role delete PulseTmpGuestAudit 2>/dev/null
+  fi
+fi
+
+if [ -n "$VM_PRIV" ]; then
+  EXTRA_PRIVS+=("$VM_PRIV")
+fi
+
+if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
+  PRIV_STRING="${EXTRA_PRIVS[*]}"
+  pveum role delete PulseMonitor 2>/dev/null
+  pveum role add PulseMonitor -privs "$PRIV_STRING"
+  pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+fi
 ```
 
 ## Troubleshooting
@@ -168,11 +205,13 @@ If you see "permission denied" in Pulse logs when querying guest agent:
    pveum user permissions pulse-monitor@pam
    ```
 
-2. **For Proxmox 9+:** Ensure user has `PVEAuditor` role or `VM.GuestAgent.Audit` permission
+2. **For Proxmox 9+:** Ensure user has the `VM.GuestAgent.Audit` privilege (PulseMonitor role handles this)
 
-3. **For Proxmox 8:** Ensure user has `VM.Monitor` permission
+3. **For Proxmox 8:** Ensure user has the `VM.Monitor` privilege (PulseMonitor role handles this)
 
-4. **Re-run setup script** if you added the node before Pulse v4.7 (old scripts didn't add VM.Monitor)
+4. **All versions:** Confirm `Sys.Audit` is present for Ceph metrics when applicable
+
+5. **Re-run setup script** if you added the node before Pulse v4.7 (old scripts didn't add VM.Monitor/guest agent privileges)
 
 ### Disk Usage Still Not Showing
 

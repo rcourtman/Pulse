@@ -279,8 +279,9 @@ pveum user permissions pulse-monitor@pam
 ```
 
 **Required permissions:**
-- **Proxmox 9:** `PVEAuditor` role (includes `VM.GuestAgent.Audit`)
-- **Proxmox 8:** `VM.Monitor` permission
+- **Proxmox 9:** `VM.GuestAgent.Audit` privilege (Pulse setup adds this via the `PulseMonitor` role)
+- **Proxmox 8:** `VM.Monitor` privilege (Pulse setup adds this via the `PulseMonitor` role)
+- **All versions:** `Sys.Audit` is recommended for Ceph metrics and applied when available
 
 **Fix permissions:**
 
@@ -291,12 +292,48 @@ curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/setup-p
 
 Or manually:
 ```bash
-# Proxmox 9
+# Shared read-only access
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
 
-# Proxmox 8
-pveum role add PulseMonitor -privs VM.Monitor
-pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+# Extra privileges for guest metrics and Ceph
+EXTRA_PRIVS=()
+
+# Sys.Audit (Ceph, cluster status)
+if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
+  EXTRA_PRIVS+=(Sys.Audit)
+else
+  if pveum role add PulseTmpSysAudit -privs Sys.Audit 2>/dev/null; then
+    EXTRA_PRIVS+=(Sys.Audit)
+    pveum role delete PulseTmpSysAudit 2>/dev/null
+  fi
+fi
+
+# VM guest agent / monitor privileges
+VM_PRIV=""
+if pveum role list 2>/dev/null | grep -q "VM.Monitor"; then
+  VM_PRIV="VM.Monitor"
+elif pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
+  VM_PRIV="VM.GuestAgent.Audit"
+else
+  if pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then
+    VM_PRIV="VM.Monitor"
+    pveum role delete PulseTmpVMMonitor 2>/dev/null
+  elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
+    VM_PRIV="VM.GuestAgent.Audit"
+    pveum role delete PulseTmpGuestAudit 2>/dev/null
+  fi
+fi
+
+if [ -n "$VM_PRIV" ]; then
+  EXTRA_PRIVS+=("$VM_PRIV")
+fi
+
+if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
+  PRIV_STRING="${EXTRA_PRIVS[*]}"
+  pveum role delete PulseMonitor 2>/dev/null
+  pveum role add PulseMonitor -privs "$PRIV_STRING"
+  pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+fi
 ```
 
 **Important:** Both API tokens and passwords work fine for guest agent access. If you see permission errors, it's a permission configuration issue, not an authentication method limitation.

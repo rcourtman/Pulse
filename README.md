@@ -471,7 +471,7 @@ See [Reverse Proxy Configuration Guide](docs/REVERSE_PROXY.md) for nginx, Caddy,
 
 ### Connection Issues
 - Check Proxmox API is accessible (port 8006/8007)
-- Verify credentials have PVEAuditor role minimum
+- Verify credentials have PVEAuditor role plus VM.GuestAgent.Audit (PVE 9) or VM.Monitor (PVE 8); the setup script applies these via the PulseMonitor role (adds Sys.Audit when available)
 - For PBS: ensure API token has Datastore.Audit permission
 
 ### High CPU/Memory

@@ -264,7 +264,7 @@ docker run -d -p 7655:7655 \
 
 ### Connection Issues
 - Check Proxmox API is accessible (port 8006/8007)
-- Verify credentials have PVEAuditor role minimum
+- Verify credentials have PVEAuditor role plus VM.GuestAgent.Audit (PVE 9) or VM.Monitor (PVE 8); the setup script applies these via the PulseMonitor role (adds Sys.Audit when available)
 - For PBS: ensure API token has Datastore.Audit permission
 
 ### Logs
