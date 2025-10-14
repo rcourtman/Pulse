@@ -336,7 +336,7 @@ WantedBy=multi-user.target`;
                                 {token.prefix && token.suffix ? `${token.prefix}…${token.suffix}` : '—'}
                               </td>
                               <td class="py-2 px-2 text-gray-600 dark:text-gray-400">
-                                {token.lastUsedAt ? formatRelativeTime(token.lastUsedAt) : 'Never'}
+                                {token.lastUsedAt ? formatRelativeTime(new Date(token.lastUsedAt).getTime()) : 'Never'}
                               </td>
                             </tr>
                           )}
