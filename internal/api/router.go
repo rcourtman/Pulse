@@ -2716,12 +2716,13 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Expires", "0")
 
 	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
-	searchPaths := make([]string, 0, 4)
+	searchPaths := make([]string, 0, 6)
 
 	if normalized := normalizeDockerAgentArch(archParam); normalized != "" {
 		searchPaths = append(searchPaths,
 			filepath.Join("/opt/pulse/bin", "pulse-docker-agent-"+normalized),
 			filepath.Join("/opt/pulse", "pulse-docker-agent-"+normalized),
+			filepath.Join("/app", "pulse-docker-agent-"+normalized), // legacy Docker image layout
 		)
 	}
 
@@ -2729,6 +2730,7 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 	searchPaths = append(searchPaths,
 		filepath.Join("/opt/pulse/bin", "pulse-docker-agent"),
 		"/opt/pulse/pulse-docker-agent",
+		filepath.Join("/app", "pulse-docker-agent"), // legacy Docker image layout
 	)
 
 	for _, candidate := range searchPaths {
