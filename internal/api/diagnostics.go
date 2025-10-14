@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -19,13 +20,14 @@ import (
 
 // DiagnosticsInfo contains comprehensive diagnostic information
 type DiagnosticsInfo struct {
-	Version string           `json:"version"`
-	Runtime string           `json:"runtime"`
-	Uptime  float64          `json:"uptime"`
-	Nodes   []NodeDiagnostic `json:"nodes"`
-	PBS     []PBSDiagnostic  `json:"pbs"`
-	System  SystemDiagnostic `json:"system"`
-	Errors  []string         `json:"errors"`
+	Version          string                      `json:"version"`
+	Runtime          string                      `json:"runtime"`
+	Uptime           float64                     `json:"uptime"`
+	Nodes            []NodeDiagnostic            `json:"nodes"`
+	PBS              []PBSDiagnostic             `json:"pbs"`
+	System           SystemDiagnostic            `json:"system"`
+	TemperatureProxy *TemperatureProxyDiagnostic `json:"temperatureProxy,omitempty"`
+	Errors           []string                    `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
 	// GuestSnapshots captures recent per-guest memory breakdowns (VM/LXC) with the raw Proxmox fields.
@@ -132,6 +134,16 @@ type SystemDiagnostic struct {
 	MemoryMB     uint64 `json:"memoryMB"`
 }
 
+// TemperatureProxyDiagnostic summarizes proxy detection state
+type TemperatureProxyDiagnostic struct {
+	LegacySSHDetected     bool     `json:"legacySSHDetected"`
+	RecommendProxyUpgrade bool     `json:"recommendProxyUpgrade"`
+	SocketFound           bool     `json:"socketFound"`
+	SocketPath            string   `json:"socketPath,omitempty"`
+	SocketPermissions     string   `json:"socketPermissions,omitempty"`
+	Notes                 []string `json:"notes,omitempty"`
+}
+
 // handleDiagnostics returns comprehensive diagnostic information
 func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
@@ -164,6 +176,42 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 		NumGoroutine: runtime.NumGoroutine(),
 		MemoryMB:     memStats.Alloc / 1024 / 1024,
 	}
+
+	legacySSH, recommendProxy := r.detectLegacySSH()
+	proxyDiag := &TemperatureProxyDiagnostic{
+		LegacySSHDetected:     legacySSH,
+		RecommendProxyUpgrade: recommendProxy,
+	}
+
+	socketPaths := []string{
+		"/mnt/pulse-proxy/pulse-sensor-proxy.sock",
+		"/run/pulse-sensor-proxy/pulse-sensor-proxy.sock",
+	}
+
+	for _, path := range socketPaths {
+		if info, err := os.Stat(path); err == nil {
+			if info.Mode()&os.ModeSocket != 0 {
+				proxyDiag.SocketFound = true
+				proxyDiag.SocketPath = path
+				proxyDiag.SocketPermissions = fmt.Sprintf("%#o", info.Mode().Perm())
+				break
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			proxyDiag.Notes = append(proxyDiag.Notes, fmt.Sprintf("Unable to inspect proxy socket at %s: %v", path, err))
+		}
+	}
+
+	if !proxyDiag.SocketFound {
+		proxyDiag.Notes = append(proxyDiag.Notes, "No proxy socket detected inside the container. If you recently ran the installer, ensure the mp mount is configured and restart the container.")
+	} else if proxyDiag.SocketPath == "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock" {
+		proxyDiag.Notes = append(proxyDiag.Notes, "Proxy socket is exposed via /run. For unprivileged containers the installer now mounts it at /mnt/pulse-proxy; re-run the installer if you still rely on direct container access.")
+	}
+
+	if proxyDiag.LegacySSHDetected && proxyDiag.RecommendProxyUpgrade {
+		proxyDiag.Notes = append(proxyDiag.Notes, "Legacy SSH configuration detected. Re-run /opt/pulse/scripts/install-sensor-proxy.sh --ctid <id> on the Proxmox host to migrate to the secure proxy.")
+	}
+
+	diag.TemperatureProxy = proxyDiag
 
 	// Test each configured node
 	for _, node := range r.config.PVEInstances {
