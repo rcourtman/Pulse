@@ -152,6 +152,157 @@ extract_targets_from_service() {
     fi
 }
 
+detect_agent_path_from_service() {
+    if [[ -n "$SERVICE_PATH" && -f "$SERVICE_PATH" ]]; then
+        local exec_line
+        exec_line=$(grep -m1 '^ExecStart=' "$SERVICE_PATH" 2>/dev/null || true)
+        if [[ -n "$exec_line" ]]; then
+            local value="${exec_line#ExecStart=}"
+            value=$(trim "$value")
+            if [[ -n "$value" ]]; then
+                printf '%s' "${value%%[[:space:]]*}"
+                return
+            fi
+        fi
+    fi
+}
+
+detect_agent_path_from_unraid() {
+    if [[ -n "$UNRAID_STARTUP" && -f "$UNRAID_STARTUP" ]]; then
+        local match
+        match=$(grep -m1 -o '/[^[:space:]]*pulse-docker-agent' "$UNRAID_STARTUP" 2>/dev/null || true)
+        if [[ -n "$match" ]]; then
+            printf '%s' "$match"
+            return
+        fi
+    fi
+}
+
+detect_existing_agent_path() {
+    local path
+
+    path=$(detect_agent_path_from_service)
+    if [[ -n "$path" ]]; then
+        printf '%s' "$path"
+        return
+    fi
+
+    path=$(detect_agent_path_from_unraid)
+    if [[ -n "$path" ]]; then
+        printf '%s' "$path"
+        return
+    fi
+
+    if command -v pulse-docker-agent >/dev/null 2>&1; then
+        path=$(command -v pulse-docker-agent)
+        if [[ -n "$path" ]]; then
+            printf '%s' "$path"
+            return
+        fi
+    fi
+}
+
+ensure_agent_path_writable() {
+    local file_path="$1"
+    local dir="${file_path%/*}"
+
+    if [[ -z "$dir" || "$file_path" != /* ]]; then
+        return 1
+    fi
+
+    if [[ ! -d "$dir" ]]; then
+        if ! mkdir -p "$dir" 2>/dev/null; then
+            return 1
+        fi
+    fi
+
+    local test_file="$dir/.pulse-agent-write-test-$$"
+    if ! touch "$test_file" 2>/dev/null; then
+        return 1
+    fi
+    rm -f "$test_file" 2>/dev/null || true
+    return 0
+}
+
+select_agent_path_for_install() {
+    local candidates=()
+    declare -A seen=()
+    local selected=""
+    local default_attempted="false"
+    local default_failed="false"
+
+    if [[ -n "$AGENT_PATH_OVERRIDE" ]]; then
+        candidates+=("$AGENT_PATH_OVERRIDE")
+    fi
+
+    if [[ -n "$EXISTING_AGENT_PATH" ]]; then
+        candidates+=("$EXISTING_AGENT_PATH")
+    fi
+
+    candidates+=("$DEFAULT_AGENT_PATH")
+    for fallback in "${AGENT_FALLBACK_PATHS[@]}"; do
+        candidates+=("$fallback")
+    done
+
+    for candidate in "${candidates[@]}"; do
+        candidate=$(trim "$candidate")
+        if [[ -z "$candidate" || "$candidate" != /* ]]; then
+            continue
+        fi
+        if [[ -n "${seen[$candidate]}" ]]; then
+            continue
+        fi
+        seen["$candidate"]=1
+
+        if [[ "$candidate" == "$DEFAULT_AGENT_PATH" ]]; then
+            default_attempted="true"
+        fi
+
+        if ensure_agent_path_writable "$candidate"; then
+            selected="$candidate"
+            if [[ "$candidate" == "$DEFAULT_AGENT_PATH" ]]; then
+                DEFAULT_AGENT_PATH_WRITABLE="true"
+            else
+                if [[ "$default_attempted" == "true" && "$default_failed" == "true" && "$OVERRIDE_SPECIFIED" == "false" ]]; then
+                    AGENT_PATH_NOTE="Note: Detected that $DEFAULT_AGENT_PATH is not writable. Using fallback path: $candidate"
+                fi
+            fi
+            break
+        else
+            if [[ "$candidate" == "$DEFAULT_AGENT_PATH" ]]; then
+                default_failed="true"
+                DEFAULT_AGENT_PATH_WRITABLE="false"
+            fi
+        fi
+    done
+
+    if [[ -z "$selected" ]]; then
+        echo "Error: Could not find a writable location for the agent binary." >&2
+        if [[ "$OVERRIDE_SPECIFIED" == "true" ]]; then
+            echo "Provided agent path: $AGENT_PATH_OVERRIDE" >&2
+        fi
+        exit 1
+    fi
+
+    printf '%s' "$selected"
+}
+
+resolve_agent_path_for_uninstall() {
+    if [[ -n "$AGENT_PATH_OVERRIDE" ]]; then
+        printf '%s' "$AGENT_PATH_OVERRIDE"
+        return
+    fi
+
+    local existing_path
+    existing_path=$(detect_existing_agent_path)
+    if [[ -n "$existing_path" ]]; then
+        printf '%s' "$existing_path"
+        return
+    fi
+
+    printf '%s' "$DEFAULT_AGENT_PATH"
+}
+
 # Pulse Docker Agent Installer/Uninstaller
 # Install (single target):
 #   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --url http://pulse.example.com --token <api-token>
@@ -163,7 +314,21 @@ extract_targets_from_service() {
 #   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --uninstall
 
 PULSE_URL=""
-AGENT_PATH="/usr/local/bin/pulse-docker-agent"
+DEFAULT_AGENT_PATH="/usr/local/bin/pulse-docker-agent"
+AGENT_FALLBACK_PATHS=(
+    "/opt/pulse/bin/pulse-docker-agent"
+    "/opt/bin/pulse-docker-agent"
+    "/var/lib/pulse/bin/pulse-docker-agent"
+)
+AGENT_PATH_OVERRIDE="${PULSE_AGENT_PATH:-}"
+OVERRIDE_SPECIFIED="false"
+if [[ -n "$AGENT_PATH_OVERRIDE" ]]; then
+    OVERRIDE_SPECIFIED="true"
+fi
+AGENT_PATH_NOTE=""
+DEFAULT_AGENT_PATH_WRITABLE="unknown"
+EXISTING_AGENT_PATH=""
+AGENT_PATH=""
 SERVICE_PATH="/etc/systemd/system/pulse-docker-agent.service"
 UNRAID_STARTUP="/boot/config/go.d/pulse-docker-agent.sh"
 LOG_PATH="/var/log/pulse-docker-agent.log"
@@ -202,9 +367,15 @@ while [[ $# -gt 0 ]]; do
       TARGET_SPECS+=("$2")
       shift 2
       ;;
+    --agent-path)
+      AGENT_PATH_OVERRIDE="$2"
+      OVERRIDE_SPECIFIED="true"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
       echo "Usage: $0 --url <Pulse URL> --token <API token> [--interval 30s]"
+      echo "       $0 --agent-path /custom/path/pulse-docker-agent"
       echo "       $0 --uninstall"
       exit 1
       ;;
@@ -222,6 +393,24 @@ if [[ $EUID -ne 0 ]]; then
    echo "  Install: curl -fsSL <URL>/install-docker-agent.sh | bash -s -- --url <URL>"
    echo "  Uninstall: curl -fsSL <URL>/install-docker-agent.sh | bash -s -- --uninstall"
    exit 1
+fi
+
+AGENT_PATH_OVERRIDE=$(trim "$AGENT_PATH_OVERRIDE")
+if [[ -z "$AGENT_PATH_OVERRIDE" ]]; then
+    OVERRIDE_SPECIFIED="false"
+fi
+
+if [[ -n "$AGENT_PATH_OVERRIDE" && "$AGENT_PATH_OVERRIDE" != /* ]]; then
+    echo "Error: --agent-path must be an absolute path." >&2
+    exit 1
+fi
+
+EXISTING_AGENT_PATH=$(detect_existing_agent_path)
+
+if [[ "$UNINSTALL" = true ]]; then
+    AGENT_PATH=$(resolve_agent_path_for_uninstall)
+else
+    AGENT_PATH=$(select_agent_path_for_install)
 fi
 
 # Handle uninstall
@@ -366,6 +555,9 @@ fi
 echo "==================================="
 echo "Pulse Docker Agent Installer"
 echo "==================================="
+if [[ -n "$AGENT_PATH_NOTE" ]]; then
+  echo "$AGENT_PATH_NOTE"
+fi
 echo "Primary Pulse URL: $PRIMARY_URL"
 if [[ ${#TARGETS[@]} -gt 1 ]]; then
   echo "Additional Pulse targets: $(( ${#TARGETS[@]} - 1 ))"
