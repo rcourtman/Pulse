@@ -1,5 +1,6 @@
 import { Component, createSignal, Show, createMemo, createEffect } from 'solid-js';
 import { apiFetch } from '@/utils/apiClient';
+import { SecurityAPI, type APITokenRecord } from '@/api/security';
 
 interface CommandBuilderProps {
   command: string;
@@ -7,7 +8,7 @@ interface CommandBuilderProps {
   storedToken?: string | null;
   currentTokenHint?: string; // Masked token preview (e.g., "abc12***...xyz89")
   onTokenChange?: (token: string) => void;
-  onTokenGenerated?: (token: string) => void;
+  onTokenGenerated?: (token: string, record: APITokenRecord) => void;
   requiresToken: boolean;
   hasExistingToken?: boolean;
 }
@@ -21,10 +22,16 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
 
   // Token generation/revocation state
   const [showGenerateModal, setShowGenerateModal] = createSignal(false);
-  const [showRevokeModal, setShowRevokeModal] = createSignal(false);
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [newlyGeneratedToken, setNewlyGeneratedToken] = createSignal<string | null>(null);
   const [showNewTokenModal, setShowNewTokenModal] = createSignal(false);
+  const [tokenLabel, setTokenLabel] = createSignal('Docker agent token');
+
+  const defaultTokenLabel = () => `Docker agent token ${new Date().toISOString().slice(0, 10)}`;
+  const openGenerateModal = () => {
+    setTokenLabel(defaultTokenLabel());
+    setShowGenerateModal(true);
+  };
 
   // Initialize with stored token if available
   createEffect(() => {
@@ -158,44 +165,39 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
 
   // Generate new token
   const generateNewToken = async () => {
-    setShowGenerateModal(false);
+    if (isGenerating()) return;
     setIsGenerating(true);
 
     try {
-      const response = await apiFetch('/api/security/regenerate-token', {
-        method: 'POST',
-      });
+      const desiredName = tokenLabel().trim() || undefined;
+      const { token: newToken, record } = await SecurityAPI.createToken(desiredName);
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Failed to generate token');
-      }
-
-      const data = await response.json();
-      const newToken = data.token;
-
+      setShowGenerateModal(false);
       setNewlyGeneratedToken(newToken);
       setShowNewTokenModal(true);
 
       // Auto-populate the command builder
-      setTokenInput(newToken);
-      if (props.onTokenGenerated) {
-        props.onTokenGenerated(newToken);
+     setTokenInput(newToken);
+     if (props.onTokenGenerated) {
+       props.onTokenGenerated(newToken, record);
+     }
+
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem('apiToken', newToken);
+          window.dispatchEvent(new StorageEvent('storage', { key: 'apiToken', newValue: newToken }));
+        } catch (storageErr) {
+          console.warn('Unable to persist API token in localStorage', storageErr);
+        }
       }
 
-      window.showToast('success', 'New API token generated successfully!');
+      window.showToast('success', 'New API token generated. Save it now – it will not be shown again.');
     } catch (error) {
       console.error('Token generation failed:', error);
-      window.showToast('error', `Failed to generate token: ${error}`);
+      window.showToast('error', error instanceof Error ? error.message : 'Failed to generate token');
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  // Revoke and replace token
-  const revokeAndReplace = async () => {
-    setShowRevokeModal(false);
-    await generateNewToken();
   };
 
   // Use existing token
@@ -294,11 +296,11 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowGenerateModal(true)}
+                  onClick={openGenerateModal}
                   disabled={isGenerating()}
                   class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                 >
-                  {isGenerating() ? 'Generating...' : 'Generate New Token'}
+                  {isGenerating() ? 'Generating...' : 'Generate API Token'}
                 </button>
               </div>
             </div>
@@ -341,15 +343,18 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowRevokeModal(true)}
+                  onClick={openGenerateModal}
                   disabled={isGenerating()}
-                  class="px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 rounded hover:bg-red-200 dark:hover:bg-red-900/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                  title="Revoke current token and generate a new one"
+                  class="px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                  title="Generate another token for a new host or automation workflow"
                 >
-                  Revoke & Replace
+                  Generate Token
                 </button>
               </div>
             </div>
+            <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+              Manage or revoke tokens from the table above whenever a credential is no longer needed.
+            </p>
           </div>
         </Show>
       </Show>
@@ -479,18 +484,29 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
       <Show when={showGenerateModal()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Generate New API Token?</h3>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Generate API Token</h3>
             <div class="space-y-3 mb-6">
               <p class="text-sm text-gray-600 dark:text-gray-400">
-                This will generate a new API token for Docker agent authentication.
+                Create a dedicated token for this host or automation workflow. Tokens remain active until you revoke them from the API tokens list.
               </p>
-              <Show when={props.hasExistingToken}>
-                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3">
-                  <p class="text-xs text-red-800 dark:text-red-300 font-medium">
-                    ⚠️ This will immediately invalidate your existing token. All Docker agents using the old token will need to be updated with the new token.
-                  </p>
-                </div>
-              </Show>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-gray-600 dark:text-gray-400" for="command-builder-token-name">
+                  Token name (optional)
+                </label>
+                <input
+                  id="command-builder-token-name"
+                  type="text"
+                  value={tokenLabel()}
+                  onInput={(event) => setTokenLabel(event.currentTarget.value)}
+                  class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={defaultTokenLabel()}
+                />
+              </div>
+              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
+                <p class="text-xs text-blue-800 dark:text-blue-300 font-medium">
+                  Tip: Issue one token per host so you can revoke compromised credentials without affecting other agents.
+                </p>
+              </div>
             </div>
             <div class="flex gap-3 justify-end">
               <button
@@ -503,44 +519,10 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
               <button
                 type="button"
                 onClick={generateNewToken}
-                class="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+                disabled={isGenerating()}
+                class="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Generate Token
-              </button>
-            </div>
-          </div>
-        </div>
-      </Show>
-
-      {/* Revoke & Replace Confirmation Modal */}
-      <Show when={showRevokeModal()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Revoke & Replace Token?</h3>
-            <div class="space-y-3 mb-6">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                This will immediately invalidate your current token and generate a new one.
-              </p>
-              <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3">
-                <p class="text-xs text-red-800 dark:text-red-300 font-medium">
-                  ⚠️ All Docker agents using the old token will stop working immediately. You'll need to update them with the new token.
-                </p>
-              </div>
-            </div>
-            <div class="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setShowRevokeModal(false)}
-                class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={revokeAndReplace}
-                class="px-4 py-2 text-sm text-white bg-red-600 rounded hover:bg-red-700 transition-colors"
-              >
-                Revoke & Replace
+                {isGenerating() ? 'Generating…' : 'Generate Token'}
               </button>
             </div>
           </div>

@@ -107,7 +107,7 @@ docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
-  -e API_TOKEN="your-secure-token" \
+  -e API_TOKENS="ansible-token,docker-agent-token" \
   -e PULSE_AUTH_USER="admin" \
   -e PULSE_AUTH_PASS="your-password" \
   --restart unless-stopped \
@@ -141,7 +141,8 @@ services:
       # Security (all optional - runs open by default)
       # - PULSE_AUTH_USER=admin             # Username for web UI login
       # - PULSE_AUTH_PASS=your-password     # Plain text or bcrypt hash (auto-hashed if plain)
-      # - API_TOKEN=your-token              # Plain text or SHA3-256 hash (auto-hashed if plain)
+      # - API_TOKENS=token-a,token-b        # Comma-separated tokens (plain or SHA3-256 hashed)
+      # - API_TOKEN=legacy-token            # Optional single-token fallback
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
 
       # Security: Plain text credentials are automatically hashed
@@ -167,7 +168,7 @@ volumes:
 1. Open `http://<your-server>:7655`
 2. **Complete the mandatory security setup** (first-time only)
 3. Create your admin username and password
-4. Save the generated API token for automation
+4. Use **Settings → Security → API tokens** to issue dedicated tokens for automation (one token per integration makes revocation painless)
 
 ## Configure Proxmox/PBS Nodes
 

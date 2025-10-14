@@ -965,7 +965,7 @@ const Settings: Component<SettingsProps> = (props) => {
               setShowApiTokenModal(true);
               return;
             }
-            if (errorText.includes('API_TOKEN')) {
+            if (errorText.includes('API_TOKEN') || errorText.includes('API_TOKENS')) {
               setApiTokenModalSource('export');
               setShowApiTokenModal(true);
               return;
@@ -1082,7 +1082,7 @@ const Settings: Component<SettingsProps> = (props) => {
               setShowApiTokenModal(true);
               return;
             }
-            if (errorText.includes('API_TOKEN')) {
+            if (errorText.includes('API_TOKEN') || errorText.includes('API_TOKENS')) {
               setApiTokenModalSource('import');
               setShowApiTokenModal(true);
               return;
@@ -2661,7 +2661,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     <div class="text-sm text-blue-800 dark:text-blue-200">
                       <p class="font-medium mb-1">Configuration Priority</p>
                       <ul class="space-y-1">
-                        <li>• Some env vars override settings (API_TOKEN, PORTS, AUTH)</li>
+                        <li>• Some env vars override settings (API_TOKENS, legacy API_TOKEN, PORTS, AUTH)</li>
                         <li>• Changes made here are saved to system.json immediately</li>
                         <li>• Settings persist unless overridden by env vars</li>
                       </ul>
@@ -3588,7 +3588,12 @@ const Settings: Component<SettingsProps> = (props) => {
 
                     {/* Content */}
                     <div class="p-6">
-                      <APITokenManager currentTokenHint={securityStatus()?.apiTokenHint} />
+                      <APITokenManager
+                        currentTokenHint={securityStatus()?.apiTokenHint}
+                        onTokensChanged={() => {
+                          void loadSecurityStatus();
+                        }}
+                      />
                     </div>
                   </Card>
                 </Show>
@@ -4980,7 +4985,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
               <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded p-2">
                 <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
-                <code class="block">API_TOKEN=your-secure-token</code>
+                <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
               </div>
             </div>
 

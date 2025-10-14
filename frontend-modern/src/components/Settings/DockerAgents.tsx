@@ -358,10 +358,31 @@ WantedBy=multi-user.target`;
               currentTokenHint={securityStatus()?.apiTokenHint}
               requiresToken={requiresToken()}
               hasExistingToken={Boolean(securityStatus()?.apiTokenConfigured)}
-              onTokenGenerated={(token) => {
+              onTokenGenerated={(token, record) => {
                 setApiToken(token);
-                if (typeof window !== 'undefined' && window.localStorage.getItem('apiToken')) {
-                  window.localStorage.setItem('apiToken', token);
+                setAvailableTokens((prev) => {
+                  const filtered = prev.filter((existing) => existing.id !== record.id);
+                  return [record, ...filtered];
+                });
+                setSecurityStatus((prev) => {
+                  if (!prev) return prev;
+                  const hint =
+                    record.prefix && record.suffix
+                      ? `${record.prefix}…${record.suffix}`
+                      : prev.apiTokenHint;
+                  return {
+                    ...prev,
+                    apiTokenConfigured: true,
+                    apiTokenHint: hint || prev.apiTokenHint,
+                  };
+                });
+                if (typeof window !== 'undefined') {
+                  try {
+                    window.localStorage.setItem('apiToken', token);
+                    window.dispatchEvent(new StorageEvent('storage', { key: 'apiToken', newValue: token }));
+                  } catch (err) {
+                    console.warn('Unable to persist API token in localStorage', err);
+                  }
                 }
               }}
             />

@@ -171,7 +171,7 @@ proxy_set_header X-Authentik-Groups $http_x_authentik_groups;
 Proxy authentication can work alongside other authentication methods:
 
 - If `PROXY_AUTH_SECRET` is set, proxy auth takes precedence
-- API tokens (`API_TOKEN`) still work for programmatic access
+- API tokens (`API_TOKENS` or legacy `API_TOKEN`) still work for programmatic access
 - Basic auth (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`) can be used as fallback
 
 ## Troubleshooting
