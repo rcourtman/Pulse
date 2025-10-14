@@ -222,10 +222,10 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                         <td class="py-2 px-3 text-gray-900 dark:text-gray-100">{token.name || 'Untitled token'}</td>
                         <td class="py-2 px-3 font-mono text-xs text-gray-600 dark:text-gray-400">{tokenHint(token)}</td>
                         <td class="py-2 px-3 text-gray-600 dark:text-gray-400">
-                          {formatRelativeTime(token.createdAt)}
+                          {formatRelativeTime(new Date(token.createdAt).getTime())}
                         </td>
                         <td class="py-2 px-3 text-gray-600 dark:text-gray-400">
-                          {token.lastUsedAt ? formatRelativeTime(token.lastUsedAt) : 'Never'}
+                          {token.lastUsedAt ? formatRelativeTime(new Date(token.lastUsedAt).getTime()) : 'Never'}
                         </td>
                         <td class="py-2 px-3 text-right">
                           <button
