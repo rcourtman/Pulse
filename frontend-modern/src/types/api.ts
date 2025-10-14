@@ -250,6 +250,7 @@ export interface ZFSDevice {
   readErrors: number;
   writeErrors: number;
   checksumErrors: number;
+  message?: string;
 }
 
 export interface PBSInstance {

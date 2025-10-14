@@ -240,6 +240,7 @@ type ZFSDevice struct {
 	ReadErrors     int64  `json:"readErrors"`
 	WriteErrors    int64  `json:"writeErrors"`
 	ChecksumErrors int64  `json:"checksumErrors"`
+	Message        string `json:"message,omitempty"` // Additional message provided by Proxmox (if any)
 }
 
 // CephCluster represents the health and capacity information for a Ceph cluster
