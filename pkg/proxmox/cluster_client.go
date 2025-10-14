@@ -543,6 +543,19 @@ func (cc *ClusterClient) GetNodeStatus(ctx context.Context, node string) (*NodeS
 	return result, err
 }
 
+func (cc *ClusterClient) GetNodeRRDData(ctx context.Context, node, timeframe, cf string, ds []string) ([]NodeRRDPoint, error) {
+	var result []NodeRRDPoint
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		points, err := client.GetNodeRRDData(ctx, node, timeframe, cf, ds)
+		if err != nil {
+			return err
+		}
+		result = points
+		return nil
+	})
+	return result, err
+}
+
 func (cc *ClusterClient) GetVMs(ctx context.Context, node string) ([]VM, error) {
 	var result []VM
 	err := cc.executeWithFailover(ctx, func(client *Client) error {
