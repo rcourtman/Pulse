@@ -202,13 +202,13 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if !proxyDiag.SocketFound {
-		proxyDiag.Notes = append(proxyDiag.Notes, "No proxy socket detected inside the container. If you recently ran the installer, ensure the mp mount is configured and restart the container.")
+		proxyDiag.Notes = append(proxyDiag.Notes, "No proxy socket detected inside the container. Remove the affected node in Pulse, then re-add it using the installer script from Settings → Nodes to regenerate the mount.")
 	} else if proxyDiag.SocketPath == "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock" {
-		proxyDiag.Notes = append(proxyDiag.Notes, "Proxy socket is exposed via /run. For unprivileged containers the installer now mounts it at /mnt/pulse-proxy; re-run the installer if you still rely on direct container access.")
+		proxyDiag.Notes = append(proxyDiag.Notes, "Proxy socket is exposed via /run. Remove and re-add this node with the Settings → Nodes installer script so the managed /mnt/pulse-proxy mount is applied.")
 	}
 
 	if proxyDiag.LegacySSHDetected && proxyDiag.RecommendProxyUpgrade {
-		proxyDiag.Notes = append(proxyDiag.Notes, "Legacy SSH configuration detected. Re-run /opt/pulse/scripts/install-sensor-proxy.sh --ctid <id> on the Proxmox host to migrate to the secure proxy.")
+		proxyDiag.Notes = append(proxyDiag.Notes, "Legacy SSH configuration detected. Remove each node from Pulse and re-add it using the installer script copied from Settings → Nodes to migrate to the secure proxy.")
 	}
 
 	diag.TemperatureProxy = proxyDiag
