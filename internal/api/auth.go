@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -13,6 +14,12 @@ import (
 	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
+)
+
+type contextKey string
+
+const (
+	contextKeyAPIToken contextKey = "apiTokenRecord"
 )
 
 // Global session store instance
@@ -211,7 +218,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	}
 
 	// If no auth is configured at all, allow access unless OIDC is enabled
-	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.APIToken == "" && cfg.ProxyAuthSecret == "" {
+	if cfg.AuthUser == "" && cfg.AuthPass == "" && !cfg.HasAPITokens() && cfg.ProxyAuthSecret == "" {
 		if cfg.OIDC != nil && cfg.OIDC.Enabled {
 			log.Debug().Msg("OIDC enabled without local credentials, authentication required")
 		} else {
@@ -222,7 +229,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 	// API-only mode: when only API token is configured (no password auth)
 	// Allow read-only endpoints for the UI to work
-	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.APIToken != "" {
+	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
 		// Check if an API token was provided
 		providedToken := r.Header.Get("X-API-Token")
 		if providedToken == "" {
@@ -231,8 +238,8 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 		// If a token was provided, validate it
 		if providedToken != "" {
-			// Use secure token comparison
-			if internalauth.CompareAPIToken(providedToken, cfg.APIToken) {
+			if record, ok := cfg.ValidateAPIToken(providedToken); ok {
+				attachAPITokenRecord(r, record)
 				return true
 			}
 			// Invalid token provided
@@ -278,34 +285,35 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	log.Debug().
 		Str("configured_user", cfg.AuthUser).
 		Bool("has_pass", cfg.AuthPass != "").
-		Bool("has_token", cfg.APIToken != "").
+		Bool("has_token", cfg.HasAPITokens()).
 		Str("url", r.URL.Path).
 		Msg("Checking authentication")
 
-	// Check API token first (for backward compatibility)
-	if cfg.APIToken != "" {
-		// Check header
-		if token := r.Header.Get("X-API-Token"); token != "" {
-			// Config always has hashed token now (auto-hashed on load)
-			if internalauth.CompareAPIToken(token, cfg.APIToken) {
-				return true
-			}
+	validateToken := func(token string) bool {
+		if token == "" {
+			return false
 		}
-		// Support Authorization: Bearer <token> for environments that strip custom headers
+		if record, ok := cfg.ValidateAPIToken(token); ok {
+			attachAPITokenRecord(r, record)
+			return true
+		}
+		return false
+	}
+
+	// Check API tokens (header, bearer, query) before other auth methods
+	if cfg.HasAPITokens() {
+		if validateToken(r.Header.Get("X-API-Token")) {
+			return true
+		}
 		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
 			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-				bearerToken := strings.TrimSpace(authHeader[7:])
-				if bearerToken != "" && internalauth.CompareAPIToken(bearerToken, cfg.APIToken) {
+				if validateToken(strings.TrimSpace(authHeader[7:])) {
 					return true
 				}
 			}
 		}
-		// Check query parameter (for export/import)
-		if token := r.URL.Query().Get("token"); token != "" {
-			// Config always has hashed token now (auto-hashed on load)
-			if internalauth.CompareAPIToken(token, cfg.APIToken) {
-				return true
-			}
+		if validateToken(r.URL.Query().Get("token")) {
+			return true
 		}
 	}
 
@@ -584,4 +592,26 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 		// User is authenticated and has admin privileges (or not using proxy auth)
 		handler(w, r)
 	}
+}
+
+func attachAPITokenRecord(r *http.Request, record *config.APITokenRecord) {
+	if record == nil {
+		return
+	}
+	clone := record.Clone()
+	ctx := context.WithValue(r.Context(), contextKeyAPIToken, clone)
+	*r = *r.WithContext(ctx)
+}
+
+func getAPITokenRecordFromRequest(r *http.Request) *config.APITokenRecord {
+	value := r.Context().Value(contextKeyAPIToken)
+	if value == nil {
+		return nil
+	}
+	record, ok := value.(config.APITokenRecord)
+	if !ok {
+		return nil
+	}
+	clone := record.Clone()
+	return &clone
 }

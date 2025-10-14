@@ -154,6 +154,10 @@ type DockerHost struct {
 	IntervalSeconds  int               `json:"intervalSeconds"`
 	AgentVersion     string            `json:"agentVersion,omitempty"`
 	Containers       []DockerContainer `json:"containers"`
+	TokenID          string            `json:"tokenId,omitempty"`
+	TokenName        string            `json:"tokenName,omitempty"`
+	TokenHint        string            `json:"tokenHint,omitempty"`
+	TokenLastUsedAt  *time.Time        `json:"tokenLastUsedAt,omitempty"`
 }
 
 // DockerContainer represents the state of a Docker container on a monitored host.

@@ -19,15 +19,16 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu          sync.RWMutex
-	configDir   string
-	alertFile   string
-	emailFile   string
-	webhookFile string
-	nodesFile   string
-	systemFile  string
-	oidcFile    string
-	crypto      *crypto.CryptoManager
+	mu            sync.RWMutex
+	configDir     string
+	alertFile     string
+	emailFile     string
+	webhookFile   string
+	nodesFile     string
+	systemFile    string
+	oidcFile      string
+	apiTokensFile string
+	crypto        *crypto.CryptoManager
 }
 
 // NewConfigPersistence creates a new config persistence manager
@@ -44,14 +45,15 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:   configDir,
-		alertFile:   filepath.Join(configDir, "alerts.json"),
-		emailFile:   filepath.Join(configDir, "email.enc"),
-		webhookFile: filepath.Join(configDir, "webhooks.enc"),
-		nodesFile:   filepath.Join(configDir, "nodes.enc"),
-		systemFile:  filepath.Join(configDir, "system.json"),
-		oidcFile:    filepath.Join(configDir, "oidc.enc"),
-		crypto:      cryptoMgr,
+		configDir:     configDir,
+		alertFile:     filepath.Join(configDir, "alerts.json"),
+		emailFile:     filepath.Join(configDir, "email.enc"),
+		webhookFile:   filepath.Join(configDir, "webhooks.enc"),
+		nodesFile:     filepath.Join(configDir, "nodes.enc"),
+		systemFile:    filepath.Join(configDir, "system.json"),
+		oidcFile:      filepath.Join(configDir, "oidc.enc"),
+		apiTokensFile: filepath.Join(configDir, "api_tokens.json"),
+		crypto:        cryptoMgr,
 	}
 
 	log.Debug().
@@ -67,6 +69,65 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 // EnsureConfigDir ensures the configuration directory exists
 func (c *ConfigPersistence) EnsureConfigDir() error {
 	return os.MkdirAll(c.configDir, 0700)
+}
+
+// LoadAPITokens loads API token metadata from disk.
+func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.apiTokensFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []APITokenRecord{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return []APITokenRecord{}, nil
+	}
+
+	var tokens []APITokenRecord
+	if err := json.Unmarshal(data, &tokens); err != nil {
+		return nil, err
+	}
+
+	return tokens, nil
+}
+
+// SaveAPITokens persists API token metadata to disk.
+func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	// Backup previous state (best effort).
+	if existing, err := os.ReadFile(c.apiTokensFile); err == nil && len(existing) > 0 {
+		if err := os.WriteFile(c.apiTokensFile+".backup", existing, 0600); err != nil {
+			log.Warn().Err(err).Msg("Failed to create API token backup file")
+		}
+	}
+
+	data, err := json.MarshalIndent(tokens, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	tmp := c.apiTokensFile + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmp, c.apiTokensFile); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+
+	return nil
 }
 
 // SaveAlertConfig saves alert configuration to file

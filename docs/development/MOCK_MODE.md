@@ -72,10 +72,13 @@ The toggle script exports `PULSE_DATA_DIR` before launching the backend, creates
 
 ## Hot-Dev Workflow
 
-1. **Start hot-dev mode:**
+Hot reload now runs as a long-lived systemd service so it is always ready when you log in.
+
+1. **Check the hot-dev service:**
    ```bash
-   scripts/hot-dev.sh
+   systemctl status pulse-hot-dev
    ```
+   The service is enabled by default; use `sudo systemctl restart pulse-hot-dev` if you need a clean rebuild.
 
 2. **Toggle mock mode as needed:**
    ```bash
@@ -92,6 +95,20 @@ The toggle script exports `PULSE_DATA_DIR` before launching the backend, creates
 4. **Frontend changes:** Just save your files - Vite hot-reloads instantly
 
 **No port changes. No manual restarts. Everything just works!**
+
+> **Note:** The legacy `pulse-backend.service` is intentionally disabled on this dev box. All backend/API traffic comes from the hot-dev service, so you never need to run the production binary locally.
+
+### Default credentials
+
+Authentication is enabled for the dev stack so security-focused features behave exactly like production. Use the shared credentials below when the UI prompts for a login:
+
+```
+Username: dev
+Password: dev
+```
+
+You can change them at any time by editing `.env` at the repo root (the backend watcher loads it automatically on restart).
+
 
 ## Mock Data Generation
 
@@ -186,7 +203,7 @@ When `mock.env` changes:
 
 ### Backend not reloading
 
-1. Ensure hot-dev mode is running (not systemd service)
+1. Ensure the `pulse-hot-dev` systemd service is active
 2. Check for errors in backend logs
 3. Verify file watcher started successfully
 4. Fall back to manual restart if needed

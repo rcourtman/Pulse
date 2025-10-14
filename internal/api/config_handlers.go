@@ -45,19 +45,19 @@ type SetupCode struct {
 
 // ConfigHandlers handles configuration-related API endpoints
 type ConfigHandlers struct {
-	config                    *config.Config
-	persistence               *config.ConfigPersistence
-	monitor                   *monitoring.Monitor
-	reloadFunc                func() error
-	reloadSystemSettingsFunc  func() // Function to reload cached system settings
-	wsHub                     *websocket.Hub
-	guestMetadataHandler      *GuestMetadataHandler
-	setupCodes                map[string]*SetupCode // Map of code hash -> setup code details
-	codeMutex                 sync.RWMutex          // Mutex for thread-safe code access
-	clusterDetectMutex        sync.Mutex
-	lastClusterDetection      map[string]time.Time
-	recentAutoRegistered      map[string]time.Time
-	recentAutoRegMutex        sync.Mutex
+	config                   *config.Config
+	persistence              *config.ConfigPersistence
+	monitor                  *monitoring.Monitor
+	reloadFunc               func() error
+	reloadSystemSettingsFunc func() // Function to reload cached system settings
+	wsHub                    *websocket.Hub
+	guestMetadataHandler     *GuestMetadataHandler
+	setupCodes               map[string]*SetupCode // Map of code hash -> setup code details
+	codeMutex                sync.RWMutex          // Mutex for thread-safe code access
+	clusterDetectMutex       sync.Mutex
+	lastClusterDetection     map[string]time.Time
+	recentAutoRegistered     map[string]time.Time
+	recentAutoRegMutex       sync.Mutex
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
@@ -2871,7 +2871,7 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	log.Info().
 		Str("type", serverType).
 		Str("host", serverHost).
-		Bool("has_auth", h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.APIToken != "").
+		Bool("has_auth", h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.HasAPITokens()).
 		Msg("HandleSetupScript called")
 
 	// The setup script is now public - authentication happens via setup code
@@ -4374,19 +4374,24 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	log.Debug().
 		Str("authToken", req.AuthToken).
 		Str("authCode", authCode).
-		Bool("hasConfigToken", h.config.APIToken != "").
+		Bool("hasConfigToken", h.config.HasAPITokens()).
 		Msg("Checking authentication for auto-register")
 
 	// First check for setup code/auth token in the request
 	if authCode != "" {
-		// First check if it's the actual API token (for direct authentication)
-		if h.config.APIToken != "" && internalauth.CompareAPIToken(authCode, h.config.APIToken) {
-			authenticated = true
-			log.Info().
-				Str("type", req.Type).
-				Str("host", req.Host).
-				Msg("Auto-register authenticated via direct API token")
-		} else {
+		matchedAPIToken := false
+		if h.config.HasAPITokens() {
+			if _, ok := h.config.ValidateAPIToken(authCode); ok {
+				authenticated = true
+				matchedAPIToken = true
+				log.Info().
+					Str("type", req.Type).
+					Str("host", req.Host).
+					Msg("Auto-register authenticated via direct API token")
+			}
+		}
+
+		if !matchedAPIToken {
 			// Not the API token, check if it's a temporary setup code
 			codeHash := internalauth.HashAPIToken(authCode)
 			log.Debug().
@@ -4429,10 +4434,9 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// If not authenticated via setup code, check API token if configured
-	if !authenticated && h.config.APIToken != "" {
+	if !authenticated && h.config.HasAPITokens() {
 		apiToken := r.Header.Get("X-API-Token")
-		// Config always has hashed token now (auto-hashed on load)
-		if apiToken != "" && internalauth.CompareAPIToken(apiToken, h.config.APIToken) {
+		if _, ok := h.config.ValidateAPIToken(apiToken); ok {
 			authenticated = true
 			log.Info().Msg("Auto-register authenticated via API token")
 		}
@@ -4441,11 +4445,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	// If still not authenticated and auth is required, reject
 	// BUT: Always allow if a valid setup code/auth token was provided (even if expired/used)
 	// This ensures the error message is accurate
-	if !authenticated && h.config.APIToken != "" && authCode == "" {
+	if !authenticated && h.config.HasAPITokens() && authCode == "" {
 		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - no authentication provided")
 		http.Error(w, "Pulse requires authentication", http.StatusUnauthorized)
 		return
-	} else if !authenticated && h.config.APIToken != "" {
+	} else if !authenticated && h.config.HasAPITokens() {
 		// Had a code but it didn't validate
 		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - invalid or expired setup code")
 		http.Error(w, "Invalid or expired setup code", http.StatusUnauthorized)

@@ -129,6 +129,10 @@ export interface DockerHost {
   intervalSeconds: number;
   agentVersion?: string;
   containers: DockerContainer[];
+  tokenId?: string;
+  tokenName?: string;
+  tokenHint?: string;
+  tokenLastUsedAt?: number;
 }
 
 export interface DockerContainer {

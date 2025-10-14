@@ -3,26 +3,31 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rs/zerolog/log"
 )
 
 // ConfigWatcher monitors the .env file for changes and updates runtime config
 type ConfigWatcher struct {
-	config          *Config
-	envPath         string
-	mockEnvPath     string
-	watcher         *fsnotify.Watcher
-	stopChan        chan struct{}
-	lastModTime     time.Time
-	mockLastModTime time.Time
-	mu              sync.RWMutex
-	onMockReload    func() // Callback to trigger backend restart
+	config               *Config
+	envPath              string
+	mockEnvPath          string
+	apiTokensPath        string
+	watcher              *fsnotify.Watcher
+	stopChan             chan struct{}
+	lastModTime          time.Time
+	mockLastModTime      time.Time
+	apiTokensLastModTime time.Time
+	mu                   sync.RWMutex
+	onMockReload         func() // Callback to trigger backend restart
 }
 
 // NewConfigWatcher creates a new config watcher
@@ -53,12 +58,15 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		return nil, err
 	}
 
+	apiTokensPath := filepath.Join(filepath.Dir(envPath), "api_tokens.json")
+
 	cw := &ConfigWatcher{
-		config:      config,
-		envPath:     envPath,
-		mockEnvPath: mockEnvPath,
-		watcher:     watcher,
-		stopChan:    make(chan struct{}),
+		config:        config,
+		envPath:       envPath,
+		mockEnvPath:   mockEnvPath,
+		apiTokensPath: apiTokensPath,
+		watcher:       watcher,
+		stopChan:      make(chan struct{}),
 	}
 
 	// Get initial mod times
@@ -69,6 +77,9 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		if stat, err := os.Stat(mockEnvPath); err == nil {
 			cw.mockLastModTime = stat.ModTime()
 		}
+	}
+	if stat, err := os.Stat(apiTokensPath); err == nil {
+		cw.apiTokensLastModTime = stat.ModTime()
 	}
 
 	return cw, nil
@@ -105,7 +116,7 @@ func (cw *ConfigWatcher) Start() error {
 	}
 
 	go cw.watchForChanges()
-	logEvent := log.Info().Str("env_path", cw.envPath)
+	logEvent := log.Info().Str("env_path", cw.envPath).Str("api_tokens_path", cw.apiTokensPath)
 	if cw.mockEnvPath != "" {
 		logEvent = logEvent.Str("mock_env_path", cw.mockEnvPath)
 	}
@@ -147,6 +158,16 @@ func (cw *ConfigWatcher) watchForChanges() {
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Info().Str("event", event.Op.String()).Msg("Detected .env file change")
 					cw.reloadConfig()
+				}
+			}
+
+			if cw.apiTokensPath != "" && (filepath.Base(event.Name) == filepath.Base(cw.apiTokensPath) || event.Name == cw.apiTokensPath) {
+				// Debounce
+				time.Sleep(100 * time.Millisecond)
+
+				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+					log.Info().Str("event", event.Op.String()).Msg("Detected API token file change")
+					cw.reloadAPITokens()
 				}
 			}
 
@@ -201,6 +222,16 @@ func (cw *ConfigWatcher) pollForChanges() {
 				}
 			}
 
+			if cw.apiTokensPath != "" {
+				if stat, err := os.Stat(cw.apiTokensPath); err == nil {
+					if stat.ModTime().After(cw.apiTokensLastModTime) {
+						log.Info().Msg("Detected API token file change via polling")
+						cw.apiTokensLastModTime = stat.ModTime()
+						cw.reloadAPITokens()
+					}
+				}
+			}
+
 		case <-cw.stopChan:
 			return
 		}
@@ -229,7 +260,11 @@ func (cw *ConfigWatcher) reloadConfig() {
 	// Update auth settings
 	oldAuthUser := cw.config.AuthUser
 	oldAuthPass := cw.config.AuthPass
-	oldAPIToken := cw.config.APIToken
+	oldTokenHashes := cw.config.ActiveAPITokenHashes()
+	existingByHash := make(map[string]APITokenRecord, len(cw.config.APITokens))
+	for _, record := range cw.config.APITokens {
+		existingByHash[record.Hash] = record.Clone()
+	}
 
 	// Apply auth user
 	newUser := strings.Trim(envMap["PULSE_AUTH_USER"], "'\"")
@@ -257,17 +292,85 @@ func (cw *ConfigWatcher) reloadConfig() {
 		}
 	}
 
-	// Apply API token
-	newToken := strings.Trim(envMap["API_TOKEN"], "'\"")
-	if newToken != oldAPIToken {
-		cw.config.APIToken = newToken
-		cw.config.APITokenEnabled = (newToken != "")
-		if newToken == "" {
-			changes = append(changes, "API token removed")
-		} else if oldAPIToken == "" {
-			changes = append(changes, "API token added")
+	// Apply API tokens if present in .env (legacy support)
+	rawTokens := make([]string, 0, 4)
+	if raw, ok := envMap["API_TOKENS"]; ok {
+		raw = strings.Trim(raw, "'\"")
+		if raw != "" {
+			parts := strings.Split(raw, ",")
+			for _, part := range parts {
+				token := strings.TrimSpace(part)
+				if token != "" {
+					rawTokens = append(rawTokens, token)
+				}
+			}
 		} else {
-			changes = append(changes, "API token updated")
+			// Explicit empty list clears tokens
+			rawTokens = []string{}
+		}
+	}
+	if raw, ok := envMap["API_TOKEN"]; ok {
+		raw = strings.Trim(raw, "'\"")
+		rawTokens = append(rawTokens, raw)
+	}
+
+	if len(rawTokens) > 0 {
+		seen := make(map[string]struct{}, len(rawTokens))
+		newRecords := make([]APITokenRecord, 0, len(rawTokens))
+		for _, tokenValue := range rawTokens {
+			tokenValue = strings.TrimSpace(tokenValue)
+			if tokenValue == "" {
+				continue
+			}
+
+			hashed := tokenValue
+			prefix := tokenPrefix(tokenValue)
+			suffix := tokenSuffix(tokenValue)
+			if !auth.IsAPITokenHashed(tokenValue) {
+				hashed = auth.HashAPIToken(tokenValue)
+				prefix = tokenPrefix(tokenValue)
+				suffix = tokenSuffix(tokenValue)
+			}
+
+			if _, exists := seen[hashed]; exists {
+				continue
+			}
+			seen[hashed] = struct{}{}
+
+			if existing, ok := existingByHash[hashed]; ok {
+				newRecords = append(newRecords, existing)
+			} else {
+				newRecords = append(newRecords, APITokenRecord{
+					ID:        uuid.NewString(),
+					Name:      "Environment token",
+					Hash:      hashed,
+					Prefix:    prefix,
+					Suffix:    suffix,
+					CreatedAt: time.Now().UTC(),
+				})
+			}
+		}
+
+		cw.config.APITokens = newRecords
+		cw.config.SortAPITokens()
+		cw.config.APITokenEnabled = len(newRecords) > 0
+
+		newHashes := cw.config.ActiveAPITokenHashes()
+		if !reflect.DeepEqual(oldTokenHashes, newHashes) {
+			switch {
+			case len(newHashes) == 0:
+				changes = append(changes, "API tokens removed")
+			case len(oldTokenHashes) == 0:
+				changes = append(changes, "API tokens added")
+			default:
+				changes = append(changes, "API tokens updated")
+			}
+
+			if globalPersistence != nil {
+				if err := globalPersistence.SaveAPITokens(cw.config.APITokens); err != nil {
+					log.Error().Err(err).Msg("Failed to persist API tokens from .env reload")
+				}
+			}
 		}
 	}
 
@@ -279,11 +382,39 @@ func (cw *ConfigWatcher) reloadConfig() {
 		log.Info().
 			Strs("changes", changes).
 			Bool("has_auth", cw.config.AuthUser != "" && cw.config.AuthPass != "").
-			Bool("has_token", cw.config.APIToken != "").
+			Bool("has_token", cw.config.HasAPITokens()).
 			Msg("Applied .env file changes to runtime config")
 	} else {
 		log.Debug().Msg("No relevant changes detected in .env file")
 	}
+}
+
+func (cw *ConfigWatcher) reloadAPITokens() {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	if globalPersistence == nil {
+		log.Warn().Msg("Config persistence unavailable; cannot reload API tokens")
+		return
+	}
+
+	tokens, err := globalPersistence.LoadAPITokens()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to reload API tokens")
+		return
+	}
+
+	cw.config.APITokens = tokens
+	cw.config.SortAPITokens()
+	cw.config.APITokenEnabled = len(tokens) > 0
+
+	if cw.apiTokensPath != "" {
+		if stat, err := os.Stat(cw.apiTokensPath); err == nil {
+			cw.apiTokensLastModTime = stat.ModTime()
+		}
+	}
+
+	log.Info().Int("count", len(tokens)).Msg("Reloaded API tokens from disk")
 }
 
 // reloadMockConfig handles mock.env file changes
