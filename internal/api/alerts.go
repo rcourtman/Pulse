@@ -36,18 +36,24 @@ func (h *AlertHandlers) SetMonitor(m *monitoring.Monitor) {
 
 // validateAlertID validates an alert ID for security
 func validateAlertID(alertID string) bool {
-	// Check length to prevent DOS attacks with huge IDs
+	// Guard against empty strings or extremely large payloads that could impact memory usage.
 	if len(alertID) == 0 || len(alertID) > 500 {
 		return false
 	}
-	// Alert IDs should only contain alphanumeric, hyphens, underscores, colons, and slashes
-	// (e.g., "pve1:qemu/101-cpu", "node-offline-pve1")
-	for _, c := range alertID {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '-' || c == '_' || c == ':' || c == '/' || c == '.') {
+
+	// Reject attempts to traverse directories via crafted path segments.
+	if strings.Contains(alertID, "../") || strings.Contains(alertID, "/..") {
+		return false
+	}
+
+	// Permit any printable ASCII character (including spaces) so user supplied identifiers
+	// like instance names remain valid, while excluding control characters and DEL.
+	for _, r := range alertID {
+		if r < 32 || r == 127 {
 			return false
 		}
 	}
+
 	return true
 }
 
