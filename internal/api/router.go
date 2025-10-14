@@ -835,7 +835,7 @@ func (r *Router) setupRoutes() {
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings)
 	r.mux.HandleFunc("/api/system/settings", r.systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", r.systemSettingsHandler.HandleUpdateSystemSettings)
-	r.mux.HandleFunc("/api/system/verify-temperature-ssh", RequireAuth(r.config, r.configHandlers.HandleVerifyTemperatureSSH))
+	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// Docker agent download endpoints
@@ -855,6 +855,69 @@ func (r *Router) setupRoutes() {
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
 
+}
+
+func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Request) {
+	if r.configHandlers == nil {
+		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	if token := extractSetupToken(req); token != "" {
+		if r.configHandlers.ValidateSetupToken(token) {
+			r.configHandlers.HandleVerifyTemperatureSSH(w, req)
+			return
+		}
+	}
+
+	if CheckAuth(r.config, w, req) {
+		r.configHandlers.HandleVerifyTemperatureSSH(w, req)
+		return
+	}
+
+	log.Warn().
+		Str("ip", req.RemoteAddr).
+		Str("path", req.URL.Path).
+		Str("method", req.Method).
+		Msg("Unauthorized access attempt (verify-temperature-ssh)")
+
+	if strings.HasPrefix(req.URL.Path, "/api/") || strings.Contains(req.Header.Get("Accept"), "application/json") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Authentication required"}`))
+	} else {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	}
+}
+
+func extractSetupToken(req *http.Request) string {
+	if token := strings.TrimSpace(req.Header.Get("X-Setup-Token")); token != "" {
+		return token
+	}
+	if token := extractBearerToken(req.Header.Get("Authorization")); token != "" {
+		return token
+	}
+	if token := strings.TrimSpace(req.URL.Query().Get("auth_token")); token != "" {
+		return token
+	}
+	return ""
+}
+
+func extractBearerToken(header string) string {
+	if header == "" {
+		return ""
+	}
+
+	trimmed := strings.TrimSpace(header)
+	if len(trimmed) < 7 {
+		return ""
+	}
+
+	if strings.HasPrefix(strings.ToLower(trimmed), "bearer ") {
+		return strings.TrimSpace(trimmed[7:])
+	}
+
+	return ""
 }
 
 // Handler returns the router wrapped with middleware.
@@ -1042,6 +1105,13 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if normalizedPath == "/api/setup-script" {
 				// The script itself prompts for a setup code
 				isPublic = true
+			}
+
+			// Allow temperature verification endpoint when a setup token is provided
+			if normalizedPath == "/api/system/verify-temperature-ssh" && r.configHandlers != nil {
+				if token := extractSetupToken(req); token != "" && r.configHandlers.ValidateSetupToken(token) {
+					isPublic = true
+				}
 			}
 
 			// Auto-register endpoint needs to be public (validates tokens internally)
