@@ -176,19 +176,13 @@ mp0: /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
 
 ### Upgrading Existing Installations
 
-If you previously followed the legacy guide (manual `lxc.mount.entry` and `/run/pulse-sensor-proxy` inside the container), simply re-run the installer on each host:
+If you previously followed the legacy guide (manual `lxc.mount.entry` and `/run/pulse-sensor-proxy` inside the container), upgrade by **removing each node in Pulse and then re-adding it using the “Copy install script” flow in Settings → Nodes**. The script you copy from the UI now:
 
-```bash
-sudo /opt/pulse/scripts/install-sensor-proxy.sh --ctid <container-id>
-```
+- Cleans up any old `lxc.mount.entry` rows and replaces them with the managed `mp` mount.
+- Ensures the socket is mounted at `/mnt/pulse-proxy/pulse-sensor-proxy.sock` inside the container.
+- Adds the systemd override so the container backend (or hot-dev) automatically uses the mounted socket.
 
-The script is idempotent and will:
-
-- Replace any old `lxc.mount.entry` rows with the new managed `mp` mount.
-- Ensure the socket is mounted at `/mnt/pulse-proxy/pulse-sensor-proxy.sock` inside the container.
-- Drop a systemd override so Pulse (or the hot-dev backend) automatically uses the mounted socket.
-
-No manual edits are required—just re-run the script after updating Pulse.
+This is the same workflow you used originally—no extra commands are required. Just remove the node from Pulse, click “Copy install script,” run it on the Proxmox host, and add the node again.
 
 ### Runtime Verification
 
