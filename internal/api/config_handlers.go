@@ -53,6 +53,7 @@ type ConfigHandlers struct {
 	wsHub                    *websocket.Hub
 	guestMetadataHandler     *GuestMetadataHandler
 	setupCodes               map[string]*SetupCode // Map of code hash -> setup code details
+	recentSetupTokens        map[string]time.Time  // Temporary map for recently used setup tokens (grace period)
 	codeMutex                sync.RWMutex          // Mutex for thread-safe code access
 	clusterDetectMutex       sync.Mutex
 	lastClusterDetection     map[string]time.Time
@@ -71,6 +72,7 @@ func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFu
 		wsHub:                    wsHub,
 		guestMetadataHandler:     guestMetadataHandler,
 		setupCodes:               make(map[string]*SetupCode),
+		recentSetupTokens:        make(map[string]time.Time),
 		lastClusterDetection:     make(map[string]time.Time),
 		recentAutoRegistered:     make(map[string]time.Time),
 	}
@@ -100,8 +102,39 @@ func (h *ConfigHandlers) cleanupExpiredCodes() {
 				log.Debug().Bool("was_used", code.Used).Msg("Cleaned up setup code")
 			}
 		}
+		for tokenHash, expiresAt := range h.recentSetupTokens {
+			if now.After(expiresAt) {
+				delete(h.recentSetupTokens, tokenHash)
+			}
+		}
 		h.codeMutex.Unlock()
 	}
+}
+
+// ValidateSetupToken checks whether the provided temporary setup token is still valid.
+func (h *ConfigHandlers) ValidateSetupToken(token string) bool {
+	if token == "" {
+		return false
+	}
+
+	tokenHash := internalauth.HashAPIToken(token)
+	now := time.Now()
+
+	h.codeMutex.RLock()
+	defer h.codeMutex.RUnlock()
+
+	if code, exists := h.setupCodes[tokenHash]; exists {
+		// Allow tokens while they are valid or within a short grace period after use.
+		if now.Before(code.ExpiresAt.Add(2 * time.Minute)) {
+			return true
+		}
+	}
+
+	if expiresAt, ok := h.recentSetupTokens[tokenHash]; ok && now.Before(expiresAt) {
+		return true
+	}
+
+	return false
 }
 
 func (h *ConfigHandlers) markAutoRegistered(nodeType, nodeName string) {
@@ -1240,7 +1273,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		req.Name = host
 	}
 
-	if req.Type != "pve" && req.Type != "pbs" {
+	if req.Type != "pve" && req.Type != "pbs" && req.Type != "pmg" {
 		http.Error(w, "Invalid node type", http.StatusBadRequest)
 		return
 	}
@@ -1316,7 +1349,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
-	} else {
+	} else if req.Type == "pbs" {
 		// Ensure host has protocol for PBS
 		host := req.Host
 		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
@@ -1393,6 +1426,81 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			"status":         "success",
 			"message":        fmt.Sprintf("Successfully connected. Found %d datastore(s)", len(datastores)),
 			"datastoreCount": len(datastores),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	} else {
+		host := req.Host
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		protocolEnd := 0
+		if strings.HasPrefix(host, "https://") {
+			protocolEnd = 8
+		} else if strings.HasPrefix(host, "http://") {
+			protocolEnd = 7
+		}
+		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
+			host = host + ":8006"
+		}
+
+		clientConfig := config.CreatePMGConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, req.VerifySSL)
+
+		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
+			if clientConfig.User != "" && !strings.Contains(clientConfig.User, "@") {
+				clientConfig.User = clientConfig.User + "@pmg"
+			}
+		} else if req.TokenName != "" && req.TokenValue != "" {
+			if user != "" {
+				normalizedUser := user
+				if !strings.Contains(normalizedUser, "@") {
+					normalizedUser = normalizedUser + "@pmg"
+				}
+				clientConfig.User = normalizedUser
+			}
+		}
+
+		tempClient, err := pmg.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		version, err := tempClient.GetVersion(ctx)
+		if err != nil {
+			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
+			return
+		}
+
+		versionLabel := ""
+		if version != nil && strings.TrimSpace(version.Version) != "" {
+			versionLabel = strings.TrimSpace(version.Version)
+			if strings.TrimSpace(version.Release) != "" {
+				versionLabel = versionLabel + "-" + strings.TrimSpace(version.Release)
+			}
+		}
+
+		message := "Connected to PMG instance"
+		if versionLabel != "" {
+			message = fmt.Sprintf("Connected to PMG instance (version %s)", versionLabel)
+		}
+
+		response := map[string]interface{}{
+			"status":  "success",
+			"message": message,
+		}
+
+		if version != nil {
+			if version.Version != "" {
+				response["version"] = strings.TrimSpace(version.Version)
+			}
+			if version.Release != "" {
+				response["release"] = strings.TrimSpace(version.Release)
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -2269,6 +2377,63 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 					"status":  "success",
 					"message": "Connected to PBS",
 					"latency": latency,
+				}
+			}
+		}
+	} else if nodeType == "pmg" && index < len(h.config.PMGInstances) {
+		pmgInstance := h.config.PMGInstances[index]
+
+		clientConfig := config.CreatePMGConfig(&pmgInstance)
+		if pmgInstance.Password != "" && pmgInstance.TokenName == "" && pmgInstance.TokenValue == "" {
+			if clientConfig.User != "" && !strings.Contains(clientConfig.User, "@") {
+				clientConfig.User = clientConfig.User + "@pmg"
+			}
+		}
+
+		client, err := pmg.NewClient(clientConfig)
+		if err != nil {
+			testResult = map[string]interface{}{
+				"status":  "error",
+				"message": sanitizeErrorMessage(err, "create_client"),
+			}
+		} else {
+			startTime := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			if version, err := client.GetVersion(ctx); err != nil {
+				testResult = map[string]interface{}{
+					"status":  "error",
+					"message": sanitizeErrorMessage(err, "connection"),
+				}
+			} else {
+				latency := time.Since(startTime).Milliseconds()
+				versionLabel := ""
+				if version != nil && strings.TrimSpace(version.Version) != "" {
+					versionLabel = strings.TrimSpace(version.Version)
+					if strings.TrimSpace(version.Release) != "" {
+						versionLabel = versionLabel + "-" + strings.TrimSpace(version.Release)
+					}
+				}
+
+				message := "Connected to PMG instance"
+				if versionLabel != "" {
+					message = fmt.Sprintf("Connected to PMG instance (version %s)", versionLabel)
+				}
+
+				testResult = map[string]interface{}{
+					"status":  "success",
+					"message": message,
+					"latency": latency,
+				}
+
+				if version != nil {
+					if version.Version != "" {
+						testResult["version"] = strings.TrimSpace(version.Version)
+					}
+					if version.Release != "" {
+						testResult["release"] = strings.TrimSpace(version.Release)
+					}
 				}
 			}
 		}
@@ -4447,6 +4612,13 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				// what's entered in the UI and what's provided in the setup script URL
 				if setupCode.NodeType == req.Type {
 					setupCode.Used = true // Mark as used immediately
+					// Allow the token to be reused for a brief grace period so the setup
+					// script can complete follow-up actions (temperature verification, etc).
+					graceExpiry := time.Now().Add(5 * time.Minute)
+					if setupCode.ExpiresAt.After(graceExpiry) {
+						graceExpiry = setupCode.ExpiresAt
+					}
+					h.recentSetupTokens[codeHash] = graceExpiry
 					authenticated = true
 					log.Info().
 						Str("type", req.Type).
