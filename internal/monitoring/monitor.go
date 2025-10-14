@@ -2820,11 +2820,15 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Proxmox 9: Ensure token/user has PVEAuditor role (includes VM.GuestAgent.Audit)")
+									Msg("• Proxmox 9: Ensure token/user has VM.GuestAgent.Audit privilege (Pulse setup adds this via PulseMonitor role)")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Proxmox 8: Ensure token/user has VM.Monitor permission")
+									Msg("• Proxmox 8: Ensure token/user has VM.Monitor privilege (Pulse setup adds this via PulseMonitor role)")
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Msg("• All versions: Sys.Audit is recommended for Ceph metrics and applied when available")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
@@ -3536,11 +3540,15 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Proxmox 9: Ensure token/user has PVEAuditor role (includes VM.GuestAgent.Audit)")
+							Msg("• Proxmox 9: Ensure token/user has VM.GuestAgent.Audit privilege (Pulse setup adds this via PulseMonitor role)")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Proxmox 8: Ensure token/user has VM.Monitor permission")
+							Msg("• Proxmox 8: Ensure token/user has VM.Monitor privilege (Pulse setup adds this via PulseMonitor role)")
+						log.Info().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Msg("• All versions: Sys.Audit is recommended for Ceph metrics and applied when available")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).

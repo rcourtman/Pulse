@@ -3361,6 +3361,28 @@ if pveum role list 2>/dev/null | grep -q "VM.Monitor" ||
     pveum role delete TestMonitor 2>/dev/null || true
 fi
 
+# Detect availability of newer guest agent privileges (PVE 9+)
+HAS_VM_GUEST_AGENT_AUDIT=false
+if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
+    HAS_VM_GUEST_AGENT_AUDIT=true
+else
+    if pveum role add TestGuestAgentAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
+        HAS_VM_GUEST_AGENT_AUDIT=true
+        pveum role delete TestGuestAgentAudit 2>/dev/null || true
+    fi
+fi
+
+# Detect availability of Sys.Audit (needed for Ceph metrics)
+HAS_SYS_AUDIT=false
+if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
+    HAS_SYS_AUDIT=true
+else
+    if pveum role add TestSysAudit -privs Sys.Audit 2>/dev/null; then
+        HAS_SYS_AUDIT=true
+        pveum role delete TestSysAudit 2>/dev/null || true
+    fi
+fi
+
 # Method 2: Try to detect PVE version directly
 PVE_VERSION=""
 if command -v pveversion >/dev/null 2>&1; then
@@ -3368,18 +3390,33 @@ if command -v pveversion >/dev/null 2>&1; then
     PVE_VERSION=$(pveversion --verbose 2>/dev/null | grep "pve-manager" | awk -F'/' '{print $2}' | cut -d'.' -f1)
 fi
 
+echo "Setting up additional permissions..."
+EXTRA_PRIVS=()
+
+if [ "$HAS_SYS_AUDIT" = true ]; then
+    EXTRA_PRIVS+=("Sys.Audit")
+fi
+
 if [ "$HAS_VM_MONITOR" = true ]; then
     # PVE 8 or below - VM.Monitor exists
-    echo "Setting up additional permissions..."
+    EXTRA_PRIVS+=("VM.Monitor")
+elif [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
+    # PVE 9+ - VM.Monitor removed, prefer VM.GuestAgent.Audit for guest data
+    EXTRA_PRIVS+=("VM.GuestAgent.Audit")
+fi
+
+if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
+    PRIV_STRING="${EXTRA_PRIVS[*]}"
     pveum role delete PulseMonitor 2>/dev/null || true
-    pveum role add PulseMonitor -privs VM.Monitor 2>/dev/null
-    pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+    if pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null; then
+        pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+        echo "  • Applied privileges: $PRIV_STRING"
+    else
+        echo "  • Failed to create PulseMonitor role with: $PRIV_STRING"
+        echo "    Assign these privileges manually if Pulse reports permission errors."
+    fi
 else
-    # PVE 9+ - VM.Monitor was removed, try to add Sys.Audit as replacement
-    echo "Setting up additional permissions..."
-    pveum role delete PulseMonitor 2>/dev/null || true
-    pveum role add PulseMonitor -privs "Sys.Audit" 2>/dev/null
-    pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+    echo "  • No additional privileges detected. Pulse may show limited VM metrics."
 fi
 
 echo ""

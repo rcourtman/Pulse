@@ -924,7 +924,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </button>
                                       <code class="text-gray-800 dark:text-gray-200 whitespace-pre-line">
                                         {
-                                          '# Apply monitoring permissions - use built-in PVEAuditor role\npveum aclmod / -user pulse-monitor@pam -role PVEAuditor\n\n# For Proxmox 8 and below, also check if VM.Monitor is needed\nif pveum role list 2>/dev/null | grep -q "VM.Monitor" || \\\n   pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then\n  # VM.Monitor exists (PVE 8 or below) - create additional role\n  pveum role delete TestMonitor 2>/dev/null\n  pveum role delete PulseMonitor 2>/dev/null\n  pveum role add PulseMonitor -privs VM.Monitor\n  pveum aclmod / -user pulse-monitor@pam -role PulseMonitor\nfi'
+                                          '# Apply monitoring permissions - use built-in PVEAuditor role\npveum aclmod / -user pulse-monitor@pam -role PVEAuditor\n\n# Gather additional privileges for VM metrics\nEXTRA_PRIVS=()\n\n# Sys.Audit (Ceph, cluster status)\nif pveum role list 2>/dev/null | grep -q "Sys.Audit"; then\n  EXTRA_PRIVS+=(\"Sys.Audit\")\nelse\n  if pveum role add PulseTmpSysAudit -privs Sys.Audit 2>/dev/null; then\n    EXTRA_PRIVS+=(\"Sys.Audit\")\n    pveum role delete PulseTmpSysAudit 2>/dev/null\n  fi\nfi\n\n# VM guest agent / monitor privileges\nVM_PRIV=\"\"\nif pveum role list 2>/dev/null | grep -q "VM.Monitor"; then\n  VM_PRIV=\"VM.Monitor\"\nelif pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then\n  VM_PRIV=\"VM.GuestAgent.Audit\"\nelse\n  if pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then\n    VM_PRIV=\"VM.Monitor\"\n    pveum role delete PulseTmpVMMonitor 2>/dev/null\n  elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then\n    VM_PRIV=\"VM.GuestAgent.Audit\"\n    pveum role delete PulseTmpGuestAudit 2>/dev/null\n  fi\nfi\n\nif [ -n \"$VM_PRIV\" ]; then\n  EXTRA_PRIVS+=(\"$VM_PRIV\")\nfi\n\nif [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then\n  PRIV_STRING=\"${EXTRA_PRIVS[*]}\"\n  pveum role delete PulseMonitor 2>/dev/null\n  pveum role add PulseMonitor -privs \"$PRIV_STRING\"\n  pveum aclmod / -user pulse-monitor@pam -role PulseMonitor\nfi'
                                         }
                                       </code>
                                     </div>
@@ -966,10 +966,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </code>
                                     </div>
                                     <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                                      ℹ️ PVEAuditor gives read-only access including
-                                      VM.GuestAgent.Audit (required for disk usage on PVE 9+).
-                                      PulseMonitor adds VM.Monitor (PVE 8 only). PVEDatastoreAdmin
-                                      on /storage adds backup management.
+                                      ℹ️ PVEAuditor gives read-only API access. PulseMonitor adds
+                                      Sys.Audit plus either VM.Monitor (PVE 8) or VM.GuestAgent.Audit
+                                      (PVE 9+) for disk and guest metrics. PVEDatastoreAdmin on
+                                      /storage adds backup visibility.
                                     </p>
                                   </div>
 
