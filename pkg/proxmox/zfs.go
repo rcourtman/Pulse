@@ -96,7 +96,7 @@ func (p *ZFSPoolInfo) ConvertToModelZFSPool() *ZFSPool {
 	// Extract error counts from devices if available
 	pool.Devices = make([]ZFSDevice, 0)
 	for _, dev := range p.Devices {
-		pool.Devices = append(pool.Devices, convertDeviceRecursive(dev)...)
+		pool.Devices = append(pool.Devices, convertDeviceRecursive(dev, "")...)
 	}
 
 	// Calculate total errors from all devices
@@ -132,38 +132,64 @@ type ZFSDevice struct {
 	WriteErrors    int64  `json:"writeErrors"`
 	ChecksumErrors int64  `json:"checksumErrors"`
 	IsLeaf         bool   `json:"isLeaf"`
+	Message        string `json:"message,omitempty"`
 }
 
 // convertDeviceRecursive flattens the device tree into a list
-func convertDeviceRecursive(dev ZFSPoolDevice) []ZFSDevice {
+func convertDeviceRecursive(dev ZFSPoolDevice, parentRole string) []ZFSDevice {
 	var devices []ZFSDevice
 
-	// Determine device type based on name and structure
-	deviceType := "disk"
-	if dev.Leaf == 0 && len(dev.Children) > 0 {
-		// It's a vdev (mirror, raidz, etc.)
-		if dev.Name == "mirror" || (len(dev.Name) >= 6 && dev.Name[:6] == "mirror") {
-			deviceType = "mirror"
-		} else if len(dev.Name) >= 5 && dev.Name[:5] == "raidz" {
-			deviceType = dev.Name // raidz, raidz2, raidz3
-		} else {
-			deviceType = "vdev"
-		}
-	}
+	name := strings.TrimSpace(dev.Name)
+	lowerName := strings.ToLower(name)
 
-	lowerName := strings.ToLower(strings.TrimSpace(dev.Name))
-	isSpare := lowerName == "spares" || strings.HasPrefix(lowerName, "spare")
-	if isSpare {
-		if deviceType == "vdev" {
-			deviceType = "spare"
-		} else if dev.Leaf == 1 {
-			deviceType = "spare"
+	role := parentRole
+	if role == "" {
+		switch {
+		case lowerName == "logs" || lowerName == "log" || strings.HasPrefix(lowerName, "slog"):
+			role = "log"
+		case lowerName == "cache" || strings.HasPrefix(lowerName, "l2arc"):
+			role = "cache"
+		case lowerName == "spares" || strings.HasPrefix(lowerName, "spare"):
+			role = "spare"
 		}
 	}
 
 	state := strings.ToUpper(strings.TrimSpace(dev.State))
 	if state == "" {
 		state = "UNKNOWN"
+	}
+
+	isVdev := dev.Leaf == 0 && len(dev.Children) > 0
+
+	deviceType := "disk"
+	if isVdev {
+		deviceType = "vdev"
+	}
+
+	switch {
+	case isVdev && (lowerName == "mirror" || strings.HasPrefix(lowerName, "mirror")):
+		deviceType = "mirror"
+	case isVdev && strings.HasPrefix(lowerName, "raidz"):
+		deviceType = lowerName // raidz, raidz2, raidz3
+	case isVdev && role == "log":
+		deviceType = "log"
+	case isVdev && role == "cache":
+		deviceType = "cache"
+	case isVdev && role == "spare":
+		deviceType = "spare"
+	case role == "log" && dev.Leaf == 1:
+		deviceType = "log"
+	case role == "cache" && dev.Leaf == 1:
+		deviceType = "cache"
+	}
+
+	isSpare := lowerName == "spares" || strings.HasPrefix(lowerName, "spare")
+	if isSpare {
+		if dev.Leaf == 1 {
+			deviceType = "spare"
+		} else {
+			deviceType = "spare-group"
+		}
 	}
 
 	healthyStates := map[string]bool{
@@ -173,26 +199,31 @@ func convertDeviceRecursive(dev ZFSPoolDevice) []ZFSDevice {
 		"INUSE":  true,
 	}
 
-	if state == "UNKNOWN" && isSpare {
-		healthyStates[state] = true
+	if state == "UNKNOWN" {
+		if role == "log" || role == "cache" || role == "spare" || isSpare {
+			healthyStates[state] = true
+		}
 	}
 
 	// Add this device if it has errors or is not healthy (but skip healthy spares)
 	if !healthyStates[state] || dev.Read > 0 || dev.Write > 0 || dev.Cksum > 0 {
+		message := strings.TrimSpace(dev.Msg)
+
 		devices = append(devices, ZFSDevice{
-			Name:           dev.Name,
+			Name:           name,
 			Type:           deviceType,
-			State:          dev.State,
+			State:          state,
 			ReadErrors:     dev.Read,
 			WriteErrors:    dev.Write,
 			ChecksumErrors: dev.Cksum,
 			IsLeaf:         dev.Leaf == 1,
+			Message:        message,
 		})
 	}
 
 	// Process children
 	for _, child := range dev.Children {
-		devices = append(devices, convertDeviceRecursive(child)...)
+		devices = append(devices, convertDeviceRecursive(child, role)...)
 	}
 
 	return devices

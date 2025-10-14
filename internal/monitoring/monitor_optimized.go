@@ -48,6 +48,7 @@ func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 			ReadErrors:     dev.ReadErrors,
 			WriteErrors:    dev.WriteErrors,
 			ChecksumErrors: dev.ChecksumErrors,
+			Message:        dev.Message,
 		})
 	}
 

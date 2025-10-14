@@ -1279,6 +1279,13 @@ const Storage: Component = () => {
                                                           W/{device.checksumErrors}C errors)
                                                         </span>
                                                       </Show>
+                                                      <Show when={device.message?.trim()}>
+                                                        {(message) => (
+                                                          <span class="ml-1 text-gray-500 dark:text-gray-400">
+                                                            {message()}
+                                                          </span>
+                                                        )}
+                                                      </Show>
                                                     </span>
                                                   </div>
                                                 )}
