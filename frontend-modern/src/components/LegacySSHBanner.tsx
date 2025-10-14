@@ -79,7 +79,7 @@ export function LegacySSHBanner() {
               <div class="flex items-center gap-3 flex-wrap">
                 <div class="text-sm space-x-1">
                   <span class="font-medium">Legacy temperature monitoring detected.</span>
-                  <span>Remove each node and re-add it using the installer script in Settings → Nodes.</span>
+                  <span>Remove each node and re-add it using the installer script in Settings → Nodes (advanced: rerun the host installer script directly).</span>
                   <a
                     href="https://github.com/rcourtman/Pulse/blob/main/docs/PULSE_SENSOR_PROXY_HARDENING.md#upgrading-existing-installations"
                     target="_blank"
