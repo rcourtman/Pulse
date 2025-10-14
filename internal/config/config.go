@@ -1,7 +1,7 @@
 // Package config manages Pulse configuration from multiple sources.
 //
 // Configuration File Separation:
-//   - .env: Authentication credentials ONLY (PULSE_AUTH_USER, PULSE_AUTH_PASS, API_TOKEN)
+//   - .env: Authentication credentials ONLY (PULSE_AUTH_USER, PULSE_AUTH_PASS, API_TOKEN/API_TOKENS)
 //   - system.json: Application settings (polling interval, timeouts, update settings, etc.)
 //   - nodes.enc: Encrypted node credentials (PVE/PBS passwords and tokens)
 //

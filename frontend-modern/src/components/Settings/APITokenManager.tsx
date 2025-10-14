@@ -8,6 +8,7 @@ import { formatRelativeTime } from '@/utils/format';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
+  onTokensChanged?: () => void;
 }
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
@@ -47,6 +48,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       setNewTokenRecord(record);
       setNameInput('');
       showSuccess('New API token generated! Save it now – it will not be shown again.');
+      props.onTokensChanged?.();
 
       try {
         window.localStorage.setItem('apiToken', token);
@@ -88,6 +90,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       await SecurityAPI.deleteToken(record.id);
       setTokens((prev) => prev.filter((token) => token.id !== record.id));
       showSuccess('Token revoked');
+      props.onTokensChanged?.();
 
       const current = newTokenRecord();
       if (current && current.id === record.id) {

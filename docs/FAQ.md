@@ -85,7 +85,7 @@ Yes! When you add one cluster node, Pulse automatically discovers and monitors a
 
 ### Authentication issues?
 - Password auth: Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables
-- API token: Verify `API_TOKEN` is set correctly
+- API tokens: Ensure `API_TOKENS` includes an active credential (or `API_TOKEN` for legacy setups)
 - Session expired: Log in again via web UI
 - Account locked: Wait 15 minutes after 5 failed attempts
 

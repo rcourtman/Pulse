@@ -38,7 +38,8 @@ All configuration files are stored in `/etc/pulse/` (or `/data/` in Docker conta
 # User authentication
 PULSE_AUTH_USER='admin'              # Admin username
 PULSE_AUTH_PASS='$2a$12$...'        # Bcrypt hashed password (keep quotes!)
-API_TOKEN=abc123...                  # API token (Pulse hashes it automatically)
+API_TOKEN=abc123...                  # Optional: seed a primary API token (auto-hashed)
+API_TOKENS=token-one,token-two       # Optional: comma-separated list of API tokens
 
 # Security settings
 DISABLE_AUTH=true                    # Disable authentication entirely
@@ -54,10 +55,11 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 
 **Important Notes:**
 - Password hash MUST be in single quotes to prevent shell expansion
-- API tokens are stored as SHA3-256 hashes on disk; provide a plain token and Pulse hashes it automatically
+- API tokens are stored as SHA3-256 hashes on disk; plain tokens listed in `API_TOKEN` or `API_TOKENS` are auto-hashed at startup
+- Multiple tokens can be pre-seeded via `API_TOKENS` (comma separated). Every token—plain text or pre-hashed—becomes a distinct credential.
 - This file should have restricted permissions (600)
 - Never commit this file to version control
-- ProxmoxVE installations may pre-configure API_TOKEN
+- ProxmoxVE installations may pre-configure `API_TOKEN`; you can now add additional tokens without touching the original value
 - Changes to this file are applied immediately without restart (v4.3.9+)
 - **DO NOT** put port configuration here - use system.json or systemd overrides
 - Copy `.env.example` from the repository for a ready-to-edit template
@@ -317,7 +319,8 @@ These env vars override system.json values. When set, the UI will show a warning
 These should be set in the .env file for security:
 
 - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS` - Basic authentication
-- `API_TOKEN` - API token for authentication
+- `API_TOKEN` - Primary API token (auto-hashed if you supply the raw value)
+- `API_TOKENS` - Comma-separated list of additional API tokens (plain or SHA3-256 hashed)
 - `DISABLE_AUTH` - Set to `true` to disable authentication entirely
 
 #### OIDC Variables (optional overrides)
@@ -384,15 +387,19 @@ For automated deployments (CI/CD, infrastructure as code, ProxmoxVE scripts), yo
 
 ### Simple Automated Setup
 
-**Option 1: API Token Authentication**
+**Option 1: API Tokens (single or multiple)**
 ```bash
-# Start Pulse with API token - setup screen is skipped
-API_TOKEN=your-secure-api-token ./pulse
+# Start Pulse with API tokens - setup screen is skipped
+API_TOKENS="$ANSIBLE_TOKEN,$DOCKER_AGENT_TOKEN" ./pulse
 
-# The token is hashed and stored securely
-# Use this same token for all API calls
-curl -H "X-API-Token: your-secure-api-token" http://localhost:7655/api/nodes
+# Each token is hashed and stored securely on startup
+curl -H "X-API-Token: $ANSIBLE_TOKEN" http://localhost:7655/api/nodes
+
+# Legacy fallback (not recommended for new installs)
+# API_TOKEN=your-secure-api-token ./pulse
 ```
+
+> **Tip:** Generate a distinct token for each automation workflow (Ansible, Docker agents, CI runners, etc.) so you can revoke one credential without affecting the others.
 
 **Option 2: Basic Authentication**
 ```bash
@@ -406,9 +413,10 @@ PULSE_AUTH_PASS=your-secure-password \
 ```
 
 **Option 3: Both (API + Basic Auth)**
+Set `PRIMARY_TOKEN` to the token value you want to reuse (plain text or SHA3-256 hash) before starting Pulse:
 ```bash
 # Configure both authentication methods
-API_TOKEN=your-api-token \
+API_TOKENS="$PRIMARY_TOKEN" \
 PULSE_AUTH_USER=admin \
 PULSE_AUTH_PASS=your-password \
 ./pulse
@@ -430,22 +438,51 @@ PULSE_AUTH_PASS=your-password \
 
 ```bash
 #!/bin/bash
-# Generate secure token
-API_TOKEN=$(openssl rand -hex 32)
+# Generate dedicated tokens for each integration
+ANSIBLE_TOKEN=$(openssl rand -hex 32)
+DOCKER_AGENT_TOKEN=$(openssl rand -hex 32)
 
 # Deploy with authentication pre-configured
 docker run -d \
   --name pulse \
   -p 7655:7655 \
-  -e API_TOKEN="$API_TOKEN" \
+  -e API_TOKENS="$ANSIBLE_TOKEN,$DOCKER_AGENT_TOKEN" \
   -v pulse-data:/data \
   rcourtman/pulse:latest
 
-echo "Pulse deployed! Use API token: $API_TOKEN"
+echo "Pulse deployed!"
+echo "  Ansible token: $ANSIBLE_TOKEN"
+echo "  Docker agent token: $DOCKER_AGENT_TOKEN"
 
 # Immediately use the API - no setup needed
-curl -H "X-API-Token: $API_TOKEN" http://localhost:7655/api/nodes
+curl -H "X-API-Token: $ANSIBLE_TOKEN" http://localhost:7655/api/nodes
 ```
+
+Remember to store each token securely; the plain values above are displayed only once.
+
+### Managing tokens via the REST API
+
+Infrastructure-as-code workflows (Ansible, Terraform, etc.) can drive token lifecycle directly through the new `/api/security/tokens` endpoints:
+
+- `GET /api/security/tokens` – list existing tokens (metadata only)
+- `POST /api/security/tokens` – create a new token; the raw value is returned once in the response
+- `DELETE /api/security/tokens/{id}` – revoke a token by its identifier
+
+Example: create a token named `ansible` and capture the secret for later use.
+
+```bash
+NEW_TOKEN_JSON=$(curl -sS -X POST http://localhost:7655/api/security/tokens \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: $ADMIN_TOKEN" \
+  -d '{"name":"ansible"}')
+
+NEW_TOKEN=$(echo "$NEW_TOKEN_JSON" | jq -r '.token')
+TOKEN_ID=$(echo "$NEW_TOKEN_JSON" | jq -r '.record.id')
+echo "New token value: $NEW_TOKEN"
+echo "Token id: $TOKEN_ID"
+```
+
+Store `NEW_TOKEN` securely; future GET requests only expose token hints (`prefix`/`suffix`). To revoke the credential later, call `DELETE /api/security/tokens/$TOKEN_ID`.
 
 ---
 

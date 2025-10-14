@@ -51,7 +51,8 @@ Environment variables always override configuration files.
 ## Why not .env?
 
 The `/etc/pulse/.env` file is reserved exclusively for authentication credentials:
-- `API_TOKEN` - API authentication token (hashed)
+- `API_TOKENS` - One or more API authentication tokens (hashed)
+- `API_TOKEN` - Legacy single API token (hashed)
 - `PULSE_AUTH_USER` - Web UI username
 - `PULSE_AUTH_PASS` - Web UI password (hashed)
 

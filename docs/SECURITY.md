@@ -67,7 +67,7 @@ If you're comfortable with your security setup, you can dismiss warnings:
 ### Security Features
 - **Logs**: Token values masked with `***` in all outputs
 - **API**: Frontend receives only `hasToken: true`, never actual values
-- **Export**: Requires API_TOKEN authentication to extract credentials
+- **Export**: Requires a valid API token (via `X-API-Token` header or `token` query parameter) to extract credentials
 - **Migration**: Use passphrase-protected export/import (see [Migration Guide](MIGRATION.md))
 - **Auto-Migration**: Unencrypted configs automatically migrate to encrypted format
 
@@ -75,19 +75,20 @@ If you're comfortable with your security setup, you can dismiss warnings:
 
 By default, configuration export/import is blocked for security. You have two options:
 
-### Option 1: Set API Token (Recommended)
+### Option 1: Set API Tokens (Recommended)
 ```bash
 # Using systemd (secure)
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="API_TOKEN=your-48-char-hex-token"
+Environment="API_TOKENS=ansible-token,docker-agent-token"
+Environment="API_TOKEN=legacy-token"  # Optional fallback
 
 # Then restart:
 sudo systemctl restart pulse-backend
 
 # Docker
-docker run -e API_TOKEN=your-token rcourtman/pulse:latest
+docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
 ```
 
 ### Option 2: Allow Unprotected Export (Homelab)
@@ -217,26 +218,30 @@ The Quick Security Setup automatically:
 - Generates a cryptographically secure token
 - Hashes it with SHA3-256
 - Stores only the 64-character hash
+- Adds the token to the managed token list
 
 #### Manual Token Setup
 ```bash
-# Using systemd (use SHA3-256 hash, not plain text!)
+# Using systemd (plain text values are auto-hashed on startup)
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="API_TOKEN=<64-char-sha3-256-hash>"
+Environment="API_TOKENS=ansible-token,docker-agent-token"
 
 # Docker
-docker run -e API_TOKEN=<64-char-sha3-256-hash> rcourtman/pulse:latest
+docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
+
+# To provide pre-hashed tokens instead, list the SHA3-256 hashes
+# Environment="API_TOKENS=83c8...,b1de..."
 ```
 
-**Security Note**: API tokens are automatically hashed with SHA3-256. Never store plain text tokens in configuration.
+**Security Note**: Tokens defined via environment variables are hashed with SHA3-256 before being stored on disk. Plain values never persist beyond startup.
 
-#### Token Management (Settings → Security → API Token)
-- Generate new tokens via web UI when authenticated
-- View existing token anytime (authenticated users only)
-- Regenerate tokens without disrupting service
-- Delete tokens to disable API access
+#### Token Management (Settings → Security → API tokens)
+- Issue dedicated tokens for automation/agents without sharing a global credential
+- View prefixes/suffixes and last-used timestamps for auditing
+- Revoke tokens individually without downtime
+- Regenerate tokens when rotating credentials (new value displayed once)
 - All tokens stored as SHA3-256 hashes
 
 #### Usage
@@ -258,7 +263,7 @@ curl "http://localhost:7655/api/export?token=your-original-token"
 #### Secure Mode
 - Require API token for all operations
 - Protects auto-registration endpoint
-- Enable by setting API_TOKEN environment variable
+- Enable by setting at least one API token via `API_TOKENS` (or legacy `API_TOKEN`) environment variable
 
 ## CORS (Cross-Origin Resource Sharing)
 
@@ -349,9 +354,9 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 ## Troubleshooting
 
 **Account locked?** Wait 15 minutes or contact admin for manual reset
-**Export blocked?** You're on a public network - login with password, set API_TOKEN, or set ALLOW_UNPROTECTED_EXPORT=true
+**Export blocked?** You're on a public network - login with password, set an API token (`API_TOKENS`), or set ALLOW_UNPROTECTED_EXPORT=true
 **Rate limited?** Wait 1 minute and try again
 **Can't login?** Check PULSE_AUTH_USER and PULSE_AUTH_PASS environment variables
-**API access denied?** Verify API_TOKEN is correct (use original token, not hash)
+**API access denied?** Verify the token you supplied matches one of the values created in Settings → Security → API tokens (use the original token value, not the hash)
 **CORS errors?** Configure ALLOWED_ORIGINS for your domain
 **Forgot password?** Start fresh - delete your Pulse data and restart

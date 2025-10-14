@@ -26,25 +26,25 @@ docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS=your-password rcourtman/p
 Once set, users must login via the web UI. The password can be changed from Settings → Security.
 
 ### API Token Authentication
-For programmatic API access and automation. Tokens can be generated via the web UI (Settings → Security → Generate API Token).
+For programmatic API access and automation. Manage tokens via **Settings → Security → API tokens** or the `/api/security/tokens` endpoints.
 
-**API-Only Mode**: If only API_TOKEN is configured (no password auth), the UI remains accessible in read-only mode while API modifications require the token.
+**API-Only Mode**: If at least one API token is configured (no password auth), the UI remains accessible in read-only mode while API modifications require a valid token.
 
 ```bash
 # Systemd
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="API_TOKEN=your-48-char-hex-token"
+Environment="API_TOKENS=token-a,token-b"
 
 # Docker
-docker run -e API_TOKEN=your-48-char-hex-token rcourtman/pulse:latest
+docker run -e API_TOKENS=token-a,token-b rcourtman/pulse:latest
 ```
 
 ### Using Authentication
 
 ```bash
-# With API Token (header)
+# With API token (header)
 curl -H "X-API-Token: your-secure-token" http://localhost:7655/api/health
 
 # With API Token (query parameter, for export/import)
@@ -53,6 +53,8 @@ curl "http://localhost:7655/api/export?token=your-secure-token"
 # With session cookie (after login)
 curl -b cookies.txt http://localhost:7655/api/health
 ```
+
+> Legacy note: The `API_TOKEN` environment variable is still honored for backwards compatibility. When both `API_TOKEN` and `API_TOKENS` are supplied, Pulse merges them and prefers the newest token when presenting hints.
 
 ### Security Features
 
@@ -431,13 +433,63 @@ Request body:
 ```
 
 #### API Token Management
-Manage API tokens for programmatic access.
+Manage API tokens for automation workflows, Docker agents, and tool integrations.
 
+Authentication: Requires an admin session or an existing admin-scoped API token.
+
+**List tokens**
 ```bash
-POST /api/security/regenerate-token   # Generate or regenerate API token
+GET /api/security/tokens
 ```
 
-Note: The old `/api/system/api-token` endpoints have been deprecated in favor of the simplified regenerate-token endpoint.
+Response:
+```json
+{
+  "tokens": [
+    {
+      "id": "9bf9aa59-3b85-4fd8-9aad-3f19b2c9b6f0",
+      "name": "ansible",
+      "prefix": "pulse_1a2b",
+      "suffix": "c3d4",
+      "createdAt": "2025-10-14T12:12:34Z",
+      "lastUsedAt": "2025-10-14T12:21:05Z"
+    }
+  ]
+}
+```
+
+**Create a token**
+```bash
+POST /api/security/tokens
+Content-Type: application/json
+{
+  "name": "ansible"
+}
+```
+
+Response (token value is returned once):
+```json
+{
+  "token": "pulse_1a2b3c4d5e6f7g8h9i0j",
+  "record": {
+    "id": "9bf9aa59-3b85-4fd8-9aad-3f19b2c9b6f0",
+    "name": "ansible",
+    "prefix": "pulse_1a2b",
+    "suffix": "c3d4",
+    "createdAt": "2025-10-14T12:12:34Z",
+    "lastUsedAt": null
+  }
+}
+```
+
+**Delete a token**
+```bash
+DELETE /api/security/tokens/{id}
+```
+
+Returns `204 No Content` when the token is revoked.
+
+> Legacy compatibility: `POST /api/security/regenerate-token` is still available but now replaces the entire token list with a single regenerated token. Prefer the endpoints above for multi-token environments.
 
 #### Login
 Enhanced login endpoint with lockout feedback.

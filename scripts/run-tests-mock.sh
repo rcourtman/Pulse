@@ -11,6 +11,11 @@ NC='\033[0m'
 
 MODE="full"
 API_TOKEN="${API_TOKEN:-}"
+# Allow new multi-token env var to provide the test credential
+if [ -z "$API_TOKEN" ] && [ -n "${API_TOKENS:-}" ]; then
+    # Use the first token in the comma-separated list
+    API_TOKEN="$(printf '%s\n' "$API_TOKENS" | tr ',' '\n' | head -n1)"
+fi
 PULSE_URL="${PULSE_URL:-http://localhost:7655}"
 FAILED=0
 PASSED=0

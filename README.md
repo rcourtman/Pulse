@@ -102,18 +102,19 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 1. Open `http://<your-server>:7655`
 2. **Complete the mandatory security setup** (first-time only)
 3. Create your admin username and password
-4. Save the generated API token for automation
+4. Use **Settings → Security → API tokens** to mint dedicated tokens for automation (issue one token per integration so you can revoke credentials individually)
 
 **Option B: Automated Setup (No UI)**
 For automated deployments, configure authentication via environment variables:
 ```bash
 # Start Pulse with auth pre-configured - skips setup screen
-API_TOKEN=your-api-token ./pulse
+API_TOKENS="ansible-token,docker-agent-token" ./pulse
 
 # Or use basic auth
 PULSE_AUTH_USER=admin PULSE_AUTH_PASS=password ./pulse
 
 # Plain text credentials are automatically hashed for security
+# `API_TOKEN` is still accepted for back-compat, but `API_TOKENS` lets you manage multiple credentials
 # You can also provide pre-hashed values if preferred
 ```
 See [Configuration Guide](docs/CONFIGURATION.md#automated-setup-skip-ui) for details.
@@ -196,7 +197,7 @@ docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
-  -e API_TOKEN="your-secure-token" \
+  -e API_TOKENS="ansible-token,docker-agent-token" \
   -e PULSE_AUTH_USER="admin" \
   -e PULSE_AUTH_PASS="your-password" \
   --restart unless-stopped \
@@ -229,7 +230,8 @@ services:
       # Security (all optional - runs open by default)
       # - PULSE_AUTH_USER=admin             # Username for web UI login
       # - PULSE_AUTH_PASS=your-password     # Plain text or bcrypt hash (auto-hashed if plain)
-      # - API_TOKEN=your-token              # Plain text or SHA3-256 hash (auto-hashed if plain)
+      # - API_TOKENS=token-a,token-b        # Comma-separated tokens (plain or SHA3-256 hashed)
+      # - API_TOKEN=legacy-token            # Optional single-token fallback
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
       # Security: Plain text credentials are automatically hashed

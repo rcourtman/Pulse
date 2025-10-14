@@ -78,7 +78,11 @@ services:
       # escape $ as $$ (e.g. $$2a$$12$$...) so docker compose does not treat it
       # as variable expansion.
       PULSE_AUTH_PASS: 'super-secret-password'
-      API_TOKEN: 'your-48-char-hex-token'  # Generate: openssl rand -hex 24
+      # Provide one or more API tokens. Tokens can be raw values or SHA3-256 hashes.
+      # Use distinct tokens per automation target for easier revocation.
+      API_TOKENS: 'ansible-token,docker-agent-token'
+      # Optional legacy variable kept for compatibility; newest token is used if both are set.
+      # API_TOKEN: 'your-48-char-hex-token'
       PULSE_PUBLIC_URL: 'https://pulse.example.com'  # Used for webhooks/links
       # TZ: 'UTC'
     restart: unless-stopped
@@ -95,7 +99,10 @@ Create `.env` file (no escaping needed here). You can copy `.env.example` from t
 ```env
 PULSE_AUTH_USER=admin
 PULSE_AUTH_PASS=super-secret-password          # Plain text (auto-hashed) or bcrypt hash
+# Optional legacy token (used if API_TOKENS is empty)
 API_TOKEN=your-48-char-hex-token               # Generate with: openssl rand -hex 24
+# Comma-separated list of tokens for automation/agents
+API_TOKENS=${ANSIBLE_TOKEN},${DOCKER_AGENT_TOKEN}
 PULSE_PUBLIC_URL=https://pulse.example.com     # Recommended for webhooks
 TZ=Asia/Kolkata                                # Optional: matches host timezone
 ```
@@ -138,17 +145,21 @@ If you change anything in `.env`, run `docker compose up -d` again so the contai
 docker run -d \
   -e PULSE_AUTH_USER=admin \
   -e PULSE_AUTH_PASS=mypassword \
-  -e API_TOKEN=mytoken123 \
+  -e API_TOKENS="ansible-token,docker-agent-token" \
   rcourtman/pulse:latest
 ```
+
+> Tip: Create one token per automation workflow (Ansible, Docker agents, CI jobs, etc.) so you can revoke individual credentials without touching others. Use **Settings → Security → API tokens** or `POST /api/security/tokens` to mint tokens programmatically.
 
 ### Advanced: Pre-Hashing (Optional)
 ```bash
 # Generate bcrypt hash for password
 docker run --rm -it rcourtman/pulse:latest pulse hash-password
 
-# Generate random API token
-openssl rand -hex 32
+# Generate random API tokens
+ANSIBLE_TOKEN=$(openssl rand -hex 32)
+DOCKER_AGENT_TOKEN=$(openssl rand -hex 32)
+# Then pass them to the container via API_TOKENS
 ```
 
 ## Data Persistence
@@ -252,7 +263,8 @@ Common problems:
 |----------|-------------|-------------------|
 | `PULSE_AUTH_USER` | Admin username | `admin` |
 | `PULSE_AUTH_PASS` | Admin password (plain text auto-hashed or bcrypt hash) | `super-secret-password` or `$2a$12$...` |
-| `API_TOKEN` | API access token (plain text or SHA3-256 hash) | `openssl rand -hex 24` |
+| `API_TOKEN` | Legacy single API token (optional fallback) | `openssl rand -hex 24` |
+| `API_TOKENS` | Comma-separated list of API tokens (plain or SHA3-256 hashed) | `ansible-token,docker-agent-token` |
 | `DISABLE_AUTH` | Disable authentication entirely | `false` |
 | `PULSE_AUDIT_LOG` | Enable security audit logging | `false` |
 
