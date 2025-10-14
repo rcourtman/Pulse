@@ -394,6 +394,14 @@ type Node struct {
 	Level   string  `json:"level"`
 }
 
+// NodeRRDPoint represents a single RRD datapoint for a node.
+type NodeRRDPoint struct {
+	Time         int64    `json:"time"`
+	MemTotal     *float64 `json:"memtotal,omitempty"`
+	MemUsed      *float64 `json:"memused,omitempty"`
+	MemAvailable *float64 `json:"memavailable,omitempty"`
+}
+
 // NodeStatus represents detailed node status from /nodes/{node}/status endpoint
 // This endpoint provides real-time metrics that update every second
 type NodeStatus struct {
@@ -526,6 +534,44 @@ func (c *Client) GetNodeStatus(ctx context.Context, node string) (*NodeStatus, e
 	}
 
 	return &result.Data, nil
+}
+
+// GetNodeRRDData retrieves RRD metrics for a node.
+func (c *Client) GetNodeRRDData(ctx context.Context, node, timeframe, cf string, ds []string) ([]NodeRRDPoint, error) {
+	if timeframe == "" {
+		timeframe = "hour"
+	}
+	if cf == "" {
+		cf = "AVERAGE"
+	}
+
+	params := url.Values{}
+	params.Set("timeframe", timeframe)
+	params.Set("cf", cf)
+	if len(ds) > 0 {
+		params.Set("ds", strings.Join(ds, ","))
+	}
+
+	path := fmt.Sprintf("/nodes/%s/rrddata", url.PathEscape(node))
+	if query := params.Encode(); query != "" {
+		path = fmt.Sprintf("%s?%s", path, query)
+	}
+
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []NodeRRDPoint `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
 }
 
 // VM represents a Proxmox VE virtual machine

@@ -34,6 +34,7 @@ import (
 type PVEClientInterface interface {
 	GetNodes(ctx context.Context) ([]proxmox.Node, error)
 	GetNodeStatus(ctx context.Context, node string) (*proxmox.NodeStatus, error)
+	GetNodeRRDData(ctx context.Context, node string, timeframe string, cf string, ds []string) ([]proxmox.NodeRRDPoint, error)
 	GetVMs(ctx context.Context, node string) ([]proxmox.VM, error)
 	GetContainers(ctx context.Context, node string) ([]proxmox.Container, error)
 	GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error)
@@ -275,6 +276,13 @@ type Monitor struct {
 	diagMu               sync.RWMutex              // Protects diagnostic snapshot maps
 	nodeSnapshots        map[string]NodeMemorySnapshot
 	guestSnapshots       map[string]GuestMemorySnapshot
+	rrdCacheMu           sync.RWMutex // Protects RRD memavailable cache
+	nodeRRDMemCache      map[string]rrdMemCacheEntry
+}
+
+type rrdMemCacheEntry struct {
+	value     uint64
+	fetchedAt time.Time
 }
 
 // safePercentage calculates percentage safely, returning 0 if divisor is 0
@@ -310,7 +318,66 @@ const (
 	dockerOfflineGraceMultiplier = 4
 	dockerMinimumHealthWindow    = 30 * time.Second
 	dockerMaximumHealthWindow    = 10 * time.Minute
+	nodeRRDCacheTTL              = 30 * time.Second
+	nodeRRDRequestTimeout        = 2 * time.Second
 )
+
+func (m *Monitor) getNodeRRDMemAvailable(ctx context.Context, client PVEClientInterface, nodeName string) (uint64, error) {
+	if client == nil || nodeName == "" {
+		return 0, fmt.Errorf("invalid arguments for RRD lookup")
+	}
+
+	now := time.Now()
+
+	m.rrdCacheMu.RLock()
+	if entry, ok := m.nodeRRDMemCache[nodeName]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
+		m.rrdCacheMu.RUnlock()
+		return entry.value, nil
+	}
+	m.rrdCacheMu.RUnlock()
+
+	requestCtx, cancel := context.WithTimeout(ctx, nodeRRDRequestTimeout)
+	defer cancel()
+
+	points, err := client.GetNodeRRDData(requestCtx, nodeName, "hour", "AVERAGE", []string{"memavailable", "memtotal"})
+	if err != nil {
+		return 0, err
+	}
+
+	var memAvailable uint64
+	var memTotal uint64
+
+	for i := len(points) - 1; i >= 0; i-- {
+		point := points[i]
+		if point.MemTotal != nil && !math.IsNaN(*point.MemTotal) && *point.MemTotal > 0 {
+			memTotal = uint64(math.Round(*point.MemTotal))
+		}
+
+		if point.MemAvailable == nil || math.IsNaN(*point.MemAvailable) || *point.MemAvailable <= 0 {
+			continue
+		}
+
+		memAvailable = uint64(math.Round(*point.MemAvailable))
+		break
+	}
+
+	if memAvailable == 0 {
+		return 0, fmt.Errorf("rrd memavailable not present")
+	}
+
+	if memTotal > 0 && memAvailable > memTotal {
+		memAvailable = memTotal
+	}
+
+	m.rrdCacheMu.Lock()
+	m.nodeRRDMemCache[nodeName] = rrdMemCacheEntry{
+		value:     memAvailable,
+		fetchedAt: now,
+	}
+	m.rrdCacheMu.Unlock()
+
+	return memAvailable, nil
+}
 
 // RemoveDockerHost removes a docker host from the shared state and clears related alerts.
 func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
@@ -933,6 +1000,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pbsBackupPollers:     make(map[string]bool),
 		nodeSnapshots:        make(map[string]NodeMemorySnapshot),
 		guestSnapshots:       make(map[string]GuestMemorySnapshot),
+		nodeRRDMemCache:      make(map[string]rrdMemCacheEntry),
 	}
 
 	// Load saved configurations
@@ -1986,6 +2054,24 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				if nodeInfo.Memory != nil && nodeInfo.Memory.Total > 0 {
 					var actualUsed uint64
 					effectiveAvailable := nodeInfo.Memory.EffectiveAvailable()
+					usedRRDFallback := false
+
+					if effectiveAvailable == 0 &&
+						nodeInfo.Memory.Available == 0 &&
+						nodeInfo.Memory.Avail == 0 &&
+						nodeInfo.Memory.Buffers == 0 &&
+						nodeInfo.Memory.Cached == 0 {
+						if memAvail, err := m.getNodeRRDMemAvailable(ctx, client, node.Node); err == nil && memAvail > 0 {
+							effectiveAvailable = memAvail
+							usedRRDFallback = true
+						} else if err != nil {
+							log.Debug().
+								Err(err).
+								Str("instance", instanceName).
+								Str("node", node.Node).
+								Msg("RRD memavailable fallback unavailable")
+						}
+					}
 
 					switch {
 					case effectiveAvailable > 0 && effectiveAvailable <= nodeInfo.Memory.Total:
@@ -2002,31 +2088,44 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Uint64("actualUsed", actualUsed).
 							Float64("usage", safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total)))
 
-						switch {
-						case nodeInfo.Memory.Available > 0:
-							logCtx.Msg("Node memory: using available field (excludes reclaimable cache)")
-							nodeMemorySource = "available-field"
-						case nodeInfo.Memory.Avail > 0:
-							logCtx.Msg("Node memory: using avail field (excludes reclaimable cache)")
-							nodeMemorySource = "avail-field"
-						default:
-							logCtx.
-								Uint64("free", nodeInfo.Memory.Free).
-								Uint64("buffers", nodeInfo.Memory.Buffers).
-								Uint64("cached", nodeInfo.Memory.Cached).
-								Msg("Node memory: derived available from free+buffers+cached (excludes reclaimable cache)")
-							nodeMemorySource = "derived-free-buffers-cached"
+						if usedRRDFallback {
+							logCtx.Msg("Node memory: using RRD memavailable fallback (excludes reclaimable cache)")
+							nodeMemorySource = "rrd-memavailable"
+							nodeFallbackReason = "rrd-memavailable"
+							nodeSnapshotRaw.FallbackCalculated = true
+							nodeSnapshotRaw.ProxmoxMemorySource = "rrd-memavailable"
+						} else {
+							switch {
+							case nodeInfo.Memory.Available > 0:
+								logCtx.Msg("Node memory: using available field (excludes reclaimable cache)")
+								nodeMemorySource = "available-field"
+							case nodeInfo.Memory.Avail > 0:
+								logCtx.Msg("Node memory: using avail field (excludes reclaimable cache)")
+								nodeMemorySource = "avail-field"
+							default:
+								logCtx.
+									Uint64("free", nodeInfo.Memory.Free).
+									Uint64("buffers", nodeInfo.Memory.Buffers).
+									Uint64("cached", nodeInfo.Memory.Cached).
+									Msg("Node memory: derived available from free+buffers+cached (excludes reclaimable cache)")
+								nodeMemorySource = "derived-free-buffers-cached"
+							}
 						}
 					default:
 						// Fallback to traditional used memory if no cache-aware data is exposed
 						actualUsed = nodeInfo.Memory.Used
+						if actualUsed > nodeInfo.Memory.Total {
+							actualUsed = nodeInfo.Memory.Total
+						}
 						log.Debug().
 							Str("node", node.Node).
 							Uint64("total", nodeInfo.Memory.Total).
-							Uint64("used", nodeInfo.Memory.Used).
+							Uint64("used", actualUsed).
 							Msg("Node memory: no cache-aware metrics - using traditional calculation (includes cache)")
 						nodeMemorySource = "node-status-used"
 					}
+
+					nodeSnapshotRaw.EffectiveAvailable = effectiveAvailable
 
 					free := int64(nodeInfo.Memory.Total - actualUsed)
 					if free < 0 {
