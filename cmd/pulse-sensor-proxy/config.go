@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -14,11 +15,19 @@ import (
 type Config struct {
 	AllowedSourceSubnets []string `yaml:"allowed_source_subnets"`
 	MetricsAddress       string   `yaml:"metrics_address"`
+
+	AllowIDMappedRoot bool     `yaml:"allow_idmapped_root"`
+	AllowedPeerUIDs   []uint32 `yaml:"allowed_peer_uids"`
+	AllowedPeerGIDs   []uint32 `yaml:"allowed_peer_gids"`
+	AllowedIDMapUsers []string `yaml:"allowed_idmap_users"`
 }
 
 // loadConfig loads configuration from file and environment variables
 func loadConfig(configPath string) (*Config, error) {
-	cfg := &Config{}
+	cfg := &Config{
+		AllowIDMappedRoot: true,
+		AllowedIDMapUsers: []string{"root"},
+	}
 
 	// Try to load config file if it exists
 	if configPath != "" {
@@ -46,6 +55,65 @@ func loadConfig(configPath string) (*Config, error) {
 		log.Info().
 			Int("env_subnet_count", len(envList)).
 			Msg("Appended subnets from environment variable")
+	}
+
+	// Allow ID-mapped root override
+	if envAllowIDMap := os.Getenv("PULSE_SENSOR_PROXY_ALLOW_IDMAPPED_ROOT"); envAllowIDMap != "" {
+		parsed, err := parseBool(envAllowIDMap)
+		if err != nil {
+			log.Warn().
+				Str("value", envAllowIDMap).
+				Err(err).
+				Msg("Invalid PULSE_SENSOR_PROXY_ALLOW_IDMAPPED_ROOT value, ignoring")
+		} else {
+			cfg.AllowIDMappedRoot = parsed
+			log.Info().
+				Bool("allow_idmapped_root", parsed).
+				Msg("Configured allow_idmapped_root from environment variable")
+		}
+	}
+
+	// Allowed ID map users override
+	if envIDMapUsers := os.Getenv("PULSE_SENSOR_PROXY_ALLOWED_IDMAP_USERS"); envIDMapUsers != "" {
+		envList := splitAndTrim(envIDMapUsers)
+		if len(envList) > 0 {
+			cfg.AllowedIDMapUsers = envList
+			log.Info().
+				Strs("allowed_idmap_users", cfg.AllowedIDMapUsers).
+				Msg("Configured allowed ID map users from environment")
+		}
+	}
+
+	// Allowed peer UID overrides
+	if envUIDs := os.Getenv("PULSE_SENSOR_PROXY_ALLOWED_PEER_UIDS"); envUIDs != "" {
+		parsed, err := parseUint32List(envUIDs)
+		if err != nil {
+			log.Warn().
+				Str("value", envUIDs).
+				Err(err).
+				Msg("Invalid PULSE_SENSOR_PROXY_ALLOWED_PEER_UIDS value, ignoring")
+		} else {
+			cfg.AllowedPeerUIDs = append(cfg.AllowedPeerUIDs, parsed...)
+			log.Info().
+				Int("env_uid_count", len(parsed)).
+				Msg("Appended allowed peer UIDs from environment")
+		}
+	}
+
+	// Allowed peer GID overrides
+	if envGIDs := os.Getenv("PULSE_SENSOR_PROXY_ALLOWED_PEER_GIDS"); envGIDs != "" {
+		parsed, err := parseUint32List(envGIDs)
+		if err != nil {
+			log.Warn().
+				Str("value", envGIDs).
+				Err(err).
+				Msg("Invalid PULSE_SENSOR_PROXY_ALLOWED_PEER_GIDS value, ignoring")
+		} else {
+			cfg.AllowedPeerGIDs = append(cfg.AllowedPeerGIDs, parsed...)
+			log.Info().
+				Int("env_gid_count", len(parsed)).
+				Msg("Appended allowed peer GIDs from environment")
+		}
 	}
 
 	// Metrics address from environment variable
@@ -83,6 +151,48 @@ func loadConfig(configPath string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// parseBool returns boolean value for various truthy/falsy strings
+func parseBool(raw string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid boolean value: %s", raw)
+	}
+}
+
+// parseUint32List parses comma-separated uint32 list
+func parseUint32List(raw string) ([]uint32, error) {
+	var parsed []uint32
+	parts := splitAndTrim(raw)
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		val, err := strconv.ParseUint(part, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid uint32 %q: %w", part, err)
+		}
+		parsed = append(parsed, uint32(val))
+	}
+	return parsed, nil
+}
+
+// splitAndTrim splits a comma-separated string and trims whitespace
+func splitAndTrim(raw string) []string {
+	parts := strings.Split(raw, ",")
+	var result []string
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // detectHostCIDRs detects local host IP addresses as /32 (IPv4) or /128 (IPv6) CIDRs

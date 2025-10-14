@@ -6,9 +6,30 @@ The `pulse-sensor-proxy` is a host-side service that provides secure temperature
 
 **Architecture:**
 - Host-side proxy runs with minimal privileges on each Proxmox node
-- Containerized Pulse communicates via Unix socket (`/run/pulse-sensor-proxy/pulse-sensor-proxy.sock`)
+- Containerized Pulse communicates via Unix socket (inside the container at `/mnt/pulse-proxy/pulse-sensor-proxy.sock`, backed by `/run/pulse-sensor-proxy/pulse-sensor-proxy.sock` on the host)
 - Proxy authenticates containers using Linux `SO_PEERCRED` (UID/PID verification)
 - SSH keys never leave the host filesystem
+
+```mermaid
+flowchart LR
+    subgraph Host Node
+        direction TB
+        PulseProxy["pulse-sensor-proxy service\n(systemd, user=pulse-sensor-proxy)"]
+        HostSocket["/run/pulse-sensor-proxy/\npulse-sensor-proxy.sock"]
+        PulseProxy -- Unix socket --> HostSocket
+    end
+
+    subgraph LXC Container (Pulse)
+        direction TB
+        MountPoint["/mnt/pulse-proxy/\npulse-sensor-proxy.sock"]
+        PulseBackend["Pulse backend (Go)\n-hot-dev / production"]
+        MountPoint --> PulseBackend
+    end
+
+    HostSocket == Proxmox mp mount ==> MountPoint
+    PulseBackend -.-> Sensors[(Cluster nodes via SSH 'sensors -j')]
+    PulseProxy -.-> Sensors
+```
 
 **Threat Model:**
 - ✅ Container compromise cannot access SSH keys
@@ -89,6 +110,8 @@ systemctl show pulse-sensor-proxy | grep -E '(User=|NoNewPrivileges|ProtectSyste
 
 /run/pulse-sensor-proxy/              pulse-sensor-proxy:pulse-sensor-proxy  0775
 └── pulse-sensor-proxy.sock           pulse-sensor-proxy:pulse-sensor-proxy  0777
+/mnt/pulse-proxy/                     nobody:nogroup (id-mapped)            0777
+└── pulse-sensor-proxy.sock           nobody:nogroup                         0777
 ```
 
 **Verify permissions:**
@@ -103,9 +126,13 @@ ls -l /var/lib/pulse-sensor-proxy/ssh/
 # -rw------- pulse-sensor-proxy pulse-sensor-proxy id_ed25519
 # -rw-r----- pulse-sensor-proxy pulse-sensor-proxy id_ed25519.pub
 
-# Check socket directory (note: 0775 for container access)
+# Check socket directory on host (note: 0775 for container access)
 ls -ld /run/pulse-sensor-proxy/
 # Expected: drwxrwxr-x pulse-sensor-proxy pulse-sensor-proxy
+
+# Check socket directory inside container
+ls -ld /mnt/pulse-proxy/
+# Expected: drwxrwxrwx nobody nogroup (id-mapped)
 ```
 
 **Why 0775 on socket directory?**
@@ -120,7 +147,7 @@ The socket directory needs `0775` (not `0770`) to allow the container's unprivil
 | `lxc.idmap` | `u 0 100000 65536`<br>`g 0 100000 65536` | Unprivileged UID/GID mapping |
 | `lxc.apparmor.profile` | `generated` or custom | AppArmor confinement |
 | `lxc.cap.drop` | `sys_admin` (optional) | Drop dangerous capabilities |
-| `lxc.mount.entry` | Directory-level bind mount | Socket access from container |
+| `mpX` | `/run/pulse-sensor-proxy,mp=/mnt/pulse-proxy` | Socket access from container |
 
 ### Sample LXC Configuration
 
@@ -137,8 +164,8 @@ lxc.apparmor.profile: generated
 lxc.cap.drop: sys_admin
 
 # Bind mount proxy socket directory (REQUIRED)
-# Note: Directory-level mount, not socket-level (socket is recreated by systemd)
-lxc.mount.entry: /run/pulse-sensor-proxy run/pulse-sensor-proxy none bind,create=dir 0 0
+# Note: Use an mp entry so Proxmox manages the bind mount automatically
+mp0: /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
 ```
 
 **Key points:**
@@ -187,11 +214,11 @@ capsh --print | grep Current
 **Check bind mount:**
 ```bash
 # Inside container
-ls -la /run/pulse-sensor-proxy/
+ls -la /mnt/pulse-proxy/
 # Expected: pulse-sensor-proxy.sock visible
 
 # Test socket access (requires Pulse to attempt connection)
-socat - UNIX-CONNECT:/run/pulse-sensor-proxy/pulse-sensor-proxy.sock
+socat - UNIX-CONNECT:/mnt/pulse-proxy/pulse-sensor-proxy.sock
 # Should connect (may timeout waiting for input, but connection succeeds)
 ```
 
@@ -877,7 +904,7 @@ If issues occur during rollout:
 
 **Container:**
 - [ ] Container is unprivileged (`unprivileged: 1` in config)
-- [ ] Bind mount exists: `ls /run/pulse-sensor-proxy/pulse-sensor-proxy.sock`
+- [ ] Bind mount exists: `ls /mnt/pulse-proxy/pulse-sensor-proxy.sock`
 - [ ] AppArmor enforced: `cat /proc/self/attr/current` shows confinement
 - [ ] Pulse can connect to socket (check Pulse logs)
 
