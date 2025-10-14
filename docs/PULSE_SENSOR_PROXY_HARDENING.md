@@ -174,6 +174,22 @@ mp0: /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
 - **Mode 0775**: Socket directory needs group+other execute permissions for container UID traversal
 - **Socket 0777**: Actual socket is world-writable; security enforced via `SO_PEERCRED` authentication
 
+### Upgrading Existing Installations
+
+If you previously followed the legacy guide (manual `lxc.mount.entry` and `/run/pulse-sensor-proxy` inside the container), simply re-run the installer on each host:
+
+```bash
+sudo /opt/pulse/scripts/install-sensor-proxy.sh --ctid <container-id>
+```
+
+The script is idempotent and will:
+
+- Replace any old `lxc.mount.entry` rows with the new managed `mp` mount.
+- Ensure the socket is mounted at `/mnt/pulse-proxy/pulse-sensor-proxy.sock` inside the container.
+- Drop a systemd override so Pulse (or the hot-dev backend) automatically uses the mounted socket.
+
+No manual edits are required—just re-run the script after updating Pulse.
+
 ### Runtime Verification
 
 **Check container is unprivileged:**
