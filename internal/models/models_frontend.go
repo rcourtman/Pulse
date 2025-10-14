@@ -111,6 +111,10 @@ type DockerHostFrontend struct {
 	IntervalSeconds  int                       `json:"intervalSeconds"`
 	AgentVersion     string                    `json:"agentVersion,omitempty"`
 	Containers       []DockerContainerFrontend `json:"containers"`
+	TokenID          string                    `json:"tokenId,omitempty"`
+	TokenName        string                    `json:"tokenName,omitempty"`
+	TokenHint        string                    `json:"tokenHint,omitempty"`
+	TokenLastUsedAt  *int64                    `json:"tokenLastUsedAt,omitempty"`
 }
 
 // DockerContainerFrontend represents a Docker container for the frontend

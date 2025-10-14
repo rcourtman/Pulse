@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, For, onCleanup, onMount } from 'solid-js';
+import { Component, createSignal, Show, For, onCleanup, onMount, createEffect } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -7,16 +7,32 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
 import { CommandBuilder } from './CommandBuilder';
+import { SecurityAPI, type APITokenRecord } from '@/api/security';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
-  const [showInstructions, setShowInstructions] = createSignal(false);
+  const [showInstructions, setShowInstructions] = createSignal(true);
 
   const dockerHosts = () => state.dockerHosts || [];
 
   const [removingHostId, setRemovingHostId] = createSignal<string | null>(null);
   const [apiToken, setApiToken] = createSignal<string | null>(null);
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
+  const [availableTokens, setAvailableTokens] = createSignal<APITokenRecord[]>([]);
+  const [loadingTokens, setLoadingTokens] = createSignal(false);
+  const [tokensLoaded, setTokensLoaded] = createSignal(false);
+  const [isGeneratingToken, setIsGeneratingToken] = createSignal(false);
+  const [newTokenValue, setNewTokenValue] = createSignal<string | null>(null);
+  const [newTokenRecord, setNewTokenRecord] = createSignal<APITokenRecord | null>(null);
+  const [copiedGeneratedToken, setCopiedGeneratedToken] = createSignal(false);
+
+  const tokenDisplayLabel = (token: APITokenRecord) => {
+    if (token.name) return token.name;
+    if (token.prefix && token.suffix) return `${token.prefix}…${token.suffix}`;
+    if (token.prefix) return `${token.prefix}…`;
+    if (token.suffix) return `…${token.suffix}`;
+    return 'Untitled token';
+  };
 
   const pulseUrl = () => {
     if (typeof window !== 'undefined') {
@@ -64,6 +80,103 @@ export const DockerAgents: Component = () => {
     fetchSecurityStatus();
   });
 
+  const loadTokens = async () => {
+    if (tokensLoaded() || loadingTokens()) return;
+    setLoadingTokens(true);
+    try {
+      const tokens = await SecurityAPI.listTokens();
+      const sorted = [...tokens].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setAvailableTokens(sorted);
+    } catch (err) {
+      console.error('Failed to load API tokens', err);
+      notificationStore.error('Failed to load API tokens', 6000);
+    } finally {
+      setTokensLoaded(true);
+      setLoadingTokens(false);
+    }
+  };
+
+  createEffect(() => {
+    if (showInstructions()) {
+      loadTokens();
+    }
+  });
+
+  const copyToClipboard = async (text: string): Promise<boolean> => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+
+      if (typeof document === 'undefined') {
+        return false;
+      }
+
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-999999px';
+      textarea.style.top = '-999999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+
+      try {
+        return document.execCommand('copy');
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    } catch (err) {
+      console.error('Failed to copy to clipboard', err);
+      return false;
+    }
+  };
+
+  const handleCreateToken = async () => {
+    if (isGeneratingToken()) return;
+    setIsGeneratingToken(true);
+    try {
+      const defaultName = `Docker host ${availableTokens().length + 1}`;
+      const { token, record } = await SecurityAPI.createToken(defaultName);
+      setAvailableTokens((prev) => [record, ...prev]);
+      setNewTokenValue(token);
+      setNewTokenRecord(record);
+      setApiToken(token);
+      setCopiedGeneratedToken(false);
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem('apiToken', token);
+          window.dispatchEvent(new StorageEvent('storage', { key: 'apiToken', newValue: token }));
+        } catch (err) {
+          console.warn('Unable to persist API token in localStorage', err);
+        }
+      }
+      notificationStore.success('New API token generated. Copy it into the install command immediately.', 6000);
+    } catch (err) {
+      console.error('Failed to generate API token', err);
+      notificationStore.error('Failed to generate API token', 6000);
+    } finally {
+      setIsGeneratingToken(false);
+    }
+  };
+
+  const handleCopyGeneratedToken = async () => {
+    const value = newTokenValue();
+    if (!value) return;
+
+    const success = await copyToClipboard(value);
+    if (success) {
+      setCopiedGeneratedToken(true);
+      setTimeout(() => setCopiedGeneratedToken(false), 2000);
+      if (typeof window !== 'undefined' && window.showToast) {
+        window.showToast('success', 'Copied to clipboard');
+      }
+    } else if (typeof window !== 'undefined' && window.showToast) {
+      window.showToast('error', 'Failed to copy to clipboard');
+    }
+  };
+
   const requiresToken = () => {
     const status = securityStatus();
     if (status) {
@@ -76,14 +189,14 @@ export const DockerAgents: Component = () => {
   const getInstallCommandTemplate = () => {
     const url = pulseUrl();
     if (!requiresToken()) {
-      return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url} --token disabled`;
+      return `curl -fsSL ${url}/install-docker-agent.sh | sudo bash -s -- --url ${url} --token disabled`;
     }
-    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER}`;
+    return `curl -fsSL ${url}/install-docker-agent.sh | sudo bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER}`;
   };
 
   const getUninstallCommand = () => {
     const url = pulseUrl();
-    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --uninstall`;
+    return `curl -fsSL ${url}/install-docker-agent.sh | sudo bash -s -- --uninstall`;
   };
 
   const getSystemdService = () => {
@@ -102,41 +215,6 @@ User=root
 
 [Install]
 WantedBy=multi-user.target`;
-  };
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      // Try modern clipboard API first
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        window.showToast('success', 'Copied to clipboard');
-        return;
-      }
-
-      // Fallback for non-secure contexts (http://)
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.left = '-999999px';
-      textarea.style.top = '-999999px';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-
-      try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-          window.showToast('success', 'Copied to clipboard');
-        } else {
-          window.showToast('error', 'Failed to copy to clipboard');
-        }
-      } finally {
-        document.body.removeChild(textarea);
-      }
-    } catch (err) {
-      console.error('Failed to copy:', err);
-      window.showToast('error', 'Failed to copy to clipboard');
-    }
   };
 
   const isRemovingHost = (hostId: string) => removingHostId() === hostId;
@@ -178,19 +256,101 @@ WantedBy=multi-user.target`;
 
       {/* Deployment Instructions */}
       <Show when={showInstructions()}>
-        <Card class="space-y-4">
-          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-            Deploy the Pulse Docker agent
-          </h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400">
-            Run this command on your Docker host. If you're not root (most cases), add <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">sudo</code> before <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">bash</code>. If you're already root (e.g., in a container), the command works as-is.
-          </p>
+        <Card class="space-y-6">
+          <div>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Deploy the Pulse Docker agent</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              Follow the steps below to create a token, build the install command, and confirm the host is reporting.
+            </p>
+          </div>
 
-          {/* Quick Install - One-liner */}
-          <div class="space-y-2">
-            <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              Quick install (one command)
-            </h4>
+          <section class="space-y-3">
+            <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Step 1 · Token</p>
+            <div class="space-y-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-sm font-medium text-gray-900 dark:text-gray-100">Generate or reuse a host token</p>
+                  <p class="text-xs text-gray-600 dark:text-gray-400">
+                    Use one API token per host. If that host is ever compromised you can revoke it without touching other machines.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCreateToken}
+                  disabled={isGeneratingToken()}
+                  class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isGeneratingToken() ? 'Generating…' : 'Generate token'}
+                </button>
+              </div>
+
+              <Show when={newTokenValue() && newTokenRecord()}>
+                <div class="space-y-2 rounded-lg border border-green-200 bg-green-50/80 p-4 dark:border-green-800 dark:bg-green-900/10">
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p class="text-sm font-semibold text-green-800 dark:text-green-200">Token generated</p>
+                      <p class="text-xs text-green-700 dark:text-green-300">
+                        “{newTokenRecord()?.name || 'Untitled token'}” will only be shown once. Copy it into the install command below.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyGeneratedToken}
+                      class="inline-flex items-center justify-center rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700"
+                    >
+                      {copiedGeneratedToken() ? 'Copied!' : 'Copy token'}
+                    </button>
+                  </div>
+                  <code class="block break-all rounded border border-green-200 bg-white px-3 py-2 font-mono text-sm dark:border-green-800 dark:bg-green-900/40">
+                    {newTokenValue()}
+                  </code>
+                </div>
+              </Show>
+
+              <Show when={securityStatus()?.apiTokenConfigured && securityStatus()?.apiTokenHint}>
+                <div class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                  Existing token hint: <span class="font-mono">{securityStatus()?.apiTokenHint}</span>. Paste the full value if you want to reuse it.
+                </div>
+              </Show>
+
+              <Show when={availableTokens().length > 0}>
+                <details class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+                  <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
+                    View saved tokens
+                  </summary>
+                  <div class="mt-3 overflow-x-auto">
+                    <table class="w-full text-xs">
+                      <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                          <th class="py-2 px-2 text-left font-medium text-gray-600 dark:text-gray-400">Name</th>
+                          <th class="py-2 px-2 text-left font-medium text-gray-600 dark:text-gray-400">Hint</th>
+                          <th class="py-2 px-2 text-left font-medium text-gray-600 dark:text-gray-400">Last used</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <For each={availableTokens()}>
+                          {(token) => (
+                            <tr>
+                              <td class="py-2 px-2 text-gray-900 dark:text-gray-100">{tokenDisplayLabel(token)}</td>
+                              <td class="py-2 px-2 font-mono text-gray-600 dark:text-gray-400">
+                                {token.prefix && token.suffix ? `${token.prefix}…${token.suffix}` : '—'}
+                              </td>
+                              <td class="py-2 px-2 text-gray-600 dark:text-gray-400">
+                                {token.lastUsedAt ? formatRelativeTime(token.lastUsedAt) : 'Never'}
+                              </td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </Show>
+            </div>
+          </section>
+
+          <section class="space-y-3">
+            <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Step 2 · Build the command</p>
             <CommandBuilder
               command={getInstallCommandTemplate()}
               placeholder={TOKEN_PLACEHOLDER}
@@ -200,115 +360,95 @@ WantedBy=multi-user.target`;
               hasExistingToken={Boolean(securityStatus()?.apiTokenConfigured)}
               onTokenGenerated={(token) => {
                 setApiToken(token);
-                // If user already had a token in localStorage, save the new one too
                 if (typeof window !== 'undefined' && window.localStorage.getItem('apiToken')) {
                   window.localStorage.setItem('apiToken', token);
                 }
               }}
             />
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              The script downloads the agent, creates a systemd service, and starts monitoring automatically.
-              <Show when={!requiresToken()}>
-                <span class="ml-1 font-medium">Authentication is disabled, so the agent runs without an API token.</span>
-              </Show>
-            </p>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              If you already installed the agent from another Pulse instance, running its command again on this host simply adds that server to the same agent—no duplicate processes to clean up.
+              Run the command as root (prepend <code class="rounded bg-gray-100 px-1 dark:bg-gray-800">sudo</code> when needed). The installer downloads the agent, creates a systemd service, and starts reporting automatically.
             </p>
-          </div>
+          </section>
 
-          {/* Uninstall */}
-          <div class="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-4">
-            <div class="flex items-center justify-between">
-              <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Uninstall the agent
-              </h4>
-              <button
-                type="button"
-                onClick={() => copyToClipboard(getUninstallCommand())}
-                class="px-3 py-1 text-xs font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
-                title="Copy to clipboard"
-              >
-                Copy command
-              </button>
-            </div>
-            <div class="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto">
-              <code class="text-sm text-red-400 font-mono">{getUninstallCommand()}</code>
-            </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              This will stop the agent, remove the binary, service file, and all configuration.
-            </p>
-          </div>
+          <section class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+            Step 3 · Within one or two heartbeats (default 30 seconds) the host should appear in the table below. If not, check the agent logs with{' '}
+            <code class="rounded bg-blue-100 px-1 py-0.5 font-mono dark:bg-blue-900/40">journalctl -u pulse-docker-agent -f</code>.
+          </section>
 
-          {/* Manual Installation */}
-          <details class="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <summary class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
-              Manual installation (advanced)
+          <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+            <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
+              Advanced options (uninstall & manual install)
             </summary>
-            <div class="mt-4 space-y-4">
-              {/* Step 1: Build or download */}
+            <div class="mt-3 space-y-4">
               <div>
-                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  1. Build the agent binary
-                </h4>
-                <div class="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto">
-                  <code class="text-sm text-gray-100 font-mono">
-                    cd /opt/pulse
-                    <br />
-                    GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
+                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Uninstall</p>
+                <div class="mt-2 flex items-center gap-2">
+                  <code class="flex-1 break-all rounded bg-gray-900 px-3 py-2 font-mono text-xs text-red-400 dark:bg-gray-950">
+                    {getUninstallCommand()}
                   </code>
-                </div>
-              </div>
-
-              {/* Step 2: Copy to host */}
-              <div>
-                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  2. Copy to Docker host
-                </h4>
-                <div class="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto">
-                  <code class="text-sm text-gray-100 font-mono">
-                    scp pulse-docker-agent user@docker-host:/usr/local/bin/
-                    <br />
-                    ssh user@docker-host chmod +x /usr/local/bin/pulse-docker-agent
-                  </code>
-                </div>
-              </div>
-
-              {/* Step 3: Create systemd service */}
-              <div>
-                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  3. Create systemd service file
-                </h4>
-                <div class="relative">
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(getSystemdService())}
-                    class="absolute top-2 right-2 px-3 py-1 text-xs font-medium text-gray-300 hover:text-white bg-gray-700 hover:bg-gray-600 rounded transition-colors z-10"
-                    title="Copy to clipboard"
+                    onClick={async () => {
+                      const success = await copyToClipboard(getUninstallCommand());
+                      if (typeof window !== 'undefined' && window.showToast) {
+                        window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
+                      }
+                    }}
+                    class="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
                   >
                     Copy
                   </button>
-                  <div class="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto">
-                    <pre class="text-sm text-gray-100 font-mono">{getSystemdService()}</pre>
-                  </div>
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Save to <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">/etc/systemd/system/pulse-docker-agent.service</code> and replace{' '}
-                  <code class="px-1 bg-gray-100 dark:bg-gray-800 rounded">{TOKEN_PLACEHOLDER}</code> with a valid API token.
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Stops the agent, removes the binary, the systemd unit, and related files.
                 </p>
               </div>
 
-              {/* Step 4: Enable and start */}
               <div>
-                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  4. Enable and start
-                </h4>
-                <div class="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto">
-                  <code class="text-sm text-gray-100 font-mono">
-                    systemctl daemon-reload
-                    <br />
-                    systemctl enable --now pulse-docker-agent
-                  </code>
+                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Manual installation</p>
+                <div class="mt-2 space-y-3 rounded-lg border border-gray-200 bg-white p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
+                  <p class="font-medium text-gray-900 dark:text-gray-100">1. Build the binary</p>
+                  <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                    <code>
+                      cd /opt/pulse
+                      <br />
+                      GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
+                    </code>
+                  </div>
+                  <p class="font-medium text-gray-900 dark:text-gray-100">2. Copy to host</p>
+                  <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                    <code>
+                      scp pulse-docker-agent user@docker-host:/usr/local/bin/
+                      <br />
+                      ssh user@docker-host chmod +x /usr/local/bin/pulse-docker-agent
+                    </code>
+                  </div>
+                  <p class="font-medium text-gray-900 dark:text-gray-100">3. Systemd template</p>
+                  <div class="relative">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const success = await copyToClipboard(getSystemdService());
+                        if (typeof window !== 'undefined' && window.showToast) {
+                          window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
+                        }
+                      }}
+                      class="absolute right-2 top-2 rounded bg-gray-700 px-3 py-1 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-600"
+                    >
+                      Copy
+                    </button>
+                    <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                      <pre>{getSystemdService()}</pre>
+                    </div>
+                  </div>
+                  <p class="font-medium text-gray-900 dark:text-gray-100">4. Enable & start</p>
+                  <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                    <code>
+                      systemctl daemon-reload
+                      <br />
+                      systemctl enable --now pulse-docker-agent
+                    </code>
+                  </div>
                 </div>
               </div>
             </div>

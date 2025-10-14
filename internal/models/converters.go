@@ -205,6 +205,16 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		h.DisplayName = h.Hostname
 	}
 
+	if d.TokenID != "" {
+		h.TokenID = d.TokenID
+		h.TokenName = d.TokenName
+		h.TokenHint = d.TokenHint
+		if d.TokenLastUsedAt != nil && !d.TokenLastUsedAt.IsZero() {
+			ts := d.TokenLastUsedAt.Unix() * 1000
+			h.TokenLastUsedAt = &ts
+		}
+	}
+
 	for i, ct := range d.Containers {
 		h.Containers[i] = ct.ToFrontend()
 	}

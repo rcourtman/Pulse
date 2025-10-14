@@ -232,6 +232,17 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, r.handleOIDCConfig))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
+	r.mux.HandleFunc("/api/security/tokens", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			r.handleListAPITokens(w, req)
+		case http.MethodPost:
+			r.handleCreateAPIToken(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/security/tokens/", RequireAdmin(r.config, r.handleDeleteAPIToken))
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
@@ -250,16 +261,13 @@ func (r *Router) setupRoutes() {
 				}
 
 				// Even with auth disabled, report API token status for API access
-				var apiTokenHint string
-				if r.config.APIToken != "" && len(r.config.APIToken) >= 8 {
-					apiTokenHint = r.config.APIToken[:4] + "..." + r.config.APIToken[len(r.config.APIToken)-4:]
-				}
+				apiTokenHint := r.config.PrimaryAPITokenHint()
 
 				response := map[string]interface{}{
 					"configured":         false,
 					"disabled":           true,
 					"message":            "Authentication is disabled via DISABLE_AUTH environment variable",
-					"apiTokenConfigured": r.config.APIToken != "",
+					"apiTokenConfigured": r.config.HasAPITokens(),
 					"apiTokenHint":       apiTokenHint,
 					"hasAuthentication":  false,
 				}
@@ -288,7 +296,7 @@ func (r *Router) setupRoutes() {
 				r.config.AuthUser != "" ||
 				r.config.AuthPass != "" ||
 				(oidcCfg != nil && oidcCfg.Enabled) ||
-				r.config.APIToken != "" ||
+				r.config.HasAPITokens() ||
 				r.config.ProxyAuthSecret != ""
 
 			// Check if .env file exists but hasn't been loaded yet (pending restart)
@@ -328,10 +336,7 @@ func (r *Router) setupRoutes() {
 			isTrustedNetwork := utils.IsTrustedNetwork(clientIP, trustedNetworks)
 
 			// Create token hint if token exists
-			var apiTokenHint string
-			if r.config.APIToken != "" && len(r.config.APIToken) >= 8 {
-				apiTokenHint = r.config.APIToken[:4] + "..." + r.config.APIToken[len(r.config.APIToken)-4:]
-			}
+			apiTokenHint := r.config.PrimaryAPITokenHint()
 
 			// Check for proxy auth
 			hasProxyAuth := r.config.ProxyAuthSecret != ""
@@ -355,16 +360,16 @@ func (r *Router) setupRoutes() {
 				}
 			}
 
-			requiresAuth := r.config.APIToken != "" ||
+			requiresAuth := r.config.HasAPITokens() ||
 				(r.config.AuthUser != "" && r.config.AuthPass != "") ||
 				(r.config.OIDC != nil && r.config.OIDC.Enabled) ||
 				r.config.ProxyAuthSecret != ""
 
 			status := map[string]interface{}{
-				"apiTokenConfigured":          r.config.APIToken != "",
+				"apiTokenConfigured":          r.config.HasAPITokens(),
 				"apiTokenHint":                apiTokenHint,
 				"requiresAuth":                requiresAuth,
-				"exportProtected":             r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
+				"exportProtected":             r.config.HasAPITokens() || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
 				"unprotectedExportAllowed":    os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
 				"hasAuthentication":           hasAuthentication,
 				"configuredButPendingRestart": configuredButPendingRestart,
@@ -606,25 +611,22 @@ func (r *Router) setupRoutes() {
 				hasValidSession = ValidateSession(cookie.Value)
 			}
 
-			hasValidAPIToken := false
-			if r.config.APIToken != "" {
-				authHeader := req.Header.Get("X-API-Token")
-				// Check if stored token is hashed or plain text
-				if auth.IsAPITokenHashed(r.config.APIToken) {
-					// Compare against hash
-					hasValidAPIToken = auth.CompareAPIToken(authHeader, r.config.APIToken)
-				} else {
-					// Plain text comparison (legacy)
-					hasValidAPIToken = (authHeader == r.config.APIToken)
+			validateAPIToken := func(token string) bool {
+				if token == "" || !r.config.HasAPITokens() {
+					return false
 				}
+				_, ok := r.config.ValidateAPIToken(token)
+				return ok
 			}
+
+			hasValidAPIToken := validateAPIToken(req.Header.Get("X-API-Token"))
 
 			// Check if any valid auth method is present
 			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
 
 			// Determine if auth is required
 			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
-				r.config.APIToken != "" ||
+				r.config.HasAPITokens() ||
 				r.config.ProxyAuthSecret != ""
 
 			// Check admin privileges for proxy auth users
@@ -705,25 +707,22 @@ func (r *Router) setupRoutes() {
 				hasValidSession = ValidateSession(cookie.Value)
 			}
 
-			hasValidAPIToken := false
-			if r.config.APIToken != "" {
-				authHeader := req.Header.Get("X-API-Token")
-				// Check if stored token is hashed or plain text
-				if auth.IsAPITokenHashed(r.config.APIToken) {
-					// Compare against hash
-					hasValidAPIToken = auth.CompareAPIToken(authHeader, r.config.APIToken)
-				} else {
-					// Plain text comparison (legacy)
-					hasValidAPIToken = (authHeader == r.config.APIToken)
+			validateAPIToken := func(token string) bool {
+				if token == "" || !r.config.HasAPITokens() {
+					return false
 				}
+				_, ok := r.config.ValidateAPIToken(token)
+				return ok
 			}
+
+			hasValidAPIToken := validateAPIToken(req.Header.Get("X-API-Token"))
 
 			// Check if any valid auth method is present
 			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
 
 			// Determine if auth is required
 			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
-				r.config.APIToken != "" ||
+				r.config.HasAPITokens() ||
 				r.config.ProxyAuthSecret != ""
 
 			// Check admin privileges for proxy auth users
@@ -956,13 +955,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 
 			// If a valid API token is provided, allow access even with DisableAuth
-			if providedToken != "" && r.config.APIToken != "" {
-				if auth.CompareAPIToken(providedToken, r.config.APIToken) {
-					// Valid API token provided, allow access
+			if providedToken != "" && r.config.HasAPITokens() {
+				if _, ok := r.config.ValidateAPIToken(providedToken); ok {
 					needsAuth = false
 					w.Header().Set("X-Auth-Method", "api-token")
 				} else {
-					// Invalid API token - reject even with DisableAuth
 					http.Error(w, "Invalid API token", http.StatusUnauthorized)
 					return
 				}
@@ -1157,9 +1154,9 @@ func (r *Router) detectLegacySSH() (legacyDetected, recommendProxy bool) {
 		if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
 			cgroupStr := string(data)
 			if strings.Contains(cgroupStr, "docker") ||
-			   strings.Contains(cgroupStr, "lxc") ||
-			   strings.Contains(cgroupStr, "/docker/") ||
-			   strings.Contains(cgroupStr, "/lxc/") {
+				strings.Contains(cgroupStr, "lxc") ||
+				strings.Contains(cgroupStr, "/docker/") ||
+				strings.Contains(cgroupStr, "/lxc/") {
 				inContainer = true
 			}
 		}
@@ -1177,8 +1174,8 @@ func (r *Router) detectLegacySSH() (legacyDetected, recommendProxy bool) {
 		if data, err := os.ReadFile("/proc/1/environ"); err == nil {
 			environStr := string(data)
 			if strings.Contains(environStr, "container=") ||
-			   strings.Contains(environStr, "DOCKER") ||
-			   strings.Contains(environStr, "LXC") {
+				strings.Contains(environStr, "DOCKER") ||
+				strings.Contains(environStr, "LXC") {
 				inContainer = true
 			}
 		}
@@ -1253,11 +1250,11 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 	}
 
 	response := HealthResponse{
-		Status:                 "healthy",
-		Timestamp:              time.Now().Unix(),
-		Uptime:                 time.Since(r.monitor.GetStartTime()).Seconds(),
-		LegacySSHDetected:      legacySSH,
-		RecommendProxyUpgrade:  recommendProxy,
+		Status:                      "healthy",
+		Timestamp:                   time.Now().Unix(),
+		Uptime:                      time.Since(r.monitor.GetStartTime()).Seconds(),
+		LegacySSHDetected:           legacySSH,
+		RecommendProxyUpgrade:       recommendProxy,
 		ProxyInstallScriptAvailable: true, // Install script is always available
 	}
 
@@ -1418,8 +1415,13 @@ PULSE_AUTH_PASS='%s'
 `, time.Now().Format(time.RFC3339), r.config.AuthUser, hashedPassword)
 
 			// Include API token if configured
-			if r.config.APIToken != "" {
-				envContent += fmt.Sprintf("API_TOKEN='%s'\n", r.config.APIToken)
+			if r.config.HasAPITokens() {
+				hashes := make([]string, len(r.config.APITokens))
+				for i, t := range r.config.APITokens {
+					hashes[i] = t.Hash
+				}
+				envContent += fmt.Sprintf("API_TOKEN='%s'\n", r.config.PrimaryAPITokenHash())
+				envContent += fmt.Sprintf("API_TOKENS='%s'\n", strings.Join(hashes, ","))
 			}
 		}
 
@@ -1483,8 +1485,13 @@ PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
 `, time.Now().Format(time.RFC3339), r.config.AuthUser, hashedPassword)
 
-			if r.config.APIToken != "" {
-				envContent += fmt.Sprintf("API_TOKEN='%s'\n", r.config.APIToken)
+			if r.config.HasAPITokens() {
+				hashes := make([]string, len(r.config.APITokens))
+				for i, t := range r.config.APITokens {
+					hashes[i] = t.Hash
+				}
+				envContent += fmt.Sprintf("API_TOKEN='%s'\n", r.config.PrimaryAPITokenHash())
+				envContent += fmt.Sprintf("API_TOKENS='%s'\n", strings.Join(hashes, ","))
 			}
 		}
 

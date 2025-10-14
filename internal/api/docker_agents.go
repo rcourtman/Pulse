@@ -48,7 +48,9 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		report.Timestamp = time.Now()
 	}
 
-	host, err := h.monitor.ApplyDockerReport(report)
+	tokenRecord := getAPITokenRecordFromRequest(r)
+
+	host, err := h.monitor.ApplyDockerReport(report, tokenRecord)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return

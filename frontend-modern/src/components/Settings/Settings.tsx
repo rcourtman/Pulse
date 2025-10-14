@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
-import { GenerateAPIToken } from './GenerateAPIToken';
+import { APITokenManager } from './APITokenManager';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { GuestURLs } from './GuestURLs';
 import { DockerAgents } from './DockerAgents';
@@ -3588,7 +3588,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
                     {/* Content */}
                     <div class="p-6">
-                      <GenerateAPIToken currentTokenHint={securityStatus()?.apiTokenHint} />
+                      <APITokenManager currentTokenHint={securityStatus()?.apiTokenHint} />
                     </div>
                   </Card>
                 </Show>

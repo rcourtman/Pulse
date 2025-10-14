@@ -858,15 +858,17 @@ function AppLayout(props: {
               <button
                 type="button"
                 onClick={props.handleLogout}
-                class="text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+                class="group relative flex h-7 items-center justify-center gap-1 rounded-full bg-gray-200 px-2 text-xs text-gray-700 transition-all duration-500 ease-in-out hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                 title="Logout"
+                aria-label="Logout"
               >
                 <svg
-                  class="h-3 w-3"
+                  class="h-3 w-3 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                   stroke-width="2"
+                  aria-hidden="true"
                 >
                   <path
                     stroke-linecap="round"
@@ -874,7 +876,11 @@ function AppLayout(props: {
                     d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                   />
                 </svg>
-                <span>Logout</span>
+                <span
+                  class="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 ease-in-out group-hover:ml-1 group-hover:max-w-[80px] group-hover:opacity-100 group-focus-visible:ml-1 group-focus-visible:max-w-[80px] group-focus-visible:opacity-100"
+                >
+                  Logout
+                </span>
               </button>
             </Show>
           </div>

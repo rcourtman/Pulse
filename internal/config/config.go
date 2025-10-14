@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rs/zerolog"
@@ -89,14 +90,15 @@ type Config struct {
 	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
-	APIToken             string `envconfig:"API_TOKEN"`
-	APITokenEnabled      bool   `envconfig:"API_TOKEN_ENABLED" default:"false"`
-	AuthUser             string `envconfig:"PULSE_AUTH_USER"`
-	AuthPass             string `envconfig:"PULSE_AUTH_PASS"`
-	DisableAuth          bool   `envconfig:"DISABLE_AUTH" default:"false"`
-	DemoMode             bool   `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
-	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
-	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
+	APIToken             string           `envconfig:"API_TOKEN"`
+	APITokenEnabled      bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
+	APITokens            []APITokenRecord `json:"-"`
+	AuthUser             string           `envconfig:"PULSE_AUTH_USER"`
+	AuthPass             string           `envconfig:"PULSE_AUTH_PASS"`
+	DisableAuth          bool             `envconfig:"DISABLE_AUTH" default:"false"`
+	DemoMode             bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
+	AllowedOrigins       string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
+	IframeEmbeddingAllow string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -347,6 +349,15 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Load API tokens
+	if tokens, err := persistence.LoadAPITokens(); err == nil {
+		cfg.APITokens = tokens
+		cfg.SortAPITokens()
+		log.Info().Int("count", len(tokens)).Msg("Loaded API tokens from persistence")
+	} else if err != nil {
+		log.Warn().Err(err).Msg("Failed to load API tokens from persistence")
+	}
+
 	// Ensure PBS polling interval has default if not set
 	// Note: PVE polling is hardcoded to 10s in monitor.go
 	if cfg.PBSPollingInterval == 0 {
@@ -372,26 +383,73 @@ func Load() (*Config, error) {
 			log.Info().Int("port", p).Msg("Overriding frontend port from PORT env var (legacy)")
 		}
 	}
-	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
-		// Auto-hash plain text tokens for security
-		if !auth.IsAPITokenHashed(apiToken) {
-			// Plain text token - hash it immediately
-			cfg.APIToken = auth.HashAPIToken(apiToken)
-			log.Info().Msg("Auto-hashed plain text API token from environment variable")
-		} else {
-			// Already hashed
-			cfg.APIToken = apiToken
-			log.Debug().Msg("Loaded pre-hashed API token from env var")
+	envTokens := make([]string, 0, 4)
+	if list := strings.TrimSpace(os.Getenv("API_TOKENS")); list != "" {
+		for _, part := range strings.Split(list, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				envTokens = append(envTokens, part)
+			}
 		}
 	}
+	if token := strings.TrimSpace(os.Getenv("API_TOKEN")); token != "" {
+		envTokens = append(envTokens, token)
+	}
+
+	if len(envTokens) > 0 {
+		cfg.EnvOverrides["API_TOKEN"] = true
+		cfg.EnvOverrides["API_TOKENS"] = true
+		for _, tokenValue := range envTokens {
+			if tokenValue == "" {
+				continue
+			}
+
+			hashed := tokenValue
+			prefix := tokenPrefix(tokenValue)
+			suffix := tokenSuffix(tokenValue)
+
+			if !auth.IsAPITokenHashed(tokenValue) {
+				hashed = auth.HashAPIToken(tokenValue)
+				prefix = tokenPrefix(tokenValue)
+				suffix = tokenSuffix(tokenValue)
+				log.Info().Msg("Auto-hashed plain text API token from environment variable")
+			} else {
+				log.Debug().Msg("Loaded pre-hashed API token from env var")
+			}
+
+			if cfg.HasAPITokenHash(hashed) {
+				continue
+			}
+
+			record := APITokenRecord{
+				ID:        uuid.NewString(),
+				Name:      "Environment token",
+				Hash:      hashed,
+				Prefix:    prefix,
+				Suffix:    suffix,
+				CreatedAt: time.Now().UTC(),
+			}
+			cfg.APITokens = append(cfg.APITokens, record)
+		}
+		cfg.SortAPITokens()
+	}
+
 	// Check if API token is enabled
 	if apiTokenEnabled := os.Getenv("API_TOKEN_ENABLED"); apiTokenEnabled != "" {
 		cfg.APITokenEnabled = apiTokenEnabled == "true" || apiTokenEnabled == "1"
 		log.Debug().Bool("enabled", cfg.APITokenEnabled).Msg("API token enabled status from env var")
-	} else if cfg.APIToken != "" {
-		// If token exists but no explicit enabled flag, assume enabled for backwards compatibility
+	} else if cfg.HasAPITokens() {
 		cfg.APITokenEnabled = true
-		log.Debug().Msg("API token exists without explicit enabled flag, assuming enabled for backwards compatibility")
+		log.Debug().Msg("API tokens exist without explicit enabled flag, assuming enabled for backwards compatibility")
+	}
+
+	// Legacy migration: if a single token is present without metadata, wrap it.
+	if !cfg.HasAPITokens() && cfg.APIToken != "" {
+		if record, err := NewHashedAPITokenRecord(cfg.APIToken, "Legacy token", time.Now().UTC()); err == nil {
+			cfg.APITokens = []APITokenRecord{*record}
+			cfg.SortAPITokens()
+			log.Info().Msg("Migrated legacy API token into token record store")
+		}
 	}
 	// Check if auth is disabled
 	disableAuthEnv := os.Getenv("DISABLE_AUTH")

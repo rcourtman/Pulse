@@ -36,12 +36,14 @@ Copy the binary to your Docker host (e.g. `/usr/local/bin/pulse-docker-agent`) a
 
 ### Quick install from your Pulse server
 
-Use the bundled installation script (ships with Pulse v4.22.0+) to deploy and manage the agent. Replace the token placeholder with an API token generated in **Settings → Security**.
+Use the bundled installation script (ships with Pulse v4.22.0+) to deploy and manage the agent. Replace the token placeholder with an API token generated in **Settings → Security**. Create a dedicated token for each Docker host so you can revoke individual credentials without touching others—sharing one token across many hosts makes incident response much harder.
 
 ```bash
 curl -fsSL http://pulse.example.com/install-docker-agent.sh \
   | sudo bash -s -- --url http://pulse.example.com --token <api-token>
 ```
+
+> **Why sudo?** The installer needs to drop binaries under `/usr/local/bin`, create a systemd service, and start it—actions that require root privileges. Piping to `sudo bash …` saves you from retrying if you run the command as an unprivileged user.
 
 Running the one-liner again from another Pulse server (with its own URL/token) will merge that server into the same agent automatically—no extra flags required.
 

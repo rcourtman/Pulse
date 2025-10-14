@@ -286,7 +286,12 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
 		cfg.DisableAuth = false
 		cfg.APITokenEnabled = true
-		cfg.APIToken = internalauth.HashAPIToken(apiToken)
+		record, err := config.NewAPITokenRecord(apiToken, "Integration test token")
+		if err != nil {
+			t.Fatalf("create API token record: %v", err)
+		}
+		cfg.APITokens = []config.APITokenRecord{*record}
+		cfg.SortAPITokens()
 		hashedPass, err := internalauth.HashPassword("super-secure-pass")
 		if err != nil {
 			t.Fatalf("hash password: %v", err)
