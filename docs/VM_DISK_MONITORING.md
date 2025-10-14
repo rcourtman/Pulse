@@ -243,7 +243,7 @@ The agent reports all mounted filesystems. Pulse automatically filters out:
 - Special filesystems (proc, sys, tmpfs, devtmpfs, etc.)
 - Special Windows partitions ("System Reserved")
 - Bind mounts and overlays
-- CD/DVD filesystems (iso9660, CDFS)
+- Read-only appliance or optical images (squashfs, erofs, iso9660, CDFS, UDF, cramfs, romfs, fuse.cdfs)
 
 Only local disk usage is counted toward the VM's total.
 
