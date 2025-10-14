@@ -202,13 +202,13 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if !proxyDiag.SocketFound {
-		proxyDiag.Notes = append(proxyDiag.Notes, "No proxy socket detected inside the container. Remove the affected node in Pulse, then re-add it using the installer script from Settings → Nodes to regenerate the mount.")
+		proxyDiag.Notes = append(proxyDiag.Notes, "No proxy socket detected inside the container. Remove the affected node in Pulse, then re-add it using the installer script from Settings → Nodes to regenerate the mount (or rerun the host installer script if you prefer).")
 	} else if proxyDiag.SocketPath == "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock" {
-		proxyDiag.Notes = append(proxyDiag.Notes, "Proxy socket is exposed via /run. Remove and re-add this node with the Settings → Nodes installer script so the managed /mnt/pulse-proxy mount is applied.")
+		proxyDiag.Notes = append(proxyDiag.Notes, "Proxy socket is exposed via /run. Remove and re-add this node with the Settings → Nodes installer script so the managed /mnt/pulse-proxy mount is applied (advanced: rerun the host installer script).")
 	}
 
 	if proxyDiag.LegacySSHDetected && proxyDiag.RecommendProxyUpgrade {
-		proxyDiag.Notes = append(proxyDiag.Notes, "Legacy SSH configuration detected. Remove each node from Pulse and re-add it using the installer script copied from Settings → Nodes to migrate to the secure proxy.")
+		proxyDiag.Notes = append(proxyDiag.Notes, "Legacy SSH configuration detected. Remove each node from Pulse and re-add it using the installer script copied from Settings → Nodes (or rerun the host installer script) to migrate to the secure proxy.")
 	}
 
 	diag.TemperatureProxy = proxyDiag
