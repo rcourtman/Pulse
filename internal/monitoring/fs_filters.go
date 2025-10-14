@@ -2,6 +2,19 @@ package monitoring
 
 import "strings"
 
+var readOnlyFilesystemPatterns = []struct {
+	reason     string
+	substrings []string
+}{
+	{reason: "erofs", substrings: []string{"erofs"}},
+	{reason: "squashfs", substrings: []string{"squashfs", "squash-fs"}},
+	{reason: "iso9660", substrings: []string{"iso9660"}},
+	{reason: "cdfs", substrings: []string{"cdfs"}},
+	{reason: "udf", substrings: []string{"udf"}},
+	{reason: "cramfs", substrings: []string{"cramfs"}},
+	{reason: "romfs", substrings: []string{"romfs"}},
+}
+
 // readOnlyFilesystemReason returns a label explaining why a filesystem should be
 // ignored for usage calculations, along with a boolean indicating whether it is
 // a read-only filesystem that always reports full usage. This helps us avoid
@@ -14,23 +27,12 @@ func readOnlyFilesystemReason(fsType string, totalBytes, usedBytes uint64) (stri
 	}
 
 	// Common read-only filesystem types used for immutable system partitions.
-	if strings.Contains(ft, "erofs") {
-		return "erofs", true
-	}
-	if strings.Contains(ft, "squashfs") || strings.Contains(ft, "squash-fs") {
-		return "squashfs", true
-	}
-	if strings.Contains(ft, "iso9660") {
-		return "iso9660", true
-	}
-	if strings.Contains(ft, "udf") {
-		return "udf", true
-	}
-	if strings.Contains(ft, "cramfs") {
-		return "cramfs", true
-	}
-	if strings.Contains(ft, "romfs") {
-		return "romfs", true
+	for _, pattern := range readOnlyFilesystemPatterns {
+		for _, needle := range pattern.substrings {
+			if strings.Contains(ft, needle) {
+				return pattern.reason, true
+			}
+		}
 	}
 
 	// Overlay-style filesystems can report 100% usage even though writes are
