@@ -43,6 +43,7 @@ import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { DockerIcon } from '@/components/icons/DockerIcon';
 import { AlertsIcon } from '@/components/icons/AlertsIcon';
 import { SettingsGearIcon } from '@/components/icons/SettingsGearIcon';
+import { TokenRevealDialog } from './components/TokenRevealDialog';
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -568,6 +569,7 @@ function App() {
                   </div>
                   <ToastContainer />
                   <NotificationContainer />
+                  <TokenRevealDialog />
                   <TooltipRoot />
                 </DarkModeContext.Provider>
               </WebSocketContext.Provider>

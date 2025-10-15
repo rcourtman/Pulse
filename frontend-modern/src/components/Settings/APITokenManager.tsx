@@ -7,6 +7,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { DockerHost } from '@/types/api';
+import { showTokenReveal } from '@/stores/tokenReveal';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
@@ -73,6 +74,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       setNewTokenRecord(record);
       setNameInput('');
 
+      showTokenReveal({
+        token,
+        record,
+        source: 'security',
+        note: 'Copy this token now. You can always rotate it from Security → API tokens.',
+      });
       showSuccess('New API token generated. Copy it below while it is still visible.');
       props.onTokensChanged?.();
 
