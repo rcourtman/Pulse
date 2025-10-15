@@ -767,9 +767,16 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     }
                   });
                   const customFields = buildMapFromInputs(customFieldInputs());
+                  const { payloadTemplate, ...restFormData } = formData();
+                  const testPayload = {
+                    ...restFormData,
+                    headers,
+                    customFields,
+                    template: payloadTemplate ?? restFormData.template ?? '',
+                  };
                   // Use a consistent temporary ID for this form session
                   const tempId = editingId() || 'temp-new-webhook';
-                  props.onTest(tempId, { ...formData(), headers, customFields });
+                  props.onTest(tempId, testPayload);
                 }}
                 disabled={props.testing === (editingId() || 'temp-new-webhook')}
                 class="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
