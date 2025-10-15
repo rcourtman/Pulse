@@ -102,6 +102,17 @@ func TestMemoryStatusEffectiveAvailable(t *testing.T) {
 			want:   12 * 1024,
 		},
 		{
+			name: "available zero but buffers and cache present",
+			status: MemoryStatus{
+				Total:   64 * 1024,
+				Used:    40 * 1024,
+				Free:    6 * 1024,
+				Buffers: 8 * 1024,
+				Cached:  10 * 1024,
+			},
+			want: 24 * 1024,
+		},
+		{
 			name:   "caps derived value at total",
 			status: MemoryStatus{Total: 8 * 1024, Free: 4 * 1024, Buffers: 4 * 1024, Cached: 4 * 1024},
 			want:   8 * 1024,
@@ -195,6 +206,19 @@ func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {
 			wantAvailable: 19327352832,
 			wantUsedPct:   42.4, // Should be ~42%, not 86%!
 			description:   "Real user report: 86% shown when actual usage is 42%",
+		},
+		{
+			name: "missing available but buffers/cached still present (issue 553 guard)",
+			status: MemoryStatus{
+				Total:   34359738368, // 32GB
+				Used:    27917287424, // ~26GB reported used (includes cache)
+				Free:    2147483648,  // 2GB
+				Buffers: 3221225472,  // 3GB
+				Cached:  8053063680,  // 7.5GB
+			},
+			wantAvailable: 13421772800, // Free + Buffers + Cached
+			wantUsedPct:   60.94,
+			description:   "When available=0 but buffers/cached exist, derive reclaimable memory instead of alerting",
 		},
 		{
 			name: "missing all cache-aware fields - fallback to zero",

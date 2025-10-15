@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -32,6 +33,26 @@ type DiagnosticsInfo struct {
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
 	// GuestSnapshots captures recent per-guest memory breakdowns (VM/LXC) with the raw Proxmox fields.
 	GuestSnapshots []monitoring.GuestMemorySnapshot `json:"guestSnapshots,omitempty"`
+	// MemorySources summarizes how many nodes currently rely on each memory source per instance.
+	MemorySources []MemorySourceStat `json:"memorySources,omitempty"`
+}
+
+// MemorySourceStat aggregates memory-source usage per instance.
+type MemorySourceStat struct {
+	Instance    string `json:"instance"`
+	Source      string `json:"source"`
+	NodeCount   int    `json:"nodeCount"`
+	LastUpdated string `json:"lastUpdated"`
+	Fallback    bool   `json:"fallback"`
+}
+
+func isFallbackMemorySource(source string) bool {
+	switch strings.ToLower(source) {
+	case "", "unknown", "nodes-endpoint", "node-status-used", "previous-snapshot":
+		return true
+	default:
+		return false
+	}
 }
 
 // NodeDiagnostic contains diagnostic info for a Proxmox node
@@ -338,6 +359,54 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 		snapshots := r.monitor.GetDiagnosticSnapshots()
 		if len(snapshots.Nodes) > 0 {
 			diag.NodeSnapshots = snapshots.Nodes
+
+			type memorySourceAgg struct {
+				stat   MemorySourceStat
+				latest time.Time
+			}
+
+			sourceAverages := make(map[string]*memorySourceAgg)
+			for _, snap := range snapshots.Nodes {
+				source := snap.MemorySource
+				if source == "" {
+					source = "unknown"
+				}
+
+				key := fmt.Sprintf("%s|%s", snap.Instance, source)
+				entry, ok := sourceAverages[key]
+				if !ok {
+					entry = &memorySourceAgg{
+						stat: MemorySourceStat{
+							Instance: snap.Instance,
+							Source:   source,
+							Fallback: isFallbackMemorySource(source),
+						},
+					}
+					sourceAverages[key] = entry
+				}
+
+				entry.stat.NodeCount++
+				if snap.RetrievedAt.After(entry.latest) {
+					entry.latest = snap.RetrievedAt
+				}
+			}
+
+			if len(sourceAverages) > 0 {
+				diag.MemorySources = make([]MemorySourceStat, 0, len(sourceAverages))
+				for _, entry := range sourceAverages {
+					if !entry.latest.IsZero() {
+						entry.stat.LastUpdated = entry.latest.UTC().Format(time.RFC3339)
+					}
+					diag.MemorySources = append(diag.MemorySources, entry.stat)
+				}
+
+				sort.Slice(diag.MemorySources, func(i, j int) bool {
+					if diag.MemorySources[i].Instance == diag.MemorySources[j].Instance {
+						return diag.MemorySources[i].Source < diag.MemorySources[j].Source
+					}
+					return diag.MemorySources[i].Instance < diag.MemorySources[j].Instance
+				})
+			}
 		}
 		if len(snapshots.Guests) > 0 {
 			diag.GuestSnapshots = snapshots.Guests
