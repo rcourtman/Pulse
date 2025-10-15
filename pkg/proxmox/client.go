@@ -447,6 +447,13 @@ func (m *MemoryStatus) EffectiveAvailable() uint64 {
 	}
 
 	derived := m.Free + m.Buffers + m.Cached
+	if m.Total > 0 && m.Used > 0 && m.Total >= m.Used {
+		availableFromUsed := m.Total - m.Used
+		if availableFromUsed > derived {
+			derived = availableFromUsed
+		}
+	}
+
 	if derived == 0 {
 		return 0
 	}

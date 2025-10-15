@@ -168,8 +168,21 @@ func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {
 				Cached:  4294967296,  // 4GB
 			},
 			wantAvailable: 6979321856, // Free + Buffers + Cached = ~6.5GB
-			wantUsedPct:   58.4,        // Should be ~58%, not ~80%
+			wantUsedPct:   58.4,       // Should be ~58%, not ~80%
 			description:   "When available/avail missing, derive from free+buffers+cached",
+		},
+		{
+			name: "proxmox 8.4 hides cache fields - derive from total-minus-used gap",
+			status: MemoryStatus{
+				Total:   134794743808, // ~125.6GB
+				Used:    107351023616, // ~100GB actual usage
+				Free:    6471057408,   // ~6GB bare free reported
+				Buffers: 0,
+				Cached:  0,
+			},
+			wantAvailable: 27443720192, // total - used => ~25.6GB reclaimable (free + cache)
+			wantUsedPct:   79.6,        // Matches Proxmox node dashboard
+			description:   "Proxmox 8.4 stops reporting buffers/cached; use total-used gap to recover cache-aware metric",
 		},
 		{
 			name: "issue #435 specific case - 86% vs 42% real usage",
@@ -190,9 +203,9 @@ func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {
 				Used:  6871947674,
 				Free:  0, // All fields missing
 			},
-			wantAvailable: 0,
-			wantUsedPct:   80.0, // Falls back to cache-inclusive calculation
-			description:   "When all cache fields missing, EffectiveAvailable returns 0",
+			wantAvailable: 1717986918, // Derived from total - used
+			wantUsedPct:   80.0,       // Still aligns with cache-inclusive calculation when nothing else reported
+			description:   "When all cache fields missing, fall back to total-used gap instead of zero",
 		},
 	}
 
