@@ -186,6 +186,41 @@ func TestStateEndpointReturnsMockData(t *testing.T) {
 	}
 }
 
+func TestServerInfoEndpointReportsDevelopment(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	res, err := http.Get(srv.server.URL + "/api/server/info")
+	if err != nil {
+		t.Fatalf("server info request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status: got %d want %d", res.StatusCode, http.StatusOK)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode server info response: %v", err)
+	}
+
+	isDev, ok := payload["isDevelopment"].(bool)
+	if !ok {
+		t.Fatalf("isDevelopment missing or not bool: %v", payload["isDevelopment"])
+	}
+	if !isDev {
+		t.Fatalf("expected development mode to be true")
+	}
+
+	version, ok := payload["version"].(string)
+	if !ok {
+		t.Fatalf("version missing or not string: %v", payload["version"])
+	}
+	if version == "" {
+		t.Fatalf("expected non-empty version string")
+	}
+}
+
 func TestConfigNodesUsesMockTopology(t *testing.T) {
 	srv := newIntegrationServer(t)
 
