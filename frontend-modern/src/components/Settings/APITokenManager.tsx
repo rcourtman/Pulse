@@ -3,11 +3,10 @@ import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { showError, showSuccess } from '@/utils/toast';
-import { copyToClipboard } from '@/utils/clipboard';
 import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { DockerHost } from '@/types/api';
-import { showTokenReveal } from '@/stores/tokenReveal';
+import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
@@ -42,8 +41,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [newTokenValue, setNewTokenValue] = createSignal<string | null>(null);
   const [newTokenRecord, setNewTokenRecord] = createSignal<APITokenRecord | null>(null);
-  const [copied, setCopied] = createSignal(false);
   const [nameInput, setNameInput] = createSignal('');
+  const tokenRevealState = useTokenRevealState();
 
   const loadTokens = async () => {
     setLoading(true);
@@ -64,7 +63,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   const handleGenerate = async () => {
     setIsGenerating(true);
-    setCopied(false);
     try {
       const trimmedName = nameInput().trim() || undefined;
       const { token, record } = await SecurityAPI.createToken(trimmedName);
@@ -78,7 +76,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         token,
         record,
         source: 'security',
-        note: 'Copy this token now. You can always rotate it from Security → API tokens.',
+        note: 'Copy this token now. You can reopen this dialog from Security → API tokens while this page stays open.',
       });
       showSuccess('New API token generated. Copy it below while it is still visible.');
       props.onTokensChanged?.();
@@ -117,19 +115,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     return 'unnamed token';
   };
 
-  const handleCopy = async () => {
-    const value = newTokenValue();
-    if (!value) return;
-
-    const success = await copyToClipboard(value);
-    if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } else {
-      showError('Failed to copy to clipboard');
-    }
-  };
-
   const handleDelete = async (record: APITokenRecord) => {
     const usage = dockerTokenUsage().get(record.id);
     const displayName = tokenNameForDialog(record);
@@ -166,6 +151,24 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     }
   };
 
+  const isRevealActiveForCurrentToken = () => {
+    const active = tokenRevealState();
+    if (!active) return false;
+    return newTokenValue() !== null && active.token === newTokenValue();
+  };
+
+  const reopenTokenDialog = () => {
+    const token = newTokenValue();
+    const record = newTokenRecord();
+    if (!token || !record) return;
+    showTokenReveal({
+      token,
+      record,
+      source: 'security',
+      note: 'Copy this token now. Close the dialog once you have stored it safely.',
+    });
+  };
+
   return (
     <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700" border={false}>
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -200,55 +203,57 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           </div>
         </Show>
 
-        {/* CRITICAL: Show generated token FIRST and PROMINENTLY */}
-        <Show when={newTokenValue()}>
-          <div class="space-y-4 border-4 border-green-500 dark:border-green-600 rounded-lg p-5 bg-green-50 dark:bg-green-900/30">
+        {/* Generated token reminder - only show when dialog is not already visible */}
+        <Show when={newTokenValue() && !isRevealActiveForCurrentToken()}>
+          <div class="space-y-3 rounded-lg border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/30 p-4">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0">
-                <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div class="flex-shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 p-2">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <div class="flex-1 space-y-3">
-                <div>
-                  <h3 class="text-lg font-bold text-green-900 dark:text-green-100">Token Generated!</h3>
-                  <p class="text-sm font-semibold text-green-800 dark:text-green-200 mt-1">
-                    ⚠️ This is shown ONCE. Copy it now or lose it forever!
+              <div class="space-y-2">
+                <h3 class="text-base font-semibold text-green-900 dark:text-green-100">
+                  Token ready to copy
+                </h3>
+                <p class="text-sm text-green-800 dark:text-green-200 leading-snug">
+                  We keep the full token inside a secure dialog. Reopen it if you still need to copy the value before navigating away.
+                </p>
+                <Show when={newTokenRecord()}>
+                  <p class="text-xs text-green-900/80 dark:text-green-200/80">
+                    Label{' '}
+                    <span class="font-semibold">{newTokenRecord()?.name || 'Untitled token'}</span>
+                    <Show when={newTokenRecord()?.prefix || newTokenRecord()?.suffix}>
+                      {' '}· Hint{' '}
+                      <code class="rounded bg-green-100 dark:bg-green-900/50 px-1.5 py-0.5 font-mono text-[11px] text-green-800 dark:text-green-200">
+                        {tokenHint(newTokenRecord()!)}
+                      </code>
+                    </Show>
                   </p>
-                </div>
-
-                <div class="space-y-2">
-                  <label class="text-xs font-medium text-green-900 dark:text-green-100 uppercase tracking-wide">
-                    Your new token:
-                  </label>
-                  <div class="flex items-center gap-2">
-                    <code class="flex-1 font-mono text-base bg-white dark:bg-gray-800 px-4 py-3 rounded-lg border-2 border-green-300 dark:border-green-700 break-all text-gray-900 dark:text-gray-100 font-bold">
-                      {newTokenValue()}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={handleCopy}
-                      class="px-5 py-3 text-sm font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-lg"
-                    >
-                      {copied() ? '✓ Copied!' : 'Copy Token'}
-                    </button>
-                  </div>
-                </div>
-
-                <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
-                  <p class="text-sm text-yellow-900 dark:text-yellow-100 font-medium">
-                    💡 Keep this token safe and use it anywhere Pulse requires API authentication—Docker agents, automations, or custom integrations.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setNewTokenValue(null)}
-                  class="text-sm text-green-700 dark:text-green-300 hover:underline"
-                >
-                  I've saved it, dismiss this
-                </button>
+                </Show>
               </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={reopenTokenDialog}
+                class="inline-flex items-center gap-1 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 transition-colors shadow-sm"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7h4m0 0v4m0-4l-6 6-4-4-6 6" />
+                </svg>
+                Show token dialog
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewTokenValue(null);
+                  setNewTokenRecord(null);
+                }}
+                class="inline-flex items-center rounded-md border border-green-400 dark:border-green-700 px-4 py-2 text-sm font-medium text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
+              >
+                Dismiss reminder
+              </button>
             </div>
           </div>
         </Show>

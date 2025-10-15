@@ -1,6 +1,7 @@
 import { Component, createSignal, Show, createMemo, createEffect } from 'solid-js';
 import { apiFetch } from '@/utils/apiClient';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
+import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 
 interface CommandBuilderProps {
   command: string;
@@ -24,9 +25,10 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
   // Token generation/revocation state
   const [showGenerateModal, setShowGenerateModal] = createSignal(false);
   const [isGenerating, setIsGenerating] = createSignal(false);
-  const [newlyGeneratedToken, setNewlyGeneratedToken] = createSignal<string | null>(null);
-  const [showNewTokenModal, setShowNewTokenModal] = createSignal(false);
   const [tokenLabel, setTokenLabel] = createSignal('Docker agent token');
+  const [latestGeneratedToken, setLatestGeneratedToken] = createSignal<string | null>(null);
+  const [latestGeneratedRecord, setLatestGeneratedRecord] = createSignal<APITokenRecord | null>(null);
+  const tokenRevealState = useTokenRevealState();
 
   const defaultTokenLabel = () => `Docker agent token ${new Date().toISOString().slice(0, 10)}`;
   const canManageTokens = () => props.canManageTokens !== false;
@@ -34,6 +36,25 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
     if (!canManageTokens()) return;
     setTokenLabel(defaultTokenLabel());
     setShowGenerateModal(true);
+  };
+
+  const isRevealActiveForLatestToken = () => {
+    const token = latestGeneratedToken();
+    const active = tokenRevealState();
+    if (!token || !active) return false;
+    return active.token === token;
+  };
+
+  const reopenLatestTokenDialog = () => {
+    const token = latestGeneratedToken();
+    const record = latestGeneratedRecord();
+    if (!token || !record) return;
+    showTokenReveal({
+      token,
+      record,
+      source: 'docker-command',
+      note: 'Copy this token now. Close the dialog once you have stored it securely.',
+    });
   };
 
   // Initialize with stored token if available
@@ -177,9 +198,10 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
       const { token: newToken, record } = await SecurityAPI.createToken(desiredName);
 
       setShowGenerateModal(false);
-      setNewlyGeneratedToken(newToken);
-      setShowNewTokenModal(true);
+      setLatestGeneratedToken(newToken);
+      setLatestGeneratedRecord(record);
 
+      reopenLatestTokenDialog();
       // Auto-populate the command builder
      setTokenInput(newToken);
      if (props.onTokenGenerated) {
@@ -195,7 +217,7 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
         }
       }
 
-      window.showToast('success', 'New API token generated. Save it now – it will not be shown again.');
+      window.showToast('success', 'New API token generated. Copy it from the dialog while it is visible.');
     } catch (error) {
       console.error('Token generation failed:', error);
       window.showToast('error', error instanceof Error ? error.message : 'Failed to generate token');
@@ -543,85 +565,60 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
       </Show>
 
       {/* New Token Display Modal */}
-      <Show when={showNewTokenModal()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full p-6">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">New API Token Generated!</h3>
-            <div class="space-y-4 mb-6">
-              <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3">
-                <p class="text-sm text-green-800 dark:text-green-300">
-                  ✓ Your new token has been generated and is active immediately. The command builder has been auto-filled with your new token.
-                </p>
-              </div>
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Your new token (save this now):</label>
-                <div class="flex gap-2">
-                  <code class="flex-1 text-sm font-mono bg-gray-100 dark:bg-gray-900 px-3 py-2 rounded border border-gray-300 dark:border-gray-600 break-all">
-                    {newlyGeneratedToken()}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const value = newlyGeneratedToken();
-                      if (!value) return;
-
-                      const fallbackCopy = () => {
-                        try {
-                          const textarea = document.createElement('textarea');
-                          textarea.value = value;
-                          textarea.setAttribute('readonly', '');
-                          textarea.style.position = 'fixed';
-                          textarea.style.left = '-9999px';
-                          document.body.appendChild(textarea);
-                          textarea.select();
-                          const copied = document.execCommand('copy');
-                          document.body.removeChild(textarea);
-                          return copied;
-                        } catch (err) {
-                          console.error('Fallback copy failed', err);
-                          return false;
-                        }
-                      };
-
-                      const copyPromise =
-                        typeof navigator !== 'undefined' && navigator.clipboard?.writeText
-                          ? navigator.clipboard.writeText(value).then(() => true).catch((err) => {
-                              console.warn('Clipboard API copy failed, falling back', err);
-                              return fallbackCopy();
-                            })
-                          : Promise.resolve(fallbackCopy());
-
-                      copyPromise.then((success) => {
-                        if (typeof window !== 'undefined' && window.showToast) {
-                          window.showToast(success ? 'success' : 'error', success ? 'Token copied!' : 'Failed to copy token');
-                        }
-                      }
-                      );
-                    }}
-                    class="px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors whitespace-nowrap"
-                  >
-                    Copy
-                  </button>
+      <Show
+        when={latestGeneratedToken() && !isRevealActiveForLatestToken()}
+      >
+        <div class="mt-4 space-y-3 rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-4">
+          <div class="flex items-start gap-2">
+            <div class="flex-shrink-0 text-blue-600 dark:text-blue-300">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <div class="space-y-1">
+              <p class="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                New token ready
+              </p>
+              <p class="text-xs text-blue-700 dark:text-blue-300 leading-snug">
+                Reopen the secure dialog if you still need to copy the value before you leave this page. The command above already includes it.
+              </p>
+              <Show when={latestGeneratedRecord()}>
+                <div class="text-xs text-blue-700/80 dark:text-blue-300/90">
+                  Label{' '}
+                  <span class="font-semibold">
+                    {latestGeneratedRecord()?.name || 'Untitled token'}
+                  </span>
+                  <Show when={latestGeneratedRecord()?.prefix || latestGeneratedRecord()?.suffix}>
+                    {' '}· Hint{' '}
+                    <code class="rounded bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 font-mono text-[11px] text-blue-700 dark:text-blue-200">
+                      {latestGeneratedRecord()?.prefix}…{latestGeneratedRecord()?.suffix}
+                    </code>
+                  </Show>
                 </div>
-              </div>
-              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
-                <p class="text-xs text-blue-800 dark:text-blue-300">
-                  💡 This token won't be shown again. Make sure to save it securely or use it right away in the command below.
-                </p>
-              </div>
+              </Show>
             </div>
-            <div class="flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNewTokenModal(false);
-                  setNewlyGeneratedToken(null);
-                }}
-                class="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
-              >
-                Done
-              </button>
-            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={reopenLatestTokenDialog}
+              class="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+              Show token dialog
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLatestGeneratedToken(null);
+                setLatestGeneratedRecord(null);
+              }}
+              class="inline-flex items-center rounded-md border border-blue-300 dark:border-blue-700 px-3 py-2 text-xs font-medium text-blue-800 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+            >
+              Dismiss reminder
+            </button>
           </div>
         </div>
       </Show>

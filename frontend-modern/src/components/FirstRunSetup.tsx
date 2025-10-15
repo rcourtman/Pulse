@@ -3,6 +3,8 @@ import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
 import { STORAGE_KEYS } from '@/constants';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { showTokenReveal } from '@/stores/tokenReveal';
+import type { APITokenRecord } from '@/api/security';
 
 export const FirstRunSetup: Component = () => {
   const [username, setUsername] = createSignal('admin');
@@ -130,6 +132,20 @@ export const FirstRunSetup: Component = () => {
       setSavedUsername(username());
       setSavedPassword(useCustomPassword() ? password() : generatedPassword());
       setSavedToken(token);
+
+      const bootstrapRecord: APITokenRecord = {
+        id: 'bootstrap-token',
+        name: 'Bootstrap token',
+        prefix: token.slice(0, 6),
+        suffix: token.slice(-4),
+        createdAt: new Date().toISOString(),
+      };
+      showTokenReveal({
+        token,
+        record: bootstrapRecord,
+        source: 'first-run',
+        note: 'Copy this bootstrap token now. It unlocks API access for agents and automations.',
+      });
 
       // Show credentials
       setShowCredentials(true);
