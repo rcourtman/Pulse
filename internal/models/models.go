@@ -137,27 +137,30 @@ type Container struct {
 
 // DockerHost represents a Docker host reporting metrics via the external agent.
 type DockerHost struct {
-	ID               string            `json:"id"`
-	AgentID          string            `json:"agentId"`
-	Hostname         string            `json:"hostname"`
-	DisplayName      string            `json:"displayName"`
-	MachineID        string            `json:"machineId,omitempty"`
-	OS               string            `json:"os,omitempty"`
-	KernelVersion    string            `json:"kernelVersion,omitempty"`
-	Architecture     string            `json:"architecture,omitempty"`
-	DockerVersion    string            `json:"dockerVersion,omitempty"`
-	CPUs             int               `json:"cpus"`
-	TotalMemoryBytes int64             `json:"totalMemoryBytes"`
-	UptimeSeconds    int64             `json:"uptimeSeconds"`
-	Status           string            `json:"status"`
-	LastSeen         time.Time         `json:"lastSeen"`
-	IntervalSeconds  int               `json:"intervalSeconds"`
-	AgentVersion     string            `json:"agentVersion,omitempty"`
-	Containers       []DockerContainer `json:"containers"`
-	TokenID          string            `json:"tokenId,omitempty"`
-	TokenName        string            `json:"tokenName,omitempty"`
-	TokenHint        string            `json:"tokenHint,omitempty"`
-	TokenLastUsedAt  *time.Time        `json:"tokenLastUsedAt,omitempty"`
+	ID               string                   `json:"id"`
+	AgentID          string                   `json:"agentId"`
+	Hostname         string                   `json:"hostname"`
+	DisplayName      string                   `json:"displayName"`
+	MachineID        string                   `json:"machineId,omitempty"`
+	OS               string                   `json:"os,omitempty"`
+	KernelVersion    string                   `json:"kernelVersion,omitempty"`
+	Architecture     string                   `json:"architecture,omitempty"`
+	DockerVersion    string                   `json:"dockerVersion,omitempty"`
+	CPUs             int                      `json:"cpus"`
+	TotalMemoryBytes int64                    `json:"totalMemoryBytes"`
+	UptimeSeconds    int64                    `json:"uptimeSeconds"`
+	Status           string                   `json:"status"`
+	LastSeen         time.Time                `json:"lastSeen"`
+	IntervalSeconds  int                      `json:"intervalSeconds"`
+	AgentVersion     string                   `json:"agentVersion,omitempty"`
+	Containers       []DockerContainer        `json:"containers"`
+	TokenID          string                   `json:"tokenId,omitempty"`
+	TokenName        string                   `json:"tokenName,omitempty"`
+	TokenHint        string                   `json:"tokenHint,omitempty"`
+	TokenLastUsedAt  *time.Time               `json:"tokenLastUsedAt,omitempty"`
+	Hidden           bool                     `json:"hidden"`
+	PendingUninstall bool                     `json:"pendingUninstall"`
+	Command          *DockerHostCommandStatus `json:"command,omitempty"`
 }
 
 // DockerContainer represents the state of a Docker container on a monitored host.
@@ -196,6 +199,22 @@ type DockerContainerNetworkLink struct {
 	Name string `json:"name"`
 	IPv4 string `json:"ipv4,omitempty"`
 	IPv6 string `json:"ipv6,omitempty"`
+}
+
+// DockerHostCommandStatus tracks the lifecycle of a control command issued to a Docker host.
+type DockerHostCommandStatus struct {
+	ID             string     `json:"id"`
+	Type           string     `json:"type"`
+	Status         string     `json:"status"`
+	Message        string     `json:"message,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
+	DispatchedAt   *time.Time `json:"dispatchedAt,omitempty"`
+	AcknowledgedAt *time.Time `json:"acknowledgedAt,omitempty"`
+	CompletedAt    *time.Time `json:"completedAt,omitempty"`
+	FailedAt       *time.Time `json:"failedAt,omitempty"`
+	FailureReason  string     `json:"failureReason,omitempty"`
+	ExpiresAt      *time.Time `json:"expiresAt,omitempty"`
 }
 
 // Storage represents a storage resource
@@ -881,6 +900,57 @@ func (s *State) SetDockerHostStatus(hostID, status string) bool {
 	}
 
 	return changed
+}
+
+// SetDockerHostHidden updates the hidden status of a docker host and returns the updated host.
+func (s *State) SetDockerHostHidden(hostID string, hidden bool) (DockerHost, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.DockerHosts {
+		if host.ID == hostID {
+			host.Hidden = hidden
+			s.DockerHosts[i] = host
+			s.LastUpdate = time.Now()
+			return host, true
+		}
+	}
+
+	return DockerHost{}, false
+}
+
+// SetDockerHostPendingUninstall updates the pending uninstall status of a docker host and returns the updated host.
+func (s *State) SetDockerHostPendingUninstall(hostID string, pending bool) (DockerHost, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.DockerHosts {
+		if host.ID == hostID {
+			host.PendingUninstall = pending
+			s.DockerHosts[i] = host
+			s.LastUpdate = time.Now()
+			return host, true
+		}
+	}
+
+	return DockerHost{}, false
+}
+
+// SetDockerHostCommand updates the active command status for a docker host.
+func (s *State) SetDockerHostCommand(hostID string, command *DockerHostCommandStatus) (DockerHost, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.DockerHosts {
+		if host.ID == hostID {
+			host.Command = command
+			s.DockerHosts[i] = host
+			s.LastUpdate = time.Now()
+			return host, true
+		}
+	}
+
+	return DockerHost{}, false
 }
 
 // TouchDockerHost updates the last seen timestamp for a docker host.

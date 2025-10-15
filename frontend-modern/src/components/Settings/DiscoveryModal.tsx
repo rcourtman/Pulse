@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, For, createEffect } from 'solid-js';
+import { Component, Show, createSignal, For, createEffect, on } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { showSuccess, showError } from '@/utils/toast';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -29,25 +29,25 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
   const [discoveryResult, setDiscoveryResult] = createSignal<DiscoveryResult | null>(null);
   const [hasScanned, setHasScanned] = createSignal(false);
 
-  // Load cached results when modal opens
-  createEffect(() => {
-    if (props.isOpen && !hasScanned()) {
-      setHasScanned(true);
-      loadCachedResults();
+  // Load cached results when modal opens and reset when it closes
+  createEffect(on(
+    () => props.isOpen,
+    (isOpen) => {
+      if (isOpen && !hasScanned()) {
+        setHasScanned(true);
+        loadCachedResults();
+      } else if (!isOpen) {
+        setHasScanned(false);
+        // Keep cached results, don't clear them
+      }
     }
-  });
-
-  // Reset scan state when modal closes
-  createEffect(() => {
-    if (!props.isOpen) {
-      setHasScanned(false);
-      // Keep cached results, don't clear them
-    }
-  });
+  ));
 
   // Listen for real-time WebSocket updates when modal is open and scanning
-  createEffect(() => {
-    if (!props.isOpen) return;
+  createEffect(on(
+    () => props.isOpen,
+    (isOpen) => {
+      if (!isOpen) return;
 
     const handleWsMessage = (event: MessageEvent) => {
       try {
@@ -92,16 +92,17 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
       }
     };
 
-    // Get WebSocket from global state
-    const ws = (window as any).__pulseWs;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.addEventListener('message', handleWsMessage);
+      // Get WebSocket from global state
+      const ws = (window as any).__pulseWs;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.addEventListener('message', handleWsMessage);
 
-      return () => {
-        ws.removeEventListener('message', handleWsMessage);
-      };
+        return () => {
+          ws.removeEventListener('message', handleWsMessage);
+        };
+      }
     }
-  });
+  ));
 
   const loadCachedResults = async () => {
     try {

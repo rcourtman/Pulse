@@ -8,6 +8,46 @@ trim() {
     printf '%s' "$value"
 }
 
+determine_agent_identifier() {
+    local agent_id=""
+
+    if command -v docker &> /dev/null; then
+        agent_id=$(docker info --format '{{.ID}}' 2>/dev/null | head -n1 | tr -d '[:space:]')
+    fi
+
+    if [[ -z "$agent_id" ]] && [[ -r /etc/machine-id ]]; then
+        agent_id=$(tr -d '[:space:]' < /etc/machine-id)
+    fi
+
+    if [[ -z "$agent_id" ]]; then
+        agent_id=$(hostname 2>/dev/null | tr -d '[:space:]')
+    fi
+
+    printf '%s' "$agent_id"
+}
+
+log_info() {
+    printf '[INFO] %s\n' "$1"
+}
+
+log_success() {
+    printf '[ OK ] %s\n' "$1"
+}
+
+log_warn() {
+    printf '[WARN] %s\n' "$1" >&2
+}
+
+log_header() {
+    printf '\n== %s ==\n' "$1"
+}
+
+quote_shell_arg() {
+    local value="$1"
+    value=${value//\'/\'\\\'\'}
+    printf "'%s'" "$value"
+}
+
 parse_bool() {
     local value
     value=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
@@ -343,6 +383,7 @@ PRIMARY_URL=""
 PRIMARY_TOKEN=""
 PRIMARY_INSECURE="false"
 JOINED_TARGETS=""
+ORIGINAL_ARGS=("$@")
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -385,13 +426,215 @@ done
 # Normalize PULSE_URL - strip trailing slashes to prevent double-slash issues
 PULSE_URL="${PULSE_URL%/}"
 
+ORIGINAL_ARGS_STRING=""
+if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+    __quoted_original_args=()
+    for __arg in "${ORIGINAL_ARGS[@]}"; do
+        __quoted_original_args+=("$(quote_shell_arg "$__arg")")
+    done
+    ORIGINAL_ARGS_STRING="${__quoted_original_args[*]}"
+fi
+unset __quoted_original_args __arg
+
+ORIGINAL_ARGS_ESCAPED=""
+if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+    __command_args=()
+    for __arg in "${ORIGINAL_ARGS[@]}"; do
+        __command_args+=("$(printf '%q' "$__arg")")
+    done
+    ORIGINAL_ARGS_ESCAPED="${__command_args[*]}"
+fi
+unset __command_args __arg
+
+INSTALLER_URL_HINT="${PULSE_INSTALLER_URL_HINT:-}"
+if [[ -z "$INSTALLER_URL_HINT" && -n "$PULSE_URL" ]]; then
+    INSTALLER_URL_HINT="${PULSE_URL%/}/install-docker-agent.sh"
+fi
+if [[ -z "$INSTALLER_URL_HINT" && ${#TARGET_SPECS[@]} -gt 0 ]]; then
+    if parse_target_spec "${TARGET_SPECS[0]}" >/dev/null 2>&1; then
+        if [[ -n "$PARSED_TARGET_URL" ]]; then
+            INSTALLER_URL_HINT="${PARSED_TARGET_URL%/}/install-docker-agent.sh"
+        fi
+    fi
+fi
+
+if [[ -z "$INSTALLER_URL_HINT" && -f "$SERVICE_PATH" ]]; then
+    mapfile -t __service_targets_for_hint < <(extract_targets_from_service "$SERVICE_PATH")
+    if [[ ${#__service_targets_for_hint[@]} -gt 0 ]]; then
+        if parse_target_spec "${__service_targets_for_hint[0]}" >/dev/null 2>&1; then
+            if [[ -n "$PARSED_TARGET_URL" ]]; then
+                INSTALLER_URL_HINT="${PARSED_TARGET_URL%/}/install-docker-agent.sh"
+            fi
+        fi
+    fi
+    unset __service_targets_for_hint
+fi
+
+if [[ -z "$INSTALLER_URL_HINT" && -n "${PPID:-}" ]]; then
+    PARENT_CMD=$(ps -o command= -p "$PPID" 2>/dev/null || true)
+    if [[ -n "$PARENT_CMD" ]]; then
+        if [[ "$PARENT_CMD" =~ (https?://[^[:space:]\"\'\|]+/install-docker-agent\.sh) ]]; then
+            INSTALLER_URL_HINT="${BASH_REMATCH[1]}"
+        elif [[ "$PARENT_CMD" =~ (https?://[^[:space:]\|]+install-docker-agent\.sh) ]]; then
+            INSTALLER_URL_HINT="${BASH_REMATCH[1]}"
+        fi
+        if [[ -n "$INSTALLER_URL_HINT" ]]; then
+            INSTALLER_URL_HINT="${INSTALLER_URL_HINT#\"}"
+            INSTALLER_URL_HINT="${INSTALLER_URL_HINT#\'}"
+            INSTALLER_URL_HINT="${INSTALLER_URL_HINT%\"}"
+            INSTALLER_URL_HINT="${INSTALLER_URL_HINT%\'}"
+        fi
+    fi
+    unset PARENT_CMD
+fi
+
+PIPELINE_COMMAND=""
+PIPELINE_COMMAND_SUDO_C=""
+PIPELINE_COMMAND_INNER=""
+if [[ -n "$INSTALLER_URL_HINT" ]]; then
+    INSTALLER_URL_QUOTED=$(quote_shell_arg "$INSTALLER_URL_HINT")
+    PIPELINE_COMMAND="curl -fsSL ${INSTALLER_URL_QUOTED} | sudo bash -s"
+    if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+        PIPELINE_COMMAND+=" -- ${ORIGINAL_ARGS_STRING}"
+    fi
+    INSTALLER_URL_ESCAPED=$(printf '%q' "$INSTALLER_URL_HINT")
+    PIPELINE_COMMAND_INNER="curl -fsSL ${INSTALLER_URL_ESCAPED} | bash -s"
+    if [[ -n "$ORIGINAL_ARGS_ESCAPED" ]]; then
+        PIPELINE_COMMAND_INNER+=" -- ${ORIGINAL_ARGS_ESCAPED}"
+    fi
+    PIPELINE_COMMAND_SUDO_C="sudo bash -c $(quote_shell_arg "$PIPELINE_COMMAND_INNER")"
+    unset INSTALLER_URL_ESCAPED INSTALLER_URL_QUOTED
+fi
+
+SCRIPT_SOURCE_HINT=""
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    __script_source_candidate="${BASH_SOURCE[0]}"
+    if [[ -n "$__script_source_candidate" && -f "$__script_source_candidate" ]]; then
+        if command -v realpath >/dev/null 2>&1; then
+            __resolved_source=$(realpath "$__script_source_candidate" 2>/dev/null || true)
+        elif command -v readlink >/dev/null 2>&1; then
+            __resolved_source=$(readlink -f "$__script_source_candidate" 2>/dev/null || true)
+        else
+            __resolved_source=""
+        fi
+        if [[ -z "$__resolved_source" ]]; then
+            if [[ "$__script_source_candidate" == /* ]]; then
+                __resolved_source="$__script_source_candidate"
+            else
+                __resolved_source="$(pwd)/$__script_source_candidate"
+            fi
+        fi
+        SCRIPT_SOURCE_HINT="$__resolved_source"
+    fi
+fi
+unset __script_source_candidate __resolved_source
+
+LOCAL_COMMAND=""
+if [[ -n "$SCRIPT_SOURCE_HINT" ]]; then
+    LOCAL_COMMAND="sudo bash $(quote_shell_arg "$SCRIPT_SOURCE_HINT")"
+    if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+        LOCAL_COMMAND+=" ${ORIGINAL_ARGS_STRING}"
+    fi
+fi
+
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
+   AUTO_SUDO_ATTEMPTED="false"
+   AUTO_SUDO_EXIT_CODE=0
+   if [[ -z "${PULSE_AUTO_SUDO_ATTEMPTED:-}" ]]; then
+       PULSE_AUTO_SUDO_ATTEMPTED=1
+       export PULSE_AUTO_SUDO_ATTEMPTED
+       if command -v sudo >/dev/null 2>&1; then
+           if [[ -n "$SCRIPT_SOURCE_HINT" ]]; then
+               AUTO_SUDO_ATTEMPTED="true"
+               echo "Requesting sudo to continue installation..."
+               if sudo bash "$SCRIPT_SOURCE_HINT" "${ORIGINAL_ARGS[@]}"; then
+                   exit 0
+               else
+                   AUTO_SUDO_EXIT_CODE=$?
+               fi
+           elif [[ -n "$PIPELINE_COMMAND_INNER" ]]; then
+               AUTO_SUDO_ATTEMPTED="true"
+               echo "Requesting sudo to continue installation..."
+               if sudo bash -c "$PIPELINE_COMMAND_INNER"; then
+                   exit 0
+               else
+                   AUTO_SUDO_EXIT_CODE=$?
+               fi
+           fi
+       fi
+   fi
+
+   if [[ "$AUTO_SUDO_ATTEMPTED" == "true" ]]; then
+       echo "WARN: Automatic sudo elevation failed (exit code ${AUTO_SUDO_EXIT_CODE})."
+       echo ""
+       if [[ -n "$PIPELINE_COMMAND" ]]; then
+           echo "Retry manually with sudo:"
+           echo "  $PIPELINE_COMMAND"
+           if [[ -n "$PIPELINE_COMMAND_SUDO_C" ]]; then
+               echo ""
+           fi
+       fi
+       if [[ -n "$PIPELINE_COMMAND_SUDO_C" ]]; then
+           echo "Or run the entire pipeline under sudo:"
+           echo "  $PIPELINE_COMMAND_SUDO_C"
+           if [[ -n "$LOCAL_COMMAND" ]]; then
+               echo ""
+           fi
+       fi
+       if [[ -n "$LOCAL_COMMAND" ]]; then
+           echo "If you downloaded the script locally:"
+           echo "  $LOCAL_COMMAND"
+           echo ""
+       fi
+       if [[ -z "$PIPELINE_COMMAND" && -z "$LOCAL_COMMAND" ]]; then
+           echo "Please re-run the installer with elevated privileges, for example:"
+           if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+               echo "  curl -fsSL <URL>/install-docker-agent.sh | sudo bash -s -- ${ORIGINAL_ARGS_STRING}"
+               FALLBACK_PIPELINE_INNER="curl -fsSL <URL>/install-docker-agent.sh | bash -s -- ${ORIGINAL_ARGS_ESCAPED}"
+               echo "  sudo bash -c $(quote_shell_arg "$FALLBACK_PIPELINE_INNER")"
+               unset FALLBACK_PIPELINE_INNER
+           else
+               echo "  curl -fsSL <URL>/install-docker-agent.sh | sudo bash -s"
+               echo "  sudo bash -c 'curl -fsSL <URL>/install-docker-agent.sh | bash -s'"
+           fi
+       fi
+       exit "${AUTO_SUDO_EXIT_CODE:-1}"
+   fi
+
    echo "Error: This script must be run as root"
    echo ""
-   echo "Please run the command with 'bash' instead of just piping to bash:"
-   echo "  Install: curl -fsSL <URL>/install-docker-agent.sh | bash -s -- --url <URL>"
-   echo "  Uninstall: curl -fsSL <URL>/install-docker-agent.sh | bash -s -- --uninstall"
+   if [[ -n "$PIPELINE_COMMAND" ]]; then
+       echo "Re-run with sudo using the same arguments:"
+       echo "  $PIPELINE_COMMAND"
+       if [[ -n "$PIPELINE_COMMAND_SUDO_C" ]]; then
+           echo ""
+       fi
+   fi
+   if [[ -n "$PIPELINE_COMMAND_SUDO_C" ]]; then
+       echo "Or run the entire pipeline under sudo:"
+       echo "  $PIPELINE_COMMAND_SUDO_C"
+       if [[ -n "$LOCAL_COMMAND" ]]; then
+           echo ""
+       fi
+   fi
+   if [[ -n "$LOCAL_COMMAND" ]]; then
+       echo "If you downloaded the script locally:"
+       echo "  $LOCAL_COMMAND"
+       echo ""
+   fi
+   if [[ -z "$PIPELINE_COMMAND" && -z "$LOCAL_COMMAND" ]]; then
+       echo "Please re-run the installer with elevated privileges, for example:"
+       if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+           echo "  curl -fsSL <URL>/install-docker-agent.sh | sudo bash -s -- ${ORIGINAL_ARGS_STRING}"
+           FALLBACK_PIPELINE_INNER="curl -fsSL <URL>/install-docker-agent.sh | bash -s -- ${ORIGINAL_ARGS_ESCAPED}"
+           echo "  sudo bash -c $(quote_shell_arg "$FALLBACK_PIPELINE_INNER")"
+           unset FALLBACK_PIPELINE_INNER
+       else
+           echo "  curl -fsSL <URL>/install-docker-agent.sh | sudo bash -s"
+           echo "  sudo bash -c 'curl -fsSL <URL>/install-docker-agent.sh | bash -s'"
+       fi
+   fi
    exit 1
 fi
 
@@ -508,7 +751,7 @@ if [[ "$UNINSTALL" != true ]]; then
     RAW_TARGETS+=("${PULSE_URL%/}|$TOKEN|$PRIMARY_INSECURE")
   fi
 
-  if [[ -f "$SERVICE_PATH" ]]; then
+  if [[ -f "$SERVICE_PATH" && ${#RAW_TARGETS[@]} -eq 0 ]]; then
     mapfile -t EXISTING_TARGETS < <(extract_targets_from_service "$SERVICE_PATH")
     if [[ ${#EXISTING_TARGETS[@]} -gt 0 ]]; then
       RAW_TARGETS+=("${EXISTING_TARGETS[@]}")
@@ -552,31 +795,38 @@ if [[ "$UNINSTALL" != true ]]; then
   TOKEN="$PRIMARY_TOKEN"
 fi
 
-echo "==================================="
-echo "Pulse Docker Agent Installer"
-echo "==================================="
-if [[ -n "$AGENT_PATH_NOTE" ]]; then
-  echo "$AGENT_PATH_NOTE"
-fi
-echo "Primary Pulse URL: $PRIMARY_URL"
-if [[ ${#TARGETS[@]} -gt 1 ]]; then
-  echo "Additional Pulse targets: $(( ${#TARGETS[@]} - 1 ))"
-fi
-echo "Install path: $AGENT_PATH"
-echo "Interval: $INTERVAL"
+log_header "Pulse Docker Agent Installer"
 if [[ "$UNINSTALL" != true ]]; then
-  echo "API token: (provided)"
-  echo "Targets:"
+  AGENT_IDENTIFIER=$(determine_agent_identifier)
+else
+  AGENT_IDENTIFIER=""
+fi
+if [[ -n "$AGENT_PATH_NOTE" ]]; then
+  log_warn "$AGENT_PATH_NOTE"
+fi
+log_info "Primary Pulse URL : $PRIMARY_URL"
+if [[ ${#TARGETS[@]} -gt 1 ]]; then
+  log_info "Additional targets : $(( ${#TARGETS[@]} - 1 ))"
+fi
+log_info "Install path      : $AGENT_PATH"
+log_info "Log directory     : /var/log/pulse-docker-agent"
+log_info "Reporting interval: $INTERVAL"
+if [[ "$UNINSTALL" != true ]]; then
+  log_info "API token         : provided"
+  if [[ -n "$AGENT_IDENTIFIER" ]]; then
+    log_info "Docker host ID    : $AGENT_IDENTIFIER"
+  fi
+  log_info "Targets:" 
   for spec in "${TARGETS[@]}"; do
     IFS='|' read -r target_url _ target_insecure <<< "$spec"
     if [[ "$target_insecure" == "true" ]]; then
-      echo "  - $target_url (skip TLS verify)"
+      log_info "  • $target_url (skip TLS verify)"
     else
-      echo "  - $target_url"
+      log_info "  • $target_url"
     fi
   done
 fi
-echo ""
+printf '\n'
 
 # Detect architecture for download
 if [[ "$UNINSTALL" != true ]]; then
@@ -593,14 +843,14 @@ if [[ "$UNINSTALL" != true ]]; then
       ;;
     *)
       DOWNLOAD_ARCH=""
-      echo "Warning: Unknown architecture '$ARCH'. Falling back to default agent binary."
+      log_warn "Unknown architecture '$ARCH'. Falling back to default agent binary."
       ;;
   esac
 fi
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
-    echo "Warning: Docker not found. The agent requires Docker to be installed."
+    log_warn 'Docker not found. The agent requires Docker to be installed.'
     read -p "Continue anyway? (y/N) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -619,7 +869,7 @@ if [[ "$UNINSTALL" != true ]]; then
 fi
 
 # Download agent binary
-echo "Downloading Pulse Docker agent..."
+log_info "Downloading agent binary"
 DOWNLOAD_URL_BASE="$PRIMARY_URL/download/pulse-docker-agent"
 DOWNLOAD_URL="$DOWNLOAD_URL_BASE"
 if [[ -n "$DOWNLOAD_ARCH" ]]; then
@@ -681,73 +931,129 @@ download_agent_from_url() {
 if download_agent_from_url "$DOWNLOAD_URL"; then
     :
 elif [[ "$DOWNLOAD_URL" != "$DOWNLOAD_URL_BASE" ]] && download_agent_from_url "$DOWNLOAD_URL_BASE"; then
-    echo "Falling back to server default agent binary..."
+    log_info 'Falling back to server default agent binary'
 else
-    echo "Error: Failed to download agent binary"
-    echo "Make sure the Pulse server is accessible at: $PRIMARY_URL"
+    log_warn 'Failed to download agent binary'
+    log_warn "Ensure the Pulse server is reachable at $PRIMARY_URL"
     exit 1
 fi
 
 chmod +x "$AGENT_PATH"
-echo "✓ Agent binary installed"
+log_success "Agent binary installed"
+
+allow_reenroll_if_needed() {
+    local host_id="$1"
+    if [[ -z "$host_id" || -z "$PRIMARY_TOKEN" || -z "$PRIMARY_URL" ]]; then
+        return 0
+    fi
+
+    local endpoint="$PRIMARY_URL/api/agents/docker/hosts/${host_id}/allow-reenroll"
+    local success="false"
+
+    if command -v curl &> /dev/null; then
+        local curl_args=(-fsSL -X POST -H "X-API-Token: $PRIMARY_TOKEN" "$endpoint")
+        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+            curl_args=(-k "${curl_args[@]}")
+        fi
+        if curl "${curl_args[@]}" >/dev/null 2>&1; then
+            success="true"
+        fi
+    fi
+
+    if [[ "$success" != "true" ]]; then
+        if command -v wget &> /dev/null; then
+            local wget_args=(--method=POST --header="X-API-Token: $PRIMARY_TOKEN" -q -O /dev/null "$endpoint")
+            if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+                wget_args=(--no-check-certificate "${wget_args[@]}")
+            fi
+            if wget "${wget_args[@]}" >/dev/null 2>&1; then
+                success="true"
+            fi
+        fi
+    fi
+
+    if [[ "$success" == "true" ]]; then
+        log_success "Cleared any previous stop block for host"
+    else
+        log_warn "Unable to confirm removal block clearance (continuing)"
+    fi
+
+    return 0
+}
+
+allow_reenroll_if_needed "$AGENT_IDENTIFIER"
 
 # Check if systemd is available
 if ! command -v systemctl &> /dev/null || [ ! -d /etc/systemd/system ]; then
-    echo ""
-    echo "Systemd not detected - configuring for alternative init system..."
+    printf '\n%s\n' '-- Systemd not detected; configuring alternative startup --'
 
     # Check if this is Unraid (has /boot/config directory)
     if [ -d /boot/config ]; then
-        echo "Unraid detected - creating startup script..."
+        log_info 'Detected Unraid environment'
 
-        # Create go.d directory if it doesn't exist
         mkdir -p /boot/config/go.d
-
-        # Create startup script
         STARTUP_SCRIPT="/boot/config/go.d/pulse-docker-agent.sh"
 cat > "$STARTUP_SCRIPT" <<EOF
 #!/bin/bash
 # Pulse Docker Agent - Auto-start script
 sleep 10  # Wait for Docker to be ready
-PULSE_URL="$PRIMARY_URL" PULSE_TOKEN="$PRIMARY_TOKEN" PULSE_TARGETS="$JOINED_TARGETS" PULSE_INSECURE_SKIP_VERIFY="$PRIMARY_INSECURE" $AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL" > /var/log/pulse-docker-agent.log 2>&1 &
+PULSE_URL="$PRIMARY_URL" PULSE_TOKEN="$PRIMARY_TOKEN" PULSE_TARGETS="$JOINED_TARGETS" PULSE_INSECURE_SKIP_VERIFY="$PRIMARY_INSECURE" $AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"$NO_AUTO_UPDATE_FLAG > /var/log/pulse-docker-agent.log 2>&1 &
 EOF
 
         chmod +x "$STARTUP_SCRIPT"
-        echo "✓ Startup script created at $STARTUP_SCRIPT"
+        log_success "Created startup script: $STARTUP_SCRIPT"
 
-        # Start the agent now
-        echo "Starting agent..."
-        PULSE_URL="$PRIMARY_URL" PULSE_TOKEN="$PRIMARY_TOKEN" PULSE_TARGETS="$JOINED_TARGETS" PULSE_INSECURE_SKIP_VERIFY="$PRIMARY_INSECURE" $AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL" > /var/log/pulse-docker-agent.log 2>&1 &
+        log_info 'Starting agent'
+        PULSE_URL="$PRIMARY_URL" PULSE_TOKEN="$PRIMARY_TOKEN" PULSE_TARGETS="$JOINED_TARGETS" PULSE_INSECURE_SKIP_VERIFY="$PRIMARY_INSECURE" $AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"$NO_AUTO_UPDATE_FLAG > /var/log/pulse-docker-agent.log 2>&1 &
 
-        echo ""
-        echo "==================================="
-        echo "✓ Installation complete!"
-        echo "==================================="
-        echo ""
-        echo "The agent is now running and will auto-start on reboot."
-        echo "Your Docker host should appear in Pulse within 30 seconds."
-        echo ""
-        echo "Logs: /var/log/pulse-docker-agent.log"
-        echo ""
+        log_header 'Installation complete'
+        log_info 'Agent started via Unraid go.d hook'
+        log_info 'Log file             : /var/log/pulse-docker-agent.log'
+        log_info 'Host visible in Pulse: ~30 seconds'
         exit 0
     fi
 
-    # For other non-systemd systems, provide manual instructions
-    echo ""
-    echo "The agent has been installed to: $AGENT_PATH"
-    echo ""
-    echo "To run manually:"
-    echo "  PULSE_URL=$PRIMARY_URL PULSE_TOKEN=<api-token> \\"
-    echo "  PULSE_TARGETS=\"https://pulse.example.com|<token>[;https://pulse-alt.example.com|<token2>]\" \\"
-    echo "  $AGENT_PATH --interval $INTERVAL &"
-    echo ""
-    echo "To make it start automatically, add the above command to your system's startup scripts."
-    echo ""
+    log_info 'Manual startup environment detected'
+    log_info "Binary location      : $AGENT_PATH"
+    log_info 'Start manually with  :'
+    printf '  PULSE_URL=%s PULSE_TOKEN=<api-token> \\n' "$PRIMARY_URL"
+    printf '  PULSE_TARGETS="%s" \\n' "https://pulse.example.com|<token>[;https://pulse-alt.example.com|<token2>]"
+    printf '  %s --interval %s &
+' "$AGENT_PATH" "$INTERVAL"
+    log_info 'Add the same command to your init system to start automatically.'
     exit 0
+
+fi
+
+
+# Check if server is in development mode
+NO_AUTO_UPDATE_FLAG=""
+if command -v curl &> /dev/null || command -v wget &> /dev/null; then
+    SERVER_INFO_URL="$PRIMARY_URL/api/server/info"
+    IS_DEV="false"
+
+    if command -v curl &> /dev/null; then
+        SERVER_INFO=$(curl -fsSL "$SERVER_INFO_URL" 2>/dev/null || echo "")
+    elif command -v wget &> /dev/null; then
+        SERVER_INFO=$(wget -qO- "$SERVER_INFO_URL" 2>/dev/null || echo "")
+    fi
+
+if [[ -n "$SERVER_INFO" ]] && echo "$SERVER_INFO" | grep -q '"isDevelopment"[[:space:]]*:[[:space:]]*true'; then
+    IS_DEV="true"
+    NO_AUTO_UPDATE_FLAG=" --no-auto-update"
+    log_info 'Development server detected – auto-update disabled'
+fi
+
+if [[ -n "$NO_AUTO_UPDATE_FLAG" ]]; then
+    if ! "$AGENT_PATH" --help 2>&1 | grep -q -- '--no-auto-update'; then
+        log_warn 'Agent binary lacks --no-auto-update flag; keeping auto-update enabled'
+        NO_AUTO_UPDATE_FLAG=""
+    fi
+fi
 fi
 
 # Create systemd service
-echo "Creating systemd service..."
+log_header 'Configuring systemd service'
 SYSTEMD_ENV_TARGETS_LINE=""
 if [[ -n "$JOINED_TARGETS" ]]; then
 SYSTEMD_ENV_TARGETS_LINE="Environment=\"PULSE_TARGETS=$JOINED_TARGETS\""
@@ -767,8 +1073,8 @@ $SYSTEMD_ENV_URL_LINE
 $SYSTEMD_ENV_TOKEN_LINE
 $SYSTEMD_ENV_TARGETS_LINE
 $SYSTEMD_ENV_INSECURE_LINE
-ExecStart=$AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"
-Restart=always
+ExecStart=$AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"$NO_AUTO_UPDATE_FLAG
+Restart=on-failure
 RestartSec=5s
 User=root
 
@@ -776,21 +1082,16 @@ User=root
 WantedBy=multi-user.target
 EOF
 
-echo "✓ Systemd service created"
+log_success "Wrote unit file: $SERVICE_PATH"
 
 # Reload systemd and start service
-echo "Starting service..."
+log_info 'Starting service'
 systemctl daemon-reload
 systemctl enable pulse-docker-agent
 systemctl start pulse-docker-agent
 
-echo ""
-echo "==================================="
-echo "✓ Installation complete!"
-echo "==================================="
-echo ""
-echo "The Pulse Docker agent is now running."
-echo "Check status: systemctl status pulse-docker-agent"
-echo "View logs: journalctl -u pulse-docker-agent -f"
-echo ""
-echo "Your Docker host should appear in Pulse within 30 seconds."
+log_header 'Installation complete'
+log_info 'Agent service enabled and started'
+log_info 'Check status          : systemctl status pulse-docker-agent'
+log_info 'Follow logs           : journalctl -u pulse-docker-agent -f'
+log_info 'Host visible in Pulse : ~30 seconds'

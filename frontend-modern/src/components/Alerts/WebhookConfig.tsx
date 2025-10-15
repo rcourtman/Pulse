@@ -534,6 +534,21 @@ export function WebhookConfig(props: WebhookConfigProps) {
               placeholder={currentTemplate()?.urlPattern || 'https://example.com/webhook'}
               class={controlClass('px-2 py-1.5 font-mono')}
             />
+            <p class={formHelpText + ' mt-1'}>
+              Supports template variables like{' '}
+              <code class="font-mono text-[11px] text-gray-600 dark:text-gray-300">
+                {'{{.Message}}'}
+              </code>
+              . Use{' '}
+              <code class="font-mono text-[11px] text-gray-600 dark:text-gray-300">
+                {'{{urlpath ...}}'}
+              </code>{' '}
+              or{' '}
+              <code class="font-mono text-[11px] text-gray-600 dark:text-gray-300">
+                {'{{urlquery ...}}'}
+              </code>{' '}
+              to keep dynamic values URL-safe.
+            </p>
           </div>
 
           {/* Custom Payload Template - only show for generic service */}

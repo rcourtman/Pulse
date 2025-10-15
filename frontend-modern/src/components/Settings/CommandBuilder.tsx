@@ -11,6 +11,7 @@ interface CommandBuilderProps {
   onTokenGenerated?: (token: string, record: APITokenRecord) => void;
   requiresToken: boolean;
   hasExistingToken?: boolean;
+  canManageTokens?: boolean;
 }
 
 export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
@@ -28,7 +29,9 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
   const [tokenLabel, setTokenLabel] = createSignal('Docker agent token');
 
   const defaultTokenLabel = () => `Docker agent token ${new Date().toISOString().slice(0, 10)}`;
+  const canManageTokens = () => props.canManageTokens !== false;
   const openGenerateModal = () => {
+    if (!canManageTokens()) return;
     setTokenLabel(defaultTokenLabel());
     setShowGenerateModal(true);
   };
@@ -165,6 +168,7 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
 
   // Generate new token
   const generateNewToken = async () => {
+    if (!canManageTokens()) return;
     if (isGenerating()) return;
     setIsGenerating(true);
 
@@ -294,15 +298,22 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
                   </div>
                   <p class="text-xs text-yellow-700 dark:text-yellow-400">Generate a token to secure your Docker agents.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={openGenerateModal}
-                  disabled={isGenerating()}
-                  class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                >
-                  {isGenerating() ? 'Generating...' : 'Generate API Token'}
-                </button>
+                <Show when={canManageTokens()}>
+                  <button
+                    type="button"
+                    onClick={openGenerateModal}
+                    disabled={isGenerating()}
+                    class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                  >
+                    {isGenerating() ? 'Generating...' : 'Generate API Token'}
+                  </button>
+                </Show>
               </div>
+              <Show when={!canManageTokens()}>
+                <p class="mt-3 text-xs text-yellow-700 dark:text-yellow-400">
+                  Sign in with an administrator account to create tokens from the browser.
+                </p>
+              </Show>
             </div>
           }
         >
@@ -341,15 +352,17 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
                 >
                   Copy
                 </button>
-                <button
-                  type="button"
-                  onClick={openGenerateModal}
-                  disabled={isGenerating()}
-                  class="px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                  title="Generate another token for a new host or automation workflow"
-                >
-                  Generate Token
-                </button>
+                <Show when={canManageTokens()}>
+                  <button
+                    type="button"
+                    onClick={openGenerateModal}
+                    disabled={isGenerating()}
+                    class="px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                    title="Generate another token for a new host or automation workflow"
+                  >
+                    Generate Token
+                  </button>
+                </Show>
               </div>
             </div>
             <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
@@ -549,10 +562,41 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
                   <button
                     type="button"
                     onClick={() => {
-                      if (newlyGeneratedToken()) {
-                        navigator.clipboard.writeText(newlyGeneratedToken()!);
-                        window.showToast('success', 'Token copied!');
+                      const value = newlyGeneratedToken();
+                      if (!value) return;
+
+                      const fallbackCopy = () => {
+                        try {
+                          const textarea = document.createElement('textarea');
+                          textarea.value = value;
+                          textarea.setAttribute('readonly', '');
+                          textarea.style.position = 'fixed';
+                          textarea.style.left = '-9999px';
+                          document.body.appendChild(textarea);
+                          textarea.select();
+                          const copied = document.execCommand('copy');
+                          document.body.removeChild(textarea);
+                          return copied;
+                        } catch (err) {
+                          console.error('Fallback copy failed', err);
+                          return false;
+                        }
+                      };
+
+                      const copyPromise =
+                        typeof navigator !== 'undefined' && navigator.clipboard?.writeText
+                          ? navigator.clipboard.writeText(value).then(() => true).catch((err) => {
+                              console.warn('Clipboard API copy failed, falling back', err);
+                              return fallbackCopy();
+                            })
+                          : Promise.resolve(fallbackCopy());
+
+                      copyPromise.then((success) => {
+                        if (typeof window !== 'undefined' && window.showToast) {
+                          window.showToast(success ? 'success' : 'error', success ? 'Token copied!' : 'Failed to copy token');
+                        }
                       }
+                      );
                     }}
                     class="px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors whitespace-nowrap"
                   >

@@ -205,6 +205,8 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		h.DisplayName = h.Hostname
 	}
 
+	h.PendingUninstall = d.PendingUninstall
+
 	if d.TokenID != "" {
 		h.TokenID = d.TokenID
 		h.TokenName = d.TokenName
@@ -217,6 +219,10 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 
 	for i, ct := range d.Containers {
 		h.Containers[i] = ct.ToFrontend()
+	}
+
+	if d.Command != nil {
+		h.Command = toDockerHostCommandFrontend(*d.Command)
 	}
 
 	return h
@@ -278,6 +284,43 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 	}
 
 	return container
+}
+
+func toDockerHostCommandFrontend(cmd DockerHostCommandStatus) *DockerHostCommandFrontend {
+	result := &DockerHostCommandFrontend{
+		ID:        cmd.ID,
+		Type:      cmd.Type,
+		Status:    cmd.Status,
+		Message:   cmd.Message,
+		CreatedAt: cmd.CreatedAt.Unix() * 1000,
+		UpdatedAt: cmd.UpdatedAt.Unix() * 1000,
+	}
+
+	if cmd.DispatchedAt != nil {
+		ms := cmd.DispatchedAt.Unix() * 1000
+		result.DispatchedAt = &ms
+	}
+	if cmd.AcknowledgedAt != nil {
+		ms := cmd.AcknowledgedAt.Unix() * 1000
+		result.AcknowledgedAt = &ms
+	}
+	if cmd.CompletedAt != nil {
+		ms := cmd.CompletedAt.Unix() * 1000
+		result.CompletedAt = &ms
+	}
+	if cmd.FailedAt != nil {
+		ms := cmd.FailedAt.Unix() * 1000
+		result.FailedAt = &ms
+	}
+	if cmd.FailureReason != "" {
+		result.FailureReason = cmd.FailureReason
+	}
+	if cmd.ExpiresAt != nil {
+		ms := cmd.ExpiresAt.Unix() * 1000
+		result.ExpiresAt = &ms
+	}
+
+	return result
 }
 
 // ToFrontend converts Storage to StorageFrontend

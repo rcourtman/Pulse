@@ -94,27 +94,29 @@ type ContainerFrontend struct {
 
 // DockerHostFrontend represents a Docker host with frontend-friendly fields
 type DockerHostFrontend struct {
-	ID               string                    `json:"id"`
-	AgentID          string                    `json:"agentId"`
-	Hostname         string                    `json:"hostname"`
-	DisplayName      string                    `json:"displayName"`
-	MachineID        string                    `json:"machineId,omitempty"`
-	OS               string                    `json:"os,omitempty"`
-	KernelVersion    string                    `json:"kernelVersion,omitempty"`
-	Architecture     string                    `json:"architecture,omitempty"`
-	DockerVersion    string                    `json:"dockerVersion,omitempty"`
-	CPUs             int                       `json:"cpus"`
-	TotalMemoryBytes int64                     `json:"totalMemoryBytes"`
-	UptimeSeconds    int64                     `json:"uptimeSeconds"`
-	Status           string                    `json:"status"`
-	LastSeen         int64                     `json:"lastSeen"`
-	IntervalSeconds  int                       `json:"intervalSeconds"`
-	AgentVersion     string                    `json:"agentVersion,omitempty"`
-	Containers       []DockerContainerFrontend `json:"containers"`
-	TokenID          string                    `json:"tokenId,omitempty"`
-	TokenName        string                    `json:"tokenName,omitempty"`
-	TokenHint        string                    `json:"tokenHint,omitempty"`
-	TokenLastUsedAt  *int64                    `json:"tokenLastUsedAt,omitempty"`
+	ID               string                     `json:"id"`
+	AgentID          string                     `json:"agentId"`
+	Hostname         string                     `json:"hostname"`
+	DisplayName      string                     `json:"displayName"`
+	MachineID        string                     `json:"machineId,omitempty"`
+	OS               string                     `json:"os,omitempty"`
+	KernelVersion    string                     `json:"kernelVersion,omitempty"`
+	Architecture     string                     `json:"architecture,omitempty"`
+	DockerVersion    string                     `json:"dockerVersion,omitempty"`
+	CPUs             int                        `json:"cpus"`
+	TotalMemoryBytes int64                      `json:"totalMemoryBytes"`
+	UptimeSeconds    int64                      `json:"uptimeSeconds"`
+	Status           string                     `json:"status"`
+	LastSeen         int64                      `json:"lastSeen"`
+	IntervalSeconds  int                        `json:"intervalSeconds"`
+	AgentVersion     string                     `json:"agentVersion,omitempty"`
+	Containers       []DockerContainerFrontend  `json:"containers"`
+	TokenID          string                     `json:"tokenId,omitempty"`
+	TokenName        string                     `json:"tokenName,omitempty"`
+	TokenHint        string                     `json:"tokenHint,omitempty"`
+	TokenLastUsedAt  *int64                     `json:"tokenLastUsedAt,omitempty"`
+	PendingUninstall bool                       `json:"pendingUninstall"`
+	Command          *DockerHostCommandFrontend `json:"command,omitempty"`
 }
 
 // DockerContainerFrontend represents a Docker container for the frontend
@@ -153,6 +155,22 @@ type DockerContainerNetworkFrontend struct {
 	Name string `json:"name"`
 	IPv4 string `json:"ipv4,omitempty"`
 	IPv6 string `json:"ipv6,omitempty"`
+}
+
+// DockerHostCommandFrontend exposes docker host command state to the UI.
+type DockerHostCommandFrontend struct {
+	ID             string `json:"id"`
+	Type           string `json:"type"`
+	Status         string `json:"status"`
+	Message        string `json:"message,omitempty"`
+	CreatedAt      int64  `json:"createdAt"`
+	UpdatedAt      int64  `json:"updatedAt"`
+	DispatchedAt   *int64 `json:"dispatchedAt,omitempty"`
+	AcknowledgedAt *int64 `json:"acknowledgedAt,omitempty"`
+	CompletedAt    *int64 `json:"completedAt,omitempty"`
+	FailedAt       *int64 `json:"failedAt,omitempty"`
+	FailureReason  string `json:"failureReason,omitempty"`
+	ExpiresAt      *int64 `json:"expiresAt,omitempty"`
 }
 
 // StorageFrontend represents Storage with frontend-friendly field names

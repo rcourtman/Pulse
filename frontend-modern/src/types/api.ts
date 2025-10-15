@@ -133,6 +133,24 @@ export interface DockerHost {
   tokenName?: string;
   tokenHint?: string;
   tokenLastUsedAt?: number;
+  hidden?: boolean;
+  pendingUninstall?: boolean;
+  command?: DockerHostCommand;
+}
+
+export interface DockerHostCommand {
+  id: string;
+  type: string;
+  status: string;
+  message?: string;
+  createdAt: number;
+  updatedAt: number;
+  dispatchedAt?: number;
+  acknowledgedAt?: number;
+  completedAt?: number;
+  failedAt?: number;
+  failureReason?: string;
+  expiresAt?: number;
 }
 
 export interface DockerContainer {

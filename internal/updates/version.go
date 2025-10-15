@@ -119,6 +119,23 @@ func (v *Version) IsPrerelease() bool {
 
 // GetCurrentVersion gets the current running version
 func GetCurrentVersion() (*VersionInfo, error) {
+	buildInfo := func(raw string, build string, isDev bool) *VersionInfo {
+		normalized := normalizeVersionString(raw)
+		return &VersionInfo{
+			Version:        normalized,
+			Build:          build,
+			Runtime:        "go",
+			Channel:        detectChannelFromVersion(normalized),
+			IsDevelopment:  isDev,
+			IsDocker:       isDockerEnvironment(),
+			DeploymentType: GetDeploymentType(),
+		}
+	}
+
+	if gitVersion, err := getGitVersion(); err == nil && gitVersion != "" {
+		return buildInfo(gitVersion, "development", true), nil
+	}
+
 	// Try to read from VERSION file first (release builds)
 	versionPaths := []string{
 		"VERSION",
@@ -129,22 +146,8 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	for _, path := range versionPaths {
 		versionBytes, err := os.ReadFile(path)
 		if err == nil {
-			version := strings.TrimSpace(string(versionBytes))
-			if version != "" {
-				// Determine channel from version string
-				channel := "stable"
-				if strings.Contains(strings.ToLower(version), "rc") {
-					channel = "rc"
-				}
-				return &VersionInfo{
-					Version:        version,
-					Build:          "release",
-					Runtime:        "go",
-					Channel:        channel,
-					IsDevelopment:  false,
-					IsDocker:       isDockerEnvironment(),
-					DeploymentType: GetDeploymentType(),
-				}, nil
+			if raw := strings.TrimSpace(string(versionBytes)); raw != "" {
+				return buildInfo(raw, "release", false), nil
 			}
 		}
 	}
@@ -152,37 +155,99 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	// Fall back to git (development builds)
 	gitVersion, err := getGitVersion()
 	if err == nil && gitVersion != "" {
-		// Determine channel from git version
-		channel := "stable"
-		if strings.Contains(strings.ToLower(gitVersion), "rc") {
-			channel = "rc"
-		}
-		return &VersionInfo{
-			Version:        gitVersion,
-			Build:          "development",
-			Runtime:        "go",
-			Channel:        channel,
-			IsDevelopment:  true,
-			IsDocker:       isDockerEnvironment(),
-			DeploymentType: GetDeploymentType(),
-		}, nil
+		return buildInfo(gitVersion, "development", true), nil
 	}
 
 	// Final fallback
-	version := "4.24.0-rc.3"
-	channel := "stable"
-	if strings.Contains(strings.ToLower(version), "rc") {
-		channel = "rc"
+	return buildInfo("4.24.0-rc.3", "release", false), nil
+}
+
+// normalizeVersionString ensures any version string can be parsed as semantic version.
+// Release builds are returned unchanged, while git describe strings and branch names are
+// converted to a safe 0.0.0-based prerelease format.
+func normalizeVersionString(version string) string {
+	version = strings.TrimSpace(version)
+	version = strings.TrimPrefix(version, "v")
+
+	if version == "" {
+		return "0.0.0-dev"
 	}
-	return &VersionInfo{
-		Version:        version,
-		Build:          "release",
-		Runtime:        "go",
-		Channel:        channel,
-		IsDevelopment:  false,
-		IsDocker:       isDockerEnvironment(),
-		DeploymentType: GetDeploymentType(),
-	}, nil
+
+	if normalized, ok := normalizeGitDescribeVersion(version); ok {
+		return normalized
+	}
+
+	if _, err := ParseVersion(version); err == nil {
+		return version
+	}
+
+	return fmt.Sprintf("0.0.0-%s", sanitizePrereleaseIdentifier(version))
+}
+
+var gitDescribeRegex = regexp.MustCompile(`^(\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(\d+)-g([0-9a-fA-F]+)(-dirty)?$`)
+
+func normalizeGitDescribeVersion(version string) (string, bool) {
+	matches := gitDescribeRegex.FindStringSubmatch(version)
+	if matches == nil {
+		return "", false
+	}
+
+	base := matches[1]
+	if _, err := ParseVersion(base); err != nil {
+		return "", false
+	}
+
+	build := fmt.Sprintf("git.%s.g%s", matches[2], strings.ToLower(matches[3]))
+	if matches[4] != "" {
+		build += ".dirty"
+	}
+
+	return fmt.Sprintf("%s+%s", base, build), true
+}
+
+func sanitizePrereleaseIdentifier(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "dev"
+	}
+
+	var b strings.Builder
+	lastSep := false
+
+	for _, r := range raw {
+		switch {
+		case r >= '0' && r <= '9',
+			r >= 'A' && r <= 'Z',
+			r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+			lastSep = false
+		case r == '-' || r == '.':
+			if lastSep {
+				continue
+			}
+			b.WriteRune(r)
+			lastSep = true
+		default:
+			if !lastSep {
+				b.WriteRune('-')
+				lastSep = true
+			}
+		}
+	}
+
+	clean := strings.Trim(b.String(), "-.")
+	if clean == "" {
+		return "dev"
+	}
+	return strings.ToLower(clean)
+}
+
+func detectChannelFromVersion(version string) string {
+	versionLower := strings.ToLower(version)
+	if strings.Contains(versionLower, "rc") {
+		return "rc"
+	}
+	return "stable"
 }
 
 // getGitVersion gets version information from git

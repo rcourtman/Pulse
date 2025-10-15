@@ -278,6 +278,9 @@ type Monitor struct {
 	guestSnapshots       map[string]GuestMemorySnapshot
 	rrdCacheMu           sync.RWMutex // Protects RRD memavailable cache
 	nodeRRDMemCache      map[string]rrdMemCacheEntry
+	removedDockerHosts   map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
+	dockerCommands       map[string]*dockerHostCommand
+	dockerCommandIndex   map[string]string
 }
 
 type rrdMemCacheEntry struct {
@@ -396,6 +399,15 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		}
 	}
 
+	// Track removal to prevent resurrection from cached reports
+	m.mu.Lock()
+	m.removedDockerHosts[hostID] = time.Now()
+	if cmd, ok := m.dockerCommands[hostID]; ok {
+		delete(m.dockerCommandIndex, cmd.status.ID)
+	}
+	delete(m.dockerCommands, hostID)
+	m.mu.Unlock()
+
 	m.state.RemoveConnectionHealth(dockerConnectionPrefix + hostID)
 	if m.alertManager != nil {
 		m.alertManager.HandleDockerHostRemoved(host)
@@ -409,6 +421,135 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		Msg("Docker host removed and alerts cleared")
 
 	return host, nil
+}
+
+// HideDockerHost marks a docker host as hidden without removing it from state.
+// Hidden hosts will not be shown in the frontend but will continue to accept updates.
+func (m *Monitor) HideDockerHost(hostID string) (models.DockerHost, error) {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return models.DockerHost{}, fmt.Errorf("docker host id is required")
+	}
+
+	host, ok := m.state.SetDockerHostHidden(hostID, true)
+	if !ok {
+		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
+	}
+
+	log.Info().
+		Str("dockerHost", host.Hostname).
+		Str("dockerHostID", hostID).
+		Msg("Docker host hidden from view")
+
+	return host, nil
+}
+
+// UnhideDockerHost marks a docker host as visible again.
+func (m *Monitor) UnhideDockerHost(hostID string) (models.DockerHost, error) {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return models.DockerHost{}, fmt.Errorf("docker host id is required")
+	}
+
+	host, ok := m.state.SetDockerHostHidden(hostID, false)
+	if !ok {
+		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
+	}
+
+	// Clear removal tracking if it was marked as removed
+	m.mu.Lock()
+	delete(m.removedDockerHosts, hostID)
+	m.mu.Unlock()
+
+	log.Info().
+		Str("dockerHost", host.Hostname).
+		Str("dockerHostID", hostID).
+		Msg("Docker host unhidden")
+
+	return host, nil
+}
+
+// MarkDockerHostPendingUninstall marks a docker host as pending uninstall.
+// This is used when the user has run the uninstall command and is waiting for the host to go offline.
+func (m *Monitor) MarkDockerHostPendingUninstall(hostID string) (models.DockerHost, error) {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return models.DockerHost{}, fmt.Errorf("docker host id is required")
+	}
+
+	host, ok := m.state.SetDockerHostPendingUninstall(hostID, true)
+	if !ok {
+		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
+	}
+
+	log.Info().
+		Str("dockerHost", host.Hostname).
+		Str("dockerHostID", hostID).
+		Msg("Docker host marked as pending uninstall")
+
+	return host, nil
+}
+
+// AllowDockerHostReenroll removes a host ID from the removal blocklist so it can report again.
+func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return fmt.Errorf("docker host id is required")
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.removedDockerHosts[hostID]; !exists {
+		log.Debug().
+			Str("dockerHostID", hostID).
+			Msg("Allow re-enroll requested for docker host that was not blocked")
+		return nil
+	}
+
+	delete(m.removedDockerHosts, hostID)
+	if cmd, exists := m.dockerCommands[hostID]; exists {
+		delete(m.dockerCommandIndex, cmd.status.ID)
+		delete(m.dockerCommands, hostID)
+	}
+	m.state.SetDockerHostCommand(hostID, nil)
+
+	log.Info().
+		Str("dockerHostID", hostID).
+		Msg("Docker host removal block cleared; host may report again")
+
+	return nil
+}
+
+// GetDockerHost retrieves a docker host by identifier if present in state.
+func (m *Monitor) GetDockerHost(hostID string) (models.DockerHost, bool) {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return models.DockerHost{}, false
+	}
+
+	hosts := m.state.GetDockerHosts()
+	for _, host := range hosts {
+		if host.ID == hostID {
+			return host, true
+		}
+	}
+	return models.DockerHost{}, false
+}
+
+// QueueDockerHostStop queues a stop command for the specified docker host.
+func (m *Monitor) QueueDockerHostStop(hostID string) (models.DockerHostCommandStatus, error) {
+	return m.queueDockerStopCommand(hostID)
+}
+
+// FetchDockerCommandForHost retrieves the next command payload (if any) for the host.
+func (m *Monitor) FetchDockerCommandForHost(hostID string) (map[string]any, *models.DockerHostCommandStatus) {
+	return m.getDockerCommandPayload(hostID)
+}
+
+// AcknowledgeDockerHostCommand updates the lifecycle status for a docker host command.
+func (m *Monitor) AcknowledgeDockerHostCommand(commandID, hostID, status, message string) (models.DockerHostCommandStatus, string, bool, error) {
+	return m.acknowledgeDockerCommand(commandID, hostID, status, message)
 }
 
 func tokenHintFromRecord(record *config.APITokenRecord) string {
@@ -432,6 +573,19 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	identifier := strings.TrimSpace(report.AgentKey())
 	if identifier == "" {
 		return models.DockerHost{}, fmt.Errorf("docker report missing agent identifier")
+	}
+
+	// Check if this host was deliberately removed - reject report to prevent resurrection
+	m.mu.RLock()
+	removedAt, wasRemoved := m.removedDockerHosts[identifier]
+	m.mu.RUnlock()
+
+	if wasRemoved {
+		log.Info().
+			Str("dockerHostID", identifier).
+			Time("removedAt", removedAt).
+			Msg("Rejecting report from deliberately removed Docker host")
+		return models.DockerHost{}, fmt.Errorf("docker host %q was removed at %v and cannot report again", identifier, removedAt.Format(time.RFC3339))
 	}
 
 	hostname := strings.TrimSpace(report.Host.Hostname)
@@ -562,6 +716,25 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	m.state.UpsertDockerHost(host)
 	m.state.SetConnectionHealth(dockerConnectionPrefix+host.ID, true)
 
+	// Check if the host was previously hidden and is now visible again
+	if hasPrevious && previous.Hidden && !host.Hidden {
+		log.Info().
+			Str("dockerHost", host.Hostname).
+			Str("dockerHostID", host.ID).
+			Msg("Docker host auto-unhidden after receiving report")
+	}
+
+	// Check if the host was pending uninstall - if so, log a warning that uninstall failed and clear the flag
+	if hasPrevious && previous.PendingUninstall {
+		log.Warn().
+			Str("dockerHost", host.Hostname).
+			Str("dockerHostID", host.ID).
+			Msg("Docker host reporting again after pending uninstall - uninstall may have failed")
+
+		// Clear the pending uninstall flag since the host is clearly still active
+		m.state.SetDockerHostPendingUninstall(host.ID, false)
+	}
+
 	if m.alertManager != nil {
 		m.alertManager.CheckDockerHost(host)
 	}
@@ -572,6 +745,26 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Msg("Docker host report processed")
 
 	return host, nil
+}
+
+const (
+	removedDockerHostsTTL = 24 * time.Hour // Clean up removed hosts tracking after 24 hours
+)
+
+// cleanupRemovedDockerHosts removes entries from the removed hosts map that are older than 24 hours.
+func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for hostID, removedAt := range m.removedDockerHosts {
+		if now.Sub(removedAt) > removedDockerHostsTTL {
+			delete(m.removedDockerHosts, hostID)
+			log.Debug().
+				Str("dockerHostID", hostID).
+				Time("removedAt", removedAt).
+				Msg("Cleaned up old removed Docker host entry")
+		}
+	}
 }
 
 // evaluateDockerAgents updates health for Docker hosts based on last report time.
@@ -1001,6 +1194,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 		nodeSnapshots:        make(map[string]NodeMemorySnapshot),
 		guestSnapshots:       make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:      make(map[string]rrdMemCacheEntry),
+		removedDockerHosts: make(map[string]time.Time),
+		dockerCommands:     make(map[string]*dockerHostCommand),
+		dockerCommandIndex: make(map[string]string),
 	}
 
 	// Load saved configurations
@@ -1347,7 +1543,9 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	for {
 		select {
 		case <-pollTicker.C:
-			m.evaluateDockerAgents(time.Now())
+			now := time.Now()
+			m.evaluateDockerAgents(now)
+			m.cleanupRemovedDockerHosts(now)
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()

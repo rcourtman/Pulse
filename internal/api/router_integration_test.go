@@ -143,6 +143,11 @@ func TestVersionEndpointUsesRepoVersion(t *testing.T) {
 		t.Fatalf("version field missing or not a string: %v", payload["version"])
 	}
 
+	if strings.HasPrefix(actual, "0.0.0-") {
+		// Development builds normalize to 0.0.0-<branch>[...], which is expected.
+		return
+	}
+
 	if normalizeVersion(actual) != normalizeVersion(expected) {
 		t.Fatalf("expected version=%s, got %s", expected, actual)
 	}

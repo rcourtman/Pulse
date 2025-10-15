@@ -623,11 +623,85 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	var jsonData []byte
 	var err error
 
+	if len(alertList) == 0 {
+		log.Warn().
+			Str("webhook", webhook.Name).
+			Msg("Attempted to send grouped webhook with no alerts")
+		return
+	}
+
+	primaryAlert := alertList[0]
+	customFields := convertWebhookCustomFields(webhook.CustomFields)
+
+	var templateData WebhookPayloadData
+	var dataPrepared bool
+	var urlRendered bool
+	var serviceDataApplied bool
+
+	prepareData := func() *WebhookPayloadData {
+		if !dataPrepared {
+			prepared := n.prepareWebhookData(primaryAlert, customFields)
+			prepared.AlertCount = len(alertList)
+			prepared.Alerts = alertList
+			templateData = prepared
+			dataPrepared = true
+		}
+		return &templateData
+	}
+
+	ensureURLAndServiceData := func() (*WebhookPayloadData, bool) {
+		dataPtr := prepareData()
+
+		if !urlRendered {
+			rendered, renderErr := renderWebhookURL(webhook.URL, *dataPtr)
+			if renderErr != nil {
+				log.Error().
+					Err(renderErr).
+					Str("webhook", webhook.Name).
+					Msg("Failed to render webhook URL template for grouped notification")
+				return nil, false
+			}
+			webhook.URL = rendered
+			urlRendered = true
+		}
+
+		if !serviceDataApplied {
+			switch webhook.Service {
+			case "telegram":
+				chatID, chatErr := extractTelegramChatID(webhook.URL)
+				if chatErr != nil {
+					log.Error().
+						Err(chatErr).
+						Str("webhook", webhook.Name).
+						Msg("Failed to extract Telegram chat_id for grouped notification")
+					return nil, false
+				}
+				if chatID != "" {
+					dataPtr.ChatID = chatID
+					log.Debug().
+						Str("webhook", webhook.Name).
+						Str("chatID", chatID).
+						Msg("Extracted Telegram chat_id from rendered URL for grouped notification")
+				}
+			case "pagerduty":
+				if dataPtr.CustomFields == nil {
+					dataPtr.CustomFields = make(map[string]interface{})
+				}
+				if routingKey, ok := webhook.Headers["routing_key"]; ok {
+					dataPtr.CustomFields["routing_key"] = routingKey
+				}
+			}
+			serviceDataApplied = true
+		}
+
+		return dataPtr, true
+	}
+
 	// Check if webhook has a custom template first
 	// Only use custom template if it's not empty
 	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" && len(alertList) > 0 {
 		// Use custom template with enhanced message for grouped alerts
-		alert := alertList[0]
+		alert := primaryAlert
 		if len(alertList) > 1 {
 			// Build a full list of all alerts
 			summary := alert.Message
@@ -642,7 +716,6 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			}
 		}
 
-		customFields := convertWebhookCustomFields(webhook.CustomFields)
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig:   webhook,
 			Service:         webhook.Service,
@@ -650,17 +723,11 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			CustomFields:    customFields,
 		}
 
-		data := n.prepareWebhookData(alert, customFields)
-		data.AlertCount = len(alertList)
-		data.Alerts = alertList
-
-		// For Telegram webhooks (check URL pattern since service might be empty)
-		if strings.Contains(webhook.URL, "api.telegram.org") {
-			// Don't need to extract chat_id from URL since it's in the template
-			// The template already has the chat_id embedded
+		if dataPtr, ok := ensureURLAndServiceData(); ok {
+			jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, *dataPtr, webhook.Service)
+		} else {
+			return
 		}
-
-		jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 		if err != nil {
 			log.Error().
 				Err(err).
@@ -673,10 +740,8 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		// For service-specific webhooks, use the first alert with a note about others
 		// For simplicity, send the first alert with a note about others
 		// Most webhook services work better with single structured payloads
-		alert := alertList[0]
+		alert := primaryAlert
 
-		// Convert to enhanced webhook to use template
-		customFields := convertWebhookCustomFields(webhook.CustomFields)
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,
 			Service:       webhook.Service,
@@ -715,32 +780,11 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				}
 			}
 
-			// Prepare data and generate payload
-			data := n.prepareWebhookData(alert, customFields)
-			data.AlertCount = len(alertList)
-			data.Alerts = alertList
-
-			// Handle service-specific requirements
-			if webhook.Service == "telegram" {
-				if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
-					data.ChatID = chatID
-				} else if err != nil {
-					log.Error().
-						Err(err).
-						Str("webhook", webhook.Name).
-						Msg("Failed to extract Telegram chat_id for grouped notification")
-					return // Skip this webhook
-				}
-			} else if webhook.Service == "pagerduty" {
-				if data.CustomFields == nil {
-					data.CustomFields = make(map[string]interface{})
-				}
-				if routingKey, ok := webhook.Headers["routing_key"]; ok {
-					data.CustomFields["routing_key"] = routingKey
-				}
+			if dataPtr, ok := ensureURLAndServiceData(); ok {
+				jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, *dataPtr, webhook.Service)
+			} else {
+				return
 			}
-
-			jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -758,6 +802,10 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	// Use generic payload if no service or template not found
 	// But ONLY if jsonData hasn't been set yet (from custom template)
 	if jsonData == nil && (webhook.Service == "" || webhook.Service == "generic") {
+		if _, ok := ensureURLAndServiceData(); !ok {
+			return
+		}
+
 		// Use generic payload for other services
 		payload := map[string]interface{}{
 			"alerts":    alertList,
@@ -776,6 +824,10 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				Msg("Failed to marshal grouped webhook payload")
 			return
 		}
+	}
+
+	if _, ok := ensureURLAndServiceData(); !ok {
+		return
 	}
 
 	// Send using same request logic
@@ -964,32 +1016,55 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	var jsonData []byte
 	var err error
 
+	customFields := convertWebhookCustomFields(webhook.CustomFields)
+	data := n.prepareWebhookData(alert, customFields)
+
+	// Render URL template if placeholders are present
+	renderedURL, renderErr := renderWebhookURL(webhook.URL, data)
+	if renderErr != nil {
+		log.Error().
+			Err(renderErr).
+			Str("webhook", webhook.Name).
+			Msg("Failed to render webhook URL template")
+		return
+	}
+	webhook.URL = renderedURL
+
+	// Service-specific data enrichment
+	if webhook.Service == "telegram" {
+		chatID, chatErr := extractTelegramChatID(renderedURL)
+		if chatErr != nil {
+			log.Error().
+				Err(chatErr).
+				Str("webhook", webhook.Name).
+				Msg("Failed to extract Telegram chat_id - skipping webhook")
+			return
+		}
+		if chatID != "" {
+			data.ChatID = chatID
+			log.Debug().
+				Str("webhook", webhook.Name).
+				Str("chatID", chatID).
+				Msg("Extracted Telegram chat_id from rendered URL")
+		}
+	} else if webhook.Service == "pagerduty" {
+		if data.CustomFields == nil {
+			data.CustomFields = make(map[string]interface{})
+		}
+		if routingKey, ok := webhook.Headers["routing_key"]; ok {
+			data.CustomFields["routing_key"] = routingKey
+		}
+	}
+
 	// Check if webhook has a custom template first
 	// Only use custom template if it's not empty
 	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" {
 		// Use custom template provided by user
-		customFields := convertWebhookCustomFields(webhook.CustomFields)
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig:   webhook,
 			Service:         webhook.Service,
 			PayloadTemplate: webhook.Template,
 			CustomFields:    customFields,
-		}
-
-		// Prepare data and generate payload
-		data := n.prepareWebhookData(alert, customFields)
-
-		// For Telegram, still extract chat_id from URL if present
-		if webhook.Service == "telegram" {
-			if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
-				data.ChatID = chatID
-			} else if err != nil {
-				log.Error().
-					Err(err).
-					Str("webhook", webhook.Name).
-					Msg("Failed to extract Telegram chat_id - skipping webhook")
-				return // Skip this webhook
-			}
 		}
 
 		jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
@@ -1004,7 +1079,6 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	} else if webhook.Service != "" && webhook.Service != "generic" {
 		// Check if this webhook has a service type and use the proper template
 		// Convert to enhanced webhook to use template
-		customFields := convertWebhookCustomFields(webhook.CustomFields)
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,
 			Service:       webhook.Service,
@@ -1024,40 +1098,6 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 
 		// Only use template if found, otherwise fall back to generic
 		if templateFound {
-			// Prepare data and generate payload
-			data := n.prepareWebhookData(alert, customFields)
-
-			// For Telegram, extract chat_id from URL if present
-			if webhook.Service == "telegram" {
-				chatID, err := extractTelegramChatID(webhook.URL)
-				if err != nil {
-					log.Error().
-						Err(err).
-						Str("webhook", webhook.Name).
-						Str("url", webhook.URL).
-						Msg("Failed to extract Telegram chat_id - webhook will fail")
-					return // Skip this webhook rather than sending invalid payload
-				}
-				if chatID != "" {
-					data.ChatID = chatID
-					log.Debug().
-						Str("webhook", webhook.Name).
-						Str("chatID", chatID).
-						Msg("Extracted Telegram chat_id from URL")
-				}
-			}
-
-			// For PagerDuty, add routing key if present in URL or headers
-			if webhook.Service == "pagerduty" {
-				if data.CustomFields == nil {
-					data.CustomFields = make(map[string]interface{})
-				}
-				// Check if routing key is in headers
-				if routingKey, ok := webhook.Headers["routing_key"]; ok {
-					data.CustomFields["routing_key"] = routingKey
-				}
-			}
-
 			jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 			if err != nil {
 				log.Error().
@@ -1172,6 +1212,26 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 	}
 }
 
+func templateFuncMap() template.FuncMap {
+	return template.FuncMap{
+		"title": func(s string) string {
+			if s == "" {
+				return s
+			}
+			return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+		},
+		"upper":     strings.ToUpper,
+		"lower":     strings.ToLower,
+		"printf":    fmt.Sprintf,
+		"urlquery":  template.URLQueryEscaper,
+		"urlencode": template.URLQueryEscaper,
+		"urlpath":   url.PathEscape,
+		"pathescape": func(s string) string {
+			return url.PathEscape(s)
+		},
+	}
+}
+
 // generatePayloadFromTemplate renders the payload using Go templates
 func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, data WebhookPayloadData) ([]byte, error) {
 	return n.generatePayloadFromTemplateWithService(templateStr, data, "")
@@ -1179,21 +1239,7 @@ func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, da
 
 // generatePayloadFromTemplateWithService renders the payload using Go templates with service-specific handling
 func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr string, data WebhookPayloadData, service string) ([]byte, error) {
-	// Create template with helper functions
-	funcMap := template.FuncMap{
-		"title": func(s string) string {
-			// Replace deprecated strings.Title with proper title casing
-			if s == "" {
-				return s
-			}
-			return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
-		},
-		"upper":  strings.ToUpper,
-		"lower":  strings.ToLower,
-		"printf": fmt.Sprintf,
-	}
-
-	tmpl, err := template.New("webhook").Funcs(funcMap).Parse(templateStr)
+	tmpl, err := template.New("webhook").Funcs(templateFuncMap()).Parse(templateStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid template: %w", err)
 	}
@@ -1220,6 +1266,44 @@ func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr
 	}
 
 	return buf.Bytes(), nil
+}
+
+// renderWebhookURL applies template rendering to webhook URLs and ensures the result is a valid URL
+func renderWebhookURL(urlTemplate string, data WebhookPayloadData) (string, error) {
+	trimmed := strings.TrimSpace(urlTemplate)
+	if trimmed == "" {
+		return "", fmt.Errorf("webhook URL cannot be empty")
+	}
+
+	if !strings.Contains(trimmed, "{{") {
+		return trimmed, nil
+	}
+
+	tmpl, err := template.New("webhook_url").Funcs(templateFuncMap()).Parse(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("invalid webhook URL template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("webhook URL template execution failed: %w", err)
+	}
+
+	rendered := strings.TrimSpace(buf.String())
+	if rendered == "" {
+		return "", fmt.Errorf("webhook URL template produced empty URL")
+	}
+
+	parsed, err := url.Parse(rendered)
+	if err != nil {
+		return "", fmt.Errorf("webhook URL template produced invalid URL: %w", err)
+	}
+
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("webhook URL template produced invalid URL: missing scheme or host")
+	}
+
+	return parsed.String(), nil
 }
 
 // formatWebhookDuration formats a duration in a human-readable way

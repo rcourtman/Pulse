@@ -63,6 +63,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	var payload createTokenRequest
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil && err != io.EOF {
+		log.Warn().Err(err).Msg("Failed to decode API token create request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -81,7 +82,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	record, err := config.NewAPITokenRecord(rawToken, name)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to construct API token record")
+		log.Error().Err(err).Str("token_name", name).Msg("Failed to construct API token record")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
@@ -92,7 +93,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	if r.persistence != nil {
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-			log.Warn().Err(err).Msg("Failed to persist API tokens after creation")
+			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
 		}
 	}
 
