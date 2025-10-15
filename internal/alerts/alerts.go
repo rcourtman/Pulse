@@ -3540,6 +3540,15 @@ func (m *Manager) GetAlertHistory(limit int) []Alert {
 	return m.historyManager.GetAllHistory(limit)
 }
 
+// GetAlertHistorySince returns alert history entries created after the provided time.
+func (m *Manager) GetAlertHistorySince(since time.Time, limit int) []Alert {
+	if since.IsZero() {
+		return m.GetAlertHistory(limit)
+	}
+
+	return m.historyManager.GetHistory(since, limit)
+}
+
 // ClearAlertHistory clears all alert history
 func (m *Manager) ClearAlertHistory() error {
 	return m.historyManager.ClearAllHistory()
