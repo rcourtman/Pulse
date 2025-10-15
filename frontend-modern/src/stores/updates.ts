@@ -99,9 +99,10 @@ const checkForUpdates = async (force = false): Promise<void> => {
       saveState(state);
     }
 
-    // Don't check for updates in Docker
-    if (version.isDocker) {
+    // Don't check for updates in Docker or development builds
+    if (version.isDocker || version.isDevelopment) {
       setUpdateAvailable(false);
+      setUpdateInfo(null);
       return;
     }
 
