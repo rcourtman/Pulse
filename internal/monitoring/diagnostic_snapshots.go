@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // NodeMemoryRaw captures the raw memory fields returned by Proxmox for a node.
@@ -88,6 +90,70 @@ func makeGuestSnapshotKey(instance, guestType, node string, vmid int) string {
 	return fmt.Sprintf("%s|%s|%s|%d", instance, guestType, node, vmid)
 }
 
+func (m *Monitor) logNodeMemorySource(instance, node string, snapshot NodeMemorySnapshot) {
+	if m == nil {
+		return
+	}
+
+	key := makeNodeSnapshotKey(instance, node)
+
+	source := snapshot.MemorySource
+	var prevSource string
+	m.diagMu.RLock()
+	if existing, ok := m.nodeSnapshots[key]; ok {
+		prevSource = existing.MemorySource
+	}
+	m.diagMu.RUnlock()
+
+	if prevSource == snapshot.MemorySource {
+		return
+	}
+
+	var evt *zerolog.Event
+	switch source {
+	case "", "nodes-endpoint", "node-status-used", "previous-snapshot":
+		evt = log.Warn()
+	default:
+		evt = log.Debug()
+	}
+
+	evt = evt.
+		Str("instance", instance).
+		Str("node", node).
+		Str("memorySource", source).
+		Str("proxmoxSource", snapshot.Raw.ProxmoxMemorySource)
+
+	if snapshot.FallbackReason != "" {
+		evt = evt.Str("fallbackReason", snapshot.FallbackReason)
+	}
+	if snapshot.Raw.Available > 0 {
+		evt = evt.Uint64("rawAvailable", snapshot.Raw.Available)
+	}
+	if snapshot.Raw.Buffers > 0 {
+		evt = evt.Uint64("rawBuffers", snapshot.Raw.Buffers)
+	}
+	if snapshot.Raw.Cached > 0 {
+		evt = evt.Uint64("rawCached", snapshot.Raw.Cached)
+	}
+	if snapshot.Raw.TotalMinusUsed > 0 {
+		evt = evt.Uint64("rawTotalMinusUsed", snapshot.Raw.TotalMinusUsed)
+	}
+	if snapshot.Memory.Total > 0 {
+		evt = evt.Int64("total", snapshot.Memory.Total)
+	}
+	if snapshot.Memory.Used > 0 {
+		evt = evt.Int64("used", snapshot.Memory.Used)
+	}
+	if snapshot.Memory.Free > 0 {
+		evt = evt.Int64("free", snapshot.Memory.Free)
+	}
+	if snapshot.Memory.Usage > 0 {
+		evt = evt.Float64("usage", snapshot.Memory.Usage)
+	}
+
+	evt.Msg("Node memory source updated")
+}
+
 func (m *Monitor) recordNodeSnapshot(instance, node string, snapshot NodeMemorySnapshot) {
 	if m == nil {
 		return
@@ -98,6 +164,8 @@ func (m *Monitor) recordNodeSnapshot(instance, node string, snapshot NodeMemoryS
 	if snapshot.RetrievedAt.IsZero() {
 		snapshot.RetrievedAt = time.Now()
 	}
+
+	m.logNodeMemorySource(instance, node, snapshot)
 
 	m.diagMu.Lock()
 	defer m.diagMu.Unlock()
