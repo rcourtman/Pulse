@@ -159,7 +159,7 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	}
 
 	// Final fallback
-	return buildInfo("4.24.0-rc.3", "release", false), nil
+	return buildInfo("4.24.0", "release", false), nil
 }
 
 // normalizeVersionString ensures any version string can be parsed as semantic version.
