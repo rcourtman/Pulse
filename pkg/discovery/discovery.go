@@ -206,21 +206,85 @@ func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, ipChan <-c
 
 // checkPort8006 checks if port 8006 is running PMG or PVE
 func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServer {
-	// First check if port is open
 	address := net.JoinHostPort(ip, "8006")
-	conn, err := net.DialTimeout("tcp", address, s.timeout)
-	if err != nil {
-		return nil // Port not open
-	}
-	conn.Close()
 
-	// Port is open - now detect if it's PMG or PVE
-	// PMG has statistics/mail endpoint that PVE doesn't have
-	// Even if auth is required, PMG will return 401, PVE will return 404
-	isPMG := s.isPMGServer(ctx, address)
+	// First attempt a TLS handshake so we can inspect certificate metadata.
+	var tlsState *tls.ConnectionState
+	dialer := &net.Dialer{Timeout: s.timeout}
+	tlsConn, tlsErr := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{InsecureSkipVerify: true})
+	if tlsErr != nil {
+		// Fallback to a simple TCP dial to confirm the port is open.
+		conn, err := net.DialTimeout("tcp", address, s.timeout)
+		if err != nil {
+			return nil // Port not open
+		}
+		conn.Close()
+	} else {
+		state := tlsConn.ConnectionState()
+		tlsState = &state
+		tlsConn.Close()
+	}
 
 	serverType := "pve"
-	if isPMG {
+	if tlsState != nil {
+		if guess := inferTypeFromCertificate(*tlsState); guess != "" {
+			serverType = guess
+		}
+	}
+
+	version := "Unknown"
+	var release string
+
+	// Try to get version without auth (some installations allow it)
+	versionURL := fmt.Sprintf("https://%s/api2/json/version", address)
+	if req, err := http.NewRequestWithContext(ctx, "GET", versionURL, nil); err == nil {
+		if resp, err := s.httpClient.Do(req); err == nil {
+			defer resp.Body.Close()
+
+			switch resp.StatusCode {
+			case http.StatusOK:
+				var versionResp struct {
+					Data struct {
+						Version string `json:"version"`
+						Release string `json:"release,omitempty"`
+					} `json:"data"`
+				}
+
+				if err := json.NewDecoder(resp.Body).Decode(&versionResp); err == nil && versionResp.Data.Version != "" {
+					version = versionResp.Data.Version
+					release = versionResp.Data.Release
+
+					if guess := inferTypeFromMetadata(
+						versionResp.Data.Version,
+						versionResp.Data.Release,
+						resp.Header.Get("Server"),
+						resp.Header.Get("Proxmox-Product"),
+						resp.Header.Get("WWW-Authenticate"),
+						strings.Join(resp.Header.Values("Set-Cookie"), " "),
+					); guess != "" {
+						serverType = guess
+					}
+
+					log.Info().
+						Str("ip", ip).
+						Int("port", 8006).
+						Str("version", version).
+						Msg("Got server version without auth")
+				}
+			case http.StatusUnauthorized, http.StatusForbidden:
+				if guess := inferTypeFromMetadata(
+					resp.Header.Get("WWW-Authenticate"),
+					resp.Header.Get("Server"),
+					resp.Header.Get("Proxmox-Product"),
+				); guess != "" {
+					serverType = guess
+				}
+			}
+		}
+	}
+
+	// Fallback: probe PMG-specific endpoints if we still think this is a PVE server.
+	if serverType != "pmg" && s.isPMGServer(ctx, address) {
 		serverType = "pmg"
 	}
 
@@ -234,39 +298,8 @@ func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServe
 		IP:      ip,
 		Port:    8006,
 		Type:    serverType,
-		Version: "Unknown", // Will be determined after auth
-	}
-
-	// Try to get version without auth (some installations allow it)
-	url := fmt.Sprintf("https://%s/api2/json/version", address)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err == nil {
-		resp, err := s.httpClient.Do(req)
-		if err == nil {
-			defer resp.Body.Close()
-
-			// Only try to parse if we got a successful response
-			if resp.StatusCode == 200 {
-				var versionResp struct {
-					Data struct {
-						Version string `json:"version"`
-						Release string `json:"release,omitempty"`
-					} `json:"data"`
-				}
-
-				if err := json.NewDecoder(resp.Body).Decode(&versionResp); err == nil && versionResp.Data.Version != "" {
-					server.Version = versionResp.Data.Version
-					server.Release = versionResp.Data.Release
-
-					log.Info().
-						Str("ip", ip).
-						Int("port", 8006).
-						Str("version", server.Version).
-						Msg("Got server version without auth")
-				}
-			}
-		}
+		Version: version,
+		Release: release,
 	}
 
 	// Try to resolve hostname via reverse DNS
@@ -283,34 +316,116 @@ func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServe
 
 // isPMGServer checks if a server is PMG by checking for PMG-specific endpoints
 func (s *Scanner) isPMGServer(ctx context.Context, address string) bool {
-	// Try PMG-specific endpoint: /api2/json/statistics/mail
-	// PMG will return 401 (unauthorized) or 200
-	// PVE will return 404 (not found)
-	url := fmt.Sprintf("https://%s/api2/json/statistics/mail", address)
+	endpoints := []string{
+		"api2/json/statistics/mail",
+		"api2/json/mail/queue",
+		"api2/json/mail/quarantine",
+	}
+
+	for _, endpoint := range endpoints {
+		product := s.detectProductFromEndpoint(ctx, address, endpoint)
+		if product == "pmg" {
+			log.Debug().
+				Str("address", address).
+				Str("endpoint", endpoint).
+				Msg("PMG-specific endpoint confirmed")
+			return true
+		}
+	}
+
+	return false
+}
+
+// detectProductFromEndpoint inspects an HTTP endpoint and tries to infer the product type.
+func (s *Scanner) detectProductFromEndpoint(ctx context.Context, address, endpoint string) string {
+	url := fmt.Sprintf("https://%s/%s", address, endpoint)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return false
+		return ""
 	}
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return false
+		return ""
 	}
 	defer resp.Body.Close()
 
-	// If we get anything other than 404, it's likely PMG
-	// PMG will return 401 (needs auth) or 200 (if auth not required)
-	// PVE will return 404 (endpoint doesn't exist)
-	if resp.StatusCode != 404 {
-		log.Debug().
-			Str("address", address).
-			Int("status", resp.StatusCode).
-			Msg("PMG-specific endpoint found - identified as PMG")
-		return true
+	headerProduct := inferTypeFromMetadata(
+		resp.Header.Get("Server"),
+		resp.Header.Get("Proxmox-Product"),
+		resp.Header.Get("WWW-Authenticate"),
+		strings.Join(resp.Header.Values("Set-Cookie"), " "),
+	)
+	if headerProduct != "" {
+		return headerProduct
 	}
 
-	return false
+	// If the endpoint responded (not 404) and the path is PMG-specific, treat it as PMG.
+	if resp.StatusCode != http.StatusNotFound && strings.Contains(endpoint, "mail") {
+		return "pmg"
+	}
+
+	return ""
+}
+
+// inferTypeFromCertificate tries to determine the product based on TLS certificate metadata.
+func inferTypeFromCertificate(state tls.ConnectionState) string {
+	if len(state.PeerCertificates) == 0 {
+		return ""
+	}
+
+	cert := state.PeerCertificates[0]
+	parts := []string{cert.Subject.CommonName}
+	parts = append(parts, cert.Subject.Organization...)
+	parts = append(parts, cert.Subject.OrganizationalUnit...)
+
+	return inferTypeFromMetadata(parts...)
+}
+
+// inferTypeFromMetadata inspects textual metadata and returns a best-effort product type.
+func inferTypeFromMetadata(parts ...string) string {
+	var builder strings.Builder
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if builder.Len() > 0 {
+			builder.WriteByte(' ')
+		}
+		builder.WriteString(strings.ToLower(part))
+	}
+
+	combined := builder.String()
+	if combined == "" {
+		return ""
+	}
+
+	compact := strings.ReplaceAll(combined, " ", "")
+
+	switch {
+	case strings.Contains(combined, "pmg"),
+		strings.Contains(combined, "mail gateway"),
+		strings.Contains(combined, "pmgauth"),
+		strings.Contains(combined, "pmgauthcookie"),
+		strings.Contains(compact, "mailgateway"),
+		strings.Contains(compact, "pmg-api"):
+		return "pmg"
+	case strings.Contains(combined, "pbs"),
+		strings.Contains(combined, "backup server"),
+		strings.Contains(combined, "pbsauth"),
+		strings.Contains(compact, "pbs-api"):
+		return "pbs"
+	case strings.Contains(combined, "pve"),
+		strings.Contains(combined, "virtual environment"),
+		strings.Contains(combined, "pveauth"),
+		strings.Contains(compact, "pve-api"):
+		return "pve"
+	default:
+		return ""
+	}
 }
 
 // checkServer checks if a server is running at the given IP and port

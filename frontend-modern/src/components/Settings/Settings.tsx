@@ -457,24 +457,45 @@ const Settings: Component<SettingsProps> = (props) => {
       }
     });
 
+    const recognizedTypes = ['pve', 'pbs', 'pmg'] as const;
+    type RecognizedType = (typeof recognizedTypes)[number];
+    const isRecognizedType = (value: string): value is RecognizedType =>
+      (recognizedTypes as readonly string[]).includes(value);
+
     const normalized = servers
       .map((server): DiscoveredServer | null => {
         const ip = (server.ip || '').trim();
-        const type = (server.type || '').toLowerCase();
-        const port = typeof server.port === 'number' ? server.port : type === 'pbs' ? 8007 : 8006;
-
-        if (!ip || (type !== 'pve' && type !== 'pbs')) {
-          return null;
-        }
-
+        let type = (server.type || '').toLowerCase();
         const hostname = (server.hostname || server.name || '').trim();
         const version = (server.version || '').trim();
         const release = (server.release || '').trim();
 
+        if (!isRecognizedType(type)) {
+          const metadata = `${hostname} ${version} ${release}`.toLowerCase();
+          if (metadata.includes('pmg') || metadata.includes('mail gateway')) {
+            type = 'pmg';
+          } else if (metadata.includes('pbs') || metadata.includes('backup server')) {
+            type = 'pbs';
+          } else if (metadata.includes('pve') || metadata.includes('virtual environment')) {
+            type = 'pve';
+          }
+        }
+
+        if (!ip || !isRecognizedType(type)) {
+          return null;
+        }
+
+        const port =
+          typeof server.port === 'number'
+            ? server.port
+            : type === 'pbs'
+            ? 8007
+            : 8006;
+
         return {
           ip,
           port,
-          type: type as 'pve' | 'pbs',
+          type,
           version: version || 'Unknown',
           hostname: hostname || undefined,
           release: release || undefined,
