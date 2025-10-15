@@ -152,3 +152,42 @@ func TestConvertWebhookCustomFields(t *testing.T) {
 		t.Fatalf("expected converted map to be independent of original mutations")
 	}
 }
+
+func TestRenderWebhookURL_PathEncoding(t *testing.T) {
+	data := WebhookPayloadData{
+		Message: "CPU spike detected",
+	}
+
+	result, err := renderWebhookURL("https://example.com/alerts/{{.Message}}", data)
+	if err != nil {
+		t.Fatalf("expected no error rendering URL template, got %v", err)
+	}
+
+	expected := "https://example.com/alerts/CPU%20spike%20detected"
+	if result != expected {
+		t.Fatalf("expected %s, got %s", expected, result)
+	}
+}
+
+func TestRenderWebhookURL_QueryEncoding(t *testing.T) {
+	data := WebhookPayloadData{
+		Message: "CPU & Memory > 90%",
+	}
+
+	result, err := renderWebhookURL("https://hooks.example.com?msg={{urlquery .Message}}", data)
+	if err != nil {
+		t.Fatalf("expected no error rendering URL template, got %v", err)
+	}
+
+	expected := "https://hooks.example.com?msg=CPU+%26+Memory+%3E+90%25"
+	if result != expected {
+		t.Fatalf("expected %s, got %s", expected, result)
+	}
+}
+
+func TestRenderWebhookURL_InvalidTemplate(t *testing.T) {
+	_, err := renderWebhookURL("https://example.com/{{.Missing", WebhookPayloadData{})
+	if err == nil {
+		t.Fatalf("expected error for invalid URL template, got nil")
+	}
+}

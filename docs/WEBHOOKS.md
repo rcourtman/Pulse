@@ -141,6 +141,18 @@ For generic webhooks, you can define custom JSON payloads using Go template synt
 | `{{.Level \| upper}}` | Uppercase | "WARNING" |
 | `{{.Level \| lower}}` | Lowercase | "warning" |
 | `{{printf "%.1f" .Value}}` | Format numbers | "95.5" |
+| `{{urlpath .ResourceName}}` | URL-encode a value for path segments | "web%20server" |
+| `{{urlquery .Message}}` | URL-encode a value for query parameters | "CPU+usage+%3E+90%25" |
+
+## Dynamic URL Templates
+
+Webhook URLs can also reference the same template variables that are available to payloads. Pulse renders the URL before sending the request and safely encodes path segments by default. When placing values inside query parameters, wrap them with the provided helpers to ensure correct encoding:
+
+```text
+https://example.com/hooks/{{urlpath .ResourceName}}?msg={{urlquery .Message}}
+```
+
+Supported variables are identical to the payload template list (`{{.Message}}`, `{{.Node}}`, custom fields, etc.). This makes it easy to call services that expect alert metadata in the URL itself.
 
 ### Example Templates
 

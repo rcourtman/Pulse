@@ -56,6 +56,7 @@ func loadConfig() dockeragent.Config {
 	envHostname := strings.TrimSpace(os.Getenv("PULSE_HOSTNAME"))
 	envAgentID := strings.TrimSpace(os.Getenv("PULSE_AGENT_ID"))
 	envInsecure := strings.TrimSpace(os.Getenv("PULSE_INSECURE_SKIP_VERIFY"))
+	envNoAutoUpdate := strings.TrimSpace(os.Getenv("PULSE_NO_AUTO_UPDATE"))
 	envTargets := strings.TrimSpace(os.Getenv("PULSE_TARGETS"))
 
 	defaultInterval := 30 * time.Second
@@ -71,6 +72,7 @@ func loadConfig() dockeragent.Config {
 	hostnameFlag := flag.String("hostname", envHostname, "Override hostname reported to Pulse")
 	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
 	insecureFlag := flag.Bool("insecure", parseBool(envInsecure), "Skip TLS certificate verification")
+	noAutoUpdateFlag := flag.Bool("no-auto-update", parseBool(envNoAutoUpdate), "Disable automatic agent updates")
 	var targetFlags targetFlagList
 	flag.Var(&targetFlags, "target", "Pulse target in url|token[|insecure] format. Repeat to send to multiple Pulse instances")
 
@@ -123,6 +125,7 @@ func loadConfig() dockeragent.Config {
 		HostnameOverride:   strings.TrimSpace(*hostnameFlag),
 		AgentID:            strings.TrimSpace(*agentIDFlag),
 		InsecureSkipVerify: *insecureFlag,
+		DisableAutoUpdate:  *noAutoUpdateFlag,
 		Targets:            targets,
 	}
 }

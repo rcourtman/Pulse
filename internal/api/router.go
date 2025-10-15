@@ -113,7 +113,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/state", r.handleState)
 	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, r.dockerAgentHandlers.HandleReport))
-	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, r.dockerAgentHandlers.HandleDeleteHost))
+	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, r.dockerAgentHandlers.HandleCommandAck))
+	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, r.dockerAgentHandlers.HandleDockerHostActions))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", r.handleStorage)
 	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
@@ -842,6 +843,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript)
 	r.mux.HandleFunc("/download/pulse-docker-agent", r.handleDownloadAgent)
 	r.mux.HandleFunc("/api/agent/version", r.handleAgentVersion)
+	r.mux.HandleFunc("/api/server/info", r.handleServerInfo)
 
 	// WebSocket endpoint
 	r.mux.HandleFunc("/ws", r.handleWebSocket)
@@ -1072,6 +1074,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/install-docker-agent.sh",     // Docker agent bootstrap script must be public
 				"/download/pulse-docker-agent", // Agent binary download should not require auth
 				"/api/agent/version",           // Agent update checks need to work before auth
+				"/api/server/info",             // Server info for installer script
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -1941,9 +1944,14 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 		// Fallback to VERSION file
 		versionBytes, _ := os.ReadFile("VERSION")
 		response := VersionResponse{
-			Version:   strings.TrimSpace(string(versionBytes)),
-			BuildTime: "development",
-			GoVersion: runtime.Version(),
+			Version:       strings.TrimSpace(string(versionBytes)),
+			BuildTime:     "development",
+			Build:         "development",
+			GoVersion:     runtime.Version(),
+			Runtime:       runtime.Version(),
+			Channel:       "stable",
+			IsDocker:      false,
+			IsDevelopment: true,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
@@ -1952,9 +1960,15 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 
 	// Convert to typed response
 	response := VersionResponse{
-		Version:   versionInfo.Version,
-		BuildTime: versionInfo.Build,
-		GoVersion: runtime.Version(),
+		Version:        versionInfo.Version,
+		BuildTime:      versionInfo.Build,
+		Build:          versionInfo.Build,
+		GoVersion:      runtime.Version(),
+		Runtime:        versionInfo.Runtime,
+		Channel:        versionInfo.Channel,
+		IsDocker:       versionInfo.IsDocker,
+		IsDevelopment:  versionInfo.IsDevelopment,
+		DeploymentType: versionInfo.DeploymentType,
 	}
 
 	// Add cached update info if available
@@ -1982,6 +1996,26 @@ func (r *Router) handleAgentVersion(w http.ResponseWriter, req *http.Request) {
 
 	response := AgentVersionResponse{
 		Version: version,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+func (r *Router) handleServerInfo(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	versionInfo, err := updates.GetCurrentVersion()
+	isDev := true
+	if err == nil {
+		isDev = versionInfo.IsDevelopment
+	}
+
+	response := map[string]interface{}{
+		"isDevelopment": isDev,
+		"version":       dockeragent.Version,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

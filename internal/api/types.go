@@ -11,19 +11,25 @@ import (
 
 // HealthResponse represents the health check response
 type HealthResponse struct {
-	Status                     string  `json:"status"`
-	Timestamp                  int64   `json:"timestamp"`
-	Uptime                     float64 `json:"uptime"`
-	LegacySSHDetected          bool    `json:"legacySSHDetected,omitempty"`
-	RecommendProxyUpgrade      bool    `json:"recommendProxyUpgrade,omitempty"`
-	ProxyInstallScriptAvailable bool   `json:"proxyInstallScriptAvailable,omitempty"`
+	Status                      string  `json:"status"`
+	Timestamp                   int64   `json:"timestamp"`
+	Uptime                      float64 `json:"uptime"`
+	LegacySSHDetected           bool    `json:"legacySSHDetected,omitempty"`
+	RecommendProxyUpgrade       bool    `json:"recommendProxyUpgrade,omitempty"`
+	ProxyInstallScriptAvailable bool    `json:"proxyInstallScriptAvailable,omitempty"`
 }
 
 // VersionResponse represents version information
 type VersionResponse struct {
 	Version         string `json:"version"`
 	BuildTime       string `json:"buildTime,omitempty"`
+	Build           string `json:"build,omitempty"`
 	GoVersion       string `json:"goVersion,omitempty"`
+	Runtime         string `json:"runtime,omitempty"`
+	Channel         string `json:"channel,omitempty"`
+	IsDocker        bool   `json:"isDocker"`
+	IsDevelopment   bool   `json:"isDevelopment"`
+	DeploymentType  string `json:"deploymentType,omitempty"`
 	UpdateAvailable bool   `json:"updateAvailable"`
 	LatestVersion   string `json:"latestVersion,omitempty"`
 }

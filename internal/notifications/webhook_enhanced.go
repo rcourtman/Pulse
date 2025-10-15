@@ -79,6 +79,36 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 	// Prepare template data
 	data := n.prepareWebhookData(alert, webhook.CustomFields)
 
+	// Render URL template when placeholders are present
+	renderedURL, renderErr := renderWebhookURL(webhook.URL, data)
+	if renderErr != nil {
+		return fmt.Errorf("failed to render webhook URL template: %w", renderErr)
+	}
+	webhook.URL = renderedURL
+
+	// Service-specific enrichment
+	switch webhook.Service {
+	case "telegram":
+		chatID, chatErr := extractTelegramChatID(webhook.URL)
+		if chatErr != nil {
+			return fmt.Errorf("failed to extract Telegram chat_id: %w", chatErr)
+		}
+		if chatID != "" {
+			data.ChatID = chatID
+			log.Debug().
+				Str("webhook", webhook.Name).
+				Str("chatID", chatID).
+				Msg("Extracted Telegram chat_id from rendered URL for enhanced webhook")
+		}
+	case "pagerduty":
+		if data.CustomFields == nil {
+			data.CustomFields = make(map[string]interface{})
+		}
+		if routingKey, ok := webhook.Headers["routing_key"]; ok {
+			data.CustomFields["routing_key"] = routingKey
+		}
+	}
+
 	// Generate payload from template with service-specific handling
 	payload, err := n.generatePayloadFromTemplateWithService(webhook.PayloadTemplate, data, webhook.Service)
 	if err != nil {
@@ -435,13 +465,32 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	// Prepare data
 	data := n.prepareWebhookData(testAlert, webhook.CustomFields)
 
+	// Render webhook URL using template data
+	renderedURL, renderErr := renderWebhookURL(webhook.URL, data)
+	if renderErr != nil {
+		return 0, "", fmt.Errorf("failed to render webhook URL template: %w", renderErr)
+	}
+	webhook.URL = renderedURL
+
 	// For Telegram, extract chat_id from URL if present
 	if webhook.Service == "telegram" {
 		if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
 			data.ChatID = chatID
+		} else if err != nil {
+			log.Warn().
+				Err(err).
+				Str("webhook", webhook.Name).
+				Msg("Failed to extract Telegram chat_id during enhanced webhook test")
 		}
 		// Note: For test webhooks, we don't fail if chat_id is missing
 		// as this may be intentional during testing
+	} else if webhook.Service == "pagerduty" {
+		if data.CustomFields == nil {
+			data.CustomFields = make(map[string]interface{})
+		}
+		if routingKey, ok := webhook.Headers["routing_key"]; ok {
+			data.CustomFields["routing_key"] = routingKey
+		}
 	}
 
 	// Generate payload with service-specific handling

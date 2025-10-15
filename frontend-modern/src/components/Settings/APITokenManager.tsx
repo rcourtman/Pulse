@@ -1,10 +1,12 @@
-import { Component, For, Show, createSignal, onMount } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, onMount } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { showError, showSuccess } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatRelativeTime } from '@/utils/format';
+import { useWebSocket } from '@/App';
+import type { DockerHost } from '@/types/api';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
@@ -12,6 +14,27 @@ interface APITokenManagerProps {
 }
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
+  const { state } = useWebSocket();
+  const dockerHosts = createMemo<DockerHost[]>(() => state.dockerHosts ?? []);
+  const dockerTokenUsage = createMemo(() => {
+    const usage = new Map<string, { count: number; hosts: string[] }>();
+    for (const host of dockerHosts()) {
+      const tokenId = host.tokenId;
+      if (!tokenId) continue;
+      const displayName = host.displayName?.trim() || host.hostname || host.id;
+      const existing = usage.get(tokenId);
+      if (existing) {
+        usage.set(tokenId, {
+          count: existing.count + 1,
+          hosts: [...existing.hosts, displayName],
+        });
+      } else {
+        usage.set(tokenId, { count: 1, hosts: [displayName] });
+      }
+    }
+    return usage;
+  });
+
   const [tokens, setTokens] = createSignal<APITokenRecord[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [isGenerating, setIsGenerating] = createSignal(false);
@@ -43,28 +66,55 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     try {
       const trimmedName = nameInput().trim() || undefined;
       const { token, record } = await SecurityAPI.createToken(trimmedName);
+
+      console.log('✅ Token generated:', { token, record });
+
       setTokens((prev) => [record, ...prev]);
       setNewTokenValue(token);
       setNewTokenRecord(record);
       setNameInput('');
-      showSuccess('New API token generated! Save it now – it will not be shown again.');
+
+      console.log('✅ State updated, newTokenValue:', token);
+
+      showSuccess('New API token generated! Scroll up to see it!');
       props.onTokensChanged?.();
 
       try {
         window.localStorage.setItem('apiToken', token);
-        // Fire a storage event so other listeners update immediately
         window.dispatchEvent(
           new StorageEvent('storage', { key: 'apiToken', newValue: token }),
         );
       } catch (storageErr) {
         console.warn('Unable to persist API token in localStorage', storageErr);
       }
+
+      // Scroll to top to show the token
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     } catch (err) {
       console.error('Failed to generate API token', err);
       showError('Failed to generate API token');
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const tokenHint = (record: APITokenRecord) => {
+    if (record.prefix && record.suffix) {
+      return `${record.prefix}…${record.suffix}`;
+    }
+    if (record.prefix) {
+      return `${record.prefix}…`;
+    }
+    return '—';
+  };
+
+  const tokenNameForDialog = (record: APITokenRecord) => {
+    if (record.name?.trim()) return record.name.trim();
+    if (record.prefix && record.suffix) return `${record.prefix}…${record.suffix}`;
+    if (record.prefix) return `${record.prefix}…`;
+    return 'unnamed token';
   };
 
   const handleCopy = async () => {
@@ -81,9 +131,22 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   const handleDelete = async (record: APITokenRecord) => {
-    const confirmed = window.confirm(
-      `Revoke token "${record.name}"? Any agents or integrations using it will stop working.`,
-    );
+    const usage = dockerTokenUsage().get(record.id);
+    const displayName = tokenNameForDialog(record);
+
+    let message = `Revoke token "${displayName}"? Any agents or integrations using it will stop working.`;
+
+    if (usage) {
+      const hostListPreview = usage.hosts.slice(0, 5).join(', ');
+      const extraCount = usage.hosts.length - 5;
+      const hostSummary =
+        extraCount > 0 ? `${hostListPreview}, +${extraCount} more` : hostListPreview;
+      const hostCountLabel =
+        usage.count === 1 ? 'a Docker host' : `${usage.count} Docker hosts`;
+      message = `Token "${displayName}" is currently used by ${hostCountLabel}.\nHosts: ${hostSummary}\n\nRevoking it will cause those agents to stop reporting until you update them with a new token.\n\nContinue?`;
+    }
+
+    const confirmed = window.confirm(message);
     if (!confirmed) return;
 
     try {
@@ -101,16 +164,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       console.error('Failed to revoke API token', err);
       showError('Failed to revoke API token');
     }
-  };
-
-  const tokenHint = (record: APITokenRecord) => {
-    if (record.prefix && record.suffix) {
-      return `${record.prefix}…${record.suffix}`;
-    }
-    if (record.prefix) {
-      return `${record.prefix}…`;
-    }
-    return '—';
   };
 
   return (
@@ -137,62 +190,84 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       </div>
 
       <div class="p-6 space-y-6">
-        <div class="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-          Issue a dedicated token for each host or automation. That way, if a system is compromised, you can revoke just its token without disrupting anything else.
-        </div>
-
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="api-token-name">
-            Token name
-          </label>
-          <input
-            id="api-token-name"
-            type="text"
-            value={nameInput()}
-            onInput={(event) => setNameInput(event.currentTarget.value)}
-            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="button"
-            class="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={handleGenerate}
-            disabled={isGenerating()}
-          >
-            {isGenerating() ? 'Generating…' : 'Generate API token'}
-          </button>
-        </div>
-
-        <Show when={props.currentTokenHint && !tokens().length}>
-          <p class="text-xs text-gray-500 dark:text-gray-400">
-            Current token hint: <span class="font-mono">{props.currentTokenHint}</span>
-          </p>
-        </Show>
-
+        {/* CRITICAL: Show generated token FIRST and PROMINENTLY */}
         <Show when={newTokenValue()}>
-          <div class="space-y-3">
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-              <h4 class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">✅ New API token generated</h4>
-              <p class="text-xs text-green-700 dark:text-green-300">
-                Save this value now – it is only shown once. Update your automation or agents immediately.
-              </p>
-            </div>
+          <div class="space-y-4 border-4 border-green-500 dark:border-green-600 rounded-lg p-5 bg-green-50 dark:bg-green-900/30">
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0">
+                <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="flex-1 space-y-3">
+                <div>
+                  <h3 class="text-lg font-bold text-green-900 dark:text-green-100">Token Generated!</h3>
+                  <p class="text-sm font-semibold text-green-800 dark:text-green-200 mt-1">
+                    ⚠️ This is shown ONCE. Copy it now or lose it forever!
+                  </p>
+                </div>
 
-            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-              <div class="flex items-center gap-2">
-                <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
-                  {newTokenValue()}
-                </code>
+                <div class="space-y-2">
+                  <label class="text-xs font-medium text-green-900 dark:text-green-100 uppercase tracking-wide">
+                    Your new token:
+                  </label>
+                  <div class="flex items-center gap-2">
+                    <code class="flex-1 font-mono text-base bg-white dark:bg-gray-800 px-4 py-3 rounded-lg border-2 border-green-300 dark:border-green-700 break-all text-gray-900 dark:text-gray-100 font-bold">
+                      {newTokenValue()}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={handleCopy}
+                      class="px-5 py-3 text-sm font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-lg"
+                    >
+                      {copied() ? '✓ Copied!' : 'Copy Token'}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
+                  <p class="text-sm text-yellow-900 dark:text-yellow-100 font-medium">
+                    💡 Next: Use this token on the <a href="/settings/docker-agents" class="underline hover:no-underline font-bold">Docker Agents</a> page to deploy monitoring.
+                  </p>
+                </div>
+
                 <button
                   type="button"
-                  onClick={handleCopy}
-                  class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  onClick={() => setNewTokenValue(null)}
+                  class="text-sm text-green-700 dark:text-green-300 hover:underline"
                 >
-                  {copied() ? 'Copied!' : 'Copy'}
+                  I've saved it, dismiss this
                 </button>
               </div>
             </div>
           </div>
         </Show>
+
+        <div class="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+          Issue a dedicated token for each host or automation. That way, if a system is compromised, you can revoke just its token without disrupting anything else.
+        </div>
+
+        <div class="space-y-3">
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate new token</h3>
+          <div class="flex gap-2">
+            <input
+              id="api-token-name"
+              type="text"
+              value={nameInput()}
+              onInput={(event) => setNameInput(event.currentTarget.value)}
+              placeholder="e.g., docker-host-1"
+              class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="button"
+              class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              onClick={handleGenerate}
+              disabled={isGenerating()}
+            >
+              {isGenerating() ? 'Generating…' : 'Generate'}
+            </button>
+          </div>
+        </div>
 
         <div class="space-y-3">
           <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Active tokens</h3>
@@ -217,27 +292,61 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                   <For each={tokens()}>
-                    {(token) => (
-                      <tr>
-                        <td class="py-2 px-3 text-gray-900 dark:text-gray-100">{token.name || 'Untitled token'}</td>
-                        <td class="py-2 px-3 font-mono text-xs text-gray-600 dark:text-gray-400">{tokenHint(token)}</td>
-                        <td class="py-2 px-3 text-gray-600 dark:text-gray-400">
-                          {formatRelativeTime(new Date(token.createdAt).getTime())}
-                        </td>
-                        <td class="py-2 px-3 text-gray-600 dark:text-gray-400">
-                          {token.lastUsedAt ? formatRelativeTime(new Date(token.lastUsedAt).getTime()) : 'Never'}
-                        </td>
-                        <td class="py-2 px-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(token)}
-                            class="inline-flex items-center px-3 py-1 text-xs font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
-                          >
-                            Revoke
-                          </button>
-                        </td>
-                      </tr>
-                    )}
+                    {(token) => {
+                      const usage = dockerTokenUsage().get(token.id);
+                      const hostTitle = usage ? usage.hosts.join(', ') : undefined;
+                      const hostPreview = usage ? usage.hosts.slice(0, 2).join(', ') : '';
+                      const extraCount = usage ? usage.hosts.length - 2 : 0;
+                      const hostSummary =
+                        usage && usage.count === 1
+                          ? usage.hosts[0]
+                          : usage
+                              ? `${hostPreview}${extraCount > 0 ? `, +${extraCount} more` : ''}`
+                              : '';
+                      const hostCountLabel =
+                        usage && usage.count === 1 ? 'host' : usage ? 'hosts' : '';
+
+                      return (
+                        <tr>
+                          <td class="py-2 px-3 text-gray-900 dark:text-gray-100">
+                            <div class="flex items-center gap-2">
+                              <span>{token.name || 'Untitled token'}</span>
+                              <Show when={usage}>
+                                <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                  Docker
+                                </span>
+                              </Show>
+                            </div>
+                            <Show when={usage}>
+                              <div
+                                class="mt-1 text-xs text-blue-700 dark:text-blue-300"
+                                title={hostTitle}
+                              >
+                                Used by Docker {hostCountLabel}: {hostSummary}
+                              </div>
+                            </Show>
+                          </td>
+                          <td class="py-2 px-3 font-mono text-xs text-gray-600 dark:text-gray-400">
+                            {tokenHint(token)}
+                          </td>
+                          <td class="py-2 px-3 text-gray-600 dark:text-gray-400">
+                            {formatRelativeTime(new Date(token.createdAt).getTime())}
+                          </td>
+                          <td class="py-2 px-3 text-gray-600 dark:text-gray-400">
+                            {token.lastUsedAt ? formatRelativeTime(new Date(token.lastUsedAt).getTime()) : 'Never'}
+                          </td>
+                          <td class="py-2 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(token)}
+                              class="inline-flex items-center px-3 py-1 text-xs font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 rounded hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                            >
+                              Revoke
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }}
                   </For>
                 </tbody>
               </table>
