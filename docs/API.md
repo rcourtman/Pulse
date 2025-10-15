@@ -657,6 +657,7 @@ Alert configuration responses model Pulse's hysteresis thresholds and advanced b
 - `guestDefaults`, `nodeDefaults`, `storageDefault`, `dockerDefaults`, `pmgThresholds` expose the baseline trigger/clear values applied globally. Each metric uses `{ "trigger": 90, "clear": 85 }`, so fractional thresholds (e.g. `12.5`) are supported.
 - `overrides` is keyed by resource ID for bespoke thresholds. Setting a threshold to `-1` disables that signal for that resource.
 - `timeThresholds` and `metricTimeThresholds` provide per-resource/per-metric grace periods, reducing alert noise on bursty workloads.
+- `dockerIgnoredContainerPrefixes` suppresses alerts for ephemeral containers whose name or ID begins with a listed prefix. Matching is case-insensitive and controlled through the Alerts UI.
 - `aggregation`, `flapping`, `schedule` configure deduplication, cooldown, and quiet hours. These values are shared with the notification pipeline.
 - Active and historical alerts include `metadata.clearThreshold`, `resourceType`, and other context so UIs can render the trigger/clear pair and supply timeline explanations.
 

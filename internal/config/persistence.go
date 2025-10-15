@@ -183,6 +183,7 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
 		config.TimeThresholds["all"] = config.TimeThreshold
 	}
+	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -285,6 +286,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 		config.TimeThresholds["all"] = config.TimeThreshold
 	}
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
+	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
 	// Migration: Set I/O metrics to Off (0) if they have the old default values
 	// This helps existing users avoid noisy I/O alerts
