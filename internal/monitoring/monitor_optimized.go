@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -173,6 +174,34 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 							guestRaw.MemInfoBuffers = status.MemInfo.Buffers
 							guestRaw.MemInfoCached = status.MemInfo.Cached
 							guestRaw.MemInfoShared = status.MemInfo.Shared
+							componentAvailable := status.MemInfo.Free
+							if status.MemInfo.Buffers > 0 {
+								if math.MaxUint64-componentAvailable < status.MemInfo.Buffers {
+									componentAvailable = math.MaxUint64
+								} else {
+									componentAvailable += status.MemInfo.Buffers
+								}
+							}
+							if status.MemInfo.Cached > 0 {
+								if math.MaxUint64-componentAvailable < status.MemInfo.Cached {
+									componentAvailable = math.MaxUint64
+								} else {
+									componentAvailable += status.MemInfo.Cached
+								}
+							}
+							if status.MemInfo.Total > 0 && componentAvailable > status.MemInfo.Total {
+								componentAvailable = status.MemInfo.Total
+							}
+
+							availableFromUsed := uint64(0)
+							if status.MemInfo.Total > 0 && status.MemInfo.Used > 0 && status.MemInfo.Total >= status.MemInfo.Used {
+								availableFromUsed = status.MemInfo.Total - status.MemInfo.Used
+								guestRaw.MemInfoTotalMinusUsed = availableFromUsed
+							}
+
+							missingCacheMetrics := status.MemInfo.Available == 0 &&
+								status.MemInfo.Buffers == 0 &&
+								status.MemInfo.Cached == 0
 
 							switch {
 							case status.MemInfo.Available > 0:
@@ -185,6 +214,17 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 									status.MemInfo.Buffers +
 									status.MemInfo.Cached
 								memorySource = "meminfo-derived"
+							}
+
+							if memAvailable == 0 && availableFromUsed > 0 && missingCacheMetrics {
+								const vmTotalMinusUsedGapTolerance uint64 = 4 * 1024 * 1024
+								if availableFromUsed > componentAvailable {
+									gap := availableFromUsed - componentAvailable
+									if componentAvailable == 0 || gap >= vmTotalMinusUsedGapTolerance {
+										memAvailable = availableFromUsed
+										memorySource = "meminfo-total-minus-used"
+									}
+								}
 							}
 						}
 						if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {

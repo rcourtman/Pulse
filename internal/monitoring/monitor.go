@@ -2055,12 +2055,37 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					var actualUsed uint64
 					effectiveAvailable := nodeInfo.Memory.EffectiveAvailable()
 					usedRRDFallback := false
+					componentAvailable := nodeInfo.Memory.Free
+					if nodeInfo.Memory.Buffers > 0 {
+						if math.MaxUint64-componentAvailable < nodeInfo.Memory.Buffers {
+							componentAvailable = math.MaxUint64
+						} else {
+							componentAvailable += nodeInfo.Memory.Buffers
+						}
+					}
+					if nodeInfo.Memory.Cached > 0 {
+						if math.MaxUint64-componentAvailable < nodeInfo.Memory.Cached {
+							componentAvailable = math.MaxUint64
+						} else {
+							componentAvailable += nodeInfo.Memory.Cached
+						}
+					}
+					if nodeInfo.Memory.Total > 0 && componentAvailable > nodeInfo.Memory.Total {
+						componentAvailable = nodeInfo.Memory.Total
+					}
 
-					if effectiveAvailable == 0 &&
-						nodeInfo.Memory.Available == 0 &&
+					availableFromUsed := uint64(0)
+					if nodeInfo.Memory.Total > 0 && nodeInfo.Memory.Used > 0 && nodeInfo.Memory.Total >= nodeInfo.Memory.Used {
+						availableFromUsed = nodeInfo.Memory.Total - nodeInfo.Memory.Used
+					}
+					nodeSnapshotRaw.TotalMinusUsed = availableFromUsed
+
+					missingCacheMetrics := nodeInfo.Memory.Available == 0 &&
 						nodeInfo.Memory.Avail == 0 &&
 						nodeInfo.Memory.Buffers == 0 &&
-						nodeInfo.Memory.Cached == 0 {
+						nodeInfo.Memory.Cached == 0
+
+					if effectiveAvailable == 0 && missingCacheMetrics {
 						if memAvail, err := m.getNodeRRDMemAvailable(ctx, client, node.Node); err == nil && memAvail > 0 {
 							effectiveAvailable = memAvail
 							usedRRDFallback = true
@@ -2072,6 +2097,21 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 								Msg("RRD memavailable fallback unavailable")
 						}
 					}
+
+					const totalMinusUsedGapTolerance uint64 = 16 * 1024 * 1024
+					gapGreaterThanComponents := false
+					if availableFromUsed > componentAvailable {
+						gap := availableFromUsed - componentAvailable
+						if componentAvailable == 0 || gap >= totalMinusUsedGapTolerance {
+							gapGreaterThanComponents = true
+						}
+					}
+
+					derivedFromTotalMinusUsed := !usedRRDFallback &&
+						missingCacheMetrics &&
+						availableFromUsed > 0 &&
+						gapGreaterThanComponents &&
+						effectiveAvailable == availableFromUsed
 
 					switch {
 					case effectiveAvailable > 0 && effectiveAvailable <= nodeInfo.Memory.Total:
@@ -2087,29 +2127,36 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Uint64("effectiveAvailable", effectiveAvailable).
 							Uint64("actualUsed", actualUsed).
 							Float64("usage", safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total)))
-
 						if usedRRDFallback {
 							logCtx.Msg("Node memory: using RRD memavailable fallback (excludes reclaimable cache)")
 							nodeMemorySource = "rrd-memavailable"
 							nodeFallbackReason = "rrd-memavailable"
 							nodeSnapshotRaw.FallbackCalculated = true
 							nodeSnapshotRaw.ProxmoxMemorySource = "rrd-memavailable"
-						} else {
-							switch {
-							case nodeInfo.Memory.Available > 0:
-								logCtx.Msg("Node memory: using available field (excludes reclaimable cache)")
-								nodeMemorySource = "available-field"
-							case nodeInfo.Memory.Avail > 0:
-								logCtx.Msg("Node memory: using avail field (excludes reclaimable cache)")
-								nodeMemorySource = "avail-field"
-							default:
-								logCtx.
-									Uint64("free", nodeInfo.Memory.Free).
-									Uint64("buffers", nodeInfo.Memory.Buffers).
-									Uint64("cached", nodeInfo.Memory.Cached).
-									Msg("Node memory: derived available from free+buffers+cached (excludes reclaimable cache)")
-								nodeMemorySource = "derived-free-buffers-cached"
+						} else if nodeInfo.Memory.Available > 0 {
+							logCtx.Msg("Node memory: using available field (excludes reclaimable cache)")
+							nodeMemorySource = "available-field"
+						} else if nodeInfo.Memory.Avail > 0 {
+							logCtx.Msg("Node memory: using avail field (excludes reclaimable cache)")
+							nodeMemorySource = "avail-field"
+						} else if derivedFromTotalMinusUsed {
+							logCtx.
+								Uint64("availableFromUsed", availableFromUsed).
+								Uint64("reportedFree", nodeInfo.Memory.Free).
+								Msg("Node memory: derived available from total-used gap (cache fields missing)")
+							nodeMemorySource = "derived-total-minus-used"
+							if nodeFallbackReason == "" {
+								nodeFallbackReason = "node-status-total-minus-used"
 							}
+							nodeSnapshotRaw.FallbackCalculated = true
+							nodeSnapshotRaw.ProxmoxMemorySource = "node-status-total-minus-used"
+						} else {
+							logCtx.
+								Uint64("free", nodeInfo.Memory.Free).
+								Uint64("buffers", nodeInfo.Memory.Buffers).
+								Uint64("cached", nodeInfo.Memory.Cached).
+								Msg("Node memory: derived available from free+buffers+cached (excludes reclaimable cache)")
+							nodeMemorySource = "derived-free-buffers-cached"
 						}
 					default:
 						// Fallback to traditional used memory if no cache-aware data is exposed
