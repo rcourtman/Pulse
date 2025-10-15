@@ -1,4 +1,4 @@
-import { createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
+import { createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
@@ -2936,6 +2936,54 @@ function HistoryTab() {
     (typeof navigator !== 'undefined' ? navigator.language : undefined) ||
     'en-US';
 
+  const buildHistoryParams = (range: string) => {
+    const params: { limit?: number; startTime?: string } = {};
+    const now = Date.now();
+
+    switch (range) {
+      case '24h':
+        params.limit = 2000;
+        params.startTime = new Date(now - 24 * MS_PER_HOUR).toISOString();
+        break;
+      case '7d':
+        params.limit = 10000;
+        params.startTime = new Date(now - 7 * 24 * MS_PER_HOUR).toISOString();
+        break;
+      case '30d':
+        params.limit = 10000;
+        params.startTime = new Date(now - 30 * 24 * MS_PER_HOUR).toISOString();
+        break;
+      case 'all':
+        params.limit = 0;
+        break;
+      default:
+        params.limit = 1000;
+    }
+
+    return params;
+  };
+
+  let fetchRequestId = 0;
+  const fetchAlertHistory = async (range: string) => {
+    const requestId = ++fetchRequestId;
+    setLoading(true);
+
+    try {
+      const history = await AlertsAPI.getHistory(buildHistoryParams(range));
+      if (requestId === fetchRequestId) {
+        setAlertHistory(history);
+      }
+    } catch (err) {
+      if (requestId === fetchRequestId) {
+        console.error('Failed to load alert history:', err);
+      }
+    } finally {
+      if (requestId === fetchRequestId) {
+        setLoading(false);
+      }
+    }
+  };
+
   // Ref for search input
   let searchInputRef: HTMLInputElement | undefined;
 
@@ -2968,15 +3016,8 @@ function HistoryTab() {
   });
 
   // Load alert history on mount
-  onMount(async () => {
-    try {
-      const history = await AlertsAPI.getHistory({ limit: 1000 });
-      setAlertHistory(history);
-    } catch (err) {
-      console.error('Failed to load alert history:', err);
-    } finally {
-      setLoading(false);
-    }
+  onMount(() => {
+    fetchAlertHistory(timeFilter());
 
     // Add keyboard event listeners
     const handleKeydown = (e: KeyboardEvent) => {
@@ -3004,10 +3045,21 @@ function HistoryTab() {
 
     document.addEventListener('keydown', handleKeydown);
 
-    // Cleanup on unmount
-    return () => {
+    onCleanup(() => {
       document.removeEventListener('keydown', handleKeydown);
-    };
+      // Prevent pending requests from updating state after unmount
+      fetchRequestId++;
+    });
+  });
+
+  let skipInitialFetchEffect = true;
+  createEffect(() => {
+    const range = timeFilter();
+    if (skipInitialFetchEffect) {
+      skipInitialFetchEffect = false;
+      return;
+    }
+    fetchAlertHistory(range);
   });
 
   // Format duration for display

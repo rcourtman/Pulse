@@ -6,9 +6,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -112,35 +114,165 @@ func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) 
 
 // GetAlertHistory returns alert history
 func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
 	limit := 100
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 10000 {
-			limit = l
-		} else if err != nil {
+	if limitStr := query.Get("limit"); limitStr != "" {
+		l, err := strconv.Atoi(limitStr)
+		switch {
+		case err != nil:
 			log.Warn().Str("limit", limitStr).Msg("Invalid limit parameter, using default")
-		} else {
+		case l < 0:
+			http.Error(w, "limit must be non-negative", http.StatusBadRequest)
+			return
+		case l == 0:
+			limit = 0
+		case l > 10000:
 			log.Warn().Int("limit", l).Msg("Limit exceeds maximum, capping at 10000")
 			limit = 10000
+		default:
+			limit = l
 		}
+	}
+
+	offset := 0
+	if offsetStr := query.Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil {
+			if o < 0 {
+				http.Error(w, "offset must be non-negative", http.StatusBadRequest)
+				return
+			}
+			offset = o
+		} else {
+			log.Warn().Str("offset", offsetStr).Msg("Invalid offset parameter, ignoring")
+		}
+	}
+
+	var startTime *time.Time
+	if startStr := query.Get("startTime"); startStr != "" {
+		parsed, err := time.Parse(time.RFC3339, startStr)
+		if err != nil {
+			http.Error(w, "invalid startTime parameter", http.StatusBadRequest)
+			return
+		}
+		startTime = &parsed
+	}
+
+	var endTime *time.Time
+	if endStr := query.Get("endTime"); endStr != "" {
+		parsed, err := time.Parse(time.RFC3339, endStr)
+		if err != nil {
+			http.Error(w, "invalid endTime parameter", http.StatusBadRequest)
+			return
+		}
+		endTime = &parsed
+	}
+
+	if startTime != nil && endTime != nil && endTime.Before(*startTime) {
+		http.Error(w, "endTime must be after startTime", http.StatusBadRequest)
+		return
+	}
+
+	severity := strings.ToLower(strings.TrimSpace(query.Get("severity")))
+	switch severity {
+	case "", "all":
+		severity = ""
+	case "warning", "critical":
+	default:
+		log.Warn().Str("severity", severity).Msg("Invalid severity filter, ignoring")
+		severity = ""
+	}
+
+	resourceID := strings.TrimSpace(query.Get("resourceId"))
+
+	matchesFilters := func(alertTime time.Time, alertLevel string, alertResourceID string) bool {
+		if startTime != nil && alertTime.Before(*startTime) {
+			return false
+		}
+		if endTime != nil && alertTime.After(*endTime) {
+			return false
+		}
+		if severity != "" && !strings.EqualFold(alertLevel, severity) {
+			return false
+		}
+		if resourceID != "" && alertResourceID != resourceID {
+			return false
+		}
+		return true
+	}
+
+	trimAlerts := func(alerts []alerts.Alert) []alerts.Alert {
+		if offset > 0 {
+			if offset >= len(alerts) {
+				return alerts[:0]
+			}
+			alerts = alerts[offset:]
+		}
+		if limit > 0 && len(alerts) > limit {
+			alerts = alerts[:limit]
+		}
+		return alerts
+	}
+
+	trimMockAlerts := func(alerts []models.Alert) []models.Alert {
+		if offset > 0 {
+			if offset >= len(alerts) {
+				return alerts[:0]
+			}
+			alerts = alerts[offset:]
+		}
+		if limit > 0 && len(alerts) > limit {
+			alerts = alerts[:limit]
+		}
+		return alerts
 	}
 
 	// Check if mock mode is enabled
 	mockEnabled := mock.IsMockEnabled()
-	log.Info().Bool("mockEnabled", mockEnabled).Msg("GetAlertHistory: checking mock mode")
+	log.Debug().Bool("mockEnabled", mockEnabled).Msg("GetAlertHistory: mock mode status")
+
+	fetchLimit := limit
+	if fetchLimit > 0 && offset > 0 {
+		fetchLimit += offset
+	}
 
 	if mockEnabled {
-		history := mock.GetMockAlertHistory(limit)
-		log.Info().Int("mockHistoryCount", len(history)).Msg("Returning mock alert history")
-		if err := utils.WriteJSONResponse(w, history); err != nil {
+		mockHistory := mock.GetMockAlertHistory(fetchLimit)
+		filtered := make([]models.Alert, 0, len(mockHistory))
+		for _, alert := range mockHistory {
+			if matchesFilters(alert.StartTime, alert.Level, alert.ResourceID) {
+				filtered = append(filtered, alert)
+			}
+		}
+		filtered = trimMockAlerts(filtered)
+		if err := utils.WriteJSONResponse(w, filtered); err != nil {
 			log.Error().Err(err).Msg("Failed to write mock alert history response")
 		}
 		return
 	}
 
-	// Get real alert history
-	alertHistory := h.monitor.GetAlertManager().GetAlertHistory(limit)
+	if h.monitor == nil {
+		http.Error(w, "monitor is not initialized", http.StatusServiceUnavailable)
+		return
+	}
 
-	if err := utils.WriteJSONResponse(w, alertHistory); err != nil {
+	manager := h.monitor.GetAlertManager()
+	var history []alerts.Alert
+	if startTime != nil {
+		history = manager.GetAlertHistorySince(*startTime, fetchLimit)
+	} else {
+		history = manager.GetAlertHistory(fetchLimit)
+	}
+
+	filtered := make([]alerts.Alert, 0, len(history))
+	for _, alert := range history {
+		if matchesFilters(alert.StartTime, string(alert.Level), alert.ResourceID) {
+			filtered = append(filtered, alert)
+		}
+	}
+	filtered = trimAlerts(filtered)
+
+	if err := utils.WriteJSONResponse(w, filtered); err != nil {
 		log.Error().Err(err).Msg("Failed to write alert history response")
 	}
 }
