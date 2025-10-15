@@ -8,6 +8,7 @@ import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import type { DockerHost } from '@/types/api';
+import { showTokenReveal } from '@/stores/tokenReveal';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
@@ -343,6 +344,12 @@ const modalCommandProgress = createMemo(() => {
       previousTokenStrategy = 'generate';
       setShowGenerateTokenModal(false);
       setNewTokenName('');
+      showTokenReveal({
+        token,
+        record,
+        source: 'docker',
+        note: 'Copy this token into the install command for your Docker agent or other automation.',
+      });
       if (typeof window !== 'undefined') {
         try {
           window.localStorage.setItem('apiToken', token);
