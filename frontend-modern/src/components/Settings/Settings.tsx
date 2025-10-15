@@ -3574,50 +3574,49 @@ const Settings: Component<SettingsProps> = (props) => {
                 {/* Security setup now handled by first-run wizard */}
 
                 {/* API Token - Show always to allow API access even when auth is disabled */}
-                <Show when={!securityStatusLoading()}>
-                  <Card
-                    padding="none"
-                    class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                    border={false}
-                  >
-                    {/* Header */}
-                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
-                          <svg
-                            class="w-5 h-5 text-blue-600 dark:text-blue-400"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                            />
-                          </svg>
-                        </div>
-                        <SectionHeader
-                          title="API token"
-                          description="For automation and integrations"
-                          size="sm"
-                          class="flex-1"
-                        />
+                <Card
+                  padding="none"
+                  class="overflow-hidden border border-gray-200 dark:border-gray-700"
+                  border={false}
+                >
+                  {/* Header */}
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                        <svg
+                          class="w-5 h-5 text-blue-600 dark:text-blue-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                          />
+                        </svg>
                       </div>
-                    </div>
-
-                    {/* Content */}
-                    <div class="p-6">
-                      <APITokenManager
-                        currentTokenHint={securityStatus()?.apiTokenHint}
-                        onTokensChanged={() => {
-                          void loadSecurityStatus();
-                        }}
+                      <SectionHeader
+                        title="API token"
+                        description="For automation and integrations"
+                        size="sm"
+                        class="flex-1"
                       />
                     </div>
-                  </Card>
-                </Show>
+                  </div>
+
+                  {/* Content */}
+                  <div class="p-6">
+                    <APITokenManager
+                      currentTokenHint={securityStatus()?.apiTokenHint}
+                      onTokensChanged={() => {
+                        void loadSecurityStatus();
+                      }}
+                      refreshing={securityStatusLoading()}
+                    />
+                  </div>
+                </Card>
 
                 {/* Advanced - Only show if auth is enabled */}
                 {/* Advanced Options section removed - was only used for Registration Tokens */}

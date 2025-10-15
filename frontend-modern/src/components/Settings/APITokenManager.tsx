@@ -11,6 +11,7 @@ import type { DockerHost } from '@/types/api';
 interface APITokenManagerProps {
   currentTokenHint?: string;
   onTokensChanged?: () => void;
+  refreshing?: boolean;
 }
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
@@ -67,16 +68,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       const trimmedName = nameInput().trim() || undefined;
       const { token, record } = await SecurityAPI.createToken(trimmedName);
 
-      console.log('✅ Token generated:', { token, record });
-
       setTokens((prev) => [record, ...prev]);
       setNewTokenValue(token);
       setNewTokenRecord(record);
       setNameInput('');
 
-      console.log('✅ State updated, newTokenValue:', token);
-
-      showSuccess('New API token generated! Scroll up to see it!');
+      showSuccess('New API token generated. Copy it below while it is still visible.');
       props.onTokensChanged?.();
 
       try {
@@ -88,10 +85,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         console.warn('Unable to persist API token in localStorage', storageErr);
       }
 
-      // Scroll to top to show the token
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 100);
     } catch (err) {
       console.error('Failed to generate API token', err);
       showError('Failed to generate API token');
@@ -190,6 +183,16 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       </div>
 
       <div class="p-6 space-y-6">
+        <Show when={props.refreshing}>
+          <div class="flex items-center gap-2 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-800 dark:text-blue-200">
+            <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke-width="4" stroke="currentColor" />
+              <path class="opacity-75" d="M4 12a8 8 0 018-8" stroke-width="4" stroke-linecap="round" stroke="currentColor" />
+            </svg>
+            <span>Refreshing security status…</span>
+          </div>
+        </Show>
+
         {/* CRITICAL: Show generated token FIRST and PROMINENTLY */}
         <Show when={newTokenValue()}>
           <div class="space-y-4 border-4 border-green-500 dark:border-green-600 rounded-lg p-5 bg-green-50 dark:bg-green-900/30">
@@ -227,7 +230,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
                 <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
                   <p class="text-sm text-yellow-900 dark:text-yellow-100 font-medium">
-                    💡 Next: Use this token on the <a href="/settings/docker-agents" class="underline hover:no-underline font-bold">Docker Agents</a> page to deploy monitoring.
+                    💡 Keep this token safe and use it anywhere Pulse requires API authentication—Docker agents, automations, or custom integrations.
                   </p>
                 </div>
 
