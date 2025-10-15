@@ -200,6 +200,10 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
     "restartCount": 3,
     "restartWindow": 300
   },
+  "dockerIgnoredContainerPrefixes": [
+    "runner-",
+    "ci-temp-"
+  ],
   "pmgThresholds": {
     "queueTotalWarning": 500,
     "oldestMessageWarnMins": 30
@@ -249,6 +253,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - Set a metric to `-1` to disable it globally or per-resource (the UI shows “Off” and adds a **Custom** badge).
 - `timeThresholds` apply a grace period before an alert fires; `metricTimeThresholds` allow per-metric overrides (e.g., delay network alerts longer than CPU).
 - `overrides` are indexed by the stable resource ID returned from `/api/state` (VMs: `instance/qemu/vmid`, containers: `instance/lxc/ctid`, nodes: `instance/node`).
+- `dockerIgnoredContainerPrefixes` lets you silence state/metric/restart alerts for ephemeral containers whose names or IDs share a common, case-insensitive prefix. The Docker tab in the UI keeps this list in sync.
 - Quiet hours, escalation, deduplication, and restart loop detection are all managed here, and the UI keeps the JSON in sync automatically.
 
 > Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.

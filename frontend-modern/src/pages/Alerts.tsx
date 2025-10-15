@@ -49,6 +49,52 @@ const ALERT_HEADER_META: Record<AlertTab, { title: string; description: string }
   },
 };
 
+export const ALERT_TAB_SEGMENTS: Record<AlertTab, string> = {
+  overview: 'overview',
+  thresholds: 'thresholds',
+  destinations: 'destinations',
+  schedule: 'schedule',
+  history: 'history',
+};
+
+export const pathForTab = (
+  tab: AlertTab,
+  segments: Record<AlertTab, string> = ALERT_TAB_SEGMENTS,
+): string => {
+  const segment = segments[tab];
+  return segment ? `/alerts/${segment}` : '/alerts';
+};
+
+export const tabFromPath = (
+  pathname: string,
+  segments: Record<AlertTab, string> = ALERT_TAB_SEGMENTS,
+): AlertTab => {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/alerts';
+  const parts = normalizedPath.split('/').filter(Boolean);
+
+  if (parts[0] !== 'alerts') {
+    return 'overview';
+  }
+
+  const segment = parts[1] ?? '';
+  if (!segment) {
+    return 'overview';
+  }
+
+  const entry = (Object.entries(segments) as [AlertTab, string][])
+    .find(([, value]) => value === segment);
+
+  if (entry) {
+    return entry[0];
+  }
+
+  if (segment === 'custom-rules') {
+    return 'thresholds';
+  }
+
+  return 'overview';
+};
+
 // Store reference interfaces
 interface DestinationsRef {
   emailConfig?: () => EmailConfig;
@@ -146,7 +192,7 @@ interface EscalationConfig {
 
 const getLocalTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-const createDefaultQuietHours = (): QuietHoursConfig => ({
+export const createDefaultQuietHours = (): QuietHoursConfig => ({
   enabled: false,
   start: '22:00',
   end: '08:00',
@@ -167,20 +213,20 @@ const createDefaultQuietHours = (): QuietHoursConfig => ({
   },
 });
 
-const createDefaultCooldown = (): CooldownConfig => ({
+export const createDefaultCooldown = (): CooldownConfig => ({
   enabled: true,
   minutes: 30,
   maxAlerts: 3,
 });
 
-const createDefaultGrouping = (): GroupingConfig => ({
+export const createDefaultGrouping = (): GroupingConfig => ({
   enabled: true,
   window: 5,
   byNode: true,
   byGuest: false,
 });
 
-const normalizeMetricDelayMap = (
+export const normalizeMetricDelayMap = (
   input: Record<string, Record<string, number>> | undefined | null,
 ): Record<string, Record<string, number>> => {
   if (!input) return {};
@@ -207,10 +253,38 @@ const normalizeMetricDelayMap = (
   return normalized;
 };
 
-const createDefaultEscalation = (): EscalationConfig => ({
+export const createDefaultEscalation = (): EscalationConfig => ({
   enabled: false,
   levels: [],
 });
+
+export const getTriggerValue = (
+  threshold: number | boolean | HysteresisThreshold | undefined,
+): number => {
+  if (typeof threshold === 'number') {
+    return threshold; // Legacy format
+  }
+  if (typeof threshold === 'boolean') {
+    return 0;
+  }
+  if (threshold && typeof threshold === 'object' && 'trigger' in threshold) {
+    return threshold.trigger; // New hysteresis format
+  }
+  return 0; // Default fallback
+};
+
+export const extractTriggerValues = (
+  thresholds: RawOverrideConfig,
+): Record<string, number> => {
+  const result: Record<string, number> = {};
+  Object.entries(thresholds).forEach(([key, value]) => {
+    // Skip non-threshold fields
+    if (key === 'disabled' || key === 'disableConnectivity' || key === 'poweredOffSeverity') return;
+    if (typeof value === 'string') return;
+    result[key] = getTriggerValue(value);
+  });
+  return result;
+};
 
 const DEFAULT_DELAY_SECONDS = 5;
 
@@ -218,46 +292,6 @@ export function Alerts() {
   const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
-
-  const tabSegments: Record<AlertTab, string> = {
-    overview: 'overview',
-    thresholds: 'thresholds',
-    destinations: 'destinations',
-    schedule: 'schedule',
-    history: 'history',
-  };
-
-  const pathForTab = (tab: AlertTab) => {
-    const segment = tabSegments[tab];
-    return segment ? `/alerts/${segment}` : '/alerts';
-  };
-
-  const tabFromPath = (pathname: string): AlertTab => {
-    const normalizedPath = pathname.replace(/\/+$/, '') || '/alerts';
-    const segments = normalizedPath.split('/').filter(Boolean);
-
-    if (segments[0] !== 'alerts') {
-      return 'overview';
-    }
-
-    const segment = segments[1] ?? '';
-    if (!segment) {
-      return 'overview';
-    }
-
-    const entry = (Object.entries(tabSegments) as [AlertTab, string][])
-      .find(([, value]) => value === segment);
-
-    if (entry) {
-      return entry[0];
-    }
-
-    if (segment === 'custom-rules') {
-      return 'thresholds';
-    }
-
-    return 'overview';
-  };
 
   const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
 
@@ -665,6 +699,7 @@ export function Alerts() {
           memoryCriticalPct: config.dockerDefaults.memoryCriticalPct ?? 95,
         });
       }
+      setDockerIgnoredPrefixes(config.dockerIgnoredContainerPrefixes ?? []);
 
       if (config.storageDefault) {
         setStorageDefault(getTriggerValue(config.storageDefault) ?? 85);
@@ -896,34 +931,6 @@ export function Alerts() {
     },
   );
 
-  // Helper function to extract trigger value from threshold
-  const getTriggerValue = (
-    threshold: number | boolean | HysteresisThreshold | undefined,
-  ): number => {
-    if (typeof threshold === 'number') {
-      return threshold; // Legacy format
-    }
-    if (typeof threshold === 'boolean') {
-      return 0;
-    }
-    if (threshold && typeof threshold === 'object' && 'trigger' in threshold) {
-      return threshold.trigger; // New hysteresis format
-    }
-    return 0; // Default fallback
-  };
-
-  // Helper to extract trigger values for all thresholds
-  const extractTriggerValues = (thresholds: RawOverrideConfig): Record<string, number> => {
-    const result: Record<string, number> = {};
-    Object.entries(thresholds).forEach(([key, value]) => {
-      // Skip non-threshold fields
-      if (key === 'disabled' || key === 'disableConnectivity' || key === 'poweredOffSeverity') return;
-      if (typeof value === 'string') return;
-      result[key] = getTriggerValue(value);
-    });
-    return result;
-  };
-
   // Factory defaults - constants for reset functionality
   const FACTORY_GUEST_DEFAULTS = {
     cpu: 80,
@@ -961,8 +968,9 @@ export function Alerts() {
   const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_NODE_DEFAULTS });
 
   const [dockerDefaults, setDockerDefaults] = createSignal({ ...FACTORY_DOCKER_DEFAULTS });
+  const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>([]);
 
-const [storageDefault, setStorageDefault] = createSignal(FACTORY_STORAGE_DEFAULT);
+  const [storageDefault, setStorageDefault] = createSignal(FACTORY_STORAGE_DEFAULT);
 
   // Reset functions
   const resetGuestDefaults = () => {
@@ -977,6 +985,11 @@ const [storageDefault, setStorageDefault] = createSignal(FACTORY_STORAGE_DEFAULT
 
   const resetDockerDefaults = () => {
     setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
+    setHasUnsavedChanges(true);
+  };
+
+  const resetDockerIgnoredPrefixes = () => {
+    setDockerIgnoredPrefixes([]);
     setHasUnsavedChanges(true);
   };
 
@@ -1145,6 +1158,9 @@ const [timeThresholds, setTimeThresholds] = createSignal({
                         memoryWarnPct: dockerDefaults().memoryWarnPct,
                         memoryCriticalPct: dockerDefaults().memoryCriticalPct,
                       },
+                      dockerIgnoredContainerPrefixes: dockerIgnoredPrefixes()
+                        .map((prefix) => prefix.trim())
+                        .filter((prefix) => prefix.length > 0),
                       storageDefault: createHysteresisThreshold(storageDefault()),
                       minimumDelta: 2.0,
                       suppressionWindow: 5,
@@ -1332,11 +1348,14 @@ const [timeThresholds, setTimeThresholds] = createSignal({
               setNodeDefaults={setNodeDefaults}
               dockerDefaults={dockerDefaults}
               setDockerDefaults={setDockerDefaults}
+              dockerIgnoredPrefixes={dockerIgnoredPrefixes}
+              setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
               storageDefault={storageDefault}
               setStorageDefault={setStorageDefault}
               resetGuestDefaults={resetGuestDefaults}
               resetNodeDefaults={resetNodeDefaults}
               resetDockerDefaults={resetDockerDefaults}
+              resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
               resetStorageDefault={resetStorageDefault}
               factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
               factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
@@ -1826,6 +1845,7 @@ interface ThresholdsTabProps {
   guestDefaults: () => Record<string, number | undefined>;
   nodeDefaults: () => Record<string, number | undefined>;
   dockerDefaults: () => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
+  dockerIgnoredPrefixes: () => string[];
   storageDefault: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
@@ -1854,6 +1874,7 @@ interface ThresholdsTabProps {
   setDockerDefaults: (
     value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),
   ) => void;
+  setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   setStorageDefault: (value: number) => void;
   setMetricTimeThresholds: (
     value:
@@ -1896,6 +1917,7 @@ interface ThresholdsTabProps {
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
   resetDockerDefaults?: () => void;
+  resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
@@ -1929,6 +1951,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setNodeDefaults={props.setNodeDefaults}
       dockerDefaults={props.dockerDefaults()}
       setDockerDefaults={props.setDockerDefaults}
+      dockerIgnoredPrefixes={props.dockerIgnoredPrefixes}
+      setDockerIgnoredPrefixes={props.setDockerIgnoredPrefixes}
       storageDefault={props.storageDefault}
       setStorageDefault={props.setStorageDefault}
       timeThresholds={props.timeThresholds}
@@ -1964,6 +1988,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       resetGuestDefaults={props.resetGuestDefaults}
       resetNodeDefaults={props.resetNodeDefaults}
       resetDockerDefaults={props.resetDockerDefaults}
+      resetDockerIgnoredPrefixes={props.resetDockerIgnoredPrefixes}
       resetStorageDefault={props.resetStorageDefault}
       factoryGuestDefaults={props.factoryGuestDefaults}
       factoryNodeDefaults={props.factoryNodeDefaults}

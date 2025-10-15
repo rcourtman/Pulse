@@ -285,15 +285,16 @@ type PMGThresholdConfig struct {
 
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
-	Enabled        bool                       `json:"enabled"`
-	GuestDefaults  ThresholdConfig            `json:"guestDefaults"`
-	NodeDefaults   ThresholdConfig            `json:"nodeDefaults"`
-	StorageDefault HysteresisThreshold        `json:"storageDefault"`
-	DockerDefaults DockerThresholdConfig      `json:"dockerDefaults"`
-	PMGDefaults    PMGThresholdConfig         `json:"pmgDefaults"`
-	Overrides      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
-	CustomRules    []CustomAlertRule          `json:"customRules,omitempty"`
-	Schedule       ScheduleConfig             `json:"schedule"`
+	Enabled                        bool                       `json:"enabled"`
+	GuestDefaults                  ThresholdConfig            `json:"guestDefaults"`
+	NodeDefaults                   ThresholdConfig            `json:"nodeDefaults"`
+	StorageDefault                 HysteresisThreshold        `json:"storageDefault"`
+	DockerDefaults                 DockerThresholdConfig      `json:"dockerDefaults"`
+	DockerIgnoredContainerPrefixes []string                   `json:"dockerIgnoredContainerPrefixes,omitempty"`
+	PMGDefaults                    PMGThresholdConfig         `json:"pmgDefaults"`
+	Overrides                      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
+	CustomRules                    []CustomAlertRule          `json:"customRules,omitempty"`
+	Schedule                       ScheduleConfig             `json:"schedule"`
 	// Global disable flags per resource type
 	DisableAllNodes              bool `json:"disableAllNodes"`              // Disable all alerts for Proxmox nodes
 	DisableAllGuests             bool `json:"disableAllGuests"`             // Disable all alerts for VMs/containers
@@ -722,6 +723,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
 		config.TimeThresholds["all"] = defaultDelaySeconds
 	}
+	config.DockerIgnoredContainerPrefixes = NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
 	config.GuestDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
 	config.NodeDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
@@ -781,6 +783,37 @@ func normalizeMetricTimeThresholds(input map[string]map[string]int) map[string]m
 // NormalizeMetricTimeThresholds exposes normalization for other packages (e.g., config persistence).
 func NormalizeMetricTimeThresholds(input map[string]map[string]int) map[string]map[string]int {
 	return normalizeMetricTimeThresholds(input)
+}
+
+// NormalizeDockerIgnoredPrefixes trims, deduplicates, and lowercases comparison keys for ignored Docker containers.
+// Returned values retain the user's original casing for display but guarantee uniqueness when compared case-insensitively.
+func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {
+	if len(prefixes) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(prefixes))
+	normalized := make([]string, 0, len(prefixes))
+
+	for _, prefix := range prefixes {
+		trimmed := strings.TrimSpace(prefix)
+		if trimmed == "" {
+			continue
+		}
+
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
 }
 
 // applyGlobalOfflineSettingsLocked clears tracking and active alerts for globally disabled offline detectors.
@@ -1814,6 +1847,30 @@ func dockerResourceID(hostID, containerID string) string {
 	return fmt.Sprintf("docker:%s/%s", hostID, containerID)
 }
 
+func matchesDockerIgnoredPrefix(name, id string, prefixes []string) bool {
+	if len(prefixes) == 0 {
+		return false
+	}
+
+	name = strings.ToLower(strings.TrimSpace(name))
+	id = strings.ToLower(strings.TrimSpace(id))
+
+	for _, raw := range prefixes {
+		prefix := strings.ToLower(strings.TrimSpace(raw))
+		if prefix == "" {
+			continue
+		}
+		if name != "" && strings.HasPrefix(name, prefix) {
+			return true
+		}
+		if id != "" && strings.HasPrefix(id, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // CheckDockerHost evaluates Docker host telemetry and container metrics for alerts.
 func (m *Manager) CheckDockerHost(host models.DockerHost) {
 	if host.ID == "" {
@@ -1826,6 +1883,7 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
 	disableAllHosts := m.config.DisableAllDockerHosts
+	ignoredPrefixes := append([]string(nil), m.config.DockerIgnoredContainerPrefixes...)
 	m.mu.RUnlock()
 	if !alertsEnabled {
 		return
@@ -1836,7 +1894,27 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 
 	seen := make(map[string]struct{}, len(host.Containers))
 	for _, container := range host.Containers {
+		containerName := dockerContainerDisplayName(container)
 		resourceID := dockerResourceID(host.ID, container.ID)
+
+		if matchesDockerIgnoredPrefix(containerName, container.ID, ignoredPrefixes) {
+			log.Debug().
+				Str("container", containerName).
+				Str("host", host.DisplayName).
+				Msg("Skipping Docker container alert evaluation due to ignored prefix")
+			m.clearDockerContainerStateAlert(resourceID)
+			m.clearDockerContainerHealthAlert(resourceID)
+			m.clearDockerContainerMetricAlerts(resourceID)
+			m.clearAlert(fmt.Sprintf("docker-container-restart-loop-%s", resourceID))
+			m.clearAlert(fmt.Sprintf("docker-container-oom-%s", resourceID))
+			m.clearAlert(fmt.Sprintf("docker-container-memory-limit-%s", resourceID))
+			m.mu.Lock()
+			delete(m.dockerRestartTracking, resourceID)
+			delete(m.dockerLastExitCode, resourceID)
+			m.mu.Unlock()
+			continue
+		}
+
 		seen[resourceID] = struct{}{}
 		m.evaluateDockerContainer(host, container, resourceID)
 	}

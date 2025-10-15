@@ -1,6 +1,10 @@
 package config_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -82,5 +86,90 @@ func TestSaveAlertConfig_DoesNotOverwriteExistingClear(t *testing.T) {
 	}
 	if got, want := override.Usage.Clear, 88.0; got != want {
 		t.Fatalf("clear threshold changed unexpectedly: got %v want %v", got, want)
+	}
+}
+
+func TestAlertConfigPersistenceNormalizesDockerIgnoredPrefixes(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	cfg := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+		DockerIgnoredContainerPrefixes: []string{
+			"  Foo ",
+			"foo",
+			"Bar",
+			" bar ",
+		},
+	}
+
+	if err := cp.SaveAlertConfig(cfg); err != nil {
+		t.Fatalf("SaveAlertConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	expected := []string{"Foo", "Bar"}
+	if !reflect.DeepEqual(loaded.DockerIgnoredContainerPrefixes, expected) {
+		t.Fatalf("unexpected prefixes: got %v want %v", loaded.DockerIgnoredContainerPrefixes, expected)
+	}
+}
+
+func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	raw := alerts.AlertConfig{
+		Enabled:                        false,
+		TimeThreshold:                  0,
+		TimeThresholds:                 map[string]int{"guest": 0, "node": 0},
+		DockerIgnoredContainerPrefixes: []string{" Runner "},
+		NodeDefaults: alerts.ThresholdConfig{
+			Temperature: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
+		},
+	}
+
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(tempDir, "alerts.json"), data, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	if loaded.TimeThreshold != 5 {
+		t.Fatalf("expected time threshold default 5, got %d", loaded.TimeThreshold)
+	}
+	if got := loaded.TimeThresholds["guest"]; got != 5 {
+		t.Fatalf("expected guest threshold default 5, got %d", got)
+	}
+	if got := loaded.TimeThresholds["node"]; got != 5 {
+		t.Fatalf("expected node threshold default 5, got %d", got)
+	}
+	if loaded.NodeDefaults.Temperature == nil {
+		t.Fatalf("expected node temperature defaults to be set")
+	}
+	if loaded.NodeDefaults.Temperature.Trigger != 80 || loaded.NodeDefaults.Temperature.Clear != 75 {
+		t.Fatalf("expected temperature defaults 80/75, got %+v", loaded.NodeDefaults.Temperature)
+	}
+	expectedPrefixes := []string{"Runner"}
+	if !reflect.DeepEqual(loaded.DockerIgnoredContainerPrefixes, expectedPrefixes) {
+		t.Fatalf("expected normalized prefixes %v, got %v", expectedPrefixes, loaded.DockerIgnoredContainerPrefixes)
 	}
 }

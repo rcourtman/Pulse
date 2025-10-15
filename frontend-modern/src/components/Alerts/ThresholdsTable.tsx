@@ -97,6 +97,12 @@ const PMG_KEY_TO_NORMALIZED = new Map(
   PMG_THRESHOLD_COLUMNS.map((column) => [column.key, column.normalized]),
 );
 
+export const normalizeDockerIgnoredInput = (value: string): string[] =>
+  value
+    .split('\n')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
 // Simple threshold object for the UI
 interface SimpleThresholds {
   cpu?: number;
@@ -143,11 +149,14 @@ interface ThresholdsTableProps {
   setDockerDefaults: (
     value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),
   ) => void;
+  dockerIgnoredPrefixes: () => string[];
+  setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   storageDefault: () => number;
   setStorageDefault: (value: number) => void;
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
   resetDockerDefaults?: () => void;
+  resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
@@ -202,6 +211,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   >({});
   const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'docker'>('proxmox');
   let searchInputRef: HTMLInputElement | undefined;
+  const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
+    props.dockerIgnoredPrefixes().join('\n'),
+  );
+
+  createEffect(() => {
+    setDockerIgnoredInput(props.dockerIgnoredPrefixes().join('\n'));
+  });
 
   // Determine active tab from URL
   const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'docker' => {
@@ -233,6 +249,23 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       docker: '/alerts/thresholds/docker',
     };
     navigate(tabRoutes[tab]);
+  };
+
+  const handleDockerIgnoredChange = (value: string) => {
+    setDockerIgnoredInput(value);
+    const normalized = normalizeDockerIgnoredInput(value);
+    props.setDockerIgnoredPrefixes(normalized);
+    props.setHasUnsavedChanges(true);
+  };
+
+  const handleResetDockerIgnored = () => {
+    if (props.resetDockerIgnoredPrefixes) {
+      props.resetDockerIgnoredPrefixes();
+    } else {
+      props.setDockerIgnoredPrefixes([]);
+    }
+    setDockerIgnoredInput('');
+    props.setHasUnsavedChanges(true);
   };
 
   // Set up keyboard shortcuts
@@ -1952,6 +1985,36 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
         </Show>
 
         <Show when={activeTab() === 'docker'}>
+          <div class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Ignored container prefixes
+                </h3>
+                <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  Containers whose name or ID starts with any prefix below are skipped for Docker
+                  alerts. Enter one prefix per line; matching is case-insensitive.
+                </p>
+              </div>
+              <Show when={(props.dockerIgnoredPrefixes().length ?? 0) > 0}>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-md border border-transparent bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  onClick={handleResetDockerIgnored}
+                >
+                  Reset
+                </button>
+              </Show>
+            </div>
+            <textarea
+              value={dockerIgnoredInput()}
+              onInput={(event) => handleDockerIgnoredChange(event.currentTarget.value)}
+              placeholder="runner-"
+              rows={4}
+              class="mt-4 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+            />
+          </div>
+
           <Show when={hasSection('dockerHosts')}>
             <div ref={registerSection('dockerHosts')} class="scroll-mt-24">
               <ResourceTable

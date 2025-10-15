@@ -91,6 +91,7 @@ export interface AlertConfig {
   nodeDefaults: AlertThresholds;
   storageDefault: HysteresisThreshold;
   dockerDefaults?: DockerThresholdConfig;
+  dockerIgnoredContainerPrefixes?: string[];
   pmgDefaults?: PMGThresholdDefaults;
   customRules?: CustomAlertRule[];
   overrides: Record<string, RawOverrideConfig>; // key: resource ID
