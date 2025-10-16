@@ -123,13 +123,16 @@ sudo systemctl restart pulse
 
 #### Service name confusion
 Pulse uses different service names depending on installation method:
-- **ProxmoxVE Script**: `pulse`
-- **Manual Install**: `pulse-backend`
+- **Default systemd install**: `pulse`
+- **Legacy installs (pre-v4.7)**: `pulse-backend`
+- **Hot dev environment**: `pulse-hot-dev`
 - **Docker**: N/A (container name)
 
 To check which you have:
 ```bash
-systemctl status pulse 2>/dev/null || systemctl status pulse-backend
+systemctl status pulse 2>/dev/null \
+  || systemctl status pulse-backend 2>/dev/null \
+  || systemctl status pulse-hot-dev
 ```
 
 ### Notification Issues

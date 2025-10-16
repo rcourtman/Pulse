@@ -4,6 +4,8 @@
 
 **Starting with v4.5.0, authentication setup is prompted for all new Pulse installations.** This protects your Proxmox API credentials from unauthorized access.
 
+> **Service name note:** Systemd deployments use `pulse.service`. If you're upgrading from an older install that still registers `pulse-backend.service`, substitute that name in the commands below.
+
 ### First-Run Security Setup
 When you first access Pulse, you'll be guided through a mandatory security setup:
 - Create your admin username and password
@@ -28,7 +30,7 @@ Legacy configuration (no longer applicable):
 PULSE_TRUSTED_NETWORKS=192.168.1.0/24,10.0.0.0/24
 
 # Or in systemd
-sudo systemctl edit pulse-backend
+sudo systemctl edit pulse
 [Service]
 Environment="PULSE_TRUSTED_NETWORKS=192.168.1.0/24,10.0.0.0/24"
 ```
@@ -78,14 +80,14 @@ By default, configuration export/import is blocked for security. You have two op
 ### Option 1: Set API Tokens (Recommended)
 ```bash
 # Using systemd (secure)
-sudo systemctl edit pulse-backend
+sudo systemctl edit pulse
 # Add:
 [Service]
 Environment="API_TOKENS=ansible-token,docker-agent-token"
 Environment="API_TOKEN=legacy-token"  # Optional fallback
 
 # Then restart:
-sudo systemctl restart pulse-backend
+sudo systemctl restart pulse
 
 # Docker
 docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
@@ -94,7 +96,7 @@ docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
 ### Option 2: Allow Unprotected Export (Homelab)
 ```bash
 # Using systemd
-sudo systemctl edit pulse-backend
+sudo systemctl edit pulse
 # Add:
 [Service]
 Environment="ALLOW_UNPROTECTED_EXPORT=true"
@@ -187,7 +189,7 @@ This automatically:
 #### Manual Setup (Advanced)
 ```bash
 # Using systemd (password will be hashed automatically)
-sudo systemctl edit pulse-backend
+sudo systemctl edit pulse
 # Add:
 [Service]
 Environment="PULSE_AUTH_USER=admin"
@@ -223,7 +225,7 @@ The Quick Security Setup automatically:
 #### Manual Token Setup
 ```bash
 # Using systemd (plain text values are auto-hashed on startup)
-sudo systemctl edit pulse-backend
+sudo systemctl edit pulse
 # Add:
 [Service]
 Environment="API_TOKENS=ansible-token,docker-agent-token"
@@ -278,7 +280,7 @@ If you need to access Pulse API from a different domain:
 docker run -e ALLOWED_ORIGINS="https://app.example.com" rcourtman/pulse:latest
 
 # systemd
-sudo systemctl edit pulse-backend
+sudo systemctl edit pulse
 [Service]
 Environment="ALLOWED_ORIGINS=https://app.example.com"
 

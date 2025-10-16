@@ -30,7 +30,7 @@ run: build
 
 # Development - rebuild everything and restart service
 dev: frontend backend
-	sudo systemctl restart pulse-backend
+	sudo systemctl restart pulse-hot-dev
 
 dev-hot:
 	./scripts/dev-hot.sh
@@ -42,7 +42,7 @@ clean:
 
 # Quick rebuild and restart for development
 restart: frontend backend
-	sudo systemctl restart pulse-backend
+	sudo systemctl restart pulse-hot-dev
 
 # Run linters for both backend and frontend
 lint: lint-backend lint-frontend

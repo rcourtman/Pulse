@@ -285,7 +285,7 @@ ws.onerror = (e) => console.error('WebSocket error:', e);
 ### 502 Bad Gateway
 - Pulse not running on expected port (default 7655)
 - Check with: `curl http://localhost:7655/api/health`
-- Verify Pulse service: `systemctl status pulse-backend`
+- Verify Pulse service: `systemctl status pulse` (use `pulse-backend` if you're on a legacy unit)
 
 ### WebSocket closes immediately
 - Timeout too short in proxy configuration
@@ -315,6 +315,6 @@ ws.onerror = (e) => console.error('WebSocket error:', e);
 
 If WebSockets still don't work after following this guide:
 1. Check browser console for errors (F12)
-2. Verify Pulse logs: `journalctl -u pulse-backend -f`
+2. Verify Pulse logs: `journalctl -u pulse -f`
 3. Test without proxy first: `http://your-server:7655`
 4. Report issues: https://github.com/rcourtman/Pulse/issues

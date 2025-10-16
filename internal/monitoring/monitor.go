@@ -281,6 +281,8 @@ type Monitor struct {
 	removedDockerHosts   map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerCommands       map[string]*dockerHostCommand
 	dockerCommandIndex   map[string]string
+	guestMetadataMu      sync.RWMutex
+	guestMetadataCache   map[string]guestMetadataCacheEntry
 }
 
 type rrdMemCacheEntry struct {
@@ -323,7 +325,16 @@ const (
 	dockerMaximumHealthWindow    = 10 * time.Minute
 	nodeRRDCacheTTL              = 30 * time.Second
 	nodeRRDRequestTimeout        = 2 * time.Second
+	guestMetadataCacheTTL        = 5 * time.Minute
 )
+
+type guestMetadataCacheEntry struct {
+	ipAddresses       []string
+	networkInterfaces []models.GuestNetworkInterface
+	osName            string
+	osVersion         string
+	fetchedAt         time.Time
+}
 
 func (m *Monitor) getNodeRRDMemAvailable(ctx context.Context, client PVEClientInterface, nodeName string) (uint64, error) {
 	if client == nil || nodeName == "" {
@@ -813,14 +824,33 @@ func sortContent(content string) string {
 	return strings.Join(parts, ",")
 }
 
-func fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus) ([]string, []models.GuestNetworkInterface, string, string) {
-	if vmStatus == nil {
+func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus) ([]string, []models.GuestNetworkInterface, string, string) {
+	if vmStatus == nil || client == nil {
+		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
 		return nil, nil, "", ""
 	}
 
-	var ipAddresses []string
-	var networkIfaces []models.GuestNetworkInterface
-	var osName, osVersion string
+	if vmStatus.Agent <= 0 {
+		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
+		return nil, nil, "", ""
+	}
+
+	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
+	now := time.Now()
+
+	m.guestMetadataMu.RLock()
+	cached, ok := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+
+	if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheTTL {
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion
+	}
+
+	// Start with cached values as fallback in case new calls fail
+	ipAddresses := cloneStringSlice(cached.ipAddresses)
+	networkIfaces := cloneGuestNetworkInterfaces(cached.networkInterfaces)
+	osName := cached.osName
+	osVersion := cached.osVersion
 
 	ifaceCtx, cancelIface := context.WithTimeout(ctx, 5*time.Second)
 	interfaces, err := client.GetVMNetworkInterfaces(ifaceCtx, nodeName, vmid)
@@ -834,25 +864,84 @@ func fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, ins
 			Msg("Guest agent network interfaces unavailable")
 	} else if len(interfaces) > 0 {
 		ipAddresses, networkIfaces = processGuestNetworkInterfaces(interfaces)
+	} else {
+		ipAddresses = nil
+		networkIfaces = nil
 	}
 
-	if vmStatus.Agent > 0 {
-		osCtx, cancelOS := context.WithTimeout(ctx, 3*time.Second)
-		agentInfo, err := client.GetVMAgentInfo(osCtx, nodeName, vmid)
-		cancelOS()
-		if err != nil {
-			log.Debug().
-				Str("instance", instanceName).
-				Str("vm", vmName).
-				Int("vmid", vmid).
-				Err(err).
-				Msg("Guest agent OS info unavailable")
-		} else if len(agentInfo) > 0 {
-			osName, osVersion = extractGuestOSInfo(agentInfo)
-		}
+	osCtx, cancelOS := context.WithTimeout(ctx, 3*time.Second)
+	agentInfo, err := client.GetVMAgentInfo(osCtx, nodeName, vmid)
+	cancelOS()
+	if err != nil {
+		log.Debug().
+			Str("instance", instanceName).
+			Str("vm", vmName).
+			Int("vmid", vmid).
+			Err(err).
+			Msg("Guest agent OS info unavailable")
+	} else if len(agentInfo) > 0 {
+		osName, osVersion = extractGuestOSInfo(agentInfo)
+	} else {
+		osName = ""
+		osVersion = ""
 	}
+
+	entry := guestMetadataCacheEntry{
+		ipAddresses:       cloneStringSlice(ipAddresses),
+		networkInterfaces: cloneGuestNetworkInterfaces(networkIfaces),
+		osName:            osName,
+		osVersion:         osVersion,
+		fetchedAt:         time.Now(),
+	}
+
+	m.guestMetadataMu.Lock()
+	if m.guestMetadataCache == nil {
+		m.guestMetadataCache = make(map[string]guestMetadataCacheEntry)
+	}
+	m.guestMetadataCache[key] = entry
+	m.guestMetadataMu.Unlock()
 
 	return ipAddresses, networkIfaces, osName, osVersion
+}
+
+func guestMetadataCacheKey(instanceName, nodeName string, vmid int) string {
+	return fmt.Sprintf("%s|%s|%d", instanceName, nodeName, vmid)
+}
+
+func (m *Monitor) clearGuestMetadataCache(instanceName, nodeName string, vmid int) {
+	if m == nil {
+		return
+	}
+
+	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
+	m.guestMetadataMu.Lock()
+	if m.guestMetadataCache != nil {
+		delete(m.guestMetadataCache, key)
+	}
+	m.guestMetadataMu.Unlock()
+}
+
+func cloneStringSlice(src []string) []string {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]string, len(src))
+	copy(dst, src)
+	return dst
+}
+
+func cloneGuestNetworkInterfaces(src []models.GuestNetworkInterface) []models.GuestNetworkInterface {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]models.GuestNetworkInterface, len(src))
+	for i, iface := range src {
+		dst[i] = iface
+		if len(iface.Addresses) > 0 {
+			dst[i].Addresses = cloneStringSlice(iface.Addresses)
+		}
+	}
+	return dst
 }
 
 func processGuestNetworkInterfaces(raw []proxmox.VMNetworkInterface) ([]string, []models.GuestNetworkInterface) {
@@ -1194,9 +1283,10 @@ func New(cfg *config.Config) (*Monitor, error) {
 		nodeSnapshots:        make(map[string]NodeMemorySnapshot),
 		guestSnapshots:       make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:      make(map[string]rrdMemCacheEntry),
-		removedDockerHosts: make(map[string]time.Time),
-		dockerCommands:     make(map[string]*dockerHostCommand),
-		dockerCommandIndex: make(map[string]string),
+		removedDockerHosts:   make(map[string]time.Time),
+		dockerCommands:       make(map[string]*dockerHostCommand),
+		dockerCommandIndex:   make(map[string]string),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
 	}
 
 	// Load saved configurations
@@ -3108,7 +3198,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					}
 
 					// Gather guest metadata from the agent when available
-					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, detailedStatus)
+					guestIPs, guestIfaces, guestOSName, guestOSVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, detailedStatus)
 					if len(guestIPs) > 0 {
 						ipAddresses = guestIPs
 					}
@@ -3796,7 +3886,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						memUsed = memTotal
 					}
 
-					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, node.Node, vm.Name, vm.VMID, status)
+					guestIPs, guestIfaces, guestOSName, guestOSVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, node.Node, vm.Name, vm.VMID, status)
 					if len(guestIPs) > 0 {
 						ipAddresses = guestIPs
 					}

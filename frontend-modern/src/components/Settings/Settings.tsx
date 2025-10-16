@@ -3543,7 +3543,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 Restart the development server:
                               </p>
                               <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
-                                sudo systemctl restart pulse-backend
+                                sudo systemctl restart pulse-hot-dev
                               </code>
                             </div>
                           </Show>

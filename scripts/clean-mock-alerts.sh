@@ -35,6 +35,8 @@ echo -e "${GREEN}✓ Backup created: $BACKUP_FILE${NC}"
 # Stop backend to prevent writes during cleanup
 echo "Stopping backend..."
 pkill -x pulse 2>/dev/null || true
+sudo systemctl stop pulse-hot-dev 2>/dev/null || true
+sudo systemctl stop pulse 2>/dev/null || true
 sudo systemctl stop pulse-backend 2>/dev/null || true
 sleep 2
 
@@ -58,4 +60,5 @@ echo -e "${GREEN}✓ Mock alerts removed successfully${NC}"
 echo ""
 echo "To restart the backend, run:"
 echo "  ./scripts/hot-dev.sh    (for development)"
-echo "  sudo systemctl start pulse-backend    (for production)"
+echo "  sudo systemctl start pulse           (systemd)"
+echo "  sudo systemctl start pulse-backend   (legacy)"
