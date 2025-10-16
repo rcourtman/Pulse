@@ -576,12 +576,11 @@ create_lxc_container() {
             local idx=1
             
             while IFS= read -r line; do
-                local storage_name=$(echo "$line" | awk '{print $1}')
-                local storage_type=$(echo "$line" | awk '{print $2}')
-                local avail_gb=$(echo "$line" | awk '{print $6/1048576}')
-                local total_gb=$(echo "$line" | awk '{print $4/1048576}')
-                local used_pct=$(echo "$line" | awk '{print $7}')
-                
+                local storage_name storage_type avail_gb total_gb used_pct parsed_line
+                parsed_line=$(LC_NUMERIC=C awk '{printf "%s,%s,%.1f,%.1f,%s", $1, $2, $6/1048576, $4/1048576, $7}' <<< "$line")
+                [[ -z "$parsed_line" ]] && continue
+                IFS=',' read -r storage_name storage_type avail_gb total_gb used_pct <<< "$parsed_line" || continue
+
                 storage_names+=("$storage_name")
                 LC_ALL=C printf "  %d) %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n" \
                     "$idx" "$storage_name" "$storage_type" "$avail_gb" "$total_gb" "$used_pct"
@@ -716,12 +715,11 @@ create_lxc_container() {
             local idx=1
             
             while IFS= read -r line; do
-                local storage_name=$(echo "$line" | awk '{print $1}')
-                local storage_type=$(echo "$line" | awk '{print $2}')
-                local avail_gb=$(echo "$line" | awk '{print $6/1048576}')
-                local total_gb=$(echo "$line" | awk '{print $4/1048576}')
-                local used_pct=$(echo "$line" | awk '{print $7}')
-                
+                local storage_name storage_type avail_gb total_gb used_pct parsed_line
+                parsed_line=$(LC_NUMERIC=C awk '{printf "%s,%s,%.1f,%.1f,%s", $1, $2, $6/1048576, $4/1048576, $7}' <<< "$line")
+                [[ -z "$parsed_line" ]] && continue
+                IFS=',' read -r storage_name storage_type avail_gb total_gb used_pct <<< "$parsed_line" || continue
+
                 storage_names+=("$storage_name")
                 LC_ALL=C printf "  %d) %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n" \
                     "$idx" "$storage_name" "$storage_type" "$avail_gb" "$total_gb" "$used_pct"
