@@ -20,6 +20,7 @@ var (
 	enabled       atomic.Bool
 	updateTicker  *time.Ticker
 	stopUpdatesCh chan struct{}
+	updateLoopWg  sync.WaitGroup
 )
 
 const updateInterval = 2 * time.Second
@@ -125,7 +126,9 @@ func startUpdateLoopLocked() {
 	stopUpdatesCh = stopCh
 	updateTicker = ticker
 
+	updateLoopWg.Add(1)
 	go func(stop <-chan struct{}, tick *time.Ticker) {
+		defer updateLoopWg.Done()
 		for {
 			select {
 			case <-tick.C:
@@ -139,14 +142,16 @@ func startUpdateLoopLocked() {
 }
 
 func stopUpdateLoopLocked() {
-	if ticker := updateTicker; ticker != nil {
-		ticker.Stop()
-		updateTicker = nil
-	}
 	if ch := stopUpdatesCh; ch != nil {
 		close(ch)
 		stopUpdatesCh = nil
 	}
+	if ticker := updateTicker; ticker != nil {
+		ticker.Stop()
+		updateTicker = nil
+	}
+	// Wait for the update goroutine to exit
+	updateLoopWg.Wait()
 }
 
 func updateMetrics(cfg MockConfig) {
