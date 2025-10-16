@@ -1037,6 +1037,14 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				ResolvedTime: time.Now(),
 			}
 
+			// Remove any pending notification tracking for this alert since it's no longer valid.
+			if _, isPending := m.pendingAlerts[alertID]; isPending {
+				delete(m.pendingAlerts, alertID)
+				log.Debug().
+					Str("alertID", alertID).
+					Msg("Cleared pending alert after configuration update")
+			}
+
 			// Remove from active alerts
 			m.removeActiveAlertNoLock(alertID)
 
@@ -1046,6 +1054,10 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			log.Info().
 				Str("alertID", alertID).
 				Msg("Alert auto-resolved after configuration change")
+
+			if m.onResolved != nil {
+				go m.onResolved(alertID)
+			}
 		}
 	}
 
