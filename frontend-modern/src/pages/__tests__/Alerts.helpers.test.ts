@@ -12,11 +12,11 @@ import {
   pathForTab,
   tabFromPath,
 } from '../Alerts';
+import type { RawOverrideConfig } from '@/types/alerts';
 
 describe('normalizeMetricDelayMap', () => {
   it('returns empty object when input is nullish', () => {
     expect(normalizeMetricDelayMap(undefined)).toEqual({});
-    // @ts-expect-error - testing runtime null handling
     expect(normalizeMetricDelayMap(null)).toEqual({});
   });
 
@@ -139,17 +139,19 @@ describe('threshold helper utilities', () => {
   it('extracts trigger values and ignores non-threshold keys', () => {
     const result = extractTriggerValues({
       cpu: { trigger: 80, clear: 70 },
-      memory: 85,
+      memory: { trigger: 85, clear: 75 },
       disabled: true,
       poweredOffSeverity: 'warning',
-      networkIn: false,
+      customFlag: true,
+      customLegacy: 42,
       label: 'ignored',
-    });
+    } as RawOverrideConfig);
 
     expect(result).toEqual({
       cpu: 80,
       memory: 85,
-      networkIn: 0,
+      customFlag: 0,
+      customLegacy: 42,
     });
   });
 
