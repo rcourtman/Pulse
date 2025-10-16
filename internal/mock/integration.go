@@ -120,29 +120,31 @@ func disableMockMode() {
 
 func startUpdateLoopLocked() {
 	stopUpdateLoopLocked()
-	stopUpdatesCh = make(chan struct{})
-	updateTicker = time.NewTicker(updateInterval)
+	stopCh := make(chan struct{})
+	ticker := time.NewTicker(updateInterval)
+	stopUpdatesCh = stopCh
+	updateTicker = ticker
 
-	go func() {
+	go func(stop <-chan struct{}, tick *time.Ticker) {
 		for {
 			select {
-			case <-updateTicker.C:
+			case <-tick.C:
 				cfg := GetConfig()
 				updateMetrics(cfg)
-			case <-stopUpdatesCh:
+			case <-stop:
 				return
 			}
 		}
-	}()
+	}(stopCh, ticker)
 }
 
 func stopUpdateLoopLocked() {
-	if updateTicker != nil {
-		updateTicker.Stop()
+	if ticker := updateTicker; ticker != nil {
+		ticker.Stop()
 		updateTicker = nil
 	}
-	if stopUpdatesCh != nil {
-		close(stopUpdatesCh)
+	if ch := stopUpdatesCh; ch != nil {
+		close(ch)
 		stopUpdatesCh = nil
 	}
 }
