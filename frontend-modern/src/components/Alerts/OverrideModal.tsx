@@ -374,6 +374,76 @@ export function OverrideModal(props: OverrideModalProps) {
                       </select>
                     </div>
                   </div>
+
+                  <div class="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={enabledMetrics().networkIn}
+                      onChange={(e) =>
+                        setEnabledMetrics({
+                          ...enabledMetrics(),
+                          networkIn: e.currentTarget.checked,
+                        })
+                      }
+                      class="mt-1 rounded border-gray-300 dark:border-gray-600"
+                    />
+                    <div class="flex-1 space-y-2">
+                      <label class="text-sm text-gray-600 dark:text-gray-400">Network In</label>
+                      <select
+                        value={thresholds().networkIn}
+                        onChange={(e) =>
+                          setThresholds({
+                            ...thresholds(),
+                            networkIn: parseInt(e.currentTarget.value),
+                          })
+                        }
+                        class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
+                      >
+                        <option value="0">Off</option>
+                        <option value="10">10 MB/s</option>
+                        <option value="50">50 MB/s</option>
+                        <option value="100">100 MB/s</option>
+                        <option value="200">200 MB/s</option>
+                        <option value="500">500 MB/s</option>
+                        <option value="1000">1000 MB/s</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={enabledMetrics().networkOut}
+                      onChange={(e) =>
+                        setEnabledMetrics({
+                          ...enabledMetrics(),
+                          networkOut: e.currentTarget.checked,
+                        })
+                      }
+                      class="mt-1 rounded border-gray-300 dark:border-gray-600"
+                    />
+                    <div class="flex-1 space-y-2">
+                      <label class="text-sm text-gray-600 dark:text-gray-400">Network Out</label>
+                      <select
+                        value={thresholds().networkOut}
+                        onChange={(e) =>
+                          setThresholds({
+                            ...thresholds(),
+                            networkOut: parseInt(e.currentTarget.value),
+                          })
+                        }
+                        class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
+                      >
+                        <option value="0">Off</option>
+                        <option value="10">10 MB/s</option>
+                        <option value="50">50 MB/s</option>
+                        <option value="100">100 MB/s</option>
+                        <option value="200">200 MB/s</option>
+                        <option value="500">500 MB/s</option>
+                        <option value="1000">1000 MB/s</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
