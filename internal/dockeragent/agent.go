@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -825,6 +826,34 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	a.logger.Info().Msg("Agent updated successfully, restarting...")
 }
 
+func determineSelfUpdateArch() string {
+	switch runtime.GOARCH {
+	case "amd64":
+		return "linux-amd64"
+	case "arm64":
+		return "linux-arm64"
+	case "arm":
+		return "linux-armv7"
+	}
+
+	out, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		return ""
+	}
+
+	normalized := strings.ToLower(strings.TrimSpace(string(out)))
+	switch normalized {
+	case "x86_64", "amd64":
+		return "linux-amd64"
+	case "aarch64", "arm64":
+		return "linux-arm64"
+	case "armv7l", "armhf", "armv7":
+		return "linux-armv7"
+	default:
+		return ""
+	}
+}
+
 // selfUpdate downloads the new agent binary and replaces the current one
 func (a *Agent) selfUpdate(ctx context.Context) error {
 	target := a.primaryTarget()
@@ -838,28 +867,69 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	// Download new binary
-	url := fmt.Sprintf("%s/download/pulse-docker-agent", target.URL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create download request: %w", err)
+	downloadBase := strings.TrimRight(target.URL, "/") + "/download/pulse-docker-agent"
+	archParam := determineSelfUpdateArch()
+
+	type downloadCandidate struct {
+		url  string
+		arch string
 	}
 
-	if target.Token != "" {
-		req.Header.Set("X-API-Token", target.Token)
-		req.Header.Set("Authorization", "Bearer "+target.Token)
+	candidates := make([]downloadCandidate, 0, 2)
+	if archParam != "" {
+		candidates = append(candidates, downloadCandidate{
+			url:  fmt.Sprintf("%s?arch=%s", downloadBase, archParam),
+			arch: archParam,
+		})
 	}
+	candidates = append(candidates, downloadCandidate{url: downloadBase})
 
 	client := a.httpClientFor(target)
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to download new binary: %w", err)
+	var resp *http.Response
+	var lastErr error
+
+	for _, candidate := range candidates {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, candidate.url, nil)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create download request: %w", err)
+			continue
+		}
+
+		if target.Token != "" {
+			req.Header.Set("X-API-Token", target.Token)
+			req.Header.Set("Authorization", "Bearer "+target.Token)
+		}
+
+		response, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to download new binary: %w", err)
+			continue
+		}
+
+		if response.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("download failed with status: %s", response.Status)
+			response.Body.Close()
+			continue
+		}
+
+		resp = response
+		if candidate.arch != "" {
+			a.logger.Debug().
+				Str("arch", candidate.arch).
+				Msg("Self-update: downloaded architecture-specific agent binary")
+		} else if archParam != "" {
+			a.logger.Debug().Msg("Self-update: falling back to server default agent binary")
+		}
+		break
+	}
+
+	if resp == nil {
+		if lastErr == nil {
+			lastErr = errors.New("failed to download new binary")
+		}
+		return lastErr
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed with status: %s", resp.Status)
-	}
 
 	// Create temporary file
 	tmpFile, err := os.CreateTemp("", "pulse-docker-agent-*.tmp")
