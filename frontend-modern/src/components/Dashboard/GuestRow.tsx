@@ -52,7 +52,7 @@ export function GuestRow(props: GuestRowProps) {
   const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(initialGuestId) ?? false);
   const guestId = createMemo(() => buildGuestId(props.guest));
 
-  const hasMultipleDisks = createMemo(() => (props.guest.disks?.length ?? 0) > 1);
+  const hasFilesystemDetails = createMemo(() => (props.guest.disks?.length ?? 0) > 0);
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
   const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
   const hasNetworkInterfaces = createMemo(() => networkInterfaces().length > 0);
@@ -95,16 +95,19 @@ export function GuestRow(props: GuestRowProps) {
     }
     return lines.length > 0 ? lines : undefined;
   });
-  const memoryTooltip = createMemo(() =>
-    memoryExtraLines()?.join('\n') ?? undefined,
+  const memoryTooltip = createMemo(() => memoryExtraLines()?.join('\n') ?? undefined);
+  const hasDrawerContent = createMemo(
+    () =>
+      hasOsInfo() ||
+      ipAddresses().length > 0 ||
+      (memoryExtraLines()?.length ?? 0) > 0 ||
+      hasFilesystemDetails() ||
+      hasNetworkInterfaces(),
   );
-  const canShowDrawer = createMemo(() =>
-    hasOsInfo() ||
-    ipAddresses().length > 0 ||
-    (memoryExtraLines() && memoryExtraLines()!.length > 0) ||
-    hasMultipleDisks() ||
-    hasNetworkInterfaces(),
+  const hasFallbackContent = createMemo(
+    () => !hasDrawerContent() && (props.guest.type === 'qemu' || props.guest.type === 'lxc'),
   );
+  const canShowDrawer = createMemo(() => hasDrawerContent() || hasFallbackContent());
 
   createEffect(on(guestId, (id) => {
     const stored = drawerState.get(id);
@@ -408,101 +411,131 @@ export function GuestRow(props: GuestRowProps) {
                 drawerDisabled() ? 'opacity-50 saturate-75 pointer-events-none' : ''
               }`}
             >
-              <Show when={hasOsInfo() || ipAddresses().length > 0}>
-                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Guest Overview</div>
-                  <div class="mt-1 space-y-1">
-                    <Show when={hasOsInfo()}>
-                      <div class="flex flex-wrap items-center gap-1 text-gray-600 dark:text-gray-300">
-                        <Show when={osName().length > 0}>
-                          <span class="font-medium" title={osName()}>{osName()}</span>
-                        </Show>
-                        <Show when={osName().length > 0 && osVersion().length > 0}>
-                          <span class="text-gray-400 dark:text-gray-500">•</span>
-                        </Show>
-                        <Show when={osVersion().length > 0}>
-                          <span title={osVersion()}>{osVersion()}</span>
-                        </Show>
-                      </div>
-                    </Show>
-                    <Show when={ipAddresses().length > 0}>
-                      <div class="flex flex-wrap gap-1">
-                        <For each={ipAddresses()}>
-                          {(ip) => (
-                            <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                              {ip}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
+              <Show
+                when={hasDrawerContent()}
+                fallback={
+                  <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">
+                      Guest details unavailable
+                    </div>
+                    <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
+                      <Show
+                        when={isVM(props.guest)}
+                        fallback={
+                          <p>
+                            Start this container and ensure the Pulse user has sufficient Proxmox
+                            permissions to collect guest metrics.
+                          </p>
+                        }
+                      >
+                        <p>{getDiskStatusTooltip()}</p>
+                        <p>
+                          Install and run the qemu-guest-agent inside this VM so Pulse can surface
+                          OS, network, and filesystem details.
+                        </p>
+                      </Show>
+                    </div>
                   </div>
-                </div>
-              </Show>
-
-              <Show when={memoryExtraLines() && memoryExtraLines()!.length > 0}>
-                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Memory</div>
-                  <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
-                    <For each={memoryExtraLines()!}>{(line) => <div>{line}</div>}</For>
-                  </div>
-                </div>
-              </Show>
-
-              <Show when={hasMultipleDisks() && props.guest.disks && props.guest.disks.length > 0}>
-                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Filesystems</div>
-                  <div class="mt-1 text-gray-600 dark:text-gray-300">
-                    <DiskList
-                      disks={props.guest.disks || []}
-                      diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
-                    />
-                  </div>
-                </div>
-              </Show>
-
-              <Show when={hasNetworkInterfaces()}>
-                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Network Interfaces</div>
-                  <div class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Row charts show current rate; totals below are cumulative since boot.</div>
-                  <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
-                    <For each={networkInterfaces()}>
-                      {(iface) => {
-                        const addresses = iface.addresses ?? [];
-                        const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
-                        return (
-                          <div class="space-y-1 rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700">
-                            <div class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
-                              <span class="truncate" title={iface.name}>{iface.name || 'interface'}</span>
-                              <Show when={iface.mac}>
-                                <span class="text-[10px] text-gray-400 dark:text-gray-500" title={iface.mac}>
-                                  {iface.mac}
-                                </span>
-                              </Show>
-                            </div>
-                            <Show when={addresses.length > 0}>
-                              <div class="flex flex-wrap gap-1">
-                                <For each={addresses}>
-                                  {(ip) => (
-                                    <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                      {ip}
-                                    </span>
-                                  )}
-                                </For>
-                              </div>
+                }
+              >
+                <>
+                  <Show when={hasOsInfo() || ipAddresses().length > 0}>
+                    <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Guest Overview</div>
+                      <div class="mt-1 space-y-1">
+                        <Show when={hasOsInfo()}>
+                          <div class="flex flex-wrap items-center gap-1 text-gray-600 dark:text-gray-300">
+                            <Show when={osName().length > 0}>
+                              <span class="font-medium" title={osName()}>{osName()}</span>
                             </Show>
-                            <Show when={hasTraffic}>
-                              <div class="flex items-center gap-3 text-[10px] text-gray-500 dark:text-gray-400">
-                                <span>Total RX {formatBytes(iface.rxBytes ?? 0)}</span>
-                                <span>Total TX {formatBytes(iface.txBytes ?? 0)}</span>
-                              </div>
+                            <Show when={osName().length > 0 && osVersion().length > 0}>
+                              <span class="text-gray-400 dark:text-gray-500">•</span>
+                            </Show>
+                            <Show when={osVersion().length > 0}>
+                              <span title={osVersion()}>{osVersion()}</span>
                             </Show>
                           </div>
-                        );
-                      }}
-                    </For>
-                  </div>
-                </div>
+                        </Show>
+                        <Show when={ipAddresses().length > 0}>
+                          <div class="flex flex-wrap gap-1">
+                            <For each={ipAddresses()}>
+                              {(ip) => (
+                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                  {ip}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={memoryExtraLines() && memoryExtraLines()!.length > 0}>
+                    <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Memory</div>
+                      <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
+                        <For each={memoryExtraLines()!}>{(line) => <div>{line}</div>}</For>
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={hasFilesystemDetails() && props.guest.disks && props.guest.disks.length > 0}>
+                    <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Filesystems</div>
+                      <div class="mt-1 text-gray-600 dark:text-gray-300">
+                        <DiskList
+                          disks={props.guest.disks || []}
+                          diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
+                        />
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={hasNetworkInterfaces()}>
+                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                      <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Network Interfaces</div>
+                      <div class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Row charts show current rate; totals below are cumulative since boot.</div>
+                      <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
+                        <For each={networkInterfaces()}>
+                          {(iface) => {
+                            const addresses = iface.addresses ?? [];
+                            const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
+                            return (
+                              <div class="space-y-1 rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700">
+                                <div class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
+                                  <span class="truncate" title={iface.name}>{iface.name || 'interface'}</span>
+                                  <Show when={iface.mac}>
+                                    <span class="text-[10px] text-gray-400 dark:text-gray-500" title={iface.mac}>
+                                      {iface.mac}
+                                    </span>
+                                  </Show>
+                                </div>
+                                <Show when={addresses.length > 0}>
+                                  <div class="flex flex-wrap gap-1">
+                                    <For each={addresses}>
+                                      {(ip) => (
+                                        <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                          {ip}
+                                        </span>
+                                      )}
+                                    </For>
+                                  </div>
+                                </Show>
+                                <Show when={hasTraffic}>
+                                  <div class="flex items-center gap-3 text-[10px] text-gray-500 dark:text-gray-400">
+                                    <span>Total RX {formatBytes(iface.rxBytes ?? 0)}</span>
+                                    <span>Total TX {formatBytes(iface.txBytes ?? 0)}</span>
+                                  </div>
+                                </Show>
+                              </div>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </div>
+                  </Show>
+                </>
               </Show>
             </div>
           </td>
