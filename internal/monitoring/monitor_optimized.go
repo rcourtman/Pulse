@@ -266,7 +266,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				}
 
 				if vm.Status == "running" && vmStatus != nil {
-					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus)
+					guestIPs, guestIfaces, guestOSName, guestOSVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus)
 					if len(guestIPs) > 0 {
 						ipAddresses = guestIPs
 					}

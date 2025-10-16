@@ -75,6 +75,7 @@ kill_port() {
 
 printf "[hot-dev] Cleaning up existing processes...\n"
 
+sudo systemctl stop pulse-hot-dev 2>/dev/null || true
 sudo systemctl stop pulse-backend 2>/dev/null || true
 sudo systemctl stop pulse 2>/dev/null || true
 sudo systemctl stop pulse-frontend 2>/dev/null || true
@@ -196,7 +197,8 @@ cleanup() {
     pkill -f vite 2>/dev/null || true
     pkill -f "npm run dev" 2>/dev/null || true
     pkill -9 -x "pulse" 2>/dev/null || true
-    echo "Hot-dev stopped. To restart normal service, run: sudo systemctl start pulse-backend"
+    echo "Hot-dev stopped. To restart normal service, run: sudo systemctl start pulse"
+    echo "(Legacy installs may use: sudo systemctl start pulse-backend)"
 }
 trap cleanup INT TERM EXIT
 

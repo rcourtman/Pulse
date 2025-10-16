@@ -18,21 +18,56 @@ NC='\033[0m'
 # STATE DETECTION
 #########################################
 
+detect_backend_service() {
+    local services=("pulse-hot-dev" "pulse" "pulse-backend")
+    for svc in "${services[@]}"; do
+        if systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^${svc}\\.service"; then
+            echo "$svc"
+            return 0
+        fi
+    done
+    echo ""
+}
+
+detect_running_backend_service() {
+    local services=("pulse-hot-dev" "pulse" "pulse-backend")
+    for svc in "${services[@]}"; do
+        if systemctl is-active --quiet "$svc" 2>/dev/null; then
+            echo "$svc"
+            return 0
+        fi
+    done
+    echo ""
+}
+
 detect_backend_state() {
     local state="{}"
+    local running_service=$(detect_running_backend_service)
 
-    # Check if pulse-backend service is running
-    if systemctl is-active --quiet pulse-backend 2>/dev/null; then
-        state=$(echo "$state" | jq '. + {backend_running: true, backend_type: "systemd"}')
+    if [[ -n "$running_service" ]]; then
+        local backend_type="systemd"
+        if [[ "$running_service" == "pulse-hot-dev" ]]; then
+            backend_type="hot-dev"
+        fi
+
+        state=$(echo "$state" | jq ". + {backend_running: true, backend_type: \"$backend_type\", backend_service: \"$running_service\"}")
 
         # Check mock mode from logs (multiple possible indicators, look at last 2 minutes for reliability)
-        if sudo journalctl -u pulse-backend --since "2 minutes ago" | grep -qE "(Mock mode enabled|mockEnabled=true|mock mode trackedNodes)"; then
+        if sudo journalctl -u "$running_service" --since "2 minutes ago" | grep -qE "(Mock mode enabled|mockEnabled=true|mock mode trackedNodes)"; then
             state=$(echo "$state" | jq '. + {mock_mode: true}')
         else
             state=$(echo "$state" | jq '. + {mock_mode: false}')
         fi
     else
         state=$(echo "$state" | jq '. + {backend_running: false}')
+        local configured_service=$(detect_backend_service)
+        if [[ -n "$configured_service" ]]; then
+            local backend_type="systemd"
+            if [[ "$configured_service" == "pulse-hot-dev" ]]; then
+                backend_type="hot-dev"
+            fi
+            state=$(echo "$state" | jq ". + {backend_service: \"$configured_service\", backend_type: \"$backend_type\"}")
+        fi
     fi
 
     # Check what's configured in mock.env.local
@@ -82,6 +117,11 @@ get_full_state() {
 
 switch_to_mock() {
     echo -e "${YELLOW}Switching to mock mode...${NC}"
+    local service=$(detect_backend_service)
+    if [[ -z "$service" ]]; then
+        echo -e "${RED}✗ No Pulse systemd service detected${NC}"
+        return 1
+    fi
 
     # Update mock.env.local (preferred) or mock.env
     if [ -f "$ROOT_DIR/mock.env.local" ]; then
@@ -93,14 +133,14 @@ switch_to_mock() {
     fi
 
     # Restart backend
-    sudo systemctl restart pulse-backend
+    sudo systemctl restart "$service"
     echo -e "${GREEN}✓ Backend restarted${NC}"
 
     # Wait for backend to be ready
     sleep 3
 
     # Verify
-    if sudo journalctl -u pulse-backend --since "5 seconds ago" | grep -qE "(Mock mode enabled|mockEnabled=true|mock mode trackedNodes)"; then
+    if sudo journalctl -u "$service" --since "5 seconds ago" | grep -qE "(Mock mode enabled|mockEnabled=true|mock mode trackedNodes)"; then
         echo -e "${GREEN}✓ Mock mode ACTIVE${NC}"
         return 0
     else
@@ -111,6 +151,11 @@ switch_to_mock() {
 
 switch_to_production() {
     echo -e "${YELLOW}Switching to production mode...${NC}"
+    local service=$(detect_backend_service)
+    if [[ -z "$service" ]]; then
+        echo -e "${RED}✗ No Pulse systemd service detected${NC}"
+        return 1
+    fi
 
     # Sync production config first
     if [ -f "$ROOT_DIR/scripts/sync-production-config.sh" ]; then
@@ -128,7 +173,7 @@ switch_to_production() {
     fi
 
     # Restart backend
-    sudo systemctl restart pulse-backend
+    sudo systemctl restart "$service"
     echo -e "${GREEN}✓ Backend restarted${NC}"
 
     # Wait for backend to be ready
@@ -211,7 +256,12 @@ cmd_prod() {
 
 cmd_restart() {
     echo -e "${YELLOW}Restarting backend...${NC}"
-    sudo systemctl restart pulse-backend
+    local service=$(detect_backend_service)
+    if [[ -z "$service" ]]; then
+        echo -e "${RED}✗ No Pulse systemd service detected${NC}"
+        return 1
+    fi
+    sudo systemctl restart "$service"
     sleep 2
     echo -e "${GREEN}✓ Backend restarted${NC}"
 }

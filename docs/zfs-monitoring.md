@@ -81,7 +81,7 @@ pveum acl modify /nodes -user pulse-monitor@pam -role PVEAuditor
 Disable ZFS monitoring if not needed:
 ```bash
 echo "PULSE_DISABLE_ZFS_MONITORING=true" >> /opt/pulse/.env
-systemctl restart pulse-backend
+systemctl restart pulse
 ```
 
 ## Example Alert

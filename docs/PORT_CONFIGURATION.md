@@ -69,7 +69,7 @@ Keeping application configuration separate from authentication credentials:
    ```bash
    systemctl list-units | grep pulse
    ```
-   It might be `pulse` or `pulse-backend` depending on your installation method.
+   It might be `pulse` (default), `pulse-backend` (legacy), or `pulse-hot-dev` (dev environment) depending on your installation method.
 
 2. Verify the configuration is loaded:
    ```bash

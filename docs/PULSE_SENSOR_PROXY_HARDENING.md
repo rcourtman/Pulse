@@ -767,7 +767,7 @@ EOF
    # Should show socket
 
    # Check Pulse logs for connection success
-   journalctl -u pulse-backend -n 50 | grep -i temperature
+   journalctl -u pulse -n 50 | grep -i temperature
    ```
 
 **Phase 4: End-to-End Validation**

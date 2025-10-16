@@ -8,12 +8,14 @@ Pulse provides a REST API for monitoring and managing Proxmox VE and PBS instanc
 
 Pulse supports multiple authentication methods that can be used independently or together:
 
+> **Service name note:** Systemd deployments use `pulse.service`. If your host still uses the legacy `pulse-backend.service`, substitute that name in the commands below.
+
 ### Password Authentication
 Set a username and password for web UI access. Passwords are hashed with bcrypt (cost 12) for security.
 
 ```bash
 # Systemd
-sudo systemctl edit pulse-backend
+sudo systemctl edit pulse
 # Add:
 [Service]
 Environment="PULSE_AUTH_USER=admin"
@@ -32,7 +34,7 @@ For programmatic API access and automation. Manage tokens via **Settings → Sec
 
 ```bash
 # Systemd
-sudo systemctl edit pulse-backend
+sudo systemctl edit pulse
 # Add:
 [Service]
 Environment="API_TOKENS=token-a,token-b"

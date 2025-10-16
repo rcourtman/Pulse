@@ -362,7 +362,7 @@ Configure persistent alert policies in **Settings → Alerts → Custom Rules**:
 ### HTTPS/TLS Configuration
 Enable HTTPS by setting these environment variables:
 ```bash
-# Systemd: sudo systemctl edit pulse-backend
+# Systemd (service: pulse; legacy installs may use pulse-backend): sudo systemctl edit pulse
 Environment="HTTPS_ENABLED=true"
 Environment="TLS_CERT_FILE=/etc/pulse/cert.pem"
 Environment="TLS_KEY_FILE=/etc/pulse/key.pem"
@@ -379,7 +379,7 @@ docker run -d -p 7655:7655 \
 
 For deployment overrides (ports, etc), use environment variables:
 ```bash
-# Systemd: sudo systemctl edit pulse-backend
+# Systemd (service: pulse; legacy installs may use pulse-backend): sudo systemctl edit pulse
 Environment="FRONTEND_PORT=8080"
 
 # Docker: -e FRONTEND_PORT=8080
