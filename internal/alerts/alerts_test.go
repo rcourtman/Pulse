@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -41,6 +42,132 @@ func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "usage", 85, threshold, nil)
 	if !m.activeAlerts["res1-usage"].Acknowledged {
 		t.Fatalf("acknowledged flag lost after update")
+	}
+}
+
+func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
+	m := NewManager()
+
+	vmID := "instance-node-101"
+	instanceName := "instance"
+
+	// Start with default configuration to allow CPU alerts.
+	initialConfig := AlertConfig{
+		Enabled: true,
+		GuestDefaults: ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+		},
+		TimeThreshold: 0,
+		TimeThresholds: map[string]int{},
+		NodeDefaults: ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
+		},
+		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
+		Overrides:      make(map[string]ThresholdConfig),
+	}
+	m.UpdateConfig(initialConfig)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	var dispatched []*Alert
+	done := make(chan struct{}, 1)
+	var resolved []string
+	resolvedDone := make(chan struct{}, 1)
+	m.SetAlertCallback(func(alert *Alert) {
+		dispatched = append(dispatched, alert)
+		select {
+		case done <- struct{}{}:
+		default:
+		}
+	})
+	m.SetResolvedCallback(func(alertID string) {
+		resolved = append(resolved, alertID)
+		select {
+		case resolvedDone <- struct{}{}:
+		default:
+		}
+	})
+
+	vm := models.VM{
+		ID:       vmID,
+		Name:     "test-vm",
+		Node:     "node",
+		Instance: instanceName,
+		Status:   "running",
+		CPU:      1.0, // 100% once multiplied by 100 inside CheckGuest
+		Memory: models.Memory{
+			Usage: 65,
+		},
+		Disk: models.Disk{
+			Usage: 40,
+		},
+	}
+
+	// Initial check should trigger an alert with default thresholds.
+	m.CheckGuest(vm, instanceName)
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("did not receive initial alert dispatch")
+	}
+	if len(dispatched) != 1 {
+		t.Fatalf("expected 1 alert before disabling metric, got %d", len(dispatched))
+	}
+
+	// Apply override disabling CPU alerts for this VM.
+	disabledConfig := initialConfig
+	disabledConfig.Overrides = map[string]ThresholdConfig{
+		vmID: {
+			CPU: &HysteresisThreshold{Trigger: -1, Clear: 0},
+		},
+	}
+	disabledConfig.TimeThreshold = 0
+	disabledConfig.TimeThresholds = map[string]int{}
+	m.UpdateConfig(disabledConfig)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	// Clear dispatched slice to capture only post-disable notifications.
+	dispatched = dispatched[:0]
+	done = make(chan struct{}, 1)
+
+	// Re-run evaluation with high CPU; no alert should be dispatched.
+	m.CheckGuest(vm, instanceName)
+	select {
+	case <-done:
+		t.Fatalf("expected no alerts after disabling CPU metric, but callback fired")
+	case <-time.After(100 * time.Millisecond):
+		// No callback fired as expected.
+	}
+
+	// Active alerts should be cleared by the config update.
+	m.mu.RLock()
+	activeCount := len(m.activeAlerts)
+	m.mu.RUnlock()
+	if activeCount != 0 {
+		t.Fatalf("expected active alerts to be cleared after disabling metric, got %d", activeCount)
+	}
+
+	select {
+	case <-resolvedDone:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("expected resolved callback to fire after disabling metric")
+	}
+	if len(resolved) != 1 || resolved[0] != fmt.Sprintf("%s-cpu", vmID) {
+		t.Fatalf("expected resolved callback for %s-cpu, got %v", vmID, resolved)
+	}
+
+	m.mu.RLock()
+	_, isPending := m.pendingAlerts[fmt.Sprintf("%s-cpu", vmID)]
+	m.mu.RUnlock()
+	if isPending {
+		t.Fatalf("expected pending alert entry to be cleared after disabling metric")
 	}
 }
 
