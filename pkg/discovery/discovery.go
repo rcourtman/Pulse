@@ -191,12 +191,10 @@ func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, ipChan <-c
 		case <-ctx.Done():
 			return
 		default:
-			// Check port 8006 (could be PVE or PMG)
 			if server := s.checkPort8006(ctx, ip); server != nil {
 				resultChan <- server
 			}
 
-			// Check PBS (port 8007)
 			if server := s.checkServer(ctx, ip, 8007, "pbs"); server != nil {
 				resultChan <- server
 			}

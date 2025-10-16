@@ -377,3 +377,22 @@ func TestDiscoverServersWithCallback(t *testing.T) {
 		t.Fatalf("expected callbacks for both servers, got %d", callbackCount)
 	}
 }
+
+func TestDiscoverServersCancelledContext(t *testing.T) {
+	t.Parallel()
+
+	scanner := NewScanner()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := scanner.DiscoverServersWithCallback(ctx, "127.0.0.1/32", nil)
+	if err == nil {
+		t.Fatalf("expected context error, got nil")
+	}
+	if result == nil {
+		t.Fatalf("expected result object even on cancellation")
+	}
+	if len(result.Servers) != 0 {
+		t.Fatalf("expected no servers on cancelled context")
+	}
+}
