@@ -571,11 +571,12 @@ func TestSessionCookieAllowsAuthenticatedAccess(t *testing.T) {
 func readExpectedVersion(t *testing.T) string {
 	t.Helper()
 
-	versionPath := filepath.Join("VERSION")
+	// Try to read VERSION from repository root
+	versionPath := filepath.Join("..", "..", "VERSION")
 	data, err := os.ReadFile(versionPath)
 	if err != nil {
 		// Fall back to the hard-coded fallback in version manager
-		return "4.24.0-rc.1"
+		return "4.24.0"
 	}
 	return strings.TrimSpace(string(data))
 }
@@ -584,7 +585,12 @@ func normalizeVersion(v string) string {
 	v = strings.TrimSpace(v)
 	v = strings.TrimPrefix(v, "v")
 	v = strings.TrimSuffix(v, "-dirty")
+	// Strip pre-release metadata (after '-')
 	if idx := strings.IndexByte(v, '-'); idx >= 0 {
+		v = v[:idx]
+	}
+	// Strip build metadata (after '+')
+	if idx := strings.IndexByte(v, '+'); idx >= 0 {
 		v = v[:idx]
 	}
 	return v
