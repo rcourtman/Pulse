@@ -351,9 +351,13 @@ if command -v pvecm >/dev/null 2>&1; then
             print_info "Authorizing proxy key on node $node_ip..."
 
             IS_LOCAL=false
-            if [[ " $LOCAL_IPS " == *" $node_ip "* ]]; then
-                IS_LOCAL=true
-            fi
+            # Check if node_ip matches any of the local IPs (exact match with word boundaries)
+            for local_ip in $LOCAL_IPS; do
+                if [[ "$node_ip" == "$local_ip" ]]; then
+                    IS_LOCAL=true
+                    break
+                fi
+            done
             if [[ " $LOCAL_HOSTNAMES " == *" $node_ip "* ]]; then
                 IS_LOCAL=true
             fi
