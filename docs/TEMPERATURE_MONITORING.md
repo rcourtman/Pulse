@@ -471,7 +471,35 @@ journalctl -u pulse | grep -i "proxy\|temperature"
 
 ### SSH Key Rotation
 
-Rotate SSH keys periodically for security (recommended every 90 days):
+Rotate SSH keys periodically for security (recommended every 90 days).
+
+**Automated Rotation (Recommended):**
+
+The `/opt/pulse/scripts/pulse-proxy-rotate-keys.sh` script handles rotation safely with staging, verification, and rollback support:
+
+```bash
+# 1. Dry-run first (recommended)
+sudo /opt/pulse/scripts/pulse-proxy-rotate-keys.sh --dry-run
+
+# 2. Perform rotation
+sudo /opt/pulse/scripts/pulse-proxy-rotate-keys.sh
+```
+
+**What the script does:**
+- Generates new Ed25519 keypair in staging directory
+- Pushes new key to all cluster nodes via proxy RPC
+- Verifies SSH connectivity with new key on each node
+- Atomically swaps keys (current → backup, staging → active)
+- Preserves old keys for rollback
+
+**If rotation fails, rollback:**
+```bash
+sudo /opt/pulse/scripts/pulse-proxy-rotate-keys.sh --rollback
+```
+
+**Manual Rotation (Fallback):**
+
+If the automated script fails or is unavailable:
 
 ```bash
 # 1. On Proxmox host, backup old keys
@@ -482,22 +510,10 @@ cp id_ed25519.pub id_ed25519.pub.backup
 # 2. Generate new keypair
 ssh-keygen -t ed25519 -f id_ed25519 -N "" -C "pulse-sensor-proxy-rotated"
 
-# 3. Get the new public key
-cat id_ed25519.pub
+# 3. Re-run setup to push keys to cluster
+curl -fsSL https://get.pulsenode.com/install-proxy.sh | bash -s -- --ctid <your-container-id>
 
-# 4. Add new key to all cluster nodes
-# For each node in your cluster:
-ssh root@node1 "echo 'NEW_PUBLIC_KEY_HERE' >> /root/.ssh/authorized_keys"
-ssh root@node2 "echo 'NEW_PUBLIC_KEY_HERE' >> /root/.ssh/authorized_keys"
-# ... repeat for all nodes
-
-# 5. Restart proxy to use new keys
-systemctl restart pulse-sensor-proxy
-
-# 6. Verify temperature data still works in Pulse UI
-
-# 7. Remove old keys from nodes (after confirming new keys work)
-ssh root@node1 "sed -i '/pulse-sensor-proxy-old/d' /root/.ssh/authorized_keys"
+# 4. Verify temperature data still works in Pulse UI
 ```
 
 ### Revoking Access When Nodes Leave
@@ -567,18 +583,33 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 
 ### Known Limitations
 
-**One Proxy Per Host:**
+**Single Proxy = Single Point of Failure:**
 - Each Proxmox host runs one pulse-sensor-proxy instance
+- If the proxy service dies, temperature monitoring stops for all containers on that host
+- This is acceptable for read-only telemetry, but be aware of the failure mode
+- Systemd auto-restart (`Restart=on-failure`) mitigates most outages
 - If multiple Pulse containers run on same host, they share the same proxy
-- All containers see the same temperature data from the same cluster
+
+**Sensors Output Parsing Brittleness:**
+- Pulse depends on `sensors -j` JSON output format from lm-sensors
+- Changes to sensor names, structure, or output format could break parsing
+- Consider adding schema validation and instrumentation to detect issues early
+- Monitor proxy logs for parsing errors: `journalctl -u pulse-sensor-proxy | grep -i "parse\|error"`
+
+**Cluster Discovery Limitations:**
+- Proxy uses `pvecm status` to discover cluster nodes (requires Proxmox IPC access)
+- If Proxmox hardens IPC access or cluster topology changes unexpectedly, discovery may fail
+- Standalone Proxmox nodes work but only monitor that single node
+- Fallback: Re-run setup script manually to reconfigure cluster access
+
+**SSH Fan-Out Scaling:**
+- Proxy SSHs to each node sequentially during each polling cycle
+- Large clusters (10+ nodes) at short intervals may trigger rate limiting or increase load
+- Consider implementing caching or throttling if you experience SSH connection issues
+- Monitor SSH latency metrics: `curl -s http://127.0.0.1:9127/metrics | grep pulse_proxy_ssh_latency`
 
 **Requires Proxmox Cluster Membership:**
-- Proxy uses `pvecm nodes` to discover cluster members
-- Standalone Proxmox nodes work but only monitor that single node
-- For standalone nodes, proxy is less useful (direct SSH works fine)
-
-**Passwordless Root SSH Required:**
-- Proxy assumes passwordless root SSH between cluster nodes
+- Proxy requires passwordless root SSH between cluster nodes
 - Standard for Proxmox clusters, but hardened environments may differ
 - Alternative: Create dedicated service account with sudo access to `sensors`
 
@@ -610,6 +641,48 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 2. Verify binary exists: `ls -l /usr/local/bin/pulse-sensor-proxy`
 3. Test manually: `/usr/local/bin/pulse-sensor-proxy --version`
 4. Check socket directory: `ls -ld /var/run`
+
+### Future Improvements
+
+**Potential Enhancements (Roadmap):**
+
+1. **Proxmox API Integration**
+   - If future Proxmox versions expose temperature telemetry via API, retire SSH approach
+   - Would eliminate SSH key management and improve security posture
+   - Monitor Proxmox development for metrics/RRD temperature endpoints
+
+2. **Agent-Based Architecture**
+   - Deploy lightweight agents on each node for richer telemetry
+   - Reduces SSH fan-out overhead for large clusters
+   - Trade-off: Adds deployment/update complexity
+   - Consider only if demand for additional metrics grows
+
+3. **SNMP/IPMI Support**
+   - Optional integration for baseboard management controllers
+   - Better for hardware-level sensors (baseboard temps, fan speeds)
+   - Requires hardware/firmware support, so keep as optional add-on
+
+4. **Schema Validation**
+   - Add JSON schema validation for `sensors -j` output
+   - Detect format changes early with instrumentation
+   - Log warnings when unexpected sensor formats appear
+
+5. **Caching & Throttling**
+   - Implement result caching for large clusters (10+ nodes)
+   - Reduce SSH overhead with configurable TTL
+   - Add request throttling to prevent SSH rate limiting
+
+6. **Automated Key Rotation**
+   - Systemd timer for automatic 90-day rotation
+   - Already supported via `/opt/pulse/scripts/pulse-proxy-rotate-keys.sh`
+   - Just needs timer unit configuration (documented in hardening guide)
+
+7. **Health Check Endpoint**
+   - Add `/health` endpoint separate from Prometheus metrics
+   - Enable external monitoring systems (Nagios, Zabbix, etc.)
+   - Return proxy status, socket accessibility, and last successful poll
+
+**Contributions Welcome:** If any of these improvements interest you, open a GitHub issue to discuss implementation!
 
 ### Getting Help
 
