@@ -345,7 +345,7 @@ if command -v pvecm >/dev/null 2>&1; then
         if [[ $SSH_FAILURE_COUNT -gt 0 ]]; then
             print_warn "  ✗ Failed: $SSH_FAILURE_COUNT node(s) - ${SSH_FAILED_NODES[*]}"
             print_info ""
-            print_info "To retry failed nodes, use Pulse's 'Ensure cluster keys' button or manually run:"
+            print_info "To retry failed nodes, re-run this script or manually run:"
             print_info "  ssh root@<node> 'echo \"${AUTH_LINE}\" >> /root/.ssh/authorized_keys'"
         fi
     else
