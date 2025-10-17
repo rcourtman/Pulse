@@ -29,6 +29,36 @@ print_success() {
     echo -e "${GREEN}✓${NC} $1"
 }
 
+configure_local_authorized_key() {
+    local auth_line=$1
+    local auth_keys_file="/root/.ssh/authorized_keys"
+    local tmp_auth
+
+    tmp_auth=$(mktemp)
+    mkdir -p /root/.ssh
+    touch "$tmp_auth"
+
+    if [[ -f "$auth_keys_file" ]]; then
+        grep -vF '# pulse-managed-key' "$auth_keys_file" >"$tmp_auth" 2>/dev/null || true
+        chmod --reference="$auth_keys_file" "$tmp_auth" 2>/dev/null || chmod 600 "$tmp_auth"
+        chown --reference="$auth_keys_file" "$tmp_auth" 2>/dev/null || true
+    else
+        chmod 600 "$tmp_auth"
+    fi
+
+    echo "${auth_line}" >>"$tmp_auth"
+    if mv "$tmp_auth" "$auth_keys_file"; then
+        if [ "$QUIET" != true ]; then
+            print_success "SSH key configured on localhost"
+        fi
+    else
+        rm -f "$tmp_auth"
+        print_warn "Failed to configure SSH key on localhost"
+        print_info "Add this line manually to /root/.ssh/authorized_keys:"
+        print_info "  ${auth_line}"
+    fi
+}
+
 # Check if running on Proxmox host
 if ! command -v pvecm >/dev/null 2>&1; then
     print_error "This script must be run on a Proxmox VE host"
@@ -306,20 +336,41 @@ if command -v pvecm >/dev/null 2>&1; then
 
         # Configure SSH key with forced command restriction
         FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
-        AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY}"
+        AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
         # Track SSH key push results
         SSH_SUCCESS_COUNT=0
         SSH_FAILURE_COUNT=0
         declare -a SSH_FAILED_NODES=()
+        LOCAL_IPS=$(hostname -I 2>/dev/null || echo "")
+        LOCAL_HOSTNAMES="$(hostname 2>/dev/null || echo "") $(hostname -f 2>/dev/null || echo "")"
+        LOCAL_HANDLED=false
 
         # Push key to each cluster node
         for node_ip in $CLUSTER_NODES; do
             print_info "Authorizing proxy key on node $node_ip..."
 
+            IS_LOCAL=false
+            if [[ " $LOCAL_IPS " == *" $node_ip "* ]]; then
+                IS_LOCAL=true
+            fi
+            if [[ " $LOCAL_HOSTNAMES " == *" $node_ip "* ]]; then
+                IS_LOCAL=true
+            fi
+            if [[ "$node_ip" == "127.0.0.1" || "$node_ip" == "localhost" ]]; then
+                IS_LOCAL=true
+            fi
+
+            if [[ "$IS_LOCAL" = true ]]; then
+                configure_local_authorized_key "$AUTH_LINE"
+                LOCAL_HANDLED=true
+                ((SSH_SUCCESS_COUNT++))
+                continue
+            fi
+
             # Remove any existing proxy keys first
             ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
-                "sed -i '/pulse-sensor-proxy\$/d' /root/.ssh/authorized_keys" 2>/dev/null || true
+                "sed -i '/# pulse-managed-key\$/d' /root/.ssh/authorized_keys" 2>/dev/null || true
 
             # Add new key with forced command
             SSH_ERROR=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
@@ -348,30 +399,22 @@ if command -v pvecm >/dev/null 2>&1; then
             print_info "To retry failed nodes, re-run this script or manually run:"
             print_info "  ssh root@<node> 'echo \"${AUTH_LINE}\" >> /root/.ssh/authorized_keys'"
         fi
+        if [[ "$LOCAL_HANDLED" = false ]]; then
+            configure_local_authorized_key "$AUTH_LINE"
+            ((SSH_SUCCESS_COUNT++))
+        fi
     else
         # No cluster found - configure standalone node
         print_info "No cluster detected, configuring standalone node..."
 
         # Configure SSH key with forced command restriction
         FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
-        AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY}"
+        AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
-        # Configure localhost
         print_info "Authorizing proxy key on localhost..."
-
-        # Remove any existing proxy keys first
-        sed -i '/pulse-sensor-proxy$/d' /root/.ssh/authorized_keys 2>/dev/null || touch /root/.ssh/authorized_keys
-
-        # Add new key with forced command
-        if echo "${AUTH_LINE}" >> /root/.ssh/authorized_keys; then
-            print_success "SSH key configured on standalone node"
-            print_info ""
-            print_info "Standalone node configuration complete"
-        else
-            print_warn "Failed to configure SSH key on localhost"
-            print_info "Manually add this line to /root/.ssh/authorized_keys:"
-            print_info "  ${AUTH_LINE}"
-        fi
+        configure_local_authorized_key "$AUTH_LINE"
+        print_info ""
+        print_info "Standalone node configuration complete"
     fi
 else
     # Proxmox host but pvecm not available (shouldn't happen, but handle it)
@@ -380,14 +423,9 @@ else
 
     # Configure localhost as fallback
     FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
-    AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY}"
+    AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
-    sed -i '/pulse-sensor-proxy$/d' /root/.ssh/authorized_keys 2>/dev/null || touch /root/.ssh/authorized_keys
-    if echo "${AUTH_LINE}" >> /root/.ssh/authorized_keys; then
-        print_success "SSH key configured on localhost"
-    else
-        print_warn "Failed to configure SSH key"
-    fi
+    configure_local_authorized_key "$AUTH_LINE"
 fi
 
 # Ensure container mount via mp configuration

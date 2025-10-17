@@ -27,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -2006,8 +2007,34 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		}()
 	}
 
+	if deletedNodeType == "pve" && deletedNodeHost != "" {
+		go h.triggerPVEHostCleanup(deletedNodeHost)
+	}
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+func (h *ConfigHandlers) triggerPVEHostCleanup(host string) {
+	client := tempproxy.NewClient()
+	if client == nil || !client.IsAvailable() {
+		log.Debug().
+			Str("host", host).
+			Msg("Skipping PVE cleanup request; sensor proxy socket unavailable")
+		return
+	}
+
+	if err := client.RequestCleanup(host); err != nil {
+		log.Warn().
+			Err(err).
+			Str("host", host).
+			Msg("Failed to queue PVE host cleanup via sensor proxy")
+		return
+	}
+
+	log.Info().
+		Str("host", host).
+		Msg("Queued PVE host cleanup via sensor proxy")
 }
 
 // HandleTestExistingNode tests a connection for an existing node using stored credentials
@@ -3234,98 +3261,126 @@ if [[ $MAIN_ACTION =~ ^[2Rr]$ ]]; then
     echo "Removing Pulse monitoring components..."
     echo ""
 
-    # Stop and remove pulse-sensor-proxy service
-    if command -v systemctl &> /dev/null; then
-        if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
-            echo "  • Stopping pulse-sensor-proxy service..."
-            systemctl stop pulse-sensor-proxy || true
+    CLEANUP_HELPER_USED=false
+    if [ -x /usr/local/bin/pulse-sensor-cleanup.sh ]; then
+        echo "  • Running cleanup helper..."
+        if /usr/local/bin/pulse-sensor-cleanup.sh; then
+            CLEANUP_HELPER_USED=true
+        else
+            echo "  ✗ Cleanup helper failed, falling back to manual removal."
         fi
-        if systemctl is-enabled --quiet pulse-sensor-proxy 2>/dev/null; then
-            echo "  • Disabling pulse-sensor-proxy service..."
-            systemctl disable pulse-sensor-proxy || true
-        fi
-        if [ -f /etc/systemd/system/pulse-sensor-proxy.service ]; then
-            echo "  • Removing systemd unit file..."
-            rm -f /etc/systemd/system/pulse-sensor-proxy.service
-            systemctl daemon-reload || true
-        fi
+        echo ""
     fi
 
-    # Remove pulse-sensor-proxy binary
-    if [ -f /usr/local/bin/pulse-sensor-proxy ]; then
-        echo "  • Removing pulse-sensor-proxy binary..."
-        rm -f /usr/local/bin/pulse-sensor-proxy
-    fi
-
-    # Remove pulse-sensor-proxy data directory
-    if [ -d /var/lib/pulse-sensor-proxy ]; then
-        echo "  • Removing pulse-sensor-proxy data directory..."
-        rm -rf /var/lib/pulse-sensor-proxy
-    fi
-
-    # Remove pulse-sensor-proxy user
-    if id -u pulse-sensor-proxy >/dev/null 2>&1; then
-        echo "  • Removing pulse-sensor-proxy system user..."
-        userdel pulse-sensor-proxy 2>/dev/null || true
-    fi
-
-    # Remove SSH keys from authorized_keys (only Pulse-managed entries)
-    if [ -f /root/.ssh/authorized_keys ]; then
-        echo "  • Removing SSH keys from authorized_keys..."
-        # Create temporary file for safe atomic update
-        TMP_AUTH_KEYS=$(mktemp)
-        if [ -f "$TMP_AUTH_KEYS" ]; then
-            # Remove only lines with pulse-managed-key marker (preserves user keys)
-            grep -vF '# pulse-managed-key' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null
-            GREP_EXIT=$?
-
-            # Exit 0 = lines remain, Exit 1 = all lines removed (both are success)
-            if [ $GREP_EXIT -eq 0 ] || [ $GREP_EXIT -eq 1 ]; then
-                # Preserve ownership and permissions from original
-                chmod --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || chmod 600 "$TMP_AUTH_KEYS"
-                chown --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || true
-                # Atomically replace (abort if mv fails)
-                if mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys; then
-                    :
-                else
-                    # Cleanup temp file if move failed
-                    rm -f "$TMP_AUTH_KEYS"
-                fi
-            else
-                # Cleanup temp file if grep had a real error (exit > 1)
-                rm -f "$TMP_AUTH_KEYS"
+    if [ "$CLEANUP_HELPER_USED" != true ]; then
+        # Stop and remove pulse-sensor services
+        if command -v systemctl &> /dev/null; then
+            if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                echo "  • Stopping pulse-sensor-proxy service..."
+                systemctl stop pulse-sensor-proxy || true
+            fi
+            if systemctl is-enabled --quiet pulse-sensor-proxy 2>/dev/null; then
+                echo "  • Disabling pulse-sensor-proxy service..."
+                systemctl disable pulse-sensor-proxy || true
+            fi
+            if systemctl is-active --quiet pulse-sensor-cleanup.path 2>/dev/null; then
+                echo "  • Stopping pulse-sensor-cleanup.path..."
+                systemctl stop pulse-sensor-cleanup.path || true
+            fi
+            if systemctl is-enabled --quiet pulse-sensor-cleanup.path 2>/dev/null; then
+                echo "  • Disabling pulse-sensor-cleanup.path..."
+                systemctl disable pulse-sensor-cleanup.path || true
+            fi
+            if systemctl is-enabled --quiet pulse-sensor-cleanup.service 2>/dev/null; then
+                echo "  • Disabling pulse-sensor-cleanup.service..."
+                systemctl disable pulse-sensor-cleanup.service || true
+            fi
+            if [ -f /etc/systemd/system/pulse-sensor-proxy.service ] || \
+               [ -f /etc/systemd/system/pulse-sensor-cleanup.service ] || \
+               [ -f /etc/systemd/system/pulse-sensor-cleanup.path ]; then
+                echo "  • Removing systemd unit files..."
+                rm -f /etc/systemd/system/pulse-sensor-proxy.service
+                rm -f /etc/systemd/system/pulse-sensor-cleanup.service
+                rm -f /etc/systemd/system/pulse-sensor-cleanup.path
+                systemctl daemon-reload || true
             fi
         fi
-    fi
 
-    # Remove LXC bind mounts from all container configs
-    if [ -d /etc/pve/lxc ]; then
-        echo "  • Removing LXC bind mounts from container configs..."
-        if compgen -G "/etc/pve/lxc/*.conf" > /dev/null; then
-            for conf in /etc/pve/lxc/*.conf; do
-                if [ -f "$conf" ] && grep -q "pulse-sensor-proxy" "$conf" 2>/dev/null; then
-                    sed -i '/pulse-sensor-proxy/d' "$conf" || true
-                fi
-            done
+        # Remove pulse-sensor-proxy binary
+        if [ -f /usr/local/bin/pulse-sensor-proxy ]; then
+            echo "  • Removing pulse-sensor-proxy binary..."
+            rm -f /usr/local/bin/pulse-sensor-proxy
         fi
-    fi
 
-    # Remove Pulse monitoring API tokens and user
-    echo "  • Removing Pulse monitoring API tokens and user..."
-    if command -v pveum &> /dev/null; then
-        # List all tokens for pulse-monitor@pam and remove them (idempotent)
-        TOKEN_LIST=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk 'NR>3 {print $2}' | grep -v '^$' || printf '')
-        if [ -n "$TOKEN_LIST" ]; then
-            while IFS= read -r TOKEN; do
-                if [ -n "$TOKEN" ]; then
-                    pveum user token remove pulse-monitor@pam "$TOKEN" 2>/dev/null || true
-                fi
-            done <<< "$TOKEN_LIST"
+        # Remove cleanup helper script
+        if [ -f /usr/local/bin/pulse-sensor-cleanup.sh ]; then
+            echo "  • Removing cleanup helper script..."
+            rm -f /usr/local/bin/pulse-sensor-cleanup.sh
         fi
-        # Remove the user (idempotent)
-        pveum user delete pulse-monitor@pam 2>/dev/null || true
-        # Remove custom roles (idempotent)
-        pveum role delete PulseMonitor 2>/dev/null || true
+
+        # Remove pulse-sensor-proxy data directory
+        if [ -d /var/lib/pulse-sensor-proxy ]; then
+            echo "  • Removing pulse-sensor-proxy data directory..."
+            rm -rf /var/lib/pulse-sensor-proxy
+        fi
+
+        # Remove pulse-sensor-proxy user
+        if id -u pulse-sensor-proxy >/dev/null 2>&1; then
+            echo "  • Removing pulse-sensor-proxy system user..."
+            userdel pulse-sensor-proxy 2>/dev/null || true
+        fi
+
+        # Remove SSH keys from authorized_keys (only Pulse-managed entries)
+        if [ -f /root/.ssh/authorized_keys ]; then
+            echo "  • Removing SSH keys from authorized_keys..."
+            TMP_AUTH_KEYS=$(mktemp)
+            if [ -f "$TMP_AUTH_KEYS" ]; then
+                grep -vF '# pulse-managed-key' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null
+                GREP_EXIT=$?
+                if [ $GREP_EXIT -eq 0 ] || [ $GREP_EXIT -eq 1 ]; then
+                    chmod --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || chmod 600 "$TMP_AUTH_KEYS"
+                    chown --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || true
+                    if mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys; then
+                        :
+                    else
+                        rm -f "$TMP_AUTH_KEYS"
+                    fi
+                else
+                    rm -f "$TMP_AUTH_KEYS"
+                fi
+            fi
+        fi
+
+        # Remove LXC bind mounts from all container configs
+        if [ -d /etc/pve/lxc ]; then
+            echo "  • Removing LXC bind mounts from container configs..."
+            if compgen -G "/etc/pve/lxc/*.conf" > /dev/null; then
+                for conf in /etc/pve/lxc/*.conf; do
+                    if [ -f "$conf" ] && grep -q "pulse-sensor-proxy" "$conf" 2>/dev/null; then
+                        sed -i '/pulse-sensor-proxy/d' "$conf" || true
+                    fi
+                done
+            fi
+        fi
+
+        # Remove Pulse monitoring API tokens and user
+        echo "  • Removing Pulse monitoring API tokens and user..."
+        if command -v pveum &> /dev/null; then
+            TOKEN_LIST=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk 'NR>3 {print $2}' | grep -v '^$' || printf '')
+            if [ -n "$TOKEN_LIST" ]; then
+                while IFS= read -r TOKEN; do
+                    if [ -n "$TOKEN" ]; then
+                        pveum user token remove pulse-monitor@pam "$TOKEN" 2>/dev/null || true
+                    fi
+                done <<< "$TOKEN_LIST"
+            fi
+            pveum user delete pulse-monitor@pam 2>/dev/null || true
+            pveum role delete PulseMonitor 2>/dev/null || true
+        fi
+
+        if command -v proxmox-backup-manager &> /dev/null; then
+            proxmox-backup-manager user delete pulse-monitor@pbs 2>/dev/null || true
+        fi
     fi
 
     echo ""
@@ -3670,7 +3725,18 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
             export PULSE_SENSOR_PROXY_FALLBACK_URL="%s/api/install/pulse-sensor-proxy"
 
             # Run installer
-            if "$PROXY_INSTALLER" --ctid "$PULSE_CTID" --quiet 2>&1 | grep -E "✓|⚠️|ERROR"; then
+            INSTALL_OUTPUT=$("$PROXY_INSTALLER" --ctid "$PULSE_CTID" --quiet 2>&1)
+            INSTALL_STATUS=$?
+
+            if [ -n "$INSTALL_OUTPUT" ]; then
+                echo "$INSTALL_OUTPUT" | grep -E "✓|⚠️|ERROR" || true
+            fi
+
+            if [ -n "$INSTALL_OUTPUT" ]; then
+                echo "$INSTALL_OUTPUT" | grep -E "✓|⚠️|ERROR" || true
+            fi
+
+            if [ $INSTALL_STATUS -eq 0 ]; then
                 # Verify proxy health
                 PROXY_HEALTHY=false
                 if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
@@ -3735,6 +3801,11 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
             else
                 echo ""
                 echo "⚠️  Proxy installation had issues - you may need to configure manually"
+                if [ -n "$INSTALL_OUTPUT" ]; then
+                    echo ""
+                    echo "$INSTALL_OUTPUT" | tail -n 40
+                    echo ""
+                fi
             fi
 
             rm -f "$PROXY_INSTALLER"

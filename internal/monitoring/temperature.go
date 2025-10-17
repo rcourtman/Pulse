@@ -17,10 +17,10 @@ import (
 
 // TemperatureCollector handles SSH-based temperature collection from Proxmox nodes
 type TemperatureCollector struct {
-	sshUser    string             // SSH user (typically "root" or "pulse-monitor")
-	sshKeyPath string             // Path to SSH private key
+	sshUser     string            // SSH user (typically "root" or "pulse-monitor")
+	sshKeyPath  string            // Path to SSH private key
 	proxyClient *tempproxy.Client // Optional: unix socket client for proxy
-	useProxy   bool               // Whether to use proxy for temperature collection
+	useProxy    bool              // Whether to use proxy for temperature collection
 }
 
 // NewTemperatureCollector creates a new temperature collector
@@ -103,6 +103,7 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "ConnectTimeout=5",
 		"-o", "BatchMode=yes", // No password prompts
+		"-o", "LogLevel=ERROR", // Suppress host key warnings that break JSON parsing
 	}
 
 	// Add key if specified
@@ -123,7 +124,17 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 		return "", fmt.Errorf("ssh command failed: %w", err)
 	}
 
-	return string(output), nil
+	outputStr := strings.TrimSpace(string(output))
+
+	// Strip any leading SSH noise (e.g., "Warning: Permanently added ...") so sensors JSON parses cleanly.
+	if idx := strings.Index(outputStr, "{"); idx > 0 {
+		outputStr = outputStr[idx:]
+	}
+	if idx := strings.LastIndex(outputStr, "}"); idx != -1 && idx < len(outputStr)-1 {
+		outputStr = outputStr[:idx+1]
+	}
+
+	return outputStr, nil
 }
 
 // parseSensorsJSON parses the JSON output from `sensors -j`
@@ -166,11 +177,11 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 		// Handle CPU temperature sensors
 		chipLower := strings.ToLower(chipName)
 		if strings.Contains(chipLower, "coretemp") ||
-		   strings.Contains(chipLower, "k10temp") ||
-		   strings.Contains(chipLower, "zenpower") ||
-		   strings.Contains(chipLower, "k8temp") ||
-		   strings.Contains(chipLower, "acpitz") ||
-		   strings.Contains(chipLower, "it87") {
+			strings.Contains(chipLower, "k10temp") ||
+			strings.Contains(chipLower, "zenpower") ||
+			strings.Contains(chipLower, "k8temp") ||
+			strings.Contains(chipLower, "acpitz") ||
+			strings.Contains(chipLower, "it87") {
 			foundCPUChip = true
 			tc.parseCPUTemps(chipMap, temp)
 		}

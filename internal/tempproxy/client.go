@@ -168,3 +168,25 @@ func (c *Client) GetTemperature(nodeHost string) (string, error) {
 
 	return tempStr, nil
 }
+
+// RequestCleanup signals the proxy to trigger host-side cleanup workflow.
+func (c *Client) RequestCleanup(host string) error {
+	params := make(map[string]interface{}, 1)
+	if host != "" {
+		params["host"] = host
+	}
+
+	resp, err := c.call("request_cleanup", params)
+	if err != nil {
+		return err
+	}
+
+	if !resp.Success {
+		if resp.Error != "" {
+			return fmt.Errorf("proxy error: %s", resp.Error)
+		}
+		return fmt.Errorf("proxy rejected cleanup request")
+	}
+
+	return nil
+}
