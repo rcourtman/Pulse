@@ -6,8 +6,6 @@ import (
 	"net"
 	"os"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 const (
