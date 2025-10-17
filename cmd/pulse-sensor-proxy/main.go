@@ -35,6 +35,10 @@ const (
 	maxRequestBytes   = 16 * 1024 // 16 KiB max request size
 )
 
+func defaultWorkDir() string {
+	return "/var/lib/pulse-sensor-proxy"
+}
+
 var rootCmd = &cobra.Command{
 	Use:     "pulse-sensor-proxy",
 	Short:   "Pulse Sensor Proxy - Secure sensor data bridge for containerized Pulse",
@@ -74,6 +78,7 @@ func main() {
 type Proxy struct {
 	socketPath  string
 	sshKeyPath  string
+	workDir     string
 	listener    net.Listener
 	rateLimiter *rateLimiter
 	nodeGate    *nodeGate
@@ -93,6 +98,7 @@ const (
 	RPCRegisterNodes     = "register_nodes"
 	RPCGetTemperature    = "get_temperature"
 	RPCGetStatus         = "get_status"
+	RPCRequestCleanup    = "request_cleanup"
 )
 
 // RPCRequest represents a request from Pulse
@@ -158,12 +164,20 @@ func runProxy() {
 		metrics:     metrics,
 	}
 
+	if wd, err := os.Getwd(); err == nil {
+		proxy.workDir = wd
+	} else {
+		log.Warn().Err(err).Msg("Failed to determine working directory; using default")
+		proxy.workDir = defaultWorkDir()
+	}
+
 	// Register RPC method handlers
 	proxy.router = map[string]handlerFunc{
 		RPCGetStatus:         proxy.handleGetStatusV2,
 		RPCEnsureClusterKeys: proxy.handleEnsureClusterKeysV2,
 		RPCRegisterNodes:     proxy.handleRegisterNodesV2,
 		RPCGetTemperature:    proxy.handleGetTemperatureV2,
+		RPCRequestCleanup:    proxy.handleRequestCleanup,
 	}
 
 	if err := proxy.initAuthRules(); err != nil {

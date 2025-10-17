@@ -335,6 +335,9 @@ const Settings: Component<SettingsProps> = (props) => {
   const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs' | 'pmg'>('pve');
   const [modalResetKey, setModalResetKey] = createSignal(0);
   const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+  const [showDeleteNodeModal, setShowDeleteNodeModal] = createSignal(false);
+  const [nodePendingDelete, setNodePendingDelete] = createSignal<NodeConfigWithStatus | null>(null);
+  const [deleteNodeLoading, setDeleteNodeLoading] = createSignal(false);
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
   const [discoveryScanStatus, setDiscoveryScanStatus] = createSignal<DiscoveryScanStatus>({
     scanning: false,
@@ -1091,15 +1094,53 @@ const Settings: Component<SettingsProps> = (props) => {
     }
   };
 
-  const deleteNode = async (nodeId: string) => {
-    if (!confirm('Are you sure you want to delete this node?')) return;
+  const nodePendingDeleteLabel = () => {
+    const node = nodePendingDelete();
+    if (!node) return '';
+    return node.displayName || node.name || node.host || node.id;
+  };
 
+  const nodePendingDeleteHost = () => nodePendingDelete()?.host || '';
+  const nodePendingDeleteType = () => nodePendingDelete()?.type || '';
+  const nodePendingDeleteTypeLabel = () => {
+    switch (nodePendingDeleteType()) {
+      case 'pve':
+        return 'Proxmox VE node';
+      case 'pbs':
+        return 'Proxmox Backup Server';
+      case 'pmg':
+        return 'Proxmox Mail Gateway';
+      default:
+        return 'Pulse node';
+    }
+  };
+
+  const requestDeleteNode = (node: NodeConfigWithStatus) => {
+    setNodePendingDelete(node);
+    setShowDeleteNodeModal(true);
+  };
+
+  const cancelDeleteNode = () => {
+    if (deleteNodeLoading()) return;
+    setShowDeleteNodeModal(false);
+    setNodePendingDelete(null);
+  };
+
+  const deleteNode = async () => {
+    const pending = nodePendingDelete();
+    if (!pending) return;
+    setDeleteNodeLoading(true);
     try {
-      await NodesAPI.deleteNode(nodeId);
-      setNodes(nodes().filter((n) => n.id !== nodeId));
-      showSuccess('Node deleted successfully');
+      await NodesAPI.deleteNode(pending.id);
+      setNodes(nodes().filter((n) => n.id !== pending.id));
+      const label = pending.displayName || pending.name || pending.host || pending.id;
+      showSuccess(`${label} removed successfully`);
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Failed to delete node');
+    } finally {
+      setDeleteNodeLoading(false);
+      setShowDeleteNodeModal(false);
+      setNodePendingDelete(null);
     }
   };
 
@@ -1869,7 +1910,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => deleteNode(node.id)}
+                                onClick={() => requestDeleteNode(node)}
                                 class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                               >
                                 <svg
@@ -2302,7 +2343,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => deleteNode(node.id)}
+                                onClick={() => requestDeleteNode(node)}
                                 class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                               >
                                 <svg
@@ -2710,9 +2751,9 @@ const Settings: Component<SettingsProps> = (props) => {
                                     <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                   </svg>
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteNode(pmgNode.id)}
+                                  <button
+                                    type="button"
+                                    onClick={() => requestDeleteNode(pmgNode)}
                                   class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                                   title="Delete node"
                                 >
@@ -5436,6 +5477,78 @@ const Settings: Component<SettingsProps> = (props) => {
         </Card>
 
       </div>
+
+        {/* Delete Node Modal */}
+        <Show when={showDeleteNodeModal()}>
+          <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <Card padding="lg" class="w-full max-w-lg space-y-5">
+              <SectionHeader
+                title={`Remove ${nodePendingDeleteLabel()}`}
+                size="md"
+                class="mb-1"
+              />
+              <div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                <p>
+                  Removing this {nodePendingDeleteTypeLabel().toLowerCase()} also scrubs the Pulse
+                  footprint on the host — the proxy service, SSH key, API token, and bind mount are
+                  all cleaned up automatically.
+                </p>
+                <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+                  <p class="font-medium text-blue-900 dark:text-blue-100">What happens next</p>
+                  <ul class="mt-2 list-disc space-y-1 pl-4 text-blue-800 dark:text-blue-200 text-sm">
+                    <li>Pulse removes the node entry and clears related alerts.</li>
+                    <li>
+                      {nodePendingDeleteHost() ? (
+                        <>
+                          The host{' '}
+                          <span class="font-semibold">{nodePendingDeleteHost()}</span> loses the
+                          proxy service, SSH key, and API token.
+                        </>
+                      ) : (
+                        'The host loses the proxy service, SSH key, and API token.'
+                      )}
+                    </li>
+                    <li>
+                      If the host comes back later, rerunning the setup script reinstalls everything
+                      with a fresh key.
+                    </li>
+                    <Show when={nodePendingDeleteType() === 'pbs'}>
+                      <li>
+                        Backup user tokens on the PBS are removed, so jobs referencing them will no
+                        longer authenticate until the node is re-added.
+                      </li>
+                    </Show>
+                    <Show when={nodePendingDeleteType() === 'pmg'}>
+                      <li>
+                        Mail gateway tokens are removed as part of the cleanup; re-enroll to restore
+                        outbound telemetry.
+                      </li>
+                    </Show>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={cancelDeleteNode}
+                  class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  disabled={deleteNodeLoading()}
+                >
+                  Keep node
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteNode}
+                  disabled={deleteNodeLoading()}
+                  class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
+                >
+                  {deleteNodeLoading() ? 'Removing…' : 'Remove node'}
+                </button>
+              </div>
+            </Card>
+          </div>
+        </Show>
 
         {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */}
         <Show when={showNodeModal() && currentNodeType() === 'pve'}>

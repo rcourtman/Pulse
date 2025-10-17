@@ -136,7 +136,7 @@ func (p *Proxy) testSSHConnection(nodeHost string) error {
 
 	privKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519")
 	cmd := fmt.Sprintf(
-		`ssh -i %s -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@%s "echo test"`,
+		`ssh -i %[1]s -T -n -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 root@%[2]s "echo test"`,
 		privKeyPath,
 		nodeHost,
 	)
@@ -166,7 +166,7 @@ func (p *Proxy) getTemperatureViaSSH(nodeHost string) (string, error) {
 	// Since we use ForceCommand="sensors -j", any SSH command will run sensors
 	// We don't need to specify the command
 	cmd := fmt.Sprintf(
-		`ssh -i %s -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@%s ""`,
+		`ssh -i %[1]s -T -n -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 root@%[2]s ""`,
 		privKeyPath,
 		nodeHost,
 	)
