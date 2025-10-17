@@ -108,6 +108,7 @@ export const FirstRunSetup: Component = () => {
       const response = await fetch('/api/security/quick-setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for CSRF
         body: JSON.stringify({
           username: username(),
           password: finalPassword,

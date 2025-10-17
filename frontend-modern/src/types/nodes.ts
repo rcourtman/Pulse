@@ -72,8 +72,9 @@ export interface PMGNodeConfig {
 
 export type NodeConfig = (PVENodeConfig | PBSNodeConfig | PMGNodeConfig) & {
   type: 'pve' | 'pbs' | 'pmg';
-  status?: 'connected' | 'disconnected' | 'error' | 'pending';
+  status?: 'connected' | 'disconnected' | 'offline' | 'error' | 'pending';
   temperature?: Temperature;
+  displayName?: string;
 };
 
 export interface NodesResponse {

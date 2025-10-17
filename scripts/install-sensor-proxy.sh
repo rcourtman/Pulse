@@ -368,7 +368,7 @@ if command -v pvecm >/dev/null 2>&1; then
             if [[ "$IS_LOCAL" = true ]]; then
                 configure_local_authorized_key "$AUTH_LINE"
                 LOCAL_HANDLED=true
-                ((SSH_SUCCESS_COUNT++))
+                ((SSH_SUCCESS_COUNT+=1))
                 continue
             fi
 
@@ -381,10 +381,10 @@ if command -v pvecm >/dev/null 2>&1; then
                 "echo '${AUTH_LINE}' >> /root/.ssh/authorized_keys" 2>&1)
             if [[ $? -eq 0 ]]; then
                 print_success "SSH key configured on $node_ip"
-                ((SSH_SUCCESS_COUNT++))
+                ((SSH_SUCCESS_COUNT+=1))
             else
                 print_warn "Failed to configure SSH key on $node_ip"
-                ((SSH_FAILURE_COUNT++))
+                ((SSH_FAILURE_COUNT+=1))
                 SSH_FAILED_NODES+=("$node_ip")
                 # Log detailed error for debugging
                 if [[ -n "$SSH_ERROR" ]]; then
@@ -405,7 +405,7 @@ if command -v pvecm >/dev/null 2>&1; then
         fi
         if [[ "$LOCAL_HANDLED" = false ]]; then
             configure_local_authorized_key "$AUTH_LINE"
-            ((SSH_SUCCESS_COUNT++))
+            ((SSH_SUCCESS_COUNT+=1))
         fi
     else
         # No cluster found - configure standalone node

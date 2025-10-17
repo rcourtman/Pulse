@@ -65,13 +65,24 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		}
 	} else {
 		// Direct SSH (legacy method)
+		// Try sensors first, fall back to Raspberry Pi method if that fails
 		output, err = tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null")
-		if err != nil {
+		if err != nil || strings.TrimSpace(output) == "" {
+			// Try Raspberry Pi temperature method
+			output, err = tc.runSSHCommand(ctx, host, "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null")
+			if err == nil && strings.TrimSpace(output) != "" {
+				// Parse RPi temperature format
+				temp, parseErr := tc.parseRPiTemperature(output)
+				if parseErr == nil {
+					return temp, nil
+				}
+			}
+
 			log.Debug().
 				Str("node", nodeName).
 				Str("host", host).
 				Err(err).
-				Msg("Failed to collect temperature data via SSH")
+				Msg("Failed to collect temperature data via SSH (tried both lm-sensors and RPi methods)")
 			return &models.Temperature{Available: false}, nil
 		}
 	}
@@ -181,7 +192,8 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 			strings.Contains(chipLower, "zenpower") ||
 			strings.Contains(chipLower, "k8temp") ||
 			strings.Contains(chipLower, "acpitz") ||
-			strings.Contains(chipLower, "it87") {
+			strings.Contains(chipLower, "it87") ||
+			strings.Contains(chipLower, "cpu_thermal") { // Raspberry Pi CPU temperature
 			foundCPUChip = true
 			tc.parseCPUTemps(chipMap, temp)
 		}
@@ -296,6 +308,35 @@ func extractCoreNumber(name string) int {
 		}
 	}
 	return 0
+}
+
+// parseRPiTemperature parses Raspberry Pi temperature from /sys/class/thermal/thermal_zone0/temp
+// Format: integer representing millidegrees Celsius (e.g., "45678" = 45.678°C)
+func (tc *TemperatureCollector) parseRPiTemperature(output string) (*models.Temperature, error) {
+	millidegrees := strings.TrimSpace(output)
+	if millidegrees == "" {
+		return nil, fmt.Errorf("empty RPi temperature output")
+	}
+
+	tempMilliC, err := strconv.ParseFloat(millidegrees, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse RPi temperature: %w", err)
+	}
+
+	// Convert millidegrees to degrees Celsius
+	tempC := tempMilliC / 1000.0
+
+	temp := &models.Temperature{
+		Available:  true,
+		HasCPU:     true,
+		CPUPackage: tempC,
+		CPUMax:     tempC,
+		Cores:      []models.CoreTemp{},
+		NVMe:       []models.NVMeTemp{},
+		LastUpdate: time.Now(),
+	}
+
+	return temp, nil
 }
 
 // extractHostname extracts hostname/IP from a Proxmox host URL

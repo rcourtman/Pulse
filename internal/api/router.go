@@ -850,6 +850,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/settings", r.systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", r.systemSettingsHandler.HandleUpdateSystemSettings)
 	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
+	r.mux.HandleFunc("/api/system/proxy-public-key", r.handleProxyPublicKey)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// Docker agent download endpoints
@@ -903,6 +904,49 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 	} else {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
+}
+
+// handleProxyPublicKey returns the temperature proxy's public SSH key (public endpoint)
+func (r *Router) handleProxyPublicKey(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Try to get the proxy's public key
+	proxyClient := tempproxy.NewClient()
+	if !proxyClient.IsAvailable() {
+		// Proxy not available - return empty response
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(""))
+		return
+	}
+
+	// Get proxy status which includes the public key
+	status, err := proxyClient.GetStatus()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get proxy status")
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(""))
+		return
+	}
+
+	// Extract public key
+	publicKey, ok := status["public_key"].(string)
+	if !ok || publicKey == "" {
+		log.Warn().Msg("Public key not found in proxy status")
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(""))
+		return
+	}
+
+	// Return the public key as plain text
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(publicKey))
 }
 
 func extractSetupToken(req *http.Request) string {

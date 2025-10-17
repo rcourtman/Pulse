@@ -3940,17 +3940,62 @@ else
                 echo "  ✓ SSH key configured (restricted to sensors -j)"
             fi
 
-            # Install lm-sensors if not present
+            # Check if this is a Raspberry Pi
+            IS_RPI=false
+            if [ -f /proc/device-tree/model ] && grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+                IS_RPI=true
+            fi
+
+            # Install lm-sensors if not present (skip on Raspberry Pi)
             if ! command -v sensors &> /dev/null; then
-                echo "  ✓ Installing lm-sensors..."
-                apt-get update -qq && apt-get install -y lm-sensors > /dev/null 2>&1
-                sensors-detect --auto > /dev/null 2>&1
+                if [ "$IS_RPI" = true ]; then
+                    echo "  ℹ️  Raspberry Pi detected - using native RPi temperature interface"
+                    echo "    Pulse will read temperature from /sys/class/thermal/thermal_zone0/temp"
+                else
+                    echo "  ✓ Installing lm-sensors..."
+
+                    # Try to update and install, but provide helpful errors if it fails
+                    UPDATE_OUTPUT=$(apt-get update -qq 2>&1)
+                    if echo "$UPDATE_OUTPUT" | grep -q "Could not create temporary file\|/tmp"; then
+                        echo ""
+                        echo "    ⚠️  APT cannot write to /tmp directory"
+                        echo "    This may be a permissions issue. To fix:"
+                        echo "      sudo chown root:root /tmp"
+                        echo "      sudo chmod 1777 /tmp"
+                        echo ""
+                        echo "    Attempting installation anyway..."
+                    elif echo "$UPDATE_OUTPUT" | grep -q "Failed to fetch\|GPG error\|no longer has a Release file"; then
+                        echo "    ⚠️  Some repository errors detected, attempting installation anyway..."
+                    fi
+
+                    if apt-get install -y lm-sensors > /dev/null 2>&1; then
+                        sensors-detect --auto > /dev/null 2>&1 || true
+                        echo "    ✓ lm-sensors installed successfully"
+                    else
+                        echo ""
+                        echo "    ⚠️  Could not install lm-sensors"
+                        echo "    Possible causes:"
+                        echo "      - Repository configuration errors"
+                        echo "      - /tmp directory permission issues"
+                        echo "      - Network connectivity problems"
+                        echo ""
+                        echo "    To fix manually:"
+                        echo "      1. Check /tmp permissions: ls -ld /tmp"
+                        echo "         (should be: drwxrwxrwt owned by root:root)"
+                        echo "      2. Fix if needed: sudo chown root:root /tmp && sudo chmod 1777 /tmp"
+                        echo "      3. Install: sudo apt-get update && sudo apt-get install -y lm-sensors"
+                        echo ""
+                    fi
+                fi
             else
                 echo "  ✓ lm-sensors package verified"
             fi
 
             echo ""
             echo "✓ Temperature monitoring enabled"
+            if [ "$IS_RPI" = true ]; then
+                echo "  Using Raspberry Pi native temperature interface"
+            fi
             echo "  Temperature data will appear in the dashboard within 10 seconds"
             TEMPERATURE_ENABLED=true
         else
@@ -4110,6 +4155,78 @@ EOF
     fi
 fi
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Standalone Node Configuration (for non-cluster nodes)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Check if this node is standalone (not in a cluster)
+IS_STANDALONE=false
+if ! command -v pvecm >/dev/null 2>&1 || ! pvecm status >/dev/null 2>&1; then
+    IS_STANDALONE=true
+fi
+
+# If standalone and temperature monitoring was enabled, try to fetch proxy key
+if [ "$IS_STANDALONE" = true ] && [ "$TEMPERATURE_ENABLED" = true ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Standalone Node Temperature Setup"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Detected: This is a standalone node (not in a Proxmox cluster)"
+    echo ""
+    echo "For enhanced security with containerized Pulse, we'll fetch the"
+    echo "temperature proxy's SSH key directly from your Pulse server."
+    echo ""
+
+    # Try to fetch the proxy's public key from Pulse server
+    PROXY_KEY_URL="%s/api/system/proxy-public-key"
+    echo "Fetching temperature proxy public key..."
+
+    PROXY_PUBLIC_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
+
+    if [ -n "$PROXY_PUBLIC_KEY" ] && [[ "$PROXY_PUBLIC_KEY" =~ ^ssh-(rsa|ed25519) ]]; then
+        echo "  ✓ Retrieved proxy public key"
+
+        # Build the forced command entry for the proxy key
+        PROXY_RESTRICTED_KEY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $PROXY_PUBLIC_KEY # pulse-proxy-key"
+
+        # Check if key already exists
+        if [ -f /root/.ssh/authorized_keys ] && grep -qF "$PROXY_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+            echo "  ✓ Proxy key already configured"
+        else
+            # Add the proxy key
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+
+            # Remove any old pulse-proxy-key entries first
+            if [ -f /root/.ssh/authorized_keys ]; then
+                grep -v '# pulse-proxy-key' /root/.ssh/authorized_keys > /root/.ssh/authorized_keys.tmp 2>/dev/null || true
+                mv /root/.ssh/authorized_keys.tmp /root/.ssh/authorized_keys
+            fi
+
+            # Add the new proxy key
+            echo "$PROXY_RESTRICTED_KEY" >> /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+            echo "  ✓ Temperature proxy key installed (restricted to sensors -j)"
+        fi
+
+        echo ""
+        echo "✓ Standalone node temperature monitoring configured"
+        echo "  The Pulse temperature proxy can now collect temperature data"
+        echo "  from this node using secure SSH with forced commands."
+        echo ""
+    else
+        echo "  ℹ️  Could not retrieve proxy public key from Pulse server"
+        echo ""
+        echo "This is normal if:"
+        echo "  • Pulse is not running in a container (uses direct SSH)"
+        echo "  • The temperature proxy service is not installed on the host"
+        echo ""
+        echo "Temperature monitoring will use the standard SSH key configured earlier."
+        echo ""
+    fi
+fi
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Setup Complete"
@@ -4135,7 +4252,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, tokenName, serverHost)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, tokenName, serverHost)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
