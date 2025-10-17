@@ -121,7 +121,7 @@ When you need to provision the proxy yourself (for example via your own automati
    - **Proxmox LXC:** append `lxc.mount.entry: /run/pulse-sensor-proxy run/pulse-sensor-proxy none bind,create=dir 0 0` to `/etc/pve/lxc/<CTID>.conf` and restart the container.
    - **Docker:** bind mount `/run/pulse-sensor-proxy` into the container (`- /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw`).
 
-After the container restarts, the backend will automatically use the proxy; if you want to refresh SSH restrictions, re-run node setup from **Settings → Nodes**.
+After the container restarts, the backend will automatically use the proxy. To refresh SSH keys on cluster nodes (e.g., after adding a new node), SSH to your Proxmox host and re-run the setup script: `curl -fsSL https://get.pulsenode.com/install-proxy.sh | bash -s -- --ctid <your-container-id>`
 
 ### Legacy Architecture (Pre-v4.24.0 / Native Installs)
 
@@ -598,7 +598,7 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 **New Cluster Node Not Showing Temperatures:**
 1. Ensure lm-sensors installed: `ssh root@new-node "sensors -j"`
 2. Proxy auto-discovers on next poll (may take up to 1 minute)
-3. Force refresh by restarting Pulse: `pct restart <CTID>`
+3. Re-run the setup script to configure SSH keys on the new node: `curl -fsSL https://get.pulsenode.com/install-proxy.sh | bash -s -- --ctid <CTID>`
 
 **Permission Denied Errors:**
 1. Verify socket permissions: `ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock`
