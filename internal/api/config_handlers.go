@@ -3732,10 +3732,6 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
                 echo "$INSTALL_OUTPUT" | grep -E "✓|⚠️|ERROR" || true
             fi
 
-            if [ -n "$INSTALL_OUTPUT" ]; then
-                echo "$INSTALL_OUTPUT" | grep -E "✓|⚠️|ERROR" || true
-            fi
-
             if [ $INSTALL_STATUS -eq 0 ]; then
                 # Verify proxy health
                 PROXY_HEALTHY=false
