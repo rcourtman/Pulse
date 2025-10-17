@@ -261,7 +261,7 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
 type NodeConfigWithStatus = NodeConfig & {
   hasPassword?: boolean;
   hasToken?: boolean;
-  status: 'connected' | 'disconnected' | 'error' | 'pending';
+  status: 'connected' | 'disconnected' | 'offline' | 'error' | 'pending';
 };
 
 interface SettingsProps {
@@ -1678,7 +1678,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                     if (
                                       stateNode?.connectionHealth === 'unhealthy' ||
                                       stateNode?.connectionHealth === 'error' ||
-                                      stateNode?.status === 'offline'
+                                      stateNode?.status === 'offline' ||
+                                      stateNode?.status === 'disconnected'
                                     ) {
                                       return 'bg-red-500';
                                     }
@@ -1698,13 +1699,14 @@ const Settings: Component<SettingsProps> = (props) => {
                                     if (node.status === 'connected') {
                                       return 'bg-green-500';
                                     }
-                                    if (node.status === 'error') {
-                                      return 'bg-red-500';
-                                    }
                                     if (
-                                      node.status === 'pending' ||
+                                      node.status === 'error' ||
+                                      node.status === 'offline' ||
                                       node.status === 'disconnected'
                                     ) {
+                                      return 'bg-red-500';
+                                    }
+                                    if (node.status === 'pending') {
                                       return 'bg-amber-500 animate-pulse';
                                     }
                                     return 'bg-gray-400';
@@ -2220,7 +2222,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                     if (
                                       statePBS?.connectionHealth === 'unhealthy' ||
                                       statePBS?.connectionHealth === 'error' ||
-                                      statePBS?.status === 'offline'
+                                      statePBS?.status === 'offline' ||
+                                      statePBS?.status === 'disconnected'
                                     ) {
                                       return 'bg-red-500';
                                     }
@@ -2240,13 +2243,14 @@ const Settings: Component<SettingsProps> = (props) => {
                                     if (node.status === 'connected') {
                                       return 'bg-green-500';
                                     }
-                                    if (node.status === 'error') {
-                                      return 'bg-red-500';
-                                    }
                                     if (
-                                      node.status === 'pending' ||
+                                      node.status === 'error' ||
+                                      node.status === 'offline' ||
                                       node.status === 'disconnected'
                                     ) {
+                                      return 'bg-red-500';
+                                    }
+                                    if (node.status === 'pending') {
                                       return 'bg-amber-500 animate-pulse';
                                     }
                                     return 'bg-gray-400';
@@ -2647,7 +2651,8 @@ const Settings: Component<SettingsProps> = (props) => {
                           if (
                             statePMG?.connectionHealth === 'unhealthy' ||
                             statePMG?.connectionHealth === 'error' ||
-                            statePMG?.status === 'offline'
+                            statePMG?.status === 'offline' ||
+                            statePMG?.status === 'disconnected'
                           ) {
                             return 'bg-red-500';
                           }
@@ -2660,10 +2665,14 @@ const Settings: Component<SettingsProps> = (props) => {
                           if (pmgNode.status === 'connected') {
                             return 'bg-green-500';
                           }
-                          if (pmgNode.status === 'error') {
+                          if (
+                            pmgNode.status === 'error' ||
+                            pmgNode.status === 'offline' ||
+                            pmgNode.status === 'disconnected'
+                          ) {
                             return 'bg-red-500';
                           }
-                          if (pmgNode.status === 'pending' || pmgNode.status === 'disconnected') {
+                          if (pmgNode.status === 'pending') {
                             return 'bg-amber-500 animate-pulse';
                           }
                           return 'bg-gray-400';
