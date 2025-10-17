@@ -13,7 +13,7 @@ import (
 const (
 	defaultSocketPath   = "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
 	containerSocketPath = "/mnt/pulse-proxy/pulse-sensor-proxy.sock"
-	defaultTimeout      = 10 * time.Second
+	defaultTimeout      = 30 * time.Second // Increased to accommodate SSH operations
 )
 
 // Client communicates with pulse-sensor-proxy via unix socket
@@ -83,7 +83,7 @@ func (c *Client) call(method string, params map[string]interface{}) (*RPCRespons
 		return nil, fmt.Errorf("failed to encode request: %w", err)
 	}
 
-	// Read response
+	// Read response (server uses newline-delimited framing, no CloseWrite needed)
 	var resp RPCResponse
 	decoder := json.NewDecoder(conn)
 	if err := decoder.Decode(&resp); err != nil {
@@ -96,22 +96,6 @@ func (c *Client) call(method string, params map[string]interface{}) (*RPCRespons
 // GetStatus returns proxy status
 func (c *Client) GetStatus() (map[string]interface{}, error) {
 	resp, err := c.call("get_status", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if !resp.Success {
-		return nil, fmt.Errorf("proxy error: %s", resp.Error)
-	}
-
-	return resp.Data, nil
-}
-
-// EnsureClusterKeys discovers cluster nodes and pushes SSH keys
-func (c *Client) EnsureClusterKeys() (map[string]interface{}, error) {
-	log.Info().Msg("Requesting proxy to configure cluster SSH keys")
-
-	resp, err := c.call("ensure_cluster_keys", nil)
 	if err != nil {
 		return nil, err
 	}

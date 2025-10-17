@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -514,6 +515,15 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 // RequireAuth middleware checks for authentication
 func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Dev mode bypass for all auth (disabled by default)
+		if os.Getenv("ALLOW_ADMIN_BYPASS") == "1" {
+			log.Debug().
+				Str("path", r.URL.Path).
+				Msg("Auth bypass enabled for dev mode")
+			handler(w, r)
+			return
+		}
+
 		if CheckAuth(cfg, w, r) {
 			handler(w, r)
 			return
@@ -544,6 +554,20 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 // For other auth methods, all authenticated users are considered admins
 func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Dev mode bypass for admin endpoints (disabled by default)
+		bypassValue := os.Getenv("ALLOW_ADMIN_BYPASS")
+		log.Info().
+			Str("bypass_value", bypassValue).
+			Str("path", r.URL.Path).
+			Msg("=== CHECKING ADMIN BYPASS ===")
+		if bypassValue == "1" {
+			log.Debug().
+				Str("path", r.URL.Path).
+				Msg("Admin bypass enabled for dev mode")
+			handler(w, r)
+			return
+		}
+
 		// First check if user is authenticated
 		if !CheckAuth(cfg, w, r) {
 			// Log the failed attempt

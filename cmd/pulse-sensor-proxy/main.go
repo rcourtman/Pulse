@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -271,10 +273,8 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Set read deadline
-	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		log.Warn().Err(err).Msg("Failed to set read deadline")
-	}
+	// Skip read deadline - it interferes with write operations on unix sockets
+	// Context timeout provides sufficient protection against hung connections
 
 	// Extract and verify peer credentials
 	cred, err := extractPeerCredentials(conn)
@@ -307,24 +307,35 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	}
 	defer releaseLimiter()
 
-	// Limit request size and decode
-	lr := io.LimitReader(conn, maxRequestBytes)
-	decoder := json.NewDecoder(lr)
-	decoder.DisallowUnknownFields()
+	// Read request using newline-delimited framing
+	limited := &io.LimitedReader{R: conn, N: maxRequestBytes}
+	reader := bufio.NewReader(limited)
 
-	var req RPCRequest
-	if err := decoder.Decode(&req); err != nil {
-		if errors.Is(err, io.EOF) || err.Error() == "EOF" {
+	line, err := reader.ReadBytes('\n')
+	if err != nil {
+		if errors.Is(err, bufio.ErrBufferFull) || limited.N <= 0 {
+			p.sendErrorV2(conn, "payload too large", "")
+			return
+		}
+		if errors.Is(err, io.EOF) {
 			p.sendErrorV2(conn, "empty request", "")
 			return
 		}
-		p.sendErrorV2(conn, "invalid request format", "")
+		p.sendErrorV2(conn, "failed to read request", "")
 		return
 	}
 
-	// Check if payload was too large
-	if decoder.More() {
-		p.sendErrorV2(conn, "payload too large", req.CorrelationID)
+	// Trim whitespace and validate
+	line = bytes.TrimSpace(line)
+	if len(line) == 0 {
+		p.sendErrorV2(conn, "empty request", "")
+		return
+	}
+
+	// Parse JSON
+	var req RPCRequest
+	if err := json.Unmarshal(line, &req); err != nil {
+		p.sendErrorV2(conn, "invalid request format", "")
 		return
 	}
 
@@ -359,6 +370,9 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	if err != nil {
 		resp.Error = err.Error()
 		logger.Warn().Err(err).Msg("Handler failed")
+		// Clear read deadline and set write deadline for error response
+		conn.SetReadDeadline(time.Time{})
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		p.sendResponse(conn, resp)
 		// Record failed request
 		p.metrics.rpcRequests.WithLabelValues(req.Method, "error").Inc()
@@ -370,6 +384,10 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	resp.Success = true
 	resp.Data = result
 	logger.Info().Msg("Request completed")
+
+	// Clear read deadline and set write deadline for response
+	conn.SetReadDeadline(time.Time{})
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	p.sendResponse(conn, resp)
 
 	// Record successful request
@@ -394,12 +412,22 @@ func (p *Proxy) sendErrorV2(conn net.Conn, message, correlationID string) {
 		Success:       false,
 		Error:         message,
 	}
+	// Clear read deadline before writing
+	conn.SetReadDeadline(time.Time{})
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	encoder := json.NewEncoder(conn)
 	encoder.Encode(resp)
 }
 
 // sendResponse sends an RPC response
 func (p *Proxy) sendResponse(conn net.Conn, resp RPCResponse) {
+	// Clear read deadline before writing
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		log.Warn().Err(err).Msg("Failed to clear read deadline")
+	}
+	if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		log.Warn().Err(err).Msg("Failed to set write deadline")
+	}
 	encoder := json.NewEncoder(conn)
 	if err := encoder.Encode(resp); err != nil {
 		log.Error().Err(err).Msg("Failed to encode RPC response")

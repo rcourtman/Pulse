@@ -3,6 +3,7 @@ import type { JSX } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
+import { copyToClipboard } from '@/utils/clipboard';
 import { NodeModal } from './NodeModal';
 import { APITokenManager } from './APITokenManager';
 import { ChangePasswordModal } from './ChangePasswordModal';
@@ -28,9 +29,11 @@ import Shield from 'lucide-solid/icons/shield';
 import Activity from 'lucide-solid/icons/activity';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
+import type { APITokenRecord } from '@/api/security';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
+import { showTokenReveal } from '@/stores/tokenReveal';
 import { updateStore } from '@/stores/updates';
 // Type definitions
 interface DiscoveredServer {
@@ -80,17 +83,106 @@ interface DiagnosticsPBS {
 }
 
 interface SystemDiagnostic {
-  goroutines: number;
-  memory: {
-    alloc: number;
-    totalAlloc: number;
-    sys: number;
-    numGC: number;
-  };
-  cpu: {
-    count: number;
-    percent: number;
-  };
+  os: string;
+  arch: string;
+  goVersion: string;
+  numCPU: number;
+  numGoroutine: number;
+  memoryMB: number;
+}
+
+interface TemperatureProxyDiagnostic {
+  legacySSHDetected: boolean;
+  recommendProxyUpgrade: boolean;
+  socketFound: boolean;
+  socketPath?: string;
+  socketPermissions?: string;
+  socketOwner?: string;
+  socketGroup?: string;
+  proxyReachable?: boolean;
+  proxyVersion?: string;
+  proxyPublicKeySha256?: string;
+  proxySshDirectory?: string;
+  legacySshKeyCount?: number;
+  notes?: string[];
+}
+
+interface APITokenSummary {
+  id: string;
+  name: string;
+  hint?: string;
+  createdAt?: string;
+  lastUsedAt?: string;
+  source?: string;
+}
+
+interface APITokenUsage {
+  tokenId: string;
+  hostCount: number;
+  hosts?: string[];
+}
+
+interface APITokenDiagnostic {
+  enabled: boolean;
+  tokenCount: number;
+  hasEnvTokens: boolean;
+  hasLegacyToken: boolean;
+  recommendTokenSetup: boolean;
+  recommendTokenRotation: boolean;
+  legacyDockerHostCount?: number;
+  unusedTokenCount?: number;
+  notes?: string[];
+  tokens?: APITokenSummary[];
+  usage?: APITokenUsage[];
+}
+
+interface DockerAgentAttention {
+  hostId: string;
+  name: string;
+  status: string;
+  agentVersion?: string;
+  tokenHint?: string;
+  lastSeen?: string;
+  issues: string[];
+}
+
+interface DockerAgentDiagnostic {
+  hostsTotal: number;
+  hostsOnline: number;
+  hostsReportingVersion: number;
+  hostsWithTokenBinding: number;
+  hostsWithoutTokenBinding: number;
+  hostsWithoutVersion?: number;
+  hostsOutdatedVersion?: number;
+  hostsWithStaleCommand?: number;
+  hostsPendingUninstall?: number;
+  hostsNeedingAttention: number;
+  recommendedAgentVersion?: string;
+  attention?: DockerAgentAttention[];
+  notes?: string[];
+}
+
+interface AlertsDiagnostic {
+  legacyThresholdsDetected: boolean;
+  legacyThresholdSources?: string[];
+  legacyScheduleSettings?: string[];
+  missingCooldown: boolean;
+  missingGroupingWindow: boolean;
+  notes?: string[];
+}
+
+interface ProxyRegisterNode {
+  name: string;
+  sshReady: boolean;
+  error?: string;
+}
+
+interface DockerMigrationResult {
+  token: string;
+  installCommand: string;
+  systemdServiceSnippet: string;
+  pulseURL: string;
+  record: APITokenRecord;
 }
 
 interface DiagnosticsData {
@@ -100,6 +192,10 @@ interface DiagnosticsData {
   nodes: DiagnosticsNode[];
   pbs: DiagnosticsPBS[];
   system: SystemDiagnostic;
+  temperatureProxy?: TemperatureProxyDiagnostic | null;
+  apiTokens?: APITokenDiagnostic | null;
+  dockerAgents?: DockerAgentDiagnostic | null;
+  alerts?: AlertsDiagnostic | null;
   errors: string[];
 }
 
@@ -268,6 +364,10 @@ const Settings: Component<SettingsProps> = (props) => {
   // Diagnostics
   const [diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
   const [runningDiagnostics, setRunningDiagnostics] = createSignal(false);
+  const [proxyActionLoading, setProxyActionLoading] = createSignal<'register-nodes' | null>(null);
+  const [proxyRegisterSummary, setProxyRegisterSummary] = createSignal<ProxyRegisterNode[] | null>(null);
+  const [dockerActionLoading, setDockerActionLoading] = createSignal<string | null>(null);
+  const [dockerMigrationResults, setDockerMigrationResults] = createSignal<Record<string, DockerMigrationResult>>({});
 
   // Security
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
@@ -312,6 +412,144 @@ const Settings: Component<SettingsProps> = (props) => {
     }
 
     return new Date(timestamp).toLocaleString();
+  };
+
+  const formatUptime = (seconds: number) => {
+    if (!seconds || seconds <= 0) {
+      return 'Unknown';
+    }
+
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) {
+      return `${days}d ${hours}h`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m`;
+    }
+    return `${Math.floor(seconds)}s`;
+  };
+
+  const runDiagnostics = async () => {
+    setRunningDiagnostics(true);
+    try {
+      const response = await fetch('/api/diagnostics');
+      const diag = await response.json();
+      setDiagnosticsData(diag);
+    } catch (err) {
+      console.error('Failed to fetch diagnostics:', err);
+      showError('Failed to run diagnostics');
+    } finally {
+      setRunningDiagnostics(false);
+    }
+  };
+
+  const handleRegisterProxyNodes = async () => {
+    if (proxyActionLoading()) return;
+    setProxyActionLoading('register-nodes');
+    try {
+      const response = await fetch('/api/diagnostics/temperature-proxy/register-nodes', {
+        method: 'POST',
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || data.success !== true) {
+        const message = data && typeof data.message === 'string' ? data.message : 'Failed to query proxy nodes';
+        showError(message);
+        return;
+      }
+
+      const nodes = Array.isArray(data.nodes)
+        ? (data.nodes as Array<Record<string, unknown>>).map((node) => ({
+            name: typeof node.name === 'string' ? node.name : 'unknown',
+            sshReady: Boolean(node.ssh_ready),
+            error: typeof node.error === 'string' ? node.error : undefined,
+          }))
+        : [];
+
+      setProxyRegisterSummary(nodes);
+      showSuccess('Queried proxy node registration state');
+      await runDiagnostics();
+    } catch (err) {
+      console.error('Failed to query proxy node registration state:', err);
+      showError('Failed to query proxy nodes');
+    } finally {
+      setProxyActionLoading(null);
+    }
+  };
+
+  const handleDockerPrepareToken = async (hostId: string) => {
+    if (dockerActionLoading()) return;
+    setDockerActionLoading(hostId);
+    try {
+      const response = await fetch('/api/diagnostics/docker/prepare-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostId }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || data.success !== true) {
+        const message = data && typeof data.message === 'string' ? data.message : 'Failed to prepare Docker token';
+        showError(message);
+        return;
+      }
+
+      const recordPayload = data.record as APITokenRecord | undefined;
+      if (!recordPayload || typeof recordPayload.id !== 'string') {
+        showError('Server did not return a valid token record');
+        return;
+      }
+      const tokenRecord: APITokenRecord = {
+        id: recordPayload.id,
+        name: recordPayload.name,
+        prefix: recordPayload.prefix,
+        suffix: recordPayload.suffix,
+        createdAt: recordPayload.createdAt,
+        lastUsedAt: recordPayload.lastUsedAt,
+      };
+
+      const migrationResult: DockerMigrationResult = {
+        token: data.token as string,
+        installCommand: data.installCommand as string,
+        systemdServiceSnippet: data.systemdServiceSnippet as string,
+        pulseURL: data.pulseURL as string,
+        record: tokenRecord,
+      };
+
+      setDockerMigrationResults((prev) => ({
+        ...prev,
+        [hostId]: migrationResult,
+      }));
+
+      showTokenReveal({
+        token: migrationResult.token,
+        record: tokenRecord,
+        source: 'docker',
+        note: 'Copy this token into the install command shown in Diagnostics.',
+      });
+
+      const hostName = data.host && typeof data.host.name === 'string' ? data.host.name : hostId;
+      showSuccess(`Generated dedicated token for ${hostName}`);
+      await runDiagnostics();
+    } catch (err) {
+      console.error('Failed to prepare Docker token', err);
+      showError('Failed to prepare Docker token');
+    } finally {
+      setDockerActionLoading(null);
+    }
+  };
+
+  const handleCopy = async (text: string, successMessage: string) => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      showSuccess(successMessage);
+    } else {
+      showError('Failed to copy to clipboard');
+    }
   };
 
   const tabGroups: {
@@ -3640,18 +3878,8 @@ const Settings: Component<SettingsProps> = (props) => {
                       </p>
                       <button
                         type="button"
-                        onClick={async () => {
-                          setRunningDiagnostics(true);
-                          try {
-                            const response = await fetch('/api/diagnostics');
-                            const diag = await response.json();
-                            setDiagnosticsData(diag);
-                          } catch (err) {
-                            console.error('Failed to fetch diagnostics:', err);
-                            showError('Failed to run diagnostics');
-                          } finally {
-                            setRunningDiagnostics(false);
-                          }
+                        onClick={() => {
+                          void runDiagnostics();
                         }}
                         disabled={runningDiagnostics()}
                         class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3668,19 +3896,460 @@ const Settings: Component<SettingsProps> = (props) => {
                             </h5>
                             <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
                               <div>Version: {diagnosticsData()?.version || 'Unknown'}</div>
-                              <div>
-                                Uptime: {Math.floor((diagnosticsData()?.uptime || 0) / 60)} minutes
-                              </div>
                               <div>Runtime: {diagnosticsData()?.runtime || 'Unknown'}</div>
                               <div>
-                                Memory:{' '}
-                                {Math.round(
-                                  (diagnosticsData()?.system?.memory?.alloc || 0) / 1024 / 1024,
-                                )}{' '}
+                                Uptime: {formatUptime(diagnosticsData()?.uptime || 0)}
+                              </div>
+                              <div>
+                                OS / Arch:{' '}
+                                {diagnosticsData()?.system?.os
+                                  ? `${diagnosticsData()?.system?.os} / ${diagnosticsData()?.system?.arch || 'Unknown'}`
+                                  : 'Unknown'}
+                              </div>
+                              <div>Go runtime: {diagnosticsData()?.system?.goVersion || 'Unknown'}</div>
+                              <div>
+                                CPU cores: {diagnosticsData()?.system?.numCPU ?? 'Unknown'}
+                              </div>
+                              <div>
+                                Goroutines: {diagnosticsData()?.system?.numGoroutine ?? 'Unknown'}
+                              </div>
+                              <div>
+                                Memory: {diagnosticsData()?.system?.memoryMB ?? 0}{' '}
                                 MB
                               </div>
                             </div>
                           </Card>
+
+                          {/* Temperature proxy guidance */}
+                          <Show when={diagnosticsData()?.temperatureProxy}>
+                            {(temp) => (
+                              <Card padding="sm">
+                                <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
+                                  Temperature proxy
+                                </h5>
+                                <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
+                                  <div class="flex items-center justify-between">
+                                    <span>Proxy socket</span>
+                                    <span
+                                      class={`px-2 py-0.5 rounded text-white text-xs ${
+                                        temp().socketFound ? 'bg-green-500' : 'bg-red-500'
+                                      }`}
+                                    >
+                                      {temp().socketFound ? 'Detected' : 'Missing'}
+                                    </span>
+                                  </div>
+                                  <div class="flex items-center justify-between">
+                                    <span>Daemon</span>
+                                    <span
+                                      class={`px-2 py-0.5 rounded text-white text-xs ${
+                                        temp().proxyReachable ? 'bg-green-500' : 'bg-yellow-500'
+                                      }`}
+                                    >
+                                      {temp().proxyReachable ? 'Responding' : 'No response'}
+                                    </span>
+                                  </div>
+                                  <Show when={temp().socketPath}>
+                                    <div>Socket path: {temp().socketPath}</div>
+                                  </Show>
+                                  <Show when={temp().socketPermissions}>
+                                    <div>Permissions: {temp().socketPermissions}</div>
+                                  </Show>
+                                  <Show when={temp().socketOwner || temp().socketGroup}>
+                                    <div>
+                                      Owner:{' '}
+                                      {[temp().socketOwner, temp().socketGroup]
+                                        .filter(Boolean)
+                                        .join(' / ') || 'Unknown'}
+                                    </div>
+                                  </Show>
+                                  <Show when={temp().proxyVersion}>
+                                    <div>Proxy version: {temp().proxyVersion}</div>
+                                  </Show>
+                                  <Show when={temp().proxySshDirectory}>
+                                    <div>SSH directory: {temp().proxySshDirectory}</div>
+                                  </Show>
+                                  <Show when={temp().proxyPublicKeySha256}>
+                                    <div>Key fingerprint: {temp().proxyPublicKeySha256}</div>
+                                  </Show>
+                                  <Show when={typeof temp().legacySshKeyCount === 'number'}>
+                                    <div>
+                                      Legacy SSH keys:{' '}
+                                      {temp().legacySshKeyCount ?? 0}
+                                    </div>
+                                  </Show>
+                                  <Show when={temp().legacySSHDetected}>
+                                    <div class="text-red-500">
+                                      Legacy SSH temperature collection detected
+                                    </div>
+                                  </Show>
+                                </div>
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!proxyActionLoading()) {
+                                        void handleRegisterProxyNodes();
+                                      }
+                                    }}
+                                    disabled={proxyActionLoading() !== null}
+                                    class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {proxyActionLoading() === 'register-nodes'
+                                      ? 'Checking nodes...'
+                                      : 'Check proxy nodes'}
+                                  </button>
+                                </div>
+                                <Show when={proxyRegisterSummary() && proxyRegisterSummary()!.length > 0}>
+                                  <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                                    <div>Proxy node connectivity:</div>
+                                    <ul class="list-disc pl-4 space-y-0.5">
+                                      <For each={proxyRegisterSummary() || []}>
+                                        {(node) => (
+                                          <li>
+                                            <span class={node.sshReady ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                                              {node.name}: {node.sshReady ? 'reachable' : 'unreachable'}
+                                            </span>
+                                            <Show when={node.error}>
+                                              <span class="ml-1 text-gray-500 dark:text-gray-400">
+                                                ({node.error})
+                                              </span>
+                                            </Show>
+                                          </li>
+                                        )}
+                                      </For>
+                                    </ul>
+                                  </div>
+                                </Show>
+                                <Show when={temp().notes && temp().notes!.length > 0}>
+                                  <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
+                                    <For each={temp().notes || []}>
+                                      {(note) => <li>{note}</li>}
+                                    </For>
+                                  </ul>
+                                </Show>
+                              </Card>
+                            )}
+                          </Show>
+
+                          {/* API token adoption */}
+                          <Show when={diagnosticsData()?.apiTokens}>
+                            {(apiDiag) => (
+                              <Card padding="sm">
+                                <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
+                                  API tokens
+                                </h5>
+                                <div class="text-xs space-y-2 text-gray-600 dark:text-gray-400">
+                                  <div class="flex flex-wrap gap-2">
+                                    <span
+                                      class={`px-2 py-0.5 rounded text-xs ${
+                                        apiDiag().enabled ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
+                                      }`}
+                                    >
+                                      {apiDiag().enabled ? 'Token auth enabled' : 'Token auth disabled'}
+                                    </span>
+                                    <Show when={apiDiag().hasEnvTokens}>
+                                      <span class="px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-700 dark:bg-orange-700/40 dark:text-orange-100">
+                                        Env override detected
+                                      </span>
+                                    </Show>
+                                    <Show when={apiDiag().hasLegacyToken}>
+                                      <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 dark:bg-red-700/40 dark:text-red-100">
+                                        Legacy token present
+                                      </span>
+                                    </Show>
+                                  </div>
+                              <div class="grid grid-cols-2 gap-2">
+                                <div>Configured tokens: {apiDiag().tokenCount}</div>
+                                <div>
+                                  Rotation needed:{' '}
+                                  {apiDiag().recommendTokenRotation ? 'Yes' : 'No'}
+                                </div>
+                                <div>
+                                  Docker hosts on shared token:{' '}
+                                  {apiDiag().legacyDockerHostCount ?? 0}
+                                </div>
+                                <div>
+                                  Unused tokens:{' '}
+                                  {apiDiag().unusedTokenCount ?? 0}
+                                </div>
+                              </div>
+                            </div>
+                            <Show when={apiDiag().tokens && apiDiag().tokens!.length > 0}>
+                              <div class="mt-3 border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-200 dark:divide-gray-700">
+                                <For each={apiDiag().tokens || []}>
+                                      {(token) => (
+                                        <div class="p-2 text-xs text-gray-600 dark:text-gray-400 flex flex-wrap justify-between gap-2">
+                                          <div class="flex-1 min-w-[140px]">
+                                            <div class="font-medium text-gray-700 dark:text-gray-200">
+                                              {token.name || 'Unnamed token'}
+                                            </div>
+                                            <div class="text-2xs text-gray-500 dark:text-gray-400">
+                                              {token.hint || 'No hint available'}
+                                              <Show when={token.source}>
+                                                <span class="ml-2 uppercase tracking-wide">
+                                                  ({token.source})
+                                                </span>
+                                              </Show>
+                                            </div>
+                                          </div>
+                                          <div class="text-right min-w-[160px]">
+                                            <div>
+                                              Created:{' '}
+                                              {token.createdAt
+                                                ? new Date(token.createdAt).toLocaleString()
+                                                : 'Unknown'}
+                                            </div>
+                                            <div>
+                                              Last used:{' '}
+                                              {token.lastUsedAt
+                                                ? formatRelativeTime(
+                                                    new Date(token.lastUsedAt).getTime(),
+                                                  )
+                                                : 'Never'}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </For>
+                                  </div>
+                                </Show>
+                                <Show when={apiDiag().usage && apiDiag().usage!.length > 0}>
+                                  <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                                    <div class="font-semibold text-gray-700 dark:text-gray-200">Token usage</div>
+                                    <ul class="list-disc pl-4 space-y-1">
+                                      <For each={apiDiag().usage || []}>
+                                        {(usage) => (
+                                          <li>
+                                            {usage.tokenId}: {usage.hostCount}{' '}
+                                            {usage.hostCount === 1 ? 'host' : 'hosts'}
+                                            <Show when={usage.hosts && usage.hosts!.length > 0}>
+                                              <span class="ml-1 text-gray-500 dark:text-gray-400">
+                                                ({usage.hosts!.join(', ')})
+                                              </span>
+                                            </Show>
+                                          </li>
+                                        )}
+                                      </For>
+                                    </ul>
+                                  </div>
+                                </Show>
+                                <Show when={apiDiag().notes && apiDiag().notes!.length > 0}>
+                                  <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
+                                    <For each={apiDiag().notes || []}>
+                                      {(note) => <li>{note}</li>}
+                                    </For>
+                                  </ul>
+                                </Show>
+                              </Card>
+                            )}
+                          </Show>
+
+                          {/* Docker agent adoption */}
+                          <Show when={diagnosticsData()?.dockerAgents}>
+                            {(dockerDiag) => (
+                              <Card padding="sm">
+                                <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
+                                  Docker agents
+                                </h5>
+                                <Show when={dockerDiag().hostsTotal > 0}>
+                                  <div class="text-xs text-gray-600 dark:text-gray-400 grid grid-cols-2 gap-2">
+                                    <div>Total hosts: {dockerDiag().hostsTotal}</div>
+                                    <div>Online: {dockerDiag().hostsOnline}</div>
+                                    <div>
+                                      With dedicated tokens: {dockerDiag().hostsWithTokenBinding}
+                                    </div>
+                                    <div>
+                                      Attention required: {dockerDiag().hostsNeedingAttention}
+                                    </div>
+                                    <div>
+                                      Missing version: {dockerDiag().hostsWithoutVersion ?? 0}
+                                    </div>
+                                    <div>
+                                      Outdated agents: {dockerDiag().hostsOutdatedVersion ?? 0}
+                                    </div>
+                                    <div>
+                                      Stale commands: {dockerDiag().hostsWithStaleCommand ?? 0}
+                                    </div>
+                                    <div>
+                                      Pending uninstall: {dockerDiag().hostsPendingUninstall ?? 0}
+                                    </div>
+                                  </div>
+                                  <Show when={dockerDiag().recommendedAgentVersion}>
+                                    <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                      Recommended agent version: {dockerDiag().recommendedAgentVersion}
+                                    </div>
+                                  </Show>
+                                </Show>
+                                <Show when={dockerDiag().attention && dockerDiag().attention!.length > 0}>
+                                  <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
+                                    <For each={dockerDiag().attention || []}>
+                                      {(entry) => (
+                                        <div class="p-2 space-y-1">
+                                          <div class="flex items-center justify-between">
+                                            <span class="font-medium text-gray-700 dark:text-gray-200">
+                                              {entry.name}
+                                            </span>
+                                            <span
+                                              class={`px-2 py-0.5 rounded text-xs ${
+                                                entry.status === 'online'
+                                                  ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                                  : 'bg-red-100 text-red-700 dark:bg-red-700/40 dark:text-red-100'
+                                              }`}
+                                            >
+                                              {entry.status || 'unknown'}
+                                            </span>
+                                          </div>
+                                          <div class="text-2xs text-gray-500 dark:text-gray-400 space-x-2">
+                                            <Show when={entry.agentVersion}>
+                                              <span>Agent {entry.agentVersion}</span>
+                                            </Show>
+                                            <Show when={entry.tokenHint}>
+                                              <span>Token {entry.tokenHint}</span>
+                                            </Show>
+                                            <Show when={entry.lastSeen}>
+                                              <span>
+                                                Seen{' '}
+                                                {formatRelativeTime(
+                                                  new Date(entry.lastSeen!).getTime(),
+                                                )}
+                                              </span>
+                                            </Show>
+                                          </div>
+                                          <ul class="list-disc pl-4 space-y-1 text-gray-600 dark:text-gray-400">
+                                            <For each={entry.issues}>
+                                              {(issue) => <li>{issue}</li>}
+                                            </For>
+                                          </ul>
+                                          <div class="mt-2 flex flex-wrap gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                if (dockerActionLoading() !== entry.hostId) {
+                                                  void handleDockerPrepareToken(entry.hostId);
+                                                }
+                                              }}
+                                              disabled={dockerActionLoading() === entry.hostId}
+                                              class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                              {dockerActionLoading() === entry.hostId
+                                                ? 'Preparing token...'
+                                                : 'Generate dedicated token'}
+                                            </button>
+                                          </div>
+                                          <Show when={dockerMigrationResults()[entry.hostId]}>
+                                            <div class="mt-3 w-full space-y-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded p-3 text-xs text-gray-700 dark:text-gray-200">
+                                              {(() => {
+                                                const migration = dockerMigrationResults()[entry.hostId]!;
+                                                return (
+                                                  <>
+                                                    <div class="font-semibold text-gray-800 dark:text-gray-100">
+                                                      Install command
+                                                    </div>
+                                                    <pre class="whitespace-pre-wrap break-all bg-gray-900/80 text-gray-100 rounded p-2 text-[11px]">
+                                                      {migration.installCommand}
+                                                    </pre>
+                                                    <button
+                                                      type="button"
+                                                      class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
+                                                      onClick={() => void handleCopy(migration.installCommand, 'Install command copied')}
+                                                    >
+                                                      Copy install command
+                                                    </button>
+                                                    <div class="font-semibold text-gray-800 dark:text-gray-100 mt-2">
+                                                      Systemd snippet
+                                                    </div>
+                                                    <pre class="whitespace-pre-wrap break-all bg-gray-900/80 text-gray-100 rounded p-2 text-[11px]">
+                                                      {migration.systemdServiceSnippet}
+                                                    </pre>
+                                                    <button
+                                                      type="button"
+                                                      class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
+                                                      onClick={() => void handleCopy(migration.systemdServiceSnippet, 'Service snippet copied')}
+                                                    >
+                                                      Copy service snippet
+                                                    </button>
+                                                    <div class="text-gray-600 dark:text-gray-400">
+                                                      Target URL: {migration.pulseURL}
+                                                    </div>
+                                                  </>
+                                                );
+                                              })()}
+                                            </div>
+                                          </Show>
+                                        </div>
+                                      )}
+                                    </For>
+                                  </div>
+</Show>
+                                <Show when={dockerDiag().notes && dockerDiag().notes!.length > 0}>
+                                  <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
+                                    <For each={dockerDiag().notes || []}>
+                                      {(note) => <li>{note}</li>}
+                                    </For>
+                                  </ul>
+                                </Show>
+                              </Card>
+                            )}
+                          </Show>
+
+                          {/* Alerts configuration */}
+                          <Show when={diagnosticsData()?.alerts}>
+                            {(alerts) => (
+                              <Card padding="sm">
+                                <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
+                                  Alerts configuration
+                                </h5>
+                                <div class="text-xs text-gray-600 dark:text-gray-400 space-y-2">
+                                  <div class="flex flex-wrap gap-2">
+                                    <span
+                                      class={`px-2 py-0.5 rounded text-xs ${
+                                        alerts().legacyThresholdsDetected
+                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
+                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                      }`}
+                                    >
+                                      Legacy thresholds {alerts().legacyThresholdsDetected ? 'detected' : 'migrated'}
+                                    </span>
+                                    <span
+                                      class={`px-2 py-0.5 rounded text-xs ${
+                                        alerts().missingCooldown
+                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
+                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                      }`}
+                                    >
+                                      Cooldown {alerts().missingCooldown ? 'missing' : 'configured'}
+                                    </span>
+                                    <span
+                                      class={`px-2 py-0.5 rounded text-xs ${
+                                        alerts().missingGroupingWindow
+                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
+                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                      }`}
+                                    >
+                                      Grouping window {alerts().missingGroupingWindow ? 'disabled' : 'enabled'}
+                                    </span>
+                                  </div>
+                                  <Show when={alerts().legacyThresholdSources && alerts().legacyThresholdSources!.length > 0}>
+                                    <div>
+                                      Legacy sources: {alerts().legacyThresholdSources!.join(', ')}
+                                    </div>
+                                  </Show>
+                                  <Show when={alerts().legacyScheduleSettings && alerts().legacyScheduleSettings!.length > 0}>
+                                    <div>
+                                      Legacy schedule settings: {alerts().legacyScheduleSettings!.join(', ')}
+                                    </div>
+                                  </Show>
+                                </div>
+                                <Show when={alerts().notes && alerts().notes!.length > 0}>
+                                  <ul class="mt-3 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4 space-y-1">
+                                    <For each={alerts().notes || []}>
+                                      {(note) => <li>{note}</li>}
+                                    </For>
+                                  </ul>
+                                </Show>
+                              </Card>
+                            )}
+                          </Show>
 
                           {/* Nodes Status */}
                           <Show
@@ -4076,6 +4745,109 @@ const Settings: Component<SettingsProps> = (props) => {
                             sanitized.guestSnapshots = sanitizeGuestSnapshots(
                               sanitized.guestSnapshots as Array<Record<string, unknown>>,
                             );
+                          }
+
+                          if (
+                            sanitized.temperatureProxy &&
+                            typeof sanitized.temperatureProxy === 'object'
+                          ) {
+                            const proxyDiag = sanitized.temperatureProxy as Record<string, unknown>;
+                            if (typeof proxyDiag.socketPath === 'string') {
+                              proxyDiag.socketPath = proxyDiag.socketPath.includes(
+                                'pulse-sensor-proxy',
+                              )
+                                ? '/mnt/pulse-proxy/pulse-sensor-proxy.sock'
+                                : 'proxy-socket';
+                            }
+                            if (Array.isArray(proxyDiag.notes)) {
+                              proxyDiag.notes = sanitizeNotesArray(proxyDiag.notes);
+                            }
+                          }
+
+                          if (sanitized.apiTokens && typeof sanitized.apiTokens === 'object') {
+                            const apiTokens = sanitized.apiTokens as Record<string, unknown>;
+                            const tokenIdMap = new Map<string, string>();
+                            if (Array.isArray(apiTokens.tokens)) {
+                              apiTokens.tokens = (apiTokens.tokens as Array<Record<string, unknown>>).map(
+                                (token, tokenIndex: number) => {
+                                  const sanitizedToken = { ...token } as Record<string, unknown>;
+                                  const originalId =
+                                    typeof token.id === 'string' ? (token.id as string) : '';
+                                  const sanitizedId = `token-${tokenIndex + 1}`;
+                                  if (originalId) {
+                                    tokenIdMap.set(originalId, sanitizedId);
+                                  }
+                                  sanitizedToken.id = sanitizedId;
+                                  sanitizedToken.name = sanitizedId;
+                                  if (typeof sanitizedToken.hint === 'string') {
+                                    sanitizedToken.hint = 'token-REDACTED';
+                                  }
+                                  return sanitizedToken;
+                                },
+                              );
+                            }
+                            if (Array.isArray(apiTokens.usage)) {
+                              apiTokens.usage = (apiTokens.usage as Array<Record<string, unknown>>).map(
+                                (usage, usageIndex: number) => {
+                                  const sanitizedUsage = { ...usage } as Record<string, unknown>;
+                                  const originalTokenId =
+                                    typeof usage.tokenId === 'string' ? (usage.tokenId as string) : '';
+                                  const mappedId =
+                                    tokenIdMap.get(originalTokenId) ?? `token-${usageIndex + 1}`;
+                                  sanitizedUsage.tokenId = mappedId;
+                                  if (Array.isArray(sanitizedUsage.hosts)) {
+                                    sanitizedUsage.hosts = (sanitizedUsage.hosts as Array<string>).map(
+                                      (host, hostIndex) =>
+                                        sanitizeHostname(
+                                          typeof host === 'string' ? host : `host-${hostIndex + 1}`,
+                                        ),
+                                    );
+                                  }
+                                  return sanitizedUsage;
+                                },
+                              );
+                            }
+                            if (Array.isArray(apiTokens.notes)) {
+                              apiTokens.notes = sanitizeNotesArray(apiTokens.notes);
+                            }
+                          }
+
+                          if (sanitized.dockerAgents && typeof sanitized.dockerAgents === 'object') {
+                            const dockerDiag = sanitized.dockerAgents as Record<string, unknown>;
+                            if (Array.isArray(dockerDiag.attention)) {
+                              dockerDiag.attention = (
+                                dockerDiag.attention as Array<Record<string, unknown>>
+                              ).map((entry, index: number) => {
+                                const sanitizedEntry = { ...entry };
+                                sanitizedEntry.hostId = `docker-host-${index + 1}`;
+                                sanitizedEntry.name = `docker-host-${index + 1}`;
+                                if (typeof sanitizedEntry.tokenHint === 'string') {
+                                  sanitizedEntry.tokenHint = 'token-REDACTED';
+                                }
+                                if (Array.isArray(sanitizedEntry.issues)) {
+                                  sanitizedEntry.issues = sanitizeNotesArray(
+                                    sanitizedEntry.issues,
+                                  );
+                                }
+                                return sanitizedEntry;
+                              });
+                            }
+                            if (Array.isArray(dockerDiag.notes)) {
+                              dockerDiag.notes = sanitizeNotesArray(dockerDiag.notes);
+                            }
+                          }
+
+                          if (sanitized.alerts && typeof sanitized.alerts === 'object') {
+                            const alerts = sanitized.alerts as Record<string, unknown>;
+                            if (Array.isArray(alerts.legacyThresholdSources)) {
+                              alerts.legacyThresholdSources = (alerts.legacyThresholdSources as string[]).map((source) => sanitizeText(source) ?? source);
+                            }
+                            if (Array.isArray(alerts.legacyScheduleSettings)) {
+                              alerts.legacyScheduleSettings = (alerts.legacyScheduleSettings as string[]).map((setting) => sanitizeText(setting) ?? setting);
+                            }
+                            if (Array.isArray(alerts.notes)) {
+                              alerts.notes = sanitizeNotesArray(alerts.notes);
+                            }
                           }
 
                           // Sanitize backend diagnostics (if present)

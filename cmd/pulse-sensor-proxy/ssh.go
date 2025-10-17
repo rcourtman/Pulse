@@ -184,45 +184,52 @@ func (p *Proxy) getTemperatureViaSSH(nodeHost string) (string, error) {
 }
 
 // discoverClusterNodes discovers all nodes in the Proxmox cluster
+// Returns IP addresses of cluster nodes
 func discoverClusterNodes() ([]string, error) {
 	// Check if pvecm is available (only on Proxmox hosts)
 	if _, err := exec.LookPath("pvecm"); err != nil {
 		return nil, fmt.Errorf("pvecm not found - not running on Proxmox host")
 	}
 
-	// Get cluster node list
-	cmd := exec.Command("pvecm", "nodes")
-	var out bytes.Buffer
+	// Get cluster status with IP addresses
+	cmd := exec.Command("pvecm", "status")
+	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to get cluster nodes: %w", err)
+		log.Warn().Str("stderr", stderr.String()).Msg("pvecm status failed")
+		return nil, fmt.Errorf("failed to get cluster status: %w (stderr: %s)", err, stderr.String())
 	}
 
-	// Parse output
-	// Format:
-	// Membership information
-	// ----------------------
-	//     Nodeid      Votes Name
-	//          1          1 node1
-	//          2          1 node2
+	// Parse output to extract IP addresses
+	// Format example:
+	// 0x00000001          1 192.168.0.134
+	// 0x00000003          1 192.168.0.5 (local)
 
 	var nodes []string
 	lines := strings.Split(out.String(), "\n")
 	for _, line := range lines {
+		// Look for lines with hex ID and IP address
+		if !strings.Contains(line, "0x") {
+			continue
+		}
+
 		fields := strings.Fields(line)
-		// Skip header lines and empty lines
+		// Need at least 3 fields: hex_id votes ip [optional:(local)]
 		if len(fields) < 3 {
 			continue
 		}
-		// Check if first field is numeric (node ID)
-		if fields[0][0] >= '0' && fields[0][0] <= '9' {
-			nodeName := fields[2]
-			nodes = append(nodes, nodeName)
+
+		// Third field should be the IP address
+		ip := fields[2]
+		// Basic validation that it looks like an IP
+		if strings.Contains(ip, ".") {
+			nodes = append(nodes, ip)
 		}
 	}
 
 	if len(nodes) == 0 {
-		return nil, fmt.Errorf("no cluster nodes found")
+		return nil, fmt.Errorf("no cluster nodes found with IP addresses")
 	}
 
 	return nodes, nil
