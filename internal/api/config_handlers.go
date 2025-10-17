@@ -3590,62 +3590,160 @@ echo "Temperature Monitoring Setup (Optional)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Check if Pulse is running in a container
-PULSE_IS_CONTAINERIZED=false
-if grep -q "pulse.lan\|pulse.home\|192.168" <<< "%s"; then
-    # Try to detect if target Pulse is containerized
-    # This is a heuristic - we can't know for sure from the setup script
-    :
-fi
-
-echo "📊 Temperature Monitoring"
-echo ""
-echo "Temperature monitoring collects CPU and drive temperatures via SSH."
-echo ""
-echo "Security Architecture:"
-echo "  • SSH key authentication (industry standard, used by Ansible/Terraform)"
-echo "  • Forced command restriction (only 'sensors -j' can execute)"
-echo "  • No port forwarding, X11, PTY, or agent forwarding allowed"
-echo ""
-echo "For containerized Pulse (LXC/Docker):"
-echo "  • SSH keys stored on Proxmox host (not inside container)"
-echo "  • pulse-sensor-proxy service manages connections securely"
-echo "  • Container compromise does not expose SSH credentials"
-echo ""
-echo "For native Pulse installations:"
-echo "  • SSH keys stored in Pulse service user's home directory"
-echo "  • Standard key-based authentication with forced commands"
-echo ""
-echo "Enable temperature monitoring? [y/N]"
-echo -n "> "
-
-ENABLE_TEMP_MONITORING="n"
-if [ -t 0 ]; then
-    read -n 1 -r ENABLE_TEMP_MONITORING
-else
-    if read -n 1 -r ENABLE_TEMP_MONITORING </dev/tty 2>/dev/null; then
-        :
-    else
-        echo "(No terminal available - skipping temperature monitoring)"
-        ENABLE_TEMP_MONITORING="n"
-    fi
-fi
-echo ""
-echo ""
-
-if [[ ! $ENABLE_TEMP_MONITORING =~ ^[Yy]$ ]]; then
-    echo "Temperature monitoring skipped."
-    echo ""
-    # Jump to the end of temperature setup section
-    SSH_PUBLIC_KEY=""
-else
-
 # SSH public key embedded from Pulse server
 SSH_PUBLIC_KEY="%s"
 SSH_RESTRICTED_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_PUBLIC_KEY # pulse-managed-key"
 TEMPERATURE_ENABLED=false
 
-# Check if SSH key is already configured and whether it needs upgrading
+# Detect if Pulse is running in a container BEFORE asking about temperature monitoring
+PULSE_CTID=""
+PULSE_IS_CONTAINERIZED=false
+if command -v pct >/dev/null 2>&1; then
+    # Extract Pulse IP from URL
+    PULSE_IP=$(echo "%s" | sed -E 's|^https?://([^:/]+).*|\1|')
+
+    # Find container with this IP
+    if [[ "$PULSE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # Check all containers for matching IP
+        for CTID in $(pct list | awk 'NR>1 {print $1}'); do
+            # Verify container is running before attempting connection
+            if ! pct status "$CTID" 2>/dev/null | grep -q "running"; then
+                continue
+            fi
+
+            # Get all container IPs (handles both IPv4 and IPv6)
+            CT_IPS=$(pct exec "$CTID" -- hostname -I 2>/dev/null || printf '')
+
+            # Check if any of the container's IPs match the Pulse IP
+            for CT_IP in $CT_IPS; do
+                if [ "$CT_IP" = "$PULSE_IP" ]; then
+                    # Validate with pct config to ensure it's the right container
+                    if pct config "$CTID" >/dev/null 2>&1; then
+                        PULSE_CTID="$CTID"
+                        PULSE_IS_CONTAINERIZED=true
+                        break 2  # Break out of both loops
+                    fi
+                fi
+            done
+        done
+    fi
+fi
+
+# If Pulse is containerized, offer to install proxy first
+if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
+    echo "🔒 Enhanced Security for Containerized Pulse"
+    echo ""
+    echo "Detected: Pulse running in container $PULSE_CTID"
+    echo ""
+    echo "For temperature monitoring, we recommend installing pulse-sensor-proxy."
+    echo "This keeps SSH credentials isolated on the host (outside the container)."
+    echo ""
+    echo "Install secure proxy for temperature monitoring? [Y/n]"
+    echo -n "> "
+
+    INSTALL_PROXY="y"
+    if [ -t 0 ]; then
+        read -n 1 -r INSTALL_PROXY
+    else
+        if read -n 1 -r INSTALL_PROXY </dev/tty 2>/dev/null; then
+            :
+        else
+            echo "(No terminal available - defaulting to yes)"
+            INSTALL_PROXY="y"
+        fi
+    fi
+    echo ""
+    echo ""
+
+    if [[ $INSTALL_PROXY =~ ^[Yy]$|^$ ]]; then
+        # Download installer script from Pulse server
+        PROXY_INSTALLER="/tmp/install-sensor-proxy-$$.sh"
+        INSTALLER_URL="%s/api/install/install-sensor-proxy.sh"
+
+        echo "Installing pulse-sensor-proxy..."
+        if curl --fail --silent --location \
+            "$INSTALLER_URL" \
+            -o "$PROXY_INSTALLER" 2>/dev/null; then
+            chmod +x "$PROXY_INSTALLER"
+
+            # Set fallback URL for installer to download binary from Pulse server
+            export PULSE_SENSOR_PROXY_FALLBACK_URL="%s/api/install/pulse-sensor-proxy"
+
+            # Run installer
+            if "$PROXY_INSTALLER" --ctid "$PULSE_CTID" --quiet 2>&1 | grep -E "✓|⚠️|ERROR"; then
+                # Verify proxy health
+                PROXY_HEALTHY=false
+                if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                    PROXY_HEALTHY=true
+                    echo ""
+                    echo "✓ Secure proxy architecture enabled"
+                    echo "  SSH keys are managed on the host for enhanced security"
+                    echo ""
+                fi
+
+                # Ask if user wants to restart container now
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "Container restart required for socket mount"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo ""
+                echo "The proxy socket must be mounted into container $PULSE_CTID."
+                echo "This requires restarting the container."
+                echo ""
+                echo "Restart container $PULSE_CTID now? [Y/n]"
+                echo -n "> "
+
+                RESTART_CONTAINER="y"
+                if [ -t 0 ]; then
+                    read -n 1 -r RESTART_CONTAINER
+                else
+                    if read -n 1 -r RESTART_CONTAINER </dev/tty 2>/dev/null; then
+                        :
+                    else
+                        echo "(No terminal available - defaulting to yes)"
+                        RESTART_CONTAINER="y"
+                    fi
+                fi
+                echo ""
+                echo ""
+
+                if [[ $RESTART_CONTAINER =~ ^[Yy]$|^$ ]]; then
+                    echo "Restarting container $PULSE_CTID..."
+
+                    # Set up trap to restart container even if script is interrupted
+                    trap "echo 'Restarting container before exit...'; pct stop $PULSE_CTID 2>/dev/null || true; sleep 2; pct start $PULSE_CTID" EXIT INT TERM
+
+                    pct stop "$PULSE_CTID" 2>/dev/null || true
+                    sleep 2
+                    pct start "$PULSE_CTID"
+
+                    # Clear the trap after successful restart
+                    trap - EXIT INT TERM
+
+                    echo "  ✓ Container restarted successfully"
+                    echo ""
+                else
+                    echo "⚠️  Remember to restart container $PULSE_CTID manually:"
+                    echo "   pct restart $PULSE_CTID"
+                    echo ""
+                fi
+            else
+                echo ""
+                echo "⚠️  Proxy installation had issues - you may need to configure manually"
+            fi
+
+            rm -f "$PROXY_INSTALLER"
+        else
+            echo ""
+            echo "⚠️  Could not download installer from Pulse server"
+            echo "  (Proxy can be installed later for enhanced security)"
+        fi
+    else
+        echo "Skipped proxy installation"
+        echo ""
+    fi
+fi
+
+# Check if SSH key is already configured
 SSH_ALREADY_CONFIGURED=false
 SSH_LEGACY_KEY=false
 
@@ -3658,9 +3756,12 @@ if [ -n "$SSH_PUBLIC_KEY" ] && [ -f /root/.ssh/authorized_keys ]; then
     fi
 fi
 
+# Single temperature monitoring prompt
 if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
     TEMPERATURE_ENABLED=true
-    echo "Temperature monitoring is currently ENABLED on this node."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Temperature monitoring is currently ENABLED"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "What would you like to do?"
     echo ""
@@ -3697,9 +3798,6 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
         echo ""
         echo "Temperature monitoring has been disabled."
         echo "Note: lm-sensors package was NOT removed (in case you use it elsewhere)"
-        echo ""
-        echo "To completely remove lm-sensors (optional):"
-        echo "  apt-get remove --purge lm-sensors"
         TEMPERATURE_ENABLED=false
     elif [[ $SSH_ACTION =~ ^[Ss]$ ]]; then
         echo "Temperature monitoring configuration unchanged."
@@ -3719,24 +3817,29 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
         fi
     fi
 else
-    echo "Enable hardware temperature monitoring for this node?"
+    echo "📊 Enable Temperature Monitoring?"
     echo ""
-    echo "This will:"
-    echo "  • Install lm-sensors package"
-    echo "  • Configure SSH key authentication for Pulse server"
-    echo "  • Allow Pulse to collect CPU and drive temperature data"
+    echo "Collect CPU and drive temperatures via secure SSH connection."
     echo ""
-    echo "Security: Uses SSH public key authentication (read-only access)"
+    echo "Security:"
+    echo "  • SSH key authentication with forced command (sensors -j only)"
+    echo "  • No shell access, port forwarding, or other SSH features"
+    if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
+        echo "  • Keys stored on Proxmox host via pulse-sensor-proxy (if installed)"
+    else
+        echo "  • Keys stored in Pulse service user's home directory"
+    fi
     echo ""
-    echo -n "Enable temperature monitoring? [y/N]: "
+    echo "Enable temperature monitoring? [y/N]"
+    echo -n "> "
 
     if [ -t 0 ]; then
-        read -p "> " -n 1 -r SSH_REPLY
+        read -n 1 -r SSH_REPLY
     else
-        if read -p "> " -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
+        if read -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
             :
         else
-            echo "(No terminal available - skipping SSH setup)"
+            echo "(No terminal available - skipping temperature monitoring)"
             SSH_REPLY="n"
         fi
     fi
@@ -3744,8 +3847,6 @@ else
     echo ""
 
     if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
-        echo ""
-        echo ""
         echo "Configuring temperature monitoring..."
 
         if [ -n "$SSH_PUBLIC_KEY" ]; then
@@ -3776,19 +3877,15 @@ else
             fi
 
             echo ""
-            echo "Temperature monitoring enabled successfully."
-            echo "Temperature data will appear in the dashboard within 10 seconds."
-            echo ""
-            echo "To disable later, re-run this setup script or manually remove the key:"
-            echo "  grep -v 'pulse' /root/.ssh/authorized_keys > /tmp/ak && mv /tmp/ak /root/.ssh/authorized_keys"
+            echo "✓ Temperature monitoring enabled"
+            echo "  Temperature data will appear in the dashboard within 10 seconds"
             TEMPERATURE_ENABLED=true
         else
             echo ""
-            echo "Warning: SSH key not available from Pulse server."
-            echo "Temperature monitoring cannot be configured automatically."
+            echo "⚠️  SSH key not available from Pulse server"
+            echo "  Temperature monitoring cannot be configured automatically"
         fi
     else
-        echo ""
         echo "Temperature monitoring skipped."
     fi
 fi
@@ -3819,6 +3916,10 @@ if [ "$TEMPERATURE_ENABLED" = true ] && command -v pvecm >/dev/null 2>&1 && comm
             done <<< "$CLUSTER_NODES"
 
             if [ ${#OTHER_NODES_LIST[@]} -gt 0 ]; then
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "Cluster Node Configuration"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 echo ""
                 echo "Detected additional Proxmox nodes in cluster:"
                 for NODE in "${OTHER_NODES_LIST[@]}"; do
@@ -3935,131 +4036,6 @@ EOF
         fi
     fi
 fi
-fi  # End of ENABLE_TEMP_MONITORING check
-
-# Check if Pulse is running in a container and offer to install pulse-sensor-proxy
-if command -v pct >/dev/null 2>&1 && [ "$TEMPERATURE_ENABLED" = true ]; then
-    # Extract Pulse IP from URL
-    PULSE_IP=$(echo "%s" | sed -E 's|^https?://([^:/]+).*|\1|')
-
-    # Find container with this IP
-    PULSE_CTID=""
-    if [[ "$PULSE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        # Check all containers for matching IP
-        for CTID in $(pct list | awk 'NR>1 {print $1}'); do
-            # Verify container is running before attempting connection
-            if ! pct status "$CTID" 2>/dev/null | grep -q "running"; then
-                continue
-            fi
-
-            # Get all container IPs (handles both IPv4 and IPv6)
-            CT_IPS=$(pct exec "$CTID" -- hostname -I 2>/dev/null || printf '')
-
-            # Check if any of the container's IPs match the Pulse IP
-            for CT_IP in $CT_IPS; do
-                if [ "$CT_IP" = "$PULSE_IP" ]; then
-                    # Validate with pct config to ensure it's the right container
-                    if pct config "$CTID" >/dev/null 2>&1; then
-                        PULSE_CTID="$CTID"
-                        break 2  # Break out of both loops
-                    fi
-                fi
-            done
-        done
-    fi
-
-    if [ -n "$PULSE_CTID" ]; then
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "🔒 Enhanced Security"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
-        echo "Detected: Pulse running in container $PULSE_CTID"
-        echo ""
-        echo "Recommended: Install secure proxy for temperature monitoring"
-        echo "This keeps credentials isolated outside the container."
-        echo ""
-        echo "Enable secure proxy? [Y/n]"
-        echo -n "> "
-
-        INSTALL_PROXY="y"
-        if [ -t 0 ]; then
-            read -n 1 -r INSTALL_PROXY
-        else
-            if read -n 1 -r INSTALL_PROXY </dev/tty 2>/dev/null; then
-                :
-            else
-                echo "(No terminal available - skipping proxy installation)"
-                INSTALL_PROXY="n"
-            fi
-        fi
-        echo ""
-        echo ""
-
-        if [[ $INSTALL_PROXY =~ ^[Yy]$|^$ ]]; then
-            # Download installer script
-            PROXY_INSTALLER="/tmp/install-sensor-proxy-$$.sh"
-            if curl --fail --show-error --silent --location \
-                "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" \
-                -o "$PROXY_INSTALLER" 2>&1; then
-                chmod +x "$PROXY_INSTALLER"
-
-                # Run installer (suppress verbose output)
-                if "$PROXY_INSTALLER" --ctid "$PULSE_CTID" --quiet 2>&1 | grep -E "✓|⚠️|ERROR" || "$PROXY_INSTALLER" --ctid "$PULSE_CTID" 2>&1 | grep -E "✓|⚠️|ERROR"; then
-                    # Verify proxy health before removing legacy keys
-                    PROXY_HEALTHY=false
-                    if command -v systemctl >/dev/null 2>&1; then
-                        if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
-                            PROXY_HEALTHY=true
-                        fi
-                    elif [ -x /usr/local/bin/pulse-sensor-proxy ]; then
-                        # Binary exists and is executable
-                        PROXY_HEALTHY=true
-                    fi
-
-                    if [ "$PROXY_HEALTHY" = true ]; then
-                        # Clean up old container-based SSH keys from nodes (silent)
-                        CLEANUP_NODES=""
-                        if [ "$TEMPERATURE_ENABLED" = true ]; then
-                            CLEANUP_NODES="$(hostname)"
-                        fi
-                        if [ -n "${OTHER_NODES_LIST+x}" ] && [ ${#OTHER_NODES_LIST[@]} -gt 0 ]; then
-                            CLEANUP_NODES="$CLEANUP_NODES ${OTHER_NODES_LIST[*]}"
-                        fi
-
-                        for NODE in $CLEANUP_NODES; do
-                            if [ -n "$NODE" ] && [ -n "$SSH_PUBLIC_KEY" ]; then
-                                ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR \
-                                    root@"$NODE" \
-                                    "sed -i '/$SSH_PUBLIC_KEY/d' /root/.ssh/authorized_keys 2>/dev/null || true" \
-                                    >/dev/null 2>&1
-                            fi
-                        done
-
-                        echo ""
-                        echo "✓ Secure proxy architecture enabled"
-                        echo "  SSH keys are managed on the host for enhanced security"
-                    else
-                        echo ""
-                        echo "⚠️  Proxy installed but not yet active - keeping existing SSH keys"
-                        echo "  Legacy keys will be removed automatically on next setup run"
-                    fi
-                else
-                    echo ""
-                    echo "⚠️  Installation incomplete - using standard configuration"
-                fi
-
-                rm -f "$PROXY_INSTALLER"
-            else
-                echo ""
-                echo "⚠️  Network issue - using standard configuration"
-                echo "  (Proxy can be installed later for enhanced security)"
-            fi
-        else
-            echo "Using standard configuration"
-        fi
-    fi
-fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -4086,7 +4062,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, pulseURL, sshPublicKey, pulseURL, authToken, pulseURL, tokenName, serverHost)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, tokenName, serverHost)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash

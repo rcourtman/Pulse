@@ -61,8 +61,8 @@ Mock Mode: ${PULSE_MOCK_MODE:-false}
 Toggle mock mode: npm run mock:on / npm run mock:off
 Mock config: npm run mock:edit
 
-Just edit frontend files and see changes instantly!
-Backend auto-reloads when mock.env changes!
+Frontend: Edit files and see changes instantly!
+Backend: Auto-rebuilds when .go files change!
 Press Ctrl+C to stop
 =========================================
 BANNER
@@ -75,7 +75,12 @@ kill_port() {
 
 printf "[hot-dev] Cleaning up existing processes...\n"
 
-sudo systemctl stop pulse-hot-dev 2>/dev/null || true
+# Don't stop ourselves if we're running under systemd
+if [[ -z "${INVOCATION_ID:-}" ]]; then
+    # Not running under systemd, safe to stop the service
+    sudo systemctl stop pulse-hot-dev 2>/dev/null || true
+fi
+
 sudo systemctl stop pulse-backend 2>/dev/null || true
 sudo systemctl stop pulse 2>/dev/null || true
 sudo systemctl stop pulse-frontend 2>/dev/null || true
@@ -183,9 +188,62 @@ if ! kill -0 "${BACKEND_PID}" 2>/dev/null; then
     exit 1
 fi
 
+# Start backend file watcher in background
+printf "[hot-dev] Starting backend file watcher...\n"
+(
+    cd "${ROOT_DIR}"
+    while true; do
+        # Watch for changes to .go files (excluding vendor and node_modules)
+        inotifywait -r -e modify,create,delete,move \
+            --exclude '(vendor/|node_modules/|\.git/)' \
+            --format '%w%f' \
+            "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
+        while read -r changed_file; do
+            if [[ "$changed_file" == *.go ]]; then
+                echo ""
+                echo "[hot-dev] 🔄 Go file changed: $(basename "$changed_file")"
+                echo "[hot-dev] Rebuilding backend..."
+
+                # Rebuild the binary
+                if go build -o pulse ./cmd/pulse 2>&1 | grep -v "^#"; then
+                    echo "[hot-dev] ✓ Build successful, restarting backend..."
+
+                    # Find and kill old backend
+                    OLD_PID=$(pgrep -f "^\./pulse$" || true)
+                    if [[ -n "$OLD_PID" ]]; then
+                        kill "$OLD_PID" 2>/dev/null || true
+                        sleep 1
+                        if kill -0 "$OLD_PID" 2>/dev/null; then
+                            kill -9 "$OLD_PID" 2>/dev/null || true
+                        fi
+                    fi
+
+                    # Start new backend with same environment
+                    FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} ./pulse &
+                    NEW_PID=$!
+                    sleep 1
+
+                    if kill -0 "$NEW_PID" 2>/dev/null; then
+                        echo "[hot-dev] ✓ Backend restarted (PID: $NEW_PID)"
+                    else
+                        echo "[hot-dev] ✗ Backend failed to start!"
+                    fi
+                else
+                    echo "[hot-dev] ✗ Build failed!"
+                fi
+                echo "[hot-dev] Watching for changes..."
+            fi
+        done
+    done
+) &
+WATCHER_PID=$!
+
 cleanup() {
     echo ""
     echo "Stopping services..."
+    if [[ -n ${WATCHER_PID:-} ]] && kill -0 "${WATCHER_PID}" 2>/dev/null; then
+        kill "${WATCHER_PID}" 2>/dev/null || true
+    fi
     if [[ -n ${BACKEND_PID:-} ]] && kill -0 "${BACKEND_PID}" 2>/dev/null; then
         kill "${BACKEND_PID}" 2>/dev/null || true
         sleep 1
@@ -197,6 +255,7 @@ cleanup() {
     pkill -f vite 2>/dev/null || true
     pkill -f "npm run dev" 2>/dev/null || true
     pkill -9 -x "pulse" 2>/dev/null || true
+    pkill -f "inotifywait.*pulse" 2>/dev/null || true
     echo "Hot-dev stopped. To restart normal service, run: sudo systemctl start pulse"
     echo "(Legacy installs may use: sudo systemctl start pulse-backend)"
 }

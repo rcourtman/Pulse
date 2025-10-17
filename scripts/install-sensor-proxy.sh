@@ -40,6 +40,8 @@ CTID=""
 VERSION="latest"
 LOCAL_BINARY=""
 QUIET=false
+PULSE_SERVER=""
+FALLBACK_BASE="${PULSE_SENSOR_PROXY_FALLBACK_URL:-}"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -55,6 +57,10 @@ while [[ $# -gt 0 ]]; do
             LOCAL_BINARY="$2"
             shift 2
             ;;
+        --pulse-server)
+            PULSE_SERVER="$2"
+            shift 2
+            ;;
         --quiet)
             QUIET=true
             shift
@@ -66,9 +72,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# If --pulse-server was provided, use it as the fallback base
+if [[ -n "$PULSE_SERVER" ]]; then
+    FALLBACK_BASE="${PULSE_SERVER}/api/install/pulse-sensor-proxy"
+fi
+
 if [[ -z "$CTID" ]]; then
     print_error "Missing required argument: --ctid <container-id>"
-    echo "Usage: $0 --ctid <container-id> [--version <version>] [--local-binary <path>]"
+    echo "Usage: $0 --ctid <container-id> [--pulse-server <url>] [--version <version>] [--local-binary <path>]"
     exit 1
 fi
 
@@ -95,6 +106,12 @@ else
     print_info "Service account pulse-sensor-proxy already exists"
 fi
 
+# Add pulse-sensor-proxy user to www-data group for Proxmox IPC access (pvecm commands)
+if ! groups pulse-sensor-proxy | grep -q '\bwww-data\b'; then
+    print_info "Adding pulse-sensor-proxy to www-data group for Proxmox IPC access..."
+    usermod -aG www-data pulse-sensor-proxy
+fi
+
 # Install binary - either from local file or download from GitHub
 if [[ -n "$LOCAL_BINARY" ]]; then
     # Use local binary for testing
@@ -107,31 +124,20 @@ if [[ -n "$LOCAL_BINARY" ]]; then
     chmod +x "$BINARY_PATH"
     print_info "Binary installed to $BINARY_PATH"
 else
-    # Download from GitHub release
-    GITHUB_REPO="rcourtman/Pulse"
-    if [[ "$VERSION" == "latest" ]]; then
-        RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-        print_info "Fetching latest release info..."
-        RELEASE_DATA=$(curl -fsSL "$RELEASE_URL")
-        VERSION=$(echo "$RELEASE_DATA" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
-        if [[ -z "$VERSION" ]]; then
-            print_error "Failed to determine latest version"
-            exit 1
-        fi
-        print_info "Latest version: $VERSION"
-    fi
-
     # Detect architecture
     ARCH=$(uname -m)
     case $ARCH in
         x86_64)
             BINARY_NAME="pulse-sensor-proxy-linux-amd64"
+            ARCH_LABEL="linux-amd64"
             ;;
         aarch64|arm64)
             BINARY_NAME="pulse-sensor-proxy-linux-arm64"
+            ARCH_LABEL="linux-arm64"
             ;;
         armv7l|armhf)
             BINARY_NAME="pulse-sensor-proxy-linux-armv7"
+            ARCH_LABEL="linux-armv7"
             ;;
         *)
             print_error "Unsupported architecture: $ARCH"
@@ -139,13 +145,35 @@ else
             ;;
     esac
 
-    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
+    # If fallback URL is provided (e.g., from Pulse setup script), use it directly
+    if [[ -n "$FALLBACK_BASE" ]]; then
+        FALLBACK_URL="${FALLBACK_BASE%/}?arch=${ARCH_LABEL}"
+        print_info "Downloading $BINARY_NAME from Pulse server..."
+        if ! curl -fsSL "$FALLBACK_URL" -o "$BINARY_PATH.tmp"; then
+            print_error "Failed to download proxy binary from $FALLBACK_URL"
+            exit 1
+        fi
+    else
+        # Fallback not provided, download from GitHub release
+        GITHUB_REPO="rcourtman/Pulse"
+        if [[ "$VERSION" == "latest" ]]; then
+            RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+            print_info "Fetching latest release info..."
+            RELEASE_DATA=$(curl -fsSL "$RELEASE_URL")
+            VERSION=$(echo "$RELEASE_DATA" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+            if [[ -z "$VERSION" ]]; then
+                print_error "Failed to determine latest version"
+                exit 1
+            fi
+            print_info "Latest version: $VERSION"
+        fi
 
-    # Download binary
-    print_info "Downloading $BINARY_NAME..."
-    if ! curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp"; then
-        print_error "Failed to download binary from $DOWNLOAD_URL"
-        exit 1
+        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
+        print_info "Downloading $BINARY_NAME from GitHub..."
+        if ! curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp"; then
+            print_error "Failed to download binary from $DOWNLOAD_URL"
+            exit 1
+        fi
     fi
 
     # Make executable and move to final location
@@ -177,6 +205,7 @@ After=network.target
 Type=simple
 User=pulse-sensor-proxy
 Group=pulse-sensor-proxy
+SupplementaryGroups=www-data
 WorkingDirectory=/var/lib/pulse-sensor-proxy
 ExecStart=/usr/local/bin/pulse-sensor-proxy
 Restart=on-failure
@@ -185,6 +214,7 @@ RestartSec=5s
 # Runtime dirs/sockets
 RuntimeDirectory=pulse-sensor-proxy
 RuntimeDirectoryMode=0775
+RuntimeDirectoryPreserve=yes
 UMask=0007
 
 # Core hardening
@@ -192,6 +222,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/var/lib/pulse-sensor-proxy
+ReadOnlyPaths=/run/pve-cluster /etc/pve
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -244,12 +275,133 @@ fi
 
 print_info "Socket ready at $SOCKET_PATH"
 
+# Configure SSH keys for cluster temperature monitoring
+print_info "Configuring proxy SSH access to cluster nodes..."
+
+# Wait for proxy to generate SSH keys
+PROXY_KEY_FILE="$SSH_DIR/id_ed25519.pub"
+for i in {1..10}; do
+    if [[ -f "$PROXY_KEY_FILE" ]]; then
+        break
+    fi
+    sleep 1
+done
+
+if [[ ! -f "$PROXY_KEY_FILE" ]]; then
+    print_error "Proxy SSH key not generated after 10 seconds"
+    print_info "Check service logs: journalctl -u pulse-sensor-proxy -n 50"
+    exit 1
+fi
+
+PROXY_PUBLIC_KEY=$(cat "$PROXY_KEY_FILE")
+print_info "Proxy public key: ${PROXY_PUBLIC_KEY:0:50}..."
+
+# Discover cluster nodes
+if command -v pvecm >/dev/null 2>&1; then
+    # Extract node IPs from pvecm status
+    CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}')
+
+    if [[ -n "$CLUSTER_NODES" ]]; then
+        print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"
+
+        # Configure SSH key with forced command restriction
+        FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+        AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY}"
+
+        # Track SSH key push results
+        SSH_SUCCESS_COUNT=0
+        SSH_FAILURE_COUNT=0
+        declare -a SSH_FAILED_NODES=()
+
+        # Push key to each cluster node
+        for node_ip in $CLUSTER_NODES; do
+            print_info "Authorizing proxy key on node $node_ip..."
+
+            # Remove any existing proxy keys first
+            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+                "sed -i '/pulse-sensor-proxy\$/d' /root/.ssh/authorized_keys" 2>/dev/null || true
+
+            # Add new key with forced command
+            SSH_ERROR=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+                "echo '${AUTH_LINE}' >> /root/.ssh/authorized_keys" 2>&1)
+            if [[ $? -eq 0 ]]; then
+                print_success "SSH key configured on $node_ip"
+                ((SSH_SUCCESS_COUNT++))
+            else
+                print_warn "Failed to configure SSH key on $node_ip"
+                ((SSH_FAILURE_COUNT++))
+                SSH_FAILED_NODES+=("$node_ip")
+                # Log detailed error for debugging
+                if [[ -n "$SSH_ERROR" ]]; then
+                    print_info "  Error details: $(echo "$SSH_ERROR" | head -1)"
+                fi
+            fi
+        done
+
+        # Print summary
+        print_info ""
+        print_info "SSH key configuration summary:"
+        print_info "  ✓ Success: $SSH_SUCCESS_COUNT node(s)"
+        if [[ $SSH_FAILURE_COUNT -gt 0 ]]; then
+            print_warn "  ✗ Failed: $SSH_FAILURE_COUNT node(s) - ${SSH_FAILED_NODES[*]}"
+            print_info ""
+            print_info "To retry failed nodes, use Pulse's 'Ensure cluster keys' button or manually run:"
+            print_info "  ssh root@<node> 'echo \"${AUTH_LINE}\" >> /root/.ssh/authorized_keys'"
+        fi
+    else
+        # No cluster found - configure standalone node
+        print_info "No cluster detected, configuring standalone node..."
+
+        # Configure SSH key with forced command restriction
+        FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+        AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY}"
+
+        # Configure localhost
+        print_info "Authorizing proxy key on localhost..."
+
+        # Remove any existing proxy keys first
+        sed -i '/pulse-sensor-proxy$/d' /root/.ssh/authorized_keys 2>/dev/null || touch /root/.ssh/authorized_keys
+
+        # Add new key with forced command
+        if echo "${AUTH_LINE}" >> /root/.ssh/authorized_keys; then
+            print_success "SSH key configured on standalone node"
+            print_info ""
+            print_info "Standalone node configuration complete"
+        else
+            print_warn "Failed to configure SSH key on localhost"
+            print_info "Manually add this line to /root/.ssh/authorized_keys:"
+            print_info "  ${AUTH_LINE}"
+        fi
+    fi
+else
+    # Proxmox host but pvecm not available (shouldn't happen, but handle it)
+    print_warn "pvecm command not available"
+    print_info "Configuring SSH key for localhost..."
+
+    # Configure localhost as fallback
+    FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+    AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY}"
+
+    sed -i '/pulse-sensor-proxy$/d' /root/.ssh/authorized_keys 2>/dev/null || touch /root/.ssh/authorized_keys
+    if echo "${AUTH_LINE}" >> /root/.ssh/authorized_keys; then
+        print_success "SSH key configured on localhost"
+    else
+        print_warn "Failed to configure SSH key"
+    fi
+fi
+
 # Ensure container mount via mp configuration
 print_info "Ensuring container socket mount configuration..."
 MOUNT_TARGET="/mnt/pulse-proxy"
+LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
 CONFIG_CONTENT=$(pct config "$CTID")
 CURRENT_MP=$(pct config "$CTID" | awk -v target="$MOUNT_TARGET" '$1 ~ /^mp[0-9]+:$/ && index($0, "mp=" target) {split($1, arr, ":"); print arr[1]; exit}')
 MOUNT_UPDATED=false
+HOTPLUG_FAILED=false
+CT_RUNNING=false
+if pct status "$CTID" 2>/dev/null | grep -q "running"; then
+    CT_RUNNING=true
+fi
 
 if [[ -z "$CURRENT_MP" ]]; then
     for idx in $(seq 0 9); do
@@ -263,16 +415,32 @@ if [[ -z "$CURRENT_MP" ]]; then
         exit 1
     fi
     print_info "Configuring container mount using $CURRENT_MP..."
-    pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0"
-    MOUNT_UPDATED=true
+    if pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0" 2>/dev/null; then
+        MOUNT_UPDATED=true
+    else
+        HOTPLUG_FAILED=true
+    fi
 else
     print_info "Container already has socket mount configured ($CURRENT_MP)"
-    pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0"
+    if pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0" 2>/dev/null; then
+        MOUNT_UPDATED=true
+    else
+        HOTPLUG_FAILED=true
+    fi
+fi
+
+if [[ "$HOTPLUG_FAILED" = true ]]; then
+    print_warn "Hot-plugging socket mount failed (container may be running). Updating config directly."
+    CURRENT_MP_LINE="${CURRENT_MP}: /run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0"
+    if ! grep -q "^${CURRENT_MP}:" "$LXC_CONFIG" 2>/dev/null; then
+        echo "$CURRENT_MP_LINE" >> "$LXC_CONFIG"
+    else
+        sed -i "s#^${CURRENT_MP}:.*#${CURRENT_MP_LINE}#" "$LXC_CONFIG"
+    fi
     MOUNT_UPDATED=true
 fi
 
 # Remove legacy lxc.mount.entry directives if present
-LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
 if grep -q "lxc.mount.entry: /run/pulse-sensor-proxy" "$LXC_CONFIG"; then
     print_info "Removing legacy lxc.mount.entry directives for pulse-sensor-proxy"
     sed -i '/lxc\.mount\.entry: \/run\/pulse-sensor-proxy/d' "$LXC_CONFIG"
@@ -281,20 +449,28 @@ fi
 
 # Restart container to apply mount if configuration changed or mount missing
 if [[ "$MOUNT_UPDATED" = true ]]; then
-    print_info "Restarting container to apply socket mount..."
-    pct stop "$CTID" || true
-    sleep 2
-    pct start "$CTID"
-    sleep 5
+    if [[ "$CT_RUNNING" = true ]]; then
+        print_warn "Container $CTID is currently running. Restart it when convenient to activate the secure proxy mount."
+    else
+        print_info "Restarting container to apply socket mount..."
+        pct stop "$CTID" || true
+        sleep 2
+        pct start "$CTID"
+        sleep 5
+    fi
 fi
 
 # Verify socket directory and file inside container
-print_info "Verifying socket accessibility..."
-if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
-    print_info "Socket is accessible in container at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+if [[ "$HOTPLUG_FAILED" = true && "$CT_RUNNING" = true ]]; then
+    print_warn "Skipping socket verification until container $CTID is restarted."
 else
-    print_warn "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
-    print_info "Check container configuration and restart if necessary"
+    print_info "Verifying socket accessibility..."
+    if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
+        print_info "Socket is accessible in container at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+    else
+        print_warn "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+        print_info "Check container configuration and restart if necessary"
+    fi
 fi
 
 # Configure Pulse backend environment override inside container

@@ -548,6 +548,14 @@ func (m *Monitor) GetDockerHost(hostID string) (models.DockerHost, bool) {
 	return models.DockerHost{}, false
 }
 
+// GetDockerHosts returns a point-in-time snapshot of all Docker hosts Pulse knows about.
+func (m *Monitor) GetDockerHosts() []models.DockerHost {
+	if m == nil || m.state == nil {
+		return nil
+	}
+	return m.state.GetDockerHosts()
+}
+
 // QueueDockerHostStop queues a stop command for the specified docker host.
 func (m *Monitor) QueueDockerHostStop(hostID string) (models.DockerHostCommandStatus, error) {
 	return m.queueDockerStopCommand(hostID)
@@ -2552,7 +2560,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		// Collect temperature data via SSH (non-blocking, best effort)
 		// Only attempt for online nodes
 		if node.Status == "online" && m.tempCollector != nil {
-			tempCtx, tempCancel := context.WithTimeout(ctx, 5*time.Second)
+			tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
 
 			// Determine SSH hostname to use (most robust approach):
 			// 1. For cluster nodes: Try to find the node's specific IP or host from ClusterEndpoints

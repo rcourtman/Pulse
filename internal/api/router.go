@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -21,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -45,6 +47,7 @@ type Router struct {
 	oidcMu                sync.Mutex
 	oidcService           *OIDCService
 	wrapped               http.Handler
+	projectRoot           string
 	// Cached system settings to avoid loading from disk on every request
 	settingsMu           sync.RWMutex
 	cachedAllowEmbedding bool
@@ -57,6 +60,11 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	InitSessionStore(cfg.DataPath)
 	InitCSRFStore(cfg.DataPath)
 
+	projectRoot, err := os.Getwd()
+	if err != nil {
+		projectRoot = "."
+	}
+
 	r := &Router{
 		mux:           http.NewServeMux(),
 		config:        cfg,
@@ -66,6 +74,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		updateManager: updates.NewManager(cfg),
 		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
 		persistence:   config.NewConfigPersistence(cfg.DataPath),
+		projectRoot:   projectRoot,
 	}
 
 	r.setupRoutes()
@@ -120,6 +129,10 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
 	r.mux.HandleFunc("/api/charts", r.handleCharts)
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
+	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", RequireAdmin(r.config, r.handleDiagnosticsRegisterProxyNodes))
+	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, r.handleDiagnosticsDockerPrepareToken))
+	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.handleDownloadPulseSensorProxy)
+	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.handleDownloadInstallerScript)
 	r.mux.HandleFunc("/api/config", r.handleConfig)
 	r.mux.HandleFunc("/api/backups", r.handleBackups)
 	r.mux.HandleFunc("/api/backups/", r.handleBackups)
@@ -1071,10 +1084,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/login", // Add login endpoint as public
 				"/api/oidc/login",
 				config.DefaultOIDCCallbackPath,
-				"/install-docker-agent.sh",     // Docker agent bootstrap script must be public
-				"/download/pulse-docker-agent", // Agent binary download should not require auth
-				"/api/agent/version",           // Agent update checks need to work before auth
-				"/api/server/info",             // Server info for installer script
+				"/install-docker-agent.sh",             // Docker agent bootstrap script must be public
+				"/download/pulse-docker-agent",         // Agent binary download should not require auth
+				"/api/agent/version",                   // Agent update checks need to work before auth
+				"/api/server/info",                     // Server info for installer script
+				"/api/install/install-sensor-proxy.sh", // Temperature proxy installer fallback
+				"/api/install/pulse-sensor-proxy",      // Temperature proxy binary fallback
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -1128,6 +1143,14 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if normalizedPath == "/api/security/quick-setup" && req.Method == http.MethodPost {
 				isPublic = true
 			}
+			// Dev mode bypass for admin endpoints (disabled by default)
+			if os.Getenv("ALLOW_ADMIN_BYPASS") == "1" {
+				log.Info().
+					Str("path", req.URL.Path).
+					Msg("=== ADMIN BYPASS ENABLED - SKIPPING GLOBAL AUTH ===")
+				needsAuth = false
+			}
+
 			// Check auth for protected routes (only if auth is needed)
 			if needsAuth && !isPublic && !CheckAuth(r.config, w, req) {
 				// Never send WWW-Authenticate - use custom login page
@@ -2848,6 +2871,227 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 	}
 
 	http.Error(w, "Agent binary not found", http.StatusNotFound)
+}
+
+func (r *Router) handleDiagnosticsRegisterProxyNodes(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
+		return
+	}
+
+	client := tempproxy.NewClient()
+	if client == nil || !client.IsAvailable() {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "proxy_unavailable", "pulse-sensor-proxy socket not detected inside the container", nil)
+		return
+	}
+
+	nodes, err := client.RegisterNodes()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to request proxy node registration status")
+		writeErrorResponse(w, http.StatusBadGateway, "proxy_error", err.Error(), nil)
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success": true,
+		"nodes":   nodes,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to encode proxy register nodes response")
+	}
+}
+
+func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
+		return
+	}
+
+	var payload struct {
+		HostID    string `json:"hostId"`
+		TokenName string `json:"tokenName"`
+	}
+
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", nil)
+		return
+	}
+
+	hostID := strings.TrimSpace(payload.HostID)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "hostId is required", nil)
+		return
+	}
+
+	host, ok := r.monitor.GetDockerHost(hostID)
+	if !ok {
+		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Docker host not found", nil)
+		return
+	}
+
+	name := strings.TrimSpace(payload.TokenName)
+	if name == "" {
+		displayName := preferredDockerHostName(host)
+		name = fmt.Sprintf("Docker host: %s", displayName)
+	}
+
+	rawToken, err := auth.GenerateAPIToken()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate docker migration token")
+		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
+		return
+	}
+
+	record, err := config.NewAPITokenRecord(rawToken, name)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to construct token record for docker migration")
+		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
+		return
+	}
+
+	r.config.APITokens = append(r.config.APITokens, *record)
+	r.config.SortAPITokens()
+	r.config.APITokenEnabled = true
+
+	if r.persistence != nil {
+		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+			r.config.RemoveAPIToken(record.ID)
+			log.Error().Err(err).Msg("Failed to persist API tokens after docker migration generation")
+			writeErrorResponse(w, http.StatusInternalServerError, "token_persist_failed", "Failed to persist API token", nil)
+			return
+		}
+	}
+
+	baseURL := strings.TrimRight(r.resolvePublicURL(req), "/")
+	installCommand := fmt.Sprintf("curl -fsSL %s/install-docker-agent.sh | bash -s -- --url %s --token %s", baseURL, baseURL, rawToken)
+	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-docker-agent --url %s --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL)
+
+	response := map[string]any{
+		"success": true,
+		"token":   rawToken,
+		"record":  toAPITokenDTO(*record),
+		"host": map[string]any{
+			"id":   host.ID,
+			"name": preferredDockerHostName(host),
+		},
+		"installCommand":        installCommand,
+		"systemdServiceSnippet": systemdSnippet,
+		"pulseURL":              baseURL,
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize docker token migration response")
+	}
+}
+
+func (r *Router) handleDownloadPulseSensorProxy(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
+		return
+	}
+
+	arch := strings.TrimSpace(req.URL.Query().Get("arch"))
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+
+	if runtime.GOOS != "linux" && arch != "linux-amd64" {
+		writeErrorResponse(w, http.StatusBadRequest, "unsupported_arch", "Only linux-amd64 builds are supported in this environment", nil)
+		return
+	}
+
+	tmpFile, err := os.CreateTemp("", "pulse-sensor-proxy-*.bin")
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "tempfile_error", "Failed to create temporary file", nil)
+		return
+	}
+	tmpFileName := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpFileName)
+
+	cmd := exec.Command("go", "build", "-o", tmpFileName, "./cmd/pulse-sensor-proxy")
+	cmd.Dir = r.projectRoot
+	cmd.Env = append(os.Environ(),
+		"GOOS=linux",
+		"GOARCH=amd64",
+		"CGO_ENABLED=0",
+	)
+
+	buildOutput, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error().Err(err).Bytes("output", buildOutput).Msg("Failed to build pulse-sensor-proxy binary")
+		writeErrorResponse(w, http.StatusInternalServerError, "build_failed", "Failed to build proxy binary on the server", nil)
+		return
+	}
+
+	builtFile, err := os.Open(tmpFileName)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "open_error", "Failed to open built proxy binary", nil)
+		return
+	}
+	defer builtFile.Close()
+
+	stat, err := builtFile.Stat()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "stat_error", "Failed to stat built binary", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"pulse-sensor-proxy-linux-amd64\""))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
+
+	if _, err := io.Copy(w, builtFile); err != nil {
+		log.Error().Err(err).Msg("Failed to stream proxy binary to client")
+	}
+}
+
+func (r *Router) handleDownloadInstallerScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
+		return
+	}
+
+	scriptPath := filepath.Join(r.projectRoot, "scripts", "install-sensor-proxy.sh")
+	content, err := os.ReadFile(scriptPath)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read installer script", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.Header().Set("Content-Disposition", "attachment; filename=install-sensor-proxy.sh")
+	if _, err := w.Write(content); err != nil {
+		log.Error().Err(err).Msg("Failed to write installer script to client")
+	}
+}
+
+func (r *Router) resolvePublicURL(req *http.Request) string {
+	if publicURL := strings.TrimSpace(r.config.PublicURL); publicURL != "" {
+		return strings.TrimRight(publicURL, "/")
+	}
+
+	scheme := "http"
+	if req != nil {
+		if req.TLS != nil {
+			scheme = "https"
+		} else if proto := req.Header.Get("X-Forwarded-Proto"); strings.EqualFold(proto, "https") {
+			scheme = "https"
+		}
+	}
+
+	host := ""
+	if req != nil {
+		host = strings.TrimSpace(req.Host)
+	}
+	if host == "" {
+		if r.config.FrontendPort > 0 {
+			host = fmt.Sprintf("localhost:%d", r.config.FrontendPort)
+		} else {
+			host = "localhost:7655"
+		}
+	}
+
+	return fmt.Sprintf("%s://%s", scheme, host)
 }
 
 func normalizeDockerAgentArch(arch string) string {

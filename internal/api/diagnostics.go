@@ -7,16 +7,25 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/user"
+	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/ssh"
 )
 
 // DiagnosticsInfo contains comprehensive diagnostic information
@@ -28,6 +37,9 @@ type DiagnosticsInfo struct {
 	PBS              []PBSDiagnostic             `json:"pbs"`
 	System           SystemDiagnostic            `json:"system"`
 	TemperatureProxy *TemperatureProxyDiagnostic `json:"temperatureProxy,omitempty"`
+	APITokens        *APITokenDiagnostic         `json:"apiTokens,omitempty"`
+	DockerAgents     *DockerAgentDiagnostic      `json:"dockerAgents,omitempty"`
+	Alerts           *AlertsDiagnostic           `json:"alerts,omitempty"`
 	Errors           []string                    `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots,omitempty"`
@@ -162,7 +174,84 @@ type TemperatureProxyDiagnostic struct {
 	SocketFound           bool     `json:"socketFound"`
 	SocketPath            string   `json:"socketPath,omitempty"`
 	SocketPermissions     string   `json:"socketPermissions,omitempty"`
+	SocketOwner           string   `json:"socketOwner,omitempty"`
+	SocketGroup           string   `json:"socketGroup,omitempty"`
+	ProxyReachable        bool     `json:"proxyReachable"`
+	ProxyVersion          string   `json:"proxyVersion,omitempty"`
+	ProxyPublicKeySHA256  string   `json:"proxyPublicKeySha256,omitempty"`
+	ProxySSHDirectory     string   `json:"proxySshDirectory,omitempty"`
+	LegacySSHKeyCount     int      `json:"legacySshKeyCount,omitempty"`
 	Notes                 []string `json:"notes,omitempty"`
+}
+
+// APITokenDiagnostic reports on the state of the multi-token authentication system.
+type APITokenDiagnostic struct {
+	Enabled                bool              `json:"enabled"`
+	TokenCount             int               `json:"tokenCount"`
+	HasEnvTokens           bool              `json:"hasEnvTokens"`
+	HasLegacyToken         bool              `json:"hasLegacyToken"`
+	RecommendTokenSetup    bool              `json:"recommendTokenSetup"`
+	RecommendTokenRotation bool              `json:"recommendTokenRotation"`
+	LegacyDockerHostCount  int               `json:"legacyDockerHostCount,omitempty"`
+	UnusedTokenCount       int               `json:"unusedTokenCount,omitempty"`
+	Notes                  []string          `json:"notes,omitempty"`
+	Tokens                 []APITokenSummary `json:"tokens,omitempty"`
+	Usage                  []APITokenUsage   `json:"usage,omitempty"`
+}
+
+// APITokenSummary provides sanitized token metadata for diagnostics display.
+type APITokenSummary struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Hint       string `json:"hint,omitempty"`
+	CreatedAt  string `json:"createdAt,omitempty"`
+	LastUsedAt string `json:"lastUsedAt,omitempty"`
+	Source     string `json:"source,omitempty"`
+}
+
+// APITokenUsage summarises how tokens are consumed by connected agents.
+type APITokenUsage struct {
+	TokenID   string   `json:"tokenId"`
+	HostCount int      `json:"hostCount"`
+	Hosts     []string `json:"hosts,omitempty"`
+}
+
+// DockerAgentDiagnostic summarizes adoption of the Docker agent command system.
+type DockerAgentDiagnostic struct {
+	HostsTotal               int                    `json:"hostsTotal"`
+	HostsOnline              int                    `json:"hostsOnline"`
+	HostsReportingVersion    int                    `json:"hostsReportingVersion"`
+	HostsWithTokenBinding    int                    `json:"hostsWithTokenBinding"`
+	HostsWithoutTokenBinding int                    `json:"hostsWithoutTokenBinding"`
+	HostsWithoutVersion      int                    `json:"hostsWithoutVersion,omitempty"`
+	HostsOutdatedVersion     int                    `json:"hostsOutdatedVersion,omitempty"`
+	HostsWithStaleCommand    int                    `json:"hostsWithStaleCommand,omitempty"`
+	HostsPendingUninstall    int                    `json:"hostsPendingUninstall,omitempty"`
+	HostsNeedingAttention    int                    `json:"hostsNeedingAttention"`
+	RecommendedAgentVersion  string                 `json:"recommendedAgentVersion,omitempty"`
+	Attention                []DockerAgentAttention `json:"attention,omitempty"`
+	Notes                    []string               `json:"notes,omitempty"`
+}
+
+// DockerAgentAttention captures an individual agent that requires user action.
+type DockerAgentAttention struct {
+	HostID       string   `json:"hostId"`
+	Name         string   `json:"name"`
+	Status       string   `json:"status"`
+	AgentVersion string   `json:"agentVersion,omitempty"`
+	TokenHint    string   `json:"tokenHint,omitempty"`
+	LastSeen     string   `json:"lastSeen,omitempty"`
+	Issues       []string `json:"issues"`
+}
+
+// AlertsDiagnostic summarises alert configuration migration state.
+type AlertsDiagnostic struct {
+	LegacyThresholdsDetected bool     `json:"legacyThresholdsDetected"`
+	LegacyThresholdSources   []string `json:"legacyThresholdSources,omitempty"`
+	LegacyScheduleSettings   []string `json:"legacyScheduleSettings,omitempty"`
+	MissingCooldown          bool     `json:"missingCooldown"`
+	MissingGroupingWindow    bool     `json:"missingGroupingWindow"`
+	Notes                    []string `json:"notes,omitempty"`
 }
 
 // handleDiagnostics returns comprehensive diagnostic information
@@ -199,40 +288,8 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	}
 
 	legacySSH, recommendProxy := r.detectLegacySSH()
-	proxyDiag := &TemperatureProxyDiagnostic{
-		LegacySSHDetected:     legacySSH,
-		RecommendProxyUpgrade: recommendProxy,
-	}
-
-	socketPaths := []string{
-		"/mnt/pulse-proxy/pulse-sensor-proxy.sock",
-		"/run/pulse-sensor-proxy/pulse-sensor-proxy.sock",
-	}
-
-	for _, path := range socketPaths {
-		if info, err := os.Stat(path); err == nil {
-			if info.Mode()&os.ModeSocket != 0 {
-				proxyDiag.SocketFound = true
-				proxyDiag.SocketPath = path
-				proxyDiag.SocketPermissions = fmt.Sprintf("%#o", info.Mode().Perm())
-				break
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			proxyDiag.Notes = append(proxyDiag.Notes, fmt.Sprintf("Unable to inspect proxy socket at %s: %v", path, err))
-		}
-	}
-
-	if !proxyDiag.SocketFound {
-		proxyDiag.Notes = append(proxyDiag.Notes, "No proxy socket detected inside the container. Remove the affected node in Pulse, then re-add it using the installer script from Settings → Nodes to regenerate the mount (or rerun the host installer script if you prefer).")
-	} else if proxyDiag.SocketPath == "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock" {
-		proxyDiag.Notes = append(proxyDiag.Notes, "Proxy socket is exposed via /run. Remove and re-add this node with the Settings → Nodes installer script so the managed /mnt/pulse-proxy mount is applied (advanced: rerun the host installer script).")
-	}
-
-	if proxyDiag.LegacySSHDetected && proxyDiag.RecommendProxyUpgrade {
-		proxyDiag.Notes = append(proxyDiag.Notes, "Legacy SSH configuration detected. Remove each node from Pulse and re-add it using the installer script copied from Settings → Nodes (or rerun the host installer script) to migrate to the secure proxy.")
-	}
-
-	diag.TemperatureProxy = proxyDiag
+	diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config, legacySSH, recommendProxy)
+	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 
 	// Test each configured node
 	for _, node := range r.config.PVEInstances {
@@ -354,6 +411,9 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 		diag.PBS = append(diag.PBS, pbsDiag)
 	}
 
+	diag.DockerAgents = buildDockerAgentDiagnostic(r.monitor, diag.Version)
+	diag.Alerts = buildAlertsDiagnostic(r.monitor)
+
 	// Include cached monitor snapshots for memory diagnostics if available
 	if r.monitor != nil {
 		snapshots := r.monitor.GetDiagnosticSnapshots()
@@ -421,6 +481,558 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 		log.Error().Err(err).Msg("Failed to encode diagnostics")
 		http.Error(w, "Failed to generate diagnostics", http.StatusInternalServerError)
 	}
+}
+
+func buildTemperatureProxyDiagnostic(cfg *config.Config, legacyDetected, recommendProxy bool) *TemperatureProxyDiagnostic {
+	diag := &TemperatureProxyDiagnostic{
+		LegacySSHDetected:     legacyDetected,
+		RecommendProxyUpgrade: recommendProxy,
+	}
+
+	appendNote := func(note string) {
+		if note == "" || contains(diag.Notes, note) {
+			return
+		}
+		diag.Notes = append(diag.Notes, note)
+	}
+
+	socketPaths := []string{
+		"/mnt/pulse-proxy/pulse-sensor-proxy.sock",
+		"/run/pulse-sensor-proxy/pulse-sensor-proxy.sock",
+	}
+
+	for _, path := range socketPaths {
+		info, err := os.Stat(path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			appendNote(fmt.Sprintf("Unable to inspect proxy socket at %s: %v", path, err))
+			continue
+		}
+
+		if info.Mode()&os.ModeSocket == 0 {
+			continue
+		}
+
+		diag.SocketFound = true
+		diag.SocketPath = path
+		diag.SocketPermissions = fmt.Sprintf("%#o", info.Mode().Perm())
+
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			diag.SocketOwner = resolveUserName(stat.Uid)
+			diag.SocketGroup = resolveGroupName(stat.Gid)
+		}
+		break
+	}
+
+	if !diag.SocketFound {
+		appendNote("No proxy socket detected inside the container. Remove the affected node in Pulse, then re-add it using the installer script from Settings → Nodes to regenerate the mount (or rerun the host installer script if you prefer).")
+	} else if diag.SocketPath == "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock" {
+		appendNote("Proxy socket is exposed via /run. Remove and re-add this node with the Settings → Nodes installer script so the managed /mnt/pulse-proxy mount is applied (advanced: rerun the host installer script).")
+	}
+
+	client := tempproxy.NewClient()
+	if client != nil && client.IsAvailable() {
+		diag.ProxyReachable = true
+		if status, err := client.GetStatus(); err != nil {
+			appendNote(fmt.Sprintf("Failed to query pulse-sensor-proxy status: %v", err))
+		} else {
+			if version, ok := status["version"].(string); ok {
+				diag.ProxyVersion = strings.TrimSpace(version)
+			}
+			if sshDir, ok := status["ssh_dir"].(string); ok {
+				diag.ProxySSHDirectory = sshDir
+			}
+			if pubKey, ok := status["public_key"].(string); ok {
+				if fingerprint, err := fingerprintPublicKey(pubKey); err == nil {
+					diag.ProxyPublicKeySHA256 = fingerprint
+				} else {
+					appendNote(fmt.Sprintf("Unable to fingerprint proxy public key: %v", err))
+				}
+			}
+		}
+	} else {
+		if diag.SocketFound {
+			appendNote("Proxy socket is present but the daemon did not respond. Verify pulse-sensor-proxy.service is running on the host.")
+		} else {
+			appendNote("pulse-sensor-proxy was not detected. Run the host installer script to harden temperature monitoring.")
+		}
+	}
+
+	if cfg != nil {
+		dataDir := strings.TrimSpace(cfg.DataPath)
+		if dataDir == "" {
+			dataDir = "/etc/pulse"
+		}
+		if count, err := countLegacySSHKeys(filepath.Join(dataDir, ".ssh")); err != nil {
+			appendNote(fmt.Sprintf("Unable to inspect legacy SSH directory: %v", err))
+		} else if count > 0 {
+			diag.LegacySSHKeyCount = count
+			appendNote(fmt.Sprintf("Found %d SSH key(s) inside the Pulse data directory. Remove them after migrating to the secure proxy.", count))
+		}
+	}
+
+	if diag.LegacySSHDetected && diag.RecommendProxyUpgrade {
+		appendNote("Legacy SSH temperature collection detected. Remove each node from Pulse and re-add it using the installer script copied from Settings → Nodes (or rerun the host installer script) to migrate to the secure proxy.")
+	}
+
+	return diag
+}
+
+func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *APITokenDiagnostic {
+	if cfg == nil {
+		return nil
+	}
+
+	diag := &APITokenDiagnostic{
+		Enabled:    cfg.APITokenEnabled && !cfg.DisableAuth,
+		TokenCount: len(cfg.APITokens),
+	}
+
+	appendNote := func(note string) {
+		if note == "" || contains(diag.Notes, note) {
+			return
+		}
+		diag.Notes = append(diag.Notes, note)
+	}
+
+	envTokens := false
+	if cfg.EnvOverrides != nil && (cfg.EnvOverrides["API_TOKEN"] || cfg.EnvOverrides["API_TOKENS"]) {
+		envTokens = true
+	}
+
+	legacyToken := false
+	for _, record := range cfg.APITokens {
+		if strings.EqualFold(record.Name, "Environment token") {
+			envTokens = true
+		}
+		if strings.EqualFold(record.Name, "Legacy token") {
+			legacyToken = true
+		}
+	}
+
+	diag.HasEnvTokens = envTokens
+	diag.HasLegacyToken = legacyToken
+	diag.RecommendTokenSetup = len(cfg.APITokens) == 0
+	diag.RecommendTokenRotation = envTokens || legacyToken
+
+	if cfg.DisableAuth {
+		appendNote("Authentication is disabled (DISABLE_AUTH=1). Re-enable it to use per-agent API tokens.")
+	} else if !cfg.APITokenEnabled && len(cfg.APITokens) > 0 {
+		appendNote("API token authentication is currently disabled. Enable it under Settings → Security so agents can use dedicated tokens.")
+	} else if diag.RecommendTokenSetup {
+		appendNote("No API tokens are configured. Open Settings → Security to generate dedicated tokens for each automation or agent.")
+	}
+
+	tokens := make([]APITokenSummary, 0, len(cfg.APITokens))
+	unusedCount := 0
+	for _, record := range cfg.APITokens {
+		summary := APITokenSummary{
+			ID:   record.ID,
+			Name: record.Name,
+		}
+
+		if !record.CreatedAt.IsZero() {
+			summary.CreatedAt = record.CreatedAt.UTC().Format(time.RFC3339)
+		}
+
+		if record.LastUsedAt != nil && !record.LastUsedAt.IsZero() {
+			summary.LastUsedAt = record.LastUsedAt.UTC().Format(time.RFC3339)
+		} else {
+			unusedCount++
+		}
+
+		switch {
+		case record.Prefix != "" && record.Suffix != "":
+			summary.Hint = fmt.Sprintf("%s…%s", record.Prefix, record.Suffix)
+		case record.Prefix != "":
+			summary.Hint = record.Prefix + "…"
+		case record.Suffix != "":
+			summary.Hint = "…" + record.Suffix
+		}
+
+		switch {
+		case strings.EqualFold(record.Name, "Environment token"):
+			summary.Source = "environment"
+		case strings.EqualFold(record.Name, "Legacy token"):
+			summary.Source = "legacy"
+		default:
+			summary.Source = "user"
+		}
+
+		tokens = append(tokens, summary)
+	}
+
+	diag.Tokens = tokens
+	diag.UnusedTokenCount = unusedCount
+
+	if len(cfg.APITokens) > 0 {
+		if unusedCount == len(cfg.APITokens) {
+			appendNote("Configured API tokens have not been used yet. Update your agents or automations to switch to the new tokens.")
+		} else if unusedCount > 0 {
+			appendNote(fmt.Sprintf("%d API token(s) have never been used. Remove unused tokens or update the corresponding agents.", unusedCount))
+		}
+	}
+
+	tokenUsage := make(map[string][]string)
+	legacyHosts := 0
+	if monitor != nil {
+		for _, host := range monitor.GetDockerHosts() {
+			name := preferredDockerHostName(host)
+			if strings.TrimSpace(host.TokenID) == "" {
+				legacyHosts++
+				continue
+			}
+			tokenID := strings.TrimSpace(host.TokenID)
+			tokenUsage[tokenID] = append(tokenUsage[tokenID], name)
+		}
+	}
+
+	diag.LegacyDockerHostCount = legacyHosts
+	if legacyHosts > 0 {
+		appendNote(fmt.Sprintf("%d Docker host(s) still rely on the shared API token. Generate dedicated tokens and rerun the installer from Settings → Docker Agents.", legacyHosts))
+	}
+
+	if len(tokenUsage) > 0 {
+		keys := make([]string, 0, len(tokenUsage))
+		for tokenID := range tokenUsage {
+			keys = append(keys, tokenID)
+		}
+		sort.Strings(keys)
+
+		diag.Usage = make([]APITokenUsage, 0, len(keys))
+		for _, tokenID := range keys {
+			hosts := tokenUsage[tokenID]
+			sort.Strings(hosts)
+			diag.Usage = append(diag.Usage, APITokenUsage{
+				TokenID:   tokenID,
+				HostCount: len(hosts),
+				Hosts:     hosts,
+			})
+		}
+	}
+
+	if envTokens {
+		appendNote("Environment-based API token detected. Migrate to tokens created in the UI for per-token tracking and safer rotation.")
+	}
+	if legacyToken {
+		appendNote("Legacy token detected. Generate new API tokens and update integrations to benefit from per-token management.")
+	}
+
+	return diag
+}
+
+func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *DockerAgentDiagnostic {
+	if m == nil {
+		return nil
+	}
+
+	hosts := m.GetDockerHosts()
+	diag := &DockerAgentDiagnostic{
+		HostsTotal:              len(hosts),
+		RecommendedAgentVersion: normalizeVersionLabel(serverVersion),
+	}
+
+	appendNote := func(note string) {
+		if note == "" || contains(diag.Notes, note) {
+			return
+		}
+		diag.Notes = append(diag.Notes, note)
+	}
+
+	if len(hosts) == 0 {
+		appendNote("No Docker agents have reported in yet. Use Settings → Docker Agents to install the container-side agent and unlock remote commands.")
+		return diag
+	}
+
+	var (
+		serverVer        *updates.Version
+		recommendedLabel = diag.RecommendedAgentVersion
+	)
+	if serverVersion != "" {
+		if parsed, err := updates.ParseVersion(serverVersion); err == nil {
+			serverVer = parsed
+			recommendedLabel = normalizeVersionLabel(parsed.String())
+			diag.RecommendedAgentVersion = recommendedLabel
+		}
+	}
+
+	now := time.Now().UTC()
+	legacyTokenHosts := 0
+	for _, host := range hosts {
+		status := strings.ToLower(strings.TrimSpace(host.Status))
+		if status == "online" {
+			diag.HostsOnline++
+		}
+		versionStr := strings.TrimSpace(host.AgentVersion)
+		if versionStr != "" {
+			diag.HostsReportingVersion++
+		} else {
+			diag.HostsWithoutVersion++
+		}
+
+		if strings.TrimSpace(host.TokenID) != "" {
+			diag.HostsWithTokenBinding++
+		} else {
+			legacyTokenHosts++
+		}
+
+		issues := make([]string, 0, 4)
+
+		if status != "online" && status != "" {
+			issues = append(issues, fmt.Sprintf("Host reports status %q.", status))
+		}
+
+		if versionStr == "" {
+			issues = append(issues, "Agent has not reported a version (pre v4.24). Reinstall using Settings → Docker Agents.")
+		} else if serverVer != nil {
+			if agentVer, err := updates.ParseVersion(versionStr); err == nil {
+				if agentVer.Compare(serverVer) < 0 {
+					diag.HostsOutdatedVersion++
+					issues = append(issues, fmt.Sprintf("Agent version %s lags behind the recommended %s. Re-run the installer to update.", normalizeVersionLabel(versionStr), recommendedLabel))
+				}
+			} else {
+				issues = append(issues, fmt.Sprintf("Unrecognized agent version string %q. Reinstall to ensure command support.", versionStr))
+			}
+		}
+
+		if strings.TrimSpace(host.TokenID) == "" {
+			issues = append(issues, "Host is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
+		}
+
+		if !host.LastSeen.IsZero() && now.Sub(host.LastSeen.UTC()) > 10*time.Minute {
+			issues = append(issues, fmt.Sprintf("No heartbeat since %s. Verify the agent container is running.", host.LastSeen.UTC().Format(time.RFC3339)))
+		}
+
+		if host.Command != nil {
+			cmdStatus := strings.ToLower(strings.TrimSpace(host.Command.Status))
+			switch cmdStatus {
+			case monitoring.DockerCommandStatusQueued, monitoring.DockerCommandStatusDispatched, monitoring.DockerCommandStatusAcknowledged:
+				message := fmt.Sprintf("Command %s is still in progress.", cmdStatus)
+				if !host.Command.UpdatedAt.IsZero() && now.Sub(host.Command.UpdatedAt.UTC()) > 15*time.Minute {
+					diag.HostsWithStaleCommand++
+					message = fmt.Sprintf("Command %s has been pending since %s; consider allowing re-enrolment.", cmdStatus, host.Command.UpdatedAt.UTC().Format(time.RFC3339))
+				}
+				issues = append(issues, message)
+			}
+		}
+
+		if host.PendingUninstall {
+			diag.HostsPendingUninstall++
+			issues = append(issues, "Host is pending uninstall; confirm the agent container stopped or clear the flag.")
+		}
+
+		if len(issues) == 0 {
+			continue
+		}
+
+		diag.Attention = append(diag.Attention, DockerAgentAttention{
+			HostID:       host.ID,
+			Name:         preferredDockerHostName(host),
+			Status:       host.Status,
+			AgentVersion: versionStr,
+			TokenHint:    host.TokenHint,
+			LastSeen:     formatTimeMaybe(host.LastSeen),
+			Issues:       issues,
+		})
+	}
+
+	diag.HostsWithoutTokenBinding = legacyTokenHosts
+	diag.HostsNeedingAttention = len(diag.Attention)
+
+	if legacyTokenHosts > 0 {
+		appendNote(fmt.Sprintf("%d Docker host(s) still rely on the shared API token. Migrate each host to a dedicated token via Settings → Security and rerun the installer.", legacyTokenHosts))
+	}
+	if diag.HostsOutdatedVersion > 0 {
+		appendNote(fmt.Sprintf("%d Docker host(s) run an out-of-date agent. Re-run the installer from Settings → Docker Agents to upgrade them.", diag.HostsOutdatedVersion))
+	}
+	if diag.HostsWithoutVersion > 0 {
+		appendNote(fmt.Sprintf("%d Docker host(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.HostsWithoutVersion))
+	}
+	if diag.HostsWithStaleCommand > 0 {
+		appendNote(fmt.Sprintf("%d Docker host command(s) appear stuck. Use the 'Allow re-enroll' action in Settings → Docker Agents to reset them.", diag.HostsWithStaleCommand))
+	}
+	if diag.HostsPendingUninstall > 0 {
+		appendNote(fmt.Sprintf("%d Docker host(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Docker Agents.", diag.HostsPendingUninstall))
+	}
+	if diag.HostsNeedingAttention == 0 {
+		appendNote("All Docker agents are reporting with dedicated tokens and the expected version.")
+	}
+
+	return diag
+}
+
+func buildAlertsDiagnostic(m *monitoring.Monitor) *AlertsDiagnostic {
+	if m == nil {
+		return nil
+	}
+
+	manager := m.GetAlertManager()
+	if manager == nil {
+		return nil
+	}
+
+	config := manager.GetConfig()
+	diag := &AlertsDiagnostic{}
+
+	appendNote := func(note string) {
+		if note == "" || contains(diag.Notes, note) {
+			return
+		}
+		diag.Notes = append(diag.Notes, note)
+	}
+
+	legacySources := make([]string, 0, 4)
+	if hasLegacyThresholds(config.GuestDefaults) {
+		diag.LegacyThresholdsDetected = true
+		legacySources = append(legacySources, "guest-defaults")
+	}
+	if hasLegacyThresholds(config.NodeDefaults) {
+		diag.LegacyThresholdsDetected = true
+		legacySources = append(legacySources, "node-defaults")
+	}
+
+	overrideIndex := 0
+	for _, override := range config.Overrides {
+		overrideIndex++
+		if hasLegacyThresholds(override) {
+			diag.LegacyThresholdsDetected = true
+			legacySources = append(legacySources, fmt.Sprintf("override-%d", overrideIndex))
+		}
+	}
+
+	for idx, rule := range config.CustomRules {
+		if hasLegacyThresholds(rule.Thresholds) {
+			diag.LegacyThresholdsDetected = true
+			legacySources = append(legacySources, fmt.Sprintf("custom-%d", idx+1))
+		}
+	}
+
+	if len(legacySources) > 0 {
+		sort.Strings(legacySources)
+		diag.LegacyThresholdSources = legacySources
+		appendNote("Some alert rules still rely on legacy single-value thresholds. Edit and save them to enable hysteresis-based alerts.")
+	}
+
+	legacySchedule := make([]string, 0, 2)
+	if config.TimeThreshold > 0 {
+		legacySchedule = append(legacySchedule, "timeThreshold")
+		appendNote("Global alert delay still uses the legacy timeThreshold setting. Save the alerts configuration to migrate to per-metric delays.")
+	}
+	if config.Schedule.GroupingWindow > 0 && config.Schedule.Grouping.Window == 0 {
+		legacySchedule = append(legacySchedule, "groupingWindow")
+		appendNote("Alert grouping uses the deprecated groupingWindow value. Update the schedule to use the new grouping options.")
+	}
+	if len(legacySchedule) > 0 {
+		sort.Strings(legacySchedule)
+		diag.LegacyScheduleSettings = legacySchedule
+	}
+
+	if config.Schedule.Cooldown <= 0 {
+		diag.MissingCooldown = true
+		appendNote("Alert cooldown is not configured. Set a cooldown under Settings → Alerts → Schedule to prevent alert storms.")
+	}
+	if config.Schedule.Grouping.Window <= 0 {
+		diag.MissingGroupingWindow = true
+		appendNote("Alert grouping window is disabled. Configure a grouping window to bundle related alerts.")
+	}
+
+	return diag
+}
+
+func fingerprintPublicKey(pub string) (string, error) {
+	pub = strings.TrimSpace(pub)
+	if pub == "" {
+		return "", fmt.Errorf("empty public key")
+	}
+	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(pub))
+	if err != nil {
+		return "", err
+	}
+	return ssh.FingerprintSHA256(key), nil
+}
+
+func resolveUserName(uid uint32) string {
+	uidStr := strconv.FormatUint(uint64(uid), 10)
+	if usr, err := user.LookupId(uidStr); err == nil && usr.Username != "" {
+		return usr.Username
+	}
+	return "uid:" + uidStr
+}
+
+func resolveGroupName(gid uint32) string {
+	gidStr := strconv.FormatUint(uint64(gid), 10)
+	if grp, err := user.LookupGroupId(gidStr); err == nil && grp != nil && grp.Name != "" {
+		return grp.Name
+	}
+	return "gid:" + gidStr
+}
+
+func countLegacySSHKeys(dir string) (int, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, "id_") {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func hasLegacyThresholds(th alerts.ThresholdConfig) bool {
+	return th.CPULegacy != nil ||
+		th.MemoryLegacy != nil ||
+		th.DiskLegacy != nil ||
+		th.DiskReadLegacy != nil ||
+		th.DiskWriteLegacy != nil ||
+		th.NetworkInLegacy != nil ||
+		th.NetworkOutLegacy != nil
+}
+
+func preferredDockerHostName(host models.DockerHost) string {
+	if name := strings.TrimSpace(host.DisplayName); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(host.Hostname); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(host.AgentID); name != "" {
+		return name
+	}
+	return host.ID
+}
+
+func formatTimeMaybe(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+func normalizeVersionLabel(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "v") {
+		return value
+	}
+	first := value[0]
+	if first < '0' || first > '9' {
+		return value
+	}
+	return "v" + value
 }
 
 // checkVMDiskMonitoring performs diagnostic checks for VM disk monitoring
