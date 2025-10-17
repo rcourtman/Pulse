@@ -3707,6 +3707,11 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
                 echo ""
 
                 if [[ $RESTART_CONTAINER =~ ^[Yy]$|^$ ]]; then
+                    echo "Configuring socket bind mount for container $PULSE_CTID..."
+
+                    # Configure bind mount for proxy socket
+                    pct set "$PULSE_CTID" -mp0 /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
+
                     echo "Restarting container $PULSE_CTID..."
 
                     # Set up trap to restart container even if script is interrupted
@@ -3722,8 +3727,9 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
                     echo "  ✓ Container restarted successfully"
                     echo ""
                 else
-                    echo "⚠️  Remember to restart container $PULSE_CTID manually:"
-                    echo "   pct restart $PULSE_CTID"
+                    echo "⚠️  Remember to configure the bind mount and restart container $PULSE_CTID manually:"
+                    echo "   pct set $PULSE_CTID -mp0 /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy"
+                    echo "   pct stop $PULSE_CTID && sleep 2 && pct start $PULSE_CTID"
                     echo ""
                 fi
             else
