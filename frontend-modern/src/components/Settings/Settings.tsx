@@ -319,7 +319,6 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const pveBackupsState = () => state.backups?.pve ?? state.pveBackups;
   const pbsBackupsState = () => state.backups?.pbs ?? state.pbsBackups;
-  const pmgBackupsState = () => state.backups?.pmg ?? state.pmgBackups;
 
   // Keep tab state in sync with URL and handle /settings redirect without flicker
   createEffect(

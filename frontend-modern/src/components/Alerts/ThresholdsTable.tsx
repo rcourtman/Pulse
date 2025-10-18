@@ -821,6 +821,14 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     };
   });
 
+  const snapshotFactoryDefaultsRecord = createMemo(() => {
+    const factory = snapshotFactoryConfig();
+    return {
+      'warning days': factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING,
+      'critical days': factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL,
+    };
+  });
+
   const backupFactoryConfig = () =>
     props.backupFactoryDefaults ?? {
       enabled: false,
@@ -869,13 +877,13 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     };
   });
 
-const backupFactoryDefaultsRecord = createMemo(() => {
-  const factory = backupFactoryConfig();
-  return {
-    'warning days': factory.warningDays ?? DEFAULT_BACKUP_WARNING,
-    'critical days': factory.criticalDays ?? DEFAULT_BACKUP_CRITICAL,
-  };
-});
+  const backupFactoryDefaultsRecord = createMemo(() => {
+    const factory = backupFactoryConfig();
+    return {
+      'warning days': factory.warningDays ?? DEFAULT_BACKUP_WARNING,
+      'critical days': factory.criticalDays ?? DEFAULT_BACKUP_CRITICAL,
+    };
+  });
 
 const snapshotOverridesCount = createMemo(() => {
   const current = props.snapshotDefaults();
@@ -2204,7 +2212,7 @@ const snapshotOverridesCount = createMemo(() => {
                     enabled: !prev.enabled,
                   }))
                 }
-                factoryDefaults={snapshotFactoryConfig()}
+                factoryDefaults={snapshotFactoryDefaultsRecord()}
                 onResetDefaults={() => {
                   if (props.resetSnapshotDefaults) {
                     props.resetSnapshotDefaults();

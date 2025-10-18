@@ -1907,40 +1907,10 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Immediately trigger discovery scan BEFORE reloading monitor
-	// This way we can get the deleted node's info for immediate discovery
+	// Capture node type for cleanup
 	var deletedNodeType string = nodeType
 
 	// deletedNodeHost already captured before removal when available
-
-	// Extract IP and port from the host URL for targeted discovery
-	var targetIP string
-	var targetPort int
-	if deletedNodeHost != "" {
-		// Parse the host URL to get IP and port
-		hostURL := deletedNodeHost
-		hostURL = strings.TrimPrefix(hostURL, "https://")
-		hostURL = strings.TrimPrefix(hostURL, "http://")
-		parts := strings.Split(hostURL, ":")
-		if len(parts) > 0 {
-			targetIP = parts[0]
-			if len(parts) > 1 {
-				if _, err := fmt.Sscanf(parts[1], "%d", &targetPort); err != nil {
-					log.Warn().Err(err).Str("host", deletedNodeHost).Msg("Failed to parse port from host; using default")
-					if deletedNodeType == "pve" {
-						targetPort = 8006
-					} else {
-						targetPort = 8007
-					}
-				}
-			} else {
-				if deletedNodeType == "pve" {
-					targetPort = 8006
-				} else {
-					targetPort = 8007
-				}
-			}
-		}
-	}
 
 	// Reload monitor with new configuration
 	if h.reloadFunc != nil {
@@ -1963,38 +1933,8 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		})
 		log.Info().Msg("Broadcasted node deletion event")
 
-		// If we know the deleted node's details, immediately add it to discovered list
-		if targetIP != "" && targetPort > 0 {
-			// Create a synthetic discovery result with just the deleted node
-			immediateResult := map[string]interface{}{
-				"servers": []map[string]interface{}{
-					{
-						"ip":       targetIP,
-						"port":     targetPort,
-						"type":     deletedNodeType,
-						"version":  "Unknown",
-						"hostname": targetIP,
-					},
-				},
-				"errors":    []string{},
-				"timestamp": time.Now().Unix(),
-				"immediate": true, // Flag to indicate this is immediate, not from a full scan
-			}
-
-			// Immediately broadcast the deleted node as discovered
-			h.wsHub.BroadcastMessage(websocket.Message{
-				Type:      "discovery_update",
-				Data:      immediateResult,
-				Timestamp: time.Now().Format(time.RFC3339),
-			})
-			log.Info().
-				Str("ip", targetIP).
-				Int("port", targetPort).
-				Str("type", deletedNodeType).
-				Msg("Immediately added deleted node to discovery")
-		}
-
-		// Schedule a full discovery scan in the background
+		// Trigger a full discovery scan in the background to update the discovery cache
+		// This ensures the next time discovery modal is opened, it shows fresh results
 		go func() {
 			// Short delay to let the monitor stabilize
 			time.Sleep(500 * time.Millisecond)
