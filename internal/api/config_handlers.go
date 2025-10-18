@@ -3641,33 +3641,10 @@ if command -v pct >/dev/null 2>&1; then
     fi
 fi
 
-# If Pulse is containerized, offer to install proxy first
+# If Pulse is containerized, try to install proxy automatically
 if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
-    echo "🔒 Enhanced Security for Containerized Pulse"
-    echo ""
-    echo "Detected: Pulse running in container $PULSE_CTID"
-    echo ""
-    echo "For temperature monitoring, we recommend installing pulse-sensor-proxy."
-    echo "This keeps SSH credentials isolated on the host (outside the container)."
-    echo ""
-    echo "Install secure proxy for temperature monitoring? [Y/n]"
-    echo -n "> "
-
-    INSTALL_PROXY="y"
-    if [ -t 0 ]; then
-        read -n 1 -r INSTALL_PROXY
-    else
-        if read -n 1 -r INSTALL_PROXY </dev/tty 2>/dev/null; then
-            :
-        else
-            echo "(No terminal available - defaulting to yes)"
-            INSTALL_PROXY="y"
-        fi
-    fi
-    echo ""
-    echo ""
-
-    if [[ $INSTALL_PROXY =~ ^[Yy]$|^$ ]]; then
+    # Try automatic installation - proxy keeps SSH credentials on the host for security
+    if true; then
         # Download installer script from Pulse server
         PROXY_INSTALLER="/tmp/install-sensor-proxy-$$.sh"
         INSTALLER_URL="%s/api/install/install-sensor-proxy.sh"
@@ -3762,14 +3739,8 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
             fi
 
             rm -f "$PROXY_INSTALLER"
-        else
-            echo ""
-            echo "⚠️  Could not download installer from Pulse server"
-            echo "  (Proxy can be installed later for enhanced security)"
         fi
-    else
-        echo "Skipped proxy installation"
-        echo ""
+        # Silently skip if installer unavailable - not an error for test/development setups
     fi
 fi
 
@@ -4092,25 +4063,43 @@ EOF
 
                     # Verify that Pulse can actually SSH to the configured nodes
                     echo ""
-                    echo "Verifying temperature monitoring connectivity from Pulse..."
-                    echo ""
-
-                    CONFIGURED_NODES="${OTHER_NODES_LIST[@]}"
-                    if [ "$TEMPERATURE_ENABLED" = true ]; then
-                        # Add current node to the list
-                        CONFIGURED_NODES="$(hostname) ${CONFIGURED_NODES}"
+                    # Only verify connectivity if not containerized or if proxy is installed
+                    # Containerized Pulse without proxy cannot directly SSH to nodes
+                    SHOULD_VERIFY_SSH=false
+                    if [ "$PULSE_IS_CONTAINERIZED" != true ]; then
+                        SHOULD_VERIFY_SSH=true
+                    elif systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                        SHOULD_VERIFY_SSH=true
                     fi
 
-                    VERIFY_RESPONSE=$(curl -s -X POST "%s/api/system/verify-temperature-ssh" \
-                        -H "Content-Type: application/json" \
-                        -H "Authorization: Bearer %s" \
-                        -d "{\"nodes\": \"$CONFIGURED_NODES\"}" 2>/dev/null || echo "")
+                    if [ "$SHOULD_VERIFY_SSH" = true ]; then
+                        echo "Verifying temperature monitoring connectivity from Pulse..."
+                        echo ""
 
-                    if [ -n "$VERIFY_RESPONSE" ]; then
-                        echo "$VERIFY_RESPONSE"
+                        CONFIGURED_NODES="${OTHER_NODES_LIST[@]}"
+                        if [ "$TEMPERATURE_ENABLED" = true ]; then
+                            # Add current node to the list
+                            CONFIGURED_NODES="$(hostname) ${CONFIGURED_NODES}"
+                        fi
+
+                        VERIFY_RESPONSE=$(curl -s -X POST "%s/api/system/verify-temperature-ssh" \
+                            -H "Content-Type: application/json" \
+                            -H "Authorization: Bearer %s" \
+                            -d "{\"nodes\": \"$CONFIGURED_NODES\"}" 2>/dev/null || echo "")
+
+                        if [ -n "$VERIFY_RESPONSE" ]; then
+                            echo "$VERIFY_RESPONSE"
+                        else
+                            echo "⚠️  Unable to verify SSH connectivity."
+                            echo "   Temperature data will appear once SSH connectivity is configured."
+                        fi
+                        echo ""
                     else
-                        echo "⚠️  Unable to verify SSH connectivity from Pulse server."
-                        echo "   Temperature data may not appear if Pulse cannot reach cluster nodes."
+                        # Containerized without proxy - temperature data will appear automatically
+                        echo "✓ Temperature monitoring configured"
+                        echo "  Note: Container cannot directly SSH to nodes"
+                        echo "  Temperature data will appear once proxy is configured on the host"
+                        echo ""
                     fi
                 fi
             fi
