@@ -257,6 +257,18 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   },
 };
 
+const BACKUP_INTERVAL_OPTIONS = [
+  { label: 'Default (~90 seconds)', value: 0 },
+  { label: '15 minutes', value: 15 * 60 },
+  { label: '30 minutes', value: 30 * 60 },
+  { label: '1 hour', value: 60 * 60 },
+  { label: '6 hours', value: 6 * 60 * 60 },
+  { label: '12 hours', value: 12 * 60 * 60 },
+  { label: '24 hours', value: 24 * 60 * 60 },
+];
+
+const BACKUP_INTERVAL_MAX_MINUTES = 7 * 24 * 60; // 7 days
+
 // Node with UI-specific fields
 type NodeConfigWithStatus = NodeConfig & {
   hasPassword?: boolean;
@@ -363,6 +375,36 @@ const Settings: Component<SettingsProps> = (props) => {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
   const [autoUpdateCheckInterval, setAutoUpdateCheckInterval] = createSignal(24);
   const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
+  const [backupPollingEnabled, setBackupPollingEnabled] = createSignal(true);
+  const [backupPollingInterval, setBackupPollingInterval] = createSignal(0);
+  const [backupPollingCustomMinutes, setBackupPollingCustomMinutes] = createSignal(60);
+  const backupPollingEnvLocked = () =>
+    Boolean(envOverrides()['ENABLE_BACKUP_POLLING'] || envOverrides()['BACKUP_POLLING_INTERVAL']);
+  const backupIntervalSelectValue = () => {
+    const seconds = backupPollingInterval();
+    return BACKUP_INTERVAL_OPTIONS.some((option) => option.value === seconds)
+      ? String(seconds)
+      : 'custom';
+  };
+  const backupIntervalSummary = () => {
+    if (!backupPollingEnabled()) {
+      return 'Backup polling is disabled.';
+    }
+    const seconds = backupPollingInterval();
+    if (seconds <= 0) {
+      return 'Pulse checks backups and snapshots at the default cadence (~every 90 seconds).';
+    }
+    if (seconds % 86400 === 0) {
+      const days = seconds / 86400;
+      return `Pulse checks backups every ${days === 1 ? 'day' : `${days} days`}.`;
+    }
+    if (seconds % 3600 === 0) {
+      const hours = seconds / 3600;
+      return `Pulse checks backups every ${hours === 1 ? 'hour' : `${hours} hours`}.`;
+    }
+    const minutes = Math.max(1, Math.round(seconds / 60));
+    return `Pulse checks backups every ${minutes === 1 ? 'minute' : `${minutes} minutes`}.`;
+  };
 
   // Diagnostics
   const [diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
@@ -988,6 +1030,20 @@ const Settings: Component<SettingsProps> = (props) => {
           // Load embedding settings
           setAllowEmbedding(systemSettings.allowEmbedding ?? false);
           setAllowedEmbedOrigins(systemSettings.allowedEmbedOrigins || '');
+          // Backup polling controls
+          if (typeof systemSettings.backupPollingEnabled === 'boolean') {
+            setBackupPollingEnabled(systemSettings.backupPollingEnabled);
+          } else {
+            setBackupPollingEnabled(true);
+          }
+          const intervalSeconds =
+            typeof systemSettings.backupPollingInterval === 'number'
+              ? Math.max(0, Math.floor(systemSettings.backupPollingInterval))
+              : 0;
+          setBackupPollingInterval(intervalSeconds);
+          if (intervalSeconds > 0) {
+            setBackupPollingCustomMinutes(Math.max(1, Math.round(intervalSeconds / 60)));
+          }
           // Load auto-update settings
           setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
           setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
@@ -1077,6 +1133,8 @@ const Settings: Component<SettingsProps> = (props) => {
           autoUpdateEnabled: autoUpdateEnabled(),
           autoUpdateCheckInterval: autoUpdateCheckInterval(),
           autoUpdateTime: autoUpdateTime(),
+          backupPollingEnabled: backupPollingEnabled(),
+          backupPollingInterval: backupPollingInterval(),
           allowEmbedding: allowEmbedding(),
           allowedEmbedOrigins: allowedEmbedOrigins(),
         });
@@ -3418,12 +3476,160 @@ const Settings: Component<SettingsProps> = (props) => {
                   border={false}
                   class="border border-gray-200 dark:border-gray-700"
                 >
-                  <SectionHeader
-                    title="Backup & restore"
-                    description="Backup your node configurations and credentials or restore from a previous backup."
-                    size="md"
-                    class="mb-4"
-                  />
+                    <section class="space-y-3">
+                      <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <circle cx="12" cy="12" r="9" stroke-width="2" />
+                          <path d="M12 7v5l3 3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        Backup polling
+                      </h4>
+                      <p class="text-xs text-gray-600 dark:text-gray-400">
+                        Control how often Pulse queries Proxmox backup tasks, datastore contents, and guest snapshots.
+                        Longer intervals reduce disk activity and API load.
+                      </p>
+                      <div class="space-y-3">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Enable backup polling
+                            </p>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">
+                              Required for dashboard backup status, storage snapshots, and alerting.
+                            </p>
+                          </div>
+                          <label class="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              class="sr-only peer"
+                              checked={backupPollingEnabled()}
+                              disabled={backupPollingEnvLocked()}
+                              onChange={(e) => {
+                                setBackupPollingEnabled(e.currentTarget.checked);
+                                if (!backupPollingEnvLocked()) {
+                                  setHasUnsavedChanges(true);
+                                }
+                              }}
+                            />
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                          </label>
+                        </div>
+
+                        <Show when={backupPollingEnabled()}>
+                          <div class="space-y-3 rounded-md border border-gray-200 dark:border-gray-600 p-3">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Polling interval
+                                </label>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">
+                                  {backupIntervalSummary()}
+                                </p>
+                              </div>
+                              <select
+                                value={backupIntervalSelectValue()}
+                                disabled={backupPollingEnvLocked()}
+                                onChange={(e) => {
+                                  const value = e.currentTarget.value;
+                                  if (value === 'custom') {
+                                    const minutes = Math.max(1, backupPollingCustomMinutes());
+                                    setBackupPollingInterval(minutes * 60);
+                                  } else {
+                                    const seconds = parseInt(value, 10);
+                                    if (!Number.isNaN(seconds)) {
+                                      setBackupPollingInterval(seconds);
+                                      if (seconds > 0) {
+                                        setBackupPollingCustomMinutes(Math.max(1, Math.round(seconds / 60)));
+                                      }
+                                    }
+                                  }
+                                  if (!backupPollingEnvLocked()) {
+                                    setHasUnsavedChanges(true);
+                                  }
+                                }}
+                                class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 disabled:opacity-50"
+                              >
+                                <For each={BACKUP_INTERVAL_OPTIONS}>
+                                  {(option) => (
+                                    <option value={String(option.value)}>{option.label}</option>
+                                  )}
+                                </For>
+                                <option value="custom">Custom interval…</option>
+                              </select>
+                            </div>
+
+                            <Show when={backupIntervalSelectValue() === 'custom'}>
+                              <div class="space-y-2">
+                                <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                                  Custom interval (minutes)
+                                </label>
+                                <div class="flex items-center gap-3">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={BACKUP_INTERVAL_MAX_MINUTES}
+                                    value={backupPollingCustomMinutes()}
+                                    disabled={backupPollingEnvLocked()}
+                                    onInput={(e) => {
+                                      const value = Number(e.currentTarget.value);
+                                      if (Number.isNaN(value)) {
+                                        return;
+                                      }
+                                      const clamped = Math.max(
+                                        1,
+                                        Math.min(BACKUP_INTERVAL_MAX_MINUTES, Math.floor(value)),
+                                      );
+                                      setBackupPollingCustomMinutes(clamped);
+                                      setBackupPollingInterval(clamped * 60);
+                                      if (!backupPollingEnvLocked()) {
+                                        setHasUnsavedChanges(true);
+                                      }
+                                    }}
+                                    class="w-24 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 disabled:opacity-50"
+                                  />
+                                  <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    1 – {BACKUP_INTERVAL_MAX_MINUTES} minutes (≈7 days max)
+                                  </span>
+                                </div>
+                              </div>
+                            </Show>
+                          </div>
+                        </Show>
+
+                        <Show when={backupPollingEnvLocked()}>
+                          <div class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 p-3 text-xs text-amber-700 dark:text-amber-200">
+                            <svg
+                              class="w-4 h-4 flex-shrink-0 mt-0.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                              />
+                            </svg>
+                            <div>
+                              <p class="font-medium">Environment override detected</p>
+                              <p class="mt-1">
+                                The <code class="font-mono">ENABLE_BACKUP_POLLING</code> or{' '}
+                                <code class="font-mono">BACKUP_POLLING_INTERVAL</code> environment
+                                variables are set. Remove them and restart Pulse to manage backup polling here.
+                              </p>
+                            </div>
+                          </div>
+                        </Show>
+                      </div>
+                    </section>
+
+                    <SectionHeader
+                      title="Backup & restore"
+                      description="Backup your node configurations and credentials or restore from a previous backup."
+                      size="md"
+                      class="mb-4"
+                    />
 
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Export Section */}

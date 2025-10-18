@@ -74,13 +74,15 @@ type Config struct {
 
 	// Monitoring settings
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
-	PBSPollingInterval   time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
-	PMGPollingInterval   time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
-	ConcurrentPolling    bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
-	ConnectionTimeout    time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
-	MetricsRetentionDays int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
-	BackupPollingCycles  int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
-	WebhookBatchDelay    time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
+	PBSPollingInterval    time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
+	PMGPollingInterval    time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
+	ConcurrentPolling     bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
+	ConnectionTimeout     time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
+	MetricsRetentionDays  int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
+	BackupPollingCycles   int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
+	BackupPollingInterval time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
+	EnableBackupPolling   bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
+	WebhookBatchDelay     time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -247,29 +249,31 @@ func Load() (*Config, error) {
 
 	// Initialize config with defaults
 	cfg := &Config{
-		BackendHost:          "0.0.0.0",
-		BackendPort:          3000,
-		FrontendHost:         "0.0.0.0",
-		FrontendPort:         7655,
-		ConfigPath:           dataDir,
-		DataPath:             dataDir,
-		ConcurrentPolling:    true,
-		ConnectionTimeout:    60 * time.Second,
-		MetricsRetentionDays: 7,
-		BackupPollingCycles:  10,
-		WebhookBatchDelay:    10 * time.Second,
-		LogLevel:             "info",
-		LogMaxSize:           100,
-		LogMaxAge:            30,
-		LogCompress:          true,
-		AllowedOrigins:       "", // Empty means no CORS headers (same-origin only)
-		IframeEmbeddingAllow: "SAMEORIGIN",
-		PBSPollingInterval:   60 * time.Second, // Default PBS polling (slower)
-		PMGPollingInterval:   60 * time.Second, // Default PMG polling (aggregated stats)
-		DiscoveryEnabled:     true,
-		DiscoverySubnet:      "auto",
-		EnvOverrides:         make(map[string]bool),
-		OIDC:                 NewOIDCConfig(),
+		BackendHost:           "0.0.0.0",
+		BackendPort:           3000,
+		FrontendHost:          "0.0.0.0",
+		FrontendPort:          7655,
+		ConfigPath:            dataDir,
+		DataPath:              dataDir,
+		ConcurrentPolling:     true,
+		ConnectionTimeout:     60 * time.Second,
+		MetricsRetentionDays:  7,
+		BackupPollingCycles:   10,
+		BackupPollingInterval: 0,
+		EnableBackupPolling:   true,
+		WebhookBatchDelay:     10 * time.Second,
+		LogLevel:              "info",
+		LogMaxSize:            100,
+		LogMaxAge:             30,
+		LogCompress:           true,
+		AllowedOrigins:        "", // Empty means no CORS headers (same-origin only)
+		IframeEmbeddingAllow:  "SAMEORIGIN",
+		PBSPollingInterval:    60 * time.Second, // Default PBS polling (slower)
+		PMGPollingInterval:    60 * time.Second, // Default PMG polling (aggregated stats)
+		DiscoveryEnabled:      true,
+		DiscoverySubnet:       "auto",
+		EnvOverrides:          make(map[string]bool),
+		OIDC:                  NewOIDCConfig(),
 	}
 
 	// Initialize persistence
@@ -299,6 +303,15 @@ func Load() (*Config, error) {
 			}
 			if systemSettings.PMGPollingInterval > 0 {
 				cfg.PMGPollingInterval = time.Duration(systemSettings.PMGPollingInterval) * time.Second
+			}
+
+			if systemSettings.BackupPollingInterval > 0 {
+				cfg.BackupPollingInterval = time.Duration(systemSettings.BackupPollingInterval) * time.Second
+			} else if systemSettings.BackupPollingInterval == 0 {
+				cfg.BackupPollingInterval = 0
+			}
+			if systemSettings.BackupPollingEnabled != nil {
+				cfg.EnableBackupPolling = *systemSettings.BackupPollingEnabled
 			}
 
 			if systemSettings.UpdateChannel != "" {
@@ -369,6 +382,53 @@ func Load() (*Config, error) {
 
 	// Limited environment variable support
 	// NOTE: Node configuration is NOT done via env vars - use the web UI instead
+
+	if cyclesStr := strings.TrimSpace(os.Getenv("BACKUP_POLLING_CYCLES")); cyclesStr != "" {
+		if cycles, err := strconv.Atoi(cyclesStr); err == nil {
+			if cycles < 0 {
+				log.Warn().Str("value", cyclesStr).Msg("Ignoring negative BACKUP_POLLING_CYCLES from environment")
+			} else {
+				cfg.BackupPollingCycles = cycles
+				cfg.EnvOverrides["BACKUP_POLLING_CYCLES"] = true
+				log.Info().Int("cycles", cycles).Msg("Overriding backup polling cycles from environment")
+			}
+		} else {
+			log.Warn().Str("value", cyclesStr).Msg("Invalid BACKUP_POLLING_CYCLES value, ignoring")
+		}
+	}
+
+	if intervalStr := strings.TrimSpace(os.Getenv("BACKUP_POLLING_INTERVAL")); intervalStr != "" {
+		if dur, err := time.ParseDuration(intervalStr); err == nil {
+			if dur < 0 {
+				log.Warn().Str("value", intervalStr).Msg("Ignoring negative BACKUP_POLLING_INTERVAL from environment")
+			} else {
+				cfg.BackupPollingInterval = dur
+				cfg.EnvOverrides["BACKUP_POLLING_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Overriding backup polling interval from environment")
+			}
+		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
+			if seconds < 0 {
+				log.Warn().Str("value", intervalStr).Msg("Ignoring negative BACKUP_POLLING_INTERVAL (seconds) from environment")
+			} else {
+				cfg.BackupPollingInterval = time.Duration(seconds) * time.Second
+				cfg.EnvOverrides["BACKUP_POLLING_INTERVAL"] = true
+				log.Info().Int("seconds", seconds).Msg("Overriding backup polling interval (seconds) from environment")
+			}
+		} else {
+			log.Warn().Str("value", intervalStr).Msg("Invalid BACKUP_POLLING_INTERVAL value, expected duration or seconds")
+		}
+	}
+
+	if enabledStr := strings.TrimSpace(os.Getenv("ENABLE_BACKUP_POLLING")); enabledStr != "" {
+		switch strings.ToLower(enabledStr) {
+		case "0", "false", "no", "off":
+			cfg.EnableBackupPolling = false
+		default:
+			cfg.EnableBackupPolling = true
+		}
+		cfg.EnvOverrides["ENABLE_BACKUP_POLLING"] = true
+		log.Info().Bool("enabled", cfg.EnableBackupPolling).Msg("Overriding backup polling enabled flag from environment")
+	}
 
 	// Support both FRONTEND_PORT (preferred) and PORT (legacy) env vars
 	if frontendPort := os.Getenv("FRONTEND_PORT"); frontendPort != "" {

@@ -88,6 +88,22 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 		}
 	}
 
+	if val, ok := rawRequest["backupPollingInterval"]; ok {
+		if interval, ok := val.(float64); ok {
+			if interval < 0 {
+				return fmt.Errorf("Backup polling interval cannot be negative")
+			}
+			if interval > 0 && interval < 10 {
+				return fmt.Errorf("Backup polling interval must be at least 10 seconds")
+			}
+			if interval > 604800 {
+				return fmt.Errorf("Backup polling interval cannot exceed 604800 seconds (7 days)")
+			}
+		} else {
+			return fmt.Errorf("Backup polling interval must be a number")
+		}
+	}
+
 	// Validate boolean fields have correct type
 	if val, ok := rawRequest["autoUpdateEnabled"]; ok {
 		if _, ok := val.(bool); !ok {
@@ -104,6 +120,12 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 	if val, ok := rawRequest["allowEmbedding"]; ok {
 		if _, ok := val.(bool); !ok {
 			return fmt.Errorf("allowEmbedding must be a boolean")
+		}
+	}
+
+	if val, ok := rawRequest["backupPollingEnabled"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("backupPollingEnabled must be a boolean")
 		}
 	}
 
@@ -184,6 +206,11 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		log.Debug().
 			Str("theme", settings.Theme).
 			Msg("Loaded system settings for API response")
+
+		// Always expose effective backup polling configuration
+		settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
+		enabled := h.config.EnableBackupPolling
+		settings.BackupPollingEnabled = &enabled
 	}
 
 	// Include env override information
@@ -279,6 +306,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["pmgPollingInterval"]; ok {
 		settings.PMGPollingInterval = updates.PMGPollingInterval
 	}
+	if _, ok := rawRequest["backupPollingInterval"]; ok {
+		settings.BackupPollingInterval = updates.BackupPollingInterval
+	}
 	if updates.AllowedOrigins != "" {
 		settings.AllowedOrigins = updates.AllowedOrigins
 	}
@@ -315,6 +345,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["allowEmbedding"]; ok {
 		settings.AllowEmbedding = updates.AllowEmbedding
 	}
+	if _, ok := rawRequest["backupPollingEnabled"]; ok {
+		settings.BackupPollingEnabled = updates.BackupPollingEnabled
+	}
 
 	// Update the config
 	// Note: PVE polling is hardcoded to 10s
@@ -326,6 +359,16 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if settings.PMGPollingInterval > 0 {
 		h.config.PMGPollingInterval = time.Duration(settings.PMGPollingInterval) * time.Second
+	}
+	if _, ok := rawRequest["backupPollingInterval"]; ok {
+		if settings.BackupPollingInterval <= 0 {
+			h.config.BackupPollingInterval = 0
+		} else {
+			h.config.BackupPollingInterval = time.Duration(settings.BackupPollingInterval) * time.Second
+		}
+	}
+	if settings.BackupPollingEnabled != nil {
+		h.config.EnableBackupPolling = *settings.BackupPollingEnabled
 	}
 	if settings.UpdateChannel != "" {
 		h.config.UpdateChannel = settings.UpdateChannel

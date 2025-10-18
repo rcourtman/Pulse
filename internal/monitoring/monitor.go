@@ -269,6 +269,8 @@ type Monitor struct {
 	lastAuthAttempt      map[string]time.Time      // Track last auth attempt time
 	lastClusterCheck     map[string]time.Time      // Track last cluster check for standalone nodes
 	lastPhysicalDiskPoll map[string]time.Time      // Track last physical disk poll time per instance
+	lastPVEBackupPoll    map[string]time.Time      // Track last PVE backup poll per instance
+	lastPBSBackupPoll    map[string]time.Time      // Track last PBS backup poll per instance
 	persistence          *config.ConfigPersistence // Add persistence for saving updated configs
 	pbsBackupPollers     map[string]bool           // Track PBS backup polling goroutines per instance
 	runtimeCtx           context.Context           // Context used while monitor is running
@@ -316,6 +318,42 @@ func safeFloat(val float64) float64 {
 		return 0
 	}
 	return val
+}
+
+// shouldRunBackupPoll determines whether a backup polling cycle should execute.
+// Returns whether polling should run, a human-readable skip reason, and the timestamp to record.
+func (m *Monitor) shouldRunBackupPoll(last time.Time, now time.Time) (bool, string, time.Time) {
+	if m == nil || m.config == nil {
+		return false, "configuration unavailable", last
+	}
+
+	if !m.config.EnableBackupPolling {
+		return false, "backup polling globally disabled", last
+	}
+
+	interval := m.config.BackupPollingInterval
+	if interval > 0 {
+		if !last.IsZero() && now.Sub(last) < interval {
+			next := last.Add(interval)
+			return false, fmt.Sprintf("next run scheduled for %s", next.Format(time.RFC3339)), last
+		}
+		return true, "", now
+	}
+
+	backupCycles := m.config.BackupPollingCycles
+	if backupCycles <= 0 {
+		backupCycles = 10
+	}
+
+	if m.pollCounter%int64(backupCycles) == 0 || m.pollCounter == 1 {
+		return true, "", now
+	}
+
+	remaining := int64(backupCycles) - (m.pollCounter % int64(backupCycles))
+	if remaining <= 0 {
+		remaining = int64(backupCycles)
+	}
+	return false, fmt.Sprintf("next run in %d polling cycles", remaining), last
 }
 
 const (
@@ -1286,6 +1324,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastAuthAttempt:      make(map[string]time.Time),
 		lastClusterCheck:     make(map[string]time.Time),
 		lastPhysicalDiskPoll: make(map[string]time.Time),
+		lastPVEBackupPoll:    make(map[string]time.Time),
+		lastPBSBackupPoll:    make(map[string]time.Time),
 		persistence:          config.NewConfigPersistence(cfg.DataPath),
 		pbsBackupPollers:     make(map[string]bool),
 		nodeSnapshots:        make(map[string]NodeMemorySnapshot),
@@ -3062,44 +3102,70 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Poll backups if enabled - using configurable cycle count
-	// This prevents slow backup/snapshot queries from blocking real-time stats
-	// Also poll on first cycle (pollCounter == 1) to ensure data loads quickly
-	backupCycles := 10 // default
-	if m.config.BackupPollingCycles > 0 {
-		backupCycles = m.config.BackupPollingCycles
-	}
-	if instanceCfg.MonitorBackups && (m.pollCounter%int64(backupCycles) == 0 || m.pollCounter == 1) {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			// Run backup polling in a separate goroutine to not block main polling
-			go func() {
-				timeout := m.calculateBackupOperationTimeout(instanceName)
-				startTime := time.Now()
-				log.Info().
-					Str("instance", instanceName).
-					Dur("timeout", timeout).
-					Msg("Starting background backup/snapshot polling")
-				// Create a separate context with longer timeout for backup operations
-				backupCtx, cancel := context.WithTimeout(context.Background(), timeout)
-				defer cancel()
+	// Poll backups if enabled - respect configured interval or cycle gating
+	if instanceCfg.MonitorBackups {
+		if !m.config.EnableBackupPolling {
+			log.Debug().
+				Str("instance", instanceName).
+				Msg("Skipping backup polling - globally disabled")
+		} else {
+			now := time.Now()
 
-				// Poll backup tasks
-				m.pollBackupTasks(backupCtx, instanceName, client)
+			m.mu.RLock()
+			lastPoll := m.lastPVEBackupPoll[instanceName]
+			m.mu.RUnlock()
 
-				// Poll storage backups - pass nodes to avoid duplicate API calls
-				m.pollStorageBackupsWithNodes(backupCtx, instanceName, client, nodes)
+			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
+			if !shouldPoll {
+				if reason != "" {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("reason", reason).
+						Msg("Skipping PVE backup polling this cycle")
+				}
+			} else {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					m.mu.Lock()
+					m.lastPVEBackupPoll[instanceName] = newLast
+					m.mu.Unlock()
 
-				// Poll guest snapshots
-				m.pollGuestSnapshots(backupCtx, instanceName, client)
+					// Run backup polling in a separate goroutine to avoid blocking real-time stats
+					go func(startTime time.Time, inst string, pveClient PVEClientInterface) {
+						timeout := m.calculateBackupOperationTimeout(inst)
+						log.Info().
+							Str("instance", inst).
+							Dur("timeout", timeout).
+							Msg("Starting background backup/snapshot polling")
 
-				log.Info().
-					Str("instance", instanceName).
-					Dur("duration", time.Since(startTime)).
-					Msg("Completed background backup/snapshot polling")
-			}()
+						// Create a separate context with longer timeout for backup operations
+						backupCtx, cancel := context.WithTimeout(context.Background(), timeout)
+						defer cancel()
+
+						// Poll backup tasks
+						m.pollBackupTasks(backupCtx, inst, pveClient)
+
+						// Poll storage backups - pass nodes to avoid duplicate API calls
+						m.pollStorageBackupsWithNodes(backupCtx, inst, pveClient, nodes)
+
+						// Poll guest snapshots
+						m.pollGuestSnapshots(backupCtx, inst, pveClient)
+
+						duration := time.Since(startTime)
+						log.Info().
+							Str("instance", inst).
+							Dur("duration", duration).
+							Msg("Completed background backup/snapshot polling")
+
+						// Record actual completion time for interval scheduling
+						m.mu.Lock()
+						m.lastPVEBackupPoll[inst] = time.Now()
+						m.mu.Unlock()
+					}(now, instanceName, client)
+				}
+			}
 		}
 	}
 }
@@ -4963,49 +5029,64 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Str("instance", instanceName).
 				Msg("No PBS datastores available for backup polling")
 		} else {
-			backupCycles := 10
-			if m.config.BackupPollingCycles > 0 {
-				backupCycles = m.config.BackupPollingCycles
-			}
-
-			shouldPoll := m.pollCounter%int64(backupCycles) == 0 || m.pollCounter == 1
-			if !shouldPoll {
+			if !m.config.EnableBackupPolling {
 				log.Debug().
 					Str("instance", instanceName).
-					Int64("cycle", m.pollCounter).
-					Int("backupCycles", backupCycles).
-					Msg("Skipping PBS backup polling this cycle")
+					Msg("Skipping PBS backup polling - globally disabled")
 			} else {
-				m.mu.Lock()
-				if m.pbsBackupPollers[instanceName] {
-					m.mu.Unlock()
-					log.Debug().
-						Str("instance", instanceName).
-						Msg("PBS backup polling already in progress")
-				} else {
-					m.pbsBackupPollers[instanceName] = true
-					m.mu.Unlock()
+				now := time.Now()
 
+				m.mu.RLock()
+				lastPoll := m.lastPBSBackupPoll[instanceName]
+				m.mu.RUnlock()
+
+				shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
+				if !shouldPoll {
+					if reason != "" {
+						log.Debug().
+							Str("instance", instanceName).
+							Str("reason", reason).
+							Msg("Skipping PBS backup polling this cycle")
+					}
+				} else {
 					datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
 					copy(datastoreSnapshot, pbsInst.Datastores)
 
-					go func(ds []models.PBSDatastore) {
-						defer func() {
-							m.mu.Lock()
-							delete(m.pbsBackupPollers, instanceName)
-							m.mu.Unlock()
-						}()
-
-						log.Info().
+					m.mu.Lock()
+					if m.pbsBackupPollers[instanceName] {
+						m.mu.Unlock()
+						log.Debug().
 							Str("instance", instanceName).
-							Int("datastores", len(ds)).
-							Msg("Starting background PBS backup polling")
+							Msg("PBS backup polling already in progress")
+					} else {
+						m.pbsBackupPollers[instanceName] = true
+						m.lastPBSBackupPoll[instanceName] = newLast
+						m.mu.Unlock()
 
-						backupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-						defer cancel()
+						go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
+							defer func() {
+								m.mu.Lock()
+								delete(m.pbsBackupPollers, inst)
+								m.lastPBSBackupPoll[inst] = time.Now()
+								m.mu.Unlock()
+							}()
 
-						m.pollPBSBackups(backupCtx, instanceName, client, ds)
-					}(datastoreSnapshot)
+							log.Info().
+								Str("instance", inst).
+								Int("datastores", len(ds)).
+								Msg("Starting background PBS backup polling")
+
+							backupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+							defer cancel()
+
+							m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
+
+							log.Info().
+								Str("instance", inst).
+								Dur("duration", time.Since(start)).
+								Msg("Completed background PBS backup polling")
+						}(datastoreSnapshot, instanceName, now, client)
+					}
 				}
 			}
 		}
