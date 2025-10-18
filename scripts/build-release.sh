@@ -203,9 +203,43 @@ for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$RELEASE_DIR/"
 done
 
-# Generate checksums (include tarballs and standalone binaries)
-cd $RELEASE_DIR
-sha256sum *.tar.gz pulse-sensor-proxy-* > checksums.txt
+# Optionally package Helm chart
+if [ "${SKIP_HELM_PACKAGE:-0}" != "1" ]; then
+    if command -v helm >/dev/null 2>&1; then
+        echo "Packaging Helm chart..."
+        ./scripts/package-helm-chart.sh "$VERSION"
+        if [ -f "dist/pulse-$VERSION.tgz" ]; then
+            cp "dist/pulse-$VERSION.tgz" "$RELEASE_DIR/"
+        fi
+    else
+        echo "Helm not found on PATH; skipping Helm chart packaging. Install Helm 3.9+ or set SKIP_HELM_PACKAGE=1 to silence this message."
+    fi
+fi
+
+# Generate checksums (include tarballs, helm chart, and standalone binaries)
+cd "$RELEASE_DIR"
+shopt -s nullglob
+checksum_files=( *.tar.gz pulse-sensor-proxy-* )
+if compgen -G "pulse-*.tgz" > /dev/null; then
+    checksum_files+=( pulse-*.tgz )
+fi
+if [ ${#checksum_files[@]} -eq 0 ]; then
+    echo "Warning: no release artifacts found to checksum."
+else
+    sha256sum "${checksum_files[@]}" > checksums.txt
+    if [ -n "${SIGNING_KEY_ID:-}" ]; then
+        if command -v gpg >/dev/null 2>&1; then
+            echo "Signing checksums with GPG key ${SIGNING_KEY_ID}..."
+            gpg --batch --yes --detach-sign --armor \
+                --local-user "${SIGNING_KEY_ID}" \
+                --output checksums.txt.asc \
+                checksums.txt
+        else
+            echo "SIGNING_KEY_ID is set but gpg is not installed; skipping signature."
+        fi
+    fi
+fi
+shopt -u nullglob
 cd ..
 
 echo

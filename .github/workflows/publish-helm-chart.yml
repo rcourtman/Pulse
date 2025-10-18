@@ -1,0 +1,92 @@
+name: Publish Helm Chart
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: "Chart version (required when running manually, use format 4.24.0)"
+        required: true
+      app_version:
+        description: "Application version to embed (defaults to chart version)"
+        required: false
+
+jobs:
+  publish:
+    name: Package and Push Helm Chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
+      - name: Determine chart version
+        id: versions
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHART_VERSION="${{ inputs.chart_version }}"
+            if [ -z "$CHART_VERSION" ]; then
+              echo "::error::chart_version input is required when running manually"
+              exit 1
+            fi
+            APP_VERSION="${{ inputs.app_version }}"
+            if [ -z "$APP_VERSION" ]; then
+              APP_VERSION="$CHART_VERSION"
+            fi
+            RELEASE_TAG="$CHART_VERSION"
+          else
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            if [ -z "$RELEASE_TAG" ]; then
+              echo "::error::Release tag is empty"
+              exit 1
+            fi
+            CHART_VERSION="${RELEASE_TAG#v}"
+            APP_VERSION="$CHART_VERSION"
+          fi
+
+          echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Helm lint (strict)
+        run: helm lint deploy/helm/pulse --strict
+
+      - name: Package chart
+        run: |
+          mkdir -p dist
+          helm package deploy/helm/pulse \
+            --version "${{ steps.versions.outputs.chart_version }}" \
+            --app-version "${{ steps.versions.outputs.app_version }}" \
+            --destination dist
+
+      - name: Upload packaged chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-chart-${{ steps.versions.outputs.chart_version }}
+          path: dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz
+
+      - name: Authenticate with GHCR
+        run: |
+          echo "${{ github.token }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Push chart to GHCR
+        run: |
+          helm push dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz \
+            oci://ghcr.io/${{ github.repository_owner }}/pulse-chart
+
+      - name: Attach chart to release
+        if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ steps.versions.outputs.release_tag }}" \
+            dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz \
+            --clobber

@@ -1,0 +1,48 @@
+name: Helm CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/helm/**"
+      - ".github/workflows/helm-ci.yml"
+      - "docs/KUBERNETES.md"
+      - "README.md"
+  pull_request:
+    paths:
+      - "deploy/helm/**"
+      - ".github/workflows/helm-ci.yml"
+      - "docs/KUBERNETES.md"
+      - "README.md"
+  workflow_dispatch: {}
+
+jobs:
+  lint:
+    name: Lint and Render Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
+      - name: Helm lint (strict)
+        run: helm lint deploy/helm/pulse --strict
+
+      - name: Render default manifests
+        run: helm template pulse deploy/helm/pulse > /tmp/pulse-rendered.yaml
+
+      - name: Render agent-enabled manifests
+        run: |
+          helm template pulse deploy/helm/pulse \
+            --set agent.enabled=true \
+            --set agent.kind=Deployment \
+            --set agent.secretEnv.create=true \
+            --set agent.secretEnv.data.PULSE_TOKEN=dummy-token \
+            --set server.secretEnv.create=true \
+            --set server.secretEnv.data.API_TOKENS=dummy-token \
+            --set persistence.enabled=false \
+            > /tmp/pulse-agent-rendered.yaml

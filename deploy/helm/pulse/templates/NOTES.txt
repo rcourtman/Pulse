@@ -1,0 +1,4 @@
+1. Pulse hub URL: http://{{ include "pulse.fullname" . }}:{{ .Values.service.port }}
+   (Adjust if using ingress or LoadBalancer.)
+2. Create an API token from the Pulse UI under Settings → Security for the Docker agent.
+3. Deploy the optional agent by enabling `agent.enabled` and providing your server URL and token.

@@ -1,0 +1,125 @@
+{{- if .Values.agent.enabled }}
+{{- $kind := default "DaemonSet" .Values.agent.kind | lower }}
+{{- $isDaemon := eq $kind "daemonset" }}
+{{- $workloadName := printf "%s-agent" (include "pulse.fullname" .) }}
+apiVersion: apps/v1
+kind: {{ if $isDaemon }}DaemonSet{{ else }}Deployment{{ end }}
+metadata:
+  name: {{ $workloadName }}
+  labels:
+    {{- include "pulse.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  {{- if not $isDaemon }}
+  replicas: {{ .Values.agent.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "pulse.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: agent
+  {{- if $isDaemon }}
+  updateStrategy:
+    type: RollingUpdate
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "pulse.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: agent
+        {{- with .Values.agent.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if .Values.agent.podAnnotations }}
+      annotations:
+        {{- toYaml .Values.agent.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "pulse.agentServiceAccountName" . }}
+      {{- $podSecurityContext := .Values.agent.podSecurityContext }}
+      {{- if $podSecurityContext }}
+      securityContext:
+        {{- toYaml $podSecurityContext | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: pulse-docker-agent
+          image: "{{ .Values.agent.image.repository }}:{{ default .Chart.AppVersion .Values.agent.image.tag }}"
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          {{- if .Values.agent.args }}
+          args:
+            {{- toYaml .Values.agent.args | nindent 12 }}
+          {{- end }}
+          {{- $csec := .Values.agent.securityContext }}
+          {{- if $csec }}
+          securityContext:
+            {{- toYaml $csec | nindent 12 }}
+          {{- end }}
+          {{- $envList := list }}
+          {{- range .Values.agent.env }}
+          {{- $envList = append $envList . }}
+          {{- end }}
+          {{- range .Values.agent.extraEnv }}
+          {{- $envList = append $envList . }}
+          {{- end }}
+          {{- $secret := .Values.agent.secretEnv }}
+          {{- $secretKeys := list }}
+          {{- if $secret.keys }}
+          {{- $secretKeys = $secret.keys }}
+          {{- else if $secret.data }}
+          {{- $secretKeys = keys $secret.data }}
+          {{- end }}
+          {{- $root := . }}
+          {{- range $key := $secretKeys }}
+          {{- $envList = append $envList (dict "name" $key "valueFrom" (dict "secretKeyRef" (dict "name" (include "pulse.agentSecretName" $root) "key" $key))) }}
+          {{- end }}
+          {{- if $envList }}
+          env:
+            {{- toYaml $envList | nindent 12 }}
+          {{- end }}
+          {{- $envFrom := concat .Values.agent.envFrom .Values.agent.extraEnvFrom }}
+          {{- if $envFrom }}
+          envFrom:
+            {{- range $envFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- if or .Values.agent.dockerSocket.enabled .Values.agent.extraVolumeMounts }}
+          volumeMounts:
+            {{- if .Values.agent.dockerSocket.enabled }}
+            - name: docker-socket
+              mountPath: {{ .Values.agent.dockerSocket.path }}
+            {{- end }}
+            {{- with .Values.agent.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.agent.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if or .Values.agent.dockerSocket.enabled .Values.agent.extraVolumes }}
+      volumes:
+        {{- if .Values.agent.dockerSocket.enabled }}
+        - name: docker-socket
+          hostPath:
+            path: {{ .Values.agent.dockerSocket.path }}
+            {{- with .Values.agent.dockerSocket.hostPathType }}
+            type: {{ . }}
+            {{- end }}
+        {{- end }}
+        {{- with .Values.agent.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
