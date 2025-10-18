@@ -562,7 +562,22 @@ Starting in v4.26.0, SSH keys are **automatically removed** when you delete a no
    - Removes the SSH key entries (`# pulse-managed-key` and `# pulse-proxy-key`)
    - Logs the cleanup action via syslog
 
-This works for both **cluster nodes** and **standalone nodes** (added via turnkey setup).
+**Automatic cleanup works for:**
+- ✅ **Cluster nodes** - Full automatic cleanup (Proxmox clusters have unrestricted passwordless SSH)
+- ⚠️ **Standalone nodes** - Cannot auto-cleanup due to forced command security (see below)
+
+**Standalone Node Limitation:**
+
+Standalone nodes use forced commands (`command="sensors -j"`) for security. This same restriction prevents the cleanup script from running `sed` to remove keys. This is a **security feature, not a bug** - adding a workaround would defeat the forced command protection.
+
+For standalone nodes:
+- Keys remain after removal (but they're **read-only** - only `sensors -j` access)
+- **Low security risk** - no shell access, no write access, no port forwarding
+- **Auto-cleanup on re-add** - Setup script removes old keys when node is re-added
+- **Manual cleanup if needed:**
+  ```bash
+  ssh root@standalone-node "sed -i '/# pulse-proxy-key$/d' /root/.ssh/authorized_keys"
+  ```
 
 **Monitoring Cleanup:**
 ```bash
