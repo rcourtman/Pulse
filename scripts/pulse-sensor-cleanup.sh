@@ -115,15 +115,21 @@ else
         fi
 
         # Remove both pulse-managed-key and pulse-proxy-key entries from remote host
-        $SSH_CMD root@"$HOST_CLEAN" \
-            "sed -i -e '/# pulse-managed-key\$/d' -e '/# pulse-proxy-key\$/d' /root/.ssh/authorized_keys" 2>&1 | \
-            logger -t "$LOG_TAG" -p user.info
+        CLEANUP_OUTPUT=$($SSH_CMD root@"$HOST_CLEAN" \
+            "sed -i -e '/# pulse-managed-key\$/d' -e '/# pulse-proxy-key\$/d' /root/.ssh/authorized_keys && echo 'SUCCESS'" 2>&1)
 
-        if [[ $? -eq 0 ]]; then
+        if echo "$CLEANUP_OUTPUT" | grep -q "SUCCESS"; then
             log_info "Successfully cleaned up SSH keys on $HOST_CLEAN"
         else
-            log_error "Failed to clean up SSH keys on $HOST_CLEAN"
-            exit 1
+            # Check if this is a standalone node with forced commands (common case)
+            if echo "$CLEANUP_OUTPUT" | grep -q "cpu_thermal\|coretemp\|k10temp"; then
+                log_warn "Cannot cleanup standalone node $HOST_CLEAN (forced command prevents cleanup)"
+                log_info "Standalone node keys are read-only (sensors -j) - low security risk"
+                log_info "Manual cleanup: ssh root@$HOST_CLEAN \"sed -i '/# pulse-proxy-key\$/d' /root/.ssh/authorized_keys\""
+            else
+                log_error "Failed to clean up SSH keys on $HOST_CLEAN: $CLEANUP_OUTPUT"
+                exit 1
+            fi
         fi
     fi
 fi
