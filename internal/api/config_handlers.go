@@ -3838,11 +3838,11 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
     echo ""
     echo "What would you like to do?"
     echo ""
-    echo "  [K]eep    - Leave temperature monitoring enabled (no changes)"
-    echo "  [R]emove  - Disable and remove SSH access"
-    echo "  [S]kip    - Skip this section"
+    echo "  [1] Keep    - Leave temperature monitoring enabled (no changes)"
+    echo "  [2] Remove  - Disable and remove SSH access"
+    echo "  [3] Skip    - Skip this section"
     echo ""
-    echo -n "Your choice [K/r/s]: "
+    echo -n "Your choice [1/2/3]: "
 
     if [ -t 0 ]; then
         read -p "> " -n 1 -r SSH_ACTION
@@ -3854,13 +3854,13 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
             echo "$SSH_ACTION"
         else
             echo "(No terminal available - keeping existing configuration)"
-            SSH_ACTION="k"
+            SSH_ACTION="1"
         fi
     fi
     echo ""
     echo ""
 
-    if [[ $SSH_ACTION =~ ^[Rr]$ ]]; then
+    if [[ $SSH_ACTION == "2" ]]; then
         echo "Removing temperature monitoring configuration..."
 
         # Remove the SSH key from authorized_keys
@@ -3875,7 +3875,7 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
         echo "Temperature monitoring has been disabled."
         echo "Note: lm-sensors package was NOT removed (in case you use it elsewhere)"
         TEMPERATURE_ENABLED=false
-    elif [[ $SSH_ACTION =~ ^[Ss]$ ]]; then
+    elif [[ $SSH_ACTION == "3" ]]; then
         echo "Temperature monitoring configuration unchanged."
     else
         if [ "$SSH_LEGACY_KEY" = true ]; then
