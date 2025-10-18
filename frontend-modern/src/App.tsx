@@ -98,15 +98,25 @@ function App() {
     cephClusters: [],
     physicalDisks: [],
     pbs: [],
-    pmg: [],
-    metrics: [],
-    pveBackups: {
+  pmg: [],
+  metrics: [],
+  pveBackups: {
+    backupTasks: [],
+    storageBackups: [],
+    guestSnapshots: [],
+  },
+  pbsBackups: [],
+  pmgBackups: [],
+  backups: {
+    pve: {
       backupTasks: [],
       storageBackups: [],
       guestSnapshots: [],
     },
-    pbsBackups: [],
-    performance: {
+    pbs: [],
+    pmg: [],
+  },
+  performance: {
       apiCallDuration: {},
       lastPollDuration: 0,
       pollingStartTime: '',

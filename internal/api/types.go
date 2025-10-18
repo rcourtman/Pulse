@@ -58,6 +58,8 @@ type StateResponse struct {
 	PBSInstances     []models.PBSInstance        `json:"pbs"`
 	PMGInstances     []models.PMGInstance        `json:"pmg"`
 	PBSBackups       []models.PBSBackup          `json:"pbsBackups"`
+	PMGBackups       []models.PMGBackup          `json:"pmgBackups"`
+	Backups          models.Backups              `json:"backups"`
 	Metrics          []models.Metric             `json:"metrics"`
 	PVEBackups       models.PVEBackups           `json:"pveBackups"`
 	Performance      models.Performance          `json:"performance"`

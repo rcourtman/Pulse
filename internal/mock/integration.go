@@ -310,6 +310,7 @@ func cloneState(state models.StateSnapshot) models.StateSnapshot {
 		PhysicalDisks:    append([]models.PhysicalDisk(nil), state.PhysicalDisks...),
 		PBSInstances:     append([]models.PBSInstance(nil), state.PBSInstances...),
 		PBSBackups:       append([]models.PBSBackup(nil), state.PBSBackups...),
+		PMGBackups:       append([]models.PMGBackup(nil), state.PMGBackups...),
 		Metrics:          append([]models.Metric(nil), state.Metrics...),
 		Performance:      state.Performance,
 		Stats:            state.Stats,
@@ -323,6 +324,15 @@ func cloneState(state models.StateSnapshot) models.StateSnapshot {
 		BackupTasks:    append([]models.BackupTask(nil), state.PVEBackups.BackupTasks...),
 		StorageBackups: append([]models.StorageBackup(nil), state.PVEBackups.StorageBackups...),
 		GuestSnapshots: append([]models.GuestSnapshot(nil), state.PVEBackups.GuestSnapshots...),
+	}
+	copyState.Backups = models.Backups{
+		PVE: models.PVEBackups{
+			BackupTasks:    append([]models.BackupTask(nil), state.Backups.PVE.BackupTasks...),
+			StorageBackups: append([]models.StorageBackup(nil), state.Backups.PVE.StorageBackups...),
+			GuestSnapshots: append([]models.GuestSnapshot(nil), state.Backups.PVE.GuestSnapshots...),
+		},
+		PBS: append([]models.PBSBackup(nil), state.Backups.PBS...),
+		PMG: append([]models.PMGBackup(nil), state.Backups.PMG...),
 	}
 
 	for k, v := range state.ConnectionHealth {

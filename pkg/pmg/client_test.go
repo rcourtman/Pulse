@@ -231,3 +231,55 @@ func TestClientUsesTokenAuthorizationHeader(t *testing.T) {
 		t.Fatalf("expected authorization header %q, got %q", expected, authHeader)
 	}
 }
+
+func TestListBackups(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/access/ticket":
+			if r.Method != http.MethodPost {
+				t.Fatalf("expected POST for auth, got %s", r.Method)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"ticket":"ticket789","CSRFPreventionToken":"csrf789"}}`)
+		case "/api2/json/nodes/node1/backup":
+			if r.Method != http.MethodGet {
+				t.Fatalf("expected GET for backup listing, got %s", r.Method)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[{"filename":"pmg-backup_2024-01-01.tgz","size":123456,"timestamp":1704096000}]}`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:      server.URL,
+		User:      "api@pmg",
+		Password:  "secret",
+		VerifySSL: false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	backups, err := client.ListBackups(context.Background(), "node1")
+	if err != nil {
+		t.Fatalf("ListBackups failed: %v", err)
+	}
+	if len(backups) != 1 {
+		t.Fatalf("expected 1 backup, got %d", len(backups))
+	}
+	backup := backups[0]
+	if backup.Filename != "pmg-backup_2024-01-01.tgz" {
+		t.Fatalf("unexpected filename: %s", backup.Filename)
+	}
+	if backup.Size != 123456 {
+		t.Fatalf("unexpected size: %d", backup.Size)
+	}
+	if backup.Timestamp != 1704096000 {
+		t.Fatalf("unexpected timestamp: %d", backup.Timestamp)
+	}
+}

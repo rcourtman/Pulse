@@ -317,6 +317,10 @@ const Settings: Component<SettingsProps> = (props) => {
       description: 'Manage Pulse configuration.',
     };
 
+  const pveBackupsState = () => state.backups?.pve ?? state.pveBackups;
+  const pbsBackupsState = () => state.backups?.pbs ?? state.pbsBackups;
+  const pmgBackupsState = () => state.backups?.pmg ?? state.pmgBackups;
+
   // Keep tab state in sync with URL and handle /settings redirect without flicker
   createEffect(
     on(
@@ -5413,11 +5417,11 @@ const Settings: Component<SettingsProps> = (props) => {
                               storageCount: state.storage?.length || 0,
                               physicalDisksCount: state.physicalDisks?.length || 0,
                               pbsCount: state.pbs?.length || 0,
-                              pbsBackupsCount: state.pbsBackups?.length || 0,
+                              pbsBackupsCount: pbsBackupsState()?.length || 0,
                               pveBackups: {
-                                backupTasksCount: state.pveBackups?.backupTasks?.length || 0,
-                                storageBackupsCount: state.pveBackups?.storageBackups?.length || 0,
-                                guestSnapshotsCount: state.pveBackups?.guestSnapshots?.length || 0,
+                                backupTasksCount: pveBackupsState()?.backupTasks?.length || 0,
+                                storageBackupsCount: pveBackupsState()?.storageBackups?.length || 0,
+                                guestSnapshotsCount: pveBackupsState()?.guestSnapshots?.length || 0,
                               },
                             },
                             // Node status details
@@ -5454,9 +5458,9 @@ const Settings: Component<SettingsProps> = (props) => {
                                     }
                                   : undefined,
                                 hasBackups:
-                                  (state.pveBackups?.storageBackups?.filter(
+                                  (pveBackupsState()?.storageBackups ?? []).filter(
                                     (b) => b.storage === s.name,
-                                  ).length || 0) > 0,
+                                  ).length > 0,
                               })) || [],
                             // Physical disks - critical for troubleshooting
                             physicalDisks:
@@ -5472,10 +5476,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                 smart: d.smart ?? null,
                               })) || [],
                             backups: {
-                              pveBackupTasks: state.pveBackups?.backupTasks?.slice(0, 10) || [],
+                              pveBackupTasks: pveBackupsState()?.backupTasks?.slice(0, 10) || [],
                               pveStorageBackups:
-                                state.pveBackups?.storageBackups?.slice(0, 10) || [],
-                              pbsBackups: state.pbsBackups?.slice(0, 10) || [],
+                                pveBackupsState()?.storageBackups?.slice(0, 10) || [],
+                              pbsBackups: pbsBackupsState()?.slice(0, 10) || [],
                             },
                             connectionHealth: state.connectionHealth || {},
                             performance: {

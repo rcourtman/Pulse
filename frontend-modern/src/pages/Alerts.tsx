@@ -3,7 +3,7 @@ import type { JSX } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
-import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig } from '@/types/alerts';
+import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
@@ -769,6 +769,25 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         setMetricTimeThresholds({});
       }
 
+      // Load backup thresholds
+      if (config.backupDefaults) {
+        const enabled = Boolean(config.backupDefaults.enabled);
+        const rawWarning = config.backupDefaults.warningDays ?? FACTORY_BACKUP_DEFAULTS.warningDays;
+        const rawCritical = config.backupDefaults.criticalDays ?? FACTORY_BACKUP_DEFAULTS.criticalDays;
+        const safeCritical = Math.max(0, rawCritical);
+        const normalizedWarning = Math.max(0, rawWarning);
+        const warningDays =
+          safeCritical > 0 && normalizedWarning > safeCritical ? safeCritical : normalizedWarning;
+        const criticalDays = Math.max(safeCritical, warningDays);
+        setBackupDefaults({
+          enabled,
+          warningDays,
+          criticalDays,
+        });
+      } else {
+        setBackupDefaults({ ...FACTORY_BACKUP_DEFAULTS });
+      }
+
       // Load snapshot thresholds
       if (config.snapshotDefaults) {
         const enabled = Boolean(config.snapshotDefaults.enabled);
@@ -1058,6 +1077,11 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     warningDays: 30,
     criticalDays: 45,
   };
+  const FACTORY_BACKUP_DEFAULTS: BackupAlertConfig = {
+    enabled: false,
+    warningDays: 7,
+    criticalDays: 14,
+  };
 
   // Threshold states - using trigger values for display
   const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_GUEST_DEFAULTS });
@@ -1070,6 +1094,9 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
   const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>([]);
 
   const [storageDefault, setStorageDefault] = createSignal(FACTORY_STORAGE_DEFAULT);
+  const [backupDefaults, setBackupDefaults] = createSignal<BackupAlertConfig>({
+    ...FACTORY_BACKUP_DEFAULTS,
+  });
 
   // Reset functions
   const resetGuestDefaults = () => {
@@ -1094,6 +1121,10 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
 
   const resetStorageDefault = () => {
     setStorageDefault(FACTORY_STORAGE_DEFAULT);
+    setHasUnsavedChanges(true);
+  };
+  const resetBackupDefaults = () => {
+    setBackupDefaults({ ...FACTORY_BACKUP_DEFAULTS });
     setHasUnsavedChanges(true);
   };
   const resetSnapshotDefaults = () => {
@@ -1224,12 +1255,20 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                     };
 
                     const snapshotConfig = snapshotDefaults();
-                    const normalizedWarningDays = Math.max(0, snapshotConfig.warningDays ?? 0);
-                    const normalizedCriticalDays = Math.max(0, snapshotConfig.criticalDays ?? 0);
-                    const finalCriticalDays =
-                      normalizedCriticalDays > 0
-                        ? Math.max(normalizedCriticalDays, normalizedWarningDays)
-                        : normalizedWarningDays;
+                    const normalizedSnapshotWarning = Math.max(0, snapshotConfig.warningDays ?? 0);
+                    const normalizedSnapshotCritical = Math.max(0, snapshotConfig.criticalDays ?? 0);
+                    const finalSnapshotCritical =
+                      normalizedSnapshotCritical > 0
+                        ? Math.max(normalizedSnapshotCritical, normalizedSnapshotWarning)
+                        : normalizedSnapshotWarning;
+
+                    const backupConfig = backupDefaults();
+                    const normalizedBackupWarning = Math.max(0, backupConfig.warningDays ?? 0);
+                    const normalizedBackupCritical = Math.max(0, backupConfig.criticalDays ?? 0);
+                    const finalBackupCritical =
+                      normalizedBackupCritical > 0
+                        ? Math.max(normalizedBackupCritical, normalizedBackupWarning)
+                        : normalizedBackupWarning;
 
                     const alertConfig = {
                       enabled: true,
@@ -1284,8 +1323,13 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       metricTimeThresholds: normalizeMetricDelayMap(metricTimeThresholds()),
                       snapshotDefaults: {
                         enabled: snapshotConfig.enabled,
-                        warningDays: normalizedWarningDays,
-                        criticalDays: finalCriticalDays,
+                        warningDays: normalizedSnapshotWarning,
+                        criticalDays: finalSnapshotCritical,
+                      },
+                      backupDefaults: {
+                        enabled: backupConfig.enabled,
+                        warningDays: normalizedBackupWarning,
+                        criticalDays: finalBackupCritical,
                       },
                       pmgDefaults: pmgThresholds(),
                       // Use rawOverridesConfig which is already properly formatted with disabled flags
@@ -1491,14 +1535,18 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
               resetStorageDefault={resetStorageDefault}
               resetSnapshotDefaults={resetSnapshotDefaults}
+              resetBackupDefaults={resetBackupDefaults}
               factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
               factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
               factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
               factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
               snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
+              backupFactoryDefaults={FACTORY_BACKUP_DEFAULTS}
               timeThresholds={timeThresholds}
               metricTimeThresholds={metricTimeThresholds}
               setMetricTimeThresholds={setMetricTimeThresholds}
+              backupDefaults={backupDefaults}
+              setBackupDefaults={setBackupDefaults}
               snapshotDefaults={snapshotDefaults}
               setSnapshotDefaults={setSnapshotDefaults}
               pmgThresholds={pmgThresholds}
@@ -2028,6 +2076,14 @@ interface ThresholdsTabProps {
   ) => void;
   snapshotFactoryDefaults: SnapshotAlertConfig;
   resetSnapshotDefaults: () => void;
+  backupDefaults: () => BackupAlertConfig;
+  setBackupDefaults: (
+    value:
+      | BackupAlertConfig
+      | ((prev: BackupAlertConfig) => BackupAlertConfig),
+  ) => void;
+  backupFactoryDefaults: BackupAlertConfig;
+  resetBackupDefaults: () => void;
   setOverrides: (value: Override[]) => void;
   setRawOverridesConfig: (value: Record<string, RawOverrideConfig>) => void;
   activeAlerts: Record<string, Alert>;
@@ -2085,6 +2141,10 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       dockerHosts={props.state.dockerHosts || []}
       pbsInstances={props.state.pbs || []}
       pmgInstances={props.state.pmg || []}
+      backups={props.state.backups}
+      pveBackups={props.state.pveBackups}
+      pbsBackups={props.state.pbsBackups}
+      pmgBackups={props.state.pmgBackups}
       pmgThresholds={props.pmgThresholds}
       setPMGThresholds={props.setPMGThresholds}
       guestDefaults={props.guestDefaults()}
@@ -2104,6 +2164,10 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       timeThresholds={props.timeThresholds}
       metricTimeThresholds={props.metricTimeThresholds}
       setMetricTimeThresholds={props.setMetricTimeThresholds}
+      backupDefaults={props.backupDefaults}
+      setBackupDefaults={props.setBackupDefaults}
+      backupFactoryDefaults={props.backupFactoryDefaults}
+      resetBackupDefaults={props.resetBackupDefaults}
       snapshotDefaults={props.snapshotDefaults}
       setSnapshotDefaults={props.setSnapshotDefaults}
       snapshotFactoryDefaults={props.snapshotFactoryDefaults}

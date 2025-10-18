@@ -194,6 +194,15 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
 		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
 	}
+	if config.BackupDefaults.WarningDays < 0 {
+		config.BackupDefaults.WarningDays = 0
+	}
+	if config.BackupDefaults.CriticalDays < 0 {
+		config.BackupDefaults.CriticalDays = 0
+	}
+	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
+		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
+	}
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
 	data, err := json.MarshalIndent(config, "", "  ")
@@ -250,6 +259,11 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Enabled:      false,
 					WarningDays:  30,
 					CriticalDays: 45,
+				},
+				BackupDefaults: alerts.BackupAlertConfig{
+					Enabled:      false,
+					WarningDays:  7,
+					CriticalDays: 14,
 				},
 				Overrides: make(map[string]alerts.ThresholdConfig),
 			}, nil
@@ -309,6 +323,15 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	}
 	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
 		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
+	}
+	if config.BackupDefaults.WarningDays < 0 {
+		config.BackupDefaults.WarningDays = 0
+	}
+	if config.BackupDefaults.CriticalDays < 0 {
+		config.BackupDefaults.CriticalDays = 0
+	}
+	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
+		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
 	}
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)

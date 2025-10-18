@@ -11,6 +11,8 @@ export interface State {
   pbs: PBSInstance[];
   pmg: PMGInstance[];
   pbsBackups: PBSBackup[];
+  pmgBackups: PMGBackup[];
+  backups: Backups;
   metrics: Metric[];
   pveBackups: PVEBackups;
   performance: Performance;
@@ -412,6 +414,21 @@ export interface PBSBackup {
   comment: string;
   files: string[];
   owner?: string;
+}
+
+export interface PMGBackup {
+  id: string;
+  instance: string;
+  node: string;
+  filename: string;
+  backupTime: string;
+  size: number;
+}
+
+export interface Backups {
+  pve: PVEBackups;
+  pbs: PBSBackup[];
+  pmg: PMGBackup[];
 }
 
 export interface PBSBackupJob {

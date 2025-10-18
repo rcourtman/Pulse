@@ -230,6 +230,9 @@ type StateFrontend struct {
 	PhysicalDisks    []PhysicalDisk        `json:"physicalDisks"`
 	PBS              []PBSInstance         `json:"pbs"` // Keep as is
 	PMG              []PMGInstance         `json:"pmg"`
+	PBSBackups       []PBSBackup           `json:"pbsBackups"`
+	PMGBackups       []PMGBackup           `json:"pmgBackups"`
+	Backups          Backups               `json:"backups"`
 	ActiveAlerts     []Alert               `json:"activeAlerts"`     // Active alerts
 	Metrics          map[string]any        `json:"metrics"`          // Empty object for now
 	PVEBackups       PVEBackups            `json:"pveBackups"`       // Keep as is

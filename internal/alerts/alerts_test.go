@@ -3,6 +3,7 @@ package alerts
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -270,6 +271,160 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 	m.mu.RUnlock()
 	if exists {
 		t.Fatalf("expected snapshot alert to be cleared when snapshot missing")
+	}
+}
+
+func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  7,
+		CriticalDays: 14,
+	}
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	now := time.Now()
+	storageBackups := []models.StorageBackup{
+		{
+			ID:       "inst-node-100-backup",
+			Storage:  "local",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     100,
+			Time:     now.Add(-15 * 24 * time.Hour),
+		},
+	}
+
+	key := BuildGuestKey("inst", "node", 100)
+	guestsByKey := map[string]GuestLookup{
+		key: {
+			Name:     "app-server",
+			Instance: "inst",
+			Node:     "node",
+			Type:     "qemu",
+			VMID:     100,
+		},
+	}
+	guestsByVMID := map[string]GuestLookup{
+		"100": guestsByKey[key],
+	}
+
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	alert, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected backup age alert to be created")
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical backup alert, got %s", alert.Level)
+	}
+
+	// Recent backup clears alert
+	storageBackups[0].Time = now
+	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	_, exists = m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected backup-age alert to clear after fresh backup")
+	}
+}
+
+func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  3,
+		CriticalDays: 5,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	pbsBackups := []models.PBSBackup{
+		{
+			ID:         "pbs-backup-999-0",
+			Instance:   "pbs-main",
+			Datastore:  "backup-store",
+			BackupType: "qemu",
+			VMID:       "999",
+			BackupTime: now.Add(-6 * 24 * time.Hour),
+		},
+	}
+
+	m.CheckBackups(nil, pbsBackups, nil, map[string]GuestLookup{}, map[string]GuestLookup{})
+
+	m.mu.RLock()
+	found := false
+	for id, alert := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-age-") {
+			found = true
+			if alert.Level != AlertLevelCritical {
+				t.Fatalf("expected PBS backup alert to be critical")
+			}
+			break
+		}
+	}
+	m.mu.RUnlock()
+	if !found {
+		t.Fatalf("expected PBS backup alert to be created")
+	}
+}
+
+func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  5,
+		CriticalDays: 7,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	pmgBackups := []models.PMGBackup{
+		{
+			ID:         "pmg-backup-mail-01",
+			Instance:   "mail",
+			Node:       "mail-gateway",
+			Filename:   "pmg-backup_2024-01-01.tgz",
+			BackupTime: now.Add(-8 * 24 * time.Hour),
+			Size:       123456,
+		},
+	}
+
+	m.CheckBackups(nil, nil, pmgBackups, map[string]GuestLookup{}, map[string]GuestLookup{})
+
+	m.mu.RLock()
+	found := false
+	for id, alert := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-age-") {
+			found = true
+			if alert.Level != AlertLevelCritical {
+				t.Fatalf("expected PMG backup alert to be critical")
+			}
+			break
+		}
+	}
+	m.mu.RUnlock()
+	if !found {
+		t.Fatalf("expected PMG backup alert to be created")
 	}
 }
 

@@ -2452,16 +2452,24 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 	// Get current state
 	state := r.monitor.GetState()
 
-	// Return backup data structure
-	backups := map[string]interface{}{
-		"backupTasks":    state.PVEBackups.BackupTasks,
-		"storageBackups": state.PVEBackups.StorageBackups,
-		"guestSnapshots": state.PVEBackups.GuestSnapshots,
-		"pbsBackups":     state.PBSBackups,
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(backups)
+	json.NewEncoder(w).Encode(struct {
+		Backups     models.Backups         `json:"backups"`
+		PVEBackups  models.PVEBackups      `json:"pveBackups"`
+		PBSBackups  []models.PBSBackup     `json:"pbsBackups"`
+		PMGBackups  []models.PMGBackup     `json:"pmgBackups"`
+		BackupTasks []models.BackupTask    `json:"backupTasks"`
+		Storage     []models.StorageBackup `json:"storageBackups"`
+		GuestSnaps  []models.GuestSnapshot `json:"guestSnapshots"`
+	}{
+		Backups:     state.Backups,
+		PVEBackups:  state.PVEBackups,
+		PBSBackups:  state.PBSBackups,
+		PMGBackups:  state.PMGBackups,
+		BackupTasks: state.PVEBackups.BackupTasks,
+		Storage:     state.PVEBackups.StorageBackups,
+		GuestSnaps:  state.PVEBackups.GuestSnapshots,
+	})
 }
 
 // handleBackupsPVE handles PVE backup requests

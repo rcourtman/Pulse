@@ -54,6 +54,7 @@ export interface Resource {
   host?: string;
   type?: string;
   resourceType?: string;
+  subtitle?: string;
   thresholds?: Record<string, number | undefined>;
   defaults?: Record<string, number | undefined>;
   disabled?: boolean;
@@ -68,6 +69,12 @@ export interface Resource {
   clusterName?: string;
   isClusterMember?: boolean;
   delaySeconds?: number;
+  editScope?: 'snapshot';
+  isEnabled?: boolean;
+  toggleEnabled?: () => void;
+  toggleTitleEnabled?: string;
+  toggleTitleDisabled?: string;
+  editable?: boolean;
   [key: string]: unknown;
 }
 
@@ -386,9 +393,7 @@ export function ResourceTable(props: ResourceTableProps) {
     titleEnabled?: string;
     titleDisabled?: string;
     titleWhenDisabled?: string;
-  }) => {
-    return <StatusBadge {...config} />;
-  };
+  }) => <StatusBadge {...config} />;
 
   const offlineStateOrder: OfflineState[] = ['off', 'warning', 'critical'];
 
@@ -826,61 +831,67 @@ export function ResourceTable(props: ResourceTableProps) {
                               </Show>
                             </td>
                           <td class="p-1 px-2">
-                            <Show when={resource.type === 'node'} fallback={
-                              <div class="flex items-center gap-2">
-                                <span
-                                  class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
-                                >
-                                  {resource.name}
-                                </span>
-                                <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                  <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
-                                    Custom
-                                  </span>
-                                </Show>
-                              </div>
-                            }>
-                              <div class="flex flex-wrap items-center gap-3" title={resource.status || undefined}>
-                                <Show when={resource.host} fallback={
+                            <div class="flex items-center gap-2">
+                              <Show
+                                when={resource.type === 'node'}
+                                fallback={
                                   <span
                                     class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                   >
-                                    {resource.type === 'node'
-                                      ? resource.name
-                                      : resource.displayName || resource.name}
+                                    {resource.name}
                                   </span>
-                                }>
-                                  {(host) => (
-                                    <a
-                                      href={host() as string}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      class={`text-sm font-medium transition-colors duration-150 ${
-                                        resource.disabled
-                                          ? 'text-gray-500 dark:text-gray-500'
-                                          : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
-                                      }`}
-                                      title={`Open ${resource.displayName || resource.name} web interface`}
-                                    >
-                                      {resource.type === 'node'
-                                        ? resource.name
-                                        : resource.displayName || resource.name}
-                                    </a>
-                                  )}
-                                </Show>
-                                <Show when={resource.clusterName}>
-                                  <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                                    {resource.clusterName}
-                                  </span>
-                                </Show>
-                                <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                  <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
-                                    Custom
-                                  </span>
-                                </Show>
-                              </div>
-                            </Show>
+                                }
+                              >
+                                <div class="flex flex-wrap items-center gap-3" title={resource.status || undefined}>
+                                  <Show
+                                    when={resource.host}
+                                    fallback={
+                                      <span
+                                        class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                      >
+                                        {resource.type === 'node'
+                                          ? resource.name
+                                          : resource.displayName || resource.name}
+                                      </span>
+                                    }
+                                  >
+                                    {(host) => (
+                                      <a
+                                        href={host() as string}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        class={`text-sm font-medium transition-colors duration-150 ${
+                                          resource.disabled
+                                            ? 'text-gray-500 dark:text-gray-500'
+                                            : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
+                                        }`}
+                                        title={`Open ${resource.displayName || resource.name} web interface`}
+                                      >
+                                        {resource.type === 'node'
+                                          ? resource.name
+                                          : resource.displayName || resource.name}
+                                      </a>
+                                    )}
+                                  </Show>
+                                  <Show when={resource.clusterName}>
+                                    <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                      {resource.clusterName}
+                                    </span>
+                                  </Show>
+                                </div>
+                              </Show>
+                              <Show when={resource.subtitle}>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                  {resource.subtitle as string}
+                                </span>
+                              </Show>
+                              <Show when={resource.hasOverride || resource.disableConnectivity}>
+                                <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                                  Custom
+                                </span>
+                              </Show>
+                            </div>
                           </td>
                           {/* Metric columns - dynamically rendered based on resource type */}
                             <For each={props.columns}>
@@ -1279,14 +1290,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           {/* Metric columns - dynamically rendered based on resource type */}
                           <For each={props.columns}>
                             {(column) => {
-                              const metric = column
-                                .toLowerCase()
-                                .replace(' %', '')
-                                .replace(' mb/s', '')
-                                .replace('disk r', 'diskRead')
-                                .replace('disk w', 'diskWrite')
-                                .replace('net in', 'networkIn')
-                                .replace('net out', 'networkOut');
+                              const metric = normalizeMetricKey(column);
 
                               // Check if this metric applies to this resource type
                               const showMetric = () => {
@@ -1312,6 +1316,9 @@ export function ResourceTable(props: ResourceTableProps) {
 
                               const openMetricEditor = (e: MouseEvent) => {
                                 e.stopPropagation();
+                                if (resource.editable === false) {
+                                  return;
+                                }
                                 setActiveMetricInput({ resourceId: resource.id, metric });
                                 props.onEdit(
                                   resource.id,
@@ -1438,7 +1445,20 @@ export function ResourceTable(props: ResourceTableProps) {
                         {/* Actions column */}
                         <td class="p-1 px-2">
                           <div class="flex items-center justify-center gap-1">
+                            <Show when={typeof resource.toggleEnabled === 'function'}>
+                              <StatusBadge
+                                size="sm"
+                                isEnabled={resource.isEnabled ?? true}
+                                onToggle={resource.toggleEnabled}
+                                titleEnabled={resource.toggleTitleEnabled}
+                                titleDisabled={resource.toggleTitleDisabled}
+                              />
+                            </Show>
                             <Show
+                              when={resource.editable !== false && typeof props.onEdit === 'function'}
+                              fallback={<span class="text-xs text-gray-400 dark:text-gray-600">—</span>}
+                            >
+                              <Show
                                 when={!isEditing()}
                                 fallback={
                                   <button
@@ -1466,43 +1486,18 @@ export function ResourceTable(props: ResourceTableProps) {
                                   </button>
                                 }
                               >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    props.onEdit(
-                                      resource.id,
-                                      resource.thresholds ? { ...resource.thresholds } : {},
-                                      resource.defaults ? { ...resource.defaults } : {},
-                                    )
-                                  }
-                                  class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                  title="Edit thresholds"
-                                >
-                                  <svg
-                                    class="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      stroke-width="2"
-                                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                    />
-                                  </svg>
-                                </button>
-                                <Show
-                                  when={
-                                    resource.hasOverride ||
-                                    (resource.type === 'node' && resource.disableConnectivity)
-                                  }
-                                >
+                                <div class="flex items-center gap-1">
                                   <button
                                     type="button"
-                                    onClick={() => props.onRemoveOverride(resource.id)}
-                                    class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                    title="Remove override"
+                                    onClick={() =>
+                                      props.onEdit(
+                                        resource.id,
+                                        resource.thresholds ? { ...resource.thresholds } : {},
+                                        resource.defaults ? { ...resource.defaults } : {},
+                                      )
+                                    }
+                                    class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                    title="Edit thresholds"
                                   >
                                     <svg
                                       class="w-4 h-4"
@@ -1514,14 +1509,42 @@ export function ResourceTable(props: ResourceTableProps) {
                                         stroke-linecap="round"
                                         stroke-linejoin="round"
                                         stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                                       />
                                     </svg>
                                   </button>
-                                </Show>
+                                  <Show
+                                    when={
+                                      resource.hasOverride ||
+                                      (resource.type === 'node' && resource.disableConnectivity)
+                                    }
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => props.onRemoveOverride(resource.id)}
+                                      class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                      title="Remove override"
+                                    >
+                                      <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          stroke-width="2"
+                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                        />
+                                      </svg>
+                                    </button>
+                                  </Show>
+                                </div>
                               </Show>
-                            </div>
-                          </td>
+                            </Show>
+                          </div>
+                        </td>
                         </tr>
                       );
                     }}
