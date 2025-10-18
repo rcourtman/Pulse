@@ -619,6 +619,32 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                 : value >= 70
                                   ? 'text-yellow-600 dark:text-yellow-400'
                                   : 'text-green-600 dark:text-green-400';
+
+                            const temp = node!.temperature;
+                            const hasMinMax = temp && temp.cpuMin && temp.cpuMin > 0 && temp.cpuMaxRecord && temp.cpuMaxRecord > 0;
+
+                            if (hasMinMax) {
+                              const min = Math.round(temp.cpuMin);
+                              const max = Math.round(temp.cpuMaxRecord);
+
+                              const getTooltipColor = (temp: number) => {
+                                if (temp >= 80) return 'text-red-400';
+                                if (temp >= 70) return 'text-yellow-400';
+                                return 'text-green-400';
+                              };
+
+                              return (
+                                <span class="relative inline-block group">
+                                  <span class={`text-xs font-medium ${severityClass} cursor-help`}>
+                                    {value}°C
+                                  </span>
+                                  <span class="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs whitespace-nowrap bg-gray-900 dark:bg-gray-700 text-white rounded shadow-lg z-50 pointer-events-none">
+                                    <span class="text-gray-300">Range:</span> <span class={getTooltipColor(min)}>{min}</span>-<span class={getTooltipColor(max)}>{max}</span>°C
+                                  </span>
+                                </span>
+                              );
+                            }
+
                             return <span class={`text-xs font-medium ${severityClass}`}>{value}°C</span>;
                           })()}
                         </Show>
