@@ -167,8 +167,8 @@ func (s *Service) performScan() {
 			Msg("Discovery scan incomplete but found some servers")
 	}
 
-	// Update cache even with partial results
-	if result != nil && len(result.Servers) > 0 {
+	// Always update cache with results (even if empty) to prevent stale data
+	if result != nil {
 		s.cache.mu.Lock()
 		s.cache.result = result
 		s.cache.updated = time.Now()

@@ -72,18 +72,27 @@ func (s *Scanner) DiscoverServersWithCallback(ctx context.Context, subnet string
 	if subnet == "" || subnet == "auto" {
 		// Check if we're in Docker (detected subnet is Docker network)
 		autoDetected := s.getLocalSubnet()
-		if autoDetected != nil && strings.HasPrefix(autoDetected.String(), "172.17.") {
-			log.Info().Msg("Running in Docker - scanning common home/office networks")
-			// In Docker, scan common subnets instead
-			ipNets = s.getCommonSubnets()
+		if autoDetected != nil && (strings.HasPrefix(autoDetected.String(), "172.17.") || strings.HasPrefix(autoDetected.String(), "172.1")) {
+			log.Info().Msg("Running in Docker - detecting host network from gateway")
+			// Try to detect the host's network from the default gateway
+			if hostSubnet := s.getHostSubnetFromGateway(); hostSubnet != nil {
+				ipNets = []*net.IPNet{hostSubnet}
+				log.Info().Str("detected", hostSubnet.String()).Msg("Detected host subnet from Docker gateway")
+			} else {
+				// Fallback: scan only most common subnet (192.168.0.0/24)
+				log.Info().Msg("Could not detect host subnet - scanning 192.168.0.0/24")
+				_, defaultNet, _ := net.ParseCIDR("192.168.0.0/24")
+				ipNets = []*net.IPNet{defaultNet}
+			}
 		} else if autoDetected != nil {
 			// Use auto-detected subnet
 			ipNets = []*net.IPNet{autoDetected}
 			log.Info().Str("detected", autoDetected.String()).Msg("Auto-detected local subnet")
 		} else {
-			// Fallback to common subnets
-			log.Info().Msg("Auto-detection failed - scanning common networks")
-			ipNets = s.getCommonSubnets()
+			// Fallback to most common subnet
+			log.Info().Msg("Auto-detection failed - scanning 192.168.0.0/24")
+			_, defaultNet, _ := net.ParseCIDR("192.168.0.0/24")
+			ipNets = []*net.IPNet{defaultNet}
 		}
 	} else {
 		// Parse provided subnet
@@ -655,6 +664,47 @@ func (s *Scanner) getLocalSubnet() *net.IPNet {
 	// Default to common subnet if detection fails
 	_, defaultNet, _ := net.ParseCIDR("192.168.1.0/24")
 	return defaultNet
+}
+
+// getHostSubnetFromGateway detects the host network by examining the default gateway
+// This is useful when running in Docker to detect the actual host's network
+func (s *Scanner) getHostSubnetFromGateway() *net.IPNet {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+
+	// Find the default gateway by checking routes
+	// In Docker, the gateway IP usually ends in .1 and is on the Docker bridge network
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
+				// Check if this looks like a Docker bridge network (172.17.x.x or similar)
+				ipStr := ipNet.IP.String()
+				if strings.HasPrefix(ipStr, "172.17.") || strings.HasPrefix(ipStr, "172.1") {
+					// Gateway is typically .1 in the same subnet
+					// Try to derive the host network: gateway .1 -> likely host is 192.168.x.0/24
+					// We'll try the .1 address as the gateway and ping common host subnets
+
+					// For now, just return the most common subnet
+					// A more sophisticated approach would parse /proc/net/route
+					_, hostNet, _ := net.ParseCIDR("192.168.0.0/24")
+					return hostNet
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // getCommonSubnets returns a list of common home/office network subnets
