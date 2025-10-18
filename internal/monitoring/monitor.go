@@ -2590,12 +2590,56 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			tempCancel()
 
 			if err == nil && temp != nil && temp.Available {
+				// Get the current CPU temperature (prefer package, fall back to max)
+				currentTemp := temp.CPUPackage
+				if currentTemp == 0 && temp.CPUMax > 0 {
+					currentTemp = temp.CPUMax
+				}
+
+				// Find previous temperature data for this node to preserve min/max
+				var prevTemp *models.Temperature
+				for _, prevNode := range prevInstanceNodes {
+					if prevNode.ID == modelNode.ID && prevNode.Temperature != nil {
+						prevTemp = prevNode.Temperature
+						break
+					}
+				}
+
+				// Initialize or update min/max tracking
+				if prevTemp != nil && prevTemp.CPUMin > 0 {
+					// Preserve existing min/max and update if necessary
+					temp.CPUMin = prevTemp.CPUMin
+					temp.CPUMaxRecord = prevTemp.CPUMaxRecord
+					temp.MinRecorded = prevTemp.MinRecorded
+					temp.MaxRecorded = prevTemp.MaxRecorded
+
+					// Update min if current is lower
+					if currentTemp > 0 && currentTemp < temp.CPUMin {
+						temp.CPUMin = currentTemp
+						temp.MinRecorded = time.Now()
+					}
+
+					// Update max if current is higher
+					if currentTemp > temp.CPUMaxRecord {
+						temp.CPUMaxRecord = currentTemp
+						temp.MaxRecorded = time.Now()
+					}
+				} else if currentTemp > 0 {
+					// First reading - initialize min/max to current value
+					temp.CPUMin = currentTemp
+					temp.CPUMaxRecord = currentTemp
+					temp.MinRecorded = time.Now()
+					temp.MaxRecorded = time.Now()
+				}
+
 				modelNode.Temperature = temp
 				log.Debug().
 					Str("node", node.Node).
 					Str("sshHost", sshHost).
 					Float64("cpuPackage", temp.CPUPackage).
 					Float64("cpuMax", temp.CPUMax).
+					Float64("cpuMin", temp.CPUMin).
+					Float64("cpuMaxRecord", temp.CPUMaxRecord).
 					Int("nvmeCount", len(temp.NVMe)).
 					Msg("Collected temperature data")
 			} else if err != nil {

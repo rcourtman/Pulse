@@ -512,6 +512,10 @@ export interface CPUInfo {
 export interface Temperature {
   cpuPackage?: number; // CPU package temperature (primary metric)
   cpuMax?: number; // Highest core temperature
+  cpuMin?: number; // Minimum recorded CPU temperature (since monitoring started)
+  cpuMaxRecord?: number; // Maximum recorded CPU temperature (since monitoring started)
+  minRecorded?: string; // When minimum temperature was recorded
+  maxRecorded?: string; // When maximum temperature was recorded
   cores?: CoreTemp[]; // Individual core temperatures
   nvme?: NVMeTemp[]; // NVMe drive temperatures
   available: boolean; // Whether any temperature data is available
