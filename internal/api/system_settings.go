@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -461,10 +463,18 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	defer r.Body.Close()
 
 	// Read SSH config content from request body
 	sshConfig, err := io.ReadAll(r.Body)
 	if err != nil {
+		// Check if body was too large
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			log.Warn().Msg("SSH config request body too large")
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		log.Error().Err(err).Msg("Failed to read SSH config from request")
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
@@ -478,19 +488,56 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Security: Reject dangerous SSH directives
-	dangerousDirectives := []string{
-		"ProxyCommand",
-		"LocalCommand",
-		"RemoteCommand",
-		"PermitLocalCommand",
+	// Security: Use allowlist-based validation (safer than blocklist)
+	// Only permit the specific directives Pulse needs for ProxyJump
+	allowedDirectives := map[string]bool{
+		"host":                    true,
+		"hostname":                true,
+		"proxyjump":               true,
+		"user":                    true,
+		"identityfile":            true,
+		"stricthostkeychecking":   true,
 	}
-	for _, directive := range dangerousDirectives {
-		if strings.Contains(configStr, directive) {
-			log.Warn().Str("directive", directive).Msg("Rejected SSH config with dangerous directive")
-			http.Error(w, "SSH config contains forbidden directive", http.StatusBadRequest)
+
+	// Parse and validate each line
+	scanner := bufio.NewScanner(strings.NewReader(configStr))
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+
+		// Strip comments
+		if idx := strings.Index(line, "#"); idx >= 0 {
+			line = line[:idx]
+		}
+
+		// Skip empty lines and whitespace
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Extract directive (first word)
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+
+		directive := strings.ToLower(fields[0])
+		if !allowedDirectives[directive] {
+			log.Warn().
+				Str("directive", fields[0]).
+				Int("line", lineNum).
+				Msg("Rejected SSH config with forbidden directive")
+			http.Error(w, fmt.Sprintf("SSH config contains forbidden directive: %s", fields[0]), http.StatusBadRequest)
 			return
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Error().Err(err).Msg("Failed to parse SSH config")
+		http.Error(w, "Invalid SSH config format", http.StatusBadRequest)
+		return
 	}
 
 	// Get the Pulse user's home directory
@@ -516,6 +563,8 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	}
 
 	log.Info().Str("path", configPath).Int("size", len(sshConfig)).Msg("SSH config written successfully")
+
+	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
 		log.Error().Err(err).Msg("Failed to encode success response")
 	}
