@@ -290,6 +290,22 @@ type SnapshotAlertConfig struct {
 	CriticalDays int  `json:"criticalDays"`
 }
 
+// BackupAlertConfig represents backup age alert configuration
+type BackupAlertConfig struct {
+	Enabled      bool `json:"enabled"`
+	WarningDays  int  `json:"warningDays"`
+	CriticalDays int  `json:"criticalDays"`
+}
+
+// GuestLookup describes a guest identity used for snapshot/backup evaluations.
+type GuestLookup struct {
+	Name     string
+	Instance string
+	Node     string
+	Type     string
+	VMID     int
+}
+
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
 	Enabled                        bool                       `json:"enabled"`
@@ -300,6 +316,7 @@ type AlertConfig struct {
 	DockerIgnoredContainerPrefixes []string                   `json:"dockerIgnoredContainerPrefixes,omitempty"`
 	PMGDefaults                    PMGThresholdConfig         `json:"pmgDefaults"`
 	SnapshotDefaults               SnapshotAlertConfig        `json:"snapshotDefaults"`
+	BackupDefaults                 BackupAlertConfig          `json:"backupDefaults"`
 	Overrides                      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
 	CustomRules                    []CustomAlertRule          `json:"customRules,omitempty"`
 	Schedule                       ScheduleConfig             `json:"schedule"`
@@ -485,6 +502,11 @@ func NewManager() *Manager {
 				Enabled:      false,
 				WarningDays:  30,
 				CriticalDays: 45,
+			},
+			BackupDefaults: BackupAlertConfig{
+				Enabled:      false,
+				WarningDays:  7,
+				CriticalDays: 14,
 			},
 			StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
 			MinimumDelta:      2.0, // 2% minimum change
@@ -702,6 +724,15 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
 		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
 	}
+	if config.BackupDefaults.WarningDays < 0 {
+		config.BackupDefaults.WarningDays = 0
+	}
+	if config.BackupDefaults.CriticalDays < 0 {
+		config.BackupDefaults.CriticalDays = 0
+	}
+	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
+		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
+	}
 
 	// Ensure minimums for other important fields
 	if config.MinimumDelta <= 0 {
@@ -763,6 +794,9 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 
 	if !m.config.SnapshotDefaults.Enabled {
 		m.clearSnapshotAlertsForInstanceLocked("")
+	}
+	if !m.config.BackupDefaults.Enabled {
+		m.clearBackupAlertsLocked()
 	}
 
 	m.applyGlobalOfflineSettingsLocked()
@@ -2756,7 +2790,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	}
 }
 
-func buildSnapshotGuestKey(instance, node string, vmid int) string {
+func BuildGuestKey(instance, node string, vmid int) string {
 	instance = strings.TrimSpace(instance)
 	node = strings.TrimSpace(node)
 	if instance == "" {
@@ -2817,7 +2851,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
 		validAlerts[alertID] = struct{}{}
 
-		guestKey := buildSnapshotGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
+		guestKey := BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
 		guestName := strings.TrimSpace(guestNames[guestKey])
 
 		guestType := "VM"
@@ -2956,6 +2990,356 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			continue
 		}
 		if instanceName != "" && alert.Instance != instanceName {
+			continue
+		}
+		if _, ok := validAlerts[alertID]; ok {
+			continue
+		}
+		m.clearAlertNoLock(alertID)
+	}
+	m.mu.Unlock()
+}
+
+// CheckBackups evaluates storage, PBS, and PMG backups for age-based alerts.
+func (m *Manager) CheckBackups(
+	storageBackups []models.StorageBackup,
+	pbsBackups []models.PBSBackup,
+	pmgBackups []models.PMGBackup,
+	guestsByKey map[string]GuestLookup,
+	guestsByVMID map[string]GuestLookup,
+) {
+	m.mu.RLock()
+	enabled := m.config.Enabled
+	backupCfg := m.config.BackupDefaults
+	m.mu.RUnlock()
+
+	if !enabled || !backupCfg.Enabled {
+		m.clearBackupAlerts()
+		return
+	}
+
+	if backupCfg.WarningDays <= 0 && backupCfg.CriticalDays <= 0 {
+		m.clearBackupAlerts()
+		return
+	}
+
+	type backupRecord struct {
+		key          string
+		lookup       GuestLookup
+		fallbackName string
+		instance     string
+		node         string
+		source       string
+		storage      string
+		datastore    string
+		backupType   string
+		filename     string
+		lastTime     time.Time
+	}
+
+	records := make(map[string]*backupRecord)
+
+	updateRecord := func(key string, candidate backupRecord) {
+		if key == "" {
+			return
+		}
+		if existing, ok := records[key]; ok {
+			if candidate.lastTime.After(existing.lastTime) {
+				*existing = candidate
+			}
+			return
+		}
+		record := candidate
+		records[key] = &record
+	}
+
+	now := time.Now()
+
+	for _, backup := range storageBackups {
+		if backup.Time.IsZero() {
+			continue
+		}
+
+		key := BuildGuestKey(backup.Instance, backup.Node, backup.VMID)
+		info := guestsByKey[key]
+		displayName := info.Name
+		if displayName == "" {
+			displayName = fmt.Sprintf("%s-%d", sanitizeAlertKey(backup.Node), backup.VMID)
+		}
+
+		updateRecord(key, backupRecord{
+			key:          key,
+			lookup:       info,
+			fallbackName: displayName,
+			instance:     backup.Instance,
+			node:         backup.Node,
+			source:       "PVE storage",
+			storage:      backup.Storage,
+			backupType:   backup.Type,
+			lastTime:     backup.Time,
+		})
+	}
+
+	for _, backup := range pbsBackups {
+		if backup.BackupTime.IsZero() {
+			continue
+		}
+		if backup.VMID == "0" {
+			// Host configuration backups - skip from age alerts
+			continue
+		}
+
+		info, exists := guestsByVMID[backup.VMID]
+		var key string
+		var displayName string
+		var instance string
+		var node string
+
+		if exists && info.Instance != "" && info.Node != "" {
+			key = BuildGuestKey(info.Instance, info.Node, info.VMID)
+			displayName = info.Name
+			instance = info.Instance
+			node = info.Node
+		} else {
+			key = fmt.Sprintf("pbs:%s:%s:%s", backup.Instance, backup.BackupType, backup.VMID)
+			displayName = fmt.Sprintf("VMID %s", backup.VMID)
+			instance = fmt.Sprintf("PBS:%s", backup.Instance)
+			node = backup.Datastore
+		}
+
+		updateRecord(key, backupRecord{
+			key:          key,
+			lookup:       info,
+			fallbackName: displayName,
+			instance:     instance,
+			node:         node,
+			source:       "PBS",
+			datastore:    backup.Datastore,
+			backupType:   backup.BackupType,
+			lastTime:     backup.BackupTime,
+		})
+	}
+
+	for _, backup := range pmgBackups {
+		if backup.BackupTime.IsZero() {
+			continue
+		}
+
+		instanceLabel := strings.TrimSpace(backup.Instance)
+		if instanceLabel == "" {
+			instanceLabel = "PMG"
+		}
+
+		nodeName := strings.TrimSpace(backup.Node)
+		keyComponent := nodeName
+		if keyComponent == "" {
+			keyComponent = strings.TrimSpace(backup.Filename)
+		}
+		if keyComponent == "" {
+			keyComponent = "unknown"
+		}
+
+		displayName := nodeName
+		if displayName == "" {
+			displayName = instanceLabel
+		}
+		if displayName == "" {
+			displayName = "PMG gateway"
+		} else {
+			displayName = fmt.Sprintf("PMG %s", displayName)
+		}
+
+		instanceField := fmt.Sprintf("PMG:%s", instanceLabel)
+		key := fmt.Sprintf("pmg:%s:%s", instanceLabel, keyComponent)
+
+		updateRecord(key, backupRecord{
+			key:          key,
+			fallbackName: displayName,
+			instance:     instanceField,
+			node:         nodeName,
+			source:       "PMG",
+			backupType:   "pmg",
+			filename:     backup.Filename,
+			lastTime:     backup.BackupTime,
+		})
+	}
+
+	if len(records) == 0 {
+		m.clearBackupAlerts()
+		return
+	}
+
+	validAlerts := make(map[string]struct{})
+
+	for key, record := range records {
+		age := now.Sub(record.lastTime)
+		if age < 0 {
+			continue
+		}
+
+		ageDays := age.Hours() / 24
+		if ageDays < 0 {
+			continue
+		}
+		ageDaysRounded := math.Round(ageDays*10) / 10
+
+		var level AlertLevel
+		var threshold int
+		switch {
+		case backupCfg.CriticalDays > 0 && ageDays >= float64(backupCfg.CriticalDays):
+			level = AlertLevelCritical
+			threshold = backupCfg.CriticalDays
+		case backupCfg.WarningDays > 0 && ageDays >= float64(backupCfg.WarningDays):
+			level = AlertLevelWarning
+			threshold = backupCfg.WarningDays
+		default:
+			continue
+		}
+
+		alertKey := sanitizeAlertKey(key)
+		alertID := fmt.Sprintf("backup-age-%s", alertKey)
+		validAlerts[alertID] = struct{}{}
+
+		displayName := record.lookup.Name
+		if displayName == "" {
+			displayName = record.fallbackName
+		}
+		if displayName == "" {
+			displayName = "Unknown guest"
+		}
+
+		node := record.node
+		if node == "" {
+			node = record.lookup.Node
+		}
+		instance := record.instance
+		if instance == "" {
+			instance = record.lookup.Instance
+		}
+
+		thresholdTime := record.lastTime.Add(time.Duration(threshold) * 24 * time.Hour)
+		if thresholdTime.After(now) {
+			thresholdTime = now
+		}
+
+		var sourceLabel string
+		switch record.source {
+		case "PBS":
+			sourceLabel = fmt.Sprintf("PBS datastore %s on %s", record.datastore, strings.TrimPrefix(instance, "PBS:"))
+		case "PMG":
+			if node != "" {
+				sourceLabel = fmt.Sprintf("PMG node %s", node)
+			} else {
+				sourceLabel = "PMG"
+			}
+		default:
+			sourceLabel = fmt.Sprintf("storage %s on %s", record.storage, node)
+		}
+
+		message := fmt.Sprintf(
+			"%s backup via %s is %.1f days old (threshold: %d days)",
+			displayName,
+			sourceLabel,
+			ageDaysRounded,
+			threshold,
+		)
+
+		metadata := map[string]interface{}{
+			"source":         record.source,
+			"lastBackupTime": record.lastTime,
+			"ageDays":        ageDays,
+			"thresholdDays":  threshold,
+		}
+		if record.storage != "" {
+			metadata["storage"] = record.storage
+		}
+		if record.datastore != "" {
+			metadata["datastore"] = record.datastore
+		}
+		if record.backupType != "" {
+			metadata["backupType"] = record.backupType
+		}
+		if record.filename != "" {
+			metadata["filename"] = record.filename
+		}
+
+		m.mu.Lock()
+		if existing, exists := m.activeAlerts[alertID]; exists {
+			existing.LastSeen = now
+			existing.Level = level
+			existing.Value = ageDays
+			existing.Threshold = float64(threshold)
+			existing.Message = message
+			if existing.Metadata == nil {
+				existing.Metadata = make(map[string]interface{})
+			}
+			for k, v := range metadata {
+				existing.Metadata[k] = v
+			}
+			m.mu.Unlock()
+			continue
+		}
+
+		alert := &Alert{
+			ID:           alertID,
+			Type:         "backup-age",
+			Level:        level,
+			ResourceID:   alertKey,
+			ResourceName: fmt.Sprintf("%s backup", displayName),
+			Node:         node,
+			Instance:     instance,
+			Message:      message,
+			Value:        ageDays,
+			Threshold:    float64(threshold),
+			StartTime:    thresholdTime,
+			LastSeen:     now,
+			Metadata:     metadata,
+		}
+
+		m.preserveAlertState(alertID, alert)
+
+		m.activeAlerts[alertID] = alert
+		m.recentAlerts[alertID] = alert
+		m.historyManager.AddAlert(*alert)
+
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (backup)")
+				}
+			}()
+			if err := m.SaveActiveAlerts(); err != nil {
+				log.Error().Err(err).Msg("Failed to save active alerts after backup alert creation")
+			}
+		}()
+
+		if !m.checkRateLimit(alertID) {
+			m.mu.Unlock()
+			log.Debug().
+				Str("alertID", alertID).
+				Str("resource", displayName).
+				Msg("Backup alert suppressed due to rate limit")
+			continue
+		}
+
+		if m.onAlert != nil {
+			notified := now
+			alert.LastNotified = &notified
+			if m.dispatchAlert(alert, true) {
+				log.Info().
+					Str("alertID", alertID).
+					Str("resource", displayName).
+					Msg("Backup age alert dispatched")
+			} else {
+				alert.LastNotified = nil
+			}
+		}
+		m.mu.Unlock()
+	}
+
+	m.mu.Lock()
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil || alert.Type != "backup-age" {
 			continue
 		}
 		if _, ok := validAlerts[alertID]; ok {
@@ -6458,6 +6842,21 @@ func (m *Manager) clearSnapshotAlertsForInstanceLocked(instance string) {
 			continue
 		}
 		if instance != "" && alert.Instance != instance {
+			continue
+		}
+		m.clearAlertNoLock(alertID)
+	}
+}
+
+func (m *Manager) clearBackupAlerts() {
+	m.mu.Lock()
+	m.clearBackupAlertsLocked()
+	m.mu.Unlock()
+}
+
+func (m *Manager) clearBackupAlertsLocked() {
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil || alert.Type != "backup-age" {
 			continue
 		}
 		m.clearAlertNoLock(alertID)

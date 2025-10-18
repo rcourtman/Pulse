@@ -140,6 +140,11 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 			WarningDays:  20,
 			CriticalDays: 10,
 		},
+		BackupDefaults: alerts.BackupAlertConfig{
+			Enabled:      true,
+			WarningDays:  12,
+			CriticalDays: 8,
+		},
 		NodeDefaults: alerts.ThresholdConfig{
 			Temperature: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
 		},
@@ -173,6 +178,15 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 	}
 	if loaded.NodeDefaults.Temperature.Trigger != 80 || loaded.NodeDefaults.Temperature.Clear != 75 {
 		t.Fatalf("expected temperature defaults 80/75, got %+v", loaded.NodeDefaults.Temperature)
+	}
+	if !loaded.BackupDefaults.Enabled {
+		t.Fatalf("expected backup defaults to remain enabled")
+	}
+	if loaded.BackupDefaults.WarningDays != 8 {
+		t.Fatalf("expected backup warning normalized to 8, got %d", loaded.BackupDefaults.WarningDays)
+	}
+	if loaded.BackupDefaults.CriticalDays != 8 {
+		t.Fatalf("expected backup critical normalized to 8, got %d", loaded.BackupDefaults.CriticalDays)
 	}
 	expectedPrefixes := []string{"Runner"}
 	if !reflect.DeepEqual(loaded.DockerIgnoredContainerPrefixes, expectedPrefixes) {

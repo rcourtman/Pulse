@@ -25,6 +25,9 @@ interface DateGroup {
 
 const UnifiedBackups: Component = () => {
   const { state } = useWebSocket();
+  const pveBackupsState = createMemo(() => state.backups?.pve ?? state.pveBackups);
+  const pbsBackupsState = createMemo(() => state.backups?.pbs ?? state.pbsBackups);
+  const pmgBackupsState = createMemo(() => state.backups?.pmg ?? state.pmgBackups);
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [typeFilter, setTypeFilter] = createSignal<'all' | FilterableGuestType>('all');
@@ -159,10 +162,14 @@ const UnifiedBackups: Component = () => {
 
   // Check if we have any backup data yet
   const isLoading = createMemo(() => {
+    const pve = pveBackupsState();
+    const pbs = pbsBackupsState();
+    const pmg = pmgBackupsState();
     return (
-      !state.pveBackups?.guestSnapshots &&
-      !state.pveBackups?.storageBackups &&
-      !state.pbsBackups?.length &&
+      !(pve?.guestSnapshots?.length ?? 0) &&
+      !(pve?.storageBackups?.length ?? 0) &&
+      !(pbs?.length ?? 0) &&
+      !(pmg?.length ?? 0) &&
       !state.pbs?.length
     );
   });
@@ -176,7 +183,7 @@ const UnifiedBackups: Component = () => {
     const debugMode = typeof window !== 'undefined' && localStorage.getItem('debug-pmg') === 'true';
 
     // Normalize snapshots
-    state.pveBackups?.guestSnapshots?.forEach((snapshot) => {
+    pveBackupsState()?.guestSnapshots?.forEach((snapshot) => {
       // Try to find the guest name by matching VMID and instance (not hostname)
       let guestName = '';
       const vm = state.vms?.find((v) => v.vmid === snapshot.vmid && v.instance === snapshot.instance);
@@ -213,8 +220,8 @@ const UnifiedBackups: Component = () => {
     // This ensures we have the complete PBS data with namespaces
     // Filter by selected PBS instance if one is selected
     const pbsBackupsToProcess = selectedPBSInstance()
-      ? state.pbsBackups?.filter((b) => b.instance === selectedPBSInstance())
-      : state.pbsBackups;
+      ? pbsBackupsState()?.filter((b) => b.instance === selectedPBSInstance())
+      : pbsBackupsState();
 
     pbsBackupsToProcess?.forEach((backup) => {
       const backupDate = new Date(backup.backupTime);
@@ -302,8 +309,38 @@ const UnifiedBackups: Component = () => {
       });
     });
 
+    pmgBackupsState()?.forEach((backup) => {
+      const backupTimeMs = backup.backupTime ? Date.parse(backup.backupTime) : Number.NaN;
+      const backupTimeSeconds = Number.isFinite(backupTimeMs) ? Math.floor(backupTimeMs / 1000) : 0;
+      const backupKey = backup.id || `${backup.instance}:${backup.node}:${backup.filename}`;
+      if (seenBackups.has(backupKey)) {
+        return;
+      }
+      seenBackups.add(backupKey);
+
+      const displayName = backup.node || backup.filename || 'PMG Host Backup';
+      unified.push({
+        backupType: 'local',
+        vmid: backup.node || backup.filename,
+        name: displayName,
+        type: 'Host',
+        node: backup.node || 'PMG',
+        instance: backup.instance || 'PMG',
+        backupTime: backupTimeSeconds,
+        backupName: backup.filename || displayName,
+        description: backup.filename || '',
+        status: 'ok',
+        size: backup.size || null,
+        storage: 'PMG',
+        datastore: null,
+        namespace: null,
+        verified: null,
+        protected: false,
+      });
+    });
+
     // Normalize local backups (including PBS through PVE storage)
-    state.pveBackups?.storageBackups?.forEach((backup) => {
+    pveBackupsState()?.storageBackups?.forEach((backup) => {
       // Skip templates and ISOs - they're not backups
       if (backup.type === 'vztmpl' || backup.type === 'iso') {
         return;
@@ -1199,7 +1236,7 @@ const UnifiedBackups: Component = () => {
 
                     // Count backups for this PBS instance
                     const pbsBackups = () =>
-                      state.pbsBackups?.filter((b) => b.instance === pbs.name).length || 0;
+                      pbsBackupsState()?.filter((b) => b.instance === pbs.name).length || 0;
 
                     const isSelected = () => selectedPBSInstance() === pbs.name;
 

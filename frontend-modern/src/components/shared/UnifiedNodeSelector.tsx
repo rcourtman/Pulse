@@ -44,6 +44,8 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   // This allows users to select a node AND search within it
 
   // Calculate backup counts for nodes and PBS instances
+  const pveBackupsState = () => state.backups?.pve ?? state.pveBackups;
+  const pbsBackupsState = () => state.backups?.pbs ?? state.pbsBackups;
   const backupCounts = createMemo(() => {
     const counts: Record<string, number> = {};
 
@@ -54,15 +56,16 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         let count = 0;
 
         // Count storage backups (excluding PBS backups which are counted separately)
-        if (state.pveBackups?.storageBackups) {
-          count += state.pveBackups.storageBackups.filter(
+        const pveBackups = pveBackupsState();
+        if (pveBackups?.storageBackups) {
+          count += pveBackups.storageBackups.filter(
             (b) => b.instance === node.instance && b.node === node.name && !b.isPBS,
           ).length;
         }
 
         // Count snapshots
-        if (state.pveBackups?.guestSnapshots) {
-          count += state.pveBackups.guestSnapshots.filter((s) => s.instance === node.instance && s.node === node.name).length;
+        if (pveBackups?.guestSnapshots) {
+          count += pveBackups.guestSnapshots.filter((s) => s.instance === node.instance && s.node === node.name).length;
         }
 
         counts[node.id] = count;
@@ -70,9 +73,10 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     }
 
     // Count PBS backups by instance
-    if (state.pbs && state.pbsBackups) {
+    const pbsBackups = pbsBackupsState();
+    if (state.pbs && pbsBackups) {
       state.pbs.forEach((pbs) => {
-        counts[pbs.name] = state.pbsBackups?.filter((b) => b.instance === pbs.name).length || 0;
+        counts[pbs.name] = pbsBackups.filter((b) => b.instance === pbs.name).length || 0;
       });
     }
 

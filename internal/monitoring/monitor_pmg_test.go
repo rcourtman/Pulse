@@ -66,6 +66,11 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"data":{"active":5,"deferred":2,"hold":0,"maildrop":0}}`)
 
+		case "/api2/json/nodes/mail-gateway/backup":
+			w.Header().Set("Content-Type", "application/json")
+			timestamp := time.Now().Add(-8 * 24 * time.Hour).Unix()
+			fmt.Fprintf(w, `{"data":[{"filename":"pmg-backup_2024-01-01.tgz","size":123456,"timestamp":%d}]}`, timestamp)
+
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -143,6 +148,15 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 
 	if failures := mon.authFailures["pmg-primary"]; failures != 0 {
 		t.Fatalf("expected no auth failures tracked, got %d", failures)
+	}
+
+	if len(snapshot.PMGBackups) != 1 {
+		t.Fatalf("expected 1 PMG backup in state, got %d", len(snapshot.PMGBackups))
+	}
+
+	pmgBackup := snapshot.PMGBackups[0]
+	if pmgBackup.Node != "mail-gateway" {
+		t.Fatalf("expected PMG backup node mail-gateway, got %s", pmgBackup.Node)
 	}
 }
 

@@ -14,6 +14,8 @@ type StateSnapshot struct {
 	PBSInstances     []PBSInstance   `json:"pbs"`
 	PMGInstances     []PMGInstance   `json:"pmg"`
 	PBSBackups       []PBSBackup     `json:"pbsBackups"`
+	PMGBackups       []PMGBackup     `json:"pmgBackups"`
+	Backups          Backups         `json:"backups"`
 	Metrics          []Metric        `json:"metrics"`
 	PVEBackups       PVEBackups      `json:"pveBackups"`
 	Performance      Performance     `json:"performance"`
@@ -29,6 +31,14 @@ func (s *State) GetSnapshot() StateSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	pbsBackups := append([]PBSBackup{}, s.PBSBackups...)
+	pmgBackups := append([]PMGBackup{}, s.PMGBackups...)
+	pveBackups := PVEBackups{
+		BackupTasks:    append([]BackupTask{}, s.PVEBackups.BackupTasks...),
+		StorageBackups: append([]StorageBackup{}, s.PVEBackups.StorageBackups...),
+		GuestSnapshots: append([]GuestSnapshot{}, s.PVEBackups.GuestSnapshots...),
+	}
+
 	// Create a snapshot without mutex
 	snapshot := StateSnapshot{
 		Nodes:         append([]Node{}, s.Nodes...),
@@ -40,13 +50,15 @@ func (s *State) GetSnapshot() StateSnapshot {
 		PhysicalDisks: append([]PhysicalDisk{}, s.PhysicalDisks...),
 		PBSInstances:  append([]PBSInstance{}, s.PBSInstances...),
 		PMGInstances:  append([]PMGInstance{}, s.PMGInstances...),
-		PBSBackups:    append([]PBSBackup{}, s.PBSBackups...),
-		Metrics:       append([]Metric{}, s.Metrics...),
-		PVEBackups: PVEBackups{
-			BackupTasks:    append([]BackupTask{}, s.PVEBackups.BackupTasks...),
-			StorageBackups: append([]StorageBackup{}, s.PVEBackups.StorageBackups...),
-			GuestSnapshots: append([]GuestSnapshot{}, s.PVEBackups.GuestSnapshots...),
+		PBSBackups:    pbsBackups,
+		PMGBackups:    pmgBackups,
+		Backups: Backups{
+			PVE: pveBackups,
+			PBS: pbsBackups,
+			PMG: pmgBackups,
 		},
+		Metrics:          append([]Metric{}, s.Metrics...),
+		PVEBackups:       pveBackups,
 		Performance:      s.Performance,
 		ConnectionHealth: make(map[string]bool),
 		Stats:            s.Stats,
@@ -110,6 +122,9 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		PhysicalDisks:    s.PhysicalDisks,
 		PBS:              s.PBSInstances,
 		PMG:              s.PMGInstances,
+		PBSBackups:       s.PBSBackups,
+		PMGBackups:       s.PMGBackups,
+		Backups:          s.Backups,
 		ActiveAlerts:     s.ActiveAlerts,
 		Metrics:          make(map[string]any),
 		PVEBackups:       s.PVEBackups,

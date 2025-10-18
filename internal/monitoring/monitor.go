@@ -1707,7 +1707,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("vms", len(state.VMs)).
 				Int("containers", len(state.Containers)).
 				Int("pbs", len(state.PBSInstances)).
-				Int("pbsBackups", len(state.PBSBackups)).
+				Int("pbsBackups", len(state.Backups.PBS)).
 				Int("physicalDisks", len(state.PhysicalDisks)).
 				Msg("Broadcasting state update (ticker)")
 			// Convert to frontend format before broadcasting (converts time.Time to int64, etc.)
@@ -5167,7 +5167,11 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	cluster, err := client.GetClusterStatus(ctx, true)
 	if err != nil {
 		log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to retrieve PMG cluster status")
-	} else if len(cluster) > 0 {
+	}
+
+	backupNodes := make(map[string]struct{})
+
+	if len(cluster) > 0 {
 		nodes := make([]models.PMGNodeStatus, 0, len(cluster))
 		for _, entry := range cluster {
 			status := strings.ToLower(strings.TrimSpace(entry.Type))
@@ -5179,6 +5183,8 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 				Status: status,
 				Role:   entry.Type,
 			}
+
+			backupNodes[entry.Name] = struct{}{}
 
 			// Fetch queue status for this node
 			if queueData, qErr := client.GetQueueStatus(ctx, entry.Name); qErr != nil {
@@ -5203,6 +5209,53 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}
 		pmgInst.Nodes = nodes
 	}
+
+	if len(backupNodes) == 0 {
+		trimmed := strings.TrimSpace(instanceName)
+		if trimmed != "" {
+			backupNodes[trimmed] = struct{}{}
+		}
+	}
+
+	pmgBackups := make([]models.PMGBackup, 0)
+	seenBackupIDs := make(map[string]struct{})
+
+	for nodeName := range backupNodes {
+		if ctx.Err() != nil {
+			break
+		}
+
+		backups, backupErr := client.ListBackups(ctx, nodeName)
+		if backupErr != nil {
+			log.Debug().Err(backupErr).
+				Str("instance", instanceName).
+				Str("node", nodeName).
+				Msg("Failed to list PMG configuration backups")
+			continue
+		}
+
+		for _, b := range backups {
+			backupTime := time.Unix(b.Timestamp, 0)
+			id := fmt.Sprintf("pmg-%s-%s-%d", instanceName, nodeName, b.Timestamp)
+			if _, exists := seenBackupIDs[id]; exists {
+				continue
+			}
+			seenBackupIDs[id] = struct{}{}
+			pmgBackups = append(pmgBackups, models.PMGBackup{
+				ID:         id,
+				Instance:   instanceName,
+				Node:       nodeName,
+				Filename:   b.Filename,
+				BackupTime: backupTime,
+				Size:       b.Size,
+			})
+		}
+	}
+
+	log.Debug().
+		Str("instance", instanceName).
+		Int("backupCount", len(pmgBackups)).
+		Msg("PMG backups polled")
 
 	if stats, err := client.GetMailStatistics(ctx, "day"); err != nil {
 		log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail statistics")
@@ -5279,6 +5332,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 	pmgInst.Quarantine = &quarantine
 
+	m.state.UpdatePMGBackups(instanceName, pmgBackups)
 	m.state.UpdatePMGInstance(pmgInst)
 	log.Info().
 		Str("instance", instanceName).
@@ -5620,6 +5674,24 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Update state with storage backups for this instance
 	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
 
+	if m.alertManager != nil {
+		snapshot := m.state.GetSnapshot()
+		guestsByKey, guestsByVMID := buildGuestLookups(snapshot)
+		pveStorage := snapshot.Backups.PVE.StorageBackups
+		if len(pveStorage) == 0 && len(snapshot.PVEBackups.StorageBackups) > 0 {
+			pveStorage = snapshot.PVEBackups.StorageBackups
+		}
+		pbsBackups := snapshot.Backups.PBS
+		if len(pbsBackups) == 0 && len(snapshot.PBSBackups) > 0 {
+			pbsBackups = snapshot.PBSBackups
+		}
+		pmgBackups := snapshot.Backups.PMG
+		if len(pmgBackups) == 0 && len(snapshot.PMGBackups) > 0 {
+			pmgBackups = snapshot.PMGBackups
+		}
+		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
+	}
+
 	log.Debug().
 		Str("instance", instanceName).
 		Int("count", len(allBackups)).
@@ -5634,6 +5706,49 @@ func shouldPreserveBackups(nodeCount int, hadSuccessfulNode bool, storagesWithBa
 		return true
 	}
 	return false
+}
+
+func buildGuestLookups(snapshot models.StateSnapshot) (map[string]alerts.GuestLookup, map[string]alerts.GuestLookup) {
+	byKey := make(map[string]alerts.GuestLookup)
+	byVMID := make(map[string]alerts.GuestLookup)
+
+	for _, vm := range snapshot.VMs {
+		info := alerts.GuestLookup{
+			Name:     vm.Name,
+			Instance: vm.Instance,
+			Node:     vm.Node,
+			Type:     vm.Type,
+			VMID:     vm.VMID,
+		}
+		key := alerts.BuildGuestKey(vm.Instance, vm.Node, vm.VMID)
+		byKey[key] = info
+
+		vmidKey := fmt.Sprintf("%d", vm.VMID)
+		if _, exists := byVMID[vmidKey]; !exists {
+			byVMID[vmidKey] = info
+		}
+	}
+
+	for _, ct := range snapshot.Containers {
+		info := alerts.GuestLookup{
+			Name:     ct.Name,
+			Instance: ct.Instance,
+			Node:     ct.Node,
+			Type:     ct.Type,
+			VMID:     int(ct.VMID),
+		}
+		key := alerts.BuildGuestKey(ct.Instance, ct.Node, int(ct.VMID))
+		if _, exists := byKey[key]; !exists {
+			byKey[key] = info
+		}
+
+		vmidKey := fmt.Sprintf("%d", ct.VMID)
+		if _, exists := byVMID[vmidKey]; !exists {
+			byVMID[vmidKey] = info
+		}
+	}
+
+	return byKey, byVMID
 }
 
 func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Duration {
@@ -6042,6 +6157,7 @@ func (m *Monitor) removeFailedPMGInstance(instanceName string) {
 	}
 
 	m.state.UpdatePMGInstances(updated)
+	m.state.UpdatePMGBackups(instanceName, nil)
 	m.state.SetConnectionHealth("pmg-"+instanceName, false)
 }
 
@@ -6149,6 +6265,24 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Update state
 	m.state.UpdatePBSBackups(instanceName, allBackups)
+
+	if m.alertManager != nil {
+		snapshot := m.state.GetSnapshot()
+		guestsByKey, guestsByVMID := buildGuestLookups(snapshot)
+		pveStorage := snapshot.Backups.PVE.StorageBackups
+		if len(pveStorage) == 0 && len(snapshot.PVEBackups.StorageBackups) > 0 {
+			pveStorage = snapshot.PVEBackups.StorageBackups
+		}
+		pbsBackups := snapshot.Backups.PBS
+		if len(pbsBackups) == 0 && len(snapshot.PBSBackups) > 0 {
+			pbsBackups = snapshot.PBSBackups
+		}
+		pmgBackups := snapshot.Backups.PMG
+		if len(pmgBackups) == 0 && len(snapshot.PMGBackups) > 0 {
+			pmgBackups = snapshot.PMGBackups
+		}
+		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
+	}
 }
 
 // checkMockAlerts checks alerts for mock data
@@ -6187,6 +6321,21 @@ func (m *Monitor) checkMockAlerts() {
 		Int("trackedNodes", len(existingNodes)).
 		Msg("Collecting resources for alert cleanup in mock mode")
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
+
+	guestsByKey, guestsByVMID := buildGuestLookups(state)
+	pveStorage := state.Backups.PVE.StorageBackups
+	if len(pveStorage) == 0 && len(state.PVEBackups.StorageBackups) > 0 {
+		pveStorage = state.PVEBackups.StorageBackups
+	}
+	pbsBackups := state.Backups.PBS
+	if len(pbsBackups) == 0 && len(state.PBSBackups) > 0 {
+		pbsBackups = state.PBSBackups
+	}
+	pmgBackups := state.Backups.PMG
+	if len(pmgBackups) == 0 && len(state.PMGBackups) > 0 {
+		pmgBackups = state.PMGBackups
+	}
+	m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
 
 	// Limit how many guests we check per cycle to prevent blocking with large datasets
 	const maxGuestsPerCycle = 50

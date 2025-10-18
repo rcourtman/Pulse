@@ -91,6 +91,12 @@ export interface SnapshotAlertConfig {
   criticalDays: number;
 }
 
+export interface BackupAlertConfig {
+  enabled: boolean;
+  warningDays: number;
+  criticalDays: number;
+}
+
 export interface AlertConfig {
   enabled: boolean;
   guestDefaults: AlertThresholds;
@@ -100,6 +106,7 @@ export interface AlertConfig {
   dockerIgnoredContainerPrefixes?: string[];
   pmgDefaults?: PMGThresholdDefaults;
   snapshotDefaults?: SnapshotAlertConfig;
+  backupDefaults?: BackupAlertConfig;
   customRules?: CustomAlertRule[];
   overrides: Record<string, RawOverrideConfig>; // key: resource ID
   minimumDelta?: number;

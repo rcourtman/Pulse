@@ -119,6 +119,13 @@ type QueueStatusEntry struct {
 	OldestAge int64 `json:"oldest_age,omitempty"` // Age of oldest message in seconds
 }
 
+// BackupEntry represents a PMG configuration backup stored on a node.
+type BackupEntry struct {
+	Filename  string `json:"filename"`
+	Size      int64  `json:"size"`
+	Timestamp int64  `json:"timestamp"`
+}
+
 func NewClient(cfg ClientConfig) (*Client, error) {
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 60 * time.Second
@@ -458,4 +465,14 @@ func (c *Client) GetQueueStatus(ctx context.Context, node string) (*QueueStatusE
 		return nil, err
 	}
 	return &resp.Data, nil
+}
+
+// ListBackups returns configuration backup archives available on a PMG node.
+func (c *Client) ListBackups(ctx context.Context, node string) ([]BackupEntry, error) {
+	path := fmt.Sprintf("/nodes/%s/backup", url.PathEscape(node))
+	var resp apiResponse[[]BackupEntry]
+	if err := c.getJSON(ctx, path, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
 }

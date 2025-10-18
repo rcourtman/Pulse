@@ -329,6 +329,12 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		StorageBackups: generateBackups(data.VMs, data.Containers),
 		GuestSnapshots: generateSnapshots(data.VMs, data.Containers),
 	}
+	data.PMGBackups = extractPMGBackups(data.PVEBackups.StorageBackups)
+	data.Backups = models.Backups{
+		PVE: data.PVEBackups,
+		PBS: append([]models.PBSBackup(nil), data.PBSBackups...),
+		PMG: append([]models.PMGBackup(nil), data.PMGBackups...),
+	}
 
 	// Calculate stats
 	data.Stats.StartTime = time.Now()
@@ -2098,6 +2104,47 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 	})
 
 	return backups
+}
+
+func extractPMGBackups(storageBackups []models.StorageBackup) []models.PMGBackup {
+	pmgBackups := make([]models.PMGBackup, 0)
+	for _, backup := range storageBackups {
+		if !strings.EqualFold(backup.Type, "host") {
+			continue
+		}
+		format := strings.ToLower(backup.Format)
+		notes := strings.ToLower(backup.Notes)
+		if !strings.Contains(format, "pmg") && !strings.Contains(notes, "pmg") {
+			continue
+		}
+
+		filename := backup.Volid
+		if filename == "" {
+			filename = backup.Notes
+		}
+		instance := backup.Instance
+		if instance == "" && backup.Node != "" {
+			instance = fmt.Sprintf("PMG:%s", backup.Node)
+		}
+		if instance == "" {
+			instance = "PMG:mock"
+		}
+
+		pmgBackups = append(pmgBackups, models.PMGBackup{
+			ID:         backup.ID,
+			Instance:   instance,
+			Node:       backup.Node,
+			Filename:   filename,
+			BackupTime: backup.Time,
+			Size:       backup.Size,
+		})
+	}
+
+	sort.Slice(pmgBackups, func(i, j int) bool {
+		return pmgBackups[i].BackupTime.After(pmgBackups[j].BackupTime)
+	})
+
+	return pmgBackups
 }
 
 // generatePBSInstances generates mock PBS instances

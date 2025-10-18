@@ -36,6 +36,16 @@ export function createWebSocketStore(url: string) {
       guestSnapshots: [],
     } as PVEBackups,
     pbsBackups: [],
+    pmgBackups: [],
+    backups: {
+      pve: {
+        backupTasks: [],
+        storageBackups: [],
+        guestSnapshots: [],
+      },
+      pbs: [],
+      pmg: [],
+    },
     performance: {
       apiCallDuration: {},
       lastPollDuration: 0,
@@ -282,8 +292,19 @@ export function createWebSocketStore(url: string) {
               setState('cephClusters', message.data.cephClusters);
             if (message.data.pbs !== undefined) setState('pbs', message.data.pbs);
             if (message.data.pmg !== undefined) setState('pmg', message.data.pmg);
+            if (message.data.backups !== undefined) {
+              setState('backups', message.data.backups);
+              if (message.data.backups.pve !== undefined)
+                setState('pveBackups', message.data.backups.pve);
+              if (message.data.backups.pbs !== undefined)
+                setState('pbsBackups', message.data.backups.pbs);
+              if (message.data.backups.pmg !== undefined)
+                setState('pmgBackups', message.data.backups.pmg);
+            }
             if (message.data.pbsBackups !== undefined)
               setState('pbsBackups', message.data.pbsBackups);
+            if (message.data.pmgBackups !== undefined)
+              setState('pmgBackups', message.data.pmgBackups);
             if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
             if (message.data.pveBackups !== undefined)
               setState('pveBackups', message.data.pveBackups);

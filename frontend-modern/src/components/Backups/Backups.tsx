@@ -13,7 +13,15 @@ const Backups: Component = () => {
       <ProxmoxSectionNav current="backups" />
 
       {/* Loading State */}
-      <Show when={connected() && !state.pveBackups && !state.pbs}>
+      <Show
+        when={
+          connected() &&
+          !(state.backups?.pve?.guestSnapshots?.length ||
+            state.backups?.pve?.storageBackups?.length ||
+            state.backups?.pbs?.length ||
+            state.backups?.pmg?.length)
+        }
+      >
         <Card padding="lg">
           <EmptyState
             icon={
@@ -72,7 +80,7 @@ const Backups: Component = () => {
       </Show>
 
       {/* Main Content - Unified Backups View */}
-      <Show when={connected() && (state.pveBackups || state.pbs)}>
+      <Show when={connected() && (state.backups?.pve || state.backups?.pbs || state.pbs)}>
         <UnifiedBackups />
       </Show>
     </div>
