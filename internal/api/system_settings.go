@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -458,12 +459,38 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Limit request body to 32KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+
 	// Read SSH config content from request body
 	sshConfig, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to read SSH config from request")
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
+	}
+
+	// Basic validation: ensure it looks like SSH config
+	configStr := string(sshConfig)
+	if len(configStr) == 0 {
+		log.Error().Msg("Empty SSH config received")
+		http.Error(w, "Empty SSH config", http.StatusBadRequest)
+		return
+	}
+
+	// Security: Reject dangerous SSH directives
+	dangerousDirectives := []string{
+		"ProxyCommand",
+		"LocalCommand",
+		"RemoteCommand",
+		"PermitLocalCommand",
+	}
+	for _, directive := range dangerousDirectives {
+		if strings.Contains(configStr, directive) {
+			log.Warn().Str("directive", directive).Msg("Rejected SSH config with dangerous directive")
+			http.Error(w, "SSH config contains forbidden directive", http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Get the Pulse user's home directory
@@ -488,7 +515,8 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	log.Info().Str("path", configPath).Msg("SSH config written successfully")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	log.Info().Str("path", configPath).Int("size", len(sshConfig)).Msg("SSH config written successfully")
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		log.Error().Err(err).Msg("Failed to encode success response")
+	}
 }
