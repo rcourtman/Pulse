@@ -3618,6 +3618,9 @@ if command -v pct >/dev/null 2>&1; then
     fi
 fi
 
+# Track whether temperature monitoring can work
+TEMP_MONITORING_AVAILABLE=true
+
 # If Pulse is containerized, try to install proxy automatically
 if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
     # Try automatic installation - proxy keeps SSH credentials on the host for security
@@ -3716,8 +3719,20 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
             fi
 
             rm -f "$PROXY_INSTALLER"
+        else
+            # Proxy installer not available - configure automatic ProxyJump instead
+            echo ""
+            echo "ℹ️  Proxy not available - configuring automatic SSH ProxyJump"
+            echo ""
+
+            # Get the current Proxmox host's IP/hostname
+            PROXY_JUMP_HOST=$(hostname)
+            PROXY_JUMP_IP=$(hostname -I | awk '{print $1}')
+
+            # We'll configure Pulse's SSH config to use this host as a jump point
+            # This will be done when temperature monitoring is enabled
+            CONFIGURE_PROXYJUMP=true
         fi
-        # Silently skip if installer unavailable - not an error for test/development setups
     fi
 fi
 
@@ -3797,7 +3812,7 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
             echo "Temperature monitoring configuration unchanged."
         fi
     fi
-else
+elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
     echo "📊 Enable Temperature Monitoring?"
     echo ""
     echo "Collect CPU and drive temperatures via secure SSH connection."
@@ -3909,6 +3924,37 @@ else
             fi
             echo "  Temperature data will appear in the dashboard within 10 seconds"
             TEMPERATURE_ENABLED=true
+
+            # Configure automatic ProxyJump if needed (for containerized Pulse)
+            if [ "$CONFIGURE_PROXYJUMP" = true ] && [ -n "$PROXY_JUMP_HOST" ]; then
+                echo ""
+                echo "Configuring automatic SSH ProxyJump for containerized Pulse..."
+
+                # Create SSH config that uses this Proxmox host as jump point
+                SSH_CONFIG="Host ${PROXY_JUMP_HOST}
+    HostName ${PROXY_JUMP_IP}
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+
+Host *
+    ProxyJump ${PROXY_JUMP_HOST}
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+    StrictHostKeyChecking accept-new"
+
+                # Write SSH config to Pulse container
+                # This will be written to /home/pulse/.ssh/config inside the container
+                echo "$SSH_CONFIG" | curl -s -X POST "%s/api/system/ssh-config" \
+                    -H "Content-Type: text/plain" \
+                    -H "Authorization: Bearer %s" \
+                    --data-binary @- > /dev/null 2>&1
+
+                if [ $? -eq 0 ]; then
+                    echo "  ✓ ProxyJump configured - temperature monitoring will work automatically"
+                else
+                    echo "  ⚠️  Could not configure ProxyJump automatically"
+                fi
+            fi
         else
             echo ""
             echo "⚠️  SSH key not available from Pulse server"

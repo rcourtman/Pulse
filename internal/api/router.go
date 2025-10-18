@@ -849,6 +849,7 @@ func (r *Router) setupRoutes() {
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings)
 	r.mux.HandleFunc("/api/system/settings", r.systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", r.systemSettingsHandler.HandleUpdateSystemSettings)
+	r.mux.HandleFunc("/api/system/ssh-config", RequireAuth(r.config, r.systemSettingsHandler.HandleSSHConfig))
 	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
 	r.mux.HandleFunc("/api/system/proxy-public-key", r.handleProxyPublicKey)
 	// Old API token endpoints removed - now using /api/security/regenerate-token

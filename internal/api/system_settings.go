@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -446,4 +449,46 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
 		log.Error().Err(err).Msg("Failed to write system settings update response")
 	}
+}
+
+// HandleSSHConfig writes SSH configuration for Pulse user
+func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Read SSH config content from request body
+	sshConfig, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read SSH config from request")
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	// Get the Pulse user's home directory
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		homeDir = "/home/pulse" // fallback
+	}
+
+	// Create .ssh directory if it doesn't exist
+	sshDir := filepath.Join(homeDir, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		log.Error().Err(err).Str("dir", sshDir).Msg("Failed to create .ssh directory")
+		http.Error(w, "Failed to create SSH directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Write SSH config file
+	configPath := filepath.Join(sshDir, "config")
+	if err := os.WriteFile(configPath, sshConfig, 0600); err != nil {
+		log.Error().Err(err).Str("path", configPath).Msg("Failed to write SSH config")
+		http.Error(w, "Failed to write SSH config", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().Str("path", configPath).Msg("SSH config written successfully")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
