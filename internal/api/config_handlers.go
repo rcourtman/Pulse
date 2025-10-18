@@ -2542,38 +2542,15 @@ func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *ht
 		if len(successNodes) > 0 {
 			response.WriteString("\n")
 		}
-		response.WriteString("⚠️  SSH connectivity FAILED for:\n")
+		response.WriteString("ℹ️  Temperature monitoring will be available once SSH connectivity is configured.\n")
+		response.WriteString("\n")
+		response.WriteString("Nodes pending configuration:\n")
 		for _, node := range failedNodes {
 			response.WriteString(fmt.Sprintf("  • %s\n", node))
 		}
-
-		// Check if Pulse is containerized
-		isContainerized := os.Getenv("PULSE_DOCKER") == "true" || isRunningInContainer()
-
-		if isContainerized {
-			response.WriteString("\n")
-			response.WriteString("Pulse is running in a container and cannot reach these nodes directly.\n")
-			response.WriteString("\n")
-			response.WriteString("To fix this, configure SSH ProxyJump in /home/pulse/.ssh/config:\n")
-			response.WriteString("\n")
-			response.WriteString("  Host GATEWAY_NODE\n")
-			response.WriteString("      HostName <gateway-ip>\n")
-			response.WriteString("      User root\n")
-			response.WriteString("      IdentityFile ~/.ssh/id_ed25519\n")
-			response.WriteString("\n")
-			for _, node := range failedNodes {
-				response.WriteString(fmt.Sprintf("  Host %s\n", node))
-				response.WriteString(fmt.Sprintf("      HostName %%h\n"))
-				response.WriteString("      User root\n")
-				response.WriteString("      ProxyJump GATEWAY_NODE\n")
-				response.WriteString("\n")
-			}
-			response.WriteString("Replace GATEWAY_NODE and <gateway-ip> with your Proxmox host details.\n")
-		} else {
-			response.WriteString("\n")
-			response.WriteString("Temperature data will not be available for these nodes.\n")
-			response.WriteString("Ensure Pulse can SSH to these nodes as root using key-based authentication.\n")
-		}
+		response.WriteString("\n")
+		response.WriteString("For LXC deployments, consider installing pulse-sensor-proxy on the Proxmox host.\n")
+		response.WriteString("See: https://docs.pulseapp.io for detailed SSH configuration options.\n")
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
