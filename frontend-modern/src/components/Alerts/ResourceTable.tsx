@@ -133,7 +133,15 @@ export function ResourceTable(props: ResourceTableProps) {
     return props.resources ?? [];
   };
 
-  const hasRows = () => flattenResources().length > 0;
+  const hasRows = () => {
+    if (flattenResources().length > 0) {
+      return true;
+    }
+    if (props.groupedResources && Object.keys(props.groupedResources).length > 0) {
+      return true;
+    }
+    return Boolean(props.globalDefaults);
+  };
 
   const [activeMetricInput, setActiveMetricInput] = createSignal<{ resourceId: string; metric: string } | null>(null);
   const [showDelayRow, setShowDelayRow] = createSignal(false);

@@ -85,6 +85,12 @@ export interface PMGThresholdDefaults {
   quarantineGrowthCritMin?: number;
 }
 
+export interface SnapshotAlertConfig {
+  enabled: boolean;
+  warningDays: number;
+  criticalDays: number;
+}
+
 export interface AlertConfig {
   enabled: boolean;
   guestDefaults: AlertThresholds;
@@ -93,6 +99,7 @@ export interface AlertConfig {
   dockerDefaults?: DockerThresholdConfig;
   dockerIgnoredContainerPrefixes?: string[];
   pmgDefaults?: PMGThresholdDefaults;
+  snapshotDefaults?: SnapshotAlertConfig;
   customRules?: CustomAlertRule[];
   overrides: Record<string, RawOverrideConfig>; // key: resource ID
   minimumDelta?: number;

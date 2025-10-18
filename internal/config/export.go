@@ -25,6 +25,7 @@ type ExportData struct {
 	Alerts        alerts.AlertConfig            `json:"alerts"`
 	Email         notifications.EmailConfig     `json:"email"`
 	Webhooks      []notifications.WebhookConfig `json:"webhooks"`
+	Apprise       notifications.AppriseConfig   `json:"apprise"`
 	System        SystemSettings                `json:"system"`
 	GuestMetadata map[string]*GuestMetadata     `json:"guestMetadata,omitempty"`
 	OIDC          *OIDCConfig                   `json:"oidc,omitempty"`
@@ -53,6 +54,11 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 	emailConfig, err := c.LoadEmailConfig()
 	if err != nil {
 		return "", fmt.Errorf("failed to load email config: %w", err)
+	}
+
+	appriseConfig, err := c.LoadAppriseConfig()
+	if err != nil {
+		return "", fmt.Errorf("failed to load Apprise config: %w", err)
 	}
 
 	webhooks, err := c.LoadWebhooks()
@@ -90,6 +96,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		Alerts:        *alertConfig,
 		Email:         *emailConfig,
 		Webhooks:      webhooks,
+		Apprise:       *appriseConfig,
 		System:        *systemSettings,
 		GuestMetadata: guestMetadata,
 		OIDC:          oidcConfig,
@@ -151,6 +158,10 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	if err := c.SaveEmailConfig(exportData.Email); err != nil {
 		return fmt.Errorf("failed to import email config: %w", err)
+	}
+
+	if err := c.SaveAppriseConfig(exportData.Apprise); err != nil {
+		return fmt.Errorf("failed to import Apprise config: %w", err)
 	}
 
 	if err := c.SaveWebhooks(exportData.Webhooks); err != nil {

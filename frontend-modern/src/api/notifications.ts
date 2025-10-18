@@ -57,6 +57,13 @@ export interface Webhook {
   customFields?: Record<string, string>;
 }
 
+export interface AppriseConfig {
+  enabled: boolean;
+  targets: string[];
+  cliPath?: string;
+  timeoutSeconds?: number;
+}
+
 export interface NotificationTestRequest {
   type: 'email' | 'webhook';
   config?: Record<string, unknown>; // Backend expects different format than frontend types
@@ -65,6 +72,17 @@ export interface NotificationTestRequest {
 
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
+
+  static async getAppriseConfig(): Promise<AppriseConfig> {
+    return apiFetchJSON(`${this.baseUrl}/apprise`);
+  }
+
+  static async updateAppriseConfig(config: AppriseConfig): Promise<AppriseConfig> {
+    return apiFetchJSON(`${this.baseUrl}/apprise`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  }
 
   // Email configuration
   static async getEmailConfig(): Promise<EmailConfig> {

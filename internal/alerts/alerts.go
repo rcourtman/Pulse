@@ -283,6 +283,13 @@ type PMGThresholdConfig struct {
 	QuarantineGrowthCritMin int `json:"quarantineGrowthCritMin"` // Minimum message growth for critical (default: 500)
 }
 
+// SnapshotAlertConfig represents snapshot age alert configuration
+type SnapshotAlertConfig struct {
+	Enabled      bool `json:"enabled"`
+	WarningDays  int  `json:"warningDays"`
+	CriticalDays int  `json:"criticalDays"`
+}
+
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
 	Enabled                        bool                       `json:"enabled"`
@@ -292,6 +299,7 @@ type AlertConfig struct {
 	DockerDefaults                 DockerThresholdConfig      `json:"dockerDefaults"`
 	DockerIgnoredContainerPrefixes []string                   `json:"dockerIgnoredContainerPrefixes,omitempty"`
 	PMGDefaults                    PMGThresholdConfig         `json:"pmgDefaults"`
+	SnapshotDefaults               SnapshotAlertConfig        `json:"snapshotDefaults"`
 	Overrides                      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
 	CustomRules                    []CustomAlertRule          `json:"customRules,omitempty"`
 	Schedule                       ScheduleConfig             `json:"schedule"`
@@ -472,6 +480,11 @@ func NewManager() *Manager {
 				QuarantineGrowthWarnMin: 250,  // AND ≥250 messages
 				QuarantineGrowthCritPct: 50,   // Critical if growth ≥50%
 				QuarantineGrowthCritMin: 500,  // AND ≥500 messages
+			},
+			SnapshotDefaults: SnapshotAlertConfig{
+				Enabled:      false,
+				WarningDays:  30,
+				CriticalDays: 45,
 			},
 			StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
 			MinimumDelta:      2.0, // 2% minimum change
@@ -680,6 +693,16 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		config.PMGDefaults.QuarantineGrowthCritMin = 500
 	}
 
+	if config.SnapshotDefaults.WarningDays < 0 {
+		config.SnapshotDefaults.WarningDays = 0
+	}
+	if config.SnapshotDefaults.CriticalDays < 0 {
+		config.SnapshotDefaults.CriticalDays = 0
+	}
+	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
+		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
+	}
+
 	// Ensure minimums for other important fields
 	if config.MinimumDelta <= 0 {
 		config.MinimumDelta = 2.0
@@ -736,6 +759,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 			m.config.Overrides[id] = override
 		}
 		m.config.Overrides[id] = override
+	}
+
+	if !m.config.SnapshotDefaults.Enabled {
+		m.clearSnapshotAlertsForInstanceLocked("")
 	}
 
 	m.applyGlobalOfflineSettingsLocked()
@@ -2727,6 +2754,216 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	if storage.ZFSPool != nil {
 		m.checkZFSPoolHealth(storage)
 	}
+}
+
+func buildSnapshotGuestKey(instance, node string, vmid int) string {
+	instance = strings.TrimSpace(instance)
+	node = strings.TrimSpace(node)
+	if instance == "" {
+		instance = node
+	}
+	if instance == node {
+		return fmt.Sprintf("%s-%d", node, vmid)
+	}
+	return fmt.Sprintf("%s-%s-%d", instance, node, vmid)
+}
+
+// CheckSnapshotsForInstance evaluates guest snapshots for age-based alerts.
+func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []models.GuestSnapshot, guestNames map[string]string) {
+	m.mu.RLock()
+	enabled := m.config.Enabled
+	snapshotCfg := m.config.SnapshotDefaults
+	m.mu.RUnlock()
+
+	if !enabled {
+		return
+	}
+
+	if !snapshotCfg.Enabled {
+		m.clearSnapshotAlertsForInstance(instanceName)
+		return
+	}
+
+	now := time.Now()
+	validAlerts := make(map[string]struct{})
+
+	for _, snapshot := range snapshots {
+		if instanceName != "" && snapshot.Instance != "" && snapshot.Instance != instanceName {
+			continue
+		}
+		if snapshot.Time.IsZero() {
+			continue
+		}
+
+		ageHours := now.Sub(snapshot.Time).Hours()
+		if ageHours < 0 {
+			continue
+		}
+		ageDays := ageHours / 24
+
+		var level AlertLevel
+		var threshold int
+
+		if snapshotCfg.CriticalDays > 0 && ageDays >= float64(snapshotCfg.CriticalDays) {
+			level = AlertLevelCritical
+			threshold = snapshotCfg.CriticalDays
+		} else if snapshotCfg.WarningDays > 0 && ageDays >= float64(snapshotCfg.WarningDays) {
+			level = AlertLevelWarning
+			threshold = snapshotCfg.WarningDays
+		} else {
+			continue
+		}
+
+		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
+		validAlerts[alertID] = struct{}{}
+
+		guestKey := buildSnapshotGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
+		guestName := strings.TrimSpace(guestNames[guestKey])
+
+		guestType := "VM"
+		if strings.EqualFold(snapshot.Type, "lxc") {
+			guestType = "Container"
+		}
+
+		if guestName == "" {
+			switch guestType {
+			case "Container":
+				guestName = fmt.Sprintf("CT %d", snapshot.VMID)
+			default:
+				guestName = fmt.Sprintf("VM %d", snapshot.VMID)
+			}
+		}
+
+		snapshotName := strings.TrimSpace(snapshot.Name)
+		if snapshotName == "" {
+			snapshotName = "(unnamed)"
+		}
+
+		ageDaysRounded := math.Round(ageDays*10) / 10
+		message := fmt.Sprintf(
+			"%s snapshot '%s' for %s is %.1f days old on %s (threshold: %d days)",
+			guestType,
+			snapshotName,
+			guestName,
+			ageDaysRounded,
+			snapshot.Node,
+			threshold,
+		)
+
+		thresholdTime := snapshot.Time.Add(time.Duration(threshold) * 24 * time.Hour)
+		if thresholdTime.After(now) {
+			thresholdTime = now
+		}
+
+		metadata := map[string]interface{}{
+			"snapshotName":      snapshot.Name,
+			"snapshotCreatedAt": snapshot.Time,
+			"snapshotAgeDays":   ageDays,
+			"snapshotAgeHours":  ageHours,
+			"guestName":         guestName,
+			"guestType":         guestType,
+			"guestInstance":     snapshot.Instance,
+			"guestNode":         snapshot.Node,
+			"guestVmid":         snapshot.VMID,
+			"thresholdDays":     threshold,
+		}
+
+		resourceName := fmt.Sprintf("%s snapshot '%s'", guestName, snapshotName)
+
+		m.mu.Lock()
+		if existing, exists := m.activeAlerts[alertID]; exists {
+			existing.LastSeen = now
+			existing.Level = level
+			existing.Value = ageDays
+			existing.Threshold = float64(threshold)
+			existing.Message = message
+			existing.ResourceName = resourceName
+			if existing.Metadata == nil {
+				existing.Metadata = make(map[string]interface{})
+			}
+			for k, v := range metadata {
+				existing.Metadata[k] = v
+			}
+			m.mu.Unlock()
+			continue
+		}
+
+		alert := &Alert{
+			ID:           alertID,
+			Type:         "snapshot-age",
+			Level:        level,
+			ResourceID:   snapshot.ID,
+			ResourceName: resourceName,
+			Node:         snapshot.Node,
+			Instance:     snapshot.Instance,
+			Message:      message,
+			Value:        ageDays,
+			Threshold:    float64(threshold),
+			StartTime:    thresholdTime,
+			LastSeen:     now,
+			Metadata:     metadata,
+		}
+
+		m.preserveAlertState(alertID, alert)
+
+		m.activeAlerts[alertID] = alert
+		m.recentAlerts[alertID] = alert
+		m.historyManager.AddAlert(*alert)
+
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (snapshot)")
+				}
+			}()
+			if err := m.SaveActiveAlerts(); err != nil {
+				log.Error().Err(err).Msg("Failed to save active alerts after snapshot alert creation")
+			}
+		}()
+
+		if !m.checkRateLimit(alertID) {
+			m.mu.Unlock()
+			log.Debug().
+				Str("alertID", alertID).
+				Str("guest", guestName).
+				Msg("Snapshot alert suppressed due to rate limit")
+			continue
+		}
+
+		if m.onAlert != nil {
+			nowCopy := now
+			alert.LastNotified = &nowCopy
+			if m.dispatchAlert(alert, true) {
+				log.Info().
+					Str("alertID", alertID).
+					Str("guest", guestName).
+					Msg("Snapshot age alert dispatched")
+			} else {
+				alert.LastNotified = nil
+			}
+		} else {
+			log.Warn().
+				Str("alertID", alertID).
+				Msg("Snapshot age alert created but no onAlert callback set")
+		}
+
+		m.mu.Unlock()
+	}
+
+	m.mu.Lock()
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil || alert.Type != "snapshot-age" {
+			continue
+		}
+		if instanceName != "" && alert.Instance != instanceName {
+			continue
+		}
+		if _, ok := validAlerts[alertID]; ok {
+			continue
+		}
+		m.clearAlertNoLock(alertID)
+	}
+	m.mu.Unlock()
 }
 
 // checkZFSPoolHealth checks ZFS pool for errors and degraded state
@@ -6207,4 +6444,22 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 	log.Info().
 		Str("alertID", alertID).
 		Msg("Alert cleared")
+}
+
+func (m *Manager) clearSnapshotAlertsForInstance(instance string) {
+	m.mu.Lock()
+	m.clearSnapshotAlertsForInstanceLocked(instance)
+	m.mu.Unlock()
+}
+
+func (m *Manager) clearSnapshotAlertsForInstanceLocked(instance string) {
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil || alert.Type != "snapshot-age" {
+			continue
+		}
+		if instance != "" && alert.Instance != instance {
+			continue
+		}
+		m.clearAlertNoLock(alertID)
+	}
 }

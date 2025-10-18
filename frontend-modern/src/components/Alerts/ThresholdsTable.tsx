@@ -15,7 +15,7 @@ import type {
   DockerHost,
   DockerContainer,
 } from '@/types/api';
-import type { RawOverrideConfig, PMGThresholdDefaults } from '@/types/alerts';
+import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig } from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 type OverrideType =
   | 'guest'
@@ -169,6 +169,14 @@ interface ThresholdsTableProps {
       | Record<string, Record<string, number>>
       | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
   ) => void;
+  snapshotDefaults: () => SnapshotAlertConfig;
+  setSnapshotDefaults: (
+    value:
+      | SnapshotAlertConfig
+      | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
+  ) => void;
+  snapshotFactoryDefaults?: SnapshotAlertConfig;
+  resetSnapshotDefaults?: () => void;
   setHasUnsavedChanges: (value: boolean) => void;
   activeAlerts?: Record<string, Alert>;
   removeAlerts?: (predicate: (alert: Alert) => boolean) => void;
@@ -199,6 +207,9 @@ interface ThresholdsTableProps {
   disableAllDockerHostsOffline: () => boolean;
   setDisableAllDockerHostsOffline: (value: boolean) => void;
 }
+
+const DEFAULT_SNAPSHOT_WARNING = 30;
+const DEFAULT_SNAPSHOT_CRITICAL = 45;
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const navigate = useNavigate();
@@ -744,6 +755,74 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     /* no-op placeholder for future scroll restoration */
   };
 
+  const snapshotFactoryConfig = () =>
+    props.snapshotFactoryDefaults ?? {
+      enabled: false,
+      warningDays: DEFAULT_SNAPSHOT_WARNING,
+      criticalDays: DEFAULT_SNAPSHOT_CRITICAL,
+    };
+
+  const sanitizeSnapshotConfig = (config: SnapshotAlertConfig): SnapshotAlertConfig => {
+    let warning = Math.max(0, Math.round(config.warningDays ?? 0));
+    let critical = Math.max(0, Math.round(config.criticalDays ?? 0));
+
+    if (critical > 0 && warning > critical) {
+      warning = critical;
+    }
+    if (critical === 0 && warning > 0) {
+      critical = warning;
+    }
+
+    return {
+      enabled: !!config.enabled,
+      warningDays: warning,
+      criticalDays: critical,
+    };
+  };
+
+  const updateSnapshotDefaults = (
+    updater:
+      | SnapshotAlertConfig
+      | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
+  ) => {
+    props.setSnapshotDefaults((prev) => {
+      const next =
+        typeof updater === 'function'
+          ? (updater as (prev: SnapshotAlertConfig) => SnapshotAlertConfig)(prev)
+          : { ...prev, ...updater };
+      return sanitizeSnapshotConfig(next);
+    });
+    props.setHasUnsavedChanges(true);
+  };
+
+  const snapshotDefaultsRecord = createMemo(() => {
+    const current = props.snapshotDefaults();
+    return {
+      'warning days': current.warningDays ?? 0,
+      'critical days': current.criticalDays ?? 0,
+    };
+  });
+
+  const snapshotFactoryDefaultsRecord = createMemo(() => {
+    const factory = snapshotFactoryConfig();
+    return {
+      'warning days': factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING,
+      'critical days': factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL,
+    };
+  });
+
+  const snapshotOverridesCount = createMemo(() => {
+    const current = props.snapshotDefaults();
+    const factory = snapshotFactoryConfig();
+    return current.enabled !== factory.enabled ||
+      (current.warningDays ?? DEFAULT_SNAPSHOT_WARNING) !==
+        (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
+      (current.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) !==
+        (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL)
+      ? 1
+      : 0;
+  });
+
   // Process guests with their overrides and group by node
   const guestsGroupedByNode = createMemo<Record<string, Resource[]>>((prev = {}) => {
     // If we're currently editing, return the previous value to avoid re-renders
@@ -1082,16 +1161,23 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
         },
         {
           key: 'storage' as const,
-          label: 'Storage',
-          total: props.storage?.length ?? 0,
-          overrides: countOverrides(storageWithOverrides()),
-          tab: 'proxmox' as const,
-        },
-        {
-          key: 'pbs' as const,
-          label: 'PBS Servers',
-          total: props.pbsInstances?.length ?? 0,
-          overrides: countOverrides(pbsServersWithOverrides()),
+      label: 'Storage',
+      total: props.storage?.length ?? 0,
+      overrides: countOverrides(storageWithOverrides()),
+      tab: 'proxmox' as const,
+    },
+    {
+      key: 'snapshots' as const,
+      label: 'Snapshots',
+      total: 1,
+      overrides: snapshotOverridesCount(),
+      tab: 'proxmox' as const,
+    },
+    {
+      key: 'pbs' as const,
+      label: 'PBS Servers',
+      total: props.pbsInstances?.length ?? 0,
+      overrides: countOverrides(pbsServersWithOverrides()),
           tab: 'proxmox' as const,
         },
         {
@@ -1879,6 +1965,72 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
                 factoryDefaults={props.factoryGuestDefaults}
                 onResetDefaults={props.resetGuestDefaults}
+              />
+            </div>
+          </Show>
+
+          <Show when={hasSection('snapshots')}>
+            <div ref={registerSection('snapshots')} class="scroll-mt-24">
+              <ResourceTable
+                title="Snapshot Age"
+                resources={[]}
+                columns={['Warning Days', 'Critical Days']}
+                activeAlerts={props.activeAlerts}
+                emptyMessage=""
+                onEdit={startEditing}
+                onSaveEdit={saveEdit}
+                onCancelEdit={cancelEdit}
+                onRemoveOverride={removeOverride}
+                showOfflineAlertsColumn={false}
+                editingId={editingId}
+                editingThresholds={editingThresholds}
+                setEditingThresholds={setEditingThresholds}
+                formatMetricValue={formatMetricValue}
+                hasActiveAlert={hasActiveAlert}
+                globalDefaults={snapshotDefaultsRecord()}
+                setGlobalDefaults={(value) => {
+                  updateSnapshotDefaults((prev) => {
+                    const currentRecord = {
+                      'warning days': prev.warningDays ?? 0,
+                      'critical days': prev.criticalDays ?? 0,
+                    };
+                    const nextRecord =
+                      typeof value === 'function'
+                        ? value(currentRecord)
+                        : { ...currentRecord, ...value };
+                    return {
+                      ...prev,
+                      warningDays:
+                        typeof nextRecord['warning days'] === 'number'
+                          ? nextRecord['warning days']
+                          : prev.warningDays,
+                      criticalDays:
+                        typeof nextRecord['critical days'] === 'number'
+                          ? nextRecord['critical days']
+                          : prev.criticalDays,
+                    };
+                  });
+                }}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={() => !props.snapshotDefaults().enabled}
+                onToggleGlobalDisable={() =>
+                  updateSnapshotDefaults((prev) => ({
+                    ...prev,
+                    enabled: !prev.enabled,
+                  }))
+                }
+                factoryDefaults={snapshotFactoryDefaultsRecord()}
+                onResetDefaults={
+                  props.resetSnapshotDefaults
+                    ? () => {
+                        props.resetSnapshotDefaults?.();
+                        props.setHasUnsavedChanges(true);
+                      }
+                    : () =>
+                        updateSnapshotDefaults({
+                          ...snapshotFactoryConfig(),
+                        })
+                }
               />
             </div>
           </Show>

@@ -6,7 +6,7 @@ import {
   ThresholdsTable,
   normalizeDockerIgnoredInput,
 } from '../ThresholdsTable';
-import type { PMGThresholdDefaults } from '@/types/alerts';
+import type { PMGThresholdDefaults, SnapshotAlertConfig } from '@/types/alerts';
 
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => vi.fn(),
@@ -87,6 +87,10 @@ const baseProps = () => ({
   factoryNodeDefaults: {},
   factoryDockerDefaults: {},
   factoryStorageDefault: 85,
+  snapshotDefaults: () => ({ enabled: false, warningDays: 30, criticalDays: 45 }),
+  setSnapshotDefaults: vi.fn(),
+  snapshotFactoryDefaults: { enabled: false, warningDays: 30, criticalDays: 45 } as SnapshotAlertConfig,
+  resetSnapshotDefaults: vi.fn(),
   timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5 }),
   metricTimeThresholds: () => ({}),
   setMetricTimeThresholds: vi.fn(),
