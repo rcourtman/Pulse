@@ -52,6 +52,26 @@ docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 
 See [Docker Guide](DOCKER.md) for advanced options.
 
+### Kubernetes (Helm)
+
+Use the bundled Helm chart for Kubernetes clusters:
+
+```bash
+helm registry login ghcr.io
+helm install pulse oci://ghcr.io/rcourtman/pulse-chart \
+  --version $(curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/VERSION) \
+  --namespace pulse \
+  --create-namespace
+# Replace the VERSION lookup with a specific release tag (without "v") if you need to pin.
+
+# Developing locally? Install from the checked-out chart directory instead:
+# helm upgrade --install pulse ./deploy/helm/pulse \
+#   --namespace pulse \
+#   --create-namespace
+```
+
+Read the full [Kubernetes deployment guide](KUBERNETES.md) for ingress, persistence, and Docker agent configuration.
+
 ## Updating
 
 ### Automatic Updates (Recommended)

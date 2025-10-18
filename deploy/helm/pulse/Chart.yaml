@@ -1,0 +1,17 @@
+apiVersion: v2
+name: pulse
+description: Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
+type: application
+version: 0.1.0
+appVersion: "4.24.0"
+icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+keywords:
+  - monitoring
+  - proxmox
+  - observability
+home: https://github.com/rcourtman/Pulse
+sources:
+  - https://github.com/rcourtman/Pulse
+maintainers:
+  - name: Pulse Maintainers
+    email: pulse@rcourtman.dev

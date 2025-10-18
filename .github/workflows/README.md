@@ -49,3 +49,34 @@ ssh pulse-relay "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/ma
 - ✅ Validates install script works on real server
 - ✅ Removes manual step from release process
 - ✅ Free to run (public repos get unlimited GitHub Actions minutes)
+
+## Helm CI
+
+**File**: `helm-ci.yml`
+
+Runs `helm lint --strict` and renders the chart with common configuration combinations on every pull request that touches Helm content (and on pushes to `main`). This prevents regressions before they land.
+
+- Triggered by PRs/pushes touching `deploy/helm/**`, docs, or the workflow itself
+- Uses Helm v3.15.2
+- Renders both the default deployment and an agent-enabled configuration to catch template issues
+
+## Publish Helm Chart
+
+**File**: `publish-helm-chart.yml`
+
+Packages the Helm chart and pushes it to the GitHub Container Registry (OCI) whenever a GitHub Release is published. Also makes the packaged `.tgz` available as both an Actions artifact and a release asset. The same behaviour can be triggered locally via `./scripts/package-helm-chart.sh <version> [--push]`.
+
+- Triggered automatically on `release: published`, or manually via workflow dispatch (requires `chart_version` input)
+- Chart and app versions mirror the Pulse release tag (e.g., `v4.24.0` → `4.24.0`)
+- Publishes to `oci://ghcr.io/<owner>/pulse-chart`
+- Requires no additional secrets—uses the built-in `GITHUB_TOKEN` with `packages: write` permission
+
+## Helm Integration (Kind)
+
+**File**: `helm-integration.yml`
+
+Creates a disposable Kind cluster, installs the chart, waits for the hub deployment to report ready, and performs a `/health` smoke check from inside the cluster.
+
+- Triggered alongside the lint workflow for PRs/pushes touching Helm content
+- Disables persistence to keep the Kind cluster lightweight
+- Provides early detection of runtime issues (missing secrets, invalid probes, etc.)
