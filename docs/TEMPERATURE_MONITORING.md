@@ -158,6 +158,40 @@ The auto-setup script (Settings → Nodes → Setup Script) will prompt you to c
 
 If the node is part of a Proxmox cluster, the script will now detect the other members and offer to configure the same SSH/lm-sensors setup on each of them automatically—confirm when prompted to roll it out cluster-wide.
 
+### Turnkey Setup for Standalone Nodes (v4.25.0+)
+
+**For standalone nodes** (not in a Proxmox cluster) running **containerized Pulse**, the setup script now automatically configures temperature monitoring with zero manual steps:
+
+1. The script detects the node is standalone (not in a cluster)
+2. Automatically fetches the temperature proxy's SSH public key from your Pulse server via `/api/system/proxy-public-key`
+3. Installs it with forced commands (`command="sensors -j"`) automatically
+4. Temperature monitoring "just works" - no manual SSH key management needed!
+
+**Example output:**
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Standalone Node Temperature Setup
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Detected: This is a standalone node (not in a Proxmox cluster)
+
+Fetching temperature proxy public key...
+  ✓ Retrieved proxy public key
+  ✓ Temperature proxy key installed (restricted to sensors -j)
+
+✓ Standalone node temperature monitoring configured
+  The Pulse temperature proxy can now collect temperature data
+  from this node using secure SSH with forced commands.
+```
+
+**Security:**
+- Public keys are safe to expose (it's in the name!)
+- Forced commands restrict the key to only `command="sensors -j"`
+- All other SSH features disabled (no-port-forwarding, no-pty, etc.)
+- Works exactly like cluster setups, but fully automated
+
+**Note:** This only works for containerized Pulse deployments where the temperature proxy is running. For native (non-containerized) installs, you'll still need to provide your Pulse server's public key manually as described in step 3 above.
+
 ## Setup (Manual)
 
 If you skipped SSH setup during auto-setup, you can configure it manually:
