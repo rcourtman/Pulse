@@ -320,6 +320,12 @@ Quick start - most settings are in the web UI:
 - **Settings → Security**: Authentication and API tokens
 - **Alerts**: Thresholds and notifications
 
+### Apprise CLI Notifications
+
+Pulse can broadcast grouped alerts through the [Apprise](https://github.com/caronc/apprise) CLI. Install Apprise on the Pulse host (for example with `pip install apprise`) and configure the targets under **Alerts → Notifications**. Each target URL should be a valid Apprise destination (Discord, Slack, email, SMS, etc.).
+
+You can also override the CLI path and execution timeout if Apprise is installed in a non-standard location. Pulse automatically skips Apprise delivery when no targets are configured.
+
 ### Configuration Files
 
 Pulse uses three separate configuration files with clear separation of concerns:

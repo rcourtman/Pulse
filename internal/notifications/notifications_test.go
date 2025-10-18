@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -15,6 +16,96 @@ func flushPending(n *NotificationManager) {
 	}
 	n.mu.Unlock()
 	n.sendGroupedAlerts()
+}
+
+func TestNormalizeAppriseConfig(t *testing.T) {
+	original := AppriseConfig{
+		Enabled:        true,
+		Targets:        []string{"  discord://token  ", "", "DISCORD://TOKEN"},
+		CLIPath:        " ",
+		TimeoutSeconds: -5,
+	}
+
+	normalized := NormalizeAppriseConfig(original)
+
+	if normalized.CLIPath != "apprise" {
+		t.Fatalf("expected default CLI path 'apprise', got %q", normalized.CLIPath)
+	}
+
+	if normalized.TimeoutSeconds != 15 {
+		t.Fatalf("expected timeout of 15 seconds, got %d", normalized.TimeoutSeconds)
+	}
+
+	if !normalized.Enabled {
+		t.Fatalf("expected config to remain enabled when targets exist")
+	}
+
+	if len(normalized.Targets) != 1 || normalized.Targets[0] != "discord://token" {
+		t.Fatalf("unexpected targets normalization result: %#v", normalized.Targets)
+	}
+
+	// When all targets removed, enabled should reset to false
+	empty := NormalizeAppriseConfig(AppriseConfig{Enabled: true})
+	if empty.Enabled {
+		t.Fatalf("expected enabled to be false when no targets configured")
+	}
+}
+
+func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
+	nm := NewNotificationManager("")
+	nm.SetGroupingWindow(0)
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	done := make(chan struct{})
+	var capturedArgs []string
+
+	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
+		if path != "apprise" {
+			t.Fatalf("expected CLI path 'apprise', got %q", path)
+		}
+		capturedArgs = append([]string(nil), args...)
+		close(done)
+		return []byte("success"), nil
+	}
+
+	nm.SetAppriseConfig(AppriseConfig{
+		Enabled:        true,
+		Targets:        []string{"discord://token"},
+		TimeoutSeconds: 10,
+	})
+
+	alert := &alerts.Alert{
+		ID:           "test",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		Message:      "CPU usage high",
+		Value:        95,
+		Threshold:    90,
+		StartTime:    time.Now().Add(-time.Minute),
+		LastSeen:     time.Now(),
+	}
+
+	nm.mu.Lock()
+	nm.pendingAlerts = append(nm.pendingAlerts, alert)
+	nm.mu.Unlock()
+
+	nm.sendGroupedAlerts()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for Apprise executor to run")
+	}
+
+	if len(capturedArgs) == 0 {
+		t.Fatalf("expected Apprise executor to receive arguments")
+	}
+
+	if capturedArgs[len(capturedArgs)-1] != "discord://token" {
+		t.Fatalf("expected target URL as last argument, got %v", capturedArgs)
+	}
 }
 
 func TestNotificationCooldownAllowsNewAlertInstance(t *testing.T) {

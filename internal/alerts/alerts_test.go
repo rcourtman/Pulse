@@ -57,7 +57,7 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 		GuestDefaults: ThresholdConfig{
 			CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
 		},
-		TimeThreshold: 0,
+		TimeThreshold:  0,
 		TimeThresholds: map[string]int{},
 		NodeDefaults: ThresholdConfig{
 			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -209,6 +209,67 @@ func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 	}
 	if _, exists := m.dockerLastExitCode[containerResourceID]; exists {
 		t.Fatalf("expected last exit code tracking to be cleared")
+	}
+}
+
+func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	cfg := AlertConfig{
+		Enabled:        true,
+		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
+		SnapshotDefaults: SnapshotAlertConfig{
+			Enabled:      true,
+			WarningDays:  7,
+			CriticalDays: 14,
+		},
+		Overrides: make(map[string]ThresholdConfig),
+	}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	now := time.Now()
+	snapshots := []models.GuestSnapshot{
+		{
+			ID:       "inst-node-100-weekly",
+			Name:     "weekly",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     100,
+			Time:     now.Add(-15 * 24 * time.Hour),
+		},
+	}
+	guestNames := map[string]string{
+		"inst-node-100": "app-server",
+	}
+
+	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+
+	m.mu.RLock()
+	alert, exists := m.activeAlerts["snapshot-age-inst-node-100-weekly"]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected snapshot age alert to be created")
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical level for old snapshot, got %s", alert.Level)
+	}
+	if alert.ResourceName != "app-server snapshot 'weekly'" {
+		t.Fatalf("unexpected resource name: %s", alert.ResourceName)
+	}
+
+	m.CheckSnapshotsForInstance("inst", nil, guestNames)
+
+	m.mu.RLock()
+	_, exists = m.activeAlerts["snapshot-age-inst-node-100-weekly"]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected snapshot alert to be cleared when snapshot missing")
 	}
 }
 

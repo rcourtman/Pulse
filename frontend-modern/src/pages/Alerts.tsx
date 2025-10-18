@@ -3,18 +3,18 @@ import type { JSX } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
-import type { RawOverrideConfig, PMGThresholdDefaults } from '@/types/alerts';
+import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig } from '@/types/alerts';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
-import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
+import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
-import type { EmailConfig } from '@/api/notifications';
+import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container, DockerHost, DockerContainer } from '@/types/api';
 import { useNavigate, useLocation } from '@solidjs/router';
@@ -98,6 +98,7 @@ export const tabFromPath = (
 // Store reference interfaces
 interface DestinationsRef {
   emailConfig?: () => EmailConfig;
+  appriseConfig?: () => AppriseConfig;
 }
 
 // Override interface for both guests and nodes
@@ -149,6 +150,13 @@ interface UIEmailConfig {
   maxRetries: number;
   retryDelay: number;
   rateLimit: number;
+}
+
+interface UIAppriseConfig {
+  enabled: boolean;
+  targetsText: string;
+  cliPath: string;
+  timeoutSeconds: number;
 }
 
 interface QuietHoursConfig {
@@ -225,6 +233,22 @@ export const createDefaultGrouping = (): GroupingConfig => ({
   byNode: true,
   byGuest: false,
 });
+
+const createDefaultAppriseConfig = (): UIAppriseConfig => ({
+  enabled: false,
+  targetsText: '',
+  cliPath: 'apprise',
+  timeoutSeconds: 15,
+});
+
+const parseAppriseTargets = (value: string): string[] =>
+  value
+    .split(/\r?\n|,/)
+    .map((entry) => entry.trim())
+    .filter((entry, index, arr) => entry.length > 0 && arr.indexOf(entry) === index);
+
+const formatAppriseTargets = (targets: string[] | undefined | null): string =>
+  targets && targets.length > 0 ? targets.join('\n') : '';
 
 export const normalizeMetricDelayMap = (
   input: Record<string, Record<string, number>> | undefined | null,
@@ -348,11 +372,11 @@ export function Alerts() {
   >({}); // Store raw config
 
   // Email configuration state moved to parent to persist across tab changes
-  const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
-    enabled: false,
-    provider: '',
-    server: '', // Fixed: use 'server' not 'smtpHost'
-    port: 587, // Fixed: use 'port' not 'smtpPort'
+const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
+  enabled: false,
+  provider: '',
+  server: '', // Fixed: use 'server' not 'smtpHost'
+  port: 587, // Fixed: use 'port' not 'smtpPort'
     username: '',
     password: '',
     from: '',
@@ -362,8 +386,12 @@ export function Alerts() {
     replyTo: '',
     maxRetries: 3,
     retryDelay: 5,
-    rateLimit: 60,
-  });
+  rateLimit: 60,
+});
+
+const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
+  createDefaultAppriseConfig(),
+);
 
   // Schedule configuration state moved to parent to persist across tab changes
   const [scheduleQuietHours, setScheduleQuietHours] =
@@ -393,6 +421,16 @@ export function Alerts() {
       tls: config.tls,
       startTLS: config.startTLS,
     } as EmailConfig;
+  };
+
+  destinationsRef.appriseConfig = () => {
+    const config = appriseConfig();
+    return {
+      enabled: config.enabled,
+      targets: parseAppriseTargets(config.targetsText),
+      cliPath: config.cliPath,
+      timeoutSeconds: config.timeoutSeconds,
+    } as AppriseConfig;
   };
 
   // Process raw overrides config when state changes
@@ -658,6 +696,8 @@ export function Alerts() {
       rateLimit: 60,
     });
 
+    setAppriseConfig(createDefaultAppriseConfig());
+
     try {
       const config = await AlertsAPI.getConfig();
 
@@ -727,6 +767,29 @@ export function Alerts() {
         setMetricTimeThresholds(normalizeMetricDelayMap(config.metricTimeThresholds));
       } else {
         setMetricTimeThresholds({});
+      }
+
+      // Load snapshot thresholds
+      if (config.snapshotDefaults) {
+        const enabled = Boolean(config.snapshotDefaults.enabled);
+        const rawWarning = config.snapshotDefaults.warningDays ?? 30;
+        const rawCritical = config.snapshotDefaults.criticalDays ?? 45;
+        const safeCritical = Math.max(0, rawCritical);
+        const normalizedWarning = Math.max(0, rawWarning);
+        const warningDays =
+          safeCritical > 0 && normalizedWarning > safeCritical ? safeCritical : normalizedWarning;
+        const criticalDays = Math.max(safeCritical, warningDays);
+        setSnapshotDefaults({
+          enabled,
+          warningDays,
+          criticalDays,
+        });
+      } else {
+        setSnapshotDefaults({
+          enabled: false,
+          warningDays: 30,
+          criticalDays: 45,
+        });
       }
 
       // Load PMG thresholds
@@ -867,6 +930,21 @@ export function Alerts() {
         console.error('Failed to load email configuration:', emailErr);
       }
 
+      try {
+        const appriseData = await NotificationsAPI.getAppriseConfig();
+        setAppriseConfig({
+          enabled: appriseData.enabled ?? false,
+          targetsText: formatAppriseTargets(appriseData.targets),
+          cliPath: appriseData.cliPath || 'apprise',
+          timeoutSeconds:
+            typeof appriseData.timeoutSeconds === 'number' && appriseData.timeoutSeconds > 0
+              ? appriseData.timeoutSeconds
+              : 15,
+        });
+      } catch (appriseErr) {
+        console.error('Failed to load Apprise configuration:', appriseErr);
+      }
+
       if (options.notify) {
         showSuccess('Changes discarded');
       }
@@ -910,6 +988,22 @@ export function Alerts() {
         })
         .catch((err) => {
           console.error('Failed to reload email configuration:', err);
+        });
+
+      NotificationsAPI.getAppriseConfig()
+        .then((appriseData) => {
+          setAppriseConfig({
+            enabled: appriseData.enabled ?? false,
+            targetsText: formatAppriseTargets(appriseData.targets),
+            cliPath: appriseData.cliPath || 'apprise',
+            timeoutSeconds:
+              typeof appriseData.timeoutSeconds === 'number' && appriseData.timeoutSeconds > 0
+                ? appriseData.timeoutSeconds
+                : 15,
+          });
+        })
+        .catch((err) => {
+          console.error('Failed to reload Apprise configuration:', err);
         });
     }
   });
@@ -959,6 +1053,11 @@ export function Alerts() {
   };
 
   const FACTORY_STORAGE_DEFAULT = 85;
+  const FACTORY_SNAPSHOT_DEFAULTS: SnapshotAlertConfig = {
+    enabled: false,
+    warningDays: 30,
+    criticalDays: 45,
+  };
 
   // Threshold states - using trigger values for display
   const [guestDefaults, setGuestDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_GUEST_DEFAULTS });
@@ -997,15 +1096,22 @@ export function Alerts() {
     setStorageDefault(FACTORY_STORAGE_DEFAULT);
     setHasUnsavedChanges(true);
   };
-const [timeThreshold, setTimeThreshold] = createSignal(DEFAULT_DELAY_SECONDS); // Legacy
-const [timeThresholds, setTimeThresholds] = createSignal({
-  guest: DEFAULT_DELAY_SECONDS,
-  node: DEFAULT_DELAY_SECONDS,
-  storage: DEFAULT_DELAY_SECONDS,
-  pbs: DEFAULT_DELAY_SECONDS,
-});
+  const resetSnapshotDefaults = () => {
+    setSnapshotDefaults({ ...FACTORY_SNAPSHOT_DEFAULTS });
+    setHasUnsavedChanges(true);
+  };
+  const [timeThreshold, setTimeThreshold] = createSignal(DEFAULT_DELAY_SECONDS); // Legacy
+  const [timeThresholds, setTimeThresholds] = createSignal({
+    guest: DEFAULT_DELAY_SECONDS,
+    node: DEFAULT_DELAY_SECONDS,
+    storage: DEFAULT_DELAY_SECONDS,
+    pbs: DEFAULT_DELAY_SECONDS,
+  });
   const [metricTimeThresholds, setMetricTimeThresholds] =
     createSignal<Record<string, Record<string, number>>>({});
+  const [snapshotDefaults, setSnapshotDefaults] = createSignal<SnapshotAlertConfig>({
+    ...FACTORY_SNAPSHOT_DEFAULTS,
+  });
 
   const [pmgThresholds, setPMGThresholds] = createSignal({
     queueTotalWarning: 500,
@@ -1117,6 +1223,14 @@ const [timeThresholds, setTimeThresholds] = createSignal({
                       };
                     };
 
+                    const snapshotConfig = snapshotDefaults();
+                    const normalizedWarningDays = Math.max(0, snapshotConfig.warningDays ?? 0);
+                    const normalizedCriticalDays = Math.max(0, snapshotConfig.criticalDays ?? 0);
+                    const finalCriticalDays =
+                      normalizedCriticalDays > 0
+                        ? Math.max(normalizedCriticalDays, normalizedWarningDays)
+                        : normalizedWarningDays;
+
                     const alertConfig = {
                       enabled: true,
                       // Global disable flags per resource type
@@ -1168,6 +1282,11 @@ const [timeThresholds, setTimeThresholds] = createSignal({
                       timeThreshold: timeThreshold() || 0, // Legacy
                       timeThresholds: timeThresholds(),
                       metricTimeThresholds: normalizeMetricDelayMap(metricTimeThresholds()),
+                      snapshotDefaults: {
+                        enabled: snapshotConfig.enabled,
+                        warningDays: normalizedWarningDays,
+                        criticalDays: finalCriticalDays,
+                      },
                       pmgDefaults: pmgThresholds(),
                       // Use rawOverridesConfig which is already properly formatted with disabled flags
                       overrides: rawOverridesConfig(),
@@ -1215,6 +1334,20 @@ const [timeThresholds, setTimeThresholds] = createSignal({
                     if (destinationsRef.emailConfig) {
                       const emailData = destinationsRef.emailConfig();
                       await NotificationsAPI.updateEmailConfig(emailData);
+                    }
+
+                    if (destinationsRef.appriseConfig) {
+                      const appriseData = destinationsRef.appriseConfig();
+                      const updatedApprise = await NotificationsAPI.updateAppriseConfig(appriseData);
+                      setAppriseConfig({
+                        enabled: updatedApprise.enabled ?? false,
+                        targetsText: formatAppriseTargets(updatedApprise.targets),
+                        cliPath: updatedApprise.cliPath || 'apprise',
+                        timeoutSeconds:
+                          typeof updatedApprise.timeoutSeconds === 'number' && updatedApprise.timeoutSeconds > 0
+                            ? updatedApprise.timeoutSeconds
+                            : 15,
+                      });
                     }
 
                     setHasUnsavedChanges(false);
@@ -1357,13 +1490,17 @@ const [timeThresholds, setTimeThresholds] = createSignal({
               resetDockerDefaults={resetDockerDefaults}
               resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
               resetStorageDefault={resetStorageDefault}
+              resetSnapshotDefaults={resetSnapshotDefaults}
               factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
               factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
               factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
               factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
+              snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
               timeThresholds={timeThresholds}
               metricTimeThresholds={metricTimeThresholds}
               setMetricTimeThresholds={setMetricTimeThresholds}
+              snapshotDefaults={snapshotDefaults}
+              setSnapshotDefaults={setSnapshotDefaults}
               pmgThresholds={pmgThresholds}
               setPMGThresholds={setPMGThresholds}
               activeAlerts={activeAlerts}
@@ -1404,6 +1541,8 @@ const [timeThresholds, setTimeThresholds] = createSignal({
               setHasUnsavedChanges={setHasUnsavedChanges}
               emailConfig={emailConfig}
               setEmailConfig={setEmailConfig}
+              appriseConfig={appriseConfig}
+              setAppriseConfig={setAppriseConfig}
             />
           </Show>
 
@@ -1881,6 +2020,14 @@ interface ThresholdsTabProps {
       | Record<string, Record<string, number>>
       | ((prev: Record<string, Record<string, number>>) => Record<string, Record<string, number>>),
   ) => void;
+  snapshotDefaults: () => SnapshotAlertConfig;
+  setSnapshotDefaults: (
+    value:
+      | SnapshotAlertConfig
+      | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
+  ) => void;
+  snapshotFactoryDefaults: SnapshotAlertConfig;
+  resetSnapshotDefaults: () => void;
   setOverrides: (value: Override[]) => void;
   setRawOverridesConfig: (value: Record<string, RawOverrideConfig>) => void;
   activeAlerts: Record<string, Alert>;
@@ -1926,7 +2073,6 @@ interface ThresholdsTabProps {
 }
 
 function ThresholdsTab(props: ThresholdsTabProps) {
-  // Use the new table component for a cleaner, more information-dense layout
   return (
     <ThresholdsTable
       overrides={props.overrides}
@@ -1958,6 +2104,10 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       timeThresholds={props.timeThresholds}
       metricTimeThresholds={props.metricTimeThresholds}
       setMetricTimeThresholds={props.setMetricTimeThresholds}
+      snapshotDefaults={props.snapshotDefaults}
+      setSnapshotDefaults={props.setSnapshotDefaults}
+      snapshotFactoryDefaults={props.snapshotFactoryDefaults}
+      resetSnapshotDefaults={props.resetSnapshotDefaults}
       setHasUnsavedChanges={props.setHasUnsavedChanges}
       activeAlerts={props.activeAlerts}
       removeAlerts={props.removeAlerts}
@@ -2005,13 +2155,18 @@ interface DestinationsTabProps {
   setHasUnsavedChanges: (value: boolean) => void;
   emailConfig: () => UIEmailConfig;
   setEmailConfig: (config: UIEmailConfig) => void;
+  appriseConfig: () => UIAppriseConfig;
+  setAppriseConfig: (config: UIAppriseConfig) => void;
 }
 
 function DestinationsTab(props: DestinationsTabProps) {
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
-
+  const appriseState = () => props.appriseConfig();
+  const updateApprise = (partial: Partial<UIAppriseConfig>) => {
+    props.setAppriseConfig({ ...props.appriseConfig(), ...partial });
+  };
   // Load webhooks on mount (email config is now loaded in parent)
   onMount(async () => {
     try {
@@ -2102,6 +2257,78 @@ function DestinationsTab(props: DestinationsTabProps) {
             onTest={testEmailConfig}
             testing={testingEmail()}
           />
+        </div>
+      </SettingsPanel>
+
+      <SettingsPanel
+        title="Apprise notifications"
+        description="Relay grouped alerts through the Apprise CLI."
+        action={
+          <Toggle
+            checked={appriseState().enabled}
+            onChange={(e) => {
+              updateApprise({ enabled: e.currentTarget.checked });
+              props.setHasUnsavedChanges(true);
+            }}
+            containerClass="sm:self-start"
+            label={
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                {appriseState().enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            }
+          />
+        }
+        class="min-w-0"
+        bodyClass="space-y-4"
+      >
+        <div class="space-y-4">
+          <div class={formField}>
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery targets</label>
+            <textarea
+              rows={4}
+              class={`${formControl} font-mono min-h-[120px]`}
+              value={appriseState().targetsText}
+              placeholder={`discord://token\nmailto://alerts@example.com`}
+              onInput={(e) => {
+                updateApprise({ targetsText: e.currentTarget.value });
+                props.setHasUnsavedChanges(true);
+              }}
+            />
+            <p class={formHelpText}>Enter one Apprise URL per line. Commas are also supported.</p>
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class={formField}>
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>CLI path</label>
+              <input
+                type="text"
+                value={appriseState().cliPath}
+                class={formControl}
+                placeholder="apprise"
+                onInput={(e) => {
+                  updateApprise({ cliPath: e.currentTarget.value });
+                  props.setHasUnsavedChanges(true);
+                }}
+              />
+              <p class={formHelpText}>Leave blank to use the default `apprise` executable.</p>
+            </div>
+            <div class={formField}>
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Timeout (seconds)</label>
+              <input
+                type="number"
+                min="5"
+                max="120"
+                value={appriseState().timeoutSeconds}
+                class={formControl}
+                onInput={(e) => {
+                  const raw = e.currentTarget.valueAsNumber;
+                  const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
+                  updateApprise({ timeoutSeconds: safe });
+                  props.setHasUnsavedChanges(true);
+                }}
+              />
+              <p class={formHelpText}>Maximum time to wait for the Apprise CLI to complete.</p>
+            </div>
+          </div>
         </div>
       </SettingsPanel>
 

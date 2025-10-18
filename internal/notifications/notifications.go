@@ -2,11 +2,13 @@ package notifications
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"strings"
 	"sync"
 	"text/template"
@@ -103,6 +105,7 @@ type NotificationManager struct {
 	mu                sync.RWMutex
 	emailConfig       EmailConfig
 	webhooks          []WebhookConfig
+	appriseConfig     AppriseConfig
 	enabled           bool
 	cooldown          time.Duration
 	lastNotified      map[string]notificationRecord
@@ -114,7 +117,10 @@ type NotificationManager struct {
 	groupByGuest      bool
 	webhookHistory    []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
 	webhookRateLimits map[string]*webhookRateLimit // Track rate limits per webhook URL
+	appriseExec       appriseExecFunc
 }
+
+type appriseExecFunc func(ctx context.Context, path string, args []string) ([]byte, error)
 
 // copyEmailConfig returns a defensive copy of EmailConfig including its slices to avoid data races.
 func copyEmailConfig(cfg EmailConfig) EmailConfig {
@@ -152,6 +158,58 @@ func copyWebhookConfigs(webhooks []WebhookConfig) []WebhookConfig {
 	}
 
 	return copies
+}
+
+func copyAppriseConfig(cfg AppriseConfig) AppriseConfig {
+	copy := cfg
+	if len(cfg.Targets) > 0 {
+		copy.Targets = append([]string(nil), cfg.Targets...)
+	}
+	return copy
+}
+
+// NormalizeAppriseConfig cleans and normalizes Apprise configuration values.
+func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
+	normalized := cfg
+	normalized.CLIPath = strings.TrimSpace(normalized.CLIPath)
+	if normalized.CLIPath == "" {
+		normalized.CLIPath = "apprise"
+	}
+
+	if normalized.TimeoutSeconds <= 0 {
+		normalized.TimeoutSeconds = 15
+	} else if normalized.TimeoutSeconds > 120 {
+		normalized.TimeoutSeconds = 120
+	} else if normalized.TimeoutSeconds < 5 {
+		normalized.TimeoutSeconds = 5
+	}
+
+	cleanTargets := make([]string, 0, len(normalized.Targets))
+	seen := make(map[string]struct{}, len(normalized.Targets))
+	for _, target := range normalized.Targets {
+		trimmed := strings.TrimSpace(target)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if _, exists := seen[lower]; exists {
+			continue
+		}
+		seen[lower] = struct{}{}
+		cleanTargets = append(cleanTargets, trimmed)
+	}
+
+	normalized.Targets = cleanTargets
+	if len(cleanTargets) == 0 {
+		normalized.Enabled = false
+	}
+
+	return normalized
+}
+
+func defaultAppriseExec(ctx context.Context, path string, args []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, path, args...)
+	return cmd.CombinedOutput()
 }
 
 type notificationRecord struct {
@@ -200,6 +258,14 @@ type WebhookConfig struct {
 	CustomFields map[string]string `json:"customFields,omitempty"`
 }
 
+// AppriseConfig holds Apprise CLI notification settings.
+type AppriseConfig struct {
+	Enabled        bool     `json:"enabled"`
+	Targets        []string `json:"targets"`
+	CLIPath        string   `json:"cliPath,omitempty"`
+	TimeoutSeconds int      `json:"timeoutSeconds,omitempty"`
+}
+
 // NewNotificationManager creates a new notification manager
 func NewNotificationManager(publicURL string) *NotificationManager {
 	if publicURL != "" {
@@ -208,10 +274,16 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		log.Info().Msg("NotificationManager initialized without public URL - webhook links may not work")
 	}
 	return &NotificationManager{
-		enabled:           true,
-		cooldown:          5 * time.Minute,
-		lastNotified:      make(map[string]notificationRecord),
-		webhooks:          []WebhookConfig{},
+		enabled:      true,
+		cooldown:     5 * time.Minute,
+		lastNotified: make(map[string]notificationRecord),
+		webhooks:     []WebhookConfig{},
+		appriseConfig: AppriseConfig{
+			Enabled:        false,
+			Targets:        []string{},
+			CLIPath:        "apprise",
+			TimeoutSeconds: 15,
+		},
 		groupWindow:       30 * time.Second,
 		pendingAlerts:     make([]*alerts.Alert, 0),
 		groupByNode:       true,
@@ -219,6 +291,7 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		webhookHistory:    make([]WebhookDelivery, 0, WebhookHistoryMaxSize),
 		webhookRateLimits: make(map[string]*webhookRateLimit),
 		publicURL:         publicURL,
+		appriseExec:       defaultAppriseExec,
 	}
 }
 
@@ -227,6 +300,20 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.emailConfig = config
+}
+
+// SetAppriseConfig updates Apprise configuration.
+func (n *NotificationManager) SetAppriseConfig(config AppriseConfig) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.appriseConfig = NormalizeAppriseConfig(config)
+}
+
+// GetAppriseConfig returns a copy of the Apprise configuration.
+func (n *NotificationManager) GetAppriseConfig() AppriseConfig {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return copyAppriseConfig(n.appriseConfig)
 }
 
 // SetCooldown updates the cooldown duration
@@ -434,6 +521,7 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	// Snapshot configuration while holding the lock to avoid races with concurrent updates
 	emailConfig := copyEmailConfig(n.emailConfig)
 	webhooks := copyWebhookConfigs(n.webhooks)
+	appriseConfig := copyAppriseConfig(n.appriseConfig)
 
 	// Send notifications using the captured snapshots outside the lock to avoid blocking writers
 	if emailConfig.Enabled {
@@ -457,6 +545,10 @@ func (n *NotificationManager) sendGroupedAlerts() {
 		}
 	}
 
+	if appriseConfig.Enabled && len(appriseConfig.Targets) > 0 {
+		go n.sendGroupedApprise(appriseConfig, alertsToSend)
+	}
+
 	// Update last notified time for all alerts
 	now := time.Now()
 	for _, alert := range alertsToSend {
@@ -478,6 +570,76 @@ func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*
 
 	// Send using HTML-aware method
 	n.sendHTMLEmail(subject, htmlBody, textBody, config)
+}
+
+func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList []*alerts.Alert) {
+	if len(alertList) == 0 {
+		return
+	}
+
+	cfg := NormalizeAppriseConfig(config)
+	if !cfg.Enabled || len(cfg.Targets) == 0 {
+		return
+	}
+
+	primary := alertList[0]
+	alertCount := len(alertList)
+
+	title := fmt.Sprintf("Pulse alert: %s", primary.ResourceName)
+	if alertCount > 1 {
+		title = fmt.Sprintf("Pulse alerts (%d)", alertCount)
+	}
+
+	var bodyBuilder strings.Builder
+	bodyBuilder.WriteString(primary.Message)
+	bodyBuilder.WriteString("\n\n")
+
+	for _, alert := range alertList {
+		bodyBuilder.WriteString(fmt.Sprintf("[%s] %s", strings.ToUpper(string(alert.Level)), alert.ResourceName))
+		bodyBuilder.WriteString(fmt.Sprintf(" — value %.2f (threshold %.2f)\n", alert.Value, alert.Threshold))
+		if alert.Node != "" {
+			bodyBuilder.WriteString(fmt.Sprintf("Node: %s\n", alert.Node))
+		}
+		if alert.Instance != "" && alert.Instance != alert.Node {
+			bodyBuilder.WriteString(fmt.Sprintf("Instance: %s\n", alert.Instance))
+		}
+		bodyBuilder.WriteString("\n")
+	}
+
+	if n.publicURL != "" {
+		bodyBuilder.WriteString("Dashboard: " + n.publicURL + "\n")
+	}
+
+	body := bodyBuilder.String()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
+	defer cancel()
+
+	args := []string{"-t", title, "-b", body}
+	args = append(args, cfg.Targets...)
+
+	execFn := n.appriseExec
+	if execFn == nil {
+		execFn = defaultAppriseExec
+	}
+
+	output, err := execFn(ctx, cfg.CLIPath, args)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("cliPath", cfg.CLIPath).
+			Strs("targets", cfg.Targets).
+			Msg("Failed to send Apprise notification")
+		return
+	}
+
+	if len(output) > 0 {
+		log.Debug().
+			Str("cliPath", cfg.CLIPath).
+			Strs("targets", cfg.Targets).
+			Str("output", string(output)).
+			Msg("Apprise CLI output")
+	}
 }
 
 // sendEmail sends an email notification

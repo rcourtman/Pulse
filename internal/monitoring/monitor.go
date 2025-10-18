@@ -1363,6 +1363,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 		log.Warn().Err(err).Msg("Failed to load email configuration")
 	}
 
+	if appriseConfig, err := m.configPersist.LoadAppriseConfig(); err == nil {
+		m.notificationMgr.SetAppriseConfig(*appriseConfig)
+	} else {
+		log.Warn().Err(err).Msg("Failed to load Apprise configuration")
+	}
+
 	// Migrate webhooks if needed (from unencrypted to encrypted)
 	if err := m.configPersist.MigrateWebhooksIfNeeded(); err != nil {
 		log.Warn().Err(err).Msg("Failed to migrate webhooks")
@@ -5686,6 +5692,21 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	}
 	m.mu.RUnlock()
 
+	guestKey := func(instance, node string, vmid int) string {
+		if instance == node {
+			return fmt.Sprintf("%s-%d", node, vmid)
+		}
+		return fmt.Sprintf("%s-%s-%d", instance, node, vmid)
+	}
+
+	guestNames := make(map[string]string, len(vms)+len(containers))
+	for _, vm := range vms {
+		guestNames[guestKey(instanceName, vm.Node, vm.VMID)] = vm.Name
+	}
+	for _, ct := range containers {
+		guestNames[guestKey(instanceName, ct.Node, ct.VMID)] = ct.Name
+	}
+
 	activeGuests := 0
 	for _, vm := range vms {
 		if !vm.Template {
@@ -5856,6 +5877,10 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 	// Update state with guest snapshots for this instance
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
+
+	if m.alertManager != nil {
+		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestNames)
+	}
 
 	log.Debug().
 		Str("instance", instanceName).

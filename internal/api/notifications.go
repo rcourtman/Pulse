@@ -87,6 +87,51 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+// GetAppriseConfig returns the current Apprise configuration.
+func (h *NotificationHandlers) GetAppriseConfig(w http.ResponseWriter, r *http.Request) {
+	config := h.monitor.GetNotificationManager().GetAppriseConfig()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(config); err != nil {
+		log.Error().Err(err).Msg("Failed to encode Apprise configuration response")
+	}
+}
+
+// UpdateAppriseConfig updates the Apprise configuration.
+func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var config notifications.AppriseConfig
+	if err := json.Unmarshal(body, &config); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Info().
+		Bool("enabled", config.Enabled).
+		Int("targetCount", len(config.Targets)).
+		Str("cliPath", config.CLIPath).
+		Int("timeoutSeconds", config.TimeoutSeconds).
+		Msg("Parsed Apprise configuration update")
+
+	h.monitor.GetNotificationManager().SetAppriseConfig(config)
+
+	if err := h.monitor.GetConfigPersistence().SaveAppriseConfig(config); err != nil {
+		log.Error().Err(err).Msg("Failed to save Apprise configuration")
+	}
+
+	normalized := h.monitor.GetNotificationManager().GetAppriseConfig()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(normalized); err != nil {
+		log.Error().Err(err).Msg("Failed to encode Apprise configuration response")
+	}
+}
+
 // GetWebhooks returns all webhook configurations
 func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Request) {
 	webhooks := h.monitor.GetNotificationManager().GetWebhooks()
@@ -479,6 +524,10 @@ func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *htt
 		h.GetEmailConfig(w, r)
 	case path == "/email" && r.Method == http.MethodPut:
 		h.UpdateEmailConfig(w, r)
+	case path == "/apprise" && r.Method == http.MethodGet:
+		h.GetAppriseConfig(w, r)
+	case path == "/apprise" && r.Method == http.MethodPut:
+		h.UpdateAppriseConfig(w, r)
 	case path == "/webhooks" && r.Method == http.MethodGet:
 		h.GetWebhooks(w, r)
 	case path == "/webhooks" && r.Method == http.MethodPost:

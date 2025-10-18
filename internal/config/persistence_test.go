@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 )
 
 func TestSaveAlertConfig_PreservesStorageOverrideHysteresis(t *testing.T) {
@@ -134,6 +135,11 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 		TimeThreshold:                  0,
 		TimeThresholds:                 map[string]int{"guest": 0, "node": 0},
 		DockerIgnoredContainerPrefixes: []string{" Runner "},
+		SnapshotDefaults: alerts.SnapshotAlertConfig{
+			Enabled:      true,
+			WarningDays:  20,
+			CriticalDays: 10,
+		},
 		NodeDefaults: alerts.ThresholdConfig{
 			Temperature: &alerts.HysteresisThreshold{Trigger: 0, Clear: 0},
 		},
@@ -171,5 +177,68 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 	expectedPrefixes := []string{"Runner"}
 	if !reflect.DeepEqual(loaded.DockerIgnoredContainerPrefixes, expectedPrefixes) {
 		t.Fatalf("expected normalized prefixes %v, got %v", expectedPrefixes, loaded.DockerIgnoredContainerPrefixes)
+	}
+	if loaded.SnapshotDefaults.Enabled != true {
+		t.Fatalf("expected snapshot defaults to preserve enabled state")
+	}
+	if loaded.SnapshotDefaults.WarningDays != 10 {
+		t.Fatalf("expected snapshot warning days normalized to critical, got %d", loaded.SnapshotDefaults.WarningDays)
+	}
+	if loaded.SnapshotDefaults.CriticalDays != 10 {
+		t.Fatalf("expected snapshot critical days preserved at 10, got %d", loaded.SnapshotDefaults.CriticalDays)
+	}
+}
+
+func TestAppriseConfigPersistence(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	cfg := notifications.AppriseConfig{
+		Enabled:        true,
+		Targets:        []string{"  discord://token  ", "", "mailto://alerts@example.com"},
+		CLIPath:        " /usr/local/bin/apprise ",
+		TimeoutSeconds: 3,
+	}
+
+	if err := cp.SaveAppriseConfig(cfg); err != nil {
+		t.Fatalf("SaveAppriseConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadAppriseConfig()
+	if err != nil {
+		t.Fatalf("LoadAppriseConfig: %v", err)
+	}
+
+	if !loaded.Enabled {
+		t.Fatalf("expected config to remain enabled")
+	}
+
+	expectedTargets := []string{"discord://token", "mailto://alerts@example.com"}
+	if !reflect.DeepEqual(loaded.Targets, expectedTargets) {
+		t.Fatalf("unexpected targets: got %v want %v", loaded.Targets, expectedTargets)
+	}
+
+	if loaded.CLIPath != "/usr/local/bin/apprise" {
+		t.Fatalf("expected CLI path to be trimmed, got %q", loaded.CLIPath)
+	}
+
+	if loaded.TimeoutSeconds != 5 {
+		t.Fatalf("expected timeout normalized to minimum 5 seconds, got %d", loaded.TimeoutSeconds)
+	}
+
+	// Clearing targets should disable the config on next load
+	if err := cp.SaveAppriseConfig(notifications.AppriseConfig{Enabled: true}); err != nil {
+		t.Fatalf("SaveAppriseConfig empty: %v", err)
+	}
+
+	empty, err := cp.LoadAppriseConfig()
+	if err != nil {
+		t.Fatalf("LoadAppriseConfig empty: %v", err)
+	}
+	if empty.Enabled {
+		t.Fatalf("expected disabled configuration when no targets stored")
 	}
 }

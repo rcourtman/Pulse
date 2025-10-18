@@ -24,6 +24,7 @@ type ConfigPersistence struct {
 	alertFile     string
 	emailFile     string
 	webhookFile   string
+	appriseFile   string
 	nodesFile     string
 	systemFile    string
 	oidcFile      string
@@ -49,6 +50,7 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 		alertFile:     filepath.Join(configDir, "alerts.json"),
 		emailFile:     filepath.Join(configDir, "email.enc"),
 		webhookFile:   filepath.Join(configDir, "webhooks.enc"),
+		appriseFile:   filepath.Join(configDir, "apprise.enc"),
 		nodesFile:     filepath.Join(configDir, "nodes.enc"),
 		systemFile:    filepath.Join(configDir, "system.json"),
 		oidcFile:      filepath.Join(configDir, "oidc.enc"),
@@ -183,6 +185,15 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
 		config.TimeThresholds["all"] = config.TimeThreshold
 	}
+	if config.SnapshotDefaults.WarningDays < 0 {
+		config.SnapshotDefaults.WarningDays = 0
+	}
+	if config.SnapshotDefaults.CriticalDays < 0 {
+		config.SnapshotDefaults.CriticalDays = 0
+	}
+	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
+		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
+	}
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
 	data, err := json.MarshalIndent(config, "", "  ")
@@ -235,7 +246,12 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 				MinimumDelta:      2.0,
 				SuppressionWindow: 5,
 				HysteresisMargin:  5.0,
-				Overrides:         make(map[string]alerts.ThresholdConfig),
+				SnapshotDefaults: alerts.SnapshotAlertConfig{
+					Enabled:      false,
+					WarningDays:  30,
+					CriticalDays: 45,
+				},
+				Overrides: make(map[string]alerts.ThresholdConfig),
 			}, nil
 		}
 		return nil, err
@@ -284,6 +300,15 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	ensureDelay("pbs")
 	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
 		config.TimeThresholds["all"] = config.TimeThreshold
+	}
+	if config.SnapshotDefaults.WarningDays < 0 {
+		config.SnapshotDefaults.WarningDays = 0
+	}
+	if config.SnapshotDefaults.CriticalDays < 0 {
+		config.SnapshotDefaults.CriticalDays = 0
+	}
+	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
+		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
 	}
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
@@ -384,6 +409,82 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 		Bool("encrypted", c.crypto != nil).
 		Msg("Email configuration loaded")
 	return &config, nil
+}
+
+// SaveAppriseConfig saves Apprise configuration to file (encrypted if available)
+func (c *ConfigPersistence) SaveAppriseConfig(config notifications.AppriseConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	config = notifications.NormalizeAppriseConfig(config)
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+
+	if err := os.WriteFile(c.appriseFile, data, 0600); err != nil {
+		return err
+	}
+
+	log.Info().
+		Str("file", c.appriseFile).
+		Bool("encrypted", c.crypto != nil).
+		Msg("Apprise configuration saved")
+	return nil
+}
+
+// LoadAppriseConfig loads Apprise configuration from file (decrypts if encrypted)
+func (c *ConfigPersistence) LoadAppriseConfig() (*notifications.AppriseConfig, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.appriseFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			defaultCfg := notifications.AppriseConfig{
+				Enabled:        false,
+				Targets:        []string{},
+				CLIPath:        "apprise",
+				TimeoutSeconds: 15,
+			}
+			return &defaultCfg, nil
+		}
+		return nil, err
+	}
+
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			return nil, err
+		}
+		data = decrypted
+	}
+
+	var config notifications.AppriseConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	normalized := notifications.NormalizeAppriseConfig(config)
+
+	log.Info().
+		Str("file", c.appriseFile).
+		Bool("encrypted", c.crypto != nil).
+		Msg("Apprise configuration loaded")
+	return &normalized, nil
 }
 
 // SaveWebhooks saves webhook configurations to file
