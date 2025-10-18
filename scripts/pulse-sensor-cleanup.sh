@@ -105,8 +105,17 @@ else
     else
         log_info "Cleaning up remote host: $HOST_CLEAN"
 
+        # Try to use proxy's SSH key first (for standalone nodes), fall back to default
+        PROXY_KEY="/var/lib/pulse-sensor-proxy/ssh/id_ed25519"
+        SSH_CMD="ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5"
+
+        if [[ -f "$PROXY_KEY" ]]; then
+            log_info "Using proxy SSH key for cleanup"
+            SSH_CMD="$SSH_CMD -i $PROXY_KEY"
+        fi
+
         # Remove both pulse-managed-key and pulse-proxy-key entries from remote host
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$HOST_CLEAN" \
+        $SSH_CMD root@"$HOST_CLEAN" \
             "sed -i -e '/# pulse-managed-key\$/d' -e '/# pulse-proxy-key\$/d' /root/.ssh/authorized_keys" 2>&1 | \
             logger -t "$LOG_TAG" -p user.info
 
