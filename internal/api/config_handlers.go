@@ -3930,17 +3930,39 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                 echo ""
                 echo "Configuring automatic SSH ProxyJump for containerized Pulse..."
 
+                # Get list of all cluster nodes (or just this node if standalone)
+                ALL_NODES="${PROXY_JUMP_HOST}"
+                if command -v pvecm >/dev/null 2>&1; then
+                    CLUSTER_OUTPUT=$(pvecm nodes 2>/dev/null || true)
+                    if [ -n "$CLUSTER_OUTPUT" ]; then
+                        CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | awk 'NR>1 && $1 ~ /^[0-9]+$/ {print $3}')
+                        if [ -n "$CLUSTER_NODES" ]; then
+                            ALL_NODES="$CLUSTER_NODES"
+                        fi
+                    fi
+                fi
+
                 # Create SSH config that uses this Proxmox host as jump point
+                # Only scope ProxyJump to the specific Proxmox nodes, not all hosts
                 SSH_CONFIG="Host ${PROXY_JUMP_HOST}
     HostName ${PROXY_JUMP_IP}
     User root
     IdentityFile ~/.ssh/id_ed25519
+    StrictHostKeyChecking accept-new
+"
 
-Host *
+                # Add ProxyJump config for each cluster node
+                for NODE in $ALL_NODES; do
+                    if [ "$NODE" != "$PROXY_JUMP_HOST" ]; then
+                        SSH_CONFIG="${SSH_CONFIG}
+Host ${NODE}
     ProxyJump ${PROXY_JUMP_HOST}
     User root
     IdentityFile ~/.ssh/id_ed25519
-    StrictHostKeyChecking accept-new"
+    StrictHostKeyChecking accept-new
+"
+                    fi
+                done
 
                 # Write SSH config to Pulse container
                 # This will be written to /home/pulse/.ssh/config inside the container
