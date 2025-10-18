@@ -3847,8 +3847,11 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
     if [ -t 0 ]; then
         read -p "> " -n 1 -r SSH_ACTION
     else
+        # When stdin is not a terminal (e.g., curl | bash), try /dev/tty first, then stdin for piped input
         if read -p "> " -n 1 -r SSH_ACTION </dev/tty 2>/dev/null; then
             :
+        elif read -t 2 -n 1 -r SSH_ACTION 2>/dev/null && [ -n "$SSH_ACTION" ]; then
+            echo "$SSH_ACTION"
         else
             echo "(No terminal available - keeping existing configuration)"
             SSH_ACTION="k"
@@ -3909,8 +3912,11 @@ else
     if [ -t 0 ]; then
         read -n 1 -r SSH_REPLY
     else
+        # When stdin is not a terminal (e.g., curl | bash), try /dev/tty first, then stdin for piped input
         if read -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
             :
+        elif read -t 2 -n 1 -r SSH_REPLY 2>/dev/null && [ -n "$SSH_REPLY" ]; then
+            echo "$SSH_REPLY"
         else
             echo "(No terminal available - skipping temperature monitoring)"
             SSH_REPLY="n"
@@ -4247,12 +4253,12 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
     else
         echo "  Token Value: [See token output above]"
     fi
-    echo "  Host URL: %s"
+    echo "  Host URL: YOUR_PROXMOX_HOST:8006"
     echo ""
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, tokenName, serverHost)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, pulseURL, tokenName, serverHost)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash

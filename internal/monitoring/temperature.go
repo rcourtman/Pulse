@@ -226,6 +226,8 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 
 // parseCPUTemps extracts CPU temperature data from a sensor chip
 func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, temp *models.Temperature) {
+	foundPackageTemp := false
+
 	for sensorName, sensorData := range chipMap {
 		sensorMap, ok := sensorData.(map[string]interface{})
 		if !ok {
@@ -236,6 +238,7 @@ func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, te
 		if strings.Contains(sensorName, "Package id") || strings.Contains(sensorName, "Tdie") {
 			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) {
 				temp.CPUPackage = tempVal
+				foundPackageTemp = true
 			}
 		}
 
@@ -249,6 +252,25 @@ func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, te
 				})
 				if tempVal > temp.CPUMax {
 					temp.CPUMax = tempVal
+				}
+			}
+		}
+	}
+
+	// If no package temperature was found (e.g., Raspberry Pi), look for generic temp sensors
+	if !foundPackageTemp {
+		for sensorName, sensorData := range chipMap {
+			sensorMap, ok := sensorData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Look for generic temperature sensors (e.g., "temp1" on Raspberry Pi)
+			if strings.HasPrefix(sensorName, "temp") || strings.HasPrefix(sensorName, "Temp") {
+				if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+					temp.CPUPackage = tempVal
+					temp.CPUMax = tempVal
+					break // Use the first valid generic temp sensor
 				}
 			}
 		}
