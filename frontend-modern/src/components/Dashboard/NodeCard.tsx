@@ -133,6 +133,16 @@ const NodeCard: Component<NodeCardProps> = (props) => {
     if (value === null) {
       return 'CPU sensor unavailable';
     }
+
+    const temp = props.node.temperature;
+    const hasMinMax = temp && temp.cpuMin > 0 && temp.cpuMaxRecord > 0;
+
+    if (hasMinMax) {
+      const min = Math.round(temp.cpuMin);
+      const max = Math.round(temp.cpuMaxRecord);
+      return `CPU: ${value}°C (${min}-${max}°C since monitoring started)`;
+    }
+
     return `CPU: ${value}°C`;
   });
 

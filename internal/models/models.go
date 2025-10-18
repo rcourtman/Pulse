@@ -569,14 +569,18 @@ type CPUInfo struct {
 
 // Temperature represents temperature sensors data
 type Temperature struct {
-	CPUPackage float64    `json:"cpuPackage,omitempty"` // CPU package temperature (primary metric)
-	CPUMax     float64    `json:"cpuMax,omitempty"`     // Highest core temperature
-	Cores      []CoreTemp `json:"cores,omitempty"`      // Individual core temperatures
-	NVMe       []NVMeTemp `json:"nvme,omitempty"`       // NVMe drive temperatures
-	Available  bool       `json:"available"`            // Whether any temperature data is available
-	HasCPU     bool       `json:"hasCPU"`               // Whether CPU temperature data is available
-	HasNVMe    bool       `json:"hasNVMe"`              // Whether NVMe temperature data is available
-	LastUpdate time.Time  `json:"lastUpdate"`           // When this data was collected
+	CPUPackage   float64    `json:"cpuPackage,omitempty"`   // CPU package temperature (primary metric)
+	CPUMax       float64    `json:"cpuMax,omitempty"`       // Highest core temperature
+	CPUMin       float64    `json:"cpuMin,omitempty"`       // Minimum recorded CPU temperature (since monitoring started)
+	CPUMaxRecord float64    `json:"cpuMaxRecord,omitempty"` // Maximum recorded CPU temperature (since monitoring started)
+	MinRecorded  time.Time  `json:"minRecorded,omitempty"`  // When minimum temperature was recorded
+	MaxRecorded  time.Time  `json:"maxRecorded,omitempty"`  // When maximum temperature was recorded
+	Cores        []CoreTemp `json:"cores,omitempty"`        // Individual core temperatures
+	NVMe         []NVMeTemp `json:"nvme,omitempty"`         // NVMe drive temperatures
+	Available    bool       `json:"available"`              // Whether any temperature data is available
+	HasCPU       bool       `json:"hasCPU"`                 // Whether CPU temperature data is available
+	HasNVMe      bool       `json:"hasNVMe"`                // Whether NVMe temperature data is available
+	LastUpdate   time.Time  `json:"lastUpdate"`             // When this data was collected
 }
 
 // CoreTemp represents a CPU core temperature
