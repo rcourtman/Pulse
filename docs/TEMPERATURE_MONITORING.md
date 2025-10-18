@@ -550,13 +550,42 @@ curl -fsSL https://get.pulsenode.com/install-proxy.sh | bash -s -- --ctid <your-
 # 4. Verify temperature data still works in Pulse UI
 ```
 
-### Revoking Access When Nodes Leave
+### Automatic Cleanup When Nodes Are Removed (v4.26.0+)
 
-When removing a node from your cluster:
+Starting in v4.26.0, SSH keys are **automatically removed** when you delete a node from Pulse:
+
+1. **When you remove a node** in Pulse Settings → Nodes, Pulse signals the temperature proxy
+2. **The proxy creates a cleanup request** file at `/var/lib/pulse-sensor-proxy/cleanup-request.json`
+3. **A systemd path unit detects the request** and triggers the cleanup service
+4. **The cleanup script automatically:**
+   - SSHs to the specified node (or localhost if it's local)
+   - Removes the SSH key entries (`# pulse-managed-key` and `# pulse-proxy-key`)
+   - Logs the cleanup action via syslog
+
+This works for both **cluster nodes** and **standalone nodes** (added via turnkey setup).
+
+**Monitoring Cleanup:**
+```bash
+# Watch cleanup operations in real-time
+journalctl -u pulse-sensor-cleanup -f
+
+# View cleanup history
+journalctl -u pulse-sensor-cleanup --since "1 week ago"
+
+# Check if cleanup system is active
+systemctl status pulse-sensor-cleanup.path
+```
+
+**Manual Cleanup (if needed):**
+
+If automatic cleanup fails or you need to manually revoke access:
 
 ```bash
-# On the node being removed, remove the proxy's public key
-ssh root@old-node "sed -i '/pulse-sensor-proxy/d' /root/.ssh/authorized_keys"
+# On the node being removed, remove all Pulse SSH keys
+ssh root@old-node "sed -i -e '/# pulse-managed-key\$/d' -e '/# pulse-proxy-key\$/d' /root/.ssh/authorized_keys"
+
+# Or remove them locally
+sed -i -e '/# pulse-managed-key$/d' -e '/# pulse-proxy-key$/d' /root/.ssh/authorized_keys
 
 # No restart needed - proxy will fail gracefully for that node
 # Temperature monitoring will continue for remaining nodes
