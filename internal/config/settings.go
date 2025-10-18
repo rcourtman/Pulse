@@ -28,10 +28,12 @@ type PortSettings struct {
 
 // MonitoringSettings contains monitoring-related configuration
 type MonitoringSettings struct {
-	PollingInterval      int  `json:"pollingInterval" yaml:"pollingInterval" mapstructure:"pollingInterval"` // milliseconds
-	ConcurrentPolling    bool `json:"concurrentPolling" yaml:"concurrentPolling" mapstructure:"concurrentPolling"`
-	BackupPollingCycles  int  `json:"backupPollingCycles" yaml:"backupPollingCycles" mapstructure:"backupPollingCycles"` // How often to poll backups
-	MetricsRetentionDays int  `json:"metricsRetentionDays" yaml:"metricsRetentionDays" mapstructure:"metricsRetentionDays"`
+	PollingInterval         int  `json:"pollingInterval" yaml:"pollingInterval" mapstructure:"pollingInterval"` // milliseconds
+	ConcurrentPolling       bool `json:"concurrentPolling" yaml:"concurrentPolling" mapstructure:"concurrentPolling"`
+	BackupPollingCycles     int  `json:"backupPollingCycles" yaml:"backupPollingCycles" mapstructure:"backupPollingCycles"`             // How often to poll backups
+	BackupPollingIntervalMs int  `json:"backupPollingIntervalMs" yaml:"backupPollingIntervalMs" mapstructure:"backupPollingIntervalMs"` // 0 = use cycle-based scheduling
+	BackupPollingEnabled    bool `json:"backupPollingEnabled" yaml:"backupPollingEnabled" mapstructure:"backupPollingEnabled"`
+	MetricsRetentionDays    int  `json:"metricsRetentionDays" yaml:"metricsRetentionDays" mapstructure:"metricsRetentionDays"`
 }
 
 // LoggingSettings contains logging configuration
@@ -66,10 +68,12 @@ func DefaultSettings() *Settings {
 			},
 		},
 		Monitoring: MonitoringSettings{
-			PollingInterval:      5000, // 5 seconds
-			ConcurrentPolling:    true,
-			BackupPollingCycles:  10, // Poll backups every 10 cycles
-			MetricsRetentionDays: 7,
+			PollingInterval:         5000, // 5 seconds
+			ConcurrentPolling:       true,
+			BackupPollingCycles:     10, // Poll backups every 10 cycles
+			BackupPollingIntervalMs: 0,
+			BackupPollingEnabled:    true,
+			MetricsRetentionDays:    7,
 		},
 		Logging: LoggingSettings{
 			Level:      "info",
@@ -118,8 +122,12 @@ func (s *Settings) Validate() error {
 		return fmt.Errorf("polling interval must be at least 1000ms (1 second)")
 	}
 
-	if s.Monitoring.BackupPollingCycles < 1 {
-		return fmt.Errorf("backup polling cycles must be at least 1")
+	if s.Monitoring.BackupPollingCycles < 0 {
+		return fmt.Errorf("backup polling cycles cannot be negative")
+	}
+
+	if s.Monitoring.BackupPollingIntervalMs < 0 {
+		return fmt.Errorf("backup polling interval cannot be negative")
 	}
 
 	// Validate logging level

@@ -2523,6 +2523,7 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 	settings := config.SystemSettings{
 		// Note: PVE polling is hardcoded to 10s
 		PBSPollingInterval:      int(h.config.PBSPollingInterval.Seconds()),
+		BackupPollingInterval:   int(h.config.BackupPollingInterval.Seconds()),
 		BackendPort:             h.config.BackendPort,
 		FrontendPort:            h.config.FrontendPort,
 		AllowedOrigins:          h.config.AllowedOrigins,
@@ -2538,6 +2539,8 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 		DiscoveryEnabled:        persistedSettings.DiscoveryEnabled,    // Include discoveryEnabled from persisted settings
 		DiscoverySubnet:         persistedSettings.DiscoverySubnet,     // Include discoverySubnet from persisted settings
 	}
+	backupEnabled := h.config.EnableBackupPolling
+	settings.BackupPollingEnabled = &backupEnabled
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
@@ -2670,6 +2673,10 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 		http.Error(w, "PBS polling interval must be positive", http.StatusBadRequest)
 		return
 	}
+	if settings.BackupPollingInterval < 0 {
+		http.Error(w, "Backup polling interval cannot be negative", http.StatusBadRequest)
+		return
+	}
 
 	// Update polling intervals
 	needsReload := false
@@ -2677,6 +2684,14 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 	// Note: PVE polling is hardcoded to 10s, only PBS interval can be configured
 	if settings.PBSPollingInterval > 0 {
 		h.config.PBSPollingInterval = time.Duration(settings.PBSPollingInterval) * time.Second
+		needsReload = true
+	}
+	if settings.BackupPollingInterval > 0 || (settings.BackupPollingInterval == 0 && h.config.BackupPollingInterval != 0) {
+		h.config.BackupPollingInterval = time.Duration(settings.BackupPollingInterval) * time.Second
+		needsReload = true
+	}
+	if settings.BackupPollingEnabled != nil {
+		h.config.EnableBackupPolling = *settings.BackupPollingEnabled
 		needsReload = true
 	}
 

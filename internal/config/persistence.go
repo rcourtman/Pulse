@@ -541,6 +541,8 @@ type SystemSettings struct {
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
 	PBSPollingInterval      int    `json:"pbsPollingInterval"` // PBS polling interval in seconds
 	PMGPollingInterval      int    `json:"pmgPollingInterval"` // PMG polling interval in seconds
+	BackupPollingInterval   int    `json:"backupPollingInterval,omitempty"`
+	BackupPollingEnabled    *bool  `json:"backupPollingEnabled,omitempty"`
 	BackendPort             int    `json:"backendPort,omitempty"`
 	FrontendPort            int    `json:"frontendPort,omitempty"`
 	AllowedOrigins          string `json:"allowedOrigins,omitempty"`

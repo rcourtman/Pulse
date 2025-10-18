@@ -314,6 +314,8 @@ These env vars override system.json values. When set, the UI will show a warning
 - `CONNECTION_TIMEOUT` - API timeout in seconds (default: 10)
 - `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)
 - `LOG_LEVEL` - Log verbosity: debug/info/warn/error (default: info)
+- `ENABLE_BACKUP_POLLING` - Set to `false` to disable polling of Proxmox backup/snapshot APIs (default: true)
+- `BACKUP_POLLING_INTERVAL` - Override the backup polling cadence. Accepts Go duration syntax (e.g. `30m`, `6h`) or seconds. Use `0` for Pulse's default (~90s) cadence.
 - `PULSE_PUBLIC_URL` - Full URL to access Pulse (e.g., `http://192.168.1.100:7655`)
   - **Auto-detected** if not set (except inside Docker where detection is disabled)
   - Used in webhook notifications for "View in Pulse" links

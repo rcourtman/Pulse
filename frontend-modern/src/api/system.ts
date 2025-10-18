@@ -7,6 +7,8 @@ export interface SystemSettings {
   autoUpdateEnabled: boolean;
   autoUpdateCheckInterval?: number;
   autoUpdateTime?: string;
+  backupPollingInterval?: number;
+  backupPollingEnabled?: boolean;
   // apiToken removed - now handled via security API
 }
 
