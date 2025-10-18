@@ -3677,7 +3677,9 @@ if command -v pct >/dev/null 2>&1; then
         # Check all containers for matching IP
         for CTID in $(pct list | awk 'NR>1 {print $1}'); do
             # Verify container is running before attempting connection
-            if ! pct status "$CTID" 2>/dev/null | grep -q "running"; then
+            # Note: status can be "running", "running (healthy)", or "running (unhealthy)"
+            CT_STATUS=$(pct status "$CTID" 2>/dev/null || echo "")
+            if ! echo "$CT_STATUS" | grep -q "running"; then
                 continue
             fi
 
