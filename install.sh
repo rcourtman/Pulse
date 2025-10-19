@@ -25,6 +25,7 @@ ENABLE_AUTO_UPDATES=false
 FORCE_VERSION=""
 FORCE_CHANNEL=""
 SOURCE_BRANCH="main"
+PROXY_MODE=""  # Can be: yes, no, auto, or empty (will prompt)
 
 DEBIAN_TEMPLATE_FALLBACK="debian-12-standard_12.12-1_amd64.tar.zst"
 DEBIAN_TEMPLATE=""
@@ -143,6 +144,67 @@ print_info() {
 
 print_warn() {
     echo -e "${YELLOW}[WARN] $1${NC}"
+}
+
+# Prompt user about proxy installation
+# Returns 0 if user wants proxy, 1 if not
+prompt_proxy_installation() {
+    local docker_detected="$1"
+    local default_choice="n"
+
+    # If Docker is detected, preselect yes
+    if [[ "$docker_detected" == "true" ]]; then
+        default_choice="y"
+    fi
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Temperature Monitoring Setup"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Pulse can install a secure proxy service on the host to enable"
+    echo "temperature monitoring from within the container."
+    echo ""
+    echo "This will:"
+    echo "  • Install pulse-sensor-proxy service on the Proxmox host"
+    echo "  • Create bind mount for container communication"
+    echo "  • Distribute SSH keys to cluster nodes"
+    echo "  • Restart the container to activate"
+    echo ""
+
+    if [[ "$docker_detected" == "true" ]]; then
+        echo "${YELLOW}Docker detected - proxy is recommended for temperature monitoring${NC}"
+        echo ""
+    fi
+
+    # Determine prompt text based on default
+    if [[ "$default_choice" == "y" ]]; then
+        echo -n "Enable temperature monitoring? [Y/n]: "
+    else
+        echo -n "Enable temperature monitoring? [y/N]: "
+    fi
+
+    read -r response
+
+    # Handle empty response (use default)
+    if [[ -z "$response" ]]; then
+        response="$default_choice"
+    fi
+
+    # Normalize to lowercase
+    response=$(echo "$response" | tr '[:upper:]' '[:lower:]')
+
+    if [[ "$response" =~ ^(y|yes)$ ]]; then
+        echo ""
+        print_info "Temperature proxy will be installed"
+        return 0
+    else
+        echo ""
+        print_info "Skipping proxy installation"
+        print_info "Temperature monitoring from container will be unavailable"
+        print_info "To enable later, run: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid <CTID>"
+        return 1
+    fi
 }
 
 ensure_debian_template() {
@@ -1086,59 +1148,96 @@ create_lxc_container() {
     # Get container IP
     local IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
 
-    # Install temperature proxy on host for secure monitoring
-    echo
-    print_info "Installing temperature monitoring proxy on host..."
-    local proxy_script="/tmp/install-sensor-proxy-$$.sh"
+    # Determine if we should install temperature proxy
+    local install_proxy=false
+    local docker_in_container=false
 
-    # Download proxy installer
-    if command -v timeout >/dev/null 2>&1; then
-        if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 \
-            "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
-            > "$proxy_script" 2>/dev/null; then
-            print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-            print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
-        fi
-    else
-        if ! curl -fsSL --connect-timeout 5 --max-time 15 \
-            "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
-            > "$proxy_script" 2>/dev/null; then
-            print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-            print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
-        fi
+    # Check if Docker is installed in the container
+    if pct exec $CTID -- command -v docker >/dev/null 2>&1; then
+        docker_in_container=true
     fi
 
-    # Run proxy installer if downloaded
-    if [[ -f "$proxy_script" ]]; then
-        chmod +x "$proxy_script"
-
-        # If building from source, copy the binary from the LXC instead of downloading
-        local proxy_install_args="--ctid $CTID"
-        if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
-            local local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
-            print_info "Copying locally-built pulse-sensor-proxy binary from container..."
-            if pct pull $CTID /opt/pulse/bin/pulse-sensor-proxy "$local_proxy_binary" 2>/dev/null; then
-                proxy_install_args="--ctid $CTID --local-binary $local_proxy_binary"
-                print_info "Using locally-built binary from container"
+    # Decide based on PROXY_MODE
+    case "$PROXY_MODE" in
+        yes)
+            install_proxy=true
+            ;;
+        no)
+            install_proxy=false
+            ;;
+        auto)
+            # Auto-detect: install if Docker is present
+            if [[ "$docker_in_container" == "true" ]]; then
+                install_proxy=true
             else
-                print_warn "Failed to copy binary from container, will try fallback download"
-                export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
+                install_proxy=false
+            fi
+            ;;
+        *)
+            # Empty/unset - prompt the user
+            if prompt_proxy_installation "$docker_in_container"; then
+                install_proxy=true
+            else
+                install_proxy=false
+            fi
+            ;;
+    esac
+
+    # Install temperature proxy on host for secure monitoring (if enabled)
+    if [[ "$install_proxy" == "true" ]]; then
+        echo
+        print_info "Installing temperature monitoring proxy on host..."
+        local proxy_script="/tmp/install-sensor-proxy-$$.sh"
+
+        # Download proxy installer
+        if command -v timeout >/dev/null 2>&1; then
+            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 \
+                "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
+                > "$proxy_script" 2>/dev/null; then
+                print_warn "Failed to download proxy installer - temperature monitoring unavailable"
+                print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
             fi
         else
-            # For release installs, set fallback URL to download from Pulse server inside the LXC
-            export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
+            if ! curl -fsSL --connect-timeout 5 --max-time 15 \
+                "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
+                > "$proxy_script" 2>/dev/null; then
+                print_warn "Failed to download proxy installer - temperature monitoring unavailable"
+                print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+            fi
         fi
 
-        if bash "$proxy_script" $proxy_install_args 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
-            print_info "Temperature proxy installed successfully"
-            # Clean up temporary binary if it was copied
-            [[ -f "$local_proxy_binary" ]] && rm -f "$local_proxy_binary"
-        else
-            print_warn "Proxy installation failed - temperature monitoring will use fallback method"
-            print_info "Check logs: /tmp/proxy-install-${CTID}.log"
-            print_info "Or run manually: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+        # Run proxy installer if downloaded
+        if [[ -f "$proxy_script" ]]; then
+            chmod +x "$proxy_script"
+
+            # If building from source, copy the binary from the LXC instead of downloading
+            local proxy_install_args="--ctid $CTID"
+            if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+                local local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
+                print_info "Copying locally-built pulse-sensor-proxy binary from container..."
+                if pct pull $CTID /opt/pulse/bin/pulse-sensor-proxy "$local_proxy_binary" 2>/dev/null; then
+                    proxy_install_args="--ctid $CTID --local-binary $local_proxy_binary"
+                    print_info "Using locally-built binary from container"
+                else
+                    print_warn "Failed to copy binary from container, will try fallback download"
+                    export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
+                fi
+            else
+                # For release installs, set fallback URL to download from Pulse server inside the LXC
+                export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
+            fi
+
+            if bash "$proxy_script" $proxy_install_args 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
+                print_info "Temperature proxy installed successfully"
+                # Clean up temporary binary if it was copied
+                [[ -f "$local_proxy_binary" ]] && rm -f "$local_proxy_binary"
+            else
+                print_warn "Proxy installation failed - temperature monitoring will use fallback method"
+                print_info "Check logs: /tmp/proxy-install-${CTID}.log"
+                print_info "Or run manually: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+            fi
+            rm -f "$proxy_script"
         fi
-        rm -f "$proxy_script"
     fi
 
     # Clean final output
@@ -2863,6 +2962,14 @@ while [[ $# -gt 0 ]]; do
             ENABLE_AUTO_UPDATES=true
             shift
             ;;
+        --proxy)
+            PROXY_MODE="$2"
+            if [[ ! "$PROXY_MODE" =~ ^(yes|no|auto)$ ]]; then
+                print_error "Invalid --proxy value: $PROXY_MODE (must be yes, no, or auto)"
+                exit 1
+            fi
+            shift 2
+            ;;
         --main|--source|--from-source|--branch)
             BUILD_FROM_SOURCE=true
             # Optional: specify branch
@@ -2884,6 +2991,11 @@ while [[ $# -gt 0 ]]; do
             echo "  --main             Build and install from main branch source"
             echo "  --source [BRANCH]  Build and install from source (default: main)"
             echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
+            echo "  --proxy MODE       Control temperature proxy installation (yes/no/auto)"
+            echo "                     yes: Install without prompting"
+            echo "                     no: Skip proxy installation"
+            echo "                     auto: Auto-detect (install if Docker present)"
+            echo "                     (default: prompt user for LXC installations)"
             echo ""
             echo "Management options:"
             echo "  --reset            Reset Pulse to fresh configuration"
