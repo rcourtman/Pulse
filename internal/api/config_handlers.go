@@ -2,9 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -3947,7 +3946,7 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                 SSH_CONFIG="Host ${PROXY_JUMP_HOST}
     HostName ${PROXY_JUMP_IP}
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/id_ed25519
     StrictHostKeyChecking accept-new
 "
 
@@ -3958,7 +3957,7 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
 Host ${NODE}
     ProxyJump ${PROXY_JUMP_HOST}
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/id_ed25519
     StrictHostKeyChecking accept-new
 "
                     fi
@@ -5322,8 +5321,8 @@ func (h *ConfigHandlers) getOrGenerateSSHKey() string {
 	}
 
 	sshDir := filepath.Join(homeDir, ".ssh")
-	privateKeyPath := filepath.Join(sshDir, "id_rsa")
-	publicKeyPath := filepath.Join(sshDir, "id_rsa.pub")
+	privateKeyPath := filepath.Join(sshDir, "id_ed25519")
+	publicKeyPath := filepath.Join(sshDir, "id_ed25519.pub")
 
 	// Check if public key already exists
 	if pubKeyBytes, err := os.ReadFile(publicKeyPath); err == nil {
@@ -5341,14 +5340,14 @@ func (h *ConfigHandlers) getOrGenerateSSHKey() string {
 		return ""
 	}
 
-	// Generate RSA key pair
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	// Generate Ed25519 key pair (more secure and faster than RSA)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to generate RSA key")
+		log.Error().Err(err).Msg("Failed to generate Ed25519 key")
 		return ""
 	}
 
-	// Save private key
+	// Save private key in OpenSSH format
 	privateKeyFile, err := os.OpenFile(privateKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		log.Error().Err(err).Str("path", privateKeyPath).Msg("Failed to create private key file")
@@ -5356,23 +5355,25 @@ func (h *ConfigHandlers) getOrGenerateSSHKey() string {
 	}
 	defer privateKeyFile.Close()
 
-	privateKeyPEM := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	// Marshal Ed25519 private key to OpenSSH format
+	privKeyBytes, err := ssh.MarshalPrivateKey(privateKey, "")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal private key")
+		return ""
 	}
-	if err := pem.Encode(privateKeyFile, privateKeyPEM); err != nil {
+	if err := pem.Encode(privateKeyFile, privKeyBytes); err != nil {
 		log.Error().Err(err).Msg("Failed to write private key")
 		return ""
 	}
 
 	// Generate public key in OpenSSH format
-	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	sshPublicKey, err := ssh.NewPublicKey(publicKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate public key")
 		return ""
 	}
 
-	publicKeyBytes := ssh.MarshalAuthorizedKey(publicKey)
+	publicKeyBytes := ssh.MarshalAuthorizedKey(sshPublicKey)
 	publicKeyString := strings.TrimSpace(string(publicKeyBytes))
 
 	// Save public key
