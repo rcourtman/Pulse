@@ -59,18 +59,13 @@ configure_local_authorized_key() {
     fi
 }
 
-# Check if running on Proxmox host
-if ! command -v pvecm >/dev/null 2>&1; then
-    print_error "This script must be run on a Proxmox VE host"
-    exit 1
-fi
-
-# Parse arguments
+# Parse arguments first to check for standalone mode
 CTID=""
 VERSION="latest"
 LOCAL_BINARY=""
 QUIET=false
 PULSE_SERVER=""
+STANDALONE=false
 FALLBACK_BASE="${PULSE_SENSOR_PROXY_FALLBACK_URL:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -95,6 +90,10 @@ while [[ $# -gt 0 ]]; do
             QUIET=true
             shift
             ;;
+        --standalone)
+            STANDALONE=true
+            shift
+            ;;
         *)
             print_error "Unknown option: $1"
             exit 1
@@ -107,19 +106,35 @@ if [[ -n "$PULSE_SERVER" ]]; then
     FALLBACK_BASE="${PULSE_SERVER}/api/install/pulse-sensor-proxy"
 fi
 
-if [[ -z "$CTID" ]]; then
-    print_error "Missing required argument: --ctid <container-id>"
-    echo "Usage: $0 --ctid <container-id> [--pulse-server <url>] [--version <version>] [--local-binary <path>]"
-    exit 1
+# Check if running on Proxmox host (only required for LXC mode)
+if [[ "$STANDALONE" == false ]]; then
+    if ! command -v pvecm >/dev/null 2>&1; then
+        print_error "This script must be run on a Proxmox VE host"
+        exit 1
+    fi
 fi
 
-# Verify container exists
-if ! pct status "$CTID" >/dev/null 2>&1; then
-    print_error "Container $CTID does not exist"
-    exit 1
+# Validate arguments based on mode
+if [[ "$STANDALONE" == false ]]; then
+    if [[ -z "$CTID" ]]; then
+        print_error "Missing required argument: --ctid <container-id>"
+        echo "Usage: $0 --ctid <container-id> [--pulse-server <url>] [--version <version>] [--local-binary <path>]"
+        echo "   Or: $0 --standalone [--pulse-server <url>] [--version <version>] [--local-binary <path>]"
+        exit 1
+    fi
+
+    # Verify container exists
+    if ! pct status "$CTID" >/dev/null 2>&1; then
+        print_error "Container $CTID does not exist"
+        exit 1
+    fi
 fi
 
-print_info "Installing pulse-sensor-proxy for container $CTID"
+if [[ "$STANDALONE" == true ]]; then
+    print_info "Installing pulse-sensor-proxy for standalone/Docker deployment"
+else
+    print_info "Installing pulse-sensor-proxy for container $CTID"
+fi
 
 BINARY_PATH="/usr/local/bin/pulse-sensor-proxy"
 SERVICE_PATH="/etc/systemd/system/pulse-sensor-proxy.service"
@@ -216,6 +231,24 @@ fi
 print_info "Setting up directories with proper ownership..."
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 "$SSH_DIR"
+install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0755 /etc/pulse-sensor-proxy
+
+# Create config file with ACL for Docker containers (standalone mode)
+if [[ "$STANDALONE" == true ]]; then
+    print_info "Creating config file with Docker container ACL..."
+    cat > /etc/pulse-sensor-proxy/config.yaml << 'EOF'
+# Pulse Temperature Proxy Configuration
+# Allow Docker containers (UID 1000) to connect
+allowed_peer_uids: [1000]
+
+# Allow ID-mapped root (LXC containers with sub-UID mapping)
+allow_idmapped_root: true
+allowed_idmap_users:
+  - root
+EOF
+    chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/config.yaml
+    chmod 0644 /etc/pulse-sensor-proxy/config.yaml
+fi
 
 # Stop existing service if running (for upgrades)
 if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
@@ -225,7 +258,67 @@ fi
 
 # Install hardened systemd service
 print_info "Installing hardened systemd service..."
-cat > "$SERVICE_PATH" << 'EOF'
+
+# Generate service file based on mode (Proxmox vs standalone)
+if [[ "$STANDALONE" == true ]]; then
+    # Standalone/Docker mode - no Proxmox-specific paths
+    cat > "$SERVICE_PATH" << 'EOF'
+[Unit]
+Description=Pulse Temperature Proxy
+Documentation=https://github.com/rcourtman/Pulse
+After=network.target
+
+[Service]
+Type=simple
+User=pulse-sensor-proxy
+Group=pulse-sensor-proxy
+WorkingDirectory=/var/lib/pulse-sensor-proxy
+ExecStart=/usr/local/bin/pulse-sensor-proxy --config /etc/pulse-sensor-proxy/config.yaml
+Restart=on-failure
+RestartSec=5s
+
+# Runtime dirs/sockets
+RuntimeDirectory=pulse-sensor-proxy
+RuntimeDirectoryMode=0775
+RuntimeDirectoryPreserve=yes
+UMask=0007
+
+# Core hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/pulse-sensor-proxy
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectProc=invisible
+ProcSubset=pid
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+AmbientCapabilities=
+KeyringMode=private
+LimitNOFILE=1024
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pulse-sensor-proxy
+
+[Install]
+WantedBy=multi-user.target
+EOF
+else
+    # Proxmox mode - include Proxmox paths
+    cat > "$SERVICE_PATH" << 'EOF'
 [Unit]
 Description=Pulse Temperature Proxy
 Documentation=https://github.com/rcourtman/Pulse
@@ -281,6 +374,7 @@ SyslogIdentifier=pulse-sensor-proxy
 [Install]
 WantedBy=multi-user.target
 EOF
+fi
 
 # Reload systemd and start service
 print_info "Enabling and starting service..."
@@ -641,10 +735,12 @@ else
     configure_local_authorized_key "$AUTH_LINE"
 fi
 
-# Ensure container mount via mp configuration
-print_info "Ensuring container socket mount configuration..."
-MOUNT_TARGET="/mnt/pulse-proxy"
-LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
+# Container-specific configuration (skip for standalone mode)
+if [[ "$STANDALONE" == false ]]; then
+    # Ensure container mount via mp configuration
+    print_info "Ensuring container socket mount configuration..."
+    MOUNT_TARGET="/mnt/pulse-proxy"
+    LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
 CONFIG_CONTENT=$(pct config "$CTID")
 CURRENT_MP=$(pct config "$CTID" | awk -v target="$MOUNT_TARGET" '$1 ~ /^mp[0-9]+:$/ && index($0, "mp=" target) {split($1, arr, ":"); print arr[1]; exit}')
 MOUNT_UPDATED=false
@@ -762,6 +858,7 @@ if [ "$LEGACY_KEYS_FOUND" = true ] && [ "$QUIET" != true ]; then
     print_info "Legacy SSH keys removed from container for security"
     print_info ""
 fi
+fi  # End of container-specific configuration
 
 if [ "$QUIET" = true ]; then
     print_success "pulse-sensor-proxy installed and running"
