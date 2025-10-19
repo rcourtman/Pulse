@@ -39,6 +39,10 @@ func defaultWorkDir() string {
 	return "/var/lib/pulse-sensor-proxy"
 }
 
+var (
+	configPath string
+)
+
 var rootCmd = &cobra.Command{
 	Use:     "pulse-sensor-proxy",
 	Short:   "Pulse Sensor Proxy - Secure sensor data bridge for containerized Pulse",
@@ -65,6 +69,7 @@ var versionCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to configuration file (default: /etc/pulse-sensor-proxy/config.yaml)")
 }
 
 func main() {
@@ -135,12 +140,16 @@ func runProxy() {
 	}
 
 	// Load configuration
-	configPath := os.Getenv("PULSE_SENSOR_PROXY_CONFIG")
-	if configPath == "" {
-		configPath = defaultConfigPath
+	// Priority: --config flag > PULSE_SENSOR_PROXY_CONFIG env > default path
+	cfgPath := configPath // from flag
+	if cfgPath == "" {
+		cfgPath = os.Getenv("PULSE_SENSOR_PROXY_CONFIG")
+	}
+	if cfgPath == "" {
+		cfgPath = defaultConfigPath
 	}
 
-	cfg, err := loadConfig(configPath)
+	cfg, err := loadConfig(cfgPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
@@ -151,7 +160,7 @@ func runProxy() {
 	log.Info().
 		Str("socket", socketPath).
 		Str("ssh_key_dir", sshKeyPath).
-		Str("config_path", configPath).
+		Str("config_path", cfgPath).
 		Str("version", Version).
 		Msg("Starting pulse-sensor-proxy")
 
@@ -568,6 +577,13 @@ func (p *Proxy) handleRegisterNodes(req RPCRequest) RPCResponse {
 	// Test SSH connectivity to each node
 	nodeStatus := make([]map[string]interface{}, 0, len(nodes))
 	for _, node := range nodes {
+		// Validate node name to prevent SSH command injection
+		node = strings.TrimSpace(node)
+		if err := validateNodeName(node); err != nil {
+			log.Warn().Str("node", node).Msg("Invalid node name format from cluster discovery")
+			continue
+		}
+
 		status := map[string]interface{}{
 			"name": node,
 		}
@@ -606,6 +622,15 @@ func (p *Proxy) handleGetTemperature(req RPCRequest) RPCResponse {
 		return RPCResponse{
 			Success: false,
 			Error:   "'node' parameter must be a string",
+		}
+	}
+
+	// Validate node name to prevent SSH command injection
+	node = strings.TrimSpace(node)
+	if err := validateNodeName(node); err != nil {
+		return RPCResponse{
+			Success: false,
+			Error:   "invalid node name format",
 		}
 	}
 

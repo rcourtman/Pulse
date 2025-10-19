@@ -9,7 +9,14 @@ import (
 
 var (
 	// nodeNameRegex validates node names (alphanumeric, dots, underscores, hyphens, 1-64 chars)
-	nodeNameRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,64}$`)
+	// Must not start with hyphen to prevent SSH option injection
+	nodeNameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
+
+	// ipv4Regex validates IPv4 addresses
+	ipv4Regex = regexp.MustCompile(`^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$`)
+
+	// ipv6Regex validates IPv6 addresses (simplified)
+	ipv6Regex = regexp.MustCompile(`^[0-9a-fA-F:]+$`)
 )
 
 // sanitizeCorrelationID validates and sanitizes a correlation ID
