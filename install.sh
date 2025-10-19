@@ -1437,6 +1437,18 @@ download_pulse() {
 
         rm -f pulse-docker-agent
 
+        print_info "Building temperature proxy from source..."
+        if ! go build -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy >/dev/null 2>&1; then
+            print_error "Failed to build temperature proxy binary"
+            exit 1
+        fi
+
+        cp -f pulse-sensor-proxy "$INSTALL_DIR/bin/pulse-sensor-proxy"
+        chmod +x "$INSTALL_DIR/bin/pulse-sensor-proxy"
+        chown pulse:pulse "$INSTALL_DIR/bin/pulse-sensor-proxy"
+
+        rm -f pulse-sensor-proxy
+
         build_agent_binaries_from_source "$agent_version"
 
         # Update VERSION file to show it's from source
@@ -2207,6 +2219,20 @@ main() {
             chown pulse:pulse "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
             ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
             rm -f pulse-docker-agent
+
+            print_info "Building temperature proxy from source..."
+            if ! go build -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy >/dev/null 2>&1; then
+                print_error "Failed to build temperature proxy binary"
+                cd /
+                rm -rf "$TEMP_BUILD_DIR"
+                exit 1
+            fi
+
+            cp -f pulse-sensor-proxy "$INSTALL_DIR/bin/pulse-sensor-proxy"
+            chmod +x "$INSTALL_DIR/bin/pulse-sensor-proxy"
+            chown pulse:pulse "$INSTALL_DIR/bin/pulse-sensor-proxy"
+            rm -f pulse-sensor-proxy
+
             ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
 
             mkdir -p "$INSTALL_DIR/scripts"
@@ -2216,6 +2242,18 @@ main() {
                 chown pulse:pulse "$INSTALL_DIR/scripts/install-docker-agent.sh"
             else
                 print_warn "Docker agent install script missing from source checkout; skipping installation"
+            fi
+
+            if [[ -f "scripts/install-docker.sh" ]]; then
+                cp "scripts/install-docker.sh" "$INSTALL_DIR/scripts/install-docker.sh"
+                chmod 755 "$INSTALL_DIR/scripts/install-docker.sh"
+                chown pulse:pulse "$INSTALL_DIR/scripts/install-docker.sh"
+            fi
+
+            if [[ -f "scripts/install-sensor-proxy.sh" ]]; then
+                cp "scripts/install-sensor-proxy.sh" "$INSTALL_DIR/scripts/install-sensor-proxy.sh"
+                chmod 755 "$INSTALL_DIR/scripts/install-sensor-proxy.sh"
+                chown pulse:pulse "$INSTALL_DIR/scripts/install-sensor-proxy.sh"
             fi
 
             build_agent_binaries_from_source "$agent_version"
