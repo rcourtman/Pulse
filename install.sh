@@ -1108,6 +1108,8 @@ create_lxc_container() {
     # Run proxy installer if downloaded
     if [[ -f "$proxy_script" ]]; then
         chmod +x "$proxy_script"
+        # Set fallback URL to download from Pulse server inside the LXC
+        export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
         if bash "$proxy_script" --ctid "$CTID" 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
             print_info "Temperature proxy installed successfully"
         else
