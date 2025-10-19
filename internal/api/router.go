@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -133,6 +132,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, r.handleDiagnosticsDockerPrepareToken))
 	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.handleDownloadPulseSensorProxy)
 	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.handleDownloadInstallerScript)
+	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
 	r.mux.HandleFunc("/api/config", r.handleConfig)
 	r.mux.HandleFunc("/api/backups", r.handleBackups)
 	r.mux.HandleFunc("/api/backups/", r.handleBackups)
@@ -1167,6 +1167,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/server/info",                     // Server info for installer script
 				"/api/install/install-sensor-proxy.sh", // Temperature proxy installer fallback
 				"/api/install/pulse-sensor-proxy",      // Temperature proxy binary fallback
+				"/api/install/install-docker.sh",       // Docker turnkey installer
+				"/api/system/proxy-public-key",         // Temperature proxy public key for setup script
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -1429,6 +1431,9 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 			Msg("Legacy SSH configuration detected - user should migrate to proxy architecture")
 	}
 
+	// Check for dev mode SSH override (FOR TESTING ONLY - NEVER in production)
+	devModeSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
+
 	response := HealthResponse{
 		Status:                      "healthy",
 		Timestamp:                   time.Now().Unix(),
@@ -1436,6 +1441,7 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		LegacySSHDetected:           legacySSH,
 		RecommendProxyUpgrade:       recommendProxy,
 		ProxyInstallScriptAvailable: true, // Install script is always available
+		DevModeSSH:                  devModeSSH,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -3081,59 +3087,106 @@ func (r *Router) handleDownloadPulseSensorProxy(w http.ResponseWriter, req *http
 		return
 	}
 
+	// Get requested architecture from query param
 	arch := strings.TrimSpace(req.URL.Query().Get("arch"))
 	if arch == "" {
-		arch = runtime.GOARCH
+		arch = "linux-amd64" // Default to amd64
 	}
 
-	if runtime.GOOS != "linux" && arch != "linux-amd64" {
-		writeErrorResponse(w, http.StatusBadRequest, "unsupported_arch", "Only linux-amd64 builds are supported in this environment", nil)
+	var binaryPath string
+	var filename string
+
+	// Map architecture to binary filename
+	switch arch {
+	case "linux-amd64", "amd64":
+		filename = "pulse-sensor-proxy-linux-amd64"
+	case "linux-arm64", "arm64":
+		filename = "pulse-sensor-proxy-linux-arm64"
+	case "linux-armv7", "armv7", "armhf":
+		filename = "pulse-sensor-proxy-linux-armv7"
+	default:
+		writeErrorResponse(w, http.StatusBadRequest, "unsupported_arch", fmt.Sprintf("Unsupported architecture: %s", arch), nil)
 		return
 	}
 
-	tmpFile, err := os.CreateTemp("", "pulse-sensor-proxy-*.bin")
+	// Try pre-built architecture-specific binary first (in container)
+	binaryPath = filepath.Join("/opt/pulse/bin", filename)
+	content, err := os.ReadFile(binaryPath)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "tempfile_error", "Failed to create temporary file", nil)
-		return
-	}
-	tmpFileName := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpFileName)
-
-	cmd := exec.Command("go", "build", "-o", tmpFileName, "./cmd/pulse-sensor-proxy")
-	cmd.Dir = r.projectRoot
-	cmd.Env = append(os.Environ(),
-		"GOOS=linux",
-		"GOARCH=amd64",
-		"CGO_ENABLED=0",
-	)
-
-	buildOutput, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Error().Err(err).Bytes("output", buildOutput).Msg("Failed to build pulse-sensor-proxy binary")
-		writeErrorResponse(w, http.StatusInternalServerError, "build_failed", "Failed to build proxy binary on the server", nil)
-		return
+		// Try generic pulse-sensor-proxy binary (built for host arch)
+		genericPath := "/opt/pulse/bin/pulse-sensor-proxy"
+		content, err = os.ReadFile(genericPath)
+		if err == nil {
+			log.Info().
+				Str("arch", arch).
+				Str("path", genericPath).
+				Int("size", len(content)).
+				Msg("Serving generic pulse-sensor-proxy binary (built for host arch)")
+			binaryPath = genericPath
+		}
 	}
 
-	builtFile, err := os.Open(tmpFileName)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "open_error", "Failed to open built proxy binary", nil)
-		return
-	}
-	defer builtFile.Close()
+		// Fallback: Try to build on-the-fly for dev environments
+		log.Info().
+			Str("arch", arch).
+			Str("tried_path", binaryPath).
+			Msg("Pre-built binary not found, attempting to build on-the-fly (dev mode)")
 
-	stat, err := builtFile.Stat()
-	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "stat_error", "Failed to stat built binary", nil)
-		return
+		if !strings.HasPrefix(arch, "linux-amd64") && runtime.GOARCH != strings.TrimPrefix(arch, "linux-") {
+			writeErrorResponse(w, http.StatusBadRequest, "cross_compile_unsupported", "Cross-compilation not supported in dev mode", nil)
+			return
+		}
+
+		tmpFile, err := os.CreateTemp("", "pulse-sensor-proxy-*.bin")
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create temp file for on-the-fly build")
+			writeErrorResponse(w, http.StatusInternalServerError, "tempfile_error", "Binary not available and build failed", nil)
+			return
+		}
+		tmpFileName := tmpFile.Name()
+		tmpFile.Close()
+		defer os.Remove(tmpFileName)
+
+		cmd := exec.Command("go", "build", "-o", tmpFileName, "./cmd/pulse-sensor-proxy")
+		cmd.Dir = r.projectRoot
+		cmd.Env = append(os.Environ(),
+			"CGO_ENABLED=0",
+		)
+
+		buildOutput, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Error().Err(err).Bytes("output", buildOutput).Msg("Failed to build pulse-sensor-proxy binary on-the-fly")
+			writeErrorResponse(w, http.StatusInternalServerError, "build_failed", "Binary not available and on-the-fly build failed", nil)
+			return
+		}
+
+		// Read the built binary
+		content, err = os.ReadFile(tmpFileName)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to read built binary")
+			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read built binary", nil)
+			return
+		}
+
+		log.Info().
+			Str("arch", arch).
+			Int("size", len(content)).
+			Msg("Successfully built pulse-sensor-proxy binary on-the-fly")
+	} else {
+		log.Info().
+			Str("path", binaryPath).
+			Str("arch", arch).
+			Int("size", len(content)).
+			Msg("Serving pre-built pulse-sensor-proxy binary")
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"pulse-sensor-proxy-linux-amd64\""))
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
 
-	if _, err := io.Copy(w, builtFile); err != nil {
-		log.Error().Err(err).Msg("Failed to stream proxy binary to client")
+	if _, err := w.Write(content); err != nil {
+		log.Error().Err(err).Msg("Failed to write proxy binary to client")
 	}
 }
 
@@ -3143,17 +3196,51 @@ func (r *Router) handleDownloadInstallerScript(w http.ResponseWriter, req *http.
 		return
 	}
 
-	scriptPath := filepath.Join(r.projectRoot, "scripts", "install-sensor-proxy.sh")
+	// Try pre-built location first (in container)
+	scriptPath := "/opt/pulse/scripts/install-sensor-proxy.sh"
 	content, err := os.ReadFile(scriptPath)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read installer script", nil)
-		return
+		// Fallback to project root (dev environment)
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "install-sensor-proxy.sh")
+		content, err = os.ReadFile(scriptPath)
+		if err != nil {
+			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read installer script")
+			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read installer script", nil)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Header().Set("Content-Disposition", "attachment; filename=install-sensor-proxy.sh")
 	if _, err := w.Write(content); err != nil {
 		log.Error().Err(err).Msg("Failed to write installer script to client")
+	}
+}
+
+func (r *Router) handleDownloadDockerInstallerScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
+		return
+	}
+
+	// Try pre-built location first (in container)
+	scriptPath := "/opt/pulse/scripts/install-docker.sh"
+	content, err := os.ReadFile(scriptPath)
+	if err != nil {
+		// Fallback to project root (dev environment)
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "install-docker.sh")
+		content, err = os.ReadFile(scriptPath)
+		if err != nil {
+			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read Docker installer script")
+			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read Docker installer script", nil)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.Header().Set("Content-Disposition", "attachment; filename=install-docker.sh")
+	if _, err := w.Write(content); err != nil {
+		log.Error().Err(err).Msg("Failed to write Docker installer script to client")
 	}
 }
 

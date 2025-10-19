@@ -17,6 +17,7 @@ type HealthResponse struct {
 	LegacySSHDetected           bool    `json:"legacySSHDetected,omitempty"`
 	RecommendProxyUpgrade       bool    `json:"recommendProxyUpgrade,omitempty"`
 	ProxyInstallScriptAvailable bool    `json:"proxyInstallScriptAvailable,omitempty"`
+	DevModeSSH                  bool    `json:"devModeSSH,omitempty"` // DEV/TEST ONLY: SSH keys allowed in containers
 }
 
 // VersionResponse represents version information
