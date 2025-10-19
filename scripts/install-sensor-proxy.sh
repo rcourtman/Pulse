@@ -191,34 +191,39 @@ else
     esac
 
     # If fallback URL is provided (e.g., from Pulse setup script), use it directly
-    if [[ -n "$FALLBACK_BASE" ]]; then
+    # Try GitHub first for releases
+    GITHUB_REPO="rcourtman/Pulse"
+    DOWNLOAD_SUCCESS=false
+
+    if [[ "$VERSION" == "latest" ]]; then
+        RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+        print_info "Fetching latest release info..."
+        RELEASE_DATA=$(curl -fsSL "$RELEASE_URL" 2>/dev/null)
+        VERSION=$(echo "$RELEASE_DATA" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+
+        if [[ -n "$VERSION" ]]; then
+            print_info "Latest version: $VERSION"
+            DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
+            print_info "Downloading $BINARY_NAME from GitHub..."
+            if curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp" 2>/dev/null; then
+                DOWNLOAD_SUCCESS=true
+            fi
+        fi
+    fi
+
+    # Fall back to Pulse server if GitHub failed or fallback is provided
+    if [[ "$DOWNLOAD_SUCCESS" != true ]] && [[ -n "$FALLBACK_BASE" ]]; then
         FALLBACK_URL="${FALLBACK_BASE%/}?arch=${ARCH_LABEL}"
         print_info "Downloading $BINARY_NAME from Pulse server..."
-        if ! curl -fsSL "$FALLBACK_URL" -o "$BINARY_PATH.tmp"; then
-            print_error "Failed to download proxy binary from $FALLBACK_URL"
-            exit 1
+        if curl -fsSL "$FALLBACK_URL" -o "$BINARY_PATH.tmp" 2>/dev/null; then
+            DOWNLOAD_SUCCESS=true
         fi
-    else
-        # Fallback not provided, download from GitHub release
-        GITHUB_REPO="rcourtman/Pulse"
-        if [[ "$VERSION" == "latest" ]]; then
-            RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-            print_info "Fetching latest release info..."
-            RELEASE_DATA=$(curl -fsSL "$RELEASE_URL")
-            VERSION=$(echo "$RELEASE_DATA" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
-            if [[ -z "$VERSION" ]]; then
-                print_error "Failed to determine latest version"
-                exit 1
-            fi
-            print_info "Latest version: $VERSION"
-        fi
+    fi
 
-        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
-        print_info "Downloading $BINARY_NAME from GitHub..."
-        if ! curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp"; then
-            print_error "Failed to download binary from $DOWNLOAD_URL"
-            exit 1
-        fi
+    # Exit if both methods failed
+    if [[ "$DOWNLOAD_SUCCESS" != true ]]; then
+        print_error "Failed to download binary from GitHub or Pulse server"
+        exit 1
     fi
 
     # Make executable and move to final location
