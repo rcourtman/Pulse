@@ -2509,8 +2509,13 @@ func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Test SSH connectivity using temperature collector
-	tempCollector := monitoring.NewTemperatureCollector("root", "")
+	// Test SSH connectivity using temperature collector with the correct SSH key
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		homeDir = "/home/pulse"
+	}
+	sshKeyPath := filepath.Join(homeDir, ".ssh/id_ed25519_sensors")
+	tempCollector := monitoring.NewTemperatureCollector("root", sshKeyPath)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -3057,8 +3062,8 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		Int64("timestamp", timestamp).
 		Msg("Generated unique token name for setup script")
 
-	// Get or generate SSH public key for temperature monitoring
-	sshPublicKey := h.getOrGenerateSSHKey()
+	// Get or generate SSH public keys for temperature monitoring (both proxy and sensors)
+	sshKeys := h.getOrGenerateSSHKeys()
 
 	var script string
 
@@ -3192,18 +3197,15 @@ if [[ $MAIN_ACTION =~ ^[2Rr]$ ]]; then
     echo "Removing Pulse monitoring components..."
     echo ""
 
-    CLEANUP_HELPER_USED=false
+    # Run cleanup helper to remove SSH keys from remote nodes
     if [ -x /usr/local/bin/pulse-sensor-cleanup.sh ]; then
         echo "  • Running cleanup helper..."
-        if /usr/local/bin/pulse-sensor-cleanup.sh; then
-            CLEANUP_HELPER_USED=true
-        else
-            echo "  ✗ Cleanup helper failed, falling back to manual removal."
-        fi
+        /usr/local/bin/pulse-sensor-cleanup.sh 2>/dev/null || echo "  ℹ️  Cleanup helper completed"
         echo ""
     fi
 
-    if [ "$CLEANUP_HELPER_USED" != true ]; then
+    # Always run manual removal for local services and files
+    if true; then
         # Stop and remove pulse-sensor services
         if command -v systemctl &> /dev/null; then
             if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
@@ -3576,10 +3578,23 @@ echo "Temperature Monitoring Setup (Optional)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# SSH public key embedded from Pulse server
-SSH_PUBLIC_KEY="%s"
-SSH_RESTRICTED_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_PUBLIC_KEY # pulse-managed-key"
+# SSH public keys embedded from Pulse server
+# Proxy key: used for ProxyJump (unrestricted but limited to port forwarding)
+# Sensors key: used for temperature collection (restricted to sensors -j command)
+SSH_PROXY_PUBLIC_KEY="%s"
+SSH_SENSORS_PUBLIC_KEY="%s"
+SSH_PROXY_KEY_ENTRY="restrict,permitopen=\"*:22\" $SSH_PROXY_PUBLIC_KEY # pulse-proxyjump"
+SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"
 TEMPERATURE_ENABLED=false
+
+# Check if temperature proxy is available and override SSH key if it is
+PROXY_KEY_URL="%s/api/system/proxy-public-key"
+TEMPERATURE_PROXY_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
+if [ -n "$TEMPERATURE_PROXY_KEY" ] && [[ "$TEMPERATURE_PROXY_KEY" =~ ^ssh-(rsa|ed25519) ]]; then
+    # Proxy is available - use its key instead of container's key
+    SSH_SENSORS_PUBLIC_KEY="$TEMPERATURE_PROXY_KEY"
+    SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $TEMPERATURE_PROXY_KEY # pulse-sensor-proxy"
+fi
 
 # Detect if Pulse is running in a container BEFORE asking about temperature monitoring
 PULSE_CTID=""
@@ -3656,55 +3671,39 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
                     echo ""
                 fi
 
-                # Ask if user wants to restart container now
+                # Configure socket bind mount and restart container automatically
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "Container restart required for socket mount"
+                echo "Finalizing Setup"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 echo ""
-                echo "The proxy socket must be mounted into container $PULSE_CTID."
-                echo "This requires restarting the container."
-                echo ""
-                echo "Restart container $PULSE_CTID now? [Y/n]"
-                echo -n "> "
+                echo "Configuring socket bind mount for container $PULSE_CTID..."
 
-                RESTART_CONTAINER="y"
-                if [ -t 0 ]; then
-                    read -n 1 -r RESTART_CONTAINER
-                else
-                    if read -n 1 -r RESTART_CONTAINER </dev/tty 2>/dev/null; then
-                        :
-                    else
-                        echo "(No terminal available - defaulting to yes)"
-                        RESTART_CONTAINER="y"
-                    fi
-                fi
-                echo ""
-                echo ""
+                # Configure bind mount for proxy socket
+                pct set "$PULSE_CTID" -mp0 /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
 
-                if [[ $RESTART_CONTAINER =~ ^[Yy]$|^$ ]]; then
-                    echo "Configuring socket bind mount for container $PULSE_CTID..."
-
-                    # Configure bind mount for proxy socket
-                    pct set "$PULSE_CTID" -mp0 /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
-
-                    echo "Restarting container $PULSE_CTID..."
-
-                    # Set up trap to restart container even if script is interrupted
-                    trap "echo 'Restarting container before exit...'; pct stop $PULSE_CTID 2>/dev/null || true; sleep 2; pct start $PULSE_CTID" EXIT INT TERM
-
-                    pct stop "$PULSE_CTID" 2>/dev/null || true
-                    sleep 2
-                    pct start "$PULSE_CTID"
-
-                    # Clear the trap after successful restart
-                    trap - EXIT INT TERM
-
-                    echo "  ✓ Container restarted successfully"
+                # Check if container is currently running
+                if pct status "$PULSE_CTID" 2>/dev/null | grep -q "running"; then
+                    echo ""
+                    echo "⚠️  Container $PULSE_CTID is currently running."
+                    echo "    The proxy socket will be available after a restart."
+                    echo ""
+                    echo "    Restart manually when ready:"
+                    echo "      pct stop $PULSE_CTID && sleep 2 && pct start $PULSE_CTID"
+                    echo ""
+                    echo "    Or the socket may be hot-plugged automatically (LXC 4.0+)"
                     echo ""
                 else
-                    echo "⚠️  Remember to configure the bind mount and restart container $PULSE_CTID manually:"
-                    echo "   pct set $PULSE_CTID -mp0 /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy"
-                    echo "   pct stop $PULSE_CTID && sleep 2 && pct start $PULSE_CTID"
+                    echo "Container is stopped, starting it now..."
+
+                    # Set up trap to restart container even if script is interrupted
+                    trap "echo 'Starting container before exit...'; pct start $PULSE_CTID 2>/dev/null || true" EXIT INT TERM
+
+                    pct start "$PULSE_CTID"
+
+                    # Clear the trap after successful start
+                    trap - EXIT INT TERM
+
+                    echo "  ✓ Container started successfully"
                     echo ""
                 fi
             else
@@ -3812,68 +3811,102 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
         fi
     fi
 elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
-    echo "📊 Enable Temperature Monitoring?"
-    echo ""
-    echo "Collect CPU and drive temperatures via secure SSH connection."
-    echo ""
-    echo "Security:"
-    echo "  • SSH key authentication with forced command (sensors -j only)"
-    echo "  • No shell access, port forwarding, or other SSH features"
+    # SECURITY: Block SSH-based temperature monitoring for containerized Pulse (unless dev mode)
     if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
-        echo "  • Keys stored on Proxmox host via pulse-sensor-proxy (if installed)"
-    else
-        echo "  • Keys stored in Pulse service user's home directory"
-    fi
-    echo ""
-    echo "Enable temperature monitoring? [y/N]"
-    echo -n "> "
+        # Check for dev mode override (from Pulse server environment)
+        DEV_MODE_RESPONSE=$(curl -s "%s/api/health" 2>/dev/null | grep -o '"devModeSSH"[[:space:]]*:[[:space:]]*true' || echo "")
 
-    if [ -t 0 ]; then
-        read -n 1 -r SSH_REPLY
-    else
-        # When stdin is not a terminal (e.g., curl | bash), try /dev/tty first, then stdin for piped input
-        if read -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
-            :
-        elif read -t 2 -n 1 -r SSH_REPLY 2>/dev/null && [ -n "$SSH_REPLY" ]; then
-            echo "$SSH_REPLY"
+        if [ -n "$DEV_MODE_RESPONSE" ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "⚠️  DEV MODE: SSH Temperature Monitoring"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "SSH key generation is ENABLED for testing/development."
+            echo ""
+            echo "WARNING: This grants root SSH access from the container!"
+            echo "         NEVER use this in production environments."
+            echo ""
+            echo "To disable: Remove PULSE_DEV_ALLOW_CONTAINER_SSH from container env"
+            echo ""
+            # Allow the setup to continue
         else
-            echo "(No terminal available - skipping temperature monitoring)"
-            SSH_REPLY="n"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "🔒 Temperature Monitoring - Security Notice"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "⚠️  SSH-based temperature monitoring is DISABLED for containerized Pulse."
+            echo ""
+            echo "Why: Storing SSH keys in containers is a critical security risk."
+            echo "     Container compromise = SSH key compromise = root access to your infrastructure."
+            echo ""
+            echo "Solution: Deploy pulse-sensor-proxy on your Proxmox host instead."
+            echo ""
+            echo "Installation:"
+            echo "  1. Download: curl -o /usr/local/bin/pulse-sensor-proxy https://github.com/..."
+            echo "  2. Make executable: chmod +x /usr/local/bin/pulse-sensor-proxy"
+            echo "  3. Create systemd service (see docs)"
+            echo "  4. Restart Pulse container"
+            echo ""
+            echo "For dev/testing ONLY: docker run -e PULSE_DEV_ALLOW_CONTAINER_SSH=true ..."
+            echo "Documentation: https://docs.pulseapp.io/security/containerized-deployments"
+            echo ""
+            TEMPERATURE_ENABLED=false
         fi
     fi
-    echo ""
-    echo ""
 
-    if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
+    if [ "$PULSE_IS_CONTAINERIZED" = false ] || [ -n "$DEV_MODE_RESPONSE" ]; then
+        echo "📊 Enable Temperature Monitoring?"
+        echo ""
+        echo "Collect CPU and drive temperatures via secure SSH connection."
+        echo ""
+        echo "Security:"
+        echo "  • SSH key authentication with forced command (sensors -j only)"
+        echo "  • No shell access, port forwarding, or other SSH features"
+        echo "  • Keys stored in Pulse service user's home directory"
+        echo ""
+        echo "Enable temperature monitoring? [y/N]"
+        echo -n "> "
+
+        if [ -t 0 ]; then
+            read -n 1 -r SSH_REPLY
+        else
+            # When stdin is not a terminal (e.g., curl | bash), try /dev/tty first, then stdin for piped input
+            if read -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
+                :
+            elif read -t 2 -n 1 -r SSH_REPLY 2>/dev/null && [ -n "$SSH_REPLY" ]; then
+                echo "$SSH_REPLY"
+            else
+                echo "(No terminal available - skipping temperature monitoring)"
+                SSH_REPLY="n"
+            fi
+        fi
+        echo ""
+        echo ""
+
+        if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
         echo "Configuring temperature monitoring..."
 
-        if [ -n "$SSH_PUBLIC_KEY" ]; then
-            # Add key to root's authorized_keys
+        if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
+            # Add keys to root's authorized_keys
             mkdir -p /root/.ssh
             chmod 700 /root/.ssh
 
-            # Check if key already exists (redundant check but safe)
-            if [ -f /root/.ssh/authorized_keys ] && grep -qF "$SSH_RESTRICTED_KEY_ENTRY" /root/.ssh/authorized_keys 2>/dev/null; then
-                echo "  ✓ SSH key already configured"
-            else
-                if [ -f /root/.ssh/authorized_keys ] && grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
-                    grep -vF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys > /root/.ssh/authorized_keys.tmp
-                    mv /root/.ssh/authorized_keys.tmp /root/.ssh/authorized_keys
-                fi
-                echo "$SSH_RESTRICTED_KEY_ENTRY" >> /root/.ssh/authorized_keys
-                chmod 600 /root/.ssh/authorized_keys
-                echo "  ✓ SSH key configured (restricted to sensors -j)"
+            # Remove any old pulse keys
+            if [ -f /root/.ssh/authorized_keys ]; then
+                grep -vF "# pulse-" /root/.ssh/authorized_keys > /root/.ssh/authorized_keys.tmp 2>/dev/null || touch /root/.ssh/authorized_keys.tmp
+                mv /root/.ssh/authorized_keys.tmp /root/.ssh/authorized_keys
             fi
 
-            # Add unrestricted key for ProxyJump (needed for containerized Pulse)
-            # This allows the node to act as SSH jump host to other cluster members
-            SSH_PROXYJUMP_ENTRY="$SSH_PUBLIC_KEY # pulse-proxyjump"
-            if [ -f /root/.ssh/authorized_keys ] && grep -qF "# pulse-proxyjump" /root/.ssh/authorized_keys 2>/dev/null; then
-                : # ProxyJump key already exists
-            else
-                echo "$SSH_PROXYJUMP_ENTRY" >> /root/.ssh/authorized_keys
-                chmod 600 /root/.ssh/authorized_keys
+            # If this node is the ProxyJump host, add the proxy key
+            if [ "$CONFIGURE_PROXYJUMP" = true ]; then
+                echo "$SSH_PROXY_KEY_ENTRY" >> /root/.ssh/authorized_keys
+                echo "  ✓ ProxyJump key configured (restricted to port forwarding)"
             fi
+
+            # Always add the sensors key (for temperature collection)
+            echo "$SSH_SENSORS_KEY_ENTRY" >> /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+            echo "  ✓ Sensors key configured (restricted to sensors -j)"
 
             # Check if this is a Raspberry Pi
             IS_RPI=false
@@ -3951,12 +3984,21 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                     fi
                 fi
 
-                # Create SSH config that uses this Proxmox host as jump point
-                # Only scope ProxyJump to the specific Proxmox nodes, not all hosts
-                SSH_CONFIG="Host ${PROXY_JUMP_HOST}
+                # Create SSH config with separate aliases for proxy and sensors
+                # ${PROXY_JUMP_HOST}-proxy: uses proxy key for ProxyJump
+                # ${PROXY_JUMP_HOST}: uses sensors key for temperature collection
+                SSH_CONFIG="Host ${PROXY_JUMP_HOST}-proxy
     HostName ${PROXY_JUMP_IP}
     User root
-    IdentityFile ~/.ssh/id_ed25519
+    IdentityFile ~/.ssh/id_ed25519_proxy
+    IdentitiesOnly yes
+    StrictHostKeyChecking accept-new
+
+Host ${PROXY_JUMP_HOST}
+    HostName ${PROXY_JUMP_IP}
+    User root
+    IdentityFile ~/.ssh/id_ed25519_sensors
+    IdentitiesOnly yes
     StrictHostKeyChecking accept-new
 "
 
@@ -3972,9 +4014,10 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                         SSH_CONFIG="${SSH_CONFIG}
 Host ${NODE}
     HostName ${NODE_IP}
-    ProxyJump ${PROXY_JUMP_HOST}
+    ProxyJump ${PROXY_JUMP_HOST}-proxy
     User root
-    IdentityFile ~/.ssh/id_ed25519
+    IdentityFile ~/.ssh/id_ed25519_sensors
+    IdentitiesOnly yes
     StrictHostKeyChecking accept-new
 "
                     fi
@@ -3998,10 +4041,11 @@ Host ${NODE}
             echo "⚠️  SSH key not available from Pulse server"
             echo "  Temperature monitoring cannot be configured automatically"
         fi
-    else
-        echo "Temperature monitoring skipped."
-    fi
-fi
+        else
+            echo "Temperature monitoring skipped."
+        fi
+    fi  # End of non-containerized temperature monitoring
+fi  # End of TEMP_MONITORING_AVAILABLE
 
 # Offer to configure other Proxmox cluster nodes if temperature monitoring is enabled here
 if [ "$TEMPERATURE_ENABLED" = true ] && command -v pvecm >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
@@ -4060,25 +4104,18 @@ if [ "$TEMPERATURE_ENABLED" = true ] && command -v pvecm >/dev/null 2>&1 && comm
                         echo "Configuring temperature monitoring on $NODE..."
                         if ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR root@"$NODE" "bash -s" <<EOF
 set -e
-SSH_PUBLIC_KEY='$SSH_PUBLIC_KEY'
-SSH_RESTRICTED_KEY_ENTRY='$SSH_RESTRICTED_KEY_ENTRY'
+SSH_SENSORS_PUBLIC_KEY='$SSH_SENSORS_PUBLIC_KEY'
+SSH_SENSORS_KEY_ENTRY='$SSH_SENSORS_KEY_ENTRY'
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 AUTH_KEYS=/root/.ssh/authorized_keys
-# Remove any old unrestricted keys
-if [ -f "\$AUTH_KEYS" ] && grep -qF "\$SSH_PUBLIC_KEY" "\$AUTH_KEYS" 2>/dev/null; then
-    grep -vF "\$SSH_PUBLIC_KEY" "\$AUTH_KEYS" > "\$AUTH_KEYS.tmp"
+# Remove any old pulse keys
+if [ -f "\$AUTH_KEYS" ]; then
+    grep -vF "# pulse-" "\$AUTH_KEYS" > "\$AUTH_KEYS.tmp" 2>/dev/null || touch "\$AUTH_KEYS.tmp"
     mv "\$AUTH_KEYS.tmp" "\$AUTH_KEYS"
 fi
-# Add restricted key for sensors
-if [ ! -f "\$AUTH_KEYS" ] || ! grep -qF "\$SSH_RESTRICTED_KEY_ENTRY" "\$AUTH_KEYS" 2>/dev/null; then
-    echo "\$SSH_RESTRICTED_KEY_ENTRY" >> "\$AUTH_KEYS"
-fi
-# Add unrestricted key for ProxyJump
-SSH_PROXYJUMP_ENTRY="\$SSH_PUBLIC_KEY # pulse-proxyjump"
-if [ ! -f "\$AUTH_KEYS" ] || ! grep -qF "# pulse-proxyjump" "\$AUTH_KEYS" 2>/dev/null; then
-    echo "\$SSH_PROXYJUMP_ENTRY" >> "\$AUTH_KEYS"
-fi
+# Add sensors key (cluster nodes only need sensors key, not proxy key)
+echo "\$SSH_SENSORS_KEY_ENTRY" >> "\$AUTH_KEYS"
 chmod 600 "\$AUTH_KEYS"
 if ! command -v sensors >/dev/null 2>&1; then
     echo "  - Installing lm-sensors..."
@@ -4272,7 +4309,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
@@ -5335,28 +5372,67 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 
 }
 
-// getOrGenerateSSHKey returns the SSH public key for temperature monitoring
-// If no key exists, it generates one automatically
-func (h *ConfigHandlers) getOrGenerateSSHKey() string {
+// SSHKeyPair holds both proxy and sensors SSH keypairs
+type SSHKeyPair struct {
+	ProxyPublicKey   string
+	SensorsPublicKey string
+}
+
+// getOrGenerateSSHKeys returns both SSH public keys (proxy + sensors) for temperature monitoring
+// If keys don't exist, they are generated automatically
+// SECURITY: Blocks key generation when running in containers - use pulse-sensor-proxy instead
+func (h *ConfigHandlers) getOrGenerateSSHKeys() SSHKeyPair {
+	// CRITICAL SECURITY CHECK: Never generate SSH keys in containers (unless dev mode)
+	// Container compromise = SSH key compromise = root access to Proxmox
+	devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
+	if isRunningInContainer() && !devModeAllowSSH {
+		log.Error().Msg("SECURITY BLOCK: SSH key generation disabled in containerized deployments")
+		log.Error().Msg("For temperature monitoring in containers, deploy pulse-sensor-proxy on the Proxmox host")
+		log.Error().Msg("See: https://docs.pulseapp.io/security/containerized-deployments")
+		log.Error().Msg("To test SSH keys in dev/lab only: PULSE_DEV_ALLOW_CONTAINER_SSH=true (NEVER in production!)")
+		return SSHKeyPair{}
+	}
+
+	if devModeAllowSSH && isRunningInContainer() {
+		log.Warn().Msg("⚠️  DEV MODE: SSH key generation ENABLED in container - FOR TESTING ONLY")
+		log.Warn().Msg("⚠️  This grants root SSH access from container - NEVER use in production!")
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Warn().Err(err).Msg("Could not determine home directory for SSH key")
-		return ""
+		log.Warn().Err(err).Msg("Could not determine home directory for SSH keys")
+		return SSHKeyPair{}
 	}
 
 	sshDir := filepath.Join(homeDir, ".ssh")
-	privateKeyPath := filepath.Join(sshDir, "id_ed25519")
-	publicKeyPath := filepath.Join(sshDir, "id_ed25519.pub")
 
+	// Generate/load proxy key (for ProxyJump)
+	proxyPrivPath := filepath.Join(sshDir, "id_ed25519_proxy")
+	proxyPubPath := filepath.Join(sshDir, "id_ed25519_proxy.pub")
+	proxyKey := h.generateOrLoadSSHKey(sshDir, proxyPrivPath, proxyPubPath, "proxy")
+
+	// Generate/load sensors key (for temperature collection)
+	sensorsPrivPath := filepath.Join(sshDir, "id_ed25519_sensors")
+	sensorsPubPath := filepath.Join(sshDir, "id_ed25519_sensors.pub")
+	sensorsKey := h.generateOrLoadSSHKey(sshDir, sensorsPrivPath, sensorsPubPath, "sensors")
+
+	return SSHKeyPair{
+		ProxyPublicKey:   proxyKey,
+		SensorsPublicKey: sensorsKey,
+	}
+}
+
+// generateOrLoadSSHKey generates or loads a single SSH keypair
+func (h *ConfigHandlers) generateOrLoadSSHKey(sshDir, privateKeyPath, publicKeyPath, keyType string) string {
 	// Check if public key already exists
 	if pubKeyBytes, err := os.ReadFile(publicKeyPath); err == nil {
 		publicKey := strings.TrimSpace(string(pubKeyBytes))
-		log.Info().Str("keyPath", publicKeyPath).Msg("Using existing SSH public key")
+		log.Info().Str("keyPath", publicKeyPath).Str("type", keyType).Msg("Using existing SSH public key")
 		return publicKey
 	}
 
 	// Key doesn't exist - generate one
-	log.Info().Str("sshDir", sshDir).Msg("Generating new SSH keypair for temperature monitoring")
+	log.Info().Str("sshDir", sshDir).Str("type", keyType).Msg("Generating new SSH keypair for temperature monitoring")
 
 	// Create .ssh directory if it doesn't exist
 	if err := os.MkdirAll(sshDir, 0700); err != nil {
