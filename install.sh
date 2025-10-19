@@ -1108,10 +1108,28 @@ create_lxc_container() {
     # Run proxy installer if downloaded
     if [[ -f "$proxy_script" ]]; then
         chmod +x "$proxy_script"
-        # Set fallback URL to download from Pulse server inside the LXC
-        export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
-        if bash "$proxy_script" --ctid "$CTID" 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
+
+        # If building from source, copy the binary from the LXC instead of downloading
+        local proxy_install_args="--ctid $CTID"
+        if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+            local local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
+            print_info "Copying locally-built pulse-sensor-proxy binary from container..."
+            if pct pull $CTID /opt/pulse/bin/pulse-sensor-proxy "$local_proxy_binary" 2>/dev/null; then
+                proxy_install_args="--ctid $CTID --local-binary $local_proxy_binary"
+                print_info "Using locally-built binary from container"
+            else
+                print_warn "Failed to copy binary from container, will try fallback download"
+                export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
+            fi
+        else
+            # For release installs, set fallback URL to download from Pulse server inside the LXC
+            export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
+        fi
+
+        if bash "$proxy_script" $proxy_install_args 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
             print_info "Temperature proxy installed successfully"
+            # Clean up temporary binary if it was copied
+            [[ -f "$local_proxy_binary" ]] && rm -f "$local_proxy_binary"
         else
             print_warn "Proxy installation failed - temperature monitoring will use fallback method"
             print_info "Check logs: /tmp/proxy-install-${CTID}.log"
