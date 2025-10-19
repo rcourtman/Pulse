@@ -742,8 +742,19 @@ fi
 
 # Container-specific configuration (skip for standalone mode)
 if [[ "$STANDALONE" == false ]]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Secure Container Communication Setup"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Setting up secure socket mount for temperature monitoring:"
+    echo "  • Container communicates with host proxy via Unix socket"
+    echo "  • No SSH keys exposed inside container (enhanced security)"
+    echo "  • Proxy on host manages all temperature collection"
+    echo ""
+
     # Ensure container mount via mp configuration
-    print_info "Ensuring container socket mount configuration..."
+    print_info "Configuring socket bind mount..."
     MOUNT_TARGET="/mnt/pulse-proxy"
     LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
 CONFIG_CONTENT=$(pct config "$CTID")
@@ -801,7 +812,7 @@ fi
 
 # Restart container to apply mount if configuration changed or mount missing
 if [[ "$MOUNT_UPDATED" = true ]]; then
-    print_info "Restarting container to apply socket mount..."
+    print_info "Restarting container to activate secure communication..."
     if [[ "$CT_RUNNING" = true ]]; then
         pct restart "$CTID"
     else
@@ -814,9 +825,9 @@ fi
 if [[ "$HOTPLUG_FAILED" = true && "$CT_RUNNING" = true ]]; then
     print_warn "Skipping socket verification until container $CTID is restarted."
 else
-    print_info "Verifying socket accessibility..."
+    print_info "Verifying secure communication channel..."
     if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
-        print_info "Socket is accessible in container at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+        print_info "✓ Secure socket communication ready"
     else
         print_warn "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
         print_info "Check container configuration and restart if necessary"
@@ -824,7 +835,7 @@ else
 fi
 
 # Configure Pulse backend environment override inside container
-print_info "Configuring Pulse backend to use mounted proxy socket..."
+print_info "Configuring Pulse to use proxy..."
 pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse-backend.service.d"
 pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse-backend.service.d/10-pulse-proxy.conf
 [Service]
