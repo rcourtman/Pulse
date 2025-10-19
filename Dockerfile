@@ -91,7 +91,7 @@ ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
 # Final stage (Pulse server runtime)
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates tzdata su-exec
+RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client
 
 WORKDIR /app
 
