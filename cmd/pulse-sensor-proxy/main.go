@@ -400,9 +400,13 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 		// Privileged methods can only be called from host (not from containers)
 		if p.isIDMappedRoot(cred) {
 			resp.Error = "method requires host-level privileges"
-			logger.Warn().
+			log.Warn().
 				Str("method", req.Method).
-				Msg("Container attempted to call privileged method")
+				Uint32("uid", cred.uid).
+				Uint32("gid", cred.gid).
+				Uint32("pid", cred.pid).
+				Str("corr_id", req.CorrelationID).
+				Msg("SECURITY: Container attempted to call privileged method - access denied")
 			p.sendResponse(conn, resp)
 			p.metrics.rpcRequests.WithLabelValues(req.Method, "unauthorized").Inc()
 			return
