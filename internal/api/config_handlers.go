@@ -4065,12 +4065,19 @@ SSH_RESTRICTED_KEY_ENTRY='$SSH_RESTRICTED_KEY_ENTRY'
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 AUTH_KEYS=/root/.ssh/authorized_keys
+# Remove any old unrestricted keys
 if [ -f "\$AUTH_KEYS" ] && grep -qF "\$SSH_PUBLIC_KEY" "\$AUTH_KEYS" 2>/dev/null; then
     grep -vF "\$SSH_PUBLIC_KEY" "\$AUTH_KEYS" > "\$AUTH_KEYS.tmp"
     mv "\$AUTH_KEYS.tmp" "\$AUTH_KEYS"
 fi
+# Add restricted key for sensors
 if [ ! -f "\$AUTH_KEYS" ] || ! grep -qF "\$SSH_RESTRICTED_KEY_ENTRY" "\$AUTH_KEYS" 2>/dev/null; then
     echo "\$SSH_RESTRICTED_KEY_ENTRY" >> "\$AUTH_KEYS"
+fi
+# Add unrestricted key for ProxyJump
+SSH_PROXYJUMP_ENTRY="\$SSH_PUBLIC_KEY # pulse-proxyjump"
+if [ ! -f "\$AUTH_KEYS" ] || ! grep -qF "# pulse-proxyjump" "\$AUTH_KEYS" 2>/dev/null; then
+    echo "\$SSH_PROXYJUMP_ENTRY" >> "\$AUTH_KEYS"
 fi
 chmod 600 "\$AUTH_KEYS"
 if ! command -v sensors >/dev/null 2>&1; then
