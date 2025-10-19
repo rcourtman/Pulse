@@ -849,7 +849,7 @@ func (r *Router) setupRoutes() {
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings)
 	r.mux.HandleFunc("/api/system/settings", r.systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", r.systemSettingsHandler.HandleUpdateSystemSettings)
-	r.mux.HandleFunc("/api/system/ssh-config", RequireAuth(r.config, r.systemSettingsHandler.HandleSSHConfig))
+	r.mux.HandleFunc("/api/system/ssh-config", r.handleSSHConfig)
 	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
 	r.mux.HandleFunc("/api/system/proxy-public-key", r.handleProxyPublicKey)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
@@ -905,6 +905,38 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 	} else {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
+}
+
+// handleSSHConfig handles SSH config writes with setup token or API auth
+func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
+	if r.systemSettingsHandler == nil {
+		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Check setup token first (for setup scripts)
+	if token := extractSetupToken(req); token != "" {
+		if r.configHandlers != nil && r.configHandlers.ValidateSetupToken(token) {
+			r.systemSettingsHandler.HandleSSHConfig(w, req)
+			return
+		}
+	}
+
+	// Fall back to standard API authentication
+	if CheckAuth(r.config, w, req) {
+		r.systemSettingsHandler.HandleSSHConfig(w, req)
+		return
+	}
+
+	log.Warn().
+		Str("ip", req.RemoteAddr).
+		Str("path", req.URL.Path).
+		Str("method", req.Method).
+		Msg("Unauthorized access attempt (ssh-config)")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	w.Write([]byte(`{"error":"Authentication required"}`))
 }
 
 // handleProxyPublicKey returns the temperature proxy's public SSH key (public endpoint)
