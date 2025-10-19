@@ -4168,16 +4168,15 @@ EOF
 
                     # Verify that Pulse can actually SSH to the configured nodes
                     echo ""
-                    # Only verify connectivity if not containerized or if proxy is installed
-                    # Containerized Pulse without proxy cannot directly SSH to nodes
-                    SHOULD_VERIFY_SSH=false
-                    if [ "$PULSE_IS_CONTAINERIZED" != true ]; then
-                        SHOULD_VERIFY_SSH=true
-                    elif systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
-                        SHOULD_VERIFY_SSH=true
-                    fi
-
-                    if [ "$SHOULD_VERIFY_SSH" = true ]; then
+                    # Check if we're using the temperature proxy
+                    # If proxy key was detected earlier, we're using proxy-based temperature monitoring
+                    if [ -n "$TEMPERATURE_PROXY_KEY" ]; then
+                        # Using proxy - verification not needed, proxy handles SSH
+                        echo "✓ Temperature monitoring configured via pulse-sensor-proxy"
+                        echo "  Temperature data will appear in the dashboard within 10 seconds"
+                        echo ""
+                    elif [ "$PULSE_IS_CONTAINERIZED" != true ]; then
+                        # Non-containerized Pulse - can verify SSH directly
                         echo "Verifying temperature monitoring connectivity from Pulse..."
                         echo ""
 
