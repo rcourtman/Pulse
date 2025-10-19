@@ -4249,7 +4249,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, pulseURL)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
