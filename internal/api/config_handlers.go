@@ -3865,6 +3865,16 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                 echo "  ✓ SSH key configured (restricted to sensors -j)"
             fi
 
+            # Add unrestricted key for ProxyJump (needed for containerized Pulse)
+            # This allows the node to act as SSH jump host to other cluster members
+            SSH_PROXYJUMP_ENTRY="$SSH_PUBLIC_KEY # pulse-proxyjump"
+            if [ -f /root/.ssh/authorized_keys ] && grep -qF "# pulse-proxyjump" /root/.ssh/authorized_keys 2>/dev/null; then
+                : # ProxyJump key already exists
+            else
+                echo "$SSH_PROXYJUMP_ENTRY" >> /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/authorized_keys
+            fi
+
             # Check if this is a Raspberry Pi
             IS_RPI=false
             if [ -f /proc/device-tree/model ] && grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
