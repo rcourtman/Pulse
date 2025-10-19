@@ -3947,7 +3947,7 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                 SSH_CONFIG="Host ${PROXY_JUMP_HOST}
     HostName ${PROXY_JUMP_IP}
     User root
-    IdentityFile ~/.ssh/id_ed25519
+    IdentityFile ~/.ssh/id_rsa
     StrictHostKeyChecking accept-new
 "
 
@@ -3958,7 +3958,7 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
 Host ${NODE}
     ProxyJump ${PROXY_JUMP_HOST}
     User root
-    IdentityFile ~/.ssh/id_ed25519
+    IdentityFile ~/.ssh/id_rsa
     StrictHostKeyChecking accept-new
 "
                     fi
