@@ -801,15 +801,13 @@ fi
 
 # Restart container to apply mount if configuration changed or mount missing
 if [[ "$MOUNT_UPDATED" = true ]]; then
+    print_info "Restarting container to apply socket mount..."
     if [[ "$CT_RUNNING" = true ]]; then
-        print_warn "Container $CTID is currently running. Restart it when convenient to activate the secure proxy mount."
+        pct restart "$CTID"
     else
-        print_info "Restarting container to apply socket mount..."
-        pct stop "$CTID" || true
-        sleep 2
         pct start "$CTID"
-        sleep 5
     fi
+    sleep 5
 fi
 
 # Verify socket directory and file inside container
