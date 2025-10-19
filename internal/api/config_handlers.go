@@ -3953,8 +3953,15 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                 # Add ProxyJump config for each cluster node
                 for NODE in $ALL_NODES; do
                     if [ "$NODE" != "$PROXY_JUMP_HOST" ]; then
+                        # Resolve node IP address (try getent, fallback to just the hostname)
+                        NODE_IP=$(getent hosts "$NODE" 2>/dev/null | awk '{print $1}' | head -1)
+                        if [ -z "$NODE_IP" ]; then
+                            NODE_IP="$NODE"  # Fallback to hostname if resolution fails
+                        fi
+
                         SSH_CONFIG="${SSH_CONFIG}
 Host ${NODE}
+    HostName ${NODE_IP}
     ProxyJump ${PROXY_JUMP_HOST}
     User root
     IdentityFile ~/.ssh/id_ed25519
