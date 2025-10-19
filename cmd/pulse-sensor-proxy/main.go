@@ -106,6 +106,13 @@ const (
 	RPCRequestCleanup    = "request_cleanup"
 )
 
+// Privileged RPC methods that require host-level access (not accessible from containers)
+var privilegedMethods = map[string]bool{
+	RPCEnsureClusterKeys: true, // SSH key distribution
+	RPCRegisterNodes:     true, // Node registration
+	RPCRequestCleanup:    true, // Cleanup operations
+}
+
 // RPCRequest represents a request from Pulse
 type RPCRequest struct {
 	CorrelationID string                 `json:"correlation_id,omitempty"`
@@ -386,6 +393,20 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 		logger.Warn().Msg("Unknown method")
 		p.sendResponse(conn, resp)
 		return
+	}
+
+	// Check if method requires host-level privileges
+	if privilegedMethods[req.Method] {
+		// Privileged methods can only be called from host (not from containers)
+		if p.isIDMappedRoot(cred) {
+			resp.Error = "method requires host-level privileges"
+			logger.Warn().
+				Str("method", req.Method).
+				Msg("Container attempted to call privileged method")
+			p.sendResponse(conn, resp)
+			p.metrics.rpcRequests.WithLabelValues(req.Method, "unauthorized").Inc()
+			return
+		}
 	}
 
 	// Execute handler
