@@ -4058,7 +4058,7 @@ if [ "$TEMPERATURE_ENABLED" = true ] && command -v pvecm >/dev/null 2>&1 && comm
                 if [[ $REMOTE_REPLY =~ ^[Yy]$ ]]; then
                     for NODE in "${OTHER_NODES_LIST[@]}"; do
                         echo "Configuring temperature monitoring on $NODE..."
-                        if ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR root@"$NODE" "bash -s" <<'EOF'
+                        if ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR root@"$NODE" "bash -s" <<EOF
 set -e
 SSH_PUBLIC_KEY='$SSH_PUBLIC_KEY'
 SSH_RESTRICTED_KEY_ENTRY='$SSH_RESTRICTED_KEY_ENTRY'
