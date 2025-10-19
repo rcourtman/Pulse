@@ -1048,6 +1048,9 @@ create_lxc_container() {
     if [[ -n "$auto_updates_flag" ]]; then
         install_cmd="$install_cmd $auto_updates_flag"
     fi
+    if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+        install_cmd="$install_cmd --main"
+    fi
     if [[ "$frontend_port" != "7655" ]]; then
         install_cmd="FRONTEND_PORT=$frontend_port $install_cmd"
     fi
