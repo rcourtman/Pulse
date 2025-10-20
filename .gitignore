@@ -148,7 +148,6 @@ tmp_*.py
 tmp_*.sh
 
 # Experimental/abandoned features (not part of main project)
-cloud-relay/
 scripts/agent/
 docs/internal/
 claude.md

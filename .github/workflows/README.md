@@ -4,7 +4,7 @@
 
 **File**: `update-demo-server.yml`
 
-Automatically updates the public demo server (`pulse-relay`) when a new stable release is published.
+Automatically updates the public demo server when a new stable release is published.
 
 ### Configuration Required
 
@@ -37,11 +37,6 @@ To test without publishing a release:
 1. Go to `Actions` tab in GitHub
 2. Select `Update Demo Server` workflow
 3. Click `Run workflow` (if manual trigger is enabled)
-
-Or test manually:
-```bash
-ssh pulse-relay "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash"
-```
 
 ### Benefits
 
