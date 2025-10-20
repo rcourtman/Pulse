@@ -231,6 +231,7 @@ If the agent is working but Pulse still shows "-":
    qm agent <vmid> get-fsinfo
    ```
    If this works but Pulse doesn't show data, check Pulse permissions and logs
+   (v4.24.0: adjust **Settings → System → Logging** to `debug` temporarily if you need more detail, then revert to `info`).
 
 3. **Check agent version** - Older agents might not support filesystem info
 

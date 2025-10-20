@@ -67,10 +67,10 @@ from="192.168.0.0/24",command="sensors -j",no-port-forwarding,no-X11-forwarding,
 - IP restrictions prevent lateral movement
 
 ### 3. Client ↔ Proxy Boundary
-- **Enforced by**: UID-based ACL + rate limiting
+- **Enforced by**: UID-based ACL + adaptive rate limiting
 - SO_PEERCRED verifies caller's UID/GID/PID
-- Rate limiting: 20 requests/minute per peer, burst of 10
-- Concurrency limit: 10 simultaneous requests per peer
+- Rate limiting (defaults): ~12 requests per minute per UID (burst 2), per-UID concurrency 2, global concurrency 8, 2 s penalty on validation failures
+- Per-node guard: only 1 SSH fetch per node at a time
 
 ---
 
@@ -116,9 +116,11 @@ if privilegedMethods[method] && isIDMappedRoot(credentials) {
 ## Rate Limiting
 
 ### Per-Peer Limits
-- **Rate**: 20 requests per minute
-- **Burst**: 10 requests (allows short bursts)
-- **Concurrency**: Maximum 10 simultaneous requests
+- **Rate**: ~12 requests per minute (`rate.Every(5s)`)
+- **Burst**: 2 requests (short spikes are tolerated)
+- **Per-peer concurrency**: Maximum 2 simultaneous RPCs
+- **Global concurrency**: 8 total in-flight RPCs across all peers
+- **Penalty**: 2 s enforced delay when validation fails (payloads too large, unauthorized methods)
 - **Cleanup**: Idle peer entries removed after 10 minutes
 
 ### Per-Node Concurrency
@@ -129,7 +131,7 @@ if privilegedMethods[method] && isIDMappedRoot(credentials) {
 ### Monitoring Rate Limits
 ```bash
 # Check rate limit metrics
-curl -s http://localhost:9090/metrics | grep pulse_sensor_proxy_rate_limit_hits
+curl -s http://127.0.0.1:9127/metrics | grep pulse_proxy_limiter_rejects_total
 
 # Watch for rate limit warnings in logs
 journalctl -u pulse-sensor-proxy -f | grep "Rate limit exceeded"
@@ -230,6 +232,8 @@ journalctl -u pulse-sensor-proxy -f
 journalctl -u pulse-backend -f
 ```
 
+**Audit rotation**: Use the steps in [operations/audit-log-rotation.md](operations/audit-log-rotation.md) to rotate `/var/log/pulse/sensor-proxy/audit.log`. After each rotation, restart the proxy and confirm temperature pollers are healthy in `/api/monitoring/scheduler/health` (closed breakers, no DLQ entries).
+
 ### Security Events to Monitor
 
 #### 1. Privileged Method Denials
@@ -265,35 +269,42 @@ SECURITY BLOCK: SSH temperature collection disabled in containers
 
 ```bash
 # Rate limit hits
-pulse_sensor_proxy_rate_limit_hits_total
+pulse_proxy_rate_limit_hits_total
 
 # RPC requests by method and result
-pulse_sensor_proxy_rpc_requests_total{method="get_temperature",result="success"}
-pulse_sensor_proxy_rpc_requests_total{method="ensure_cluster_keys",result="unauthorized"}
+pulse_proxy_rpc_requests_total{method="get_temperature",result="success"}
+pulse_proxy_rpc_requests_total{method="ensure_cluster_keys",result="unauthorized"}
 
 # SSH request latency
-pulse_sensor_proxy_ssh_request_duration_seconds{node="delly"}
+pulse_proxy_ssh_latency_seconds{node="delly"}
 
 # Active connections
-pulse_sensor_proxy_active_connections
+pulse_proxy_queue_depth
+pulse_proxy_global_concurrency_inflight
 ```
 
 ### Recommended Alerts
 
 1. **Privilege Escalation Attempts**:
    ```
-   pulse_sensor_proxy_rpc_requests_total{result="unauthorized"} > 0
+   pulse_proxy_rpc_requests_total{result="unauthorized"} > 0
    ```
 
 2. **Rate Limit Abuse**:
    ```
-   rate(pulse_sensor_proxy_rate_limit_hits_total[5m]) > 1
+   rate(pulse_proxy_rate_limit_hits_total[5m]) > 1
    ```
 
 3. **Proxy Unavailable**:
    ```
    up{job="pulse-sensor-proxy"} == 0
    ```
+
+4. **Scheduler Drift** (Pulse side – ensures temperature pollers stay healthy):
+   ```
+   max_over_time(pulse_monitor_poll_queue_depth[5m]) > <baseline*1.5>
+   ```
+   Pair with a check of `/api/monitoring/scheduler/health` to confirm temperature instances report `breaker.state == "closed"`.
 
 ---
 
@@ -370,12 +381,12 @@ systemctl restart pulse-backend
 
 **Symptom**: Requests failing with rate limit error
 
-**Cause**: More than 20 requests/minute from same process
+**Cause**: Peer exceeded ~12 requests/minute (or exhausted per-peer/global concurrency)
 
 **Resolution**:
-1. Check if legitimate high request rate
-2. Increase rate limit in config if needed
-3. Check for retry loops in client code
+1. Confirm workload is legitimate (look for retry loops or aggressive polling).
+2. Allow the limiter to recover—penalty sleeps clear in ~2 s and idle peers expire after 10 minutes.
+3. If sustained higher throughput is required, adjust the constants in `cmd/pulse-sensor-proxy/throttle.go` and rebuild.
 
 ### Temperature monitoring unavailable
 
@@ -398,6 +409,10 @@ curl -s --unix-socket /run/pulse-sensor-proxy/pulse-sensor-proxy.sock \
 
 # 5. Check SSH connectivity
 ssh root@delly "sensors -j"
+
+# 6. Inspect adaptive polling for temperature pollers
+curl -s http://localhost:7655/api/monitoring/scheduler/health \
+  | jq '.instances[] | select(.key | contains("temperature")) | {key, breaker: .breaker.state, deadLetter: .deadLetter.present, lastSuccess: .pollStatus.lastSuccess}'
 ```
 
 ### SSH key not distributed

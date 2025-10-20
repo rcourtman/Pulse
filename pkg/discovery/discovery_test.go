@@ -1,20 +1,37 @@
 package discovery
 
 import (
-	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/json"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
+    "context"
+    "crypto/tls"
+    "crypto/x509"
+    "crypto/x509/pkix"
+    "encoding/json"
+    "net"
+    "net/http"
+    "net/http/httptest"
+    "strconv"
+    "strings"
+    "sync"
+    "testing"
+    "time"
+
+    "github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
 )
+
+func newTestScanner(client *http.Client) *Scanner {
+	policy := envdetect.DefaultScanPolicy()
+	policy.DialTimeout = time.Second
+	profile := &envdetect.EnvironmentProfile{
+		Policy:   policy,
+		Metadata: map[string]string{},
+	}
+
+	return &Scanner{
+		policy:     policy,
+		profile:    profile,
+		httpClient: client,
+	}
+}
 
 func TestInferTypeFromMetadata(t *testing.T) {
 	t.Parallel()
@@ -107,10 +124,7 @@ func TestDetectProductFromEndpoint(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	scanner := &Scanner{
-		timeout:    time.Second,
-		httpClient: ts.Client(),
-	}
+    scanner := newTestScanner(ts.Client())
 
 	address := strings.TrimPrefix(ts.URL, "https://")
 	if product := scanner.detectProductFromEndpoint(context.Background(), address, "api2/json/statistics/mail"); product != "pmg" {
@@ -143,10 +157,7 @@ func TestIsPMGServer(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	scanner := &Scanner{
-		timeout:    time.Second,
-		httpClient: ts.Client(),
-	}
+    scanner := newTestScanner(ts.Client())
 
 	address := strings.TrimPrefix(ts.URL, "https://")
 	if !scanner.isPMGServer(context.Background(), address) {
@@ -190,10 +201,7 @@ func TestCheckServerRetrievesVersion(t *testing.T) {
 		t.Fatalf("strconv.Atoi: %v", err)
 	}
 
-	scanner := &Scanner{
-		timeout:    time.Second,
-		httpClient: ts.Client(),
-	}
+    scanner := newTestScanner(ts.Client())
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -241,13 +249,10 @@ func TestCheckServerHandlesUnauthorized(t *testing.T) {
 	srv := startTLSServerOn(t, "127.0.0.1:9008", unauthorizedHandler)
 	_ = srv
 
-	scanner := &Scanner{
-		timeout: time.Second,
-		httpClient: &http.Client{
-			Timeout:   500 * time.Millisecond,
-			Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-		},
-	}
+    scanner := newTestScanner(&http.Client{
+        Timeout:   500 * time.Millisecond,
+        Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+    })
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -315,12 +320,15 @@ func TestDiscoverServersWithCallback(t *testing.T) {
 	pbsServer := startTLSServerOn(t, "127.0.0.1:8007", pbsHandler)
 	_ = pbsServer
 
-	scanner := NewScanner()
-	scanner.concurrent = 4
-	scanner.timeout = 200 * time.Millisecond
-	scanner.httpClient = &http.Client{
+	scanner := newTestScanner(&http.Client{
 		Timeout:   500 * time.Millisecond,
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+	})
+	scanner.policy.MaxConcurrent = 4
+	scanner.policy.DialTimeout = 200 * time.Millisecond
+	scanner.policy.HTTPTimeout = 500 * time.Millisecond
+	if scanner.profile != nil {
+		scanner.profile.Policy = scanner.policy
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -336,7 +344,7 @@ func TestDiscoverServersWithCallback(t *testing.T) {
 		t.Fatalf("expected checkServer to handle TCP-only host without panic")
 	}
 
-	result, err := scanner.DiscoverServersWithCallback(ctx, subnet, func(server DiscoveredServer) {
+	result, err := scanner.DiscoverServersWithCallback(ctx, subnet, func(server DiscoveredServer, phase string) {
 		mu.Lock()
 		callbacks = append(callbacks, server)
 		mu.Unlock()

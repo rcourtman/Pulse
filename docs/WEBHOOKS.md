@@ -268,6 +268,7 @@ Supported variables are identical to the payload template list (`{{.Message}}`, 
 - Check alert thresholds are configured correctly
 - Ensure notification cooldown period has passed
 - Test the webhook manually using the Test button
+- Temporarily raise log level to `debug` via **Settings → System → Logging** (or set `LOG_LEVEL=debug` and restart) to inspect `webhook.delivery` entries in the logs, then return to `info` once resolved.
 
 ## API Reference
 

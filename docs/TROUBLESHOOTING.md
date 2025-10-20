@@ -106,6 +106,31 @@ Common issues:
 - Volume permissions: Ensure volume is writable
 - Invalid environment variables: Check syntax
 
+### Port change didn't take effect
+1. **Confirm which service name is active**
+   ```bash
+   systemctl status pulse 2>/dev/null \\
+     || systemctl status pulse-backend 2>/dev/null \\
+     || systemctl status pulse-hot-dev
+   ```
+   - Docker: the container port mapping controls the public port (`-p host:7655`).
+   - Kubernetes (Helm chart): service is `svc/pulse`; update `service.port` in your values file and run `helm upgrade`.
+
+2. **Verify configuration/environment overrides**
+   ```bash
+   sudo systemctl show pulse --property=Environment
+   ```
+   Helm users can run `kubectl get svc pulse -n <namespace> -o yaml` to confirm the current port.
+
+3. **Check for port conflicts**
+   ```bash
+   sudo lsof -i :8080
+   ```
+
+4. **Post-change validation**
+   - Restart the service (`systemctl restart`, `docker restart`, or `helm upgrade`).
+   - v4.24.0 logs these restarts/upgrades in **Settings → System → Updates** and `/api/updates/history`; capture the `event_id` for your change notes.
+
 ### Installation Issues
 
 #### Binary not found (v4.3.7)
@@ -147,7 +172,7 @@ systemctl status pulse 2>/dev/null \
 - Verify URL is accessible from Pulse server
 - Check for SSL certificate issues
 - Try a test service like webhook.site
-- Check logs for response codes
+- Check logs for response codes (temporarily set `LOG_LEVEL=debug` via **Settings → System → Logging** or export `LOG_LEVEL=debug` and restart; review `webhook.delivery` entries, then revert to `info`)
 
 ### VM Disk Monitoring Issues
 

@@ -62,21 +62,66 @@ Keeping application configuration separate from authentication credentials:
 - Follows the principle of separation of concerns
 - Makes it easier to backup/share configs without exposing credentials
 
+## Service Name Variations
+
+**Important:** Pulse uses different service names depending on the deployment environment:
+
+- **Systemd (default):** `pulse.service` or `pulse-backend.service` (legacy)
+- **Hot-dev scripts:** `pulse-hot-dev` (development only)
+- **Kubernetes/Helm:** Deployment `pulse`, Service `pulse` (port configured via Helm values)
+
+**To check the active service:**
+```bash
+# Systemd
+systemctl list-units | grep pulse
+systemctl status pulse
+
+# Kubernetes
+kubectl -n pulse get svc pulse
+kubectl -n pulse get deploy pulse
+```
+
+## Change Tracking (v4.24.0+)
+
+Port changes via environment variables or `system.json` take effect immediately after restart. **v4.24.0 records configuration changes in update history**—useful for audit trails and troubleshooting.
+
+**To view change history:**
+```bash
+# Via UI
+# Navigate to Settings → System → Updates
+
+# Via API
+curl -s http://localhost:7655/api/updates/history | jq '.entries[] | {timestamp, action, status}'
+```
+
 ## Troubleshooting
 
 ### Port not changing after configuration?
-1. Check which service name is in use:
+1. **Check which service name is in use:**
    ```bash
    systemctl list-units | grep pulse
    ```
    It might be `pulse` (default), `pulse-backend` (legacy), or `pulse-hot-dev` (dev environment) depending on your installation method.
 
-2. Verify the configuration is loaded:
+2. **Verify the configuration is loaded:**
    ```bash
+   # Systemd
    sudo systemctl show pulse | grep Environment
+
+   # Kubernetes
+   kubectl -n pulse get deploy pulse -o jsonpath='{.spec.template.spec.containers[0].env}' | jq
    ```
 
-3. Check if another process is using the port:
+3. **Check if another process is using the port:**
    ```bash
    sudo lsof -i :8080
+   ```
+
+4. **Verify post-restart** (v4.24.0+):
+   ```bash
+   # Check actual listening port
+   curl -s http://localhost:7655/api/version | jq
+
+   # Check update history for restart event
+   curl -s http://localhost:7655/api/updates/history?limit=5 | jq
    ```

@@ -287,6 +287,8 @@ RestartSec=5s
 RuntimeDirectory=pulse-sensor-proxy
 RuntimeDirectoryMode=0775
 RuntimeDirectoryPreserve=yes
+LogsDirectory=pulse/sensor-proxy
+LogsDirectoryMode=0750
 UMask=0007
 
 # Core hardening
@@ -344,6 +346,8 @@ RestartSec=5s
 RuntimeDirectory=pulse-sensor-proxy
 RuntimeDirectoryMode=0775
 RuntimeDirectoryPreserve=yes
+LogsDirectory=pulse/sensor-proxy
+LogsDirectoryMode=0750
 UMask=0007
 
 # Core hardening

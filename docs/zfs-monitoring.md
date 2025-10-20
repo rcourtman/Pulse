@@ -69,7 +69,7 @@ ZFS issues appear in the Storage tab:
 ### No ZFS Data Appearing
 1. Check permissions: `pveum user permissions pulse-monitor@pam`
 2. Verify ZFS pools exist: `zpool list`
-3. Check logs: `grep ZFS /opt/pulse/pulse.log`
+3. Check logs: `grep ZFS /opt/pulse/pulse.log` (raise log level to `debug` via **Settings → System → Logging** if you need more context, then switch back to `info`).
 
 ### Permission Denied Errors
 Grant the required permission:

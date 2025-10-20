@@ -2851,13 +2851,20 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 		if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
 			result, updated := discoveryService.GetCachedResult()
 
-			// Add metadata about the cache
+			var updatedUnix int64
+			var ageSeconds float64
+			if !updated.IsZero() {
+				updatedUnix = updated.Unix()
+				ageSeconds = time.Since(updated).Seconds()
+			}
+
 			response := map[string]interface{}{
-				"servers": result.Servers,
-				"errors":  result.Errors,
-				"cached":  true,
-				"updated": updated.Unix(),
-				"age":     time.Since(updated).Seconds(),
+				"servers":      result.Servers,
+				"errors":       result.Errors,
+				"environment":  result.Environment,
+				"cached":       true,
+				"updated":      updatedUnix,
+				"age":          ageSeconds,
 			}
 
 			w.Header().Set("Content-Type", "application/json")
@@ -2865,20 +2872,21 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		// No discovery service available, return empty result
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"servers": []interface{}{},
-			"errors":  []string{},
-			"cached":  false,
+			"servers":     []interface{}{},
+			"errors":      []string{},
+			"environment": nil,
+			"cached":      false,
+			"updated":     int64(0),
+			"age":         float64(0),
 		})
 		return
 
 	case http.MethodPost:
-		// Parse request
 		var req struct {
-			Subnet   string `json:"subnet"`    // CIDR notation or "auto"
-			UseCache bool   `json:"use_cache"` // Whether to return cached results
+			Subnet   string `json:"subnet"`
+			UseCache bool   `json:"use_cache"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2886,17 +2894,24 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		// If use_cache is true and we have cached results, return them
 		if req.UseCache {
 			if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
 				result, updated := discoveryService.GetCachedResult()
 
+				var updatedUnix int64
+				var ageSeconds float64
+				if !updated.IsZero() {
+					updatedUnix = updated.Unix()
+					ageSeconds = time.Since(updated).Seconds()
+				}
+
 				response := map[string]interface{}{
-					"servers": result.Servers,
-					"errors":  result.Errors,
-					"cached":  true,
-					"updated": updated.Unix(),
-					"age":     time.Since(updated).Seconds(),
+					"servers":     result.Servers,
+					"errors":      result.Errors,
+					"environment": result.Environment,
+					"cached":      true,
+					"updated":     updatedUnix,
+					"age":         ageSeconds,
 				}
 
 				w.Header().Set("Content-Type", "application/json")
@@ -2905,49 +2920,42 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 			}
 		}
 
-		// Check if discovery service is available for triggering a refresh
-		if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
-			// Update subnet if provided
-			if req.Subnet != "" {
-				discoveryService.SetSubnet(req.Subnet)
-			}
-
-			// Trigger a refresh
-			discoveryService.ForceRefresh()
-
-			// Wait a moment for scan to start, then return current cache
-			time.Sleep(100 * time.Millisecond)
-
-			result, updated := discoveryService.GetCachedResult()
-			response := map[string]interface{}{
-				"servers":  result.Servers,
-				"errors":   result.Errors,
-				"cached":   true,
-				"scanning": true,
-				"updated":  updated.Unix(),
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-			return
+		subnet := strings.TrimSpace(req.Subnet)
+		if subnet == "" {
+			subnet = "auto"
 		}
 
-		// Fallback to direct scan if no discovery service
-		log.Info().Str("subnet", req.Subnet).Msg("Starting network discovery (fallback)")
+		log.Info().Str("subnet", subnet).Msg("Starting manual discovery scan")
 
 		scanner := discovery.NewScanner()
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
-		result, err := scanner.DiscoverServers(ctx, req.Subnet)
+		result, err := scanner.DiscoverServers(ctx, subnet)
 		if err != nil {
 			log.Error().Err(err).Msg("Discovery failed")
 			http.Error(w, fmt.Sprintf("Discovery failed: %v", err), http.StatusInternalServerError)
 			return
 		}
 
+		if result.Environment != nil {
+			log.Info().
+				Str("environment", result.Environment.Type).
+				Float64("confidence", result.Environment.Confidence).
+				Int("phases", len(result.Environment.Phases)).
+				Msg("Manual discovery environment summary")
+		}
+
+		response := map[string]interface{}{
+			"servers":     result.Servers,
+			"errors":      result.Errors,
+			"environment": result.Environment,
+			"cached":      false,
+			"scanning":    false,
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		json.NewEncoder(w).Encode(response)
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
