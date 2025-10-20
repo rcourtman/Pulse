@@ -3,8 +3,10 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"math"
+	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -259,6 +261,13 @@ type Monitor struct {
 	scheduler            *AdaptiveScheduler
 	stalenessTracker     *StalenessTracker
 	taskQueue            *TaskQueue
+	circuitBreakers      map[string]*circuitBreaker
+	deadLetterQueue      *TaskQueue
+	failureCounts        map[string]int
+	lastOutcome          map[string]taskOutcome
+	backoffCfg           backoffConfig
+	rng                  *rand.Rand
+	maxRetryAttempts     int
 	tempCollector        *TemperatureCollector // SSH-based temperature collector
 	mu                   sync.RWMutex
 	startTime            time.Time
@@ -377,6 +386,13 @@ type guestMetadataCacheEntry struct {
 	osName            string
 	osVersion         string
 	fetchedAt         time.Time
+}
+
+type taskOutcome struct {
+	success     bool
+	transient   bool
+	err         error
+	recordedAt  time.Time
 }
 
 func (m *Monitor) getNodeRRDMemAvailable(ctx context.Context, client PVEClientInterface, nodeName string) (uint64, error) {
@@ -1319,6 +1335,16 @@ func New(cfg *config.Config) (*Monitor, error) {
 	stalenessTracker := NewStalenessTracker(getPollMetrics())
 	stalenessTracker.SetBounds(cfg.AdaptivePollingBaseInterval, cfg.AdaptivePollingMaxInterval)
 	taskQueue := NewTaskQueue()
+	deadLetterQueue := NewTaskQueue()
+	breakers := make(map[string]*circuitBreaker)
+failureCounts := make(map[string]int)
+lastOutcome := make(map[string]taskOutcome)
+backoff := backoffConfig{
+	Initial:    5 * time.Second,
+	Multiplier: 2,
+	Jitter:     0.2,
+	Max:        5 * time.Minute,
+}
 
 	var scheduler *AdaptiveScheduler
 	if cfg.AdaptivePollingEnabled {
@@ -1339,6 +1365,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 		scheduler:            scheduler,
 		stalenessTracker:     stalenessTracker,
 		taskQueue:            taskQueue,
+		deadLetterQueue:      deadLetterQueue,
+		circuitBreakers:      breakers,
+		failureCounts:        failureCounts,
+		lastOutcome:          lastOutcome,
+		backoffCfg:           backoff,
+		rng:                  rand.New(rand.NewSource(time.Now().UnixNano())),
+		maxRetryAttempts:     5,
 		tempCollector:        tempCollector,
 		startTime:            time.Now(),
 		rateTracker:          NewRateTracker(),
@@ -2113,6 +2146,13 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 }
 
 func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) {
+    if !m.allowExecution(task) {
+        log.Debug().
+            Str("instance", task.InstanceName).
+            Str("type", string(task.InstanceType)).
+            Msg("Task blocked by circuit breaker")
+        return
+    }
 	switch task.InstanceType {
 	case InstanceTypePVE:
 		client, ok := m.pveClients[task.InstanceName]
@@ -2120,21 +2160,21 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 			log.Warn().Str("instance", task.InstanceName).Msg("PVE client missing for scheduled task")
 			return
 		}
-		m.pollPVEInstance(ctx, task.InstanceName, client)
+        m.pollPVEInstance(ctx, task.InstanceName, client)
 	case InstanceTypePBS:
 		client, ok := m.pbsClients[task.InstanceName]
 		if !ok || client == nil {
 			log.Warn().Str("instance", task.InstanceName).Msg("PBS client missing for scheduled task")
 			return
 		}
-		m.pollPBSInstance(ctx, task.InstanceName, client)
+        m.pollPBSInstance(ctx, task.InstanceName, client)
 	case InstanceTypePMG:
 		client, ok := m.pmgClients[task.InstanceName]
 		if !ok || client == nil {
 			log.Warn().Str("instance", task.InstanceName).Msg("PMG client missing for scheduled task")
 			return
 		}
-		m.pollPMGInstance(ctx, task.InstanceName, client)
+        m.pollPMGInstance(ctx, task.InstanceName, client)
 	default:
 		log.Debug().Str("instance", task.InstanceName).Str("type", string(task.InstanceType)).Msg("Skipping unsupported task type")
 	}
@@ -2142,6 +2182,28 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 
 func (m *Monitor) rescheduleTask(task ScheduledTask) {
 	if m.taskQueue == nil {
+		return
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+	m.mu.Lock()
+	outcome, hasOutcome := m.lastOutcome[key]
+	failureCount := m.failureCounts[key]
+	m.mu.Unlock()
+
+	if hasOutcome && !outcome.success {
+		if !outcome.transient || failureCount >= m.maxRetryAttempts {
+			m.sendToDeadLetter(task, outcome.err)
+			return
+		}
+		delay := m.backoffCfg.nextDelay(failureCount-1, m.randomFloat())
+		if delay <= 0 {
+			delay = 5 * time.Second
+		}
+		next := task
+		next.Interval = delay
+		next.NextRun = time.Now().Add(delay)
+		m.taskQueue.Upsert(next)
 		return
 	}
 
@@ -2161,9 +2223,9 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 	}
 
 	desc := InstanceDescriptor{
-		Name:         task.InstanceName,
-		Type:         task.InstanceType,
-		LastInterval: task.Interval,
+		Name:          task.InstanceName,
+		Type:          task.InstanceType,
+		LastInterval:  task.Interval,
 		LastScheduled: task.NextRun,
 	}
 	if m.stalenessTracker != nil {
@@ -2196,11 +2258,125 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 	}
 }
 
+func (m *Monitor) sendToDeadLetter(task ScheduledTask, err error) {
+	if m.deadLetterQueue == nil {
+		log.Error().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Err(err).
+			Msg("Dead-letter queue unavailable; dropping task")
+		return
+	}
+
+	log.Error().
+		Str("instance", task.InstanceName).
+		Str("type", string(task.InstanceType)).
+		Err(err).
+		Msg("Routing task to dead-letter queue after repeated failures")
+
+	next := task
+	next.Interval = 30 * time.Minute
+	next.NextRun = time.Now().Add(next.Interval)
+	m.deadLetterQueue.Upsert(next)
+}
+
+func (m *Monitor) randomFloat() float64 {
+	if m.rng == nil {
+		m.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	return m.rng.Float64()
+}
+
 func (m *Monitor) updateQueueDepthMetric() {
 	if m.pollMetrics == nil || m.taskQueue == nil {
 		return
 	}
 	m.pollMetrics.SetQueueDepth(m.taskQueue.Size())
+}
+
+func (m *Monitor) allowExecution(task ScheduledTask) bool {
+	if m.circuitBreakers == nil {
+		return true
+	}
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+	breaker := m.ensureBreaker(key)
+	return breaker.allow(time.Now())
+}
+
+func (m *Monitor) ensureBreaker(key string) *circuitBreaker {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+
+    if m.circuitBreakers == nil {
+        m.circuitBreakers = make(map[string]*circuitBreaker)
+    }
+    if breaker, ok := m.circuitBreakers[key]; ok {
+        return breaker
+    }
+    breaker := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+    m.circuitBreakers[key] = breaker
+    return breaker
+}
+
+func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, pollErr error) {
+	if m == nil {
+		return
+	}
+
+	key := schedulerKey(instanceType, instance)
+	now := time.Now()
+
+	breaker := m.ensureBreaker(key)
+
+	m.mu.Lock()
+	if pollErr == nil {
+		if m.failureCounts != nil {
+			m.failureCounts[key] = 0
+		}
+		if m.lastOutcome != nil {
+			m.lastOutcome[key] = taskOutcome{
+				success:    true,
+				transient:  true,
+				err:        nil,
+				recordedAt: now,
+			}
+		}
+		m.mu.Unlock()
+		if breaker != nil {
+			breaker.recordSuccess()
+		}
+		return
+	}
+
+	transient := isTransientError(pollErr)
+	if m.failureCounts != nil {
+		m.failureCounts[key] = m.failureCounts[key] + 1
+	}
+	if m.lastOutcome != nil {
+		m.lastOutcome[key] = taskOutcome{
+			success:    false,
+			transient:  transient,
+			err:        pollErr,
+			recordedAt: now,
+		}
+	}
+	m.mu.Unlock()
+	if breaker != nil {
+		breaker.recordFailure(now)
+	}
+}
+
+func isTransientError(err error) bool {
+	if err == nil {
+		return true
+	}
+	if errors.IsRetryableError(err) {
+		return true
+	}
+	if stderrors.Is(err, context.Canceled) || stderrors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	return false
 }
 
 // pollPVEInstance polls a single PVE instance
@@ -2230,6 +2406,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}
 		}()
 	}
+	defer m.recordTaskResult(InstanceTypePVE, instanceName, pollErr)
 
 	// Check if context is cancelled
 	select {
@@ -4000,6 +4177,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			}
 		}()
 	}
+	defer m.recordTaskResult(InstanceTypePBS, instanceName, pollErr)
 
     // Check if context is cancelled
     select {
@@ -4310,6 +4488,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 			}
 		}()
 	}
+	defer m.recordTaskResult(InstanceTypePMG, instanceName, pollErr)
 
 	select {
 	case <-ctx.Done():
