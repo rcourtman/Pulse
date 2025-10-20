@@ -92,6 +92,53 @@ Yes! When you add one cluster node, Pulse automatically discovers and monitors a
 ### High memory usage?
 Reduce `metricsRetentionDays` in settings and restart
 
+### How do I monitor adaptive polling?
+**New in v4.24.0:** Pulse includes adaptive polling that automatically adjusts polling intervals based on system load.
+
+**Monitor adaptive polling:**
+- **Dashboard**: Settings → System → Monitoring shows scheduler health status
+- **API**: `/api/monitoring/scheduler/health` provides detailed metrics including:
+  - Queue depths and processing times
+  - Circuit breaker status
+  - Backoff states
+  - Instance metadata
+- **Logging**: Enable debug logging to see detailed polling behavior
+
+**Key metrics to watch:**
+- Queue depth (alerts if backlog builds up)
+- Circuit breaker trips (indicates connectivity issues)
+- Backoff delays (shows throttling behavior)
+
+See [Adaptive Polling Documentation](monitoring/ADAPTIVE_POLLING.md) for complete details.
+
+### What's new about rate limiting in v4.24.0?
+Pulse now returns standard rate limit headers with all API responses:
+
+**Response Headers:**
+- `X-RateLimit-Limit`: Maximum requests allowed per window (e.g., 500)
+- `X-RateLimit-Remaining`: Requests remaining in current window
+- `Retry-After`: Seconds to wait before retrying (on 429 responses)
+
+**Rate Limits:**
+- **Auth endpoints**: 10 attempts/minute per IP
+- **General API**: 500 requests/minute per IP
+- **Real-time endpoints**: No limits (WebSocket, SSE)
+
+**Example Response:**
+```
+HTTP/1.1 200 OK
+X-RateLimit-Limit: 500
+X-RateLimit-Remaining: 487
+```
+
+When you hit the limit:
+```
+HTTP/1.1 429 Too Many Requests
+X-RateLimit-Limit: 500
+X-RateLimit-Remaining: 0
+Retry-After: 60
+```
+
 ## Features
 
 ### Why do VMs show "-" for disk usage?
@@ -175,13 +222,72 @@ First, confirm the agent is still running (`systemctl status pulse-docker-agent`
 ## Updates
 
 ### How to update?
-- **Docker**: Pull latest image, recreate container  
+- **Docker**: Pull latest image, recreate container
 - **Manual/systemd**: Run the install script again: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash`
 
+### Can I roll back if an update misbehaves?
+**New in v4.24.0:** Yes! Pulse now retains previous versions and provides easy rollback.
+
+**Via UI (Recommended):**
+1. Navigate to **Settings → System → Updates**
+2. Click **"Restore previous version"**
+3. Confirm rollback
+4. Pulse restarts with the previous working version
+
+**Via CLI:**
+```bash
+# Systemd installations
+sudo /opt/pulse/pulse config rollback
+
+# LXC containers
+pct exec <ctid> -- bash -c "cd /opt/pulse && ./pulse config rollback"
+```
+
+**What gets rolled back:**
+- Pulse binary and frontend assets
+- System configuration (preserved from previous version)
+- Rollback history tracked in Updates view
+
+**What stays the same:**
+- Your node configurations
+- Alert settings
+- User credentials
+- Historical metrics data
+
+Check rollback logs: `journalctl -u pulse | grep rollback`
+
 ### How do I install an older release (downgrade)?
-- **Manual/systemd installs**: rerun the installer and pass the tag you want, e.g. `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.20.0`
-- **Proxmox LXC appliance**: `pct exec <ctid> -- bash -lc "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.20.0"`
-- **Docker**: launch with a versioned tag instead of `latest`, e.g. `docker run -d --name pulse -p 7655:7655 rcourtman/pulse:v4.20.0`
+- **Manual/systemd installs**: rerun the installer and pass the tag you want, e.g. `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.24.0`
+- **Proxmox LXC appliance**: `pct exec <ctid> -- bash -lc "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.24.0"`
+- **Docker**: launch with a versioned tag instead of `latest`, e.g. `docker run -d --name pulse -p 7655:7655 rcourtman/pulse:v4.24.0`
+
+### How do I adjust logging without restarting?
+**New in v4.24.0:** Pulse supports runtime logging configuration—no restart required!
+
+**Via UI:**
+1. Navigate to **Settings → System → Logging**
+2. Adjust:
+   - **Log Level**: debug, info, warn, error
+   - **Log Format**: json, text
+   - **File Rotation**: size limits, retention
+3. Changes apply immediately
+
+**Via Environment Variables:**
+```bash
+# Systemd
+sudo systemctl edit pulse
+[Service]
+Environment="LOG_LEVEL=debug"
+Environment="LOG_FORMAT=json"
+
+# Docker
+docker run -e LOG_LEVEL=debug -e LOG_FORMAT=json rcourtman/pulse:latest
+```
+
+**Use cases:**
+- Enable debug logging temporarily for troubleshooting
+- Switch to JSON format for log aggregation
+- Adjust file rotation to manage disk usage
 
 ### Why can't I update from the UI?
 For security reasons, Pulse cannot self-update. The UI will notify you when updates are available and show the appropriate update command for your deployment type.

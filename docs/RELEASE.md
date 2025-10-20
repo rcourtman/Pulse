@@ -4,7 +4,7 @@ Use this checklist when preparing and publishing a new Pulse release.
 
 ## Pre-release
 
-- [ ] Ensure `VERSION` is up to date and matches the tag you plan to cut (format `4.x.y`)
+- [ ] Ensure `VERSION` is set to `4.24.0` and matches the tag you plan to cut (format `4.x.y`)
 - [ ] Confirm the Helm chart renders and installs locally:
   ```bash
   helm lint deploy/helm/pulse --strict
@@ -26,6 +26,8 @@ Use this checklist when preparing and publishing a new Pulse release.
   kubectl -n pulse get pods
   kind delete cluster
   ```
+- [ ] Confirm adaptive polling, scheduler health API, rollback UI, logging runtime controls, and rate-limit header documentation are updated before tagging v4.24.0
+- [ ] Smoke-test updates rollback: apply a test update via Settings → System → Updates, trigger a rollback, and verify journal entries document the rollback event
 
 ## Publishing
 
@@ -62,11 +64,21 @@ Use this checklist when preparing and publishing a new Pulse release.
      --create-namespace
    ```
 
+   **For v4.24.0 specifically**, highlight these features in the release notes:
+   - Adaptive polling (now GA)
+   - Scheduler health API with rich instance metadata
+   - Updates rollback workflow
+   - Shared script library system (now GA)
+   - X-RateLimit-* headers for all API responses
+   - Runtime logging configuration (no restart required)
+
 6. Mention any chart-breaking changes (new values, migrations) in the release notes.
 
 ## Post-release
 
 - [ ] Verify `helm show chart oci://ghcr.io/rcourtman/pulse-chart --version 4.x.y` shows the expected metadata (version, appVersion, icon)
 - [ ] Run `helm install` against a test cluster (Kind/k3s) using the published OCI artifact
+- [ ] Run `curl -s http://<host>:7655/api/monitoring/scheduler/health | jq` to ensure the scheduler health endpoint is live
+- [ ] Verify the Updates view reports rollback metadata and X-RateLimit-* headers appear in API responses
 - [ ] Announce the release with links to both the GitHub release and the Helm installation instructions (`docs/KUBERNETES.md`)
 - [ ] Verify signatures: `gpg --verify checksums.txt.asc checksums.txt`
