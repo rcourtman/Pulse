@@ -269,10 +269,6 @@ func (s *AdaptiveScheduler) LastScheduled(instanceType InstanceType, instanceNam
 	return task, ok
 }
 
-func schedulerKey(instanceType InstanceType, name string) string {
-	return string(instanceType) + "::" + name
-}
-
 type noopStalenessSource struct{}
 
 func (noopStalenessSource) StalenessScore(instanceType InstanceType, instanceName string) (float64, bool) {

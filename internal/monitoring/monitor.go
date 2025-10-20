@@ -301,6 +301,85 @@ func (r *realExecutor) Execute(ctx context.Context, task PollTask) {
 	}
 }
 
+type instanceInfo struct {
+	Key         string
+	Type        InstanceType
+	DisplayName string
+	Connection  string
+	Metadata    map[string]string
+}
+
+type pollStatus struct {
+	LastSuccess         time.Time
+	LastErrorAt         time.Time
+	LastErrorMessage    string
+	LastErrorCategory   string
+	ConsecutiveFailures int
+	FirstFailureAt      time.Time
+}
+
+type dlqInsight struct {
+	Reason       string
+	FirstAttempt time.Time
+	LastAttempt  time.Time
+	RetryCount   int
+	NextRetry    time.Time
+}
+
+type ErrorDetail struct {
+	At       time.Time `json:"at"`
+	Message  string    `json:"message"`
+	Category string    `json:"category"`
+}
+
+type InstancePollStatus struct {
+	LastSuccess         *time.Time   `json:"lastSuccess,omitempty"`
+	LastError           *ErrorDetail `json:"lastError,omitempty"`
+	ConsecutiveFailures int          `json:"consecutiveFailures"`
+	FirstFailureAt      *time.Time   `json:"firstFailureAt,omitempty"`
+}
+
+type InstanceBreaker struct {
+	State          string     `json:"state"`
+	Since          *time.Time `json:"since,omitempty"`
+	LastTransition *time.Time `json:"lastTransition,omitempty"`
+	RetryAt        *time.Time `json:"retryAt,omitempty"`
+	FailureCount   int        `json:"failureCount"`
+}
+
+type InstanceDLQ struct {
+	Present      bool       `json:"present"`
+	Reason       string     `json:"reason,omitempty"`
+	FirstAttempt *time.Time `json:"firstAttempt,omitempty"`
+	LastAttempt  *time.Time `json:"lastAttempt,omitempty"`
+	RetryCount   int        `json:"retryCount,omitempty"`
+	NextRetry    *time.Time `json:"nextRetry,omitempty"`
+}
+
+type InstanceHealth struct {
+	Key         string             `json:"key"`
+	Type        string             `json:"type"`
+	DisplayName string             `json:"displayName"`
+	Instance    string             `json:"instance"`
+	Connection  string             `json:"connection"`
+	PollStatus  InstancePollStatus `json:"pollStatus"`
+	Breaker     InstanceBreaker    `json:"breaker"`
+	DeadLetter  InstanceDLQ        `json:"deadLetter"`
+}
+
+
+func schedulerKey(instanceType InstanceType, name string) string {
+	return string(instanceType) + "::" + name
+}
+
+func timePtr(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	copy := t
+	return &copy
+}
+
 // Monitor handles all monitoring operations
 type Monitor struct {
 	config               *config.Config
@@ -354,6 +433,9 @@ type Monitor struct {
 	breakerBaseRetry     time.Duration
 	breakerMaxDelay      time.Duration
 	breakerHalfOpenWindow time.Duration
+	instanceInfoCache    map[string]*instanceInfo
+	pollStatusMap        map[string]*pollStatus
+	dlqInsightMap        map[string]*dlqInsight
 }
 
 type rrdMemCacheEntry struct {
@@ -1455,6 +1537,9 @@ lastOutcome := make(map[string]taskOutcome)
 		dockerCommands:       make(map[string]*dockerHostCommand),
 		dockerCommandIndex:   make(map[string]string),
 		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		instanceInfoCache:    make(map[string]*instanceInfo),
+		pollStatusMap:        make(map[string]*pollStatus),
+		dlqInsightMap:        make(map[string]*dlqInsight),
 	}
 
 	m.breakerBaseRetry = 5 * time.Second
@@ -1468,6 +1553,7 @@ lastOutcome := make(map[string]taskOutcome)
 	}
 
 	m.executor = newRealExecutor(m)
+	m.buildInstanceInfoCache(cfg)
 
 	if m.pollMetrics != nil {
 		m.pollMetrics.ResetQueueDepth(0)
@@ -1725,6 +1811,82 @@ func (m *Monitor) SetExecutor(exec PollExecutor) {
 
 	m.executor = exec
 }
+
+func (m *Monitor) buildInstanceInfoCache(cfg *config.Config) {
+	if m == nil || cfg == nil {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.instanceInfoCache == nil {
+		m.instanceInfoCache = make(map[string]*instanceInfo)
+	}
+
+	add := func(instType InstanceType, name string, displayName string, connection string, metadata map[string]string) {
+		key := schedulerKey(instType, name)
+		m.instanceInfoCache[key] = &instanceInfo{
+			Key:         key,
+			Type:        instType,
+			DisplayName: displayName,
+			Connection:  connection,
+			Metadata:    metadata,
+		}
+	}
+
+	// PVE instances
+	for _, inst := range cfg.PVEInstances {
+		name := strings.TrimSpace(inst.Name)
+		if name == "" {
+			name = strings.TrimSpace(inst.Host)
+		}
+		if name == "" {
+			name = "pve-instance"
+		}
+		display := name
+		if display == "" {
+			display = strings.TrimSpace(inst.Host)
+		}
+		connection := strings.TrimSpace(inst.Host)
+		add(InstanceTypePVE, name, display, connection, nil)
+	}
+
+	// PBS instances
+	for _, inst := range cfg.PBSInstances {
+		name := strings.TrimSpace(inst.Name)
+		if name == "" {
+			name = strings.TrimSpace(inst.Host)
+		}
+		if name == "" {
+			name = "pbs-instance"
+		}
+		display := name
+		if display == "" {
+			display = strings.TrimSpace(inst.Host)
+		}
+		connection := strings.TrimSpace(inst.Host)
+		add(InstanceTypePBS, name, display, connection, nil)
+	}
+
+	// PMG instances
+	for _, inst := range cfg.PMGInstances {
+		name := strings.TrimSpace(inst.Name)
+		if name == "" {
+			name = strings.TrimSpace(inst.Host)
+		}
+		if name == "" {
+			name = "pmg-instance"
+		}
+		display := name
+		if display == "" {
+			display = strings.TrimSpace(inst.Host)
+		}
+		connection := strings.TrimSpace(inst.Host)
+		add(InstanceTypePMG, name, display, connection, nil)
+	}
+}
+
 
 func (m *Monitor) getExecutor() PollExecutor {
 	m.mu.RLock()
@@ -2401,6 +2563,39 @@ func (m *Monitor) sendToDeadLetter(task ScheduledTask, err error) {
 	next.Interval = 30 * time.Minute
 	next.NextRun = time.Now().Add(next.Interval)
 	m.deadLetterQueue.Upsert(next)
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+	now := time.Now()
+
+	m.mu.Lock()
+	if m.dlqInsightMap == nil {
+		m.dlqInsightMap = make(map[string]*dlqInsight)
+	}
+	info, ok := m.dlqInsightMap[key]
+	if !ok {
+		info = &dlqInsight{}
+		m.dlqInsightMap[key] = info
+	}
+	if info.FirstAttempt.IsZero() {
+		info.FirstAttempt = now
+	}
+	info.LastAttempt = now
+	info.RetryCount++
+	info.NextRetry = next.NextRun
+	if err != nil {
+		info.Reason = classifyDLQReason(err)
+	}
+	m.mu.Unlock()
+}
+
+func classifyDLQReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.IsRetryableError(err) {
+		return "max_retry_attempts"
+	}
+	return "permanent_failure"
 }
 
 func (m *Monitor) randomFloat() float64 {
@@ -2464,6 +2659,12 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 	breaker := m.ensureBreaker(key)
 
 	m.mu.Lock()
+	status, ok := m.pollStatusMap[key]
+	if !ok {
+		status = &pollStatus{}
+		m.pollStatusMap[key] = status
+	}
+
 	if pollErr == nil {
 		if m.failureCounts != nil {
 			m.failureCounts[key] = 0
@@ -2476,6 +2677,9 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 				recordedAt: now,
 			}
 		}
+		status.LastSuccess = now
+		status.ConsecutiveFailures = 0
+		status.FirstFailureAt = time.Time{}
 		m.mu.Unlock()
 		if breaker != nil {
 			breaker.recordSuccess()
@@ -2484,6 +2688,10 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 	}
 
 	transient := isTransientError(pollErr)
+	category := "permanent"
+	if transient {
+		category = "transient"
+	}
 	if m.failureCounts != nil {
 		m.failureCounts[key] = m.failureCounts[key] + 1
 	}
@@ -2494,6 +2702,13 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 			err:        pollErr,
 			recordedAt: now,
 		}
+	}
+	status.LastErrorAt = now
+	status.LastErrorMessage = pollErr.Error()
+	status.LastErrorCategory = category
+	status.ConsecutiveFailures++
+	if status.ConsecutiveFailures == 1 {
+		status.FirstFailureAt = now
 	}
 	m.mu.Unlock()
 	if breaker != nil {
@@ -2509,6 +2724,7 @@ type SchedulerHealthResponse struct {
 	DeadLetter  DeadLetterSnapshot         `json:"deadLetter"`
 	Breakers    []BreakerSnapshot          `json:"breakers,omitempty"`
 	Staleness   []StalenessSnapshot        `json:"staleness,omitempty"`
+	Instances   []InstanceHealth           `json:"instances"`
 }
 
 // DeadLetterSnapshot contains dead-letter queue data.
@@ -2577,6 +2793,194 @@ func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 	// Staleness snapshots
 	if m.stalenessTracker != nil {
 		response.Staleness = m.stalenessTracker.Snapshot()
+	}
+
+	instanceInfos := make(map[string]*instanceInfo)
+	pollStatuses := make(map[string]pollStatus)
+	dlqInsights := make(map[string]dlqInsight)
+	breakerRefs := make(map[string]*circuitBreaker)
+
+	m.mu.RLock()
+	for k, v := range m.instanceInfoCache {
+		if v == nil {
+			continue
+		}
+		copyVal := *v
+		instanceInfos[k] = &copyVal
+	}
+	for k, v := range m.pollStatusMap {
+		if v == nil {
+			continue
+		}
+		pollStatuses[k] = *v
+	}
+	for k, v := range m.dlqInsightMap {
+		if v == nil {
+			continue
+		}
+		dlqInsights[k] = *v
+	}
+	for k, v := range m.circuitBreakers {
+		if v != nil {
+			breakerRefs[k] = v
+		}
+	}
+	m.mu.RUnlock()
+
+	keySet := make(map[string]struct{})
+	for k := range instanceInfos {
+		if k != "" {
+			keySet[k] = struct{}{}
+		}
+	}
+	for k := range pollStatuses {
+		if k != "" {
+			keySet[k] = struct{}{}
+		}
+	}
+	for k := range dlqInsights {
+		if k != "" {
+			keySet[k] = struct{}{}
+		}
+	}
+	for k := range breakerRefs {
+		if k != "" {
+			keySet[k] = struct{}{}
+		}
+	}
+	for _, task := range response.DeadLetter.Tasks {
+		if task.Instance == "" {
+			continue
+		}
+		keySet[schedulerKey(InstanceType(task.Type), task.Instance)] = struct{}{}
+	}
+	for _, snap := range response.Staleness {
+		if snap.Instance == "" {
+			continue
+		}
+		keySet[schedulerKey(InstanceType(snap.Type), snap.Instance)] = struct{}{}
+	}
+
+	if len(keySet) > 0 {
+		keys := make([]string, 0, len(keySet))
+		for k := range keySet {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		instances := make([]InstanceHealth, 0, len(keys))
+		for _, key := range keys {
+			instType := "unknown"
+			instName := key
+			if parts := strings.SplitN(key, "::", 2); len(parts) == 2 {
+				if parts[0] != "" {
+					instType = parts[0]
+				}
+				if parts[1] != "" {
+					instName = parts[1]
+				}
+			}
+			instType = strings.TrimSpace(instType)
+			instName = strings.TrimSpace(instName)
+
+			info := instanceInfos[key]
+			display := instName
+			connection := ""
+			if info != nil {
+				if instType == "unknown" || instType == "" {
+					if info.Type != "" {
+						instType = string(info.Type)
+					}
+				}
+				if strings.Contains(info.Key, "::") {
+					if parts := strings.SplitN(info.Key, "::", 2); len(parts) == 2 {
+						if instName == key {
+							instName = parts[1]
+						}
+						if (instType == "" || instType == "unknown") && parts[0] != "" {
+							instType = parts[0]
+						}
+					}
+				}
+				if info.DisplayName != "" {
+					display = info.DisplayName
+				}
+				if info.Connection != "" {
+					connection = info.Connection
+				}
+			}
+			display = strings.TrimSpace(display)
+			connection = strings.TrimSpace(connection)
+			if display == "" {
+				display = instName
+			}
+			if display == "" {
+				display = connection
+			}
+			if instType == "" {
+				instType = "unknown"
+			}
+			if instName == "" {
+				instName = key
+			}
+
+			status, hasStatus := pollStatuses[key]
+			instanceStatus := InstancePollStatus{}
+			if hasStatus {
+				instanceStatus.ConsecutiveFailures = status.ConsecutiveFailures
+				instanceStatus.LastSuccess = timePtr(status.LastSuccess)
+				if !status.FirstFailureAt.IsZero() {
+					instanceStatus.FirstFailureAt = timePtr(status.FirstFailureAt)
+				}
+				if !status.LastErrorAt.IsZero() && status.LastErrorMessage != "" {
+					instanceStatus.LastError = &ErrorDetail{
+						At:       status.LastErrorAt,
+						Message:  status.LastErrorMessage,
+						Category: status.LastErrorCategory,
+					}
+				}
+			}
+
+			breakerInfo := InstanceBreaker{
+				State:        "closed",
+				FailureCount: 0,
+			}
+			if br, ok := breakerRefs[key]; ok && br != nil {
+				state, failures, retryAt, since, lastTransition := br.stateDetails()
+				if state != "" {
+					breakerInfo.State = state
+				}
+				breakerInfo.FailureCount = failures
+				breakerInfo.RetryAt = timePtr(retryAt)
+				breakerInfo.Since = timePtr(since)
+				breakerInfo.LastTransition = timePtr(lastTransition)
+			}
+
+			dlqInfo := InstanceDLQ{Present: false}
+			if dlq, ok := dlqInsights[key]; ok {
+				dlqInfo.Present = true
+				dlqInfo.Reason = dlq.Reason
+				dlqInfo.FirstAttempt = timePtr(dlq.FirstAttempt)
+				dlqInfo.LastAttempt = timePtr(dlq.LastAttempt)
+				dlqInfo.RetryCount = dlq.RetryCount
+				dlqInfo.NextRetry = timePtr(dlq.NextRetry)
+			}
+
+			instances = append(instances, InstanceHealth{
+				Key:         key,
+				Type:        instType,
+				DisplayName: display,
+				Instance:    instName,
+				Connection:  connection,
+				PollStatus:  instanceStatus,
+				Breaker:     breakerInfo,
+				DeadLetter:  dlqInfo,
+			})
+		}
+
+		response.Instances = instances
+	} else {
+		response.Instances = []InstanceHealth{}
 	}
 
 	return response
