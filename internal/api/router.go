@@ -123,6 +123,7 @@ func (r *Router) setupRoutes() {
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
+	r.mux.HandleFunc("/api/monitoring/scheduler/health", RequireAuth(r.config, r.handleSchedulerHealth))
 	r.mux.HandleFunc("/api/state", r.handleState)
 	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, r.dockerAgentHandlers.HandleReport))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, r.dockerAgentHandlers.HandleCommandAck))
@@ -1607,6 +1608,24 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write health response")
+	}
+}
+
+// handleSchedulerHealth returns scheduler health status for adaptive polling
+func (r *Router) handleSchedulerHealth(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.monitor == nil {
+		http.Error(w, "Monitor not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	health := r.monitor.SchedulerHealth()
+	if err := utils.WriteJSONResponse(w, health); err != nil {
+		log.Error().Err(err).Msg("Failed to write scheduler health response")
 	}
 }
 

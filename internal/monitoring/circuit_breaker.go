@@ -106,3 +106,34 @@ func (b *circuitBreaker) trip(now time.Time) {
 	b.retryInterval = delay
 	b.openedAt = now
 }
+
+// BreakerSnapshot represents the current state of a circuit breaker.
+type BreakerSnapshot struct {
+	Instance string    `json:"instance"`
+	Type     string    `json:"type"`
+	State    string    `json:"state"`
+	Failures int       `json:"failures"`
+	RetryAt  time.Time `json:"retryAt,omitempty"`
+}
+
+// State returns a snapshot of the circuit breaker state for API exposure.
+func (b *circuitBreaker) State() (state string, failures int, retryAt time.Time) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	switch b.state {
+	case breakerClosed:
+		state = "closed"
+	case breakerOpen:
+		state = "open"
+		retryAt = b.openedAt.Add(b.retryInterval)
+	case breakerHalfOpen:
+		state = "half_open"
+		retryAt = b.lastAttempt.Add(b.halfOpenWindow)
+	default:
+		state = "unknown"
+	}
+
+	failures = b.failureCount
+	return
+}

@@ -191,3 +191,35 @@ func (t *StalenessTracker) snapshot(instanceType InstanceType, instance string) 
 func trackerKey(instanceType InstanceType, instance string) string {
     return string(instanceType) + "::" + instance
 }
+
+// StalenessSnapshot represents staleness data for a single instance.
+type StalenessSnapshot struct {
+    Instance    string    `json:"instance"`
+    Type        string    `json:"type"`
+    Score       float64   `json:"score"`
+    LastSuccess time.Time `json:"lastSuccess"`
+    LastError   time.Time `json:"lastError,omitempty"`
+}
+
+// Snapshot returns a copy of all staleness data for API exposure.
+func (t *StalenessTracker) Snapshot() []StalenessSnapshot {
+    if t == nil {
+        return nil
+    }
+
+    t.mu.RLock()
+    defer t.mu.RUnlock()
+
+    result := make([]StalenessSnapshot, 0, len(t.entries))
+    for _, entry := range t.entries {
+        score, _ := t.StalenessScore(entry.InstanceType, entry.Instance)
+        result = append(result, StalenessSnapshot{
+            Instance:    entry.Instance,
+            Type:        string(entry.InstanceType),
+            Score:       score,
+            LastSuccess: entry.LastSuccess,
+            LastError:   entry.LastError,
+        })
+    }
+    return result
+}
