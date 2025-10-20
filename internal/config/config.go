@@ -21,8 +21,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/pkg/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
-	"github.com/rs/zerolog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rs/zerolog/log"
 )
 
@@ -90,6 +91,7 @@ type Config struct {
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
+	LogFormat   string `envconfig:"LOG_FORMAT" default:"auto"` // "json", "console", or "auto"
 	LogFile     string `envconfig:"LOG_FILE" default:""`
 	LogMaxSize  int    `envconfig:"LOG_MAX_SIZE" default:"100"` // MB
 	LogMaxAge   int    `envconfig:"LOG_MAX_AGE" default:"30"`   // days
@@ -271,6 +273,7 @@ func Load() (*Config, error) {
 		AdaptivePollingMinInterval:  5 * time.Second,
 		AdaptivePollingMaxInterval:  5 * time.Minute,
 		LogLevel:              "info",
+		LogFormat:             "auto",
 		LogMaxSize:            100,
 		LogMaxAge:             30,
 		LogCompress:           true,
@@ -743,6 +746,11 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["logLevel"] = true
 		log.Info().Str("level", logLevel).Msg("Log level overridden by LOG_LEVEL env var")
 	}
+	if logFormat := os.Getenv("LOG_FORMAT"); logFormat != "" {
+		cfg.LogFormat = logFormat
+		cfg.EnvOverrides["logFormat"] = true
+		log.Info().Str("format", logFormat).Msg("Log format overridden by LOG_FORMAT env var")
+	}
 	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
 		if d, err := time.ParseDuration(connectionTimeout + "s"); err == nil {
 			cfg.ConnectionTimeout = d
@@ -773,21 +781,16 @@ func Load() (*Config, error) {
 
 	cfg.OIDC.ApplyDefaults(cfg.PublicURL)
 
-	// Set log level
-	switch cfg.LogLevel {
-	case "debug":
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	case "warn":
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	case "error":
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	default:
-		zerolog.SetGlobalLevel(zerolog.InfoLevel) // Default to info level
-	}
+	// Initialize logging with configuration values
+	logging.Init(logging.Config{
+		Format:    cfg.LogFormat,
+		Level:     cfg.LogLevel,
+		Component: "pulse-config",
+	})
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
+		return nil, errors.Wrap(err, "load config: invalid configuration")
 	}
 
 	return cfg, nil

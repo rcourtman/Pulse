@@ -38,11 +38,12 @@ type MonitoringSettings struct {
 
 // LoggingSettings contains logging configuration
 type LoggingSettings struct {
-	Level      string `json:"level" yaml:"level" mapstructure:"level"`       // debug, info, warn, error
-	File       string `json:"file" yaml:"file" mapstructure:"file"`          // log file path
-	MaxSize    int    `json:"maxSize" yaml:"maxSize" mapstructure:"maxSize"` // MB
+	Level      string `json:"level" yaml:"level" mapstructure:"level"`          // debug, info, warn, error
+	Format     string `json:"format" yaml:"format" mapstructure:"format"`       // json, console, auto
+	File       string `json:"file" yaml:"file" mapstructure:"file"`             // log file path
+	MaxSize    int    `json:"maxSize" yaml:"maxSize" mapstructure:"maxSize"`    // MB
 	MaxBackups int    `json:"maxBackups" yaml:"maxBackups" mapstructure:"maxBackups"`
-	MaxAge     int    `json:"maxAge" yaml:"maxAge" mapstructure:"maxAge"` // days
+	MaxAge     int    `json:"maxAge" yaml:"maxAge" mapstructure:"maxAge"`       // days
 	Compress   bool   `json:"compress" yaml:"compress" mapstructure:"compress"`
 }
 
@@ -77,6 +78,7 @@ func DefaultSettings() *Settings {
 		},
 		Logging: LoggingSettings{
 			Level:      "info",
+			Format:     "auto",
 			File:       "/opt/pulse/pulse.log",
 			MaxSize:    100, // 100MB
 			MaxBackups: 5,

@@ -27,7 +27,7 @@ func (r *Router) handleGetOIDCConfig(w http.ResponseWriter, req *http.Request) {
 	response := makeOIDCResponse(cfg, r.config.PublicURL)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Error().Err(err).Msg("Failed to encode OIDC configuration response")
+		log.Error().Err(err).Msg("Failed to encode OIDC configuration response; returning HTTP 500 to caller")
 	}
 }
 
@@ -105,7 +105,7 @@ func (r *Router) handleUpdateOIDCConfig(w http.ResponseWriter, req *http.Request
 	response := makeOIDCResponse(updated, r.config.PublicURL)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Error().Err(err).Msg("Failed to encode OIDC configuration response")
+		log.Error().Err(err).Msg("Failed to encode OIDC configuration response; returning HTTP 500 to caller")
 	}
 }
 
