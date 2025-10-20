@@ -83,6 +83,10 @@ type Config struct {
 	BackupPollingInterval time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
 	EnableBackupPolling   bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
 	WebhookBatchDelay     time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
+	AdaptivePollingEnabled      bool          `envconfig:"ADAPTIVE_POLLING_ENABLED" default:"false"`
+	AdaptivePollingBaseInterval time.Duration `envconfig:"ADAPTIVE_POLLING_BASE_INTERVAL" default:"10s"`
+	AdaptivePollingMinInterval  time.Duration `envconfig:"ADAPTIVE_POLLING_MIN_INTERVAL" default:"5s"`
+	AdaptivePollingMaxInterval  time.Duration `envconfig:"ADAPTIVE_POLLING_MAX_INTERVAL" default:"5m"`
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -262,6 +266,10 @@ func Load() (*Config, error) {
 		BackupPollingInterval: 0,
 		EnableBackupPolling:   true,
 		WebhookBatchDelay:     10 * time.Second,
+		AdaptivePollingEnabled:      false,
+		AdaptivePollingBaseInterval: 10 * time.Second,
+		AdaptivePollingMinInterval:  5 * time.Second,
+		AdaptivePollingMaxInterval:  5 * time.Minute,
 		LogLevel:              "info",
 		LogMaxSize:            100,
 		LogMaxAge:             30,
@@ -305,14 +313,26 @@ func Load() (*Config, error) {
 				cfg.PMGPollingInterval = time.Duration(systemSettings.PMGPollingInterval) * time.Second
 			}
 
-			if systemSettings.BackupPollingInterval > 0 {
-				cfg.BackupPollingInterval = time.Duration(systemSettings.BackupPollingInterval) * time.Second
-			} else if systemSettings.BackupPollingInterval == 0 {
-				cfg.BackupPollingInterval = 0
-			}
-			if systemSettings.BackupPollingEnabled != nil {
-				cfg.EnableBackupPolling = *systemSettings.BackupPollingEnabled
-			}
+		if systemSettings.BackupPollingInterval > 0 {
+			cfg.BackupPollingInterval = time.Duration(systemSettings.BackupPollingInterval) * time.Second
+		} else if systemSettings.BackupPollingInterval == 0 {
+			cfg.BackupPollingInterval = 0
+		}
+		if systemSettings.BackupPollingEnabled != nil {
+			cfg.EnableBackupPolling = *systemSettings.BackupPollingEnabled
+		}
+		if systemSettings.AdaptivePollingEnabled != nil {
+			cfg.AdaptivePollingEnabled = *systemSettings.AdaptivePollingEnabled
+		}
+		if systemSettings.AdaptivePollingBaseInterval > 0 {
+			cfg.AdaptivePollingBaseInterval = time.Duration(systemSettings.AdaptivePollingBaseInterval) * time.Second
+		}
+		if systemSettings.AdaptivePollingMinInterval > 0 {
+			cfg.AdaptivePollingMinInterval = time.Duration(systemSettings.AdaptivePollingMinInterval) * time.Second
+		}
+		if systemSettings.AdaptivePollingMaxInterval > 0 {
+			cfg.AdaptivePollingMaxInterval = time.Duration(systemSettings.AdaptivePollingMaxInterval) * time.Second
+		}
 
 			if systemSettings.UpdateChannel != "" {
 				cfg.UpdateChannel = systemSettings.UpdateChannel
@@ -428,6 +448,47 @@ func Load() (*Config, error) {
 		}
 		cfg.EnvOverrides["ENABLE_BACKUP_POLLING"] = true
 		log.Info().Bool("enabled", cfg.EnableBackupPolling).Msg("Overriding backup polling enabled flag from environment")
+	}
+
+	if adaptiveEnabled := strings.TrimSpace(os.Getenv("ADAPTIVE_POLLING_ENABLED")); adaptiveEnabled != "" {
+		switch strings.ToLower(adaptiveEnabled) {
+		case "0", "false", "no", "off":
+			cfg.AdaptivePollingEnabled = false
+		default:
+			cfg.AdaptivePollingEnabled = true
+		}
+		cfg.EnvOverrides["ADAPTIVE_POLLING_ENABLED"] = true
+		log.Info().Bool("enabled", cfg.AdaptivePollingEnabled).Msg("Adaptive polling feature flag overridden by environment")
+	}
+
+	if baseInterval := strings.TrimSpace(os.Getenv("ADAPTIVE_POLLING_BASE_INTERVAL")); baseInterval != "" {
+		if dur, err := time.ParseDuration(baseInterval); err == nil {
+			cfg.AdaptivePollingBaseInterval = dur
+			cfg.EnvOverrides["ADAPTIVE_POLLING_BASE_INTERVAL"] = true
+			log.Info().Dur("interval", dur).Msg("Adaptive polling base interval overridden by environment")
+		} else {
+			log.Warn().Str("value", baseInterval).Msg("Invalid ADAPTIVE_POLLING_BASE_INTERVAL value, expected duration string")
+		}
+	}
+
+	if minInterval := strings.TrimSpace(os.Getenv("ADAPTIVE_POLLING_MIN_INTERVAL")); minInterval != "" {
+		if dur, err := time.ParseDuration(minInterval); err == nil {
+			cfg.AdaptivePollingMinInterval = dur
+			cfg.EnvOverrides["ADAPTIVE_POLLING_MIN_INTERVAL"] = true
+			log.Info().Dur("interval", dur).Msg("Adaptive polling min interval overridden by environment")
+		} else {
+			log.Warn().Str("value", minInterval).Msg("Invalid ADAPTIVE_POLLING_MIN_INTERVAL value, expected duration string")
+		}
+	}
+
+	if maxInterval := strings.TrimSpace(os.Getenv("ADAPTIVE_POLLING_MAX_INTERVAL")); maxInterval != "" {
+		if dur, err := time.ParseDuration(maxInterval); err == nil {
+			cfg.AdaptivePollingMaxInterval = dur
+			cfg.EnvOverrides["ADAPTIVE_POLLING_MAX_INTERVAL"] = true
+			log.Info().Dur("interval", dur).Msg("Adaptive polling max interval overridden by environment")
+		} else {
+			log.Warn().Str("value", maxInterval).Msg("Invalid ADAPTIVE_POLLING_MAX_INTERVAL value, expected duration string")
+		}
 	}
 
 	// Support both FRONTEND_PORT (preferred) and PORT (legacy) env vars
@@ -744,17 +805,22 @@ func SaveConfig(cfg *Config) error {
 	}
 
 	// Save system configuration
+	adaptiveEnabled := cfg.AdaptivePollingEnabled
 	systemSettings := SystemSettings{
 		// Note: PVE polling is hardcoded to 10s
-		UpdateChannel:           cfg.UpdateChannel,
-		AutoUpdateEnabled:       cfg.AutoUpdateEnabled,
-		AutoUpdateCheckInterval: int(cfg.AutoUpdateCheckInterval.Hours()),
-		AutoUpdateTime:          cfg.AutoUpdateTime,
-		AllowedOrigins:          cfg.AllowedOrigins,
-		ConnectionTimeout:       int(cfg.ConnectionTimeout.Seconds()),
-		LogLevel:                cfg.LogLevel,
-		DiscoveryEnabled:        cfg.DiscoveryEnabled,
-		DiscoverySubnet:         cfg.DiscoverySubnet,
+		UpdateChannel:                 cfg.UpdateChannel,
+		AutoUpdateEnabled:             cfg.AutoUpdateEnabled,
+		AutoUpdateCheckInterval:       int(cfg.AutoUpdateCheckInterval.Hours()),
+		AutoUpdateTime:                cfg.AutoUpdateTime,
+		AllowedOrigins:                cfg.AllowedOrigins,
+		ConnectionTimeout:             int(cfg.ConnectionTimeout.Seconds()),
+		LogLevel:                      cfg.LogLevel,
+		DiscoveryEnabled:              cfg.DiscoveryEnabled,
+		DiscoverySubnet:               cfg.DiscoverySubnet,
+		AdaptivePollingEnabled:        &adaptiveEnabled,
+		AdaptivePollingBaseInterval:   int(cfg.AdaptivePollingBaseInterval / time.Second),
+		AdaptivePollingMinInterval:    int(cfg.AdaptivePollingMinInterval / time.Second),
+		AdaptivePollingMaxInterval:    int(cfg.AdaptivePollingMaxInterval / time.Second),
 		// APIToken removed - now handled via .env only
 	}
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {
@@ -795,6 +861,21 @@ func (c *Config) Validate() error {
 	// Note: PVE polling is hardcoded to 10s
 	if c.ConnectionTimeout < time.Second {
 		return fmt.Errorf("connection timeout must be at least 1 second")
+	}
+	if c.AdaptivePollingMinInterval <= 0 {
+		return fmt.Errorf("adaptive polling min interval must be greater than 0")
+	}
+	if c.AdaptivePollingBaseInterval <= 0 {
+		return fmt.Errorf("adaptive polling base interval must be greater than 0")
+	}
+	if c.AdaptivePollingMaxInterval <= 0 {
+		return fmt.Errorf("adaptive polling max interval must be greater than 0")
+	}
+	if c.AdaptivePollingMinInterval > c.AdaptivePollingMaxInterval {
+		return fmt.Errorf("adaptive polling min interval cannot exceed max interval")
+	}
+	if c.AdaptivePollingBaseInterval < c.AdaptivePollingMinInterval || c.AdaptivePollingBaseInterval > c.AdaptivePollingMaxInterval {
+		return fmt.Errorf("adaptive polling base interval must be between min and max intervals")
 	}
 
 	// Validate PVE instances

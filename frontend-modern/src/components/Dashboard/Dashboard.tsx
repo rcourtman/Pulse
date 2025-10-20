@@ -17,6 +17,7 @@ import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { isNodeOnline } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 
 interface DashboardProps {
   vms: VM[];
@@ -38,32 +39,31 @@ export function Dashboard(props: DashboardProps) {
   const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>({});
 
   // Initialize from localStorage with proper type checking
-  const storedViewMode = localStorage.getItem('dashboardViewMode');
-  const [viewMode, setViewMode] = createSignal<ViewMode>(
-    storedViewMode === 'all' || storedViewMode === 'vm' || storedViewMode === 'lxc'
-      ? storedViewMode
-      : 'all',
-  );
+  const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
+    deserialize: (raw) => (raw === 'all' || raw === 'vm' || raw === 'lxc' ? raw : 'all'),
+  });
 
-  const storedStatusMode = localStorage.getItem('dashboardStatusMode');
-  const [statusMode, setStatusMode] = createSignal<StatusMode>(
-    storedStatusMode === 'all' || storedStatusMode === 'running' || storedStatusMode === 'stopped'
-      ? storedStatusMode
-      : 'all',
-  );
+  const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>('dashboardStatusMode', 'all', {
+    deserialize: (raw) =>
+      raw === 'all' || raw === 'running' || raw === 'stopped' ? raw : ('all' as StatusMode),
+  });
 
   // Grouping mode - grouped by node or flat list
-  const storedGroupingMode = localStorage.getItem('dashboardGroupingMode');
-  const [groupingMode, setGroupingMode] = createSignal<GroupingMode>(
-    storedGroupingMode === 'grouped' || storedGroupingMode === 'flat'
-      ? storedGroupingMode
-      : 'grouped',
+  const [groupingMode, setGroupingMode] = usePersistentSignal<GroupingMode>(
+    'dashboardGroupingMode',
+    'grouped',
+    {
+      deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped'),
+    },
   );
 
-  const [showFilters, setShowFilters] = createSignal(
-    localStorage.getItem('dashboardShowFilters') !== null
-      ? localStorage.getItem('dashboardShowFilters') === 'true'
-      : false, // Default to collapsed
+  const [showFilters, setShowFilters] = usePersistentSignal<boolean>(
+    'dashboardShowFilters',
+    false,
+    {
+      deserialize: (raw) => raw === 'true',
+      serialize: (value) => String(value),
+    },
   );
 
   // Sorting state - default to VMID ascending (matches Proxmox order)
@@ -112,25 +112,6 @@ export function Dashboard(props: DashboardProps) {
 
     return undefined;
   };
-
-
-  // Persist filter states to localStorage
-  createEffect(() => {
-    localStorage.setItem('dashboardViewMode', viewMode());
-  });
-
-  createEffect(() => {
-    localStorage.setItem('dashboardStatusMode', statusMode());
-  });
-
-  createEffect(() => {
-    localStorage.setItem('dashboardGroupingMode', groupingMode());
-  });
-
-  createEffect(() => {
-    localStorage.setItem('dashboardShowFilters', showFilters().toString());
-  });
-
   // Sort handler
   const handleSort = (key: keyof (VM | Container)) => {
     if (sortKey() === key) {

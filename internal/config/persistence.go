@@ -667,6 +667,10 @@ type SystemSettings struct {
 	PMGPollingInterval      int    `json:"pmgPollingInterval"` // PMG polling interval in seconds
 	BackupPollingInterval   int    `json:"backupPollingInterval,omitempty"`
 	BackupPollingEnabled    *bool  `json:"backupPollingEnabled,omitempty"`
+	AdaptivePollingEnabled        *bool `json:"adaptivePollingEnabled,omitempty"`
+	AdaptivePollingBaseInterval   int   `json:"adaptivePollingBaseInterval,omitempty"`
+	AdaptivePollingMinInterval    int   `json:"adaptivePollingMinInterval,omitempty"`
+	AdaptivePollingMaxInterval    int   `json:"adaptivePollingMaxInterval,omitempty"`
 	BackendPort             int    `json:"backendPort,omitempty"`
 	FrontendPort            int    `json:"frontendPort,omitempty"`
 	AllowedOrigins          string `json:"allowedOrigins,omitempty"`

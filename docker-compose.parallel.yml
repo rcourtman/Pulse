@@ -1,0 +1,43 @@
+version: "3.8"
+
+x-codex-mcp-http: &codex_mcp_http
+  build: .
+  image: codex-mcp-server:latest
+  entrypoint: /bin/sh
+  command: >
+    -c 'pip install --quiet --disable-pip-version-check uvicorn starlette sse-starlette &&
+        mkdir -p /root/.config &&
+        cp -r /gh-config-source /root/.config/gh &&
+        exec python /app/server.py'
+  volumes:
+    - /usr/local/bin/codex:/usr/local/bin/codex:ro
+    - /usr/local/lib/node_modules/@openai/codex:/usr/local/lib/node_modules/@openai/codex:ro
+    - /usr/local/lib/node_modules/@openai/codex/vendor:/usr/local/vendor:ro
+    - /tmp:/tmp
+    - /home/pulse/.codex:/root/.codex
+    - /home/pulse/.config/gh:/gh-config-source:ro
+    - /opt/pulse:/opt/pulse
+    - /opt/pulse/.mcp-servers/codex/server_http_fixed.py:/app/server.py:ro
+  environment:
+    HOME: /root
+  labels:
+    com.pulse.project: "codex-mcp"
+
+services:
+  codex-parallel-1:
+    <<: *codex_mcp_http
+    container_name: codex-parallel-1
+    ports:
+      - "18765:8765"
+
+  codex-parallel-2:
+    <<: *codex_mcp_http
+    container_name: codex-parallel-2
+    ports:
+      - "18766:8765"
+
+  codex-parallel-3:
+    <<: *codex_mcp_http
+    container_name: codex-parallel-3
+    ports:
+      - "18767:8765"

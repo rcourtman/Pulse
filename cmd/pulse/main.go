@@ -29,6 +29,8 @@ var (
 	GitCommit = "unknown"
 )
 
+const metricsPort = 9091
+
 var rootCmd = &cobra.Command{
 	Use:     "pulse",
 	Short:   "Pulse - Proxmox VE and PBS monitoring system",
@@ -90,6 +92,9 @@ func runServer() {
 	// Create context that cancels on interrupt
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	metricsAddr := fmt.Sprintf("%s:%d", cfg.BackendHost, metricsPort)
+	startMetricsServer(ctx, metricsAddr)
 
 	// Initialize WebSocket hub first
 	wsHub := websocket.NewHub(nil)

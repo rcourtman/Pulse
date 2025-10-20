@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal, createMemo, createEffect, onMount } from 'solid-js';
+import { Component, For, Show, createSignal, createMemo, createEffect } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -13,18 +13,39 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { getNodeDisplayName } from '@/utils/nodes';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+
+type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
 
 const Storage: Component = () => {
   const navigate = useNavigate();
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
-  const [viewMode, setViewMode] = createSignal<'node' | 'storage'>('node');
+  const [viewMode, setViewMode] = usePersistentSignal<'node' | 'storage'>(
+    'storageViewMode',
+    'node',
+    {
+      deserialize: (raw) => (raw === 'storage' ? 'storage' : 'node'),
+    },
+  );
   const [tabView, setTabView] = createSignal<'pools' | 'disks'>('pools');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [expandedStorage, setExpandedStorage] = createSignal<string | null>(null);
-  type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
-  const [sortKey, setSortKey] = createSignal<StorageSortKey>('name');
-  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+  const [sortKey, setSortKey] = usePersistentSignal<StorageSortKey>('storageSortKey', 'name', {
+    deserialize: (raw) =>
+      (['name', 'node', 'type', 'status', 'usage', 'free', 'total'] as const).includes(
+        raw as StorageSortKey,
+      )
+        ? (raw as StorageSortKey)
+        : 'name',
+  });
+  const [sortDirection, setSortDirection] = usePersistentSignal<'asc' | 'desc'>(
+    'storageSortDirection',
+    'asc',
+    {
+      deserialize: (raw) => (raw === 'desc' ? 'desc' : 'asc'),
+    },
+  );
 
   // Create a mapping from node instance ID to node object
   const nodeByInstance = createMemo(() => {
@@ -157,35 +178,6 @@ const Storage: Component = () => {
     { value: 'free', label: 'Free Capacity' },
     { value: 'total', label: 'Total Capacity' },
   ];
-
-  // Load preferences from localStorage
-  onMount(() => {
-    const savedViewMode = localStorage.getItem('storageViewMode');
-    if (savedViewMode === 'storage') setViewMode('storage');
-
-    const savedSortKey = localStorage.getItem('storageSortKey') as StorageSortKey | null;
-    if (savedSortKey && sortKeyOptions.some((option) => option.value === savedSortKey)) {
-      setSortKey(savedSortKey);
-    }
-
-    const savedSortDirection = localStorage.getItem('storageSortDirection');
-    if (savedSortDirection === 'desc' || savedSortDirection === 'asc') {
-      setSortDirection(savedSortDirection);
-    }
-  });
-
-  // Persist preferences
-  createEffect(() => {
-    localStorage.setItem('storageViewMode', viewMode());
-  });
-
-  createEffect(() => {
-    localStorage.setItem('storageSortKey', sortKey());
-  });
-
-  createEffect(() => {
-    localStorage.setItem('storageSortDirection', sortDirection());
-  });
 
   // Filter storage - in storage view, filter out 0 capacity and deduplicate
   const filteredStorage = createMemo(() => {
