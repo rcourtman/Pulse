@@ -80,7 +80,8 @@ RELEASE_CHECKLIST.md
 DOCKER_PUSH_INSTRUCTIONS.md
 
 # Testing and temporary files
-testing-tools/
+testing-tools/*
+!testing-tools/run_adaptive_soak.sh
 manual-test*.md
 verify-*.md
 test-*.md
