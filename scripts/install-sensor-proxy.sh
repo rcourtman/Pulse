@@ -198,15 +198,28 @@ else
     if [[ "$VERSION" == "latest" ]]; then
         RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
         print_info "Fetching latest release info..."
-        RELEASE_DATA=$(curl -fsSL "$RELEASE_URL" 2>/dev/null)
+        RELEASE_ERROR=$(mktemp)
+        RELEASE_DATA=$(curl -fsSL "$RELEASE_URL" 2>"$RELEASE_ERROR")
+        CURL_EXIT=$?
+        if [ $CURL_EXIT -ne 0 ] && [ -s "$RELEASE_ERROR" ]; then
+            print_warn "Failed to fetch GitHub release info: $(cat "$RELEASE_ERROR")"
+        fi
+        rm -f "$RELEASE_ERROR"
         VERSION=$(echo "$RELEASE_DATA" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
 
         if [[ -n "$VERSION" ]]; then
             print_info "Latest version: $VERSION"
             DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
             print_info "Downloading $BINARY_NAME from GitHub..."
-            if curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp" 2>/dev/null; then
+            DOWNLOAD_ERROR=$(mktemp)
+            if curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp" 2>"$DOWNLOAD_ERROR"; then
                 DOWNLOAD_SUCCESS=true
+                rm -f "$DOWNLOAD_ERROR"
+            else
+                if [ -s "$DOWNLOAD_ERROR" ]; then
+                    print_warn "GitHub download failed: $(cat "$DOWNLOAD_ERROR")"
+                fi
+                rm -f "$DOWNLOAD_ERROR"
             fi
         fi
     fi
@@ -215,14 +228,22 @@ else
     if [[ "$DOWNLOAD_SUCCESS" != true ]] && [[ -n "$FALLBACK_BASE" ]]; then
         FALLBACK_URL="${FALLBACK_BASE%/}?arch=${ARCH_LABEL}"
         print_info "Downloading $BINARY_NAME from Pulse server..."
-        if curl -fsSL "$FALLBACK_URL" -o "$BINARY_PATH.tmp" 2>/dev/null; then
+        FALLBACK_ERROR=$(mktemp)
+        if curl -fsSL "$FALLBACK_URL" -o "$BINARY_PATH.tmp" 2>"$FALLBACK_ERROR"; then
             DOWNLOAD_SUCCESS=true
+            rm -f "$FALLBACK_ERROR"
+        else
+            if [ -s "$FALLBACK_ERROR" ]; then
+                print_error "Pulse server download failed: $(cat "$FALLBACK_ERROR")"
+            fi
+            rm -f "$FALLBACK_ERROR"
         fi
     fi
 
     # Exit if both methods failed
     if [[ "$DOWNLOAD_SUCCESS" != true ]]; then
-        print_error "Failed to download binary from GitHub or Pulse server"
+        print_error "Failed to download binary from GitHub and Pulse server"
+        print_error "Check network connectivity and firewall rules"
         exit 1
     fi
 
@@ -388,9 +409,24 @@ fi
 
 # Reload systemd and start service
 print_info "Enabling and starting service..."
-systemctl daemon-reload
-systemctl enable pulse-sensor-proxy.service
-systemctl restart pulse-sensor-proxy.service
+if ! systemctl daemon-reload; then
+    print_error "Failed to reload systemd daemon"
+    journalctl -u pulse-sensor-proxy -n 20 --no-pager
+    exit 1
+fi
+
+if ! systemctl enable pulse-sensor-proxy.service; then
+    print_error "Failed to enable pulse-sensor-proxy service"
+    journalctl -u pulse-sensor-proxy -n 20 --no-pager
+    exit 1
+fi
+
+if ! systemctl restart pulse-sensor-proxy.service; then
+    print_error "Failed to start pulse-sensor-proxy service"
+    print_error "Check service logs:"
+    journalctl -u pulse-sensor-proxy -n 20 --no-pager
+    exit 1
+fi
 
 # Wait for socket to appear
 print_info "Waiting for socket..."
@@ -783,17 +819,25 @@ if [[ -z "$CURRENT_MP" ]]; then
         exit 1
     fi
     print_info "Configuring container mount using $CURRENT_MP..."
-    if pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0" 2>/dev/null; then
+    SET_ERROR=$(pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0" 2>&1)
+    if [ $? -eq 0 ]; then
         MOUNT_UPDATED=true
     else
         HOTPLUG_FAILED=true
+        if [ -n "$SET_ERROR" ]; then
+            print_warn "pct set failed: $SET_ERROR"
+        fi
     fi
 else
     print_info "Container already has socket mount configured ($CURRENT_MP)"
-    if pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0" 2>/dev/null; then
+    SET_ERROR=$(pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0" 2>&1)
+    if [ $? -eq 0 ]; then
         MOUNT_UPDATED=true
     else
         HOTPLUG_FAILED=true
+        if [ -n "$SET_ERROR" ]; then
+            print_warn "pct set failed: $SET_ERROR"
+        fi
     fi
 fi
 
@@ -807,6 +851,14 @@ if [[ "$HOTPLUG_FAILED" = true ]]; then
     fi
     MOUNT_UPDATED=true
 fi
+
+# Verify mount configuration actually persisted
+if ! pct config "$CTID" | grep -q "^${CURRENT_MP}:"; then
+    print_error "Failed to persist mount configuration for $CURRENT_MP"
+    print_error "Expected mount not found in container config"
+    exit 1
+fi
+print_info "✓ Mount configuration verified in container config"
 
 # Remove legacy lxc.mount.entry directives if present
 if grep -q "lxc.mount.entry: /run/pulse-sensor-proxy" "$LXC_CONFIG"; then
@@ -829,13 +881,18 @@ fi
 # Verify socket directory and file inside container
 if [[ "$HOTPLUG_FAILED" = true && "$CT_RUNNING" = true ]]; then
     print_warn "Skipping socket verification until container $CTID is restarted."
+    print_warn "Please restart container and verify socket manually:"
+    print_warn "  pct stop $CTID && sleep 2 && pct start $CTID"
+    print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
 else
     print_info "Verifying secure communication channel..."
     if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
         print_info "✓ Secure socket communication ready"
     else
-        print_warn "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
-        print_info "Check container configuration and restart if necessary"
+        print_error "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+        print_error "Mount configuration verified but socket not accessible in container"
+        print_error "This indicates a mount or restart issue"
+        exit 1
     fi
 fi
 
