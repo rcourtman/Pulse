@@ -250,6 +250,57 @@ func isLikelyIPAddress(value string) bool {
 	return false
 }
 
+// PollExecutor defines the contract for executing polling tasks.
+type PollExecutor interface {
+	Execute(ctx context.Context, task PollTask)
+}
+
+type realExecutor struct {
+	monitor *Monitor
+}
+
+func newRealExecutor(m *Monitor) PollExecutor {
+	return &realExecutor{monitor: m}
+}
+
+func (r *realExecutor) Execute(ctx context.Context, task PollTask) {
+	if r == nil || r.monitor == nil {
+		return
+	}
+
+	switch strings.ToLower(task.InstanceType) {
+	case "pve":
+		if task.PVEClient == nil {
+			log.Warn().
+				Str("instance", task.InstanceName).
+				Msg("PollExecutor received nil PVE client")
+			return
+		}
+		r.monitor.pollPVEInstance(ctx, task.InstanceName, task.PVEClient)
+	case "pbs":
+		if task.PBSClient == nil {
+			log.Warn().
+				Str("instance", task.InstanceName).
+				Msg("PollExecutor received nil PBS client")
+			return
+		}
+		r.monitor.pollPBSInstance(ctx, task.InstanceName, task.PBSClient)
+	case "pmg":
+		if task.PMGClient == nil {
+			log.Warn().
+				Str("instance", task.InstanceName).
+				Msg("PollExecutor received nil PMG client")
+			return
+		}
+		r.monitor.pollPMGInstance(ctx, task.InstanceName, task.PMGClient)
+	default:
+		log.Debug().
+			Str("instance", task.InstanceName).
+			Str("type", task.InstanceType).
+			Msg("PollExecutor received unsupported task type")
+	}
+}
+
 // Monitor handles all monitoring operations
 type Monitor struct {
 	config               *config.Config
@@ -299,6 +350,10 @@ type Monitor struct {
 	dockerCommandIndex   map[string]string
 	guestMetadataMu      sync.RWMutex
 	guestMetadataCache   map[string]guestMetadataCacheEntry
+	executor             PollExecutor
+	breakerBaseRetry     time.Duration
+	breakerMaxDelay      time.Duration
+	breakerHalfOpenWindow time.Duration
 }
 
 type rrdMemCacheEntry struct {
@@ -1339,12 +1394,17 @@ func New(cfg *config.Config) (*Monitor, error) {
 	breakers := make(map[string]*circuitBreaker)
 failureCounts := make(map[string]int)
 lastOutcome := make(map[string]taskOutcome)
-backoff := backoffConfig{
-	Initial:    5 * time.Second,
-	Multiplier: 2,
-	Jitter:     0.2,
-	Max:        5 * time.Minute,
-}
+	backoff := backoffConfig{
+		Initial:    5 * time.Second,
+		Multiplier: 2,
+		Jitter:     0.2,
+		Max:        5 * time.Minute,
+	}
+
+	if cfg.AdaptivePollingEnabled && cfg.AdaptivePollingMaxInterval > 0 && cfg.AdaptivePollingMaxInterval <= 15*time.Second {
+		backoff.Initial = 750 * time.Millisecond
+		backoff.Max = 6 * time.Second
+	}
 
 	var scheduler *AdaptiveScheduler
 	if cfg.AdaptivePollingEnabled {
@@ -1396,6 +1456,18 @@ backoff := backoffConfig{
 		dockerCommandIndex:   make(map[string]string),
 		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
 	}
+
+	m.breakerBaseRetry = 5 * time.Second
+	m.breakerMaxDelay = 5 * time.Minute
+	m.breakerHalfOpenWindow = 30 * time.Second
+
+	if cfg.AdaptivePollingEnabled && cfg.AdaptivePollingMaxInterval > 0 && cfg.AdaptivePollingMaxInterval <= 15*time.Second {
+		m.breakerBaseRetry = 2 * time.Second
+		m.breakerMaxDelay = 10 * time.Second
+		m.breakerHalfOpenWindow = 2 * time.Second
+	}
+
+	m.executor = newRealExecutor(m)
 
 	if m.pollMetrics != nil {
 		m.pollMetrics.ResetQueueDepth(0)
@@ -1635,6 +1707,30 @@ backoff := backoffConfig{
 	}
 
 	return m, nil
+}
+
+// SetExecutor allows tests to override the poll executor; passing nil restores the default executor.
+func (m *Monitor) SetExecutor(exec PollExecutor) {
+	if m == nil {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if exec == nil {
+		m.executor = newRealExecutor(m)
+		return
+	}
+
+	m.executor = exec
+}
+
+func (m *Monitor) getExecutor() PollExecutor {
+	m.mu.RLock()
+	exec := m.executor
+	m.mu.RUnlock()
+	return exec
 }
 
 // Start begins the monitoring loop
@@ -2146,13 +2242,28 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 }
 
 func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) {
-    if !m.allowExecution(task) {
-        log.Debug().
-            Str("instance", task.InstanceName).
-            Str("type", string(task.InstanceType)).
-            Msg("Task blocked by circuit breaker")
-        return
-    }
+	if !m.allowExecution(task) {
+		log.Debug().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Msg("Task blocked by circuit breaker")
+		return
+	}
+
+	executor := m.getExecutor()
+	if executor == nil {
+		log.Error().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Msg("No poll executor configured; skipping task")
+		return
+	}
+
+	pollTask := PollTask{
+		InstanceName: task.InstanceName,
+		InstanceType: string(task.InstanceType),
+	}
+
 	switch task.InstanceType {
 	case InstanceTypePVE:
 		client, ok := m.pveClients[task.InstanceName]
@@ -2160,24 +2271,30 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 			log.Warn().Str("instance", task.InstanceName).Msg("PVE client missing for scheduled task")
 			return
 		}
-        m.pollPVEInstance(ctx, task.InstanceName, client)
+		pollTask.PVEClient = client
 	case InstanceTypePBS:
 		client, ok := m.pbsClients[task.InstanceName]
 		if !ok || client == nil {
 			log.Warn().Str("instance", task.InstanceName).Msg("PBS client missing for scheduled task")
 			return
 		}
-        m.pollPBSInstance(ctx, task.InstanceName, client)
+		pollTask.PBSClient = client
 	case InstanceTypePMG:
 		client, ok := m.pmgClients[task.InstanceName]
 		if !ok || client == nil {
 			log.Warn().Str("instance", task.InstanceName).Msg("PMG client missing for scheduled task")
 			return
 		}
-        m.pollPMGInstance(ctx, task.InstanceName, client)
+		pollTask.PMGClient = client
 	default:
-		log.Debug().Str("instance", task.InstanceName).Str("type", string(task.InstanceType)).Msg("Skipping unsupported task type")
+		log.Debug().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Msg("Skipping unsupported task type")
+		return
 	}
+
+	executor.Execute(ctx, pollTask)
 }
 
 func (m *Monitor) rescheduleTask(task ScheduledTask) {
@@ -2199,6 +2316,12 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 		delay := m.backoffCfg.nextDelay(failureCount-1, m.randomFloat())
 		if delay <= 0 {
 			delay = 5 * time.Second
+		}
+		if m.config != nil && m.config.AdaptivePollingEnabled && m.config.AdaptivePollingMaxInterval > 0 && m.config.AdaptivePollingMaxInterval <= 15*time.Second {
+			maxDelay := 4 * time.Second
+			if delay > maxDelay {
+				delay = maxDelay
+			}
 		}
 		next := task
 		next.Interval = delay
@@ -2313,7 +2436,19 @@ func (m *Monitor) ensureBreaker(key string) *circuitBreaker {
     if breaker, ok := m.circuitBreakers[key]; ok {
         return breaker
     }
-    breaker := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
+    baseRetry := m.breakerBaseRetry
+    if baseRetry <= 0 {
+        baseRetry = 5 * time.Second
+    }
+    maxDelay := m.breakerMaxDelay
+    if maxDelay <= 0 {
+        maxDelay = 5 * time.Minute
+    }
+    halfOpen := m.breakerHalfOpenWindow
+    if halfOpen <= 0 {
+        halfOpen = 30 * time.Second
+    }
+    breaker := newCircuitBreaker(3, baseRetry, maxDelay, halfOpen)
     m.circuitBreakers[key] = breaker
     return breaker
 }
