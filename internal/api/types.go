@@ -33,6 +33,8 @@ type VersionResponse struct {
 	DeploymentType  string `json:"deploymentType,omitempty"`
 	UpdateAvailable bool   `json:"updateAvailable"`
 	LatestVersion   string `json:"latestVersion,omitempty"`
+	Containerized   bool   `json:"containerized"`
+	ContainerId     string `json:"containerId,omitempty"`
 }
 
 // ErrorResponse represents an error response
