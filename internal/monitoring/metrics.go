@@ -229,9 +229,9 @@ func (pm *PollMetrics) decrementPending() {
 }
 
 func (pm *PollMetrics) storeLastSuccess(instanceType, instance string, ts time.Time) {
-	pm.mu.Lock()
-	pm.lastSuccessByKey[pm.key(instanceType, instance)] = ts
-	pm.mu.Unlock()
+    pm.mu.Lock()
+    pm.lastSuccessByKey[pm.key(instanceType, instance)] = ts
+    pm.mu.Unlock()
 }
 
 func (pm *PollMetrics) lastSuccessFor(instanceType, instance string) (time.Time, bool) {

@@ -41,6 +41,13 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 					desc.LastInterval = last.Interval
 				}
 			}
+			if m.stalenessTracker != nil {
+				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePVE, name); ok {
+					desc.LastSuccess = snap.LastSuccess
+					desc.LastFailure = snap.LastError
+					desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+				}
+			}
 			descriptors = append(descriptors, desc)
 		}
 	}
@@ -56,14 +63,21 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 				Name: name,
 				Type: InstanceTypePBS,
 			}
-			if m.scheduler != nil {
-				if last, ok := m.scheduler.LastScheduled(InstanceTypePBS, name); ok {
-					desc.LastScheduled = last.NextRun
-					desc.LastInterval = last.Interval
-				}
+		if m.scheduler != nil {
+			if last, ok := m.scheduler.LastScheduled(InstanceTypePBS, name); ok {
+				desc.LastScheduled = last.NextRun
+				desc.LastInterval = last.Interval
 			}
-			descriptors = append(descriptors, desc)
 		}
+		if m.stalenessTracker != nil {
+			if snap, ok := m.stalenessTracker.snapshot(InstanceTypePBS, name); ok {
+				desc.LastSuccess = snap.LastSuccess
+				desc.LastFailure = snap.LastError
+				desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+			}
+		}
+		descriptors = append(descriptors, desc)
+	}
 	}
 
 	if len(m.pmgClients) > 0 {
@@ -77,14 +91,21 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 				Name: name,
 				Type: InstanceTypePMG,
 			}
-			if m.scheduler != nil {
-				if last, ok := m.scheduler.LastScheduled(InstanceTypePMG, name); ok {
-					desc.LastScheduled = last.NextRun
-					desc.LastInterval = last.Interval
-				}
+		if m.scheduler != nil {
+			if last, ok := m.scheduler.LastScheduled(InstanceTypePMG, name); ok {
+				desc.LastScheduled = last.NextRun
+				desc.LastInterval = last.Interval
 			}
-			descriptors = append(descriptors, desc)
 		}
+		if m.stalenessTracker != nil {
+			if snap, ok := m.stalenessTracker.snapshot(InstanceTypePMG, name); ok {
+				desc.LastSuccess = snap.LastSuccess
+				desc.LastFailure = snap.LastError
+				desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+			}
+		}
+		descriptors = append(descriptors, desc)
+	}
 	}
 
 	return descriptors

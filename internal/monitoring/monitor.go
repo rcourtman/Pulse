@@ -257,6 +257,7 @@ type Monitor struct {
 	pmgClients           map[string]*pmg.Client
 	pollMetrics          *PollMetrics
 	scheduler            *AdaptiveScheduler
+	stalenessTracker     *StalenessTracker
 	tempCollector        *TemperatureCollector // SSH-based temperature collector
 	mu                   sync.RWMutex
 	startTime            time.Time
@@ -1314,13 +1315,16 @@ func New(cfg *config.Config) (*Monitor, error) {
 	// Security warning if running in container with SSH temperature monitoring
 	checkContainerizedTempMonitoring()
 
+	stalenessTracker := NewStalenessTracker(getPollMetrics())
+	stalenessTracker.SetBounds(cfg.AdaptivePollingBaseInterval, cfg.AdaptivePollingMaxInterval)
+
 	var scheduler *AdaptiveScheduler
 	if cfg.AdaptivePollingEnabled {
 		scheduler = NewAdaptiveScheduler(SchedulerConfig{
 			BaseInterval: cfg.AdaptivePollingBaseInterval,
 			MinInterval:  cfg.AdaptivePollingMinInterval,
 			MaxInterval:  cfg.AdaptivePollingMaxInterval,
-		}, nil, nil, nil)
+		}, stalenessTracker, nil, nil)
 	}
 
 	m := &Monitor{
@@ -1331,6 +1335,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pmgClients:           make(map[string]*pmg.Client),
 		pollMetrics:          getPollMetrics(),
 		scheduler:            scheduler,
+		stalenessTracker:     stalenessTracker,
 		tempCollector:        tempCollector,
 		startTime:            time.Now(),
 		rateTracker:          NewRateTracker(),
@@ -2194,6 +2199,15 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				StartTime:    start,
 				EndTime:      time.Now(),
 			})
+		}()
+	}
+	if m.stalenessTracker != nil {
+		defer func() {
+			if pollErr == nil {
+				m.stalenessTracker.UpdateSuccess(InstanceTypePVE, instanceName, nil)
+			} else {
+				m.stalenessTracker.UpdateError(InstanceTypePVE, instanceName)
+			}
 		}()
 	}
 
@@ -3941,9 +3955,36 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 
 // pollPBSInstance polls a single PBS instance
 func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, client *pbs.Client) {
+	start := time.Now()
+	var pollErr error
+	if m.pollMetrics != nil {
+		m.pollMetrics.IncInFlight("pbs")
+		defer m.pollMetrics.DecInFlight("pbs")
+		defer func() {
+			m.pollMetrics.RecordResult(PollResult{
+				InstanceName: instanceName,
+				InstanceType: "pbs",
+				Success:      pollErr == nil,
+				Error:        pollErr,
+				StartTime:    start,
+				EndTime:      time.Now(),
+			})
+		}()
+	}
+	if m.stalenessTracker != nil {
+		defer func() {
+			if pollErr == nil {
+				m.stalenessTracker.UpdateSuccess(InstanceTypePBS, instanceName, nil)
+			} else {
+				m.stalenessTracker.UpdateError(InstanceTypePBS, instanceName)
+			}
+		}()
+	}
+
     // Check if context is cancelled
     select {
     case <-ctx.Done():
+		pollErr = ctx.Err()
         log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
         return
     default:
@@ -4238,6 +4279,15 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 				StartTime:    start,
 				EndTime:      time.Now(),
 			})
+		}()
+	}
+	if m.stalenessTracker != nil {
+		defer func() {
+			if pollErr == nil {
+				m.stalenessTracker.UpdateSuccess(InstanceTypePMG, instanceName, nil)
+			} else {
+				m.stalenessTracker.UpdateError(InstanceTypePMG, instanceName)
+			}
 		}()
 	}
 
