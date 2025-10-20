@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -80,29 +82,29 @@ type ResourceStats struct {
 
 // HarnessReport is returned after a harness run completes.
 type HarnessReport struct {
-    Scenario         HarnessScenario
-    PerInstanceStats map[string]InstanceStats
-    QueueStats       QueueStats
-    StalenessStats   StalenessStats
-    ResourceStats    ResourceStats
-    Health           SchedulerHealthResponse
-    MaxStaleness     time.Duration
-    RuntimeSamples   []runtimeSnapshot
+	Scenario         HarnessScenario
+	PerInstanceStats map[string]InstanceStats
+	QueueStats       QueueStats
+	StalenessStats   StalenessStats
+	ResourceStats    ResourceStats
+	Health           SchedulerHealthResponse
+	MaxStaleness     time.Duration
+	RuntimeSamples   []runtimeSnapshot
 }
 
 // Harness orchestrates the integration run.
 type Harness struct {
-	Monitor      *Monitor
-	Executor     *fakeExecutor
-	cancel       context.CancelFunc
-	scenario     HarnessScenario
-	dataPath     string
-	queueMax     int
-	queueSum     int
-	queueSamples int
-	maxStaleness time.Duration
-	sampleEvery  time.Duration
-	runtimeSamples []runtimeSnapshot
+	Monitor           *Monitor
+	Executor          *fakeExecutor
+	cancel            context.CancelFunc
+	scenario          HarnessScenario
+	dataPath          string
+	queueMax          int
+	queueSum          int
+	queueSamples      int
+	maxStaleness      time.Duration
+	sampleEvery       time.Duration
+	runtimeSamples    []runtimeSnapshot
 	lastRuntimeSample time.Time
 }
 
@@ -146,9 +148,9 @@ func NewHarness(scenario HarnessScenario) *Harness {
 		case "pve":
 			monitor.pveClients[inst.Name] = noopPVEClient{}
 		case "pbs":
-			// TODO: add PBS stub when needed.
+			monitor.pbsClients[inst.Name] = &pbs.Client{}
 		case "pmg":
-			// TODO: add PMG stub when needed.
+			monitor.pmgClients[inst.Name] = &pmg.Client{}
 		default:
 			// Unsupported types are ignored for now.
 		}
@@ -251,12 +253,12 @@ loop:
 			GCCountStart:    startSample.NumGC,
 			GCCountEnd:      endSample.NumGC,
 		},
-		Health:        health,
-		MaxStaleness:  h.maxStaleness,
+		Health:         health,
+		MaxStaleness:   h.maxStaleness,
 		RuntimeSamples: runtimeSamplesCopy,
 	}
 
-    return report
+	return report
 }
 
 func (h *Harness) schedule(now time.Time) {
@@ -386,9 +388,11 @@ func (noopPVEClient) GetVMs(ctx context.Context, node string) ([]proxmox.VM, err
 func (noopPVEClient) GetContainers(ctx context.Context, node string) ([]proxmox.Container, error) {
 	return nil, nil
 }
-func (noopPVEClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) { return nil, nil }
-func (noopPVEClient) GetAllStorage(ctx context.Context) ([]proxmox.Storage, error)           { return nil, nil }
-func (noopPVEClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error)            { return nil, nil }
+func (noopPVEClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
+	return nil, nil
+}
+func (noopPVEClient) GetAllStorage(ctx context.Context) ([]proxmox.Storage, error) { return nil, nil }
+func (noopPVEClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error)   { return nil, nil }
 func (noopPVEClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
 	return nil, nil
 }
@@ -423,6 +427,8 @@ func (noopPVEClient) GetZFSPoolStatus(ctx context.Context, node string) ([]proxm
 func (noopPVEClient) GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error) {
 	return nil, nil
 }
-func (noopPVEClient) GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error) { return nil, nil }
-func (noopPVEClient) GetCephStatus(ctx context.Context) (*proxmox.CephStatus, error)   { return nil, nil }
-func (noopPVEClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, error)           { return nil, nil }
+func (noopPVEClient) GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error) {
+	return nil, nil
+}
+func (noopPVEClient) GetCephStatus(ctx context.Context) (*proxmox.CephStatus, error) { return nil, nil }
+func (noopPVEClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, error)         { return nil, nil }
