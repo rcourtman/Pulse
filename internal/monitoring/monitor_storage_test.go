@@ -157,7 +157,7 @@ func TestPollStorageWithNodesOptimizedRecordsMetricsAndAlerts(t *testing.T) {
 		{Node: "node1", Status: "online"},
 	}
 
-	monitor.pollStorageWithNodesOptimized(context.Background(), "inst1", client, nodes)
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
 
 	metrics := monitor.metricsHistory.GetAllStorageMetrics("inst1-node1-local", time.Minute)
 	if len(metrics["usage"]) != 1 {

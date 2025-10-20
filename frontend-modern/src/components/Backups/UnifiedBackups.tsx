@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
+import { Component, createSignal, Show, For, createMemo, createEffect } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { formatBytes, formatAbsoluteTime, formatRelativeTime, formatUptime } from '@/utils/format';
@@ -12,6 +12,24 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import type { BackupType, GuestType, UnifiedBackup } from '@/types/backups';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+
+type BackupSortKey = keyof Pick<
+  UnifiedBackup,
+  'backupTime' | 'name' | 'node' | 'vmid' | 'backupType' | 'size' | 'storage' | 'verified' | 'type' | 'owner'
+>;
+const BACKUP_SORT_KEY_VALUES: readonly BackupSortKey[] = [
+  'backupTime',
+  'name',
+  'node',
+  'vmid',
+  'backupType',
+  'size',
+  'storage',
+  'verified',
+  'type',
+  'owner',
+] as const;
 
 type FilterableGuestType = 'VM' | 'LXC' | 'Host';
 
@@ -52,21 +70,23 @@ const UnifiedBackups: Component = () => {
     else if (value === 'pve') setBackupTypeFilter('local');
     else if (value === 'pbs') setBackupTypeFilter('remote');
   };
-  type BackupSortKey = keyof Pick<
-    UnifiedBackup,
-    | 'backupTime'
-    | 'name'
-    | 'node'
-    | 'vmid'
-    | 'backupType'
-    | 'size'
-    | 'storage'
-    | 'verified'
-    | 'type'
-    | 'owner'
-  >;
-  const [sortKey, setSortKey] = createSignal<BackupSortKey>('backupTime');
-  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('desc');
+  const [sortKey, setSortKey] = usePersistentSignal<BackupSortKey>(
+    'backupsSortKey',
+    'backupTime',
+    {
+      deserialize: (raw) =>
+        BACKUP_SORT_KEY_VALUES.includes(raw as BackupSortKey)
+          ? (raw as BackupSortKey)
+          : 'backupTime',
+    },
+  );
+  const [sortDirection, setSortDirection] = usePersistentSignal<'asc' | 'desc'>(
+    'backupsSortDirection',
+    'desc',
+    {
+      deserialize: (raw) => (raw === 'asc' || raw === 'desc' ? raw : 'desc'),
+    },
+  );
   const [selectedDateRange, setSelectedDateRange] = createSignal<{
     start: number;
     end: number;
@@ -88,26 +108,6 @@ const UnifiedBackups: Component = () => {
     { value: 'type', label: 'Guest Type' },
     { value: 'owner', label: 'Owner' },
   ];
-
-  onMount(() => {
-    const savedSortKey = localStorage.getItem('backupsSortKey') as BackupSortKey | null;
-    if (savedSortKey && sortKeyOptions.some((option) => option.value === savedSortKey)) {
-      setSortKey(savedSortKey);
-    }
-
-    const savedSortDirection = localStorage.getItem('backupsSortDirection');
-    if (savedSortDirection === 'asc' || savedSortDirection === 'desc') {
-      setSortDirection(savedSortDirection);
-    }
-  });
-
-  createEffect(() => {
-    localStorage.setItem('backupsSortKey', sortKey());
-  });
-
-  createEffect(() => {
-    localStorage.setItem('backupsSortDirection', sortDirection());
-  });
 
   // Extract PBS instance from search term
   const selectedPBSInstance = createMemo(() => {

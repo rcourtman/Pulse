@@ -16,6 +16,102 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
+	total := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
+	if total == 0 {
+		return nil
+	}
+
+	descriptors := make([]InstanceDescriptor, 0, total)
+
+	if len(m.pveClients) > 0 {
+		names := make([]string, 0, len(m.pveClients))
+		for name := range m.pveClients {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			desc := InstanceDescriptor{
+				Name: name,
+				Type: InstanceTypePVE,
+			}
+			if m.scheduler != nil {
+				if last, ok := m.scheduler.LastScheduled(InstanceTypePVE, name); ok {
+					desc.LastScheduled = last.NextRun
+					desc.LastInterval = last.Interval
+				}
+			}
+			descriptors = append(descriptors, desc)
+		}
+	}
+
+	if len(m.pbsClients) > 0 {
+		names := make([]string, 0, len(m.pbsClients))
+		for name := range m.pbsClients {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			desc := InstanceDescriptor{
+				Name: name,
+				Type: InstanceTypePBS,
+			}
+			if m.scheduler != nil {
+				if last, ok := m.scheduler.LastScheduled(InstanceTypePBS, name); ok {
+					desc.LastScheduled = last.NextRun
+					desc.LastInterval = last.Interval
+				}
+			}
+			descriptors = append(descriptors, desc)
+		}
+	}
+
+	if len(m.pmgClients) > 0 {
+		names := make([]string, 0, len(m.pmgClients))
+		for name := range m.pmgClients {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			desc := InstanceDescriptor{
+				Name: name,
+				Type: InstanceTypePMG,
+			}
+			if m.scheduler != nil {
+				if last, ok := m.scheduler.LastScheduled(InstanceTypePMG, name); ok {
+					desc.LastScheduled = last.NextRun
+					desc.LastInterval = last.Interval
+				}
+			}
+			descriptors = append(descriptors, desc)
+		}
+	}
+
+	return descriptors
+}
+
+func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
+	descriptors := m.describeInstancesForScheduler()
+	if len(descriptors) == 0 {
+		return nil
+	}
+
+	if m.scheduler == nil {
+		tasks := make([]ScheduledTask, 0, len(descriptors))
+		for _, desc := range descriptors {
+			tasks = append(tasks, ScheduledTask{
+				InstanceName: desc.Name,
+				InstanceType: desc.Type,
+				NextRun:      now,
+				Interval:     DefaultSchedulerConfig().BaseInterval,
+			})
+		}
+		return tasks
+	}
+
+	return m.scheduler.BuildPlan(now, descriptors)
+}
+
 // convertPoolInfoToModel converts Proxmox ZFS pool info to our model
 func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 	if poolInfo == nil {
