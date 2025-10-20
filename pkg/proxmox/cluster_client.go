@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +24,24 @@ type ClusterClient struct {
 	lastHealthCheck map[string]time.Time // Track last health check time
 	lastUsedIndex   int                  // For round-robin
 	config          ClientConfig         // Base config (auth info)
+	rateLimitUntil  map[string]time.Time // Cooldown window for rate-limited endpoints
+}
+
+const (
+	rateLimitBaseDelay   = 150 * time.Millisecond
+	rateLimitMaxJitter   = 200 * time.Millisecond
+	rateLimitRetryBudget = 2
+)
+
+var statusCodePattern = regexp.MustCompile(`(?i)(?:api error|status)\s+(\d{3})`)
+
+var transientRateLimitStatusCodes = map[int]struct{}{
+	408: {},
+	425: {}, // Too Early
+	429: {},
+	502: {},
+	503: {},
+	504: {},
 }
 
 // NewClusterClient creates a new cluster-aware client
@@ -33,6 +53,7 @@ func NewClusterClient(name string, config ClientConfig, endpoints []string) *Clu
 		nodeHealth:      make(map[string]bool),
 		lastHealthCheck: make(map[string]time.Time),
 		config:          config,
+		rateLimitUntil:  make(map[string]time.Time),
 	}
 
 	// Initialize all endpoints as unknown (will be tested on first use)
@@ -163,10 +184,24 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 
 	// Get list of healthy endpoints
 	var healthyEndpoints []string
+	var coolingEndpoints []string
+	now := time.Now()
 	for endpoint, healthy := range cc.nodeHealth {
 		if healthy {
+			if cooldown, exists := cc.rateLimitUntil[endpoint]; exists {
+				if now.Before(cooldown) {
+					coolingEndpoints = append(coolingEndpoints, endpoint)
+					continue
+				}
+				delete(cc.rateLimitUntil, endpoint)
+			}
 			healthyEndpoints = append(healthyEndpoints, endpoint)
 		}
+	}
+
+	if len(healthyEndpoints) == 0 && len(coolingEndpoints) > 0 {
+		// Nothing is immediately available, fall back to endpoints that are in cooldown
+		healthyEndpoints = append(healthyEndpoints, coolingEndpoints...)
 	}
 
 	log.Debug().
@@ -238,28 +273,38 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		cancel()
 
 		if testErr != nil {
-			// Check if this is a VM-specific error that shouldn't mark the node unhealthy
-			testErrStr := testErr.Error()
-			if strings.Contains(testErrStr, "No QEMU guest agent") ||
-				strings.Contains(testErrStr, "QEMU guest agent is not running") ||
-				strings.Contains(testErrStr, "guest agent") {
-				// This is a VM-specific issue, not a connectivity problem
-				// The node is actually healthy, so don't mark it unhealthy
+			// Check if this is a transient rate limit error that shouldn't mark the node unhealthy
+			if isRateLimited, _ := isTransientRateLimitError(testErr); isRateLimited {
 				log.Debug().
 					Str("cluster", cc.name).
 					Str("endpoint", selectedEndpoint).
 					Err(testErr).
-					Msg("Ignoring VM-specific error during connectivity test")
-				// Continue with client creation since the node is actually accessible
+					Msg("Ignoring transient rate limit error during connectivity test")
+				// Continue with client creation since the node is accessible, just rate limited
 			} else {
-				// Mark as unhealthy for real connectivity issues
-				cc.nodeHealth[selectedEndpoint] = false
-				log.Warn().
-					Str("cluster", cc.name).
-					Str("endpoint", selectedEndpoint).
-					Err(testErr).
-					Msg("Cluster endpoint failed connectivity test")
-				return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", selectedEndpoint, testErr)
+				// Check if this is a VM-specific error that shouldn't mark the node unhealthy
+				testErrStr := testErr.Error()
+				if strings.Contains(testErrStr, "No QEMU guest agent") ||
+					strings.Contains(testErrStr, "QEMU guest agent is not running") ||
+					strings.Contains(testErrStr, "guest agent") {
+					// This is a VM-specific issue, not a connectivity problem
+					// The node is actually healthy, so don't mark it unhealthy
+					log.Debug().
+						Str("cluster", cc.name).
+						Str("endpoint", selectedEndpoint).
+						Err(testErr).
+						Msg("Ignoring VM-specific error during connectivity test")
+					// Continue with client creation since the node is actually accessible
+				} else {
+					// Mark as unhealthy for real connectivity issues
+					cc.nodeHealth[selectedEndpoint] = false
+					log.Warn().
+						Str("cluster", cc.name).
+						Str("endpoint", selectedEndpoint).
+						Err(testErr).
+						Msg("Cluster endpoint failed connectivity test")
+					return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", selectedEndpoint, testErr)
+				}
 			}
 		}
 
@@ -400,7 +445,9 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 
 // executeWithFailover executes a function with automatic failover
 func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Client) error) error {
-	maxRetries := len(cc.endpoints)
+	baseRetries := len(cc.endpoints)
+	maxRetries := baseRetries + rateLimitRetryBudget
+	var lastErr error
 
 	log.Debug().
 		Str("cluster", cc.name).
@@ -434,6 +481,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		if err == nil {
 			return nil
 		}
+		lastErr = err
 
 		// Check error type and content
 		errStr := err.Error()
@@ -467,6 +515,34 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			return err
 		}
 
+		if isRateLimited, statusCode := isTransientRateLimitError(err); isRateLimited {
+			backoff := calculateRateLimitBackoff(i)
+			cc.applyRateLimitCooldown(clientEndpoint, backoff)
+
+			event := log.Warn().
+				Str("cluster", cc.name).
+				Str("endpoint", clientEndpoint).
+				Err(err).
+				Dur("backoff", backoff).
+				Int("attempt", i+1)
+			if statusCode != 0 {
+				event = event.Int("status", statusCode)
+			}
+			event.Msg("Rate limited by cluster node, retrying with backoff")
+
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return fmt.Errorf("context canceled while backing off after rate limit: %w", ctx.Err())
+			case <-timer.C:
+			}
+
+			continue
+		}
+
 		// Check if it's an auth error - don't retry on auth errors
 		if IsAuthError(err) {
 			return err
@@ -483,7 +559,73 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			Msg("Failed on cluster node, trying next")
 	}
 
+	if lastErr != nil {
+		return fmt.Errorf("all cluster nodes failed for %s: %w", cc.name, lastErr)
+	}
+
 	return fmt.Errorf("all cluster nodes failed for %s", cc.name)
+}
+
+func (cc *ClusterClient) applyRateLimitCooldown(endpoint string, backoff time.Duration) {
+	if endpoint == "" {
+		return
+	}
+
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	if cc.rateLimitUntil == nil {
+		cc.rateLimitUntil = make(map[string]time.Time)
+	}
+	cc.rateLimitUntil[endpoint] = time.Now().Add(backoff)
+}
+
+func calculateRateLimitBackoff(attempt int) time.Duration {
+	// Linear backoff with jitter keeps retries gentle while avoiding thundering herd
+	base := rateLimitBaseDelay * time.Duration(attempt+1)
+	if rateLimitMaxJitter <= 0 {
+		return base
+	}
+
+	jitter := time.Duration(rand.Int63n(rateLimitMaxJitter.Nanoseconds()+1)) * time.Nanosecond
+	return base + jitter
+}
+
+func isTransientRateLimitError(err error) (bool, int) {
+	if err == nil {
+		return false, 0
+	}
+
+	errStr := err.Error()
+	statusCode := extractStatusCode(errStr)
+	if statusCode != 0 {
+		if _, ok := transientRateLimitStatusCodes[statusCode]; ok {
+			return true, statusCode
+		}
+	}
+
+	lowerErr := strings.ToLower(errStr)
+	if strings.Contains(lowerErr, "rate limit") || strings.Contains(lowerErr, "too many requests") {
+		if statusCode == 0 {
+			statusCode = 429
+		}
+		return true, statusCode
+	}
+
+	return false, statusCode
+}
+
+func extractStatusCode(errStr string) int {
+	matches := statusCodePattern.FindStringSubmatch(errStr)
+	if len(matches) != 2 {
+		return 0
+	}
+
+	code, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0
+	}
+
+	return code
 }
 
 // GetHealthStatus returns the health status of all nodes

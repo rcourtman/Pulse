@@ -700,6 +700,7 @@ func Load() (*Config, error) {
 	}
 	if publicURL := os.Getenv("PULSE_PUBLIC_URL"); publicURL != "" {
 		cfg.PublicURL = publicURL
+		cfg.EnvOverrides["publicURL"] = true
 		log.Info().Str("url", publicURL).Msg("Public URL configured from PULSE_PUBLIC_URL env var")
 	} else {
 		// Try to auto-detect public URL if not explicitly configured

@@ -1018,48 +1018,49 @@ const snapshotOverridesCount = createMemo(() => {
     // Get PBS instances from props
     const pbsInstances = props.pbsInstances || [];
 
-    const pbsServers = pbsInstances
-      .filter((pbs) => (pbs.cpu || 0) > 0 || (pbs.memory || 0) > 0)
-      .map((pbs) => {
-        // PBS IDs already have "pbs-" prefix from backend, don't double it
-        const pbsId = pbs.id;
-        const override = overridesMap.get(pbsId);
+    const pbsServers = pbsInstances.map((pbs) => {
+      // Offline PBS instances report zero metrics; keep them visible so connectivity toggles stay usable
+      // PBS IDs already have "pbs-" prefix from backend, don't double it
+      const pbsId = pbs.id;
+      const override = overridesMap.get(pbsId);
 
-        // Check if any threshold values actually differ from defaults
-        const hasCustomThresholds =
-          override?.thresholds &&
-          Object.keys(override.thresholds).some((key) => {
-            const k = key as keyof typeof override.thresholds;
-            // PBS uses node defaults for CPU/Memory
-            return (
-              override.thresholds[k] !== undefined &&
-              override.thresholds[k] !== props.nodeDefaults[k as keyof typeof props.nodeDefaults]
-            );
-          });
+      // Check if any threshold values actually differ from defaults
+      const hasCustomThresholds =
+        override?.thresholds &&
+        Object.keys(override.thresholds).some((key) => {
+          const k = key as keyof typeof override.thresholds;
+          // PBS uses node defaults for CPU/Memory
+          return (
+            override.thresholds[k] !== undefined &&
+            override.thresholds[k] !== props.nodeDefaults[k as keyof typeof props.nodeDefaults]
+          );
+        });
 
+      const disableConnectivity = override?.disableConnectivity || false;
+      const hasOverride = hasCustomThresholds || disableConnectivity;
 
-        return {
-          id: pbsId,
-          name: pbs.name,
-          type: 'pbs' as const,
-          resourceType: 'PBS',
-          host: pbs.host,
-          status: pbs.status,
-          cpu: pbs.cpu,
-          memory: pbs.memory,
-          memoryUsed: pbs.memoryUsed,
-          memoryTotal: pbs.memoryTotal,
-          uptime: pbs.uptime,
-          hasOverride: hasCustomThresholds || false,
-          disabled: false,
-          disableConnectivity: override?.disableConnectivity || false,
-          thresholds: override?.thresholds || {},
-          defaults: {
-            cpu: props.nodeDefaults.cpu,
-            memory: props.nodeDefaults.memory,
-          },
-        };
-      });
+      return {
+        id: pbsId,
+        name: pbs.name,
+        type: 'pbs' as const,
+        resourceType: 'PBS',
+        host: pbs.host,
+        status: pbs.status,
+        cpu: pbs.cpu,
+        memory: pbs.memory,
+        memoryUsed: pbs.memoryUsed,
+        memoryTotal: pbs.memoryTotal,
+        uptime: pbs.uptime,
+        hasOverride,
+        disabled: false,
+        disableConnectivity,
+        thresholds: override?.thresholds || {},
+        defaults: {
+          cpu: props.nodeDefaults.cpu,
+          memory: props.nodeDefaults.memory,
+        },
+      };
+    });
 
     if (search) {
       return pbsServers.filter(

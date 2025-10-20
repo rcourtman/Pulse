@@ -236,6 +236,7 @@ fi
 print_info "Setting up directories with proper ownership..."
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 "$SSH_DIR"
+install -m 0600 -o pulse-sensor-proxy -g pulse-sensor-proxy /dev/null "$SSH_DIR/known_hosts"
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0755 /etc/pulse-sensor-proxy
 
 # Create config file with ACL for Docker containers (standalone mode)

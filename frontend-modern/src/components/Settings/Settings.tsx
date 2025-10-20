@@ -329,7 +329,6 @@ const Settings: Component<SettingsProps> = (props) => {
           if (currentTab() !== 'pve') {
             setCurrentTab('pve');
           }
-          navigate('/settings/pve', { replace: true });
           return;
         }
 

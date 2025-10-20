@@ -41,7 +41,7 @@ echo "  Pulse Turnkey Docker Installation"
 echo "============================================"
 echo ""
 
-# Check if running as root (early check per Codex feedback)
+# Check if running as root (early check for better error messages)
 if [ "$EUID" -ne 0 ]; then
     echo "❌ ERROR: This script must be run as root"
     echo ""

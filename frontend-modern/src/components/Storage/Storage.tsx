@@ -1,4 +1,5 @@
 import { Component, For, Show, createSignal, createMemo, createEffect, onMount } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { formatBytes } from '@/utils/format';
@@ -14,6 +15,7 @@ import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { getNodeDisplayName } from '@/utils/nodes';
 
 const Storage: Component = () => {
+  const navigate = useNavigate();
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [viewMode, setViewMode] = createSignal<'node' | 'storage'>('node');
   const [tabView, setTabView] = createSignal<'pools' | 'disks'>('pools');
@@ -671,12 +673,7 @@ const Storage: Component = () => {
             actions={
               <button
                 type="button"
-                onClick={() => {
-                  const settingsTab = document.querySelector(
-                    '[role=\"tab\"]:last-child',
-                  ) as HTMLElement;
-                  settingsTab?.click();
-                }}
+                onClick={() => navigate('/settings')}
                 class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Go to Settings

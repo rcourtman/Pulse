@@ -47,6 +47,14 @@ export FRONTEND_PORT PORT
 export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
 export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
 
+# Auto-detect pulse-sensor-proxy socket if available
+if [[ -z ${PULSE_SENSOR_PROXY_SOCKET:-} ]]; then
+    if [[ -S /mnt/pulse-proxy/pulse-sensor-proxy.sock ]]; then
+        export PULSE_SENSOR_PROXY_SOCKET=/mnt/pulse-proxy/pulse-sensor-proxy.sock
+        printf "[hot-dev] Detected pulse-sensor-proxy socket at %s\n" "${PULSE_SENSOR_PROXY_SOCKET}"
+    fi
+fi
+
 EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
 
 cat <<BANNER

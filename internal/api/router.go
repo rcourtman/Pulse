@@ -6,12 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +53,8 @@ type Router struct {
 	settingsMu           sync.RWMutex
 	cachedAllowEmbedding bool
 	cachedAllowedOrigins string
+	publicURLMu          sync.Mutex
+	publicURLDetected    bool
 }
 
 // NewRouter creates a new router instance
@@ -1038,6 +1042,13 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetMonitor(m)
 	}
+	if m != nil {
+		if url := strings.TrimSpace(r.config.PublicURL); url != "" {
+			if mgr := m.GetNotificationManager(); mgr != nil {
+				mgr.SetPublicURL(url)
+			}
+		}
+	}
 }
 
 // reloadSystemSettings loads system settings from disk and caches them
@@ -1077,6 +1088,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Get cached system settings (loaded once at startup, not from disk every request)
+	r.capturePublicURLFromRequest(req)
 	r.settingsMu.RLock()
 	allowEmbedding := r.cachedAllowEmbedding
 	allowedEmbedOrigins := r.cachedAllowedOrigins
@@ -1305,6 +1317,155 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Dur("duration", time.Since(start)).
 			Msg("Request handled")
 	}), allowEmbedding, allowedEmbedOrigins).ServeHTTP(w, req)
+}
+
+func (r *Router) capturePublicURLFromRequest(req *http.Request) {
+	if req == nil || r == nil || r.config == nil {
+		return
+	}
+
+	if r.config.EnvOverrides != nil && r.config.EnvOverrides["publicURL"] {
+		return
+	}
+
+	rawHost := firstForwardedValue(req.Header.Get("X-Forwarded-Host"))
+	if rawHost == "" {
+		rawHost = req.Host
+	}
+	hostWithPort, hostOnly := sanitizeForwardedHost(rawHost)
+	if hostWithPort == "" {
+		return
+	}
+	if isLoopbackHost(hostOnly) {
+		return
+	}
+
+	rawProto := firstForwardedValue(req.Header.Get("X-Forwarded-Proto"))
+	if rawProto == "" {
+		rawProto = firstForwardedValue(req.Header.Get("X-Forwarded-Scheme"))
+	}
+	scheme := strings.ToLower(strings.TrimSpace(rawProto))
+	switch scheme {
+	case "https", "http":
+		// supported values
+	default:
+		if req.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+	if scheme == "" {
+		scheme = "http"
+	}
+
+	if _, _, err := net.SplitHostPort(hostWithPort); err != nil {
+		if forwardedPort := firstForwardedValue(req.Header.Get("X-Forwarded-Port")); forwardedPort != "" {
+			if shouldAppendForwardedPort(forwardedPort, scheme) {
+				if strings.Contains(hostWithPort, ":") && !strings.HasPrefix(hostWithPort, "[") {
+					hostWithPort = fmt.Sprintf("[%s]", hostWithPort)
+				} else if strings.HasPrefix(hostWithPort, "[") && !strings.Contains(hostWithPort, "]") {
+					hostWithPort = fmt.Sprintf("[%s]", strings.TrimPrefix(hostWithPort, "["))
+				}
+				hostWithPort = fmt.Sprintf("%s:%s", hostWithPort, forwardedPort)
+			}
+		}
+	}
+
+	candidate := fmt.Sprintf("%s://%s", scheme, hostWithPort)
+	normalizedCandidate := strings.TrimRight(strings.TrimSpace(candidate), "/")
+
+	r.publicURLMu.Lock()
+	if r.publicURLDetected {
+		r.publicURLMu.Unlock()
+		return
+	}
+
+	current := strings.TrimRight(strings.TrimSpace(r.config.PublicURL), "/")
+	if current != "" && current == normalizedCandidate {
+		r.publicURLDetected = true
+		r.publicURLMu.Unlock()
+		return
+	}
+
+	r.config.PublicURL = normalizedCandidate
+	r.publicURLDetected = true
+	r.publicURLMu.Unlock()
+
+	log.Info().
+		Str("publicURL", normalizedCandidate).
+		Msg("Detected public URL from inbound request; using for notifications")
+
+	if r.monitor != nil {
+		if mgr := r.monitor.GetNotificationManager(); mgr != nil {
+			mgr.SetPublicURL(normalizedCandidate)
+		}
+	}
+}
+
+func firstForwardedValue(header string) string {
+	if header == "" {
+		return ""
+	}
+	parts := strings.Split(header, ",")
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(parts[0])
+}
+
+func sanitizeForwardedHost(raw string) (string, string) {
+	host := strings.TrimSpace(raw)
+	if host == "" {
+		return "", ""
+	}
+
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimSpace(strings.TrimSuffix(host, "/"))
+	if host == "" {
+		return "", ""
+	}
+
+	hostOnly := host
+	if h, _, err := net.SplitHostPort(hostOnly); err == nil {
+		hostOnly = h
+	}
+	hostOnly = strings.Trim(hostOnly, "[]")
+
+	return host, hostOnly
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "" {
+		return true
+	}
+	lower := strings.ToLower(host)
+	if lower == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsUnspecified() {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldAppendForwardedPort(port, scheme string) bool {
+	if port == "" {
+		return false
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		return false
+	}
+	if scheme == "https" && port == "443" {
+		return false
+	}
+	if scheme == "http" && port == "80" {
+		return false
+	}
+	return true
 }
 
 // detectLegacySSH checks if Pulse is using legacy SSH for temperature monitoring
