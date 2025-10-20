@@ -159,11 +159,33 @@ sheet for audit purposes.
 curl -s http://<host>:7655/api/monitoring/scheduler/health | jq
 ```
 
-Key fields:
+Key sections to inspect:
+
 - `queue.depth`, `queue.perType`
-- `deadLetter.count`, task list
-- `breakers` array with states (`closed`, `open`, `half_open`)
-- `staleness` per instance
+- `instances[].pollStatus` (success/failure streaks and last error)
+- `instances[].breaker` (current breaker state, retry windows)
+- `instances[].deadLetter` (reason, retry counts, schedules)
+- `staleness` (normalized freshness score)
+
+Common queries:
+
+*Instances with errors*
+```
+curl -s http://<host>:7655/api/monitoring/scheduler/health \
+  | jq '.instances[] | select(.pollStatus.lastError != null) | {key, lastError: .pollStatus.lastError}'
+```
+
+*Current dead-letter entries*
+```
+curl -s http://<host>:7655/api/monitoring/scheduler/health \
+  | jq '.instances[] | select(.deadLetter.present) | {key, reason: .deadLetter.reason, retryCount: .deadLetter.retryCount}'
+```
+
+*Breakers not closed*
+```
+curl -s http://<host>:7655/api/monitoring/scheduler/health \
+  | jq '.instances[] | select(.breaker.state != "closed") | {key, breaker: .breaker}'
+```
 
 ### When to Roll Back
 
