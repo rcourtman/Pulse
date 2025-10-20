@@ -3672,6 +3672,10 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
         echo "⚠️  Could not determine Pulse version from $PULSE_VERSION_ENDPOINT"
         echo "    Temperature proxy requires Pulse $MIN_PROXY_VERSION or later."
         TEMP_MONITORING_AVAILABLE=false
+    # Allow dev/main builds (they have latest code)
+    elif [[ "$PULSE_VERSION" =~ ^(0\.0\.0-main|dev|main) ]]; then
+        # Dev/main builds have proxy support - skip version check
+        :
     elif ! version_ge "$PULSE_VERSION" "$MIN_PROXY_VERSION"; then
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
