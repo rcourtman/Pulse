@@ -1,3 +1,6 @@
+# syntax=docker/dockerfile:1.7-labs
+ARG BUILD_AGENT=1
+
 # Build stage for frontend (must be built first for embedding)
 FROM node:20-alpine AS frontend-builder
 
@@ -5,17 +8,20 @@ WORKDIR /app/frontend-modern
 
 # Copy package files
 COPY frontend-modern/package*.json ./
-RUN npm ci
+RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
+    npm ci
 
 # Copy frontend source
 COPY frontend-modern/ ./
 
 # Build frontend
-RUN npm run build
+RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
+    npm run build
 
 # Build stage for Go backend
 FROM golang:1.24-alpine AS backend-builder
 
+ARG BUILD_AGENT
 WORKDIR /app
 
 # Install build dependencies
@@ -23,7 +29,9 @@ RUN apk add --no-cache git
 
 # Copy go mod files for better layer caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    go mod download
 
 # Copy only necessary source code
 COPY cmd/ ./cmd/
@@ -36,27 +44,46 @@ COPY VERSION ./
 COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-modern/dist
 
 # Build the binaries with embedded frontend
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" \
-    -trimpath \
-    -o pulse ./cmd/pulse
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse ./cmd/pulse
 
-# Build docker-agent for multiple architectures so users can download any arch
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-s -w" \
-    -trimpath \
-    -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-    -ldflags="-s -w" \
-    -trimpath \
-    -o pulse-docker-agent-linux-arm64 ./cmd/pulse-docker-agent && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
-    -ldflags="-s -w" \
-    -trimpath \
-    -o pulse-docker-agent-linux-armv7 ./cmd/pulse-docker-agent
+# Build docker-agent binaries (optional cross-arch builds controlled by BUILD_AGENT)
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    if [ "${BUILD_AGENT:-1}" = "1" ]; then \
+      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+        -ldflags="-s -w" \
+        -trimpath \
+        -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
+      CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+        -ldflags="-s -w" \
+        -trimpath \
+        -o pulse-docker-agent-linux-arm64 ./cmd/pulse-docker-agent && \
+      CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
+        -ldflags="-s -w" \
+        -trimpath \
+        -o pulse-docker-agent-linux-armv7 ./cmd/pulse-docker-agent; \
+    else \
+      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+        -ldflags="-s -w" \
+        -trimpath \
+        -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
+      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 && \
+      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-armv7; \
+    fi && \
+    cp pulse-docker-agent-linux-amd64 pulse-docker-agent
 
-# Keep a host-arch symlink for backward compatibility
-RUN cp pulse-docker-agent-linux-amd64 pulse-docker-agent
+# Build pulse-sensor-proxy
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
 FROM alpine:latest AS agent_runtime
@@ -106,10 +133,12 @@ COPY --from=backend-builder /app/VERSION .
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Provide docker-agent installer script for HTTP download endpoint
+# Provide installer scripts for HTTP download endpoints
 RUN mkdir -p /opt/pulse/scripts
 COPY scripts/install-docker-agent.sh /opt/pulse/scripts/install-docker-agent.sh
-RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh
+COPY scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-sensor-proxy.sh
+COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
+RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh /opt/pulse/scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-docker.sh
 
 # Copy multi-arch docker-agent binaries for download endpoint
 RUN mkdir -p /opt/pulse/bin
@@ -117,6 +146,9 @@ COPY --from=backend-builder /app/pulse-docker-agent-linux-amd64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent-linux-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent-linux-armv7 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent /opt/pulse/bin/pulse-docker-agent
+
+# Copy pulse-sensor-proxy binary for download endpoint
+COPY --from=backend-builder /app/pulse-sensor-proxy /opt/pulse/bin/pulse-sensor-proxy
 
 # Create config directory
 RUN mkdir -p /etc/pulse /data

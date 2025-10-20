@@ -3,24 +3,43 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	proxyFailureThreshold = 3
+	proxyRetryInterval    = 5 * time.Minute
+)
+
+type temperatureProxy interface {
+	IsAvailable() bool
+	GetTemperature(nodeHost string) (string, error)
+}
+
 // TemperatureCollector handles SSH-based temperature collection from Proxmox nodes
 type TemperatureCollector struct {
-	sshUser     string            // SSH user (typically "root" or "pulse-monitor")
-	sshKeyPath  string            // Path to SSH private key
-	proxyClient *tempproxy.Client // Optional: unix socket client for proxy
-	useProxy    bool              // Whether to use proxy for temperature collection
+	sshUser            string           // SSH user (typically "root" or "pulse-monitor")
+	sshKeyPath         string           // Path to SSH private key
+	proxyClient        temperatureProxy // Optional: unix socket client for proxy
+	useProxy           bool             // Whether to use proxy for temperature collection
+	hostKeys           knownhosts.Manager
+	proxyMu            sync.Mutex
+	proxyFailures      int
+	proxyCooldownUntil time.Time
 }
 
 // NewTemperatureCollector creates a new temperature collector
@@ -28,6 +47,17 @@ func NewTemperatureCollector(sshUser, sshKeyPath string) *TemperatureCollector {
 	tc := &TemperatureCollector{
 		sshUser:    sshUser,
 		sshKeyPath: sshKeyPath,
+	}
+
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		homeDir = "/home/pulse"
+	}
+	knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts_sensors")
+	if manager, err := knownhosts.NewManager(knownHostsPath); err != nil {
+		log.Warn().Err(err).Str("path", knownHostsPath).Msg("Failed to initialize temperature known_hosts manager")
+	} else {
+		tc.hostKeys = manager
 	}
 
 	// Check if proxy is available
@@ -53,9 +83,10 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 	var err error
 
 	// Use proxy if available, otherwise fall back to direct SSH
-	if tc.useProxy && tc.proxyClient != nil {
+	if tc.isProxyEnabled() {
 		output, err = tc.proxyClient.GetTemperature(host)
 		if err != nil {
+			tc.handleProxyFailure(err)
 			log.Debug().
 				Str("node", nodeName).
 				Str("host", host).
@@ -63,8 +94,19 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 				Msg("Failed to collect temperature data via proxy")
 			return &models.Temperature{Available: false}, nil
 		}
+		tc.handleProxySuccess()
 	} else {
-		// Direct SSH (legacy method)
+		// SECURITY: Block SSH fallback when running in containers (unless dev mode)
+		// Container compromise = SSH key compromise = root access to infrastructure
+		devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
+		if isRunningInContainer() && !devModeAllowSSH {
+			log.Error().
+				Str("node", nodeName).
+				Msg("SECURITY BLOCK: SSH temperature collection disabled in containers - deploy pulse-sensor-proxy")
+			return &models.Temperature{Available: false}, nil
+		}
+
+		// Direct SSH (legacy method for non-containerized deployments)
 		// Try sensors first, fall back to Raspberry Pi method if that fails
 		output, err = tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null")
 		if err != nil || strings.TrimSpace(output) == "" {
@@ -108,13 +150,33 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 
 // runSSHCommand executes a command on a remote node via SSH
 func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command string) (string, error) {
+	if err := tc.ensureHostKey(ctx, host); err != nil {
+		return "", err
+	}
+
 	// Build SSH command with appropriate options
 	sshArgs := []string{
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "ConnectTimeout=5",
-		"-o", "BatchMode=yes", // No password prompts
+		"-o", "StrictHostKeyChecking=yes",
+		"-o", "BatchMode=yes",
 		"-o", "LogLevel=ERROR", // Suppress host key warnings that break JSON parsing
+		"-o", "ConnectTimeout=5",
+	}
+
+	if tc.hostKeys != nil && tc.hostKeys.Path() != "" {
+		sshArgs = append(sshArgs,
+			"-o", fmt.Sprintf("UserKnownHostsFile=%s", tc.hostKeys.Path()),
+			"-o", "GlobalKnownHostsFile=/dev/null",
+		)
+	}
+
+	// Explicitly use SSH config file if it exists (for ProxyJump configuration)
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		homeDir = "/home/pulse"
+	}
+	sshConfigPath := filepath.Join(homeDir, ".ssh/config")
+	if _, err := os.Stat(sshConfigPath); err == nil {
+		sshArgs = append(sshArgs, "-F", sshConfigPath)
 	}
 
 	// Add key if specified
@@ -193,7 +255,8 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 			strings.Contains(chipLower, "k8temp") ||
 			strings.Contains(chipLower, "acpitz") ||
 			strings.Contains(chipLower, "it87") ||
-			strings.Contains(chipLower, "cpu_thermal") { // Raspberry Pi CPU temperature
+			strings.Contains(chipLower, "cpu_thermal") || // Raspberry Pi CPU temperature
+			strings.Contains(chipLower, "rpitemp") {
 			foundCPUChip = true
 			tc.parseCPUTemps(chipMap, temp)
 		}
@@ -268,8 +331,12 @@ func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, te
 			// Look for generic temperature sensors (e.g., "temp1" on Raspberry Pi)
 			if strings.HasPrefix(sensorName, "temp") || strings.HasPrefix(sensorName, "Temp") {
 				if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
-					temp.CPUPackage = tempVal
-					temp.CPUMax = tempVal
+					if temp.CPUPackage <= 0 {
+						temp.CPUPackage = tempVal
+					}
+					if tempVal > temp.CPUMax {
+						temp.CPUMax = tempVal
+					}
 					break // Use the first valid generic temp sensor
 				}
 			}
@@ -378,4 +445,89 @@ func extractHostname(hostURL string) string {
 	}
 
 	return host
+}
+
+func (tc *TemperatureCollector) ensureHostKey(ctx context.Context, host string) error {
+	if tc.hostKeys == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return tc.hostKeys.Ensure(ctx, host)
+}
+
+func (tc *TemperatureCollector) isProxyEnabled() bool {
+	if tc.proxyClient == nil {
+		return false
+	}
+
+	tc.proxyMu.Lock()
+	restored := false
+	if !tc.useProxy {
+		now := time.Now()
+		if now.After(tc.proxyCooldownUntil) {
+			if tc.proxyClient.IsAvailable() {
+				tc.useProxy = true
+				tc.proxyFailures = 0
+				tc.proxyCooldownUntil = time.Time{}
+				restored = true
+			} else {
+				tc.proxyCooldownUntil = now.Add(proxyRetryInterval)
+			}
+		}
+	}
+	useProxy := tc.useProxy
+	tc.proxyMu.Unlock()
+
+	if restored {
+		log.Info().Msg("Temperature proxy connection restored; resuming proxy collection")
+	}
+
+	return useProxy
+}
+
+func (tc *TemperatureCollector) handleProxySuccess() {
+	if tc.proxyClient == nil {
+		return
+	}
+	tc.proxyMu.Lock()
+	tc.proxyFailures = 0
+	tc.proxyMu.Unlock()
+}
+
+func (tc *TemperatureCollector) handleProxyFailure(err error) {
+	if tc.proxyClient == nil || !tc.shouldDisableProxy(err) {
+		return
+	}
+
+	tc.proxyMu.Lock()
+	tc.proxyFailures++
+	disable := tc.proxyFailures >= proxyFailureThreshold && tc.useProxy
+	if disable {
+		tc.useProxy = false
+		tc.proxyCooldownUntil = time.Now().Add(proxyRetryInterval)
+		tc.proxyFailures = 0
+	}
+	tc.proxyMu.Unlock()
+
+	if disable {
+		log.Warn().
+			Err(err).
+			Dur("cooldown", proxyRetryInterval).
+			Msg("Temperature proxy disabled after repeated failures; will retry later")
+	}
+}
+
+func (tc *TemperatureCollector) shouldDisableProxy(err error) bool {
+	var proxyErr *tempproxy.ProxyError
+	if errors.As(err, &proxyErr) {
+		switch proxyErr.Type {
+		case tempproxy.ErrorTypeTransport, tempproxy.ErrorTypeTimeout, tempproxy.ErrorTypeSSH:
+			return true
+		default:
+			return false
+		}
+	}
+	return true
 }

@@ -28,6 +28,7 @@ type integrationServer struct {
 	server  *httptest.Server
 	monitor *monitoring.Monitor
 	hub     *internalws.Hub
+	config  *config.Config
 }
 
 func newIntegrationServer(t *testing.T) *integrationServer {
@@ -50,6 +51,7 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		DemoMode:          false,
 		AllowedOrigins:    "*",
 		ConcurrentPolling: true,
+		EnvOverrides:      make(map[string]bool),
 	}
 
 	if customize != nil {
@@ -92,6 +94,7 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		server:  srv,
 		monitor: monitor,
 		hub:     hub,
+		config:  cfg,
 	}
 }
 
@@ -565,6 +568,67 @@ func TestSessionCookieAllowsAuthenticatedAccess(t *testing.T) {
 	defer authedResp.Body.Close()
 	if authedResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 with session cookie, got %d", authedResp.StatusCode)
+	}
+}
+
+func TestPublicURLDetectionUsesForwardedHeaders(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/health", nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "pulse.example.com")
+	req.Header.Set("X-Forwarded-Port", "8443")
+
+	res, err := srv.server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("health request failed: %v", err)
+	}
+	res.Body.Close()
+
+	expected := "https://pulse.example.com:8443"
+	if got := srv.config.PublicURL; got != expected {
+		t.Fatalf("expected config public URL %q, got %q", expected, got)
+	}
+
+	if mgr := srv.monitor.GetNotificationManager(); mgr != nil {
+		if actual := mgr.GetPublicURL(); actual != expected {
+			t.Fatalf("expected notification manager public URL %q, got %q", expected, actual)
+		}
+	}
+}
+
+func TestPublicURLDetectionRespectsEnvOverride(t *testing.T) {
+	const overrideURL = "https://from-env.example.com"
+
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		cfg.PublicURL = overrideURL
+		cfg.EnvOverrides["publicURL"] = true
+	})
+
+	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/health", nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "ignored.example.org")
+
+	res, err := srv.server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("health request failed: %v", err)
+	}
+	res.Body.Close()
+
+	if got := srv.config.PublicURL; got != overrideURL {
+		t.Fatalf("expected config public URL to remain %q, got %q", overrideURL, got)
+	}
+
+	if mgr := srv.monitor.GetNotificationManager(); mgr != nil {
+		if actual := mgr.GetPublicURL(); actual != overrideURL {
+			t.Fatalf("expected notification manager public URL %q, got %q", overrideURL, actual)
+		}
 	}
 }
 

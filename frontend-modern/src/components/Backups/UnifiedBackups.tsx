@@ -1,4 +1,5 @@
 import { Component, createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { formatBytes, formatAbsoluteTime, formatRelativeTime, formatUptime } from '@/utils/format';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
@@ -24,6 +25,7 @@ interface DateGroup {
 }
 
 const UnifiedBackups: Component = () => {
+  const navigate = useNavigate();
   const { state } = useWebSocket();
   const pveBackupsState = createMemo(() => state.backups?.pve ?? state.pveBackups);
   const pbsBackupsState = createMemo(() => state.backups?.pbs ?? state.pbsBackups);
@@ -1141,12 +1143,7 @@ const UnifiedBackups: Component = () => {
             actions={
               <button
                 type="button"
-                onClick={() => {
-                  const settingsTab = document.querySelector(
-                    '[role="tab"]:last-child',
-                  ) as HTMLElement;
-                  settingsTab?.click();
-                }}
+                onClick={() => navigate('/settings')}
                 class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Go to Settings

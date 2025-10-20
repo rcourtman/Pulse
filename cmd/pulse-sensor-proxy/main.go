@@ -11,14 +11,18 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
 // Version information (set at build time with -ldflags)
@@ -29,10 +33,12 @@ var (
 )
 
 const (
-	defaultSocketPath = "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
-	defaultSSHKeyPath = "/var/lib/pulse-sensor-proxy/ssh"
-	defaultConfigPath = "/etc/pulse-sensor-proxy/config.yaml"
-	maxRequestBytes   = 16 * 1024 // 16 KiB max request size
+	defaultSocketPath   = "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+	defaultSSHKeyPath   = "/var/lib/pulse-sensor-proxy/ssh"
+	defaultConfigPath   = "/etc/pulse-sensor-proxy/config.yaml"
+	defaultAuditLogPath = "/var/log/pulse/sensor-proxy/audit.log"
+	maxRequestBytes     = 16 * 1024 // 16 KiB max request size
+	defaultRunAsUser    = "pulse-sensor"
 )
 
 func defaultWorkDir() string {
@@ -79,17 +85,155 @@ func main() {
 	}
 }
 
+type userSpec struct {
+	name   string
+	uid    int
+	gid    int
+	groups []int
+	home   string
+}
+
+func dropPrivileges(username string) (*userSpec, error) {
+	if username == "" {
+		return nil, nil
+	}
+
+	if os.Geteuid() != 0 {
+		return nil, nil
+	}
+
+	spec, err := resolveUserSpec(username)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(spec.groups) == 0 {
+		spec.groups = []int{spec.gid}
+	}
+
+	if err := unix.Setgroups(spec.groups); err != nil {
+		return nil, fmt.Errorf("setgroups: %w", err)
+	}
+	if err := unix.Setgid(spec.gid); err != nil {
+		return nil, fmt.Errorf("setgid: %w", err)
+	}
+	if err := unix.Setuid(spec.uid); err != nil {
+		return nil, fmt.Errorf("setuid: %w", err)
+	}
+
+	if spec.home != "" {
+		_ = os.Setenv("HOME", spec.home)
+	}
+	if spec.name != "" {
+		_ = os.Setenv("USER", spec.name)
+		_ = os.Setenv("LOGNAME", spec.name)
+	}
+
+	return spec, nil
+}
+
+func resolveUserSpec(username string) (*userSpec, error) {
+	u, err := user.Lookup(username)
+	if err == nil {
+		uid, err := strconv.Atoi(u.Uid)
+		if err != nil {
+			return nil, fmt.Errorf("parse uid %q: %w", u.Uid, err)
+		}
+		gid, err := strconv.Atoi(u.Gid)
+		if err != nil {
+			return nil, fmt.Errorf("parse gid %q: %w", u.Gid, err)
+		}
+
+		var groups []int
+		if gids, err := u.GroupIds(); err == nil {
+			for _, g := range gids {
+				if gidVal, convErr := strconv.Atoi(g); convErr == nil {
+					groups = append(groups, gidVal)
+				}
+			}
+		}
+
+		if len(groups) == 0 {
+			groups = []int{gid}
+		}
+
+		return &userSpec{
+			name:   u.Username,
+			uid:    uid,
+			gid:    gid,
+			groups: groups,
+			home:   u.HomeDir,
+		}, nil
+	}
+
+	fallbackSpec, fallbackErr := lookupUserFromPasswd(username)
+	if fallbackErr == nil {
+		return fallbackSpec, nil
+	}
+
+	return nil, fmt.Errorf("lookup user %q failed: %v (fallback: %w)", username, err, fallbackErr)
+}
+
+func lookupUserFromPasswd(username string) (*userSpec, error) {
+	f, err := os.Open("/etc/passwd")
+	if err != nil {
+		return nil, fmt.Errorf("open /etc/passwd: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Split(line, ":")
+		if len(fields) < 7 {
+			continue
+		}
+		if fields[0] != username {
+			continue
+		}
+
+		uid, err := strconv.Atoi(fields[2])
+		if err != nil {
+			return nil, fmt.Errorf("parse uid %q: %w", fields[2], err)
+		}
+		gid, err := strconv.Atoi(fields[3])
+		if err != nil {
+			return nil, fmt.Errorf("parse gid %q: %w", fields[3], err)
+		}
+
+		return &userSpec{
+			name:   fields[0],
+			uid:    uid,
+			gid:    gid,
+			groups: []int{gid},
+			home:   fields[5],
+		}, nil
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan /etc/passwd: %w", err)
+	}
+
+	return nil, fmt.Errorf("user %q not found in /etc/passwd", username)
+}
+
 // Proxy manages the temperature monitoring proxy
 type Proxy struct {
 	socketPath  string
 	sshKeyPath  string
 	workDir     string
+	knownHosts  knownhosts.Manager
 	listener    net.Listener
 	rateLimiter *rateLimiter
 	nodeGate    *nodeGate
 	router      map[string]handlerFunc
 	config      *Config
 	metrics     *ProxyMetrics
+	audit       *auditLogger
 
 	allowedPeerUIDs   map[uint32]struct{}
 	allowedPeerGIDs   map[uint32]struct{}
@@ -161,6 +305,32 @@ func runProxy() {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 
+	runAsUser := os.Getenv("PULSE_SENSOR_PROXY_USER")
+	if runAsUser == "" {
+		runAsUser = defaultRunAsUser
+	}
+
+	if spec, err := dropPrivileges(runAsUser); err != nil {
+		log.Fatal().Err(err).Str("user", runAsUser).Msg("Failed to drop privileges")
+	} else if spec != nil {
+		log.Info().
+			Str("user", spec.name).
+			Int("uid", spec.uid).
+			Int("gid", spec.gid).
+			Msg("Running as unprivileged user")
+	}
+
+	auditPath := os.Getenv("PULSE_SENSOR_PROXY_AUDIT_LOG")
+	if auditPath == "" {
+		auditPath = defaultAuditLogPath
+	}
+
+	auditLogger, err := newAuditLogger(auditPath)
+	if err != nil {
+		log.Fatal().Err(err).Str("path", auditPath).Msg("Failed to initialize audit logger")
+	}
+	defer auditLogger.Close()
+
 	// Initialize metrics
 	metrics := NewProxyMetrics(Version)
 
@@ -168,16 +338,24 @@ func runProxy() {
 		Str("socket", socketPath).
 		Str("ssh_key_dir", sshKeyPath).
 		Str("config_path", cfgPath).
+		Str("audit_log", auditPath).
 		Str("version", Version).
 		Msg("Starting pulse-sensor-proxy")
+
+	knownHostsManager, err := knownhosts.NewManager(filepath.Join(sshKeyPath, "known_hosts"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize known hosts manager")
+	}
 
 	proxy := &Proxy{
 		socketPath:  socketPath,
 		sshKeyPath:  sshKeyPath,
-		rateLimiter: newRateLimiter(),
+		knownHosts:  knownHostsManager,
+		rateLimiter: newRateLimiter(metrics),
 		nodeGate:    newNodeGate(),
 		config:      cfg,
 		metrics:     metrics,
+		audit:       auditLogger,
 	}
 
 	if wd, err := os.Getwd(); err == nil {
@@ -293,6 +471,8 @@ func (p *Proxy) acceptConnections() {
 func (p *Proxy) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
+	remoteAddr := conn.RemoteAddr().String()
+
 	// Track concurrent requests
 	p.metrics.queueDepth.Inc()
 	defer p.metrics.queueDepth.Dec()
@@ -310,6 +490,9 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	cred, err := extractPeerCredentials(conn)
 	if err != nil {
 		log.Warn().Err(err).Msg("Peer credentials unavailable")
+		if p.audit != nil {
+			p.audit.LogConnectionDenied("", nil, remoteAddr, "peer_credentials_unavailable")
+		}
 		p.sendErrorV2(conn, "unauthorized", "")
 		return
 	}
@@ -320,22 +503,45 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 			Uint32("uid", cred.uid).
 			Uint32("gid", cred.gid).
 			Msg("Peer authorization failed")
+		if p.audit != nil {
+			p.audit.LogConnectionDenied("", cred, remoteAddr, err.Error())
+		}
 		p.sendErrorV2(conn, "unauthorized", "")
 		return
 	}
 
+	if p.audit != nil {
+		p.audit.LogConnectionAccepted("", cred, remoteAddr)
+	}
+
 	// Check rate limit and concurrency
-	releaseLimiter, ok := p.rateLimiter.allow(peerID{uid: cred.uid, pid: cred.pid})
-	if !ok {
-		p.metrics.rateLimitHits.Inc()
+	peer := peerID{uid: cred.uid}
+	releaseLimiter, limitReason, allowed := p.rateLimiter.allow(peer)
+	if !allowed {
 		log.Warn().
 			Uint32("uid", cred.uid).
 			Uint32("pid", cred.pid).
+			Str("reason", limitReason).
 			Msg("Rate limit exceeded")
+		if p.audit != nil {
+			p.audit.LogRateLimitHit("", cred, remoteAddr, limitReason)
+		}
 		p.sendErrorV2(conn, "rate limit exceeded", "")
 		return
 	}
-	defer releaseLimiter()
+	releaseFn := releaseLimiter
+	defer func() {
+		if releaseFn != nil {
+			releaseFn()
+		}
+	}()
+	applyPenalty := func(reason string) {
+		if releaseFn != nil {
+			releaseFn()
+			releaseFn = nil
+		}
+		p.rateLimiter.penalize(peer, reason)
+	}
 
 	// Read request using newline-delimited framing
 	limited := &io.LimitedReader{R: conn, N: maxRequestBytes}
@@ -344,28 +550,48 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	line, err := reader.ReadBytes('\n')
 	if err != nil {
 		if errors.Is(err, bufio.ErrBufferFull) || limited.N <= 0 {
+			if p.audit != nil {
+				p.audit.LogValidationFailure("", cred, remoteAddr, "", nil, "payload_too_large")
+			}
 			p.sendErrorV2(conn, "payload too large", "")
+			applyPenalty("payload_too_large")
 			return
 		}
 		if errors.Is(err, io.EOF) {
+			if p.audit != nil {
+				p.audit.LogValidationFailure("", cred, remoteAddr, "", nil, "empty_request")
+			}
 			p.sendErrorV2(conn, "empty request", "")
+			applyPenalty("empty_request")
 			return
 		}
+		if p.audit != nil {
+			p.audit.LogValidationFailure("", cred, remoteAddr, "", nil, "read_error")
+		}
 		p.sendErrorV2(conn, "failed to read request", "")
+		applyPenalty("read_error")
 		return
 	}
 
 	// Trim whitespace and validate
 	line = bytes.TrimSpace(line)
 	if len(line) == 0 {
+		if p.audit != nil {
+			p.audit.LogValidationFailure("", cred, remoteAddr, "", nil, "empty_request")
+		}
 		p.sendErrorV2(conn, "empty request", "")
+		applyPenalty("empty_request")
 		return
 	}
 
 	// Parse JSON
 	var req RPCRequest
 	if err := json.Unmarshal(line, &req); err != nil {
+		if p.audit != nil {
+			p.audit.LogValidationFailure("", cred, remoteAddr, "", nil, "invalid_json")
+		}
 		p.sendErrorV2(conn, "invalid request format", "")
+		applyPenalty("invalid_json")
 		return
 	}
 
@@ -389,9 +615,13 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	// Find handler
 	handler := p.router[req.Method]
 	if handler == nil {
+		if p.audit != nil {
+			p.audit.LogValidationFailure(req.CorrelationID, cred, remoteAddr, req.Method, nil, "unknown_method")
+		}
 		resp.Error = "unknown method"
 		logger.Warn().Msg("Unknown method")
 		p.sendResponse(conn, resp)
+		applyPenalty("unknown_method")
 		return
 	}
 
@@ -407,15 +637,27 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 				Uint32("pid", cred.pid).
 				Str("corr_id", req.CorrelationID).
 				Msg("SECURITY: Container attempted to call privileged method - access denied")
+			if p.audit != nil {
+				p.audit.LogValidationFailure(req.CorrelationID, cred, remoteAddr, req.Method, nil, "privileged_method_denied")
+			}
 			p.sendResponse(conn, resp)
 			p.metrics.rpcRequests.WithLabelValues(req.Method, "unauthorized").Inc()
+			applyPenalty("privileged_method_denied")
 			return
 		}
 	}
 
+	if p.audit != nil {
+		p.audit.LogCommandStart(req.CorrelationID, cred, remoteAddr, "", req.Method, nil)
+	}
+
 	// Execute handler
 	result, err := handler(ctx, &req, logger)
+	duration := time.Since(startTime)
 	if err != nil {
+		if p.audit != nil {
+			p.audit.LogCommandResult(req.CorrelationID, cred, remoteAddr, "", req.Method, nil, 1, duration, "", "", err)
+		}
 		resp.Error = err.Error()
 		logger.Warn().Err(err).Msg("Handler failed")
 		// Clear read deadline and set write deadline for error response
@@ -431,6 +673,9 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	// Success
 	resp.Success = true
 	resp.Data = result
+	if p.audit != nil {
+		p.audit.LogCommandResult(req.CorrelationID, cred, remoteAddr, "", req.Method, nil, 0, duration, "", "", nil)
+	}
 	logger.Info().Msg("Request completed")
 
 	// Clear read deadline and set write deadline for response

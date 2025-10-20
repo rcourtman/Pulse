@@ -3914,11 +3914,14 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                 IS_RPI=true
             fi
 
+            TEMPERATURE_SETUP_SUCCESS=false
+
             # Install lm-sensors if not present (skip on Raspberry Pi)
             if ! command -v sensors &> /dev/null; then
                 if [ "$IS_RPI" = true ]; then
                     echo "  ℹ️  Raspberry Pi detected - using native RPi temperature interface"
                     echo "    Pulse will read temperature from /sys/class/thermal/thermal_zone0/temp"
+                    TEMPERATURE_SETUP_SUCCESS=true
                 else
                     echo "  ✓ Installing lm-sensors..."
 
@@ -3939,6 +3942,7 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                     if apt-get install -y lm-sensors > /dev/null 2>&1; then
                         sensors-detect --auto > /dev/null 2>&1 || true
                         echo "    ✓ lm-sensors installed successfully"
+                        TEMPERATURE_SETUP_SUCCESS=true
                     else
                         echo ""
                         echo "    ⚠️  Could not install lm-sensors"
@@ -3957,15 +3961,21 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
                 fi
             else
                 echo "  ✓ lm-sensors package verified"
+                TEMPERATURE_SETUP_SUCCESS=true
             fi
 
             echo ""
-            echo "✓ Temperature monitoring enabled"
-            if [ "$IS_RPI" = true ]; then
-                echo "  Using Raspberry Pi native temperature interface"
+            if [ "$TEMPERATURE_SETUP_SUCCESS" = true ]; then
+                echo "✓ Temperature monitoring enabled"
+                if [ "$IS_RPI" = true ]; then
+                    echo "  Using Raspberry Pi native temperature interface"
+                fi
+                echo "  Temperature data will appear in the dashboard within 10 seconds"
+                TEMPERATURE_ENABLED=true
+            else
+                echo "✗ Temperature monitoring could not be enabled"
+                echo "  Resolve the installation issues above and rerun this step."
             fi
-            echo "  Temperature data will appear in the dashboard within 10 seconds"
-            TEMPERATURE_ENABLED=true
 
             # Configure automatic ProxyJump if needed (for containerized Pulse)
             if [ "$CONFIGURE_PROXYJUMP" = true ] && [ -n "$PROXY_JUMP_HOST" ]; then

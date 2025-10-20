@@ -1,6 +1,6 @@
 #!/bin/bash
 # Dev Environment Orchestrator
-# Provides complete state detection and control for Claude Code
+# Provides complete state detection and control for development tools
 
 set -eo pipefail
 
@@ -239,7 +239,7 @@ cmd_status() {
         echo -e "  Built: $([ "$frontend_built" = "true" ] && echo -e "${GREEN}Yes${NC}" || echo -e "${RED}No${NC}")"
     fi
 
-    # JSON output for Claude
+    # JSON output for automation tools
     if [ "$1" = "--json" ]; then
         echo ""
         echo "$state"

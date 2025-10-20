@@ -65,6 +65,7 @@ AI_DEVELOPMENT.md
 scripts/pulse-watchdog.sh
 pulse-watchdog.log
 .mcp-servers/
+.codex/
 
 # Release process files
 CHANGELOG.md
@@ -131,6 +132,12 @@ MOCK_MODE_GUIDE.md
 # Sensitive files - DO NOT COMMIT
 secrets.env
 *secret*.env
+
+# Browser/session artifacts
+**/cookies.txt
+**/cookies-*.txt
+**/*.har
+**/*.browser
 
 # Development documentation (local only)
 CLAUDE_DEV_SETUP.md

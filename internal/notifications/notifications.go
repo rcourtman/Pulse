@@ -268,8 +268,9 @@ type AppriseConfig struct {
 
 // NewNotificationManager creates a new notification manager
 func NewNotificationManager(publicURL string) *NotificationManager {
-	if publicURL != "" {
-		log.Info().Str("publicURL", publicURL).Msg("NotificationManager initialized with public URL")
+	cleanURL := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+	if cleanURL != "" {
+		log.Info().Str("publicURL", cleanURL).Msg("NotificationManager initialized with public URL")
 	} else {
 		log.Info().Msg("NotificationManager initialized without public URL - webhook links may not work")
 	}
@@ -290,9 +291,34 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		groupByGuest:      false,
 		webhookHistory:    make([]WebhookDelivery, 0, WebhookHistoryMaxSize),
 		webhookRateLimits: make(map[string]*webhookRateLimit),
-		publicURL:         publicURL,
+		publicURL:         cleanURL,
 		appriseExec:       defaultAppriseExec,
 	}
+}
+
+// SetPublicURL updates the public URL used for webhook payloads.
+func (n *NotificationManager) SetPublicURL(publicURL string) {
+	trimmed := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+	if trimmed == "" {
+		return
+	}
+
+	n.mu.Lock()
+	if n.publicURL == trimmed {
+		n.mu.Unlock()
+		return
+	}
+	n.publicURL = trimmed
+	n.mu.Unlock()
+
+	log.Info().Str("publicURL", trimmed).Msg("NotificationManager public URL updated")
+}
+
+// GetPublicURL returns the configured public URL for notifications.
+func (n *NotificationManager) GetPublicURL() string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.publicURL
 }
 
 // SetEmailConfig updates email configuration

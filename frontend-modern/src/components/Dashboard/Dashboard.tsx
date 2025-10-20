@@ -1,4 +1,5 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import { useWebSocket } from '@/App';
@@ -28,6 +29,7 @@ type StatusMode = 'all' | 'running' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
 
 export function Dashboard(props: DashboardProps) {
+  const navigate = useNavigate();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
   const [search, setSearch] = createSignal('');
@@ -639,12 +641,7 @@ export function Dashboard(props: DashboardProps) {
             actions={
               <button
                 type="button"
-                onClick={() => {
-                  const settingsTab = document.querySelector(
-                    '[role="tab"]:last-child',
-                  ) as HTMLElement;
-                  settingsTab?.click();
-                }}
+                onClick={() => navigate('/settings')}
                 class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Go to Settings

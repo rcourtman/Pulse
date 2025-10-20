@@ -580,7 +580,10 @@ IMPORTANT: Keep these credentials secure!
                   </button>
                   <button
                     type="button"
-                    onClick={() => window.location.reload()}
+                    onClick={() => {
+                      const basePath = import.meta.env.BASE_URL || '/';
+                      window.location.assign(basePath);
+                    }}
                     class="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                   >
                     Continue to Login

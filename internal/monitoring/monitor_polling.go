@@ -56,8 +56,8 @@ func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 	return modelPool
 }
 
-// pollVMsWithNodesOptimized polls VMs from all nodes in parallel using goroutines
-func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
+// pollVMsWithNodes polls VMs from all nodes in parallel using goroutines
+func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	startTime := time.Now()
 
 	// Channel to collect VM results from each node
@@ -655,8 +655,8 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 		Msg("Parallel VM polling completed")
 }
 
-// pollContainersWithNodesOptimized polls containers from all nodes in parallel using goroutines
-func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
+// pollContainersWithNodes polls containers from all nodes in parallel using goroutines
+func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	startTime := time.Now()
 
 	// Channel to collect container results from each node
@@ -898,8 +898,8 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 		Msg("Parallel container polling completed")
 }
 
-// pollStorageWithNodesOptimized polls storage from all nodes in parallel using goroutines
-func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
+// pollStorageWithNodes polls storage from all nodes in parallel using goroutines
+func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	startTime := time.Now()
 
 	// Get cluster storage configuration first (single call)
@@ -1254,9 +1254,19 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 		}
 	}
 
-	// Check alerts for all storage devices
+	// Record metrics and check alerts for all storage devices
 	for _, storage := range allStorage {
-		m.alertManager.CheckStorage(storage)
+		if m.metricsHistory != nil {
+			timestamp := time.Now()
+			m.metricsHistory.AddStorageMetric(storage.ID, "usage", storage.Usage, timestamp)
+			m.metricsHistory.AddStorageMetric(storage.ID, "used", float64(storage.Used), timestamp)
+			m.metricsHistory.AddStorageMetric(storage.ID, "total", float64(storage.Total), timestamp)
+			m.metricsHistory.AddStorageMetric(storage.ID, "avail", float64(storage.Free), timestamp)
+		}
+
+		if m.alertManager != nil {
+			m.alertManager.CheckStorage(storage)
+		}
 	}
 
 	if !cephDetected {

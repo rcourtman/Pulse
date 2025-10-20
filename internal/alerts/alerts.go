@@ -766,7 +766,8 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		config.TimeThresholds = make(map[string]int)
 	}
 	ensureDelay := func(key string) {
-		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
+		delay, ok := config.TimeThresholds[key]
+		if !ok || delay < 0 {
 			config.TimeThresholds[key] = defaultDelaySeconds
 		}
 	}
@@ -774,7 +775,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	ensureDelay("node")
 	ensureDelay("storage")
 	ensureDelay("pbs")
-	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
+	if delay, ok := config.TimeThresholds["all"]; ok && delay < 0 {
 		config.TimeThresholds["all"] = defaultDelaySeconds
 	}
 	config.DockerIgnoredContainerPrefixes = NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
@@ -5299,7 +5300,7 @@ func (m *Manager) checkQuarantineMetric(pmg models.PMGInstance, metricType strin
 }
 
 // calculateTrimmedBaseline computes a robust baseline from historical samples
-// using trimmed mean with median fallback as specified by Codex
+// using trimmed mean with median fallback for statistical robustness
 func calculateTrimmedBaseline(samples []float64) (baseline float64, trustworthy bool) {
 	sampleCount := len(samples)
 
@@ -5488,7 +5489,7 @@ func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomaly
 		baseline = 1.0 // Treat as 1 for ratio math
 	}
 
-	// Determine thresholds based on Codex spec
+	// Determine warning and critical thresholds
 	var warnRatio, critRatio float64
 	var warnDelta, critDelta float64
 

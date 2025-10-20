@@ -16,15 +16,19 @@ const defaultMetricsAddr = "127.0.0.1:9127"
 
 // ProxyMetrics holds Prometheus metrics for the proxy
 type ProxyMetrics struct {
-	rpcRequests   *prometheus.CounterVec
-	rpcLatency    *prometheus.HistogramVec
-	sshRequests   *prometheus.CounterVec
-	sshLatency    *prometheus.HistogramVec
-	queueDepth    prometheus.Gauge
-	rateLimitHits prometheus.Counter
-	buildInfo     *prometheus.GaugeVec
-	server        *http.Server
-	registry      *prometheus.Registry
+	rpcRequests       *prometheus.CounterVec
+	rpcLatency        *prometheus.HistogramVec
+	sshRequests       *prometheus.CounterVec
+	sshLatency        *prometheus.HistogramVec
+	queueDepth        prometheus.Gauge
+	rateLimitHits     prometheus.Counter
+	limiterRejects    *prometheus.CounterVec
+	globalConcurrency prometheus.Gauge
+	limiterPenalties  *prometheus.CounterVec
+	limiterPeers      prometheus.Gauge
+	buildInfo         *prometheus.GaugeVec
+	server            *http.Server
+	registry          *prometheus.Registry
 }
 
 // NewProxyMetrics creates and registers all metrics
@@ -74,6 +78,32 @@ func NewProxyMetrics(version string) *ProxyMetrics {
 				Help: "Number of RPC requests rejected due to rate limiting.",
 			},
 		),
+		limiterRejects: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "pulse_proxy_limiter_rejections_total",
+				Help: "Limiter rejections by reason.",
+			},
+			[]string{"reason"},
+		),
+		globalConcurrency: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "pulse_proxy_global_concurrency_inflight",
+				Help: "Current global concurrency slots in use.",
+			},
+		),
+		limiterPenalties: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "pulse_proxy_limiter_penalties_total",
+				Help: "Penalty sleeps applied after validation failures.",
+			},
+			[]string{"reason"},
+		),
+		limiterPeers: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "pulse_proxy_limiter_active_peers",
+				Help: "Number of peers tracked by the rate limiter.",
+			},
+		),
 		buildInfo: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "pulse_proxy_build_info",
@@ -91,6 +121,10 @@ func NewProxyMetrics(version string) *ProxyMetrics {
 		pm.sshLatency,
 		pm.queueDepth,
 		pm.rateLimitHits,
+		pm.limiterRejects,
+		pm.globalConcurrency,
+		pm.limiterPenalties,
+		pm.limiterPeers,
 		pm.buildInfo,
 	)
 
@@ -164,4 +198,40 @@ func sanitizeNodeLabel(node string) string {
 	}
 
 	return out
+}
+
+func (m *ProxyMetrics) recordLimiterReject(reason string) {
+	if m == nil {
+		return
+	}
+	m.rateLimitHits.Inc()
+	m.limiterRejects.WithLabelValues(reason).Inc()
+}
+
+func (m *ProxyMetrics) incGlobalConcurrency() {
+	if m == nil {
+		return
+	}
+	m.globalConcurrency.Inc()
+}
+
+func (m *ProxyMetrics) decGlobalConcurrency() {
+	if m == nil {
+		return
+	}
+	m.globalConcurrency.Dec()
+}
+
+func (m *ProxyMetrics) recordPenalty(reason string) {
+	if m == nil {
+		return
+	}
+	m.limiterPenalties.WithLabelValues(reason).Inc()
+}
+
+func (m *ProxyMetrics) setLimiterPeers(count int) {
+	if m == nil {
+		return
+	}
+	m.limiterPeers.Set(float64(count))
 }
