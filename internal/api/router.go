@@ -2264,6 +2264,22 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 		DeploymentType: versionInfo.DeploymentType,
 	}
 
+	// Detect containerization (LXC/Docker)
+	if containerType, err := os.ReadFile("/run/systemd/container"); err == nil {
+		response.Containerized = true
+
+		// Try to get container ID from hostname (LXC containers often use CTID as hostname)
+		if hostname, err := os.Hostname(); err == nil {
+			// For LXC, try to extract numeric ID from hostname or use full hostname
+			response.ContainerId = hostname
+		}
+
+		// Add container type to deployment type if not already set
+		if response.DeploymentType == "" {
+			response.DeploymentType = string(containerType)
+		}
+	}
+
 	// Add cached update info if available
 	if cachedUpdate := r.updateManager.GetCachedUpdateInfo(); cachedUpdate != nil {
 		response.UpdateAvailable = cachedUpdate.Available
