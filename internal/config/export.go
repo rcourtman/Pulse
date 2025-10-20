@@ -71,7 +71,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		return "", fmt.Errorf("failed to load system settings: %w", err)
 	}
 	if systemSettings == nil {
-		systemSettings = &SystemSettings{}
+		systemSettings = DefaultSystemSettings()
 	}
 
 	oidcConfig, err := c.LoadOIDCConfig()

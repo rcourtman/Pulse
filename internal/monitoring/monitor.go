@@ -1915,7 +1915,15 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		if discoverySubnet == "" {
 			discoverySubnet = "auto"
 		}
-		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet)
+		cfgProvider := func() config.DiscoveryConfig {
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+			if m.config == nil {
+				return config.DefaultDiscoveryConfig()
+			}
+			return config.CloneDiscoveryConfig(m.config.Discovery)
+		}
+		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet, cfgProvider)
 		if m.discoveryService != nil {
 			m.discoveryService.Start(ctx)
 			log.Info().Msg("Discovery service initialized and started")
@@ -5444,7 +5452,16 @@ func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hu
 		subnet = "auto"
 	}
 
-	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, subnet)
+	cfgProvider := func() config.DiscoveryConfig {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		if m.config == nil {
+			return config.DefaultDiscoveryConfig()
+		}
+		return config.CloneDiscoveryConfig(m.config.Discovery)
+	}
+
+	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, subnet, cfgProvider)
 	if m.discoveryService != nil {
 		m.discoveryService.Start(ctx)
 		log.Info().Str("subnet", subnet).Msg("Discovery service started")

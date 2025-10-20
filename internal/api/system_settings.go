@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -152,6 +153,107 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 		}
 	}
 
+	if val, ok := rawRequest["discoveryConfig"]; ok {
+		cfgMap, ok := val.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("discoveryConfig must be an object")
+		}
+
+		if envVal, exists := cfgMap["environmentOverride"]; exists {
+			envStr, ok := envVal.(string)
+			if !ok {
+				return fmt.Errorf("discoveryConfig.environmentOverride must be a string")
+			}
+			if !config.IsValidDiscoveryEnvironment(envStr) {
+				return fmt.Errorf("invalid discovery environment override: %s", envStr)
+			}
+		}
+
+		if allowVal, exists := cfgMap["subnetAllowlist"]; exists {
+			items, ok := allowVal.([]interface{})
+			if !ok {
+				return fmt.Errorf("discoveryConfig.subnetAllowlist must be an array of CIDR strings")
+			}
+			for _, item := range items {
+				cidr, ok := item.(string)
+				if !ok {
+					return fmt.Errorf("discoveryConfig.subnetAllowlist entries must be strings")
+				}
+				if _, _, err := net.ParseCIDR(cidr); err != nil {
+					return fmt.Errorf("invalid CIDR in discoveryConfig.subnetAllowlist: %s", cidr)
+				}
+			}
+		}
+
+		if blockVal, exists := cfgMap["subnetBlocklist"]; exists {
+			items, ok := blockVal.([]interface{})
+			if !ok {
+				return fmt.Errorf("discoveryConfig.subnetBlocklist must be an array of CIDR strings")
+			}
+			for _, item := range items {
+				cidr, ok := item.(string)
+				if !ok {
+					return fmt.Errorf("discoveryConfig.subnetBlocklist entries must be strings")
+				}
+				if _, _, err := net.ParseCIDR(cidr); err != nil {
+					return fmt.Errorf("invalid CIDR in discoveryConfig.subnetBlocklist: %s", cidr)
+				}
+			}
+		}
+
+		if hostsVal, exists := cfgMap["maxHostsPerScan"]; exists {
+			value, ok := hostsVal.(float64)
+			if !ok {
+				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be a number")
+			}
+			if value <= 0 {
+				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be greater than zero")
+			}
+		}
+
+		if concurrentVal, exists := cfgMap["maxConcurrent"]; exists {
+			value, ok := concurrentVal.(float64)
+			if !ok {
+				return fmt.Errorf("discoveryConfig.maxConcurrent must be a number")
+			}
+			if value <= 0 || value > 1000 {
+				return fmt.Errorf("discoveryConfig.maxConcurrent must be between 1 and 1000")
+			}
+		}
+
+		if val, exists := cfgMap["enableReverseDns"]; exists {
+			if _, ok := val.(bool); !ok {
+				return fmt.Errorf("discoveryConfig.enableReverseDns must be a boolean")
+			}
+		}
+
+		if val, exists := cfgMap["scanGateways"]; exists {
+			if _, ok := val.(bool); !ok {
+				return fmt.Errorf("discoveryConfig.scanGateways must be a boolean")
+			}
+		}
+
+		if val, exists := cfgMap["dialTimeoutMs"]; exists {
+			timeout, ok := val.(float64)
+			if !ok {
+				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be a number")
+			}
+			if timeout <= 0 {
+				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be greater than zero")
+			}
+		}
+
+		if val, exists := cfgMap["httpTimeoutMs"]; exists {
+			timeout, ok := val.(float64)
+			if !ok {
+				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be a number")
+			}
+			if timeout <= 0 {
+				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be greater than zero")
+			}
+		}
+	}
+
 	// Validate connection timeout (min 1 second, max 5 minutes)
 	if val, ok := rawRequest["connectionTimeout"]; ok {
 		if timeout, ok := val.(float64); ok {
@@ -204,7 +306,10 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 	settings, err := h.persistence.LoadSystemSettings()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load system settings")
-		settings = &config.SystemSettings{}
+		settings = config.DefaultSystemSettings()
+	}
+	if settings == nil {
+		settings = config.DefaultSystemSettings()
 	}
 
 	// Log loaded settings for debugging
@@ -217,6 +322,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
 		enabled := h.config.EnableBackupPolling
 		settings.BackupPollingEnabled = &enabled
+		settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.config.Discovery)
 	}
 
 	// Include env override information
@@ -268,10 +374,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	existingSettings, err := h.persistence.LoadSystemSettings()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load existing settings")
-		existingSettings = &config.SystemSettings{}
+		existingSettings = config.DefaultSystemSettings()
 	}
 	if existingSettings == nil {
-		existingSettings = &config.SystemSettings{}
+		existingSettings = config.DefaultSystemSettings()
 	}
 
 	// Read the request body into a map to check which fields were provided
@@ -303,6 +409,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 
 	// Start with existing settings
 	settings := *existingSettings
+	discoveryConfigUpdated := false
 
 	// Only update fields that were provided in the request
 	// Note: PVE polling is hardcoded to 10s, legacy polling fields are ignored
@@ -335,6 +442,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if updates.DiscoverySubnet != "" {
 		settings.DiscoverySubnet = updates.DiscoverySubnet
+	}
+	if _, ok := rawRequest["discoveryConfig"]; ok {
+		settings.DiscoveryConfig = config.CloneDiscoveryConfig(updates.DiscoveryConfig)
+		discoveryConfigUpdated = true
 	}
 	// Allow clearing of AllowedEmbedOrigins by setting to empty string
 	if _, ok := rawRequest["allowedEmbedOrigins"]; ok {
@@ -401,6 +512,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.DiscoverySubnet != "" {
 		h.config.DiscoverySubnet = settings.DiscoverySubnet
 	}
+	h.config.Discovery = config.CloneDiscoveryConfig(settings.DiscoveryConfig)
 
 	// Start or stop discovery service based on setting change
 	if h.monitor != nil {
@@ -420,6 +532,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			// Subnet changed while discovery is enabled, update it
 			if svc := h.monitor.GetDiscoveryService(); svc != nil {
 				svc.SetSubnet(settings.DiscoverySubnet)
+			}
+		}
+		if discoveryConfigUpdated && settings.DiscoveryEnabled {
+			if svc := h.monitor.GetDiscoveryService(); svc != nil {
+				log.Info().Msg("Discovery configuration changed; triggering refresh")
+				svc.ForceRefresh()
 			}
 		}
 	}
