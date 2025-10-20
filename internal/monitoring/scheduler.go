@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -44,6 +45,9 @@ type IntervalRequest struct {
 	LastScheduled  time.Time
 	StalenessScore float64
 	ErrorCount     int
+	QueueDepth     int
+	InstanceKey    string
+	InstanceType   InstanceType
 }
 
 // InstanceDescriptor describes a monitored endpoint for scheduling purposes.
@@ -106,15 +110,15 @@ func NewAdaptiveScheduler(cfg SchedulerConfig, staleness StalenessSource, interv
 	if cfg.MaxInterval <= 0 || cfg.MaxInterval < cfg.MinInterval {
 		cfg.MaxInterval = DefaultSchedulerConfig().MaxInterval
 	}
-	if staleness == nil {
-		staleness = noopStalenessSource{}
-	}
-	if interval == nil {
-		interval = &fixedIntervalSelector{interval: cfg.BaseInterval}
-	}
-	if enqueuer == nil {
-		enqueuer = noopTaskEnqueuer{}
-	}
+    if staleness == nil {
+        staleness = noopStalenessSource{}
+    }
+    if interval == nil {
+        interval = newAdaptiveIntervalSelector(cfg)
+    }
+    if enqueuer == nil {
+        enqueuer = noopTaskEnqueuer{}
+    }
 
 	return &AdaptiveScheduler{
 		cfg:       cfg,
@@ -155,17 +159,20 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 			lastInterval = s.cfg.BaseInterval
 		}
 
-		req := IntervalRequest{
-			Now:            now,
-			BaseInterval:   s.cfg.BaseInterval,
-			MinInterval:    s.cfg.MinInterval,
-			MaxInterval:    s.cfg.MaxInterval,
-			LastInterval:   lastInterval,
-			LastSuccess:    inst.LastSuccess,
-			LastScheduled:  lastScheduled,
-			StalenessScore: score,
-			ErrorCount:     inst.ErrorCount,
-		}
+	req := IntervalRequest{
+		Now:            now,
+		BaseInterval:   s.cfg.BaseInterval,
+		MinInterval:    s.cfg.MinInterval,
+		MaxInterval:    s.cfg.MaxInterval,
+		LastInterval:   lastInterval,
+		LastSuccess:    inst.LastSuccess,
+		LastScheduled:  lastScheduled,
+		StalenessScore: score,
+		ErrorCount:     inst.ErrorCount,
+		QueueDepth:     len(inventory),
+		InstanceKey:    schedulerKey(inst.Type, inst.Name),
+		InstanceType:   inst.Type,
+	}
 
 		nextInterval := s.interval.SelectInterval(req)
 		if nextInterval <= 0 {
@@ -280,6 +287,117 @@ func (f *fixedIntervalSelector) SelectInterval(req IntervalRequest) time.Duratio
 		return f.interval
 	}
 	return req.BaseInterval
+}
+
+type adaptiveIntervalSelector struct {
+	mu             sync.Mutex
+	state          map[string]time.Duration
+	rng            *rand.Rand
+	alpha          float64
+	jitterFraction float64
+	queueStretch   float64
+	errorPenalty   float64
+}
+
+func newAdaptiveIntervalSelector(cfg SchedulerConfig) *adaptiveIntervalSelector {
+	return &adaptiveIntervalSelector{
+		state:          make(map[string]time.Duration),
+		rng:            rand.New(rand.NewSource(time.Now().UnixNano())),
+		alpha:          0.6,
+		jitterFraction: 0.05,
+		queueStretch:   0.1,
+		errorPenalty:   0.6,
+	}
+}
+
+func (a *adaptiveIntervalSelector) SelectInterval(req IntervalRequest) time.Duration {
+	min := req.MinInterval
+	max := req.MaxInterval
+	if max <= 0 || max < min {
+		max = min
+	}
+
+	score := clampFloat(req.StalenessScore, 0, 1)
+	span := float64(max - min)
+	target := time.Duration(float64(min) + span*(1-score))
+
+	if target < min {
+		target = min
+	}
+	if target > max {
+		target = max
+	}
+
+	if req.ErrorCount > 0 {
+		penalty := 1 + a.errorPenalty*float64(req.ErrorCount)
+		if penalty > 0 {
+			target = time.Duration(float64(target) / penalty)
+			if target < min {
+				target = min
+			}
+		}
+	}
+
+	if req.QueueDepth > 1 {
+		stretch := 1 + a.queueStretch*float64(req.QueueDepth-1)
+		target = time.Duration(float64(target) * stretch)
+		if target > max {
+			target = max
+		}
+	}
+
+	base := req.LastInterval
+	if base <= 0 {
+		base = req.BaseInterval
+	}
+
+	var smoothed time.Duration
+	key := req.InstanceKey
+	if key == "" {
+		key = string(req.InstanceType)
+	}
+
+	a.mu.Lock()
+	prev, ok := a.state[key]
+	if ok {
+		base = prev
+	}
+	smoothed = time.Duration(a.alpha*float64(target) + (1-a.alpha)*float64(base))
+	if smoothed < min {
+		smoothed = min
+	}
+	if smoothed > max {
+		smoothed = max
+	}
+	a.state[key] = smoothed
+	var jitter float64
+	if a.jitterFraction > 0 && smoothed > 0 {
+		jitter = (a.rng.Float64()*2 - 1) * a.jitterFraction
+	}
+	a.mu.Unlock()
+
+	if jitter != 0 {
+		smoothed = time.Duration(float64(smoothed) * (1 + jitter))
+	}
+
+	if smoothed < min {
+		smoothed = min
+	}
+	if smoothed > max {
+		smoothed = max
+	}
+
+	return smoothed
+}
+
+func clampFloat(v, min, max float64) float64 {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
 }
 
 type noopTaskEnqueuer struct{}
