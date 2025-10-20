@@ -199,7 +199,7 @@ else
         RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
         print_info "Fetching latest release info..."
         RELEASE_ERROR=$(mktemp)
-        RELEASE_DATA=$(curl -fsSL "$RELEASE_URL" 2>"$RELEASE_ERROR")
+        RELEASE_DATA=$(curl -fSL "$RELEASE_URL" 2>"$RELEASE_ERROR")
         CURL_EXIT=$?
         if [ $CURL_EXIT -ne 0 ] && [ -s "$RELEASE_ERROR" ]; then
             print_warn "Failed to fetch GitHub release info: $(cat "$RELEASE_ERROR")"
@@ -212,7 +212,7 @@ else
             DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
             print_info "Downloading $BINARY_NAME from GitHub..."
             DOWNLOAD_ERROR=$(mktemp)
-            if curl -fsSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp" 2>"$DOWNLOAD_ERROR"; then
+            if curl -fSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp" 2>"$DOWNLOAD_ERROR"; then
                 DOWNLOAD_SUCCESS=true
                 rm -f "$DOWNLOAD_ERROR"
             else
@@ -229,7 +229,7 @@ else
         FALLBACK_URL="${FALLBACK_BASE%/}?arch=${ARCH_LABEL}"
         print_info "Downloading $BINARY_NAME from Pulse server..."
         FALLBACK_ERROR=$(mktemp)
-        if curl -fsSL "$FALLBACK_URL" -o "$BINARY_PATH.tmp" 2>"$FALLBACK_ERROR"; then
+        if curl -fSL "$FALLBACK_URL" -o "$BINARY_PATH.tmp" 2>"$FALLBACK_ERROR"; then
             DOWNLOAD_SUCCESS=true
             rm -f "$FALLBACK_ERROR"
         else
