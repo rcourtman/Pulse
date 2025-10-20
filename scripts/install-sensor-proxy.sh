@@ -819,7 +819,7 @@ fi
 if [[ "$MOUNT_UPDATED" = true ]]; then
     print_info "Restarting container to activate secure communication..."
     if [[ "$CT_RUNNING" = true ]]; then
-        pct restart "$CTID"
+        pct stop "$CTID" && sleep 2 && pct start "$CTID"
     else
         pct start "$CTID"
     fi
