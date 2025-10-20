@@ -1,0 +1,17 @@
+# Bundle manifest format:
+#   output: <path/to/output.sh>
+#   <path/to/source1.sh>
+#   <path/to/source2.sh>
+#   ...
+# Lines beginning with # are comments and ignored.
+
+output: dist/common-example.sh
+scripts/lib/common.sh
+scripts/lib/systemd.sh
+scripts/lib/http.sh
+
+output: dist/install-docker-agent.sh
+scripts/lib/common.sh
+scripts/lib/systemd.sh
+scripts/lib/http.sh
+scripts/install-docker-agent-v2.sh
