@@ -918,8 +918,8 @@ fi
 
 # Configure Pulse backend environment override inside container
 print_info "Configuring Pulse to use proxy..."
-pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse-backend.service.d"
-pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse-backend.service.d/10-pulse-proxy.conf
+pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse.service.d"
+pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse.service.d/10-pulse-proxy.conf
 [Service]
 Environment=PULSE_SENSOR_PROXY_SOCKET=${MOUNT_TARGET}/pulse-sensor-proxy.sock
 EOF"
