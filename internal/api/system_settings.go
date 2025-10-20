@@ -58,6 +58,43 @@ func (h *SystemSettingsHandler) SetMonitor(m interface {
 	h.monitor = m
 }
 
+func firstValueForKeys(m map[string]interface{}, keys ...string) (interface{}, bool) {
+	for _, key := range keys {
+		if val, ok := m[key]; ok {
+			return val, true
+		}
+	}
+	return nil, false
+}
+
+func hasAnyKey(m map[string]interface{}, keys ...string) bool {
+	for _, key := range keys {
+		if _, ok := m[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func discoveryConfigMap(raw map[string]interface{}) (map[string]interface{}, bool) {
+	if raw == nil {
+		return nil, false
+	}
+	if val, ok := raw["discoveryConfig"]; ok {
+		if cfgMap, ok := val.(map[string]interface{}); ok {
+			return cfgMap, true
+		}
+		return nil, true
+	}
+	if val, ok := raw["discovery_config"]; ok {
+		if cfgMap, ok := val.(map[string]interface{}); ok {
+			return cfgMap, true
+		}
+		return nil, true
+	}
+	return nil, false
+}
+
 // validateSystemSettings validates settings before applying them
 func validateSystemSettings(settings *config.SystemSettings, rawRequest map[string]interface{}) error {
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
@@ -153,103 +190,102 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 		}
 	}
 
-	if val, ok := rawRequest["discoveryConfig"]; ok {
-		cfgMap, ok := val.(map[string]interface{})
-		if !ok {
+	if cfgMap, cfgProvided := discoveryConfigMap(rawRequest); cfgProvided {
+		if cfgMap == nil {
 			return fmt.Errorf("discoveryConfig must be an object")
 		}
 
-		if envVal, exists := cfgMap["environmentOverride"]; exists {
+		if envVal, exists := firstValueForKeys(cfgMap, "environment_override", "environmentOverride"); exists {
 			envStr, ok := envVal.(string)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.environmentOverride must be a string")
+				return fmt.Errorf("discoveryConfig.environment_override must be a string")
 			}
 			if !config.IsValidDiscoveryEnvironment(envStr) {
 				return fmt.Errorf("invalid discovery environment override: %s", envStr)
 			}
 		}
 
-		if allowVal, exists := cfgMap["subnetAllowlist"]; exists {
+		if allowVal, exists := firstValueForKeys(cfgMap, "subnet_allowlist", "subnetAllowlist"); exists {
 			items, ok := allowVal.([]interface{})
 			if !ok {
-				return fmt.Errorf("discoveryConfig.subnetAllowlist must be an array of CIDR strings")
+				return fmt.Errorf("discoveryConfig.subnet_allowlist must be an array of CIDR strings")
 			}
 			for _, item := range items {
 				cidr, ok := item.(string)
 				if !ok {
-					return fmt.Errorf("discoveryConfig.subnetAllowlist entries must be strings")
+					return fmt.Errorf("discoveryConfig.subnet_allowlist entries must be strings")
 				}
 				if _, _, err := net.ParseCIDR(cidr); err != nil {
-					return fmt.Errorf("invalid CIDR in discoveryConfig.subnetAllowlist: %s", cidr)
+					return fmt.Errorf("invalid CIDR in discoveryConfig.subnet_allowlist: %s", cidr)
 				}
 			}
 		}
 
-		if blockVal, exists := cfgMap["subnetBlocklist"]; exists {
+		if blockVal, exists := firstValueForKeys(cfgMap, "subnet_blocklist", "subnetBlocklist"); exists {
 			items, ok := blockVal.([]interface{})
 			if !ok {
-				return fmt.Errorf("discoveryConfig.subnetBlocklist must be an array of CIDR strings")
+				return fmt.Errorf("discoveryConfig.subnet_blocklist must be an array of CIDR strings")
 			}
 			for _, item := range items {
 				cidr, ok := item.(string)
 				if !ok {
-					return fmt.Errorf("discoveryConfig.subnetBlocklist entries must be strings")
+					return fmt.Errorf("discoveryConfig.subnet_blocklist entries must be strings")
 				}
 				if _, _, err := net.ParseCIDR(cidr); err != nil {
-					return fmt.Errorf("invalid CIDR in discoveryConfig.subnetBlocklist: %s", cidr)
+					return fmt.Errorf("invalid CIDR in discoveryConfig.subnet_blocklist: %s", cidr)
 				}
 			}
 		}
 
-		if hostsVal, exists := cfgMap["maxHostsPerScan"]; exists {
+		if hostsVal, exists := firstValueForKeys(cfgMap, "max_hosts_per_scan", "maxHostsPerScan"); exists {
 			value, ok := hostsVal.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be a number")
+				return fmt.Errorf("discoveryConfig.max_hosts_per_scan must be a number")
 			}
 			if value <= 0 {
-				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be greater than zero")
+				return fmt.Errorf("discoveryConfig.max_hosts_per_scan must be greater than zero")
 			}
 		}
 
-		if concurrentVal, exists := cfgMap["maxConcurrent"]; exists {
+		if concurrentVal, exists := firstValueForKeys(cfgMap, "max_concurrent", "maxConcurrent"); exists {
 			value, ok := concurrentVal.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.maxConcurrent must be a number")
+				return fmt.Errorf("discoveryConfig.max_concurrent must be a number")
 			}
 			if value <= 0 || value > 1000 {
-				return fmt.Errorf("discoveryConfig.maxConcurrent must be between 1 and 1000")
+				return fmt.Errorf("discoveryConfig.max_concurrent must be between 1 and 1000")
 			}
 		}
 
-		if val, exists := cfgMap["enableReverseDns"]; exists {
+		if val, exists := firstValueForKeys(cfgMap, "enable_reverse_dns", "enableReverseDns"); exists {
 			if _, ok := val.(bool); !ok {
-				return fmt.Errorf("discoveryConfig.enableReverseDns must be a boolean")
+				return fmt.Errorf("discoveryConfig.enable_reverse_dns must be a boolean")
 			}
 		}
 
-		if val, exists := cfgMap["scanGateways"]; exists {
+		if val, exists := firstValueForKeys(cfgMap, "scan_gateways", "scanGateways"); exists {
 			if _, ok := val.(bool); !ok {
-				return fmt.Errorf("discoveryConfig.scanGateways must be a boolean")
+				return fmt.Errorf("discoveryConfig.scan_gateways must be a boolean")
 			}
 		}
 
-		if val, exists := cfgMap["dialTimeoutMs"]; exists {
+		if val, exists := firstValueForKeys(cfgMap, "dial_timeout_ms", "dialTimeoutMs"); exists {
 			timeout, ok := val.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be a number")
+				return fmt.Errorf("discoveryConfig.dial_timeout_ms must be a number")
 			}
 			if timeout <= 0 {
-				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be greater than zero")
+				return fmt.Errorf("discoveryConfig.dial_timeout_ms must be greater than zero")
 			}
 		}
 
-		if val, exists := cfgMap["httpTimeoutMs"]; exists {
+		if val, exists := firstValueForKeys(cfgMap, "http_timeout_ms", "httpTimeoutMs"); exists {
 			timeout, ok := val.(float64)
 			if !ok {
-				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be a number")
+				return fmt.Errorf("discoveryConfig.http_timeout_ms must be a number")
 			}
 			if timeout <= 0 {
-				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be greater than zero")
+				return fmt.Errorf("discoveryConfig.http_timeout_ms must be greater than zero")
 			}
 		}
 	}
@@ -387,6 +423,13 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
+	// Provide backwards compatibility for clients sending discovery_config instead of discoveryConfig.
+	if rawCfg, ok := rawRequest["discovery_config"]; ok {
+		if _, exists := rawRequest["discoveryConfig"]; !exists {
+			rawRequest["discoveryConfig"] = rawCfg
+		}
+	}
+
 	// Convert the map back to JSON for decoding into struct
 	jsonBytes, err := json.Marshal(rawRequest)
 	if err != nil {
@@ -443,8 +486,38 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if updates.DiscoverySubnet != "" {
 		settings.DiscoverySubnet = updates.DiscoverySubnet
 	}
-	if _, ok := rawRequest["discoveryConfig"]; ok {
-		settings.DiscoveryConfig = config.CloneDiscoveryConfig(updates.DiscoveryConfig)
+	if cfgMap, ok := discoveryConfigMap(rawRequest); ok && cfgMap != nil {
+		current := config.CloneDiscoveryConfig(settings.DiscoveryConfig)
+
+		if hasAnyKey(cfgMap, "environment_override", "environmentOverride") {
+			current.EnvironmentOverride = updates.DiscoveryConfig.EnvironmentOverride
+		}
+		if hasAnyKey(cfgMap, "subnet_allowlist", "subnetAllowlist") {
+			current.SubnetAllowlist = append([]string(nil), updates.DiscoveryConfig.SubnetAllowlist...)
+		}
+		if hasAnyKey(cfgMap, "subnet_blocklist", "subnetBlocklist") {
+			current.SubnetBlocklist = append([]string(nil), updates.DiscoveryConfig.SubnetBlocklist...)
+		}
+		if hasAnyKey(cfgMap, "max_hosts_per_scan", "maxHostsPerScan") {
+			current.MaxHostsPerScan = updates.DiscoveryConfig.MaxHostsPerScan
+		}
+		if hasAnyKey(cfgMap, "max_concurrent", "maxConcurrent") {
+			current.MaxConcurrent = updates.DiscoveryConfig.MaxConcurrent
+		}
+		if hasAnyKey(cfgMap, "enable_reverse_dns", "enableReverseDns") {
+			current.EnableReverseDNS = updates.DiscoveryConfig.EnableReverseDNS
+		}
+		if hasAnyKey(cfgMap, "scan_gateways", "scanGateways") {
+			current.ScanGateways = updates.DiscoveryConfig.ScanGateways
+		}
+		if hasAnyKey(cfgMap, "dial_timeout_ms", "dialTimeoutMs") {
+			current.DialTimeout = updates.DiscoveryConfig.DialTimeout
+		}
+		if hasAnyKey(cfgMap, "http_timeout_ms", "httpTimeoutMs") {
+			current.HTTPTimeout = updates.DiscoveryConfig.HTTPTimeout
+		}
+
+		settings.DiscoveryConfig = config.NormalizeDiscoveryConfig(current)
 		discoveryConfigUpdated = true
 	}
 	// Allow clearing of AllowedEmbedOrigins by setting to empty string

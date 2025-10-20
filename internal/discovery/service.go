@@ -151,9 +151,9 @@ func (s *Service) performScan() {
 	scanCtx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
 	defer cancel()
 
-	cfg := config.DefaultDiscoveryConfig()
+	cfg := config.NormalizeDiscoveryConfig(config.DefaultDiscoveryConfig())
 	if s.cfgProvider != nil {
-		cfg = config.CloneDiscoveryConfig(s.cfgProvider())
+		cfg = config.NormalizeDiscoveryConfig(config.CloneDiscoveryConfig(s.cfgProvider()))
 	}
 
 	newScanner, err := BuildScanner(cfg)
@@ -165,8 +165,8 @@ func (s *Service) performScan() {
 	s.scanner = newScanner
 	s.mu.Unlock()
 
-	// Perform the scan with real-time callback
- result, err = newScanner.DiscoverServersWithCallback(scanCtx, s.subnet, func(server pkgdiscovery.DiscoveredServer, phase string) {
+	// Perform the scan with real-time callbacks
+	serverCallback := func(server pkgdiscovery.DiscoveredServer, phase string) {
 		// Send immediate update for each discovered server
 		if s.wsHub != nil {
 			s.wsHub.Broadcast(websocket.Message{
@@ -177,13 +177,28 @@ func (s *Service) performScan() {
 					"timestamp": time.Now().Unix(),
 				},
 			})
-			log.Info().
+			log.Debug().
 				Str("phase", phase).
 				Str("ip", server.IP).
 				Str("type", server.Type).
 				Msg("Broadcasting discovered server to clients")
 		}
-	})
+	}
+
+	progressCallback := func(progress pkgdiscovery.ScanProgress) {
+		// Send progress update via WebSocket
+		if s.wsHub != nil {
+			s.wsHub.Broadcast(websocket.Message{
+				Type: "discovery_progress",
+				Data: map[string]interface{}{
+					"progress":  progress,
+					"timestamp": time.Now().Unix(),
+				},
+			})
+		}
+	}
+
+	result, err = newScanner.DiscoverServersWithCallbacks(scanCtx, s.subnet, serverCallback, progressCallback)
 	if err != nil {
 		// Even if scan timed out, we might have partial results
 		if result == nil || (len(result.Servers) == 0 && !errors.Is(err, context.DeadlineExceeded)) {
@@ -219,10 +234,11 @@ func (s *Service) performScan() {
 		// Send final update via WebSocket with all servers
 		if s.wsHub != nil {
 			data := map[string]interface{}{
-				"servers":   result.Servers,
-				"errors":    result.Errors,
-				"scanning":  false,
-				"timestamp": time.Now().Unix(),
+				"servers":           result.Servers,
+				"errors":            result.Errors,            // Legacy format (deprecated)
+				"structured_errors": result.StructuredErrors, // New structured format
+				"scanning":          false,
+				"timestamp":         time.Now().Unix(),
 			}
 			if result.Environment != nil {
 				data["environment"] = result.Environment

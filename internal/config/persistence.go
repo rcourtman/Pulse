@@ -691,16 +691,16 @@ type SystemSettings struct {
 
 // DefaultSystemSettings returns a SystemSettings struct populated with sane defaults.
 func DefaultSystemSettings() *SystemSettings {
- 	defaultDiscovery := DefaultDiscoveryConfig()
- 	return &SystemSettings{
- 		PBSPollingInterval:    60,
- 		PMGPollingInterval:    60,
- 		AutoUpdateEnabled:     false,
- 		DiscoveryEnabled:      true,
- 		DiscoverySubnet:       "auto",
- 		DiscoveryConfig:       defaultDiscovery,
- 		AllowEmbedding:        false,
- 	}
+	defaultDiscovery := DefaultDiscoveryConfig()
+	return &SystemSettings{
+		PBSPollingInterval:  60,
+		PMGPollingInterval:  60,
+		AutoUpdateEnabled:   false,
+		DiscoveryEnabled:    true,
+		DiscoverySubnet:     "auto",
+		DiscoveryConfig:     defaultDiscovery,
+		AllowEmbedding:      false,
+	}
 }
 
 // SaveNodesConfig saves nodes configuration to file (encrypted)

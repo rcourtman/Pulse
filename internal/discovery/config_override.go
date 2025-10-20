@@ -13,6 +13,8 @@ import (
 
 // BuildScanner creates a discovery scanner configured using the supplied discovery config.
 func BuildScanner(cfg config.DiscoveryConfig) (*pkgdiscovery.Scanner, error) {
+    cfg = config.NormalizeDiscoveryConfig(cfg)
+
     profile, err := envdetect.DetectEnvironment()
     if err != nil {
         return nil, err
