@@ -23,6 +23,8 @@ type circuitBreaker struct {
 	maxDelay       time.Duration
 	openThreshold  int
 	halfOpenWindow time.Duration
+	stateSince      time.Time
+	lastTransition  time.Time
 }
 
 func newCircuitBreaker(openThreshold int, retryInterval, maxDelay, halfOpenWindow time.Duration) *circuitBreaker {
@@ -38,13 +40,16 @@ func newCircuitBreaker(openThreshold int, retryInterval, maxDelay, halfOpenWindo
 	if halfOpenWindow <= 0 {
 		halfOpenWindow = 30 * time.Second
 	}
-	return &circuitBreaker{
-		state:          breakerClosed,
-		retryInterval:  retryInterval,
-		maxDelay:       maxDelay,
-		openThreshold:  openThreshold,
-		halfOpenWindow: halfOpenWindow,
-	}
+    now := time.Now()
+    return &circuitBreaker{
+        state:          breakerClosed,
+        retryInterval:  retryInterval,
+        maxDelay:       maxDelay,
+        openThreshold:  openThreshold,
+        halfOpenWindow: halfOpenWindow,
+        stateSince:     now,
+        lastTransition: now,
+    }
 }
 
 func (b *circuitBreaker) allow(now time.Time) bool {
@@ -58,6 +63,8 @@ func (b *circuitBreaker) allow(now time.Time) bool {
 		if now.Sub(b.openedAt) >= b.retryInterval {
 			b.state = breakerHalfOpen
 			b.lastAttempt = now
+			b.stateSince = now
+			b.lastTransition = now
 			return true
 		}
 		return false
@@ -76,8 +83,11 @@ func (b *circuitBreaker) recordSuccess() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.state != breakerClosed {
+		now := time.Now()
 		b.state = breakerClosed
 		b.failureCount = 0
+		b.stateSince = now
+		b.lastTransition = now
 	}
 }
 
@@ -105,6 +115,8 @@ func (b *circuitBreaker) trip(now time.Time) {
 	}
 	b.retryInterval = delay
 	b.openedAt = now
+	b.stateSince = now
+	b.lastTransition = now
 }
 
 // BreakerSnapshot represents the current state of a circuit breaker.
@@ -118,6 +130,11 @@ type BreakerSnapshot struct {
 
 // State returns a snapshot of the circuit breaker state for API exposure.
 func (b *circuitBreaker) State() (state string, failures int, retryAt time.Time) {
+	state, failures, retryAt, _, _ = b.stateDetails()
+	return
+}
+
+func (b *circuitBreaker) stateDetails() (state string, failures int, retryAt time.Time, since time.Time, lastTransition time.Time) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -134,6 +151,5 @@ func (b *circuitBreaker) State() (state string, failures int, retryAt time.Time)
 		state = "unknown"
 	}
 
-	failures = b.failureCount
-	return
+	return state, b.failureCount, retryAt, b.stateSince, b.lastTransition
 }
