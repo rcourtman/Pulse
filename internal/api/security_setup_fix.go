@@ -156,15 +156,14 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 		log.Info().Msg("Runtime config updated with new security settings - active immediately")
 
-		// Save system settings to system.json
-		systemSettings := config.SystemSettings{
-			ConnectionTimeout: 10,    // Default
-			AutoUpdateEnabled: false, // Default
-		}
-		if err := r.persistence.SaveSystemSettings(systemSettings); err != nil {
-			log.Error().Err(err).Msg("Failed to save system settings")
-			// Continue anyway - not critical for auth setup
-		}
+	// Save system settings to system.json
+	systemSettings := config.DefaultSystemSettings()
+	systemSettings.ConnectionTimeout = 10    // Default seconds
+	systemSettings.AutoUpdateEnabled = false // Default disabled
+	if err := r.persistence.SaveSystemSettings(*systemSettings); err != nil {
+		log.Error().Err(err).Msg("Failed to save system settings")
+		// Continue anyway - not critical for auth setup
+	}
 
 		// Detect environment
 		isSystemd := os.Getenv("INVOCATION_ID") != ""

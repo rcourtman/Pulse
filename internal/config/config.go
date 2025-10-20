@@ -130,8 +130,9 @@ type Config struct {
 	AutoUpdateTime          string        `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
 
 	// Discovery settings
-	DiscoveryEnabled bool   `envconfig:"DISCOVERY_ENABLED" default:"true"`
-	DiscoverySubnet  string `envconfig:"DISCOVERY_SUBNET" default:"auto"`
+	DiscoveryEnabled bool            `envconfig:"DISCOVERY_ENABLED" default:"true"`
+	DiscoverySubnet  string          `envconfig:"DISCOVERY_SUBNET" default:"auto"`
+	Discovery        DiscoveryConfig `json:"discoveryConfig"`
 
 	// Deprecated - for backward compatibility
 	Port  int  `envconfig:"PORT"` // Maps to BackendPort
@@ -139,6 +140,71 @@ type Config struct {
 
 	// Track which settings are overridden by environment variables
 	EnvOverrides map[string]bool `json:"-"`
+}
+
+// DiscoveryConfig captures overrides for network discovery behaviour.
+type DiscoveryConfig struct {
+	EnvironmentOverride string   `json:"environmentOverride,omitempty"`
+	SubnetAllowlist     []string `json:"subnetAllowlist,omitempty"`
+	SubnetBlocklist     []string `json:"subnetBlocklist,omitempty"`
+	MaxHostsPerScan     int      `json:"maxHostsPerScan,omitempty"`
+	MaxConcurrent       int      `json:"maxConcurrent,omitempty"`
+	EnableReverseDNS    bool     `json:"enableReverseDns"`
+	ScanGateways        bool     `json:"scanGateways"`
+	DialTimeout         int      `json:"dialTimeoutMs,omitempty"`
+	HTTPTimeout         int      `json:"httpTimeoutMs,omitempty"`
+}
+
+// DefaultDiscoveryConfig returns opinionated defaults for discovery behaviour.
+func DefaultDiscoveryConfig() DiscoveryConfig {
+	return DiscoveryConfig{
+	EnvironmentOverride: "auto",
+		SubnetAllowlist:     []string{},
+		SubnetBlocklist:     []string{"169.254.0.0/16"},
+		MaxHostsPerScan:     1024,
+		MaxConcurrent:       50,
+		EnableReverseDNS:    true,
+		ScanGateways:        true,
+		DialTimeout:         1000,
+		HTTPTimeout:         2000,
+	}
+}
+
+// CloneDiscoveryConfig returns a deep copy of the provided discovery config.
+func CloneDiscoveryConfig(cfg DiscoveryConfig) DiscoveryConfig {
+	clone := cfg
+	if cfg.SubnetAllowlist != nil {
+		clone.SubnetAllowlist = append([]string(nil), cfg.SubnetAllowlist...)
+	}
+	if cfg.SubnetBlocklist != nil {
+		clone.SubnetBlocklist = append([]string(nil), cfg.SubnetBlocklist...)
+	}
+	return clone
+}
+
+// IsValidDiscoveryEnvironment reports whether the supplied override is recognised.
+func IsValidDiscoveryEnvironment(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "auto", "native", "docker_host", "docker_bridge", "lxc_privileged", "lxc_unprivileged":
+		return true
+	default:
+		return false
+	}
+}
+
+func splitAndTrim(value string) []string {
+	if value == "" {
+		return []string{}
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // PVEInstance represents a Proxmox VE connection
@@ -284,8 +350,10 @@ func Load() (*Config, error) {
 		DiscoveryEnabled:      true,
 		DiscoverySubnet:       "auto",
 		EnvOverrides:          make(map[string]bool),
-		OIDC:                  NewOIDCConfig(),
+	OIDC:                  NewOIDCConfig(),
 	}
+
+	cfg.Discovery = DefaultDiscoveryConfig()
 
 	// Initialize persistence
 	persistence := NewConfigPersistence(dataDir)
@@ -361,6 +429,7 @@ func Load() (*Config, error) {
 			if systemSettings.DiscoverySubnet != "" {
 				cfg.DiscoverySubnet = systemSettings.DiscoverySubnet
 			}
+			cfg.Discovery = CloneDiscoveryConfig(systemSettings.DiscoveryConfig)
 			// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
@@ -369,13 +438,11 @@ func Load() (*Config, error) {
 		} else {
 			// No system.json exists - create default one
 			log.Info().Msg("No system.json found, creating default")
-			defaultSettings := SystemSettings{
-				ConnectionTimeout: int(cfg.ConnectionTimeout.Seconds()),
-				AutoUpdateEnabled: false,
-			}
-			if err := persistence.SaveSystemSettings(defaultSettings); err != nil {
-				log.Warn().Err(err).Msg("Failed to create default system.json")
-			}
+		defaultSettings := DefaultSystemSettings()
+		defaultSettings.ConnectionTimeout = int(cfg.ConnectionTimeout.Seconds())
+		if err := persistence.SaveSystemSettings(*defaultSettings); err != nil {
+			log.Warn().Err(err).Msg("Failed to create default system.json")
+		}
 		}
 
 		if oidcSettings, err := persistence.LoadOIDCConfig(); err == nil && oidcSettings != nil {
@@ -741,6 +808,83 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["discoverySubnet"] = true
 		log.Info().Str("subnet", discoverySubnet).Msg("Discovery subnet overridden by DISCOVERY_SUBNET env var")
 	}
+	if envOverride := strings.TrimSpace(os.Getenv("DISCOVERY_ENVIRONMENT_OVERRIDE")); envOverride != "" {
+		if IsValidDiscoveryEnvironment(envOverride) {
+			cfg.Discovery.EnvironmentOverride = strings.ToLower(envOverride)
+			cfg.EnvOverrides["discoveryEnvironmentOverride"] = true
+			log.Info().Str("environment", cfg.Discovery.EnvironmentOverride).Msg("Discovery environment override set by DISCOVERY_ENVIRONMENT_OVERRIDE")
+		} else {
+			log.Warn().Str("value", envOverride).Msg("Ignoring invalid DISCOVERY_ENVIRONMENT_OVERRIDE value")
+		}
+	}
+	if allowlistEnv := strings.TrimSpace(os.Getenv("DISCOVERY_SUBNET_ALLOWLIST")); allowlistEnv != "" {
+		parts := splitAndTrim(allowlistEnv)
+		cfg.Discovery.SubnetAllowlist = parts
+		cfg.EnvOverrides["discoverySubnetAllowlist"] = true
+		log.Info().Int("allowlistCount", len(parts)).Msg("Discovery subnet allowlist overridden by DISCOVERY_SUBNET_ALLOWLIST")
+	}
+	if blocklistEnv := strings.TrimSpace(os.Getenv("DISCOVERY_SUBNET_BLOCKLIST")); blocklistEnv != "" {
+		parts := splitAndTrim(blocklistEnv)
+		cfg.Discovery.SubnetBlocklist = parts
+		cfg.EnvOverrides["discoverySubnetBlocklist"] = true
+		log.Info().Int("blocklistCount", len(parts)).Msg("Discovery subnet blocklist overridden by DISCOVERY_SUBNET_BLOCKLIST")
+	}
+	if maxHostsEnv := strings.TrimSpace(os.Getenv("DISCOVERY_MAX_HOSTS_PER_SCAN")); maxHostsEnv != "" {
+		if v, err := strconv.Atoi(maxHostsEnv); err == nil && v > 0 {
+			cfg.Discovery.MaxHostsPerScan = v
+			cfg.EnvOverrides["discoveryMaxHostsPerScan"] = true
+			log.Info().Int("maxHostsPerScan", v).Msg("Discovery max hosts per scan overridden by DISCOVERY_MAX_HOSTS_PER_SCAN")
+		} else {
+			log.Warn().Str("value", maxHostsEnv).Msg("Ignoring invalid DISCOVERY_MAX_HOSTS_PER_SCAN value")
+		}
+	}
+	if maxConcurrentEnv := strings.TrimSpace(os.Getenv("DISCOVERY_MAX_CONCURRENT")); maxConcurrentEnv != "" {
+		if v, err := strconv.Atoi(maxConcurrentEnv); err == nil && v > 0 {
+			cfg.Discovery.MaxConcurrent = v
+			cfg.EnvOverrides["discoveryMaxConcurrent"] = true
+			log.Info().Int("maxConcurrent", v).Msg("Discovery concurrency overridden by DISCOVERY_MAX_CONCURRENT")
+		} else {
+			log.Warn().Str("value", maxConcurrentEnv).Msg("Ignoring invalid DISCOVERY_MAX_CONCURRENT value")
+		}
+	}
+	if reverseDNSEnv := strings.TrimSpace(os.Getenv("DISCOVERY_ENABLE_REVERSE_DNS")); reverseDNSEnv != "" {
+		switch strings.ToLower(reverseDNSEnv) {
+		case "0", "false", "no", "off":
+			cfg.Discovery.EnableReverseDNS = false
+		default:
+			cfg.Discovery.EnableReverseDNS = true
+		}
+		cfg.EnvOverrides["discoveryEnableReverseDns"] = true
+		log.Info().Bool("enableReverseDNS", cfg.Discovery.EnableReverseDNS).Msg("Discovery reverse DNS setting overridden by DISCOVERY_ENABLE_REVERSE_DNS")
+	}
+	if scanGatewaysEnv := strings.TrimSpace(os.Getenv("DISCOVERY_SCAN_GATEWAYS")); scanGatewaysEnv != "" {
+		switch strings.ToLower(scanGatewaysEnv) {
+		case "0", "false", "no", "off":
+			cfg.Discovery.ScanGateways = false
+		default:
+			cfg.Discovery.ScanGateways = true
+		}
+		cfg.EnvOverrides["discoveryScanGateways"] = true
+		log.Info().Bool("scanGateways", cfg.Discovery.ScanGateways).Msg("Discovery gateway scanning overridden by DISCOVERY_SCAN_GATEWAYS")
+	}
+	if dialTimeoutEnv := strings.TrimSpace(os.Getenv("DISCOVERY_DIAL_TIMEOUT_MS")); dialTimeoutEnv != "" {
+		if v, err := strconv.Atoi(dialTimeoutEnv); err == nil && v > 0 {
+			cfg.Discovery.DialTimeout = v
+			cfg.EnvOverrides["discoveryDialTimeoutMs"] = true
+			log.Info().Int("dialTimeoutMs", v).Msg("Discovery dial timeout overridden by DISCOVERY_DIAL_TIMEOUT_MS")
+		} else {
+			log.Warn().Str("value", dialTimeoutEnv).Msg("Ignoring invalid DISCOVERY_DIAL_TIMEOUT_MS value")
+		}
+	}
+	if httpTimeoutEnv := strings.TrimSpace(os.Getenv("DISCOVERY_HTTP_TIMEOUT_MS")); httpTimeoutEnv != "" {
+		if v, err := strconv.Atoi(httpTimeoutEnv); err == nil && v > 0 {
+			cfg.Discovery.HTTPTimeout = v
+			cfg.EnvOverrides["discoveryHttpTimeoutMs"] = true
+			log.Info().Int("httpTimeoutMs", v).Msg("Discovery HTTP timeout overridden by DISCOVERY_HTTP_TIMEOUT_MS")
+		} else {
+			log.Warn().Str("value", httpTimeoutEnv).Msg("Ignoring invalid DISCOVERY_HTTP_TIMEOUT_MS value")
+		}
+	}
 	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
 		cfg.LogLevel = logLevel
 		cfg.EnvOverrides["logLevel"] = true
@@ -820,6 +964,7 @@ func SaveConfig(cfg *Config) error {
 		LogLevel:                      cfg.LogLevel,
 		DiscoveryEnabled:              cfg.DiscoveryEnabled,
 		DiscoverySubnet:               cfg.DiscoverySubnet,
+		DiscoveryConfig:               CloneDiscoveryConfig(cfg.Discovery),
 		AdaptivePollingEnabled:        &adaptiveEnabled,
 		AdaptivePollingBaseInterval:   int(cfg.AdaptivePollingBaseInterval / time.Second),
 		AdaptivePollingMinInterval:    int(cfg.AdaptivePollingMinInterval / time.Second),

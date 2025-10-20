@@ -423,10 +423,6 @@ func buildEnvironmentInfo(profile *envdetect.EnvironmentProfile) *EnvironmentInf
 func ensurePolicyDefaults(policy envdetect.ScanPolicy) envdetect.ScanPolicy {
 	defaults := envdetect.DefaultScanPolicy()
 
-	if policy == (envdetect.ScanPolicy{}) {
-		return defaults
-	}
-
 	if policy.MaxConcurrent <= 0 {
 		policy.MaxConcurrent = defaults.MaxConcurrent
 	}

@@ -682,10 +682,25 @@ type SystemSettings struct {
 	LogLevel                string `json:"logLevel,omitempty"`
 	DiscoveryEnabled        bool   `json:"discoveryEnabled"`
 	DiscoverySubnet         string `json:"discoverySubnet,omitempty"`
+	DiscoveryConfig         DiscoveryConfig `json:"discoveryConfig"`
 	Theme                   string `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
 	AllowEmbedding          bool   `json:"allowEmbedding"`                // Allow iframe embedding
 	AllowedEmbedOrigins     string `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
 	// APIToken removed - now handled via .env file only
+}
+
+// DefaultSystemSettings returns a SystemSettings struct populated with sane defaults.
+func DefaultSystemSettings() *SystemSettings {
+ 	defaultDiscovery := DefaultDiscoveryConfig()
+ 	return &SystemSettings{
+ 		PBSPollingInterval:    60,
+ 		PMGPollingInterval:    60,
+ 		AutoUpdateEnabled:     false,
+ 		DiscoveryEnabled:      true,
+ 		DiscoverySubnet:       "auto",
+ 		DiscoveryConfig:       defaultDiscovery,
+ 		AllowEmbedding:        false,
+ 	}
 }
 
 // SaveNodesConfig saves nodes configuration to file (encrypted)
@@ -1154,13 +1169,16 @@ func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 		return nil, err
 	}
 
-	var settings SystemSettings
-	if err := json.Unmarshal(data, &settings); err != nil {
+	settings := DefaultSystemSettings()
+	if settings == nil {
+		settings = &SystemSettings{}
+	}
+	if err := json.Unmarshal(data, settings); err != nil {
 		return nil, err
 	}
 
 	log.Info().Str("file", c.systemFile).Msg("System settings loaded")
-	return &settings, nil
+	return settings, nil
 }
 
 // updateEnvFile updates the .env file with new system settings

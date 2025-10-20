@@ -28,12 +28,15 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
+	discoveryinternal "github.com/rcourtman/pulse-go-rewrite/internal/discovery"
+	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
+
+const minProxyReadyVersion = "4.24.0"
 
 // SetupCode represents a one-time setup code for secure node registration
 type SetupCode struct {
@@ -2455,29 +2458,28 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 	persistedSettings, err := h.persistence.LoadSystemSettings()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load persisted system settings")
-		persistedSettings = &config.SystemSettings{}
+		persistedSettings = config.DefaultSystemSettings()
+	}
+	if persistedSettings == nil {
+		persistedSettings = config.DefaultSystemSettings()
 	}
 
 	// Get current values from running config
-	settings := config.SystemSettings{
-		// Note: PVE polling is hardcoded to 10s
-		PBSPollingInterval:      int(h.config.PBSPollingInterval.Seconds()),
-		BackupPollingInterval:   int(h.config.BackupPollingInterval.Seconds()),
-		BackendPort:             h.config.BackendPort,
-		FrontendPort:            h.config.FrontendPort,
-		AllowedOrigins:          h.config.AllowedOrigins,
-		ConnectionTimeout:       int(h.config.ConnectionTimeout.Seconds()),
-		UpdateChannel:           h.config.UpdateChannel,
-		AutoUpdateEnabled:       h.config.AutoUpdateEnabled,
-		AutoUpdateCheckInterval: int(h.config.AutoUpdateCheckInterval.Hours()),
-		AutoUpdateTime:          h.config.AutoUpdateTime,
-		LogLevel:                h.config.LogLevel,                     // Include log level
-		Theme:                   persistedSettings.Theme,               // Include theme from persisted settings
-		AllowEmbedding:          persistedSettings.AllowEmbedding,      // Include allowEmbedding from persisted settings
-		AllowedEmbedOrigins:     persistedSettings.AllowedEmbedOrigins, // Include allowedEmbedOrigins from persisted settings
-		DiscoveryEnabled:        persistedSettings.DiscoveryEnabled,    // Include discoveryEnabled from persisted settings
-		DiscoverySubnet:         persistedSettings.DiscoverySubnet,     // Include discoverySubnet from persisted settings
-	}
+	settings := *persistedSettings
+	settings.PBSPollingInterval = int(h.config.PBSPollingInterval.Seconds())
+	settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
+	settings.BackendPort = h.config.BackendPort
+	settings.FrontendPort = h.config.FrontendPort
+	settings.AllowedOrigins = h.config.AllowedOrigins
+	settings.ConnectionTimeout = int(h.config.ConnectionTimeout.Seconds())
+	settings.UpdateChannel = h.config.UpdateChannel
+	settings.AutoUpdateEnabled = h.config.AutoUpdateEnabled
+	settings.AutoUpdateCheckInterval = int(h.config.AutoUpdateCheckInterval.Hours())
+	settings.AutoUpdateTime = h.config.AutoUpdateTime
+	settings.LogLevel = h.config.LogLevel
+	settings.DiscoveryEnabled = h.config.DiscoveryEnabled
+	settings.DiscoverySubnet = h.config.DiscoverySubnet
+	settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.config.Discovery)
 	backupEnabled := h.config.EnableBackupPolling
 	settings.BackupPollingEnabled = &backupEnabled
 
@@ -2927,7 +2929,11 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 
 		log.Info().Str("subnet", subnet).Msg("Starting manual discovery scan")
 
-		scanner := discovery.NewScanner()
+		scanner, buildErr := discoveryinternal.BuildScanner(h.config.Discovery)
+		if buildErr != nil {
+			log.Warn().Err(buildErr).Msg("Falling back to default scanner for manual discovery")
+			scanner = pkgdiscovery.NewScanner()
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
@@ -3594,6 +3600,40 @@ SSH_SENSORS_PUBLIC_KEY="%s"
 SSH_PROXY_KEY_ENTRY="restrict,permitopen=\"*:22\" $SSH_PROXY_PUBLIC_KEY # pulse-proxyjump"
 SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"
 TEMPERATURE_ENABLED=false
+TEMP_MONITORING_AVAILABLE=true
+MIN_PROXY_VERSION="%s"
+PULSE_VERSION_ENDPOINT="%s/api/version"
+
+version_ge() {
+    if command -v dpkg >/dev/null 2>&1; then
+        dpkg --compare-versions "$1" ge "$2"
+        return $?
+    fi
+    if command -v sort >/dev/null 2>&1; then
+        [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
+        return $?
+    fi
+    [ "$1" = "$2" ]
+}
+
+PULSE_VERSION=$(curl -s -f "$PULSE_VERSION_ENDPOINT" 2>/dev/null | awk -F'"' '/"version":/{print $4}' | head -n1)
+if [ -z "$PULSE_VERSION" ]; then
+    echo ""
+    echo "⚠️  Could not determine Pulse version from $PULSE_VERSION_ENDPOINT"
+    echo "    Temperature proxy requires Pulse $MIN_PROXY_VERSION or later."
+    TEMP_MONITORING_AVAILABLE=false
+elif ! version_ge "$PULSE_VERSION" "$MIN_PROXY_VERSION"; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "⚠️  Pulse upgrade required for temperature proxy"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Detected Pulse version: $PULSE_VERSION"
+    echo "Minimum required version: $MIN_PROXY_VERSION"
+    echo ""
+    echo "Please upgrade the Pulse container before rerunning this setup script."
+    echo ""
+    TEMP_MONITORING_AVAILABLE=false
+fi
 
 # Check if temperature proxy is available and override SSH key if it is
 PROXY_KEY_URL="%s/api/system/proxy-public-key"
@@ -3640,11 +3680,10 @@ if command -v pct >/dev/null 2>&1; then
     fi
 fi
 
-# Track whether temperature monitoring can work
-TEMP_MONITORING_AVAILABLE=true
+# Track whether temperature monitoring can work (may be disabled by checks above)
 
 # If Pulse is containerized, try to install proxy automatically
-if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
+if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
     # Try automatic installation - proxy keeps SSH credentials on the host for security
     if true; then
         # Download installer script from Pulse server
@@ -3677,42 +3716,91 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
                     echo "✓ Secure proxy architecture enabled"
                     echo "  SSH keys are managed on the host for enhanced security"
                     echo ""
+                else
+                    echo ""
+                    echo "⚠️  pulse-sensor-proxy service is not active. Check logs with:"
+                    echo "    journalctl -u pulse-sensor-proxy -n 40"
+                    TEMP_MONITORING_AVAILABLE=false
                 fi
 
-                # Configure socket bind mount and restart container automatically
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "Finalizing Setup"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo ""
-                echo "Configuring socket bind mount for container $PULSE_CTID..."
+                if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ ! -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]; then
+                    echo "  ✗ Proxy socket not found at /run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+                    echo "    Check logs with: journalctl -u pulse-sensor-proxy -n 40"
+                    TEMP_MONITORING_AVAILABLE=false
+                fi
 
-                # Configure bind mount for proxy socket
-                pct set "$PULSE_CTID" -mp0 /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
-
-                # Check if container is currently running
-                if pct status "$PULSE_CTID" 2>/dev/null | grep -q "running"; then
+                if [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
+                    # Configure socket bind mount and restart container automatically
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "Finalizing Setup"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                     echo ""
-                    echo "⚠️  Container $PULSE_CTID is currently running."
-                    echo "    The proxy socket will be available after a restart."
-                    echo ""
-                    echo "    Restart manually when ready:"
-                    echo "      pct stop $PULSE_CTID && sleep 2 && pct start $PULSE_CTID"
-                    echo ""
-                    echo "    Or the socket may be hot-plugged automatically (LXC 4.0+)"
-                    echo ""
-                else
-                    echo "Container is stopped, starting it now..."
+                    echo "Configuring socket bind mount for container $PULSE_CTID..."
 
-                    # Set up trap to restart container even if script is interrupted
-                    trap "echo 'Starting container before exit...'; pct start $PULSE_CTID 2>/dev/null || true" EXIT INT TERM
+                    # Configure bind mount for proxy socket
+                    pct set "$PULSE_CTID" -mp0 /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
 
-                    pct start "$PULSE_CTID"
+                    CONTAINER_RESTARTED=false
+                    # Check if container is currently running
+                    if pct status "$PULSE_CTID" 2>/dev/null | grep -q "running"; then
+                        echo ""
+                        echo "⚠️  Container $PULSE_CTID must be restarted to expose the proxy socket."
+                        echo "Restart now? [Y/n]"
+                        printf "> "
+                        if [ -t 0 ]; then
+                            read -n 1 -r RESTART_REPLY
+                            echo ""
+                        else
+                            if read -n 1 -r RESTART_REPLY </dev/tty 2>/dev/null; then
+                                echo ""
+                            else
+                                RESTART_REPLY="n"
+                                echo "(No terminal available - skipping automatic restart)"
+                            fi
+                        fi
+                        RESTART_REPLY=${RESTART_REPLY:-Y}
+                        if [[ "$RESTART_REPLY" =~ ^[Yy]$ ]]; then
+                            echo ""
+                            echo "Restarting container $PULSE_CTID..."
+                            if pct stop "$PULSE_CTID" && sleep 2 && pct start "$PULSE_CTID"; then
+                                echo "  ✓ Container restarted"
+                                CONTAINER_RESTARTED=true
+                            else
+                                echo "  ✗ Failed to restart container automatically."
+                                echo "    Please run: pct stop $PULSE_CTID && sleep 2 && pct start $PULSE_CTID"
+                            fi
+                        else
+                            echo ""
+                            echo "Please restart manually when ready:"
+                            echo "  pct stop $PULSE_CTID && sleep 2 && pct start $PULSE_CTID"
+                        fi
+                    else
+                        echo "Container is stopped, starting it now..."
 
-                    # Clear the trap after successful start
-                    trap - EXIT INT TERM
+                        # Set up trap to restart container even if script is interrupted
+                        trap "echo 'Starting container before exit...'; pct start $PULSE_CTID 2>/dev/null || true" EXIT INT TERM
 
-                    echo "  ✓ Container started successfully"
-                    echo ""
+                        if pct start "$PULSE_CTID"; then
+                            CONTAINER_RESTARTED=true
+                            echo "  ✓ Container started successfully"
+                            echo ""
+                        else
+                            echo "  ✗ Failed to start container $PULSE_CTID automatically."
+                        fi
+
+                        # Clear the trap after successful start
+                        trap - EXIT INT TERM
+                    fi
+
+                    if [ "$CONTAINER_RESTARTED" = true ]; then
+                        if ! pct exec "$PULSE_CTID" -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock 2>/dev/null; then
+                            echo "  ✗ Proxy socket not visible inside the container (/mnt/pulse-proxy/pulse-sensor-proxy.sock)"
+                            echo "    Verify the bind mount and container restart completed successfully."
+                            TEMP_MONITORING_AVAILABLE=false
+                        fi
+                    else
+                        TEMP_MONITORING_AVAILABLE=false
+                    fi
                 fi
             else
                 echo ""
@@ -4326,7 +4414,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, tokenName)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash

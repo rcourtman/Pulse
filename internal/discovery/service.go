@@ -6,14 +6,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
+	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rs/zerolog/log"
 )
 
 // Service handles background network discovery
 type Service struct {
-	scanner    *discovery.Scanner
+	scanner    *pkgdiscovery.Scanner
 	wsHub      *websocket.Hub
 	cache      *DiscoveryCache
 	interval   time.Duration
@@ -23,17 +24,18 @@ type Service struct {
 	isScanning bool
 	stopChan   chan struct{}
 	ctx        context.Context
+	cfgProvider func() config.DiscoveryConfig
 }
 
 // DiscoveryCache stores the latest discovery results
 type DiscoveryCache struct {
 	mu      sync.RWMutex
-	result  *discovery.DiscoveryResult
+	result  *pkgdiscovery.DiscoveryResult
 	updated time.Time
 }
 
 // NewService creates a new discovery service
-func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string) *Service {
+func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfgProvider func() config.DiscoveryConfig) *Service {
 	if interval == 0 {
 		interval = 5 * time.Minute // Default to 5 minutes
 	}
@@ -41,13 +43,18 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string) *Se
 		subnet = "auto"
 	}
 
+	if cfgProvider == nil {
+		cfgProvider = func() config.DiscoveryConfig { return config.DefaultDiscoveryConfig() }
+	}
+
 	return &Service{
-		scanner:  discovery.NewScanner(),
+		scanner:  pkgdiscovery.NewScanner(),
 		wsHub:    wsHub,
 		cache:    &DiscoveryCache{},
 		interval: interval,
 		subnet:   subnet,
 		stopChan: make(chan struct{}),
+		cfgProvider: cfgProvider,
 	}
 }
 
@@ -101,7 +108,7 @@ func (s *Service) performScan() {
 	s.isScanning = true
 	s.mu.Unlock()
 
-	var result *discovery.DiscoveryResult
+	var result *pkgdiscovery.DiscoveryResult
 
 	defer func() {
 		s.mu.Lock()
@@ -144,14 +151,22 @@ func (s *Service) performScan() {
 	scanCtx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
 	defer cancel()
 
-	// Refresh scanner to ensure environment detection stays current
-	newScanner := discovery.NewScanner()
+	cfg := config.DefaultDiscoveryConfig()
+	if s.cfgProvider != nil {
+		cfg = config.CloneDiscoveryConfig(s.cfgProvider())
+	}
+
+	newScanner, err := BuildScanner(cfg)
+	if err != nil {
+		log.Warn().Err(err).Msg("Environment detection failed during discovery; falling back to default scanner configuration")
+		newScanner = pkgdiscovery.NewScanner()
+	}
 	s.mu.Lock()
 	s.scanner = newScanner
 	s.mu.Unlock()
 
 	// Perform the scan with real-time callback
-	result, err = newScanner.DiscoverServersWithCallback(scanCtx, s.subnet, func(server discovery.DiscoveredServer, phase string) {
+ result, err = newScanner.DiscoverServersWithCallback(scanCtx, s.subnet, func(server pkgdiscovery.DiscoveredServer, phase string) {
 		// Send immediate update for each discovered server
 		if s.wsHub != nil {
 			s.wsHub.Broadcast(websocket.Message{
@@ -221,15 +236,15 @@ func (s *Service) performScan() {
 }
 
 // GetCachedResult returns the cached discovery result
-func (s *Service) GetCachedResult() (*discovery.DiscoveryResult, time.Time) {
+func (s *Service) GetCachedResult() (*pkgdiscovery.DiscoveryResult, time.Time) {
 	s.cache.mu.RLock()
 	defer s.cache.mu.RUnlock()
 
-	if s.cache.result == nil {
-		return &discovery.DiscoveryResult{
-			Servers: []discovery.DiscoveredServer{},
-			Errors:  []string{},
-		}, time.Time{}
+ if s.cache.result == nil {
+ 	return &pkgdiscovery.DiscoveryResult{
+ 		Servers: []pkgdiscovery.DiscoveredServer{},
+ 		Errors:  []string{},
+ 	}, time.Time{}
 	}
 
 	return s.cache.result, s.cache.updated
