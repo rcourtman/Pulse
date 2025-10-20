@@ -117,20 +117,29 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 		return nil
 	}
 
+	queueDepth := 0
+	if m.taskQueue != nil {
+		queueDepth = m.taskQueue.Size()
+	}
+
 	if m.scheduler == nil {
 		tasks := make([]ScheduledTask, 0, len(descriptors))
+		interval := m.config.AdaptivePollingBaseInterval
+		if interval <= 0 {
+			interval = DefaultSchedulerConfig().BaseInterval
+		}
 		for _, desc := range descriptors {
 			tasks = append(tasks, ScheduledTask{
 				InstanceName: desc.Name,
 				InstanceType: desc.Type,
 				NextRun:      now,
-				Interval:     DefaultSchedulerConfig().BaseInterval,
+				Interval:     interval,
 			})
 		}
 		return tasks
 	}
 
-	return m.scheduler.BuildPlan(now, descriptors)
+	return m.scheduler.BuildPlan(now, descriptors, queueDepth)
 }
 
 // convertPoolInfoToModel converts Proxmox ZFS pool info to our model

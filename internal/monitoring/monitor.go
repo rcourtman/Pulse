@@ -258,6 +258,7 @@ type Monitor struct {
 	pollMetrics          *PollMetrics
 	scheduler            *AdaptiveScheduler
 	stalenessTracker     *StalenessTracker
+	taskQueue            *TaskQueue
 	tempCollector        *TemperatureCollector // SSH-based temperature collector
 	mu                   sync.RWMutex
 	startTime            time.Time
@@ -1317,6 +1318,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 
 	stalenessTracker := NewStalenessTracker(getPollMetrics())
 	stalenessTracker.SetBounds(cfg.AdaptivePollingBaseInterval, cfg.AdaptivePollingMaxInterval)
+	taskQueue := NewTaskQueue()
 
 	var scheduler *AdaptiveScheduler
 	if cfg.AdaptivePollingEnabled {
@@ -1336,6 +1338,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pollMetrics:          getPollMetrics(),
 		scheduler:            scheduler,
 		stalenessTracker:     stalenessTracker,
+		taskQueue:            taskQueue,
 		tempCollector:        tempCollector,
 		startTime:            time.Now(),
 		rateTracker:          NewRateTracker(),
@@ -1691,8 +1694,12 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 	// Create separate tickers for polling and broadcasting
 	// Hardcoded to 10 seconds since Proxmox updates cluster/resources every 10 seconds
-	const pollingInterval = 10 * time.Second
-	pollTicker := time.NewTicker(pollingInterval)
+const pollingInterval = 10 * time.Second
+
+workerCount := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
+m.startTaskWorkers(ctx, workerCount)
+
+pollTicker := time.NewTicker(pollingInterval)
 	defer pollTicker.Stop()
 
 	broadcastTicker := time.NewTicker(pollingInterval)
@@ -1934,24 +1941,10 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 	now := startTime
 
 	plannedTasks := m.buildScheduledTasks(now)
-	dueTasks := plannedTasks
-	if m.scheduler != nil {
-		due := m.scheduler.DispatchDue(ctx, now, plannedTasks)
-		if len(due) > 0 {
-			dueTasks = due
-		}
+	for _, task := range plannedTasks {
+		m.taskQueue.Upsert(task)
 	}
-
-	if m.pollMetrics != nil {
-		m.pollMetrics.ResetQueueDepth(len(dueTasks))
-	}
-
-	if m.config.ConcurrentPolling {
-		// Use concurrent polling
-		m.pollConcurrent(ctx, dueTasks)
-	} else {
-		m.pollSequential(ctx, dueTasks)
-	}
+	m.updateQueueDepthMetric()
 
 	// Update performance metrics
 	m.state.Performance.LastPollDuration = time.Since(startTime).Seconds()
@@ -2088,99 +2081,126 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 	return cleared
 }
 
-// pollConcurrent polls instances concurrently based on scheduled tasks.
-func (m *Monitor) pollConcurrent(ctx context.Context, tasks []ScheduledTask) {
-	if len(tasks) == 0 {
+func (m *Monitor) startTaskWorkers(ctx context.Context, workers int) {
+	if m.taskQueue == nil {
 		return
 	}
-
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	for _, task := range tasks {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		switch task.InstanceType {
-		case InstanceTypePVE:
-			client, ok := m.pveClients[task.InstanceName]
-			if !ok || client == nil {
-				continue
-			}
-			wg.Add(1)
-			go func(name string, c PVEClientInterface) {
-				defer wg.Done()
-				m.pollPVEInstance(ctx, name, c)
-			}(task.InstanceName, client)
-		case InstanceTypePBS:
-			client, ok := m.pbsClients[task.InstanceName]
-			if !ok || client == nil {
-				continue
-			}
-			wg.Add(1)
-			go func(name string, c *pbs.Client) {
-				defer wg.Done()
-				m.pollPBSInstance(ctx, name, c)
-			}(task.InstanceName, client)
-		case InstanceTypePMG:
-			client, ok := m.pmgClients[task.InstanceName]
-			if !ok || client == nil {
-				continue
-			}
-			wg.Add(1)
-			go func(name string, c *pmg.Client) {
-				defer wg.Done()
-				m.pollPMGInstance(ctx, name, c)
-			}(task.InstanceName, client)
-		default:
-			log.Debug().Str("instance", task.InstanceName).Str("type", string(task.InstanceType)).Msg("Skipping unsupported task type")
-		}
+	if workers < 1 {
+		workers = 1
 	}
-
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-ctx.Done():
-		cancel()
-		wg.Wait()
+	if workers > 10 {
+		workers = 10
+	}
+	for i := 0; i < workers; i++ {
+		go m.taskWorker(ctx, i)
 	}
 }
 
-// pollSequential polls instances sequentially based on scheduled tasks.
-func (m *Monitor) pollSequential(ctx context.Context, tasks []ScheduledTask) {
-	for _, task := range tasks {
-		select {
-		case <-ctx.Done():
+func (m *Monitor) taskWorker(ctx context.Context, id int) {
+	log.Debug().Int("worker", id).Msg("Task worker started")
+	for {
+		task, ok := m.taskQueue.WaitNext(ctx)
+		if !ok {
+			log.Debug().Int("worker", id).Msg("Task worker stopping")
 			return
-		default:
 		}
 
-		switch task.InstanceType {
-		case InstanceTypePVE:
-			if client, ok := m.pveClients[task.InstanceName]; ok && client != nil {
-				m.pollPVEInstance(ctx, task.InstanceName, client)
+		m.executeScheduledTask(ctx, task)
+
+		m.rescheduleTask(task)
+		m.updateQueueDepthMetric()
+	}
+}
+
+func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) {
+	switch task.InstanceType {
+	case InstanceTypePVE:
+		client, ok := m.pveClients[task.InstanceName]
+		if !ok || client == nil {
+			log.Warn().Str("instance", task.InstanceName).Msg("PVE client missing for scheduled task")
+			return
+		}
+		m.pollPVEInstance(ctx, task.InstanceName, client)
+	case InstanceTypePBS:
+		client, ok := m.pbsClients[task.InstanceName]
+		if !ok || client == nil {
+			log.Warn().Str("instance", task.InstanceName).Msg("PBS client missing for scheduled task")
+			return
+		}
+		m.pollPBSInstance(ctx, task.InstanceName, client)
+	case InstanceTypePMG:
+		client, ok := m.pmgClients[task.InstanceName]
+		if !ok || client == nil {
+			log.Warn().Str("instance", task.InstanceName).Msg("PMG client missing for scheduled task")
+			return
+		}
+		m.pollPMGInstance(ctx, task.InstanceName, client)
+	default:
+		log.Debug().Str("instance", task.InstanceName).Str("type", string(task.InstanceType)).Msg("Skipping unsupported task type")
+	}
+}
+
+func (m *Monitor) rescheduleTask(task ScheduledTask) {
+	if m.taskQueue == nil {
+		return
+	}
+
+	if m.scheduler == nil {
+		nextInterval := task.Interval
+		if nextInterval <= 0 && m.config != nil {
+			nextInterval = m.config.AdaptivePollingBaseInterval
+		}
+		if nextInterval <= 0 {
+			nextInterval = DefaultSchedulerConfig().BaseInterval
+		}
+		next := task
+		next.NextRun = time.Now().Add(nextInterval)
+		next.Interval = nextInterval
+		m.taskQueue.Upsert(next)
+		return
+	}
+
+	desc := InstanceDescriptor{
+		Name:         task.InstanceName,
+		Type:         task.InstanceType,
+		LastInterval: task.Interval,
+		LastScheduled: task.NextRun,
+	}
+	if m.stalenessTracker != nil {
+		if snap, ok := m.stalenessTracker.snapshot(task.InstanceType, task.InstanceName); ok {
+			desc.LastSuccess = snap.LastSuccess
+			desc.LastFailure = snap.LastError
+			if snap.ChangeHash != "" {
+				desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
 			}
-		case InstanceTypePBS:
-			if client, ok := m.pbsClients[task.InstanceName]; ok && client != nil {
-				m.pollPBSInstance(ctx, task.InstanceName, client)
-			}
-		case InstanceTypePMG:
-			if client, ok := m.pmgClients[task.InstanceName]; ok && client != nil {
-				m.pollPMGInstance(ctx, task.InstanceName, client)
-			}
-		default:
-			log.Debug().Str("instance", task.InstanceName).Str("type", string(task.InstanceType)).Msg("Skipping unsupported task type")
 		}
 	}
+
+	tasks := m.scheduler.BuildPlan(time.Now(), []InstanceDescriptor{desc}, m.taskQueue.Size())
+	if len(tasks) == 0 {
+		next := task
+		nextInterval := task.Interval
+		if nextInterval <= 0 && m.config != nil {
+			nextInterval = m.config.AdaptivePollingBaseInterval
+		}
+		if nextInterval <= 0 {
+			nextInterval = DefaultSchedulerConfig().BaseInterval
+		}
+		next.Interval = nextInterval
+		next.NextRun = time.Now().Add(nextInterval)
+		m.taskQueue.Upsert(next)
+		return
+	}
+	for _, next := range tasks {
+		m.taskQueue.Upsert(next)
+	}
+}
+
+func (m *Monitor) updateQueueDepthMetric() {
+	if m.pollMetrics == nil || m.taskQueue == nil {
+		return
+	}
+	m.pollMetrics.SetQueueDepth(m.taskQueue.Size())
 }
 
 // pollPVEInstance polls a single PVE instance

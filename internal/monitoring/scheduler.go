@@ -130,7 +130,7 @@ func NewAdaptiveScheduler(cfg SchedulerConfig, staleness StalenessSource, interv
 }
 
 // BuildPlan produces an ordered set of scheduled tasks for the supplied inventory.
-func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescriptor) []ScheduledTask {
+func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int) []ScheduledTask {
 	if len(inventory) == 0 {
 		return nil
 	}
@@ -159,20 +159,21 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 			lastInterval = s.cfg.BaseInterval
 		}
 
-	req := IntervalRequest{
-		Now:            now,
-		BaseInterval:   s.cfg.BaseInterval,
-		MinInterval:    s.cfg.MinInterval,
-		MaxInterval:    s.cfg.MaxInterval,
-		LastInterval:   lastInterval,
-		LastSuccess:    inst.LastSuccess,
-		LastScheduled:  lastScheduled,
-		StalenessScore: score,
-		ErrorCount:     inst.ErrorCount,
-		QueueDepth:     len(inventory),
-		InstanceKey:    schedulerKey(inst.Type, inst.Name),
-		InstanceType:   inst.Type,
-	}
+		currentDepth := queueDepth + len(tasks)
+		req := IntervalRequest{
+			Now:            now,
+			BaseInterval:   s.cfg.BaseInterval,
+			MinInterval:    s.cfg.MinInterval,
+			MaxInterval:    s.cfg.MaxInterval,
+			LastInterval:   lastInterval,
+			LastSuccess:    inst.LastSuccess,
+			LastScheduled:  lastScheduled,
+			StalenessScore: score,
+			ErrorCount:     inst.ErrorCount,
+			QueueDepth:     currentDepth,
+			InstanceKey:    schedulerKey(inst.Type, inst.Name),
+			InstanceType:   inst.Type,
+		}
 
 		nextInterval := s.interval.SelectInterval(req)
 		if nextInterval <= 0 {
