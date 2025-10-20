@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 )
 
@@ -87,25 +86,24 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 		t.Fatalf("unexpected client error: %v", err)
 	}
 
-	mon := &Monitor{
-		config: &config.Config{
-			PMGInstances: []config.PMGInstance{
-				{
-					Name:               "primary",
-					Host:               server.URL,
-					User:               "api@pmg",
-					Password:           "secret",
-					MonitorMailStats:   true,
-					MonitorQueues:      true,
-					MonitorQuarantine:  true,
-					MonitorDomainStats: true,
-				},
+	cfg := &config.Config{
+		PMGInstances: []config.PMGInstance{
+			{
+				Name:               "primary",
+				Host:               server.URL,
+				User:               "api@pmg",
+				Password:           "secret",
+				MonitorMailStats:   true,
+				MonitorQueues:      true,
+				MonitorQuarantine:  true,
+				MonitorDomainStats: true,
 			},
 		},
-		state:            models.NewState(),
-		authFailures:     make(map[string]int),
-		lastAuthAttempt:  make(map[string]time.Time),
-		pbsBackupPollers: make(map[string]bool),
+	}
+
+	mon, err := New(cfg)
+	if err != nil {
+		t.Fatalf("failed to create monitor: %v", err)
 	}
 
 	mon.pollPMGInstance(context.Background(), "primary", client)
@@ -187,22 +185,21 @@ func TestPollPMGInstanceRecordsAuthFailures(t *testing.T) {
 		t.Fatalf("unexpected error creating token client: %v", err)
 	}
 
-	mon := &Monitor{
-		config: &config.Config{
-			PMGInstances: []config.PMGInstance{
-				{
-					Name:       "failing",
-					Host:       server.URL,
-					User:       "apitest@pmg",
-					TokenName:  "apitoken",
-					TokenValue: "secret",
-				},
+	cfg := &config.Config{
+		PMGInstances: []config.PMGInstance{
+			{
+				Name:       "failing",
+				Host:       server.URL,
+				User:       "apitest@pmg",
+				TokenName:  "apitoken",
+				TokenValue: "secret",
 			},
 		},
-		state:            models.NewState(),
-		authFailures:     make(map[string]int),
-		lastAuthAttempt:  make(map[string]time.Time),
-		pbsBackupPollers: make(map[string]bool),
+	}
+
+	mon, err := New(cfg)
+	if err != nil {
+		t.Fatalf("failed to create monitor: %v", err)
 	}
 
 	mon.pollPMGInstance(context.Background(), "failing", client)
