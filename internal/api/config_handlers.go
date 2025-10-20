@@ -3704,11 +3704,8 @@ if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true
             -o "$PROXY_INSTALLER" 2>/dev/null; then
             chmod +x "$PROXY_INSTALLER"
 
-            # Set fallback URL for installer to download binary from Pulse server
-            export PULSE_SENSOR_PROXY_FALLBACK_URL="%s/api/install/pulse-sensor-proxy"
-
-            # Run installer
-            INSTALL_OUTPUT=$("$PROXY_INSTALLER" --ctid "$PULSE_CTID" --quiet 2>&1)
+            # Run installer with Pulse server as fallback
+            INSTALL_OUTPUT=$("$PROXY_INSTALLER" --ctid "$PULSE_CTID" --pulse-server "%s" 2>&1)
             INSTALL_STATUS=$?
 
             if [ -n "$INSTALL_OUTPUT" ]; then
