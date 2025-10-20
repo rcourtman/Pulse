@@ -152,3 +152,65 @@ func (q *TaskQueue) Size() int {
 	defer q.mu.Unlock()
 	return len(q.heap)
 }
+
+// QueueSnapshot represents the current state of the task queue.
+type QueueSnapshot struct {
+	Depth            int            `json:"depth"`
+	DueWithinSeconds int            `json:"dueWithinSeconds"`
+	PerType          map[string]int `json:"perType"`
+}
+
+// Snapshot returns a snapshot of the queue state for API exposure.
+func (q *TaskQueue) Snapshot() QueueSnapshot {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	snapshot := QueueSnapshot{
+		Depth:   len(q.heap),
+		PerType: make(map[string]int),
+	}
+
+	now := time.Now()
+	for _, entry := range q.heap {
+		typeStr := string(entry.task.InstanceType)
+		snapshot.PerType[typeStr]++
+
+		if entry.task.NextRun.Sub(now) <= 12*time.Second {
+			snapshot.DueWithinSeconds++
+		}
+	}
+
+	return snapshot
+}
+
+// DeadLetterTask represents a task in the dead-letter queue.
+type DeadLetterTask struct {
+	Instance  string    `json:"instance"`
+	Type      string    `json:"type"`
+	NextRun   time.Time `json:"nextRun"`
+	LastError string    `json:"lastError,omitempty"`
+	Failures  int       `json:"failures"`
+}
+
+// PeekAll returns up to 'limit' dead-letter tasks for inspection.
+func (q *TaskQueue) PeekAll(limit int) []DeadLetterTask {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if limit <= 0 || limit > len(q.heap) {
+		limit = len(q.heap)
+	}
+
+	result := make([]DeadLetterTask, 0, limit)
+	for i := 0; i < limit && i < len(q.heap); i++ {
+		entry := q.heap[i]
+		result = append(result, DeadLetterTask{
+			Instance: entry.task.InstanceName,
+			Type:     string(entry.task.InstanceType),
+			NextRun:  entry.task.NextRun,
+			Failures: 0, // will be populated by Monitor
+		})
+	}
+
+	return result
+}

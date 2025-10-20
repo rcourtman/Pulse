@@ -2366,6 +2366,87 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 	}
 }
 
+// SchedulerHealthResponse contains complete scheduler health data for API exposure.
+type SchedulerHealthResponse struct {
+	UpdatedAt   time.Time                  `json:"updatedAt"`
+	Enabled     bool                       `json:"enabled"`
+	Queue       QueueSnapshot              `json:"queue"`
+	DeadLetter  DeadLetterSnapshot         `json:"deadLetter"`
+	Breakers    []BreakerSnapshot          `json:"breakers,omitempty"`
+	Staleness   []StalenessSnapshot        `json:"staleness,omitempty"`
+}
+
+// DeadLetterSnapshot contains dead-letter queue data.
+type DeadLetterSnapshot struct {
+	Count int              `json:"count"`
+	Tasks []DeadLetterTask `json:"tasks"`
+}
+
+// SchedulerHealth returns a complete snapshot of scheduler health for API exposure.
+func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
+	response := SchedulerHealthResponse{
+		UpdatedAt: time.Now(),
+		Enabled:   m.config != nil && m.config.AdaptivePollingEnabled,
+	}
+
+	// Queue snapshot
+	if m.taskQueue != nil {
+		response.Queue = m.taskQueue.Snapshot()
+	}
+
+	// Dead-letter queue snapshot
+	if m.deadLetterQueue != nil {
+		deadLetterTasks := m.deadLetterQueue.PeekAll(25) // limit to top 25
+		m.mu.RLock()
+		for i := range deadLetterTasks {
+			key := schedulerKey(InstanceType(deadLetterTasks[i].Type), deadLetterTasks[i].Instance)
+			if outcome, ok := m.lastOutcome[key]; ok && outcome.err != nil {
+				deadLetterTasks[i].LastError = outcome.err.Error()
+			}
+			if count, ok := m.failureCounts[key]; ok {
+				deadLetterTasks[i].Failures = count
+			}
+		}
+		m.mu.RUnlock()
+		response.DeadLetter = DeadLetterSnapshot{
+			Count: m.deadLetterQueue.Size(),
+			Tasks: deadLetterTasks,
+		}
+	}
+
+	// Circuit breaker snapshots
+	m.mu.RLock()
+	breakerSnapshots := make([]BreakerSnapshot, 0, len(m.circuitBreakers))
+	for key, breaker := range m.circuitBreakers {
+		state, failures, retryAt := breaker.State()
+		// Only include breakers that are not in default closed state with 0 failures
+		if state != "closed" || failures > 0 {
+			// Parse instance type and name from key
+			parts := strings.SplitN(key, "::", 2)
+			instanceType, instanceName := "unknown", key
+			if len(parts) == 2 {
+				instanceType, instanceName = parts[0], parts[1]
+			}
+			breakerSnapshots = append(breakerSnapshots, BreakerSnapshot{
+				Instance: instanceName,
+				Type:     instanceType,
+				State:    state,
+				Failures: failures,
+				RetryAt:  retryAt,
+			})
+		}
+	}
+	m.mu.RUnlock()
+	response.Breakers = breakerSnapshots
+
+	// Staleness snapshots
+	if m.stalenessTracker != nil {
+		response.Staleness = m.stalenessTracker.Snapshot()
+	}
+
+	return response
+}
+
 func isTransientError(err error) bool {
 	if err == nil {
 		return true

@@ -71,11 +71,76 @@ Backoff configuration:
 
 Dead-letter entries are kept in memory (same `TaskQueue` structure) with a 30 min recheck interval. Operators should inspect logs for `Routing task to dead-letter queue` messages. Future work (Task 8) will add API surfaces for inspection.
 
+## API Endpoints
+
+### GET /api/monitoring/scheduler/health
+
+Returns comprehensive scheduler health data (authentication required).
+
+**Response format:**
+
+```json
+{
+  "updatedAt": "2025-03-21T18:05:00Z",
+  "enabled": true,
+  "queue": {
+    "depth": 7,
+    "dueWithinSeconds": 2,
+    "perType": {
+      "pve": 4,
+      "pbs": 2,
+      "pmg": 1
+    }
+  },
+  "deadLetter": {
+    "count": 2,
+    "tasks": [
+      {
+        "instance": "pbs-nas",
+        "type": "pbs",
+        "nextRun": "2025-03-21T18:25:00Z",
+        "lastError": "connection timeout",
+        "failures": 7
+      }
+    ]
+  },
+  "breakers": [
+    {
+      "instance": "pve-core",
+      "type": "pve",
+      "state": "half_open",
+      "failures": 3,
+      "retryAt": "2025-03-21T18:05:45Z"
+    }
+  ],
+  "staleness": [
+    {
+      "instance": "pve-core",
+      "type": "pve",
+      "score": 0.12,
+      "lastSuccess": "2025-03-21T18:04:50Z"
+    }
+  ]
+}
+```
+
+**Field descriptions:**
+
+- `enabled`: Feature flag status
+- `queue.depth`: Total queued tasks
+- `queue.dueWithinSeconds`: Tasks due within 12 seconds
+- `queue.perType`: Distribution by instance type
+- `deadLetter.count`: Total dead-letter tasks
+- `deadLetter.tasks`: Up to 25 most recent dead-letter entries
+- `breakers`: Circuit breaker states (only non-default states shown)
+- `staleness`: Freshness scores per instance (0 = fresh, 1 = max stale)
+
 ## Operational Guidance
 
 1. **Enable adaptive polling**: set `ADAPTIVE_POLLING_ENABLED=true` via UI or environment overrides, then restart hot-dev (`scripts/hot-dev.sh`).
 2. **Monitor metrics** to ensure queue depth and staleness remain within SLA. Configure alerting on `poll_staleness_seconds` and `poll_queue_depth`.
-3. **Review dead-letter logs** for persistent failures; resolve underlying connectivity or auth issues before re-enabling.
+3. **Inspect scheduler health** via API endpoint `/api/monitoring/scheduler/health` for circuit breaker trips and dead-letter queue status.
+4. **Review dead-letter logs** for persistent failures; resolve underlying connectivity or auth issues before re-enabling.
 
 ## Rollout Plan
 
