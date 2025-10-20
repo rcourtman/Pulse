@@ -1,4 +1,5 @@
 import { createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type { JSX } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
@@ -3236,11 +3237,19 @@ function HistoryTab() {
   const { state, activeAlerts } = useWebSocket();
 
   // Filter states with localStorage persistence
-  const [timeFilter, setTimeFilter] = createSignal(
-    localStorage.getItem('alertHistoryTimeFilter') || '7d',
+  const [timeFilter, setTimeFilter] = usePersistentSignal<'24h' | '7d' | '30d' | 'all'>(
+    'alertHistoryTimeFilter',
+    '7d',
+    {
+      deserialize: (raw) => (raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : '7d'),
+    },
   );
-  const [severityFilter, setSeverityFilter] = createSignal(
-    localStorage.getItem('alertHistorySeverityFilter') || 'all',
+  const [severityFilter, setSeverityFilter] = usePersistentSignal<'all' | 'warning' | 'critical'>(
+    'alertHistorySeverityFilter',
+    'all',
+    {
+      deserialize: (raw) => (raw === 'warning' || raw === 'critical' ? raw : 'all'),
+    },
   );
   const [searchTerm, setSearchTerm] = createSignal('');
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
@@ -3304,13 +3313,6 @@ function HistoryTab() {
   let searchInputRef: HTMLInputElement | undefined;
 
   // Persist filter changes to localStorage
-  createEffect(() => {
-    localStorage.setItem('alertHistoryTimeFilter', timeFilter());
-  });
-
-  createEffect(() => {
-    localStorage.setItem('alertHistorySeverityFilter', severityFilter());
-  });
 
   // Clear chart selection when high-level filters change
   let lastTimeFilterValue: string | null = null;
