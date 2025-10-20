@@ -3712,7 +3712,7 @@ if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true
             INSTALL_STATUS=$?
 
             if [ -n "$INSTALL_OUTPUT" ]; then
-                echo "$INSTALL_OUTPUT" | grep -E "✓|⚠️|ERROR" || true
+                echo "$INSTALL_OUTPUT"
             fi
 
             if [ $INSTALL_STATUS -eq 0 ]; then
