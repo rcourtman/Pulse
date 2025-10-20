@@ -798,6 +798,14 @@ if [[ "$STANDALONE" == false ]]; then
     print_info "Configuring socket bind mount..."
     MOUNT_TARGET="/mnt/pulse-proxy"
     LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
+
+# Back up container config before modifying
+LXC_CONFIG_BACKUP=$(mktemp)
+cp "$LXC_CONFIG" "$LXC_CONFIG_BACKUP" 2>/dev/null || {
+    print_warn "Could not back up container config (may not exist yet)"
+    LXC_CONFIG_BACKUP=""
+}
+
 CONFIG_CONTENT=$(pct config "$CTID")
 CURRENT_MP=$(pct config "$CTID" | awk -v target="$MOUNT_TARGET" '$1 ~ /^mp[0-9]+:$/ && index($0, "mp=" target) {split($1, arr, ":"); print arr[1]; exit}')
 MOUNT_UPDATED=false
@@ -884,14 +892,26 @@ if [[ "$HOTPLUG_FAILED" = true && "$CT_RUNNING" = true ]]; then
     print_warn "Please restart container and verify socket manually:"
     print_warn "  pct stop $CTID && sleep 2 && pct start $CTID"
     print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
+    # Keep backup in this case since we can't verify
+    [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
 else
     print_info "Verifying secure communication channel..."
     if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
         print_info "✓ Secure socket communication ready"
+        # Clean up backup since verification succeeded
+        [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
     else
         print_error "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
         print_error "Mount configuration verified but socket not accessible in container"
         print_error "This indicates a mount or restart issue"
+
+        # Rollback container config changes
+        if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
+            print_warn "Rolling back container configuration changes..."
+            cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG"
+            rm -f "$LXC_CONFIG_BACKUP"
+            print_info "Container configuration restored to previous state"
+        fi
         exit 1
     fi
 fi
