@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func TestHubConcurrentClients(t *testing.T) {
 			client := &Client{
 				hub:  hub,
 				send: make(chan []byte, 10),
-				id:   "client-register-" + string(rune(i)),
+				id:   "client-register-" + strconv.Itoa(i),
 			}
 			hub.register <- client
 			time.Sleep(time.Microsecond)
