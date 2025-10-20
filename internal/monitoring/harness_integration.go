@@ -72,16 +72,22 @@ type ResourceStats struct {
 	GoroutinesEnd   int
 	HeapAllocStart  uint64
 	HeapAllocEnd    uint64
+	StackInuseStart uint64
+	StackInuseEnd   uint64
+	GCCountStart    uint32
+	GCCountEnd      uint32
 }
 
 // HarnessReport is returned after a harness run completes.
 type HarnessReport struct {
-	PerInstanceStats map[string]InstanceStats
-	QueueStats       QueueStats
-	StalenessStats   StalenessStats
-	ResourceStats    ResourceStats
-	Health           SchedulerHealthResponse
-	MaxStaleness     time.Duration
+    Scenario         HarnessScenario
+    PerInstanceStats map[string]InstanceStats
+    QueueStats       QueueStats
+    StalenessStats   StalenessStats
+    ResourceStats    ResourceStats
+    Health           SchedulerHealthResponse
+    MaxStaleness     time.Duration
+    RuntimeSamples   []runtimeSnapshot
 }
 
 // Harness orchestrates the integration run.
@@ -95,6 +101,9 @@ type Harness struct {
 	queueSum     int
 	queueSamples int
 	maxStaleness time.Duration
+	sampleEvery  time.Duration
+	runtimeSamples []runtimeSnapshot
+	lastRuntimeSample time.Time
 }
 
 // NewHarness constructs a harness configured for the provided scenario.
@@ -154,12 +163,16 @@ func NewHarness(scenario HarnessScenario) *Harness {
 		scenario:     scenario,
 		dataPath:     tempDir,
 		maxStaleness: cfg.AdaptivePollingMaxInterval,
+		sampleEvery:  15 * time.Second,
 	}
 }
 
 // Run executes the scenario and returns a report of collected statistics.
 func (h *Harness) Run(ctx context.Context) HarnessReport {
+	h.runtimeSamples = nil
 	runtimeStart := sampleRuntime()
+	h.runtimeSamples = append(h.runtimeSamples, runtimeStart)
+	h.lastRuntimeSample = runtimeStart.Timestamp
 
 	runCtx, cancel := context.WithCancel(ctx)
 	h.cancel = cancel
@@ -185,6 +198,9 @@ loop:
 		case <-ticker.C:
 			now := time.Now()
 			h.schedule(now)
+			if h.sampleEvery > 0 && time.Since(h.lastRuntimeSample) >= h.sampleEvery {
+				h.recordRuntimeSample()
+			}
 			if now.After(runEnd) {
 				cancel()
 			}
@@ -203,12 +219,20 @@ loop:
 	finalQueueDepth := h.Monitor.taskQueue.Size()
 	health := h.Monitor.SchedulerHealth()
 	runtimeEnd := sampleRuntime()
+	h.runtimeSamples = append(h.runtimeSamples, runtimeEnd)
 	staleness := computeStalenessStats(h.Monitor)
 
 	h.Monitor.Stop()
+	runtimeSamplesCopy := append([]runtimeSnapshot(nil), h.runtimeSamples...)
 	h.cleanup()
+	if len(runtimeSamplesCopy) == 0 {
+		runtimeSamplesCopy = append(runtimeSamplesCopy, runtimeStart, runtimeEnd)
+	}
+	startSample := runtimeSamplesCopy[0]
+	endSample := runtimeSamplesCopy[len(runtimeSamplesCopy)-1]
 
 	report := HarnessReport{
+		Scenario:         h.scenario,
 		PerInstanceStats: instanceStats,
 		QueueStats: QueueStats{
 			MaxDepth:     h.queueMax,
@@ -218,16 +242,21 @@ loop:
 		},
 		StalenessStats: staleness,
 		ResourceStats: ResourceStats{
-			GoroutinesStart: runtimeStart.Goroutines,
-			GoroutinesEnd:   runtimeEnd.Goroutines,
-			HeapAllocStart:  runtimeStart.HeapAlloc,
-			HeapAllocEnd:    runtimeEnd.HeapAlloc,
+			GoroutinesStart: startSample.Goroutines,
+			GoroutinesEnd:   endSample.Goroutines,
+			HeapAllocStart:  startSample.HeapAlloc,
+			HeapAllocEnd:    endSample.HeapAlloc,
+			StackInuseStart: startSample.StackInuse,
+			StackInuseEnd:   endSample.StackInuse,
+			GCCountStart:    startSample.NumGC,
+			GCCountEnd:      endSample.NumGC,
 		},
-		Health: health,
-		MaxStaleness: h.maxStaleness,
+		Health:        health,
+		MaxStaleness:  h.maxStaleness,
+		RuntimeSamples: runtimeSamplesCopy,
 	}
 
-	return report
+    return report
 }
 
 func (h *Harness) schedule(now time.Time) {
@@ -265,11 +294,19 @@ func (h *Harness) recordQueueDepth(depth int) {
 	}
 }
 
+func (h *Harness) recordRuntimeSample() {
+	snap := sampleRuntime()
+	h.runtimeSamples = append(h.runtimeSamples, snap)
+	h.lastRuntimeSample = snap.Timestamp
+}
+
 func (h *Harness) cleanup() {
 	if h.cancel != nil {
 		h.cancel()
 		h.cancel = nil
 	}
+	h.runtimeSamples = nil
+	h.lastRuntimeSample = time.Time{}
 	if h.dataPath != "" {
 		_ = os.RemoveAll(h.dataPath)
 		h.dataPath = ""
@@ -277,16 +314,22 @@ func (h *Harness) cleanup() {
 }
 
 type runtimeSnapshot struct {
+	Timestamp  time.Time
 	Goroutines int
 	HeapAlloc  uint64
+	StackInuse uint64
+	NumGC      uint32
 }
 
 func sampleRuntime() runtimeSnapshot {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	return runtimeSnapshot{
+		Timestamp:  time.Now(),
 		Goroutines: runtime.NumGoroutine(),
 		HeapAlloc:  ms.HeapAlloc,
+		StackInuse: ms.StackInuse,
+		NumGC:      ms.NumGC,
 	}
 }
 

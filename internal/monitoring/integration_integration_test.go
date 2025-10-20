@@ -4,11 +4,17 @@ package monitoring
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"math"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
+
+var soakFlag = flag.Bool("soak", false, "run adaptive polling soak test")
 
 func TestAdaptiveSchedulerIntegration(t *testing.T) {
 	scenario := HarnessScenario{
@@ -98,6 +104,20 @@ func TestAdaptiveSchedulerIntegration(t *testing.T) {
 		t.Fatalf("health queue depth %d exceeds observed max %d", report.Health.Queue.Depth, report.QueueStats.MaxDepth)
 	}
 
+	if len(report.RuntimeSamples) >= 2 {
+		startSample := report.RuntimeSamples[0]
+		finalSample := report.RuntimeSamples[len(report.RuntimeSamples)-1]
+		if startSample.HeapAlloc > 0 {
+			growthRatio := float64(finalSample.HeapAlloc) / float64(startSample.HeapAlloc)
+			if growthRatio > 1.25 && finalSample.HeapAlloc > startSample.HeapAlloc+5*1024*1024 {
+				t.Fatalf("heap allocation grew too much: start=%d final=%d ratio=%.2f", startSample.HeapAlloc, finalSample.HeapAlloc, growthRatio)
+			}
+		}
+		if finalSample.Goroutines > startSample.Goroutines+20 {
+			t.Fatalf("goroutine count grew too much: start=%d final=%d", startSample.Goroutines, finalSample.Goroutines)
+		}
+	}
+
 	maxStaleness := report.MaxStaleness
 	if maxStaleness <= 0 {
 		t.Fatalf("invalid max staleness value: %v", maxStaleness)
@@ -143,9 +163,12 @@ func TestAdaptiveSchedulerIntegration(t *testing.T) {
 		t.Fatalf("expected transient instance to recover with successes, got 0")
 	}
 
-	dlqKeys := map[string]struct{}{}
-	for _, task := range report.Health.DeadLetter.Tasks {
-		dlqKeys[instanceKey(task.Type, task.Instance)] = struct{}{}
+    dlqKeys := map[string]struct{}{}
+    for _, task := range report.Health.DeadLetter.Tasks {
+        dlqKeys[instanceKey(task.Type, task.Instance)] = struct{}{}
+    }
+    if len(report.Health.Breakers) > len(dlqKeys) {
+		t.Fatalf("unexpected number of circuit breaker entries: got %d want <= %d", len(report.Health.Breakers), len(dlqKeys))
 	}
 	for _, breaker := range report.Health.Breakers {
 		key := instanceKey(breaker.Type, breaker.Instance)
@@ -187,4 +210,132 @@ func TestAdaptiveSchedulerIntegration(t *testing.T) {
 	if !report.Health.Enabled {
 		t.Fatal("expected adaptive polling to be enabled in scheduler health response")
 	}
+}
+
+func TestAdaptiveSchedulerSoak(t *testing.T) {
+	minutesEnv := os.Getenv("HARNESS_SOAK_MINUTES")
+	if !*soakFlag && minutesEnv == "" {
+		t.Skip("skipping soak test (enable with -soak or HARNESS_SOAK_MINUTES)")
+	}
+
+    minutes := 15
+    if minutesEnv != "" {
+        if parsed, err := strconv.Atoi(minutesEnv); err == nil && parsed > 0 {
+            minutes = parsed
+        }
+    }
+
+	duration := time.Duration(minutes) * time.Minute
+	warmup := 2 * time.Minute
+	scenario := HarnessScenario{Duration: duration, WarmupDuration: warmup}
+
+	for i := 0; i < 60; i++ {
+		scenario.Instances = append(scenario.Instances, InstanceConfig{
+			Type:        "pve",
+			Name:        fmt.Sprintf("soak-healthy-%02d", i),
+			SuccessRate: 0.98,
+			BaseLatency: 200 * time.Millisecond,
+		})
+	}
+
+	for i := 0; i < 15; i++ {
+		scenario.Instances = append(scenario.Instances, InstanceConfig{
+			Type:        "pve",
+			Name:        fmt.Sprintf("soak-transient-%02d", i),
+			SuccessRate: 0.85,
+			FailureSeq: []FailureType{
+				FailureTransient,
+				FailureTransient,
+				FailureNone,
+				FailureTransient,
+				FailureNone,
+			},
+			BaseLatency: 220 * time.Millisecond,
+		})
+	}
+
+	permanentCount := 5
+	for i := 0; i < permanentCount; i++ {
+		scenario.Instances = append(scenario.Instances, InstanceConfig{
+			Type:        "pve",
+			Name:        fmt.Sprintf("soak-permanent-%02d", i),
+			SuccessRate: 0,
+			FailureSeq: []FailureType{
+				FailureTransient,
+				FailureTransient,
+				FailurePermanent,
+			},
+			BaseLatency: 250 * time.Millisecond,
+		})
+	}
+
+	harness := NewHarness(scenario)
+	ctx, cancel := context.WithTimeout(context.Background(), duration+warmup+5*time.Minute)
+	defer cancel()
+
+	report := harness.Run(ctx)
+
+	if len(report.RuntimeSamples) < 2 {
+		t.Fatalf("expected runtime samples, got %d", len(report.RuntimeSamples))
+	}
+
+	startSample := report.RuntimeSamples[0]
+	warmupEnd := startSample.Timestamp.Add(report.Scenario.WarmupDuration)
+	baseline := startSample
+	for _, sample := range report.RuntimeSamples {
+		if !sample.Timestamp.Before(warmupEnd) {
+			baseline = sample
+			break
+		}
+	}
+	finalSample := report.RuntimeSamples[len(report.RuntimeSamples)-1]
+
+	if baseline.HeapAlloc > 0 {
+		allowed := float64(baseline.HeapAlloc)*1.10 + 10*1024*1024
+		if float64(finalSample.HeapAlloc) > allowed {
+			t.Fatalf("heap allocation grew too much: baseline=%d final=%d", baseline.HeapAlloc, finalSample.HeapAlloc)
+		}
+	}
+	if finalSample.Goroutines > baseline.Goroutines+20 {
+		t.Fatalf("goroutine count grew too much: baseline=%d final=%d", baseline.Goroutines, finalSample.Goroutines)
+	}
+
+	if report.QueueStats.FinalDepth > len(scenario.Instances) {
+		t.Fatalf("final queue depth %d exceeds instance count %d", report.QueueStats.FinalDepth, len(scenario.Instances))
+	}
+
+	healthyThreshold := 45 * time.Second
+	for key, stats := range report.PerInstanceStats {
+		if stats.Successes == 0 || stats.PermanentFailures > 0 {
+			continue
+		}
+		if stats.LastSuccessAt.IsZero() {
+			t.Fatalf("missing last success timestamp for %s", key)
+		}
+		age := time.Since(stats.LastSuccessAt)
+		if age > healthyThreshold {
+			t.Fatalf("instance %s staleness age %v exceeds threshold %v", key, age, healthyThreshold)
+		}
+	}
+
+	if len(report.Health.DeadLetter.Tasks) != permanentCount {
+		t.Fatalf("expected %d dead-letter tasks, got %d", permanentCount, len(report.Health.DeadLetter.Tasks))
+	}
+
+	for name, stats := range report.PerInstanceStats {
+		if strings.Contains(name, "transient") {
+			if stats.TransientFailures == 0 {
+				t.Fatalf("expected transient failures for %s", name)
+			}
+			if stats.Successes == 0 {
+				t.Fatalf("expected recoveries for %s", name)
+			}
+		}
+	}
+
+	if !report.Health.Enabled {
+		t.Fatal("expected adaptive polling to be enabled during soak run")
+	}
+
+	t.Logf("soak run complete: instances=%d duration=%v samples=%d heap(start=%d end=%d) goroutines(start=%d end=%d)", len(scenario.Instances), duration, len(report.RuntimeSamples), baseline.HeapAlloc, finalSample.HeapAlloc, baseline.Goroutines, finalSample.Goroutines)
 }
