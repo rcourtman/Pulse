@@ -3617,25 +3617,6 @@ version_ge() {
     [ "$1" = "$2" ]
 }
 
-PULSE_VERSION=$(curl -s -f "$PULSE_VERSION_ENDPOINT" 2>/dev/null | awk -F'"' '/"version":/{print $4}' | head -n1)
-if [ -z "$PULSE_VERSION" ]; then
-    echo ""
-    echo "⚠️  Could not determine Pulse version from $PULSE_VERSION_ENDPOINT"
-    echo "    Temperature proxy requires Pulse $MIN_PROXY_VERSION or later."
-    TEMP_MONITORING_AVAILABLE=false
-elif ! version_ge "$PULSE_VERSION" "$MIN_PROXY_VERSION"; then
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "⚠️  Pulse upgrade required for temperature proxy"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Detected Pulse version: $PULSE_VERSION"
-    echo "Minimum required version: $MIN_PROXY_VERSION"
-    echo ""
-    echo "Please upgrade the Pulse container before rerunning this setup script."
-    echo ""
-    TEMP_MONITORING_AVAILABLE=false
-fi
-
 # Check if temperature proxy is available and override SSH key if it is
 PROXY_KEY_URL="%s/api/system/proxy-public-key"
 TEMPERATURE_PROXY_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
@@ -3682,6 +3663,28 @@ if command -v pct >/dev/null 2>&1; then
 fi
 
 # Track whether temperature monitoring can work (may be disabled by checks above)
+
+# For containerized Pulse, verify version supports proxy (v4.24.0+)
+if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
+    PULSE_VERSION=$(curl -s -f "$PULSE_VERSION_ENDPOINT" 2>/dev/null | awk -F'"' '/"version":/{print $4}' | head -n1)
+    if [ -z "$PULSE_VERSION" ]; then
+        echo ""
+        echo "⚠️  Could not determine Pulse version from $PULSE_VERSION_ENDPOINT"
+        echo "    Temperature proxy requires Pulse $MIN_PROXY_VERSION or later."
+        TEMP_MONITORING_AVAILABLE=false
+    elif ! version_ge "$PULSE_VERSION" "$MIN_PROXY_VERSION"; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "⚠️  Pulse upgrade required for temperature proxy"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Detected Pulse version: $PULSE_VERSION"
+        echo "Minimum required version: $MIN_PROXY_VERSION"
+        echo ""
+        echo "Please upgrade the Pulse container before rerunning this setup script."
+        echo ""
+        TEMP_MONITORING_AVAILABLE=false
+    fi
+fi
 
 # If Pulse is containerized, try to install proxy automatically
 if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
