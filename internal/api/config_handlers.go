@@ -2653,6 +2653,7 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 	if settings.AutoUpdateTime != "" {
 		h.config.AutoUpdateTime = settings.AutoUpdateTime
 	}
+	settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.config.Discovery)
 
 	// Save settings to persistence
 	if err := h.persistence.SaveSystemSettings(settings); err != nil {
