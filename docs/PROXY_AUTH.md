@@ -128,7 +128,11 @@ location / {
     proxy_set_header X-Proxy-Secret "your-secure-secret-here";
     proxy_set_header Remote-User $user;
     proxy_set_header Remote-Groups $groups;
-    
+    proxy_pass_header X-RateLimit-Limit;
+    proxy_pass_header X-RateLimit-Remaining;
+    proxy_pass_header X-RateLimit-Reset;
+    proxy_pass_header Retry-After;
+
     proxy_pass http://pulse:7655;
 }
 ```
@@ -165,6 +169,7 @@ proxy_set_header X-Authentik-Groups $http_x_authentik_groups;
 2. **HTTPS only**: Always use HTTPS between the proxy and Pulse in production
 3. **Network isolation**: Ensure Pulse is not directly accessible, only through the proxy
 4. **Header validation**: Pulse validates all headers and the proxy secret on every request
+5. **Preserve rate-limit headers**: Do not strip `X-RateLimit-*` or `Retry-After`. Clients rely on them when Pulse throttles requests.
 
 ## Combining with Other Auth Methods
 
@@ -187,7 +192,7 @@ Proxy authentication can work alongside other authentication methods:
    ```
 
 2. **Verify headers are being sent**:
-   - Enable debug logging: `LOG_LEVEL=debug`
+   - Temporarily raise logging to debug via **Settings → System → Logging** (or set `LOG_LEVEL=debug` and restart). Remember to return to `info` when finished.
    - Check Pulse logs: `docker logs pulse` or `journalctl -u pulse`
    - Look for "Invalid proxy secret" or "Proxy auth user header not found"
 

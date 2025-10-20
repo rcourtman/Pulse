@@ -101,6 +101,8 @@ func (s *Service) performScan() {
 	s.isScanning = true
 	s.mu.Unlock()
 
+	var result *discovery.DiscoveryResult
+
 	defer func() {
 		s.mu.Lock()
 		s.isScanning = false
@@ -109,12 +111,16 @@ func (s *Service) performScan() {
 
 		// Send scan complete notification
 		if s.wsHub != nil {
+			data := map[string]interface{}{
+				"scanning":  false,
+				"timestamp": time.Now().Unix(),
+			}
+			if result != nil && result.Environment != nil {
+				data["environment"] = result.Environment
+			}
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_complete",
-				Data: map[string]interface{}{
-					"scanning":  false,
-					"timestamp": time.Now().Unix(),
-				},
+				Data: data,
 			})
 		}
 	}()
@@ -138,18 +144,26 @@ func (s *Service) performScan() {
 	scanCtx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
 	defer cancel()
 
+	// Refresh scanner to ensure environment detection stays current
+	newScanner := discovery.NewScanner()
+	s.mu.Lock()
+	s.scanner = newScanner
+	s.mu.Unlock()
+
 	// Perform the scan with real-time callback
-	result, err := s.scanner.DiscoverServersWithCallback(scanCtx, s.subnet, func(server discovery.DiscoveredServer) {
+	result, err = newScanner.DiscoverServersWithCallback(scanCtx, s.subnet, func(server discovery.DiscoveredServer, phase string) {
 		// Send immediate update for each discovered server
 		if s.wsHub != nil {
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_server_found",
 				Data: map[string]interface{}{
 					"server":    server,
+					"phase":     phase,
 					"timestamp": time.Now().Unix(),
 				},
 			})
 			log.Info().
+				Str("phase", phase).
 				Str("ip", server.IP).
 				Str("type", server.Type).
 				Msg("Broadcasting discovered server to clients")
@@ -174,6 +188,14 @@ func (s *Service) performScan() {
 		s.cache.updated = time.Now()
 		s.cache.mu.Unlock()
 
+		if result.Environment != nil {
+			log.Info().
+				Str("environment", result.Environment.Type).
+				Float64("confidence", result.Environment.Confidence).
+				Int("phases", len(result.Environment.Phases)).
+				Msg("Environment detection summary")
+		}
+
 		log.Info().
 			Int("servers", len(result.Servers)).
 			Int("errors", len(result.Errors)).
@@ -181,14 +203,18 @@ func (s *Service) performScan() {
 
 		// Send final update via WebSocket with all servers
 		if s.wsHub != nil {
+			data := map[string]interface{}{
+				"servers":   result.Servers,
+				"errors":    result.Errors,
+				"scanning":  false,
+				"timestamp": time.Now().Unix(),
+			}
+			if result.Environment != nil {
+				data["environment"] = result.Environment
+			}
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_update",
-				Data: map[string]interface{}{
-					"servers":   result.Servers,
-					"errors":    result.Errors,
-					"scanning":  false,
-					"timestamp": time.Now().Unix(),
-				},
+				Data: data,
 			})
 		}
 	}

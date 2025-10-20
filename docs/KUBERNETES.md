@@ -90,6 +90,48 @@ server:
       API_TOKENS: docker-agent-token
 ```
 
+### Runtime Logging Configuration (v4.24.0+)
+
+Configure logging behavior via environment variables:
+
+```yaml
+server:
+  env:
+    - name: LOG_LEVEL
+      value: info              # debug, info, warn, error
+    - name: LOG_FORMAT
+      value: json              # json, text, auto
+    - name: LOG_FILE
+      value: /data/logs/pulse.log  # Optional: mirror logs to file
+    - name: LOG_MAX_SIZE
+      value: "100"             # MB per log file
+    - name: LOG_MAX_BACKUPS
+      value: "10"              # Number of rotated logs to keep
+    - name: LOG_MAX_AGE
+      value: "30"              # Days to retain logs
+```
+
+**Note:** Logging changes via environment variables require pod restart. Use **Settings → System → Logging** in the UI for runtime changes without restart.
+
+### Adaptive Polling Configuration (v4.24.0+)
+
+Adaptive polling is **enabled by default** in v4.24.0. Configure via environment variables:
+
+```yaml
+server:
+  env:
+    - name: ADAPTIVE_POLLING_ENABLED
+      value: "true"            # Enable/disable adaptive scheduler
+    - name: ADAPTIVE_POLLING_BASE_INTERVAL
+      value: "10s"             # Target cadence (default: 10s)
+    - name: ADAPTIVE_POLLING_MIN_INTERVAL
+      value: "5s"              # Fastest cadence (default: 5s)
+    - name: ADAPTIVE_POLLING_MAX_INTERVAL
+      value: "5m"              # Slowest cadence (default: 5m)
+```
+
+**Note:** These settings can also be toggled via **Settings → System → Monitoring** in the UI without pod restart.
+
 Install or upgrade with the overrides:
 
 ```bash
@@ -168,9 +210,97 @@ Notes:
 - **Rollback:** `helm rollback pulse <revision>`
 - **Uninstall:** `helm uninstall pulse -n pulse` (PVCs remain unless you delete them manually)
 
+### Post-Upgrade Verification (v4.24.0+)
+
+After upgrading to v4.24.0 or newer, verify the deployment:
+
+1. **Check update history**
+   ```bash
+   # Via UI
+   # Navigate to Settings → System → Updates
+
+   # Via API
+   kubectl -n pulse exec deploy/pulse -- curl -s http://localhost:7655/api/updates/history | jq '.entries[0]'
+   ```
+
+2. **Verify scheduler health** (adaptive polling)
+   ```bash
+   kubectl -n pulse exec deploy/pulse -- curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
+   ```
+
+   **Expected response:**
+   - `"enabled": true`
+   - `queue.depth` reasonable (< instances × 1.5)
+   - `deadLetter.count` = 0 or only known issues
+   - `instances[]` populated with your nodes
+
+3. **Check pod logs**
+   ```bash
+   kubectl -n pulse logs deploy/pulse --tail=50
+   ```
+
+4. **Verify rollback capability**
+   - Pulse v4.24.0+ logs update history
+   - Rollback available via **Settings → System → Updates → Restore previous version**
+   - Or via API: `POST /api/updates/rollback` (if supported in Kubernetes deployments)
+
+## Service Naming
+
+**Important:** The Helm chart creates a service named `svc/pulse` on port `7655` by default, matching standard Kubernetes naming conventions.
+
+**Service name variations:**
+- **Kubernetes/Helm:** `svc/pulse` (Deployment: `pulse`, Service: `pulse`)
+- **Systemd installations:** `pulse.service` or `pulse-backend.service` (legacy)
+- **Hot-dev scripts:** `pulse-hot-dev` (development only, not used in production clusters)
+
+**To check the active service:**
+```bash
+# Kubernetes
+kubectl -n pulse get svc pulse
+
+# Systemd
+systemctl status pulse
+```
+
+## Troubleshooting
+
+### Verify Scheduler Health After Rollout
+
+**v4.24.0+** includes adaptive polling. After any Helm upgrade or rollback, verify:
+
+```bash
+kubectl -n pulse exec deploy/pulse -- curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
+```
+
+**Look for:**
+- `enabled: true`
+- Queue depth stable
+- No stuck circuit breakers
+- Empty or stable dead-letter queue
+
+### Port Configuration Changes
+
+Port changes via `service.port` or environment variable `FRONTEND_PORT` take effect immediately but should be documented in change logs. v4.24.0 records restarts and configuration changes in update history.
+
+**To verify port configuration:**
+```bash
+# Check service
+kubectl -n pulse get svc pulse -o jsonpath='{.spec.ports[0].port}'
+
+# Check pod environment
+kubectl -n pulse exec deploy/pulse -- env | grep PORT
+```
+
 ## Reference
 
 - Review every available option in `deploy/helm/pulse/values.yaml`
 - Inspect published charts without installing: `helm show values oci://ghcr.io/rcourtman/pulse-chart --version <version>`
 - Helm template rendering preview: `helm template pulse ./deploy/helm/pulse -f <values>`
 - `NOTES.txt` emitted by Helm summarizes the service endpoint and agent prerequisites after each install or upgrade
+
+## Related Documentation
+
+- [Scheduler Health API](api/SCHEDULER_HEALTH.md) - Monitor adaptive polling status
+- [Configuration Guide](CONFIGURATION.md) - System settings and environment variables
+- [Adaptive Polling Operations](operations/ADAPTIVE_POLLING_ROLLOUT.md) - Operational procedures
+- [Reverse Proxy Setup](REVERSE_PROXY.md) - Configure ingress with rate limit headers

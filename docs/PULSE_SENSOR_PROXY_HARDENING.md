@@ -504,28 +504,42 @@ journalctl -u pulse-sensor-proxy --since today | grep "rate limit"
 journalctl -u pulse-sensor-proxy | grep "corr_id=a7f3d"
 ```
 
+For rotation guidance, follow [operations/audit-log-rotation.md](operations/audit-log-rotation.md). After each rotation and proxy restart, verify the adaptive polling scheduler reports closed breakers and no DLQ entries for temperature pollers:
+
+```bash
+curl -s http://localhost:7655/api/monitoring/scheduler/health \
+  | jq '.instances[] | select(.key | contains("temperature")) | {key, breaker: .breaker.state, deadLetter: .deadLetter.present}'
+```
+
 ### Rate Limiting
 
-**Current limits (per peer UID+PID):**
-- **Rate**: 20 requests/minute (token bucket with burst)
-- **Burst**: 10 requests
-- **Concurrency**: 10 simultaneous requests
+**Current limits (per peer UID):**
+- **Rate**: ~12 requests/minute (Go `rate.Every(5s)` token bucket)  
+  > Allows short bursts of 2 requests; steady-state calls beyond 12/min are rejected.
+- **Per-peer concurrency**: 2 simultaneous RPCs
+- **Global concurrency**: 8 in-flight RPCs across all peers
+- **Penalty**: 2 s enforced sleep when validation fails (payload too large, malformed JSON, unauthorized method)
+- **Per-node guard**: only 1 SSH fetch per target node at a time (prevents hammering the same hypervisor)
 
 **Behavior on limit exceeded:**
 - Request rejected immediately (no queuing)
-- `pulse_proxy_rate_limit_hits_total` metric incremented
-- Log entry: `"Rate limit exceeded"`
-- HTTP-like semantics: Similar to 429 Too Many Requests
+- `pulse_proxy_rate_limit_hits_total` and `pulse_proxy_limiter_rejects_total{reason}` increment
+- Audit log entry with `limiter.rejection`/reason code (`rate`, `peer_concurrency`, `global_concurrency`)
+- Client receives an RPC error equivalent to HTTP 429 semantics
 
-**Adjust limits:**
+**Adjust limits (advanced):**
 
-Limits are hardcoded in `throttle.go`. To adjust, modify and rebuild:
+The defaults live in `cmd/pulse-sensor-proxy/throttle.go`. To customise them, edit and rebuild:
 ```go
-// cmd/pulse-sensor-proxy/throttle.go
 const (
-    requestsPerMin  = 20     // Change this
-    requestBurst    = 10     // Change this
-    maxConcurrent   = 10     // Change this
+    defaultPerPeerBurst       = 2
+    defaultPerPeerConcurrency = 2
+    defaultGlobalConcurrency  = 8
+)
+
+var (
+    defaultPerPeerRateInterval = 5 * time.Second // 12 req/min
+    defaultPenaltyDuration     = 2 * time.Second
 )
 ```
 

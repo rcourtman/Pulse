@@ -6,8 +6,10 @@ Pulse uses WebSockets for real-time updates. Your reverse proxy **MUST** support
 
 1. **WebSocket Support Required** - Enable WebSocket proxying
 2. **Proxy Headers** - Forward original host and IP headers
-3. **Timeouts** - Increase timeouts for long-lived connections
+3. **Timeouts** - Increase timeouts for long-lived connections (7 days recommended)
 4. **Buffer Sizes** - Increase for large state updates (64KB recommended)
+5. **Rate Limit Headers (v4.24.0+)** - Pass through `X-RateLimit-*` and `Retry-After` headers
+6. **Error Pass-through** - Don't intercept 429 responses (rate limits)
 
 ## Authentication with Reverse Proxy
 
@@ -40,34 +42,38 @@ server {
 server {
     listen 443 ssl http2;
     server_name pulse.example.com;
-    
+
     # SSL configuration
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
-    
+
     # Proxy settings
     location / {
         proxy_pass http://localhost:7655;
         proxy_http_version 1.1;
-        
+
         # Required for WebSocket
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # Proxy headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Timeouts for WebSocket
+
+        # Timeouts for WebSocket and adaptive polling (v4.24.0+)
         proxy_connect_timeout 7d;
         proxy_send_timeout 7d;
         proxy_read_timeout 7d;
-        
+
         # Disable buffering for real-time updates
         proxy_buffering off;
-        
+
+        # IMPORTANT (v4.24.0+): Don't intercept error responses
+        # This ensures 429 rate limit responses reach the client
+        proxy_intercept_errors off;
+
         # Increase buffer sizes for large messages
         proxy_buffer_size 64k;
         proxy_buffers 8 64k;
@@ -260,6 +266,47 @@ curl -i -N \
   -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
   https://pulse.example.com/api/ws
 ```
+
+### v4.24.0+ Verification
+
+**Test scheduler health API** (adaptive polling):
+```bash
+curl -s https://pulse.example.com/api/monitoring/scheduler/health | jq
+```
+
+**Expected response:**
+- `enabled: true`
+- Queue depth reasonable
+- No stuck circuit breakers
+- WebSocket connection remains open
+
+**Verify rate limit headers** (v4.24.0+):
+```bash
+curl -I https://pulse.example.com/api/version
+```
+
+**Look for headers:**
+```
+HTTP/1.1 200 OK
+X-RateLimit-Limit: 500
+X-RateLimit-Remaining: 499
+X-RateLimit-Reset: 1698765432
+```
+
+**Test rate limiting:**
+```bash
+# Trigger rate limit (requires many requests)
+for i in {1..600}; do curl -s https://pulse.example.com/api/health > /dev/null; done
+
+# Should eventually see:
+curl -I https://pulse.example.com/api/health
+# HTTP/1.1 429 Too Many Requests
+# X-RateLimit-Limit: 500
+# X-RateLimit-Remaining: 0
+# Retry-After: 60
+```
+
+**Important:** If you don't see rate limit headers or 429 responses are converted to 502/504, verify `proxy_intercept_errors off` (Nginx) or equivalent is set.
 
 In browser console (F12):
 ```javascript

@@ -5,8 +5,8 @@
 - Unit: `pulse-sensor-proxy.service`
 - Logs: `/var/log/pulse/sensor-proxy/proxy.log`
 - Audit trail: `/var/log/pulse/sensor-proxy/audit.log` (hash chained, forwarded via rsyslog)
-- Metrics: `http://127.0.0.1:9456/metrics`
-- Limiters: per-UID token bucket (burst 2) + global concurrency (8)
+- Metrics: `http://127.0.0.1:9127/metrics` (set `PULSE_SENSOR_PROXY_METRICS_ADDR` to change/disable)
+- Limiters: ~12 requests/minute per UID (burst 2), per-UID concurrency 2, global concurrency 8, 2 s penalty on validation failures
 
 ## Monitoring Alerts & Response
 ### Rate Limit Hits (`pulse_proxy_limiter_rejections_total`)
@@ -35,12 +35,27 @@ sudo systemctl stop pulse-sensor-proxy
 sudo apparmor_parser -r /etc/apparmor.d/pulse-sensor-proxy   # if updating policy
 sudo systemctl start pulse-sensor-proxy
 ```
-Verify: `curl -s http://127.0.0.1:9456/metrics | grep pulse_proxy_build_info`.
+Verify:
+```bash
+# Metrics endpoint exposes proxy build/health
+curl -s http://127.0.0.1:9127/metrics | grep pulse_proxy_build_info
+
+# Ensure adaptive polling sees the proxy again
+curl -s http://localhost:7655/api/monitoring/scheduler/health \
+  | jq '.instances[] | select(.key | contains("temperature")) | {key, pollStatus}'
+```
+Temperature instances should show recent `lastSuccess` timestamps with no DLQ entries.
 
 ### Rotate SSH Keys
 1. Run `scripts/secure-sensor-files.sh` to regenerate keys (ensure environment locked down).
 2. Use RPC `ensure_cluster_keys` to distribute new public key.
 3. Confirm nodes accept `ssh` from proxy host.
+4. Confirm the scheduler clears any temporary breakers/dlq entries:
+   ```bash
+   curl -s http://localhost:7655/api/monitoring/scheduler/health \
+     | jq '.instances[] | select(.key | contains("temperature")) | {key, breaker: .breaker.state, deadLetter: .deadLetter.present}'
+   ```
+   Expect `breaker.state=="closed"` and `deadLetter.present==false` for all proxy-driven pollers.
 
 ### Adjust Rate Limits
 1. Update `limiter_policy` environment overrides (future config).

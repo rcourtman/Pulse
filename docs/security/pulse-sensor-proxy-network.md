@@ -15,7 +15,7 @@
   - Hypervisors / BMCs reachable on `tcp/22` (SSH) and optional IPMI UDP.
 - **Logging/Monitoring Zone (AZ-Logging)**
   - Receives forwarded audit/application logs (e.g. RELP/TLS on `tcp/6514`).
-  - Exposes Prometheus scrape port (default `tcp/9456`) if remote monitoring required.
+  - Exposes Prometheus scrape port (default `tcp/9127`) if remote monitoring required.
 
 ## Recommended Firewall Rules
 
@@ -26,7 +26,7 @@
 | AZ-Sensor | AZ-Proxmox BMC | `udp/623` *(optional)* | IPMI if required for temperature data | Allow if needed |
 | AZ-Proxmox | AZ-Sensor | `any` | Return SSH traffic | Allow stateful |
 | AZ-Sensor | AZ-Logging | `tcp/6514` (TLS RELP) | Audit/application log forwarding | Allow |
-| AZ-Logging | AZ-Sensor | `tcp/9456` *(optional)* | Prometheus scrape of proxy metrics | Allow if scraping remotely |
+| AZ-Logging | AZ-Sensor | `tcp/9127` *(optional)* | Prometheus scrape of proxy metrics | Allow if scraping remotely |
 | Any | AZ-Sensor | `tcp/22` | Shell/SSH access | Deny (use management bastion) |
 | AZ-Sensor | Internet | `any` | Outbound Internet | Deny (except package mirrors via proxy if required) |
 
@@ -43,9 +43,9 @@
    iptables -A OUTPUT -p tcp -d <LOG_HOST> --dport 6514 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
    iptables -A INPUT -p tcp -s <LOG_HOST> --sport 6514 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
-   # (Optional) allow Prometheus scrape
-   iptables -A INPUT -p tcp -s <SCRAPE_HOST> --dport 9456 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
-   iptables -A OUTPUT -p tcp -d <SCRAPE_HOST> --sport 9456 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+  # (Optional) allow Prometheus scrape
+  iptables -A INPUT -p tcp -s <SCRAPE_HOST> --dport 9127 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+  iptables -A OUTPUT -p tcp -d <SCRAPE_HOST> --sport 9127 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
    # Drop everything else
    iptables -P OUTPUT DROP

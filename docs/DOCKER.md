@@ -84,6 +84,13 @@ services:
       # Optional legacy variable kept for compatibility; newest token is used if both are set.
       # API_TOKEN: 'your-48-char-hex-token'
       PULSE_PUBLIC_URL: 'https://pulse.example.com'  # Used for webhooks/links
+      # Optional logging controls (v4.24.0+)
+      LOG_LEVEL: 'info'
+      LOG_FORMAT: 'auto'               # auto | json | console
+      # LOG_FILE: '/data/pulse.log'    # uncomment to mirror logs to a file
+      # LOG_MAX_SIZE: '100'            # MB
+      # LOG_MAX_AGE: '30'              # days
+      # LOG_COMPRESS: 'true'
       # TZ: 'UTC'
     restart: unless-stopped
 
@@ -105,6 +112,13 @@ API_TOKEN=your-48-char-hex-token               # Generate with: openssl rand -he
 API_TOKENS=${ANSIBLE_TOKEN},${DOCKER_AGENT_TOKEN}
 PULSE_PUBLIC_URL=https://pulse.example.com     # Recommended for webhooks
 TZ=Asia/Kolkata                                # Optional: matches host timezone
+# Logging controls (optional; take effect immediately after restart)
+LOG_LEVEL=info
+LOG_FORMAT=auto
+# LOG_FILE=/data/pulse.log
+# LOG_MAX_SIZE=100
+# LOG_MAX_AGE=30
+# LOG_COMPRESS=true
 ```
 
 **Note**: Plain text credentials are automatically hashed for security. You can provide either plain text (simpler) or pre-hashed values (advanced).
@@ -254,6 +268,44 @@ Common problems:
 4. **Regular backups** - Backup the `/data` volume regularly
 5. **Network isolation** - Don't expose port 7655 directly to the internet
 
+## Updates & Rollbacks (v4.24.0+)
+
+Docker images are still updated manually, but Pulse now records every upgrade/rollback attempt in **Settings → System → Updates** alongside the CLI instructions below.
+
+### Update to the latest image
+```bash
+docker pull rcourtman/pulse:latest
+docker stop pulse
+docker rm pulse
+docker run -d --name pulse \
+  -p 7655:7655 \
+  -v pulse_data:/data \
+  --restart unless-stopped \
+  rcourtman/pulse:latest
+```
+- The update history entry includes the image tag, operator, and timestamps. Capture the `event_id` in your change log.
+- After the container is back online, verify the adaptive scheduler is healthy:
+  ```bash
+  curl -s http://localhost:7655/api/monitoring/scheduler/health \
+    | jq '.queue.depth'
+  ```
+
+### Roll back to a prior release
+- Choose a previous tag (for example `v4.23.2`) from [GitHub Releases](https://github.com/rcourtman/Pulse/releases) or Docker Hub.
+- Redeploy the container with that tag:
+  ```bash
+  docker pull rcourtman/pulse:v4.23.2
+  docker stop pulse && docker rm pulse
+  docker run -d --name pulse \
+    -p 7655:7655 \
+    -v pulse_data:/data \
+    --restart unless-stopped \
+    rcourtman/pulse:v4.23.2
+  ```
+- The update history will log this as a rollback. Make sure to annotate the entry with the reason in your postmortem notes.
+
+> **Tip:** Keep the last known-good tag handy (for example in your compose file or infra repo) so rollbacks are a single change.
+
 ## Environment Variables Reference
 
 > **⚠️ Important**: Environment variables always override UI/system.json settings. If you set a value via env var (e.g., `DISCOVERY_SUBNET`), changes made in the UI for that setting will NOT take effect until you remove the env var. This follows standard container practices where env vars have highest precedence.
@@ -284,7 +336,12 @@ Common problems:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TZ` | Timezone inside the container | `UTC` |
-| `LOG_LEVEL` | Logging verbosity | `info` |
+| `LOG_LEVEL` | Logging verbosity. Changing the env var and restarting updates Pulse immediately. | `info` |
+| `LOG_FORMAT` | `auto`, `json`, or `console` output format. | `auto` |
+| `LOG_FILE` | Optional path inside the container to mirror logs (e.g. `/data/pulse.log`). Empty = stdout only. | *(unset)* |
+| `LOG_MAX_SIZE` | Rotate `LOG_FILE` after this size (MB). | `100` |
+| `LOG_MAX_AGE` | Days to retain rotated log files. | `30` |
+| `LOG_COMPRESS` | Compress rotated log files (`true` / `false`). | `true` |
 | `METRICS_RETENTION_DAYS` | Days of metrics history to keep | `7` |
 
 ## Advanced Configuration

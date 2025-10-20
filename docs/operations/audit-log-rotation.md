@@ -59,3 +59,105 @@ together chronologically while preserving the tamper-evident guarantees.
 
 Adjust the `create` directive to match the user and group that run the sensor
 proxy. The example assumes both user and group are `pulse`.
+
+---
+
+## Post-Rotation Health Checks (v4.24.0+)
+
+**After rotating audit logs and restarting pulse-sensor-proxy, verify adaptive polling health:**
+
+### 1. Check Scheduler Health
+
+```bash
+curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
+```
+
+**Verify:**
+- Temperature proxy pollers appear in `instances[]` array
+- `pollStatus.lastSuccess` is recent (within last 60 seconds)
+- No new entries in `deadLetter` queue for proxy instances
+- `breaker.state` is `closed` for proxy nodes
+
+**Example check for proxy instances:**
+```bash
+curl -s http://localhost:7655/api/monitoring/scheduler/health \
+  | jq '.instances[] | select(.type == "proxy" or .connection | contains("proxy")) | {key, lastSuccess: .pollStatus.lastSuccess, breaker: .breaker.state}'
+```
+
+### 2. Monitor Metrics (10-15 minutes)
+
+Watch these metrics to ensure proxy restart didn't cause issues:
+
+```bash
+# Queue depth should remain stable
+curl -s http://localhost:7655/api/monitoring/scheduler/health | jq '.queue.depth'
+
+# Check staleness for proxy instances
+curl -s http://localhost:7655/api/monitoring/scheduler/health \
+  | jq '.instances[] | select(.type == "proxy") | {key, staleness: .pollStatus.lastSuccess}'
+```
+
+**Expected behavior:**
+- Queue depth: No significant spike (< 10 temporary increase acceptable)
+- Staleness: Proxy instances show fresh polls within 30-60 seconds
+- No circuit breaker trips for proxy instances
+- No new DLQ entries
+
+### 3. Cross-Reference Audit Logs
+
+**Link rotation events with scheduler health for security review:**
+
+```bash
+# Check Pulse audit log for rotation timing
+journalctl -u pulse-sensor-proxy --since "10 minutes ago" | grep -E "restart|rotation"
+
+# Check update history for any concurrent events
+curl -s http://localhost:7655/api/updates/history?limit=5 | jq '.entries[] | {action, timestamp, status}'
+```
+
+**Why this matters:**
+- Security auditors can correlate proxy restarts with scheduler behavior
+- Update rollbacks may be concurrent with log rotations
+- Rollback metadata (new in v4.24.0) provides full operational context
+- Ensures restart didn't mask polling failures or breaker trips
+
+### 4. Troubleshooting Rotation Issues
+
+**If proxy instances don't rejoin queue:**
+
+1. **Check service status**
+   ```bash
+   systemctl status pulse-sensor-proxy
+   ```
+
+2. **Verify scheduler sees the proxy**
+   ```bash
+   curl -s http://localhost:7655/api/monitoring/scheduler/health \
+     | jq '.instances[] | select(.type == "proxy")'
+   ```
+
+3. **Check for circuit breakers**
+   ```bash
+   curl -s http://localhost:7655/api/monitoring/scheduler/health \
+     | jq '.instances[] | select(.breaker.state != "closed") | {key, state: .breaker.state, retryAt: .breaker.retryAt}'
+   ```
+
+4. **Review logs for errors**
+   ```bash
+   journalctl -u pulse-sensor-proxy -n 50
+   journalctl -u pulse | grep -E "proxy|temperature"
+   ```
+
+**Recovery actions:**
+- If breakers are stuck: Restart main Pulse service (`systemctl restart pulse`)
+- If DLQ entries persist: Check proxy credentials and network connectivity
+- If polling doesn't resume: Verify proxy configuration in **Settings → Sensors**
+
+---
+
+## Related Documentation
+
+- [Scheduler Health API](../api/SCHEDULER_HEALTH.md) - Complete API reference
+- [Adaptive Polling Operations](ADAPTIVE_POLLING_ROLLOUT.md) - Health monitoring procedures
+- [Pulse Sensor Proxy Hardening](../security/pulse-sensor-proxy-hardening.md) - Security configuration
+- [Temperature Monitoring Security](../TEMPERATURE_MONITORING_SECURITY.md) - Proxy-specific security notes

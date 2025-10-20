@@ -4,15 +4,19 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
 )
 
 // DiscoveredServer represents a discovered Proxmox/PBS/PMG server
@@ -27,35 +31,70 @@ type DiscoveredServer struct {
 
 // DiscoveryResult contains all discovered servers
 type DiscoveryResult struct {
-	Servers []DiscoveredServer `json:"servers"`
-	Errors  []string           `json:"errors,omitempty"`
+	Servers     []DiscoveredServer `json:"servers"`
+	Errors      []string           `json:"errors,omitempty"`
+	Environment *EnvironmentInfo   `json:"environment,omitempty"`
+}
+
+// EnvironmentInfo captures metadata about the environment scan.
+type EnvironmentInfo struct {
+	Type       string            `json:"type"`
+	Confidence float64           `json:"confidence"`
+	Phases     []PhaseInfo       `json:"phases"`
+	Warnings   []string          `json:"warnings"`
+	Metadata   map[string]string `json:"metadata"`
+}
+
+// PhaseInfo exposes phase details to clients.
+type PhaseInfo struct {
+	Name       string   `json:"name"`
+	Subnets    []string `json:"subnets"`
+	Confidence float64  `json:"confidence"`
 }
 
 // Scanner handles network scanning for Proxmox/PBS servers
 type Scanner struct {
-	timeout    time.Duration
-	concurrent int
+	policy     envdetect.ScanPolicy
+	profile    *envdetect.EnvironmentProfile
 	httpClient *http.Client
 }
 
 // NewScanner creates a new network scanner
 func NewScanner() *Scanner {
+	profile, err := envdetect.DetectEnvironment()
+	if err != nil {
+		log.Warn().Err(err).Msg("Environment detection completed with warnings")
+	}
+
+	return NewScannerWithProfile(profile)
+}
+
+// NewScannerWithProfile creates a scanner using the supplied environment profile.
+func NewScannerWithProfile(profile *envdetect.EnvironmentProfile) *Scanner {
+	clonedProfile := cloneProfile(profile)
+	policy := ensurePolicyDefaults(clonedProfile.Policy)
+	clonedProfile.Policy = policy
+
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		MaxIdleConns:    100,
+		MaxConnsPerHost: max(policy.MaxConcurrent, 10),
+	}
+
+	client := &http.Client{
+		Timeout:   policy.HTTPTimeout,
+		Transport: transport,
+	}
+
 	return &Scanner{
-		timeout:    1 * time.Second, // Reduced timeout for faster scanning
-		concurrent: 50,              // Increased concurrent workers for faster scanning
-		httpClient: &http.Client{
-			Timeout: 2 * time.Second, // Reduced HTTP timeout
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				MaxIdleConns:    100,
-				MaxConnsPerHost: 10,
-			},
-		},
+		policy:     policy,
+		profile:    clonedProfile,
+		httpClient: client,
 	}
 }
 
 // ServerCallback is called when a server is discovered
-type ServerCallback func(server DiscoveredServer)
+type ServerCallback func(server DiscoveredServer, phase string)
 
 // DiscoverServers scans the network for Proxmox VE and PBS servers
 func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*DiscoveryResult, error) {
@@ -64,135 +103,95 @@ func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*Discover
 
 // DiscoverServersWithCallback scans and calls callback for each discovered server
 func (s *Scanner) DiscoverServersWithCallback(ctx context.Context, subnet string, callback ServerCallback) (*DiscoveryResult, error) {
-	log.Info().Str("subnet", subnet).Msg("Starting network discovery")
-
-	// Parse subnet
-	var ipNets []*net.IPNet
-
-	if subnet == "" || subnet == "auto" {
-		// Check if we're in Docker (detected subnet is Docker network)
-		autoDetected := s.getLocalSubnet()
-		if autoDetected != nil && (strings.HasPrefix(autoDetected.String(), "172.17.") || strings.HasPrefix(autoDetected.String(), "172.1")) {
-			log.Info().Msg("Running in Docker - detecting host network from gateway")
-			// Try to detect the host's network from the default gateway
-			if hostSubnet := s.getHostSubnetFromGateway(); hostSubnet != nil {
-				ipNets = []*net.IPNet{hostSubnet}
-				log.Info().Str("detected", hostSubnet.String()).Msg("Detected host subnet from Docker gateway")
-			} else {
-				// Fallback: scan only most common subnet (192.168.0.0/24)
-				log.Info().Msg("Could not detect host subnet - scanning 192.168.0.0/24")
-				_, defaultNet, _ := net.ParseCIDR("192.168.0.0/24")
-				ipNets = []*net.IPNet{defaultNet}
-			}
-		} else if autoDetected != nil {
-			// Use auto-detected subnet
-			ipNets = []*net.IPNet{autoDetected}
-			log.Info().Str("detected", autoDetected.String()).Msg("Auto-detected local subnet")
-		} else {
-			// Fallback to most common subnet
-			log.Info().Msg("Auto-detection failed - scanning 192.168.0.0/24")
-			_, defaultNet, _ := net.ParseCIDR("192.168.0.0/24")
-			ipNets = []*net.IPNet{defaultNet}
-		}
-	} else {
-		// Parse provided subnet
-		_, parsedNet, err := net.ParseCIDR(subnet)
-		if err != nil {
-			return nil, fmt.Errorf("invalid subnet: %w", err)
-		}
-		ipNets = []*net.IPNet{parsedNet}
+	activeProfile, err := s.resolveProfile(subnet)
+	if err != nil {
+		return nil, err
 	}
 
-	// Collect all IPs to scan from all subnets
-	var allIPs []string
-	for _, ipNet := range ipNets {
-		// Check subnet size - limit to /24 or smaller for safety
-		ones, bits := ipNet.Mask.Size()
-		if ones < 24 && bits == 32 { // IPv4 with more than 256 addresses
-			log.Warn().Str("subnet", ipNet.String()).Msg("Subnet too large, limiting to /24")
-			// Convert to /24
-			ipNet.Mask = net.CIDRMask(24, 32)
-		}
-
-		// Generate list of IPs for this subnet
-		ips := s.generateIPs(ipNet)
-		allIPs = append(allIPs, ips...)
-		log.Info().Str("subnet", ipNet.String()).Int("count", len(ips)).Msg("Subnet IPs to scan")
-	}
-	log.Info().Int("total", len(allIPs)).Msg("Total IPs to scan")
-
-	// Create channels for work distribution
-	ipChan := make(chan string, len(allIPs))
-	resultChan := make(chan *DiscoveredServer, len(allIPs))
-	errorChan := make(chan string, len(allIPs))
-
-	// Start workers
-	var wg sync.WaitGroup
-	for i := 0; i < s.concurrent; i++ {
-		wg.Add(1)
-		go s.scanWorker(ctx, &wg, ipChan, resultChan, errorChan)
-	}
-
-	// Send IPs to scan
-	for _, ip := range allIPs {
-		ipChan <- ip
-	}
-	close(ipChan)
-
-	// Wait for workers to finish
-	go func() {
-		wg.Wait()
-		close(resultChan)
-		close(errorChan)
-	}()
-
-	// Collect results
 	result := &DiscoveryResult{
-		Servers: []DiscoveredServer{},
-		Errors:  []string{},
+		Servers:     []DiscoveredServer{},
+		Errors:      []string{},
+		Environment: buildEnvironmentInfo(activeProfile),
 	}
 
-	done := false
-	for !done {
-		select {
-		case server, ok := <-resultChan:
-			if !ok {
-				done = true
-				break
-			}
-			if server != nil {
-				result.Servers = append(result.Servers, *server)
-				// Log immediately when found for real-time feedback
-				log.Info().
-					Str("ip", server.IP).
-					Str("type", server.Type).
-					Str("hostname", server.Hostname).
-					Msg("🎯 Discovered server - adding to results")
+	seenIPs := make(map[string]struct{})
 
-				// Call callback for real-time updates
-				if callback != nil {
-					callback(*server)
-				}
+	// Scan explicit extra targets first, if any.
+	extraIPs := s.collectExtraTargets(activeProfile, seenIPs)
+	if len(extraIPs) > 0 {
+		log.Info().
+			Int("count", len(extraIPs)).
+			Msg("Starting discovery for explicit extra targets")
+		if err := s.runPhase(ctx, "extra_targets", extraIPs, callback, result); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("extra_targets: %v", err))
+			if errors.Is(err, context.Canceled) {
+				return result, ctx.Err()
 			}
-		case errMsg, ok := <-errorChan:
-			if ok && errMsg != "" {
-				result.Errors = append(result.Errors, errMsg)
+		}
+	}
+
+	phases := append([]envdetect.SubnetPhase(nil), activeProfile.Phases...)
+	sort.SliceStable(phases, func(i, j int) bool {
+		return phases[i].Priority < phases[j].Priority
+	})
+
+	for _, phase := range phases {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+
+		if s.shouldSkipPhase(ctx, phase) {
+			log.Warn().
+				Str("phase", phase.Name).
+				Float64("confidence", phase.Confidence).
+				Msg("Skipping discovery phase due to low confidence/time budget")
+			continue
+		}
+
+		phaseIPs, subnetCount := s.expandPhaseIPs(phase, seenIPs)
+		if len(phaseIPs) == 0 {
+			log.Debug().
+				Str("phase", phase.Name).
+				Int("subnets", subnetCount).
+				Msg("No scan targets generated for phase")
+			continue
+		}
+
+		log.Info().
+			Str("phase", phase.Name).
+			Int("subnets", subnetCount).
+			Int("targets", len(phaseIPs)).
+			Float64("confidence", phase.Confidence).
+			Msg("Starting discovery phase")
+
+		if err := s.runPhase(ctx, phase.Name, phaseIPs, callback, result); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", phase.Name, err))
+			if errors.Is(err, context.Canceled) {
+				return result, ctx.Err()
 			}
-		case <-ctx.Done():
-			return result, ctx.Err()
 		}
 	}
 
 	log.Info().
-		Int("found", len(result.Servers)).
+		Int("servers_found", len(result.Servers)).
 		Int("errors", len(result.Errors)).
 		Msg("Discovery completed")
 
 	return result, nil
 }
 
+type discoveredResult struct {
+	Phase  string
+	Server *DiscoveredServer
+}
+
+type phaseError struct {
+	Phase   string
+	Message string
+}
+
 // scanWorker scans IPs from the channel
-func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, ipChan <-chan string, resultChan chan<- *DiscoveredServer, errorChan chan<- string) {
+func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, phase string, ipChan <-chan string, resultChan chan<- discoveredResult, errorChan chan<- phaseError) {
 	defer wg.Done()
 
 	for ip := range ipChan {
@@ -201,14 +200,308 @@ func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, ipChan <-c
 			return
 		default:
 			if server := s.checkPort8006(ctx, ip); server != nil {
-				resultChan <- server
+				resultChan <- discoveredResult{Phase: phase, Server: server}
 			}
 
 			if server := s.checkServer(ctx, ip, 8007, "pbs"); server != nil {
-				resultChan <- server
+				resultChan <- discoveredResult{Phase: phase, Server: server}
 			}
 		}
 	}
+}
+
+func (s *Scanner) runPhase(ctx context.Context, phase string, ips []string, callback ServerCallback, result *DiscoveryResult) error {
+	if len(ips) == 0 {
+		return nil
+	}
+
+	workerCount := s.policy.MaxConcurrent
+	if workerCount <= 0 {
+		workerCount = 1
+	}
+
+	ipChan := make(chan string, len(ips))
+	resultChan := make(chan discoveredResult, len(ips))
+	errorChan := make(chan phaseError, len(ips))
+
+	var wg sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go s.scanWorker(ctx, &wg, phase, ipChan, resultChan, errorChan)
+	}
+
+	for _, ip := range ips {
+		ipChan <- ip
+	}
+	close(ipChan)
+
+	go func() {
+		wg.Wait()
+		close(resultChan)
+		close(errorChan)
+	}()
+
+	for resultChan != nil || errorChan != nil {
+		select {
+		case res, ok := <-resultChan:
+			if !ok {
+				resultChan = nil
+				continue
+			}
+			if res.Server == nil {
+				continue
+			}
+
+			result.Servers = append(result.Servers, *res.Server)
+
+			log.Info().
+				Str("phase", res.Phase).
+				Str("ip", res.Server.IP).
+				Str("type", res.Server.Type).
+				Str("hostname", res.Server.Hostname).
+				Msg("Discovered server")
+
+			if callback != nil {
+				callback(*res.Server, res.Phase)
+			}
+		case perr, ok := <-errorChan:
+			if !ok {
+				errorChan = nil
+				continue
+			}
+			if perr.Message == "" {
+				continue
+			}
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %s", perr.Phase, perr.Message))
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return nil
+}
+
+func (s *Scanner) resolveProfile(subnet string) (*envdetect.EnvironmentProfile, error) {
+	if strings.EqualFold(strings.TrimSpace(subnet), "auto") || strings.TrimSpace(subnet) == "" {
+		return cloneProfile(s.profile), nil
+	}
+
+    var (
+        subnets        []net.IPNet
+        renderedSubnets []string
+    )
+    for _, token := range strings.Split(subnet, ",") {
+        token = strings.TrimSpace(token)
+        if token == "" {
+            continue
+        }
+        _, parsedNet, err := net.ParseCIDR(token)
+        if err != nil {
+            return nil, fmt.Errorf("invalid subnet %q: %w", token, err)
+        }
+        subnets = append(subnets, *parsedNet)
+        renderedSubnets = append(renderedSubnets, parsedNet.String())
+    }
+
+    if len(subnets) == 0 {
+        return nil, fmt.Errorf("no valid subnets provided")
+    }
+
+	manualProfile := &envdetect.EnvironmentProfile{
+		Type:       envdetect.Unknown,
+		Confidence: 1.0,
+		Policy:     s.policy,
+		Warnings:   []string{"Manual subnet override applied"},
+        Metadata: map[string]string{
+            "manual_subnets": strings.Join(renderedSubnets, ","),
+        },
+		Phases: []envdetect.SubnetPhase{
+			{
+				Name:       "manual_subnet",
+				Subnets:    subnets,
+				Confidence: 1.0,
+				Priority:   1,
+			},
+		},
+	}
+
+	return manualProfile, nil
+}
+
+func (s *Scanner) collectExtraTargets(profile *envdetect.EnvironmentProfile, seen map[string]struct{}) []string {
+	if profile == nil {
+		return nil
+	}
+
+	var targets []string
+	for _, ip := range profile.ExtraTargets {
+		if ip == nil {
+			continue
+		}
+		ip4 := ip.To4()
+		if ip4 == nil {
+			continue
+		}
+		ipStr := ip4.String()
+		if _, exists := seen[ipStr]; exists {
+			continue
+		}
+		seen[ipStr] = struct{}{}
+		targets = append(targets, ipStr)
+	}
+
+	return targets
+}
+
+func (s *Scanner) expandPhaseIPs(phase envdetect.SubnetPhase, seen map[string]struct{}) ([]string, int) {
+	var targets []string
+
+	for _, subnet := range phase.Subnets {
+		if subnet.IP.To4() == nil {
+			continue
+		}
+
+		copySubnet := subnet // copy to avoid modifying original
+		ips := s.generateIPs(&copySubnet)
+		for _, ip := range ips {
+			if _, exists := seen[ip]; exists {
+				continue
+			}
+			seen[ip] = struct{}{}
+			targets = append(targets, ip)
+		}
+	}
+
+	return targets, len(phase.Subnets)
+}
+
+func (s *Scanner) shouldSkipPhase(ctx context.Context, phase envdetect.SubnetPhase) bool {
+	if phase.Confidence >= 0.5 {
+		return false
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return false
+	}
+
+	timeRemaining := time.Until(deadline)
+	minBudget := s.policy.DialTimeout * 5
+	if minBudget <= 0 {
+		minBudget = 5 * time.Second
+	}
+
+	return timeRemaining > 0 && timeRemaining < minBudget
+}
+
+func buildEnvironmentInfo(profile *envdetect.EnvironmentProfile) *EnvironmentInfo {
+	if profile == nil {
+		return nil
+	}
+
+	info := &EnvironmentInfo{
+		Type:       profile.Type.String(),
+		Confidence: profile.Confidence,
+		Warnings:   append([]string(nil), profile.Warnings...),
+		Metadata:   copyMetadata(profile.Metadata),
+	}
+
+	for _, phase := range profile.Phases {
+		pInfo := PhaseInfo{
+			Name:       phase.Name,
+			Confidence: phase.Confidence,
+			Subnets:    []string{},
+		}
+		for _, subnet := range phase.Subnets {
+			pInfo.Subnets = append(pInfo.Subnets, subnet.String())
+		}
+		info.Phases = append(info.Phases, pInfo)
+	}
+
+	return info
+}
+
+func ensurePolicyDefaults(policy envdetect.ScanPolicy) envdetect.ScanPolicy {
+	defaults := envdetect.DefaultScanPolicy()
+
+	if policy == (envdetect.ScanPolicy{}) {
+		return defaults
+	}
+
+	if policy.MaxConcurrent <= 0 {
+		policy.MaxConcurrent = defaults.MaxConcurrent
+	}
+	if policy.DialTimeout <= 0 {
+		policy.DialTimeout = defaults.DialTimeout
+	}
+	if policy.HTTPTimeout <= 0 {
+		policy.HTTPTimeout = defaults.HTTPTimeout
+	}
+	if policy.MaxHostsPerScan < 0 {
+		policy.MaxHostsPerScan = defaults.MaxHostsPerScan
+	}
+
+	return policy
+}
+
+func cloneProfile(profile *envdetect.EnvironmentProfile) *envdetect.EnvironmentProfile {
+	if profile == nil {
+		defaults := envdetect.DefaultScanPolicy()
+		return &envdetect.EnvironmentProfile{
+			Type:       envdetect.Unknown,
+			Confidence: 0.3,
+			Policy:     defaults,
+			Warnings:   []string{"Environment profile unavailable; using defaults"},
+			Metadata:   map[string]string{},
+		}
+	}
+
+	cloned := *profile
+	if profile.Metadata != nil {
+		cloned.Metadata = copyMetadata(profile.Metadata)
+	}
+	if profile.Warnings != nil {
+		cloned.Warnings = append([]string(nil), profile.Warnings...)
+	}
+	if profile.ExtraTargets != nil {
+		cloned.ExtraTargets = append([]net.IP(nil), profile.ExtraTargets...)
+	}
+	if profile.Phases != nil {
+		cloned.Phases = make([]envdetect.SubnetPhase, len(profile.Phases))
+		for i, phase := range profile.Phases {
+			cloned.Phases[i] = clonePhase(phase)
+		}
+	}
+
+	return &cloned
+}
+
+func clonePhase(phase envdetect.SubnetPhase) envdetect.SubnetPhase {
+	cloned := phase
+	if phase.Subnets != nil {
+		cloned.Subnets = make([]net.IPNet, len(phase.Subnets))
+		for i, subnet := range phase.Subnets {
+			cloned.Subnets[i] = subnet
+		}
+	}
+	return cloned
+}
+
+func copyMetadata(src map[string]string) map[string]string {
+	if src == nil {
+		return map[string]string{}
+	}
+	dst := make(map[string]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // checkPort8006 checks if port 8006 is running PMG or PVE
@@ -217,15 +510,20 @@ func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServe
 
 	// First attempt a TLS handshake so we can inspect certificate metadata.
 	var tlsState *tls.ConnectionState
-	dialer := &net.Dialer{Timeout: s.timeout}
-	tlsConn, tlsErr := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{InsecureSkipVerify: true})
+    timeout := s.policy.DialTimeout
+    if timeout <= 0 {
+        timeout = time.Second
+    }
+    dialer := &net.Dialer{Timeout: timeout}
+
+    tlsConn, tlsErr := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{InsecureSkipVerify: true})
 	if tlsErr != nil {
 		// Fallback to a simple TCP dial to confirm the port is open.
-		conn, err := net.DialTimeout("tcp", address, s.timeout)
-		if err != nil {
-			return nil // Port not open
-		}
-		conn.Close()
+        conn, err := dialer.DialContext(ctx, "tcp", address)
+        if err != nil {
+            return nil // Port not open
+        }
+        conn.Close()
 	} else {
 		state := tlsConn.ConnectionState()
 		tlsState = &state
@@ -310,15 +608,16 @@ func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServe
 	}
 
 	// Try to resolve hostname via reverse DNS
-	names, err := net.LookupAddr(ip)
-	if err == nil && len(names) > 0 {
-		// Use the first hostname, remove trailing dot if present
-		hostname := strings.TrimSuffix(names[0], ".")
-		server.Hostname = hostname
-		log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
-	}
+    if s.policy.EnableReverseDNS {
+        names, err := net.DefaultResolver.LookupAddr(ctx, ip)
+        if err == nil && len(names) > 0 {
+            hostname := strings.TrimSuffix(names[0], ".")
+            server.Hostname = hostname
+            log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
+        }
+    }
 
-	return server
+    return server
 }
 
 // isPMGServer checks if a server is PMG by checking for PMG-specific endpoints
@@ -438,12 +737,18 @@ func inferTypeFromMetadata(parts ...string) string {
 // checkServer checks if a server is running at the given IP and port
 func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverType string) *DiscoveredServer {
 	// First check if port is open
-	address := net.JoinHostPort(ip, strconv.Itoa(port))
-	conn, err := net.DialTimeout("tcp", address, s.timeout)
-	if err != nil {
-		return nil // Port not open
-	}
-	conn.Close()
+    address := net.JoinHostPort(ip, strconv.Itoa(port))
+    timeout := s.policy.DialTimeout
+    if timeout <= 0 {
+        timeout = time.Second
+    }
+    dialer := &net.Dialer{Timeout: timeout}
+
+    conn, err := dialer.DialContext(ctx, "tcp", address)
+    if err != nil {
+        return nil // Port not open
+    }
+    conn.Close()
 
 	// Port is open - this is likely a Proxmox/PBS server
 	// Since most installations require auth for version endpoint,
@@ -495,15 +800,16 @@ func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverTy
 	}
 
 	// Try to resolve hostname via reverse DNS
-	names, err := net.LookupAddr(ip)
-	if err == nil && len(names) > 0 {
-		// Use the first hostname, remove trailing dot if present
-		hostname := strings.TrimSuffix(names[0], ".")
-		server.Hostname = hostname
-		log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
-	}
+    if s.policy.EnableReverseDNS {
+        names, err := net.DefaultResolver.LookupAddr(ctx, ip)
+        if err == nil && len(names) > 0 {
+            hostname := strings.TrimSuffix(names[0], ".")
+            server.Hostname = hostname
+            log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
+        }
+    }
 
-	return server
+    return server
 }
 
 // getProxmoxHostname tries to get the hostname of a Proxmox VE server
@@ -574,158 +880,52 @@ func (s *Scanner) getPBSHostname(ctx context.Context, ip string, port int) strin
 
 // generateIPs generates all IPs in a subnet
 func (s *Scanner) generateIPs(ipNet *net.IPNet) []string {
-	var ips []string
+    baseIP := ipNet.IP.Mask(ipNet.Mask).To4()
+    if baseIP == nil {
+        return nil
+    }
 
-	// Get the starting IP
-	ip := ipNet.IP.Mask(ipNet.Mask)
+    ones, bits := ipNet.Mask.Size()
+    if bits != 32 {
+        return nil
+    }
 
-	// Calculate the number of hosts
-	ones, bits := ipNet.Mask.Size()
-	hostBits := bits - ones
-	numHosts := 1 << hostBits
+    hostBits := bits - ones
+    totalHosts := 1
+    if hostBits > 0 {
+        totalHosts = 1 << hostBits
+    }
 
-	// Skip network and broadcast addresses for common subnets
-	start := 1
-	end := numHosts - 1
-	if numHosts > 256 {
-		// For larger subnets, scan everything
-		start = 0
-		end = numHosts
-	}
+    start := 0
+    end := totalHosts
+    if totalHosts > 2 {
+        start = 1
+        end = totalHosts - 1
+    }
 
-	// Limit to maximum 1024 IPs to avoid scanning huge networks
-	if end-start > 1024 {
-		end = start + 1024
-		log.Warn().Int("limited_to", 1024).Msg("Limiting scan to first 1024 IPs")
-	}
+    limit := s.policy.MaxHostsPerScan
+    if limit > 0 && limit < (end-start) {
+        end = start + limit
+        log.Debug().
+            Str("subnet", ipNet.String()).
+            Int("limit", limit).
+            Msg("Applying max hosts per scan limit")
+    }
 
-	for i := start; i < end; i++ {
-		// Calculate IP
-		currIP := make(net.IP, len(ip))
-		copy(currIP, ip)
+    ips := make([]string, 0, end-start)
 
-		// Add offset to IP address
-		offset := i
-		for j := len(currIP) - 1; j >= 0 && offset > 0; j-- {
-			currIP[j] += byte(offset & 0xFF)
-			offset >>= 8
-		}
+    for offset := start; offset < end; offset++ {
+        currIP := make(net.IP, len(baseIP))
+        copy(currIP, baseIP)
 
-		// Skip common non-server IPs
-		lastOctet := currIP[len(currIP)-1]
-		if lastOctet == 0 || lastOctet == 255 {
-			continue // Skip network and broadcast
-		}
+        carry := offset
+        for idx := len(currIP) - 1; idx >= 0 && carry > 0; idx-- {
+            currIP[idx] += byte(carry & 0xFF)
+            carry >>= 8
+        }
 
-		ips = append(ips, currIP.String())
-	}
+        ips = append(ips, currIP.String())
+    }
 
-	return ips
-}
-
-// getLocalSubnet attempts to detect the local subnet
-func (s *Scanner) getLocalSubnet() *net.IPNet {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
-
-	for _, iface := range interfaces {
-		// Skip loopback and down interfaces
-		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
-			continue
-		}
-
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-
-		for _, addr := range addrs {
-			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
-				// Found an IPv4 address
-				if !ipNet.IP.IsLoopback() && !ipNet.IP.IsLinkLocalUnicast() {
-					// Convert to /24 subnet for auto-detection
-					// This ensures we scan a reasonable range
-					ip := ipNet.IP.To4()
-					if ip != nil {
-						// Create a /24 subnet from the IP
-						ip[3] = 0 // Set last octet to 0
-						return &net.IPNet{
-							IP:   ip,
-							Mask: net.CIDRMask(24, 32),
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Default to common subnet if detection fails
-	_, defaultNet, _ := net.ParseCIDR("192.168.1.0/24")
-	return defaultNet
-}
-
-// getHostSubnetFromGateway detects the host network by examining the default gateway
-// This is useful when running in Docker to detect the actual host's network
-func (s *Scanner) getHostSubnetFromGateway() *net.IPNet {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
-
-	// Find the default gateway by checking routes
-	// In Docker, the gateway IP usually ends in .1 and is on the Docker bridge network
-	for _, iface := range interfaces {
-		if iface.Flags&net.FlagUp == 0 {
-			continue
-		}
-
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-
-		for _, addr := range addrs {
-			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
-				// Check if this looks like a Docker bridge network (172.17.x.x or similar)
-				ipStr := ipNet.IP.String()
-				if strings.HasPrefix(ipStr, "172.17.") || strings.HasPrefix(ipStr, "172.1") {
-					// Gateway is typically .1 in the same subnet
-					// Try to derive the host network: gateway .1 -> likely host is 192.168.x.0/24
-					// We'll try the .1 address as the gateway and ping common host subnets
-
-					// For now, just return the most common subnet
-					// A more sophisticated approach would parse /proc/net/route
-					_, hostNet, _ := net.ParseCIDR("192.168.0.0/24")
-					return hostNet
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-// getCommonSubnets returns a list of common home/office network subnets
-func (s *Scanner) getCommonSubnets() []*net.IPNet {
-	// Ordered by likelihood - most common first for faster results
-	commonSubnets := []string{
-		"192.168.1.0/24", // Most common home router default
-		"192.168.0.0/24", // Very common alternative
-		"10.0.0.0/24",    // Some routers use this
-		// Skip less common ones for speed:
-		// "192.168.88.0/24", // MikroTik default (uncommon)
-		// "172.16.0.0/24",   // Less common but used
-	}
-
-	var nets []*net.IPNet
-	for _, subnet := range commonSubnets {
-		_, ipNet, err := net.ParseCIDR(subnet)
-		if err == nil {
-			nets = append(nets, ipNet)
-		}
-	}
-
-	return nets
+    return ips
 }

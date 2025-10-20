@@ -135,7 +135,7 @@ All configuration can be provided via environment variables (see [`docs/CONFIGUR
 
 ### Debug Logging
 
-For detailed troubleshooting, set `LOG_LEVEL=debug` in your deployment and restart Pulse. Debug logs include:
+For detailed troubleshooting, temporarily raise the log level to `debug` (via **Settings → System → Logging** or by exporting `LOG_LEVEL=debug` and restarting). Debug logs include:
 
 - OIDC provider initialization (issuer URL, endpoints discovered)
 - Authorization flow start (client ID, scopes requested)

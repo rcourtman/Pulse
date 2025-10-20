@@ -50,6 +50,8 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 - Optional Docker container monitoring via lightweight agent
 - Config export/import with encryption and authentication
 - Automatic stable updates with safe rollback (opt-in)
+- Runtime logging controls (switch level/format or mirror to file without downtime)
+- Update history with rollback guidance captured in the UI
 - Dark/light themes, responsive design
 - Built with Go for minimal resource usage
 
@@ -157,10 +159,29 @@ services:
       # CORS & logging
       # - ALLOWED_ORIGINS=https://app.example.com  # CORS origins (default: none, same-origin only)
       # - LOG_LEVEL=info                    # Log level: debug/info/warn/error (default: info)
+      # - LOG_FORMAT=auto                   # auto | json | console (default: auto)
+      # - LOG_FILE=/data/pulse.log          # Optional mirrored logfile inside container
+      # - LOG_MAX_SIZE=100                  # Rotate logfile after N MB
+      # - LOG_MAX_AGE=30                    # Retain rotated logs for N days
+      # - LOG_COMPRESS=true                 # Compress rotated logs
     restart: unless-stopped
 
 volumes:
   pulse_data:
+
+### Updating & Rollbacks (v4.24.0+)
+
+```bash
+# Update to the latest tagged image
+docker pull rcourtman/pulse:latest
+docker stop pulse && docker rm pulse
+docker run -d --name pulse \
+  -p 7655:7655 -v pulse_data:/data \
+  --restart unless-stopped \
+  rcourtman/pulse:latest
+```
+- Every upgrade is logged in **Settings → System → Updates** with an `event_id` for change tracking.
+- Need to revert? Redeploy the previous tag (for example `rcourtman/pulse:v4.23.2`). Record the rollback reason in your change notes and double-check `/api/monitoring/scheduler/health` once the container is back online.
 ```
 
 ## Initial Setup

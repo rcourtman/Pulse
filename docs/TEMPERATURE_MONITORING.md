@@ -123,6 +123,21 @@ When you need to provision the proxy yourself (for example via your own automati
 
 After the container restarts, the backend will automatically use the proxy. To refresh SSH keys on cluster nodes (e.g., after adding a new node), SSH to your Proxmox host and re-run the setup script: `curl -fsSL https://get.pulsenode.com/install-proxy.sh | bash -s -- --ctid <your-container-id>`
 
+### Post-install Verification (v4.24.0+)
+
+1. **Confirm proxy metrics**
+   ```bash
+   curl -s http://127.0.0.1:9127/metrics | grep pulse_proxy_build_info
+   ```
+2. **Ensure adaptive polling sees the proxy**
+   ```bash
+   curl -s http://localhost:7655/api/monitoring/scheduler/health \
+     | jq '.instances[] | select(.key | contains("temperature")) | {key, pollStatus}'
+   ```
+   - Expect recent `lastSuccess` timestamps, `breaker.state == "closed"`, and `deadLetter.present == false`.
+3. **Check update history** – Any future proxy restarts/rollbacks are logged under **Settings → System → Updates**; include the associated `event_id` in post-change notes.
+4. **Measure queue depth/staleness** – Grafana panels `pulse_monitor_poll_queue_depth` and `pulse_monitor_poll_staleness_seconds` should return to baseline within a few polling cycles.
+
 ### Legacy Architecture (Pre-v4.24.0 / Native Installs)
 
 For native (non-containerized) installations, Pulse connects directly via SSH:
