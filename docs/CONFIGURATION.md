@@ -107,22 +107,31 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 **Contents:**
 ```json
 {
-  "pbsPollingInterval": 60,        // Seconds between PBS refreshes (PVE polling fixed at 10s)
-  "pmgPollingInterval": 60,        // Seconds between PMG refreshes (mail analytics and health)
-  "connectionTimeout": 60,         // Seconds before node connection timeout
-  "autoUpdateEnabled": false,      // Systemd timer toggle for automatic updates
-  "autoUpdateCheckInterval": 24,   // Hours between auto-update checks
-  "autoUpdateTime": "03:00",       // Preferred update window (combined with randomized delay)
-  "updateChannel": "stable",       // Update channel: stable or rc
-  "allowedOrigins": "",            // CORS allowed origins (empty = same-origin only)
-  "allowEmbedding": false,         // Allow iframe embedding
-  "allowedEmbedOrigins": "",       // Comma-separated origins allowed to embed Pulse
-  "backendPort": 3000,             // Internal API listen port (not normally changed)
-  "frontendPort": 7655,            // Public port exposed by the service
-  "logLevel": "info",              // Log level: debug, info, warn, error
-  "discoveryEnabled": true,        // Enable/disable network discovery for Proxmox/PBS servers
-  "discoverySubnet": "auto",       // CIDR to scan ("auto" discovers common ranges)
-  "theme": ""                      // UI theme preference: "", "light", or "dark"
+  "pbsPollingInterval": 60,            // Seconds between PBS refreshes (PVE polling fixed at 10s)
+  "pmgPollingInterval": 60,            // Seconds between PMG refreshes (mail analytics and health)
+  "connectionTimeout": 60,             // Seconds before node connection timeout
+  "autoUpdateEnabled": false,          // Systemd timer toggle for automatic updates
+  "autoUpdateCheckInterval": 24,       // Hours between auto-update checks
+  "autoUpdateTime": "03:00",           // Preferred update window (combined with randomized delay)
+  "updateChannel": "stable",           // Update channel: stable or rc
+  "allowedOrigins": "",                // CORS allowed origins (empty = same-origin only)
+  "allowEmbedding": false,             // Allow iframe embedding
+  "allowedEmbedOrigins": "",           // Comma-separated origins allowed to embed Pulse
+  "backendPort": 3000,                 // Internal API listen port (not normally changed)
+  "frontendPort": 7655,                // Public port exposed by the service
+  "logLevel": "info",                  // Log level: debug, info, warn, error
+  "logFormat": "auto",                 // auto, json, or console output
+  "logFile": "",                       // Optional file path for mirrored logs
+  "logMaxSize": 100,                   // Log rotation threshold (MB) when logFile is set
+  "logMaxAge": 30,                     // Days to retain rotated files
+  "logCompress": true,                 // Compress rotated log files
+  "adaptivePollingEnabled": false,     // Toggle adaptive scheduler (v4.24.0+)
+  "adaptivePollingBaseInterval": 10,   // Target cadence (seconds)
+  "adaptivePollingMinInterval": 5,     // Fastest cadence (seconds)
+  "adaptivePollingMaxInterval": 300,   // Slowest cadence (seconds)
+  "discoveryEnabled": true,            // Enable/disable network discovery for Proxmox/PBS servers
+  "discoverySubnet": "auto",           // CIDR to scan ("auto" discovers common ranges)
+  "theme": ""                          // UI theme preference: "", "light", or "dark"
 }
 ```
 
@@ -133,6 +142,23 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - Missing file results in defaults being used
 - Changes take effect immediately (no restart required)
 - API tokens are no longer managed in system.json (moved to .env in v4.3.9+)
+- **Adaptive polling controls** (`adaptivePollingEnabled`, `adaptivePolling*Interval`) map directly to the Scheduler Health API and adjust queue/backoff behaviour in real time.
+- **Runtime logging controls** (`logLevel`, `logFormat`, `logFile`, `logMaxSize`, `logMaxAge`, `logCompress`) can be tuned from the UI or system.json; updates are applied immediately so you can raise verbosity, switch to structured JSON, or stream logs to disk without restarting Pulse.
+
+### Adaptive Polling Settings (v4.24.0+)
+
+- `adaptivePollingEnabled`: Enables the adaptive scheduler that prioritises stale or failing instances. Toggle it in **Settings → System → Adaptive polling** or set the flag in system.json.
+- `adaptivePollingBaseInterval`: Target cadence (seconds) when an instance is healthy. Defaults to 10 seconds.
+- `adaptivePollingMinInterval`: Lower bound when Pulse needs to poll aggressively (for example, 5 seconds for busy clusters).
+- `adaptivePollingMaxInterval`: Upper bound for idle instances. Setting this to a small value (≤15s) automatically engages the low-latency backoff profile (750 ms initial delay, 20 % jitter, 10 s breaker windows).
+- The adaptive scheduler feeds the `/api/monitoring/scheduler/health` endpoint and priority queue. Shorter intervals reduce queue depth; longer intervals trade freshness for fewer calls. All three intervals are stored in seconds in system.json; environment overrides accept Go duration strings such as `15s` or `5m`.
+
+### Logging Configuration (v4.24.0+)
+
+- `logLevel`: Runtime log verbosity (`debug`, `info`, `warn`, `error`). Raise it to `debug` temporarily when troubleshooting, then drop back to `info`.
+- `logFormat`: `auto` switches between human-friendly console output (interactive TTY) and JSON when Pulse runs under a service. Override with `json` to stream machine-readable logs everywhere, or `console` to force colourised output.
+- `logFile`: Optional absolute path. When populated, Pulse mirrors logs to this file as well as stdout. Rotation honours `logMaxSize` (MB), `logMaxAge` (days), and `logCompress` (gzip rotated files).
+- Logging changes made via the UI or system.json take effect immediately, so you can capture verbose traces or structured logs without scheduling downtime.
 
 ---
 
@@ -294,6 +320,12 @@ Set `autoUpdateEnabled: true` in system.json or toggle in Settings UI.
 
 **Note**: Docker installations do not support automatic updates (use Docker's update mechanisms instead).
 
+### Update Backups & History (v4.24.0+)
+
+- Every self-update or rollback writes an entry to `<DATA_PATH>/update-history.jsonl` (defaults to `/var/lib/pulse` for systemd installs and `/data` in Docker). Review the log via **Settings → System → Updates**, or query `/api/updates/history` for automation.
+- The install script prints the configuration backup it creates (for example `/etc/pulse.backup.20251020-130500`). That path is captured in the history entry as `backup_path` so rollbacks know which snapshot to restore.
+- Update logs live under `/var/log/pulse/update-*.log`; grab the most recent file when filing support tickets or analysing failures.
+
 ---
 
 ## Configuration Priority
@@ -313,7 +345,16 @@ These env vars override system.json values. When set, the UI will show a warning
 - `DISCOVERY_SUBNET` - Custom network to scan (default: auto-scans common networks)
 - `CONNECTION_TIMEOUT` - API timeout in seconds (default: 10)
 - `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)
-- `LOG_LEVEL` - Log verbosity: debug/info/warn/error (default: info)
+- `LOG_LEVEL` - Log verbosity: debug/info/warn/error (default: info). Switching levels takes effect immediately.
+- `LOG_FORMAT` - Override output format (`auto`, `json`, or `console`).
+- `LOG_FILE` - Mirror logs to this absolute path in addition to stdout (empty = stdout only).
+- `LOG_MAX_SIZE` - Rotate the log file after it grows beyond this many megabytes (default: 100).
+- `LOG_MAX_AGE` - Delete rotated log files older than this many days (default: 30).
+- `LOG_COMPRESS` - When `true` (default) gzip-compresses rotated log files.
+- `ADAPTIVE_POLLING_ENABLED` - Enable/disable the adaptive scheduler without touching system.json (`true`/`false`).
+- `ADAPTIVE_POLLING_BASE_INTERVAL` - Override the target polling cadence (accepts Go durations, e.g. `15s`).
+- `ADAPTIVE_POLLING_MIN_INTERVAL` - Override the minimum cadence (Go duration or seconds).
+- `ADAPTIVE_POLLING_MAX_INTERVAL` - Override the maximum cadence (Go duration or seconds). Values ≤`15s` engage the low-latency backoff profile.
 - `ENABLE_BACKUP_POLLING` - Set to `false` to disable polling of Proxmox backup/snapshot APIs (default: true)
 - `BACKUP_POLLING_INTERVAL` - Override the backup polling cadence. Accepts Go duration syntax (e.g. `30m`, `6h`) or seconds. Use `0` for Pulse's default (~90s) cadence.
 - `PULSE_PUBLIC_URL` - Full URL to access Pulse (e.g., `http://192.168.1.100:7655`)

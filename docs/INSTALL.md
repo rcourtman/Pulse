@@ -85,6 +85,9 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 
 # Or force enable with flag
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --enable-auto-updates
+
+# Install specific version (e.g., v4.24.0)
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.24.0
 ```
 
 #### Enable/Disable After Installation
@@ -104,6 +107,7 @@ systemctl status pulse-update.timer         # Check status
 - Creates backup before updating
 - Automatically rolls back if update fails
 - Logs all activity to systemd journal
+- **New in v4.24.0**: Rollback history is retained in Settings → System → Updates; use the new 'Restore previous version' button if the latest build regresses
 
 #### View Update Logs
 ```bash
@@ -132,11 +136,35 @@ docker rm pulse
 docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 ```
 
+### Rollback to Previous Version
+
+**New in v4.24.0:** Pulse retains previous versions and allows easy rollback if an update causes issues.
+
+#### Via UI (Recommended)
+1. Navigate to **Settings → System → Updates**
+2. Click **"Restore previous version"** button
+3. Confirm rollback
+4. Pulse will restart with the previous working version
+
+#### Via CLI
+```bash
+# For systemd installations
+sudo /opt/pulse/pulse config rollback
+
+# For LXC containers
+pct exec <container-id> -- bash -c "cd /opt/pulse && ./pulse config rollback"
+```
+
+Rollback history and metadata are tracked in the Updates view. Check system journal for detailed rollback logs:
+```bash
+journalctl -u pulse | grep rollback
+```
+
 ## Version Management
 
 ### Install Specific Version
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.8.0
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.24.0
 ```
 
 ### Install Release Candidate
@@ -154,6 +182,34 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --source develop
 ```
 **Note:** This builds Pulse from source code on your machine. Requires Go, Node.js, and npm.
+
+## Advanced Configuration
+
+### Runtime Logging Configuration
+
+**New in v4.24.0:** Adjust logging settings without restarting Pulse.
+
+#### Via UI
+Navigate to **Settings → System → Logging** to configure:
+- **Log Level**: debug, info, warn, error
+- **Log Format**: json, text
+- **File Rotation**: size limits and retention
+
+#### Via Environment Variables
+```bash
+# Systemd
+sudo systemctl edit pulse
+[Service]
+Environment="LOG_LEVEL=debug"
+Environment="LOG_FORMAT=json"
+
+# Docker
+docker run -e LOG_LEVEL=debug -e LOG_FORMAT=json rcourtman/pulse:latest
+```
+
+### Adaptive Polling
+
+**New in v4.24.0:** Adaptive polling is now enabled by default, automatically adjusting polling intervals based on system load and responsiveness. Monitor status via **Settings → System → Monitoring** or the new Scheduler Health API at `/api/monitoring/scheduler/health`.
 
 ## Troubleshooting
 

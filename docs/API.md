@@ -63,7 +63,12 @@ curl -b cookies.txt http://localhost:7655/api/health
 When authentication is enabled, Pulse provides enterprise-grade security:
 
 - **CSRF Protection**: All state-changing requests require a CSRF token
-- **Rate Limiting**: 500 req/min general, 10 attempts/min for authentication
+- **Rate Limiting** (enhanced in v4.24.0): 500 req/min general, 10 attempts/min for authentication
+  - **New**: All responses include rate limit headers:
+    - `X-RateLimit-Limit`: Maximum requests per window
+    - `X-RateLimit-Remaining`: Requests remaining in current window
+    - `X-RateLimit-Reset`: Unix timestamp when the limit resets
+    - `Retry-After`: Seconds to wait before retrying (on 429 responses)
 - **Account Lockout**: Locks after 5 failed attempts (15 minute cooldown) with clear feedback
 - **Secure Sessions**: HttpOnly cookies, 24-hour expiry
 - **Security Headers**: CSP, X-Frame-Options, X-Content-Type-Options, etc.
@@ -106,6 +111,19 @@ Response:
 }
 ```
 
+**Optional fields** (v4.24.0+, appear when relevant):
+```json
+{
+  "status": "healthy",
+  "timestamp": 1754995749,
+  "uptime": 166.187561244,
+  "legacySSHDetected": false,
+  "recommendProxyUpgrade": false,
+  "proxyInstallScriptAvailable": true,
+  "devModeSSH": false
+}
+```
+
 ### Version Information
 Get current Pulse version and build info.
 
@@ -113,15 +131,20 @@ Get current Pulse version and build info.
 GET /api/version
 ```
 
-Response:
+Response (v4.24.0+):
 ```json
 {
-  "version": "v4.8.0",
+  "version": "v4.24.0",
   "build": "release",
+  "buildTime": "2025-10-20T10:30:00Z",
   "runtime": "go",
+  "goVersion": "1.23.2",
   "channel": "stable",
+  "deploymentType": "systemd",
   "isDocker": false,
-  "isDevelopment": false
+  "isDevelopment": false,
+  "updateAvailable": false,
+  "latestVersion": "v4.24.0"
 }
 ```
 
@@ -184,6 +207,29 @@ When Pulse detects Ceph-backed storage (RBD, CephFS, etc.), the `cephClusters` a
 ```
 
 Each service entry lists offline daemons in `message` when present (for example, `Offline: mgr.x@pve2`), making it easy to highlight degraded components in custom tooling.
+
+### Scheduler Health
+
+**New in v4.24.0:** Monitor Pulse's internal adaptive polling scheduler and circuit breaker status.
+
+```bash
+GET /api/monitoring/scheduler/health
+```
+
+This endpoint provides detailed metrics about:
+- Task queue depths and processing times
+- Circuit breaker states per node
+- Backoff delays and retry schedules
+- Dead-letter queue entries (tasks that repeatedly fail)
+- Instance-level staleness tracking
+
+See [Scheduler Health API Documentation](api/SCHEDULER_HEALTH.md) for complete response schema and examples.
+
+**Key use cases:**
+- Monitor for polling backlogs
+- Detect connectivity issues via circuit breaker trips
+- Track node health and responsiveness
+- Identify failing tasks in the dead-letter queue
 
 #### PMG Mail Gateway Data
 
@@ -933,12 +979,19 @@ GET /api/updates/plan?version=v4.30.0
 GET /api/updates/plan?version=v4.30.0&channel=rc
 ```
 
-Response example (systemd deployment):
+Response example (systemd deployment, v4.24.0+):
 
 ```json
 {
   "version": "v4.30.0",
   "channel": "stable",
+  "canAutoUpdate": true,
+  "requiresRoot": true,
+  "rollbackSupport": true,
+  "estimatedTime": "2-3 minutes",
+  "downloadUrl": "https://github.com/rcourtman/Pulse/releases/download/v4.30.0/pulse-linux-amd64.tar.gz",
+  "instructions": "Run the installer script with --version flag",
+  "prerequisites": ["systemd", "root access"],
   "steps": [
     "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.30.0"
   ]
@@ -972,7 +1025,49 @@ GET /api/updates/history                 # List recent update attempts (optional
 GET /api/updates/history/entry?id=<uuid> # Inspect a specific update event
 ```
 
-Entries include version, channel, timestamps, status, and error messaging for failed attempts.
+**Response format (v4.24.0+):**
+```json
+{
+  "entries": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "action": "update",
+      "version": "v4.24.0",
+      "fromVersion": "v4.23.0",
+      "channel": "stable",
+      "status": "completed",
+      "timestamp": "2025-10-20T10:30:00Z",
+      "initiated_via": "ui",
+      "related_event_id": null,
+      "backup_path": "/opt/pulse/backups/pre-update-v4.23.0.tar.gz",
+      "duration_seconds": 120,
+      "error": null
+    },
+    {
+      "id": "650e8400-e29b-41d4-a716-446655440001",
+      "action": "rollback",
+      "version": "v4.23.0",
+      "fromVersion": "v4.24.0",
+      "channel": "stable",
+      "status": "completed",
+      "timestamp": "2025-10-20T11:00:00Z",
+      "initiated_via": "api",
+      "related_event_id": "550e8400-e29b-41d4-a716-446655440000",
+      "backup_path": null,
+      "duration_seconds": 45,
+      "error": null
+    }
+  ]
+}
+```
+
+Entries include:
+- `action`: "update" | "rollback"
+- `status`: "pending" | "in_progress" | "completed" | "failed"
+- `initiated_via`: How the action was started (ui, api, auto)
+- `related_event_id`: Links rollback to original update
+- `backup_path`: Location of pre-update backup
+- Error details for failed attempts
 
 ## Real-time Updates
 
@@ -1016,10 +1111,45 @@ Returns simplified metrics without authentication requirements.
 
 ## Rate Limiting
 
-Some endpoints have rate limiting:
-- Export/Import: 5 requests per minute
-- Test email: 10 requests per minute
-- Update check: 10 requests per hour
+**v4.24.0:** All responses include rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`). 429 responses add `Retry-After`.
+
+**Rate limits by endpoint category:**
+- **Authentication**: 10 attempts/minute per IP
+- **Config writes**: 30 requests/minute
+- **Exports**: 5 requests per 5 minutes
+- **Recovery operations**: 3 requests per 10 minutes
+- **Update operations**: 20 requests/minute
+- **WebSocket connections**: 5 connections/minute per IP
+- **General API**: 500 requests/minute per IP
+- **Public endpoints**: 1000 requests/minute per IP
+
+**Exempt endpoints** (no rate limits):
+- `/api/state` (real-time monitoring)
+- `/api/guests/metadata` (frequent polling)
+- WebSocket message streaming (after connection established)
+
+**Example response with rate limit headers:**
+```
+HTTP/1.1 200 OK
+X-RateLimit-Limit: 500
+X-RateLimit-Remaining: 487
+X-RateLimit-Reset: 1754995800
+Content-Type: application/json
+```
+
+**When rate limited:**
+```
+HTTP/1.1 429 Too Many Requests
+X-RateLimit-Limit: 500
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1754995800
+Retry-After: 60
+Content-Type: application/json
+
+{
+  "error": "Rate limit exceeded. Please retry after 60 seconds."
+}
+```
 
 ## Error Responses
 

@@ -1,5 +1,7 @@
 # Migrating Pulse
 
+**Updated for Pulse v4.24.0**
+
 ## Quick Migration Guide
 
 ### ❌ DON'T: Copy files directly
@@ -19,12 +21,16 @@ Never copy `/etc/pulse` or `/var/lib/pulse` directories between systems:
 
 #### Importing (New Server)
 1. Install fresh Pulse instance
-2. Open Pulse web interface  
+2. Open Pulse web interface
 3. Go to **Settings** → **Configuration Management**
 4. Click **Import Configuration**
 5. Select your exported file
 6. Enter the same passphrase
 7. Click Import
+8. **Post-migration verification (v4.24.0+)**:
+   - Check scheduler health: `curl -s http://localhost:7655/api/monitoring/scheduler/health | jq`
+   - Verify adaptive polling status: **Settings → System → Monitoring**
+   - Confirm all nodes are connected and polling correctly
 
 ## What Gets Migrated
 
@@ -40,7 +46,9 @@ Never copy `/etc/pulse` or `/var/lib/pulse` directories between systems:
 - Historical metrics data
 - Alert history
 - Authentication settings (passwords, API tokens)
+- **Updates rollback history** (v4.24.0+)
 - Each instance should configure its own authentication
+- **Note:** Updates rollback data isn't transferred and must be rebuilt by running one successful update cycle on the new host
 
 ## Common Scenarios
 
@@ -75,6 +83,7 @@ The export/import process works across all installation methods:
 - **Safe to Store**: Encrypted exports can be stored in cloud backups
 - **Minimum 12 characters**: Use a strong passphrase
 - **Password Manager**: Store your passphrase securely
+- **Rollback History**: Updates rollback data isn't included in exports; rebuild by running one successful update on the new host
 
 ## Troubleshooting
 
@@ -89,6 +98,12 @@ The export/import process works across all installation methods:
 **Connection errors after import**
 - Node IPs may have changed
 - Update node addresses in Settings
+
+**Logging issues after migration (v4.24.0+)**
+- If you lose logs after migration, ensure the runtime logging configuration persisted
+- Toggle **Settings → System → Logging** to your desired level
+- Check environment variables: `LOG_LEVEL`, `LOG_FORMAT`
+- Verify log file rotation settings are correct
 
 ## Pro Tips
 

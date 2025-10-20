@@ -1,8 +1,18 @@
 # Scheduler Health API
 
+**New in v4.24.0**
+
 Endpoint: `GET /api/monitoring/scheduler/health`
 
 Returns a snapshot of the adaptive polling scheduler, queue state, circuit breakers, and per-instance status. Requires authentication (session cookie or bearer token).
+
+**Key Features:**
+- Real-time scheduler health monitoring
+- Circuit breaker status per instance
+- Dead-letter queue tracking (tasks that repeatedly fail)
+- Per-instance staleness metrics
+- No query parameters required
+- Read-only endpoint (rate-limited under general 500 req/min bucket)
 
 ---
 
@@ -21,15 +31,21 @@ No query parameters are needed.
 
 ```json
 {
-  "updatedAt": "2025-10-20T13:05:42Z",
-  "enabled": true,
+  "updatedAt": "2025-10-20T13:05:42Z",  // RFC 3339 timestamp
+  "enabled": true,                       // Mirrors AdaptivePollingEnabled setting
   "queue": {...},
   "deadLetter": {...},
-  "breakers": [...],          // legacy summary
-  "staleness": [...],         // legacy summary
-  "instances": [ ... ]       // enhanced per-instance view
+  "breakers": [...],          // legacy summary (for backward compatibility)
+  "staleness": [...],         // legacy summary (for backward compatibility)
+  "instances": [ ... ]        // authoritative per-instance view (v4.24.0+)
 }
 ```
+
+**Field Notes:**
+- `updatedAt`: RFC 3339 timestamp of when this snapshot was generated
+- `enabled`: Reflects the current `AdaptivePollingEnabled` system setting
+- `breakers` and `staleness`: Legacy arrays maintained for backward compatibility; use `instances` for complete data
+- `instances`: Authoritative source for per-instance health (v4.24.0+)
 
 ### Queue Snapshot (`queue`)
 
@@ -44,7 +60,9 @@ No query parameters are needed.
 | Field | Type | Description |
 |-------|------|-------------|
 | `count` | integer | Total items in the dead-letter queue |
-| `tasks` | array | Top entries (legacy format; limited set) |
+| `tasks` | array | **Limited to 25 entries** for performance. Each task includes `instance`, `type`, `nextRun`, `lastError`, and `failures` count. For complete per-instance DLQ data, use `instances[].deadLetter` |
+
+**Note:** The top-level `deadLetter.tasks` array is capped at 25 items to prevent large responses. Use the `instances` array for exhaustive coverage.
 
 ### Instances (`instances`)
 
@@ -65,20 +83,37 @@ Each element gives a complete view of one instance.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `lastSuccess` | timestamp nullable | Most recent successful poll |
-| `lastError` | object nullable | `{ at, message, category }` (`category` is `transient` or `permanent`) |
-| `consecutiveFailures` | integer | Failure streak length |
-| `firstFailureAt` | timestamp nullable | When the streak began |
+| `lastSuccess` | timestamp nullable | RFC 3339 timestamp of most recent successful poll |
+| `lastError` | object nullable | `{ at, message, category }` where `at` is RFC 3339, `message` describes the error, and `category` is `transient` (network issues, timeouts) or `permanent` (auth failures, invalid config) |
+| `consecutiveFailures` | integer | Current failure streak length (resets on successful poll) |
+| `firstFailureAt` | timestamp nullable | **New in v4.24.0**: RFC 3339 timestamp when the current failure streak began. Useful for calculating failure duration |
+
+**Timing Metadata (v4.24.0+):**
+- `firstFailureAt`: Tracks when a failure streak started, enabling "failing for X minutes" calculations
+- Resets to `null` when a successful poll occurs
+- Combine with `consecutiveFailures` to assess severity
 
 #### Breaker (`breaker`)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `state` | string | `closed`, `open`, `half_open`, or `unknown` |
-| `since` | timestamp nullable | When current state began |
-| `lastTransition` | timestamp nullable | Last transition time |
-| `retryAt` | timestamp nullable | Scheduled retry time when applicable |
-| `failureCount` | integer | Failures counted in the current breaker cycle |
+| `state` | string | `closed` (healthy), `open` (failing), `half_open` (testing recovery), or `unknown` (not initialized) |
+| `since` | timestamp nullable | **New in v4.24.0**: RFC 3339 timestamp when the current state began. Use to calculate how long a breaker has been open |
+| `lastTransition` | timestamp nullable | **New in v4.24.0**: RFC 3339 timestamp of the most recent state change (e.g., closed → open) |
+| `retryAt` | timestamp nullable | **New in v4.24.0**: RFC 3339 timestamp of next scheduled retry attempt when breaker is open or half-open |
+| `failureCount` | integer | **New in v4.24.0**: Number of failures in the current breaker cycle. Resets when breaker closes |
+
+**Circuit Breaker Timing (v4.24.0+):**
+- `since`: When did the current state start? (e.g., "breaker has been open for 5 minutes")
+- `lastTransition`: When was the last state change? (useful for detecting flapping)
+- `retryAt`: When will the next retry attempt occur? (for open/half-open states)
+- `failureCount`: How many failures have accumulated? (triggers state transitions)
+
+**State Transitions:**
+- `closed` → `open`: Triggered after N failures (default: 5)
+- `open` → `half_open`: After timeout period, allows one test request
+- `half_open` → `closed`: If test request succeeds
+- `half_open` → `open`: If test request fails
 
 #### Dead-letter (`deadLetter`)
 
@@ -248,6 +283,29 @@ curl -s http://HOST:7655/api/monitoring/scheduler/health \
 | `staleness` array | unchanged | combined with `pollStatus.lastSuccess` gives precise timestamps |
 
 The `instances` array centralizes per-instance telemetry; existing integrations can migrate at their own pace.
+
+---
+
+## Operational Notes
+
+**v4.24.0 Behavior:**
+- **Read-only endpoint**: This endpoint is informational only and does not modify scheduler state
+- **Rate limiting**: Falls under the general API limit (500 requests/minute per IP)
+- **Authentication required**: Must provide valid session cookie or API token
+- **Adaptive polling disabled**: When adaptive polling is disabled (`enabled: false`), the response includes empty `breakers`, `staleness`, and `instances` arrays
+- **Real-time data**: Reflects current scheduler state; not historical (for trends, use metrics/logs)
+- **No query parameters**: Returns complete snapshot on every request
+- **Automatic adjustments**: The `enabled` field automatically reflects the `AdaptivePollingEnabled` system setting
+
+**Use Cases:**
+- **Monitoring dashboards**: Embed in Grafana/Prometheus for real-time scheduler health
+- **Alerting**: Trigger alerts on open circuit breakers or high DLQ counts
+- **Debugging**: Investigate why specific instances aren't polling successfully
+- **Capacity planning**: Monitor queue depth trends to assess if polling intervals need adjustment
+
+**Breaking Changes:**
+- **None**: v4.24.0 only adds fields; all existing consumers continue to work
+- Consumers just gain access to richer metadata (`firstFailureAt`, breaker timestamps, DLQ retry windows)
 
 ---
 

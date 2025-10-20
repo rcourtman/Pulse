@@ -28,28 +28,43 @@ Phase 2 introduces a scheduler that adapts poll cadence based on freshness, er
 
 ## Configuration
 
+**v4.24.0:** Adaptive polling is **enabled by default** but can be toggled without restart.
+
+### Via UI
+Navigate to **Settings → System → Monitoring** to enable/disable adaptive polling. Changes apply immediately without requiring a restart.
+
+### Via Environment Variables
 Environment variables (default in `internal/config/config.go`):
 
 | Variable                            | Default | Description                                      |
 |-------------------------------------|---------|--------------------------------------------------|
-| `ADAPTIVE_POLLING_ENABLED`          | false   | Feature flag for adaptive scheduler.             |
-| `ADAPTIVE_POLLING_BASE_INTERVAL`    | 10s     | Target cadence when system is healthy.           |
-| `ADAPTIVE_POLLING_MIN_INTERVAL`     | 5s      | Lower bound (active instances).                  |
-| `ADAPTIVE_POLLING_MAX_INTERVAL`     | 5m      | Upper bound (idle instances).                    |
+| `ADAPTIVE_POLLING_ENABLED`          | true    | **Changed in v4.24.0**: Now enabled by default   |
+| `ADAPTIVE_POLLING_BASE_INTERVAL`    | 10s     | Target cadence when system is healthy            |
+| `ADAPTIVE_POLLING_MIN_INTERVAL`     | 5s      | Lower bound (active instances)                   |
+| `ADAPTIVE_POLLING_MAX_INTERVAL`     | 5m      | Upper bound (idle instances)                     |
 
-All settings persist in `system.json` and respond to environment overrides.
+All settings persist in `system.json` and respond to environment overrides. **Changes apply without restart** when modified via UI.
 
 ## Metrics
 
+**v4.24.0:** Extended metrics for comprehensive monitoring.
+
 Exposed via Prometheus (`:9091/metrics`):
 
-| Metric                                   | Type      | Labels                                | Description                                |
-|------------------------------------------|-----------|---------------------------------------|--------------------------------------------|
-| `pulse_monitor_poll_total`               | counter   | `instance_type`, `instance`, `result` | Overall poll attempts (success/error).     |
-| `pulse_monitor_poll_duration_seconds`    | histogram | `instance_type`, `instance`           | Poll latency per instance.                 |
-| `pulse_monitor_poll_staleness_seconds`   | gauge     | `instance_type`, `instance`           | Age since last success (0 on success).     |
-| `pulse_monitor_poll_queue_depth`         | gauge     | —                                     | Size of priority queue.                    |
-| `pulse_monitor_poll_inflight`            | gauge     | `instance_type`                       | Concurrent tasks per type.                 |
+| Metric                                      | Type      | Labels                                | Description                                     |
+|---------------------------------------------|-----------|---------------------------------------|-------------------------------------------------|
+| `pulse_monitor_poll_total`                  | counter   | `instance_type`, `instance`, `result` | Overall poll attempts (success/error)           |
+| `pulse_monitor_poll_duration_seconds`       | histogram | `instance_type`, `instance`           | Poll latency per instance                       |
+| `pulse_monitor_poll_staleness_seconds`      | gauge     | `instance_type`, `instance`           | Age since last success (0 on success)           |
+| `pulse_monitor_poll_queue_depth`            | gauge     | —                                     | Size of priority queue                          |
+| `pulse_monitor_poll_inflight`               | gauge     | `instance_type`                       | Concurrent tasks per type                       |
+| `pulse_monitor_poll_errors_total`           | counter   | `instance_type`, `instance`, `category` | **New in v4.24.0**: Error counts by category (transient/permanent) |
+| `pulse_monitor_poll_last_success_timestamp` | gauge     | `instance_type`, `instance`           | **New in v4.24.0**: Unix timestamp of last successful poll |
+
+**Alerting Recommendations:**
+- Alert when `pulse_monitor_poll_staleness_seconds` > 120 for critical instances
+- Alert when `pulse_monitor_poll_queue_depth` > 50 (backlog building)
+- Alert when `pulse_monitor_poll_errors_total` with `category=permanent` increases (auth/config issues)
 
 ## Circuit Breaker & Backoff
 

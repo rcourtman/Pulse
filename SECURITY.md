@@ -266,10 +266,14 @@ for sensitive data.
   - Live reloading when `.env` changes
   - API-only mode supported (no password auth required)
 - **CSRF protection**: all state-changing operations require CSRF tokens
-- **Rate limiting**
-  - Auth endpoints: 10 attempts/minute per IP
+- **Rate limiting** (enhanced in v4.24.0)
+  - Auth endpoints: 10 attempts/minute per IP (returns `Retry-After` header)
   - General API: 500 requests/minute per IP
   - Real-time endpoints exempt for functionality
+  - **New in v4.24.0**: All responses include rate limit headers:
+    - `X-RateLimit-Limit`: Maximum requests per window
+    - `X-RateLimit-Remaining`: Requests remaining in current window
+    - `Retry-After`: Seconds to wait before retrying (on 429 responses)
 - **Account lockout**
   - Locks after 5 failed login attempts
   - 15-minute automatic lockout duration
@@ -287,7 +291,11 @@ for sensitive data.
   - X-XSS-Protection: 1; mode=block
   - Referrer-Policy: strict-origin-when-cross-origin
   - Permissions-Policy restricting sensitive APIs
-- **Audit logging**: authentication events include IP addresses
+- **Audit logging** (enhanced in v4.24.0)
+  - Authentication events include IP addresses
+  - **New**: Rollback actions are logged with timestamps and metadata
+  - **New**: Scheduler health escalations recorded in audit trail
+  - **New**: Runtime logging configuration changes tracked
 
 ### What's Encrypted in Exports
 - Node credentials (passwords, API tokens)
@@ -404,6 +412,51 @@ curl "http://localhost:7655/api/export?token=your-original-token"
 - Protects auto-registration endpoint
 - Enable by setting at least one API token via `API_TOKENS` (or legacy `API_TOKEN`) environment variable
 
+### Runtime Logging Configuration
+
+**New in v4.24.0:** Adjust logging settings dynamically without restarting Pulse.
+
+#### Security Benefits
+- Enable debug logging temporarily for incident investigation
+- Switch to JSON format for SIEM integration
+- Adjust verbosity based on security posture
+- Control file rotation to manage audit log retention
+
+#### Configuration Options
+
+**Via UI:**
+Navigate to **Settings → System → Logging**:
+- **Log Level**: `debug`, `info`, `warn`, `error`
+- **Log Format**: `json` (for log aggregation), `text` (human-readable)
+- **File Rotation**: size limits, retention policies
+
+**Via Environment Variables:**
+```bash
+# Systemd
+sudo systemctl edit pulse
+[Service]
+Environment="LOG_LEVEL=info"
+Environment="LOG_FORMAT=json"
+Environment="LOG_MAX_SIZE=100"        # MB per log file
+Environment="LOG_MAX_BACKUPS=10"      # Number of rotated logs to keep
+Environment="LOG_MAX_AGE=30"          # Days to retain logs
+
+# Docker
+docker run \
+  -e LOG_LEVEL=info \
+  -e LOG_FORMAT=json \
+  -e LOG_MAX_SIZE=100 \
+  -e LOG_MAX_BACKUPS=10 \
+  -e LOG_MAX_AGE=30 \
+  rcourtman/pulse:latest
+```
+
+**Security Considerations:**
+- Debug logs may contain sensitive data—enable only when needed
+- JSON format recommended for security monitoring and SIEM
+- Adjust retention based on compliance requirements
+- Changes are logged to audit trail
+
 ## CORS (Cross-Origin Resource Sharing)
 
 By default, Pulse only allows same-origin requests (no CORS headers). This is the most secure configuration.
@@ -429,6 +482,42 @@ PULSE_DEV=true
 ```
 
 **Security Note**: Never use `ALLOWED_ORIGINS=*` in production as it allows any website to access your API.
+
+## Monitoring and Observability
+
+### Scheduler Health API
+
+**New in v4.24.0:** Monitor Pulse's internal health and detect anomalies using the scheduler health API.
+
+#### Endpoint
+```bash
+curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
+```
+
+#### Security Use Cases
+1. **Anomaly Detection**
+   - Watch for unusual queue depths (possible DoS)
+   - Monitor circuit breaker trips (connectivity issues or attacks)
+   - Track backoff patterns (rate limiting, potential probes)
+
+2. **Performance Monitoring**
+   - Identify performance degradation
+   - Detect resource exhaustion
+   - Track API response times
+
+3. **Incident Response**
+   - Real-time visibility into system health
+   - Historical metrics for post-incident analysis
+   - Circuit breaker status for failover decisions
+
+#### Key Security Metrics
+- **Queue Depth**: High values may indicate attack or overload
+- **Circuit Breaker Status**: Half-open/open states suggest connectivity issues
+- **Backoff Delays**: Increased backoff may indicate rate limiting or errors
+- **Error Rates**: Track failed API calls and authentication attempts
+
+**Dashboard Access:**
+Navigate to **Settings → System → Monitoring** for visual representation of scheduler health.
 
 ## Security Best Practices
 
@@ -498,6 +587,16 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
 **API access denied?** Verify the token you supplied matches one of the values created in *Settings → Security → API tokens* (use the original token, not the hash)  
 **CORS errors?** Configure `ALLOWED_ORIGINS` for your domain  
-**Forgot password?** Start fresh – delete your Pulse data and restart  
+**Forgot password?** Start fresh – delete your Pulse data and restart
 
-_Last updated: 2025-10-19_
+---
+
+_Last updated: 2025-10-20_
+
+**Version 4.24.0 Security Enhancements:**
+- ✅ X-RateLimit-* headers for all API responses
+- ✅ Runtime logging configuration for incident response
+- ✅ Scheduler health API for anomaly detection
+- ✅ Enhanced audit logging (rollback actions, scheduler events)
+- ✅ Adaptive polling with circuit breakers and backoff
+- ✅ Shared script library system (secure installer patterns)
