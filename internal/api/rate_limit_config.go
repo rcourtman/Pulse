@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -156,7 +157,7 @@ func UniversalRateLimitMiddleware(next http.Handler) http.Handler {
 		if !limiter.Allow(ip) {
 			// Add retry-after header
 			w.Header().Set("Retry-After", "60")
-			w.Header().Set("X-RateLimit-Limit", string(rune(limiter.limit)))
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limiter.limit))
 			w.Header().Set("X-RateLimit-Remaining", "0")
 			w.Header().Set("X-RateLimit-Reset", time.Now().Add(limiter.window).Format(time.RFC3339))
 
