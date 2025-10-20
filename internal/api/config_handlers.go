@@ -4343,11 +4343,13 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
         echo "  Token Value: [See token output above]"
     fi
     echo "  Host URL: YOUR_PROXMOX_HOST:8006"
-    echo ""
+echo ""
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, tokenName)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
+			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
+			pulseURL, "%s", "%s", pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
