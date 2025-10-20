@@ -5,9 +5,12 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/spf13/cobra"
@@ -223,8 +226,39 @@ var configAutoImportCmd = &cobra.Command{
 
 		// Get data from URL or direct data
 		if configURL != "" {
-			// TODO: Implement HTTP fetch for config URL
-			return fmt.Errorf("URL import not yet implemented")
+			parsedURL, err := url.Parse(configURL)
+			if err != nil {
+				return fmt.Errorf("invalid PULSE_INIT_CONFIG_URL: %w", err)
+			}
+			if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+				return fmt.Errorf("unsupported URL scheme %q for PULSE_INIT_CONFIG_URL", parsedURL.Scheme)
+			}
+
+			client := &http.Client{Timeout: 15 * time.Second}
+			resp, err := client.Get(configURL)
+			if err != nil {
+				return fmt.Errorf("failed to fetch configuration from URL: %w", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				return fmt.Errorf("failed to fetch configuration from URL: %s", resp.Status)
+			}
+
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("failed to read configuration response: %w", err)
+			}
+			if len(body) == 0 {
+				return fmt.Errorf("configuration response from URL was empty")
+			}
+
+			trimmed := strings.TrimSpace(string(body))
+			if decoded, err := base64.StdEncoding.DecodeString(trimmed); err == nil {
+				encryptedData = string(decoded)
+			} else {
+				encryptedData = string(body)
+			}
 		} else if configData != "" {
 			// Decode base64 if needed
 			if decoded, err := base64.StdEncoding.DecodeString(configData); err == nil {
