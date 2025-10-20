@@ -302,7 +302,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 						Str("cluster", cc.name).
 						Str("endpoint", selectedEndpoint).
 						Err(testErr).
-						Msg("Cluster endpoint failed connectivity test")
+						Msg("Failed to connect to Proxmox endpoint; endpoint removed from rotation until next refresh")
 					return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", selectedEndpoint, testErr)
 				}
 			}

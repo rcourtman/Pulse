@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -231,7 +233,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			vms, err := client.GetVMs(ctx, n.Node)
 			if err != nil {
 				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_vms", instanceName, err).WithNode(n.Node)
-				log.Error().Err(monErr).Str("node", n.Node).Msg("Failed to get VMs")
+				log.Error().Err(monErr).Str("node", n.Node).Msg("Failed to get VMs; deferring node poll until next cycle")
 				resultChan <- nodeResult{node: n.Node, err: err}
 				return
 			}
@@ -459,28 +461,34 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				// The cluster/resources endpoint always returns 0 for disk usage
 				if vm.Status == "running" && vmStatus != nil && diskTotal > 0 {
 					// Log the initial state
-					log.Debug().
-						Str("instance", instanceName).
-						Str("vm", vm.Name).
-						Int("vmid", vm.VMID).
-						Int("agent", vmStatus.Agent).
-						Uint64("diskUsed", diskUsed).
-						Uint64("diskTotal", diskTotal).
-						Msg("VM has 0 disk usage, checking guest agent")
-
-					// Check if agent is enabled
-					if vmStatus.Agent == 0 {
-						diskStatusReason = "agent-disabled"
-						log.Debug().
-							Str("instance", instanceName).
-							Str("vm", vm.Name).
-							Msg("Guest agent disabled in VM config")
-					} else if vmStatus.Agent > 0 || diskUsed == 0 {
+					if logging.IsLevelEnabled(zerolog.DebugLevel) {
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
-							Msg("Guest agent enabled, fetching filesystem info")
+							Int("agent", vmStatus.Agent).
+							Uint64("diskUsed", diskUsed).
+							Uint64("diskTotal", diskTotal).
+							Msg("VM has 0 disk usage, checking guest agent")
+					}
+
+					// Check if agent is enabled
+					if vmStatus.Agent == 0 {
+						diskStatusReason = "agent-disabled"
+						if logging.IsLevelEnabled(zerolog.DebugLevel) {
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Msg("Guest agent disabled in VM config")
+						}
+					} else if vmStatus.Agent > 0 || diskUsed == 0 {
+						if logging.IsLevelEnabled(zerolog.DebugLevel) {
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Int("vmid", vm.VMID).
+								Msg("Guest agent enabled, fetching filesystem info")
+						}
 
 						statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 						if fsInfo, err := client.GetVMFSInfo(statusCtx, n.Node, vm.VMID); err != nil {

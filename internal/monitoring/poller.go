@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -64,16 +66,22 @@ func (p *PollerPool) Start(ctx context.Context) {
 
 // worker processes polling tasks
 func (p *PollerPool) worker(ctx context.Context, id int) {
-	log.Debug().Int("worker", id).Msg("Poller worker started")
+	if logging.IsLevelEnabled(zerolog.DebugLevel) {
+		log.Debug().Int("worker", id).Msg("Poller worker started")
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug().Int("worker", id).Msg("Poller worker stopped")
+			if logging.IsLevelEnabled(zerolog.DebugLevel) {
+				log.Debug().Int("worker", id).Msg("Poller worker stopped")
+			}
 			return
 		case task, ok := <-p.tasksChan:
 			if !ok {
-				log.Debug().Int("worker", id).Msg("Task channel closed, worker stopping")
+				if logging.IsLevelEnabled(zerolog.DebugLevel) {
+					log.Debug().Int("worker", id).Msg("Task channel closed, worker stopping")
+				}
 				return
 			}
 
@@ -91,7 +99,9 @@ func (p *PollerPool) worker(ctx context.Context, id int) {
 					return
 				default:
 					// Channel might be closed, just continue
-					log.Debug().Int("worker", id).Msg("Results channel appears closed, skipping result")
+					if logging.IsLevelEnabled(zerolog.DebugLevel) {
+						log.Debug().Int("worker", id).Msg("Results channel appears closed, skipping result")
+					}
 				}
 			}
 		}
@@ -162,7 +172,7 @@ func (p *PollerPool) collectResults(ctx context.Context) {
 					Str("instance", result.InstanceName).
 					Str("type", result.InstanceType).
 					Dur("duration", duration).
-					Msg("Polling failed")
+					Msg("Polling failed; request will be retried on next cycle")
 			}
 		}
 	}

@@ -92,7 +92,7 @@ func (m *Monitor) collectContainerRootUsage(ctx context.Context, client PVEClien
 				Err(err).
 				Str("node", node).
 				Str("storage", storage.Storage).
-				Msg("Unable to query storage content for container disk overrides")
+				Msg("Container disk usage query failed; metrics for instance omitted this cycle")
 			continue
 		}
 

@@ -14,10 +14,10 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -70,9 +70,12 @@ func main() {
 }
 
 func runServer() {
-	// Initialize logger
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	// Initialize logger with baseline defaults for early startup logs
+	logging.Init(logging.Config{
+		Format:    "auto",
+		Level:     "info",
+		Component: "pulse",
+	})
 
 	// Check for auto-import on first startup
 	if shouldAutoImport() {
@@ -86,6 +89,13 @@ func runServer() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
+
+	// Re-initialize logging with configuration-driven settings
+	logging.Init(logging.Config{
+		Format:    cfg.LogFormat,
+		Level:     cfg.LogLevel,
+		Component: "pulse",
+	})
 
 	log.Info().Msg("Starting Pulse monitoring server")
 
