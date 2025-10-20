@@ -225,21 +225,249 @@ func (a *InstallShAdapter) Rollback(ctx context.Context, eventID string) error {
 		return fmt.Errorf("backup not found: %s", entry.BackupPath)
 	}
 
+	targetVersion := entry.VersionFrom
+	if targetVersion == "" {
+		return fmt.Errorf("no target version available in history")
+	}
+
 	log.Info().
 		Str("event_id", eventID).
 		Str("backup", entry.BackupPath).
-		Str("version_from", entry.VersionTo).
-		Str("version_to", entry.VersionFrom).
+		Str("current_version", entry.VersionTo).
+		Str("target_version", targetVersion).
 		Msg("Starting rollback")
 
-	// TODO: Implement actual rollback logic
-	// This would involve:
-	// 1. Stop service
-	// 2. Restore files from backup
-	// 3. Restart service
-	// 4. Create rollback history entry
+	// Create rollback history entry
+	rollbackEventID, err := a.history.CreateEntry(ctx, UpdateHistoryEntry{
+		Action:         ActionRollback,
+		VersionFrom:    entry.VersionTo,
+		VersionTo:      targetVersion,
+		DeploymentType: a.GetDeploymentType(),
+		InitiatedBy:    InitiatedByUser,
+		InitiatedVia:   InitiatedViaCLI,
+		Status:         StatusInProgress,
+		RelatedEventID: eventID,
+		Notes:          fmt.Sprintf("Rolling back update %s", eventID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create rollback history entry: %w", err)
+	}
 
-	return fmt.Errorf("rollback not yet implemented")
+	rollbackErr := a.executeRollback(ctx, entry, targetVersion)
+
+	// Update rollback history
+	finalStatus := StatusSuccess
+	var updateError *UpdateError
+	if rollbackErr != nil {
+		finalStatus = StatusFailed
+		updateError = &UpdateError{
+			Message: rollbackErr.Error(),
+			Code:    "rollback_failed",
+		}
+	}
+
+	_ = a.history.UpdateEntry(ctx, rollbackEventID, func(e *UpdateHistoryEntry) error {
+		e.Status = finalStatus
+		e.Error = updateError
+		return nil
+	})
+
+	return rollbackErr
+}
+
+// executeRollback performs the actual rollback operation
+func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHistoryEntry, targetVersion string) error {
+	// Step 1: Detect service name
+	serviceName, err := a.detectServiceName()
+	if err != nil {
+		return fmt.Errorf("failed to detect service name: %w", err)
+	}
+
+	log.Info().Str("service", serviceName).Msg("Detected Pulse service")
+
+	// Step 2: Download old binary
+	log.Info().Str("version", targetVersion).Msg("Downloading old binary")
+	binaryPath, err := a.downloadBinary(ctx, targetVersion)
+	if err != nil {
+		return fmt.Errorf("failed to download binary: %w", err)
+	}
+	defer os.Remove(binaryPath)
+
+	// Step 3: Stop service
+	log.Info().Msg("Stopping Pulse service")
+	if err := a.stopService(ctx, serviceName); err != nil {
+		return fmt.Errorf("failed to stop service: %w", err)
+	}
+
+	// Step 4: Backup current config (safety)
+	configDir := "/etc/pulse"
+	safetyBackup := fmt.Sprintf("%s.rollback-safety.%s", configDir, time.Now().Format("20060102-150405"))
+	log.Info().Str("backup", safetyBackup).Msg("Creating safety backup of current config")
+	if err := exec.CommandContext(ctx, "cp", "-a", configDir, safetyBackup).Run(); err != nil {
+		log.Warn().Err(err).Msg("Failed to create safety backup")
+	}
+
+	// Step 5: Restore config from backup
+	log.Info().Str("source", entry.BackupPath).Msg("Restoring configuration")
+	if err := a.restoreConfig(ctx, entry.BackupPath, configDir); err != nil {
+		// Try to start service anyway
+		_ = a.startService(ctx, serviceName)
+		return fmt.Errorf("failed to restore config: %w", err)
+	}
+
+	// Step 6: Install old binary
+	log.Info().Str("version", targetVersion).Msg("Installing old binary")
+	installDir := "/opt/pulse/bin/pulse"
+	if err := a.installBinary(ctx, binaryPath, installDir); err != nil {
+		// Try to start service anyway
+		_ = a.startService(ctx, serviceName)
+		return fmt.Errorf("failed to install binary: %w", err)
+	}
+
+	// Step 7: Start service
+	log.Info().Msg("Starting Pulse service")
+	if err := a.startService(ctx, serviceName); err != nil {
+		return fmt.Errorf("failed to start service: %w", err)
+	}
+
+	// Step 8: Health check
+	log.Info().Msg("Verifying service health")
+	if err := a.waitForHealth(ctx, 30*time.Second); err != nil {
+		return fmt.Errorf("service health check failed: %w", err)
+	}
+
+	log.Info().Str("version", targetVersion).Msg("Rollback completed successfully")
+	return nil
+}
+
+// detectServiceName detects the active Pulse service name
+func (a *InstallShAdapter) detectServiceName() (string, error) {
+	candidates := []string{"pulse", "pulse-backend", "pulse-hot-dev"}
+
+	for _, name := range candidates {
+		cmd := exec.Command("systemctl", "is-active", name)
+		if output, err := cmd.Output(); err == nil {
+			status := strings.TrimSpace(string(output))
+			if status == "active" || status == "activating" {
+				return name, nil
+			}
+		}
+	}
+
+	// Default to "pulse" if none are active
+	return "pulse", nil
+}
+
+// downloadBinary downloads a specific version binary from GitHub
+func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (string, error) {
+	// Ensure version has 'v' prefix
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
+
+	// Determine architecture
+	arch := "amd64"
+	if _, err := os.Stat("/proc/cpuinfo"); err == nil {
+		output, _ := exec.Command("uname", "-m").Output()
+		machine := strings.TrimSpace(string(output))
+		if machine == "aarch64" || machine == "arm64" {
+			arch = "arm64"
+		}
+	}
+
+	// Download URL
+	url := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%s/pulse-linux-%s", version, arch)
+
+	// Create temp file
+	tmpFile, err := os.CreateTemp("", "pulse-rollback-*")
+	if err != nil {
+		return "", err
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+
+	// Download
+	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", tmpPath, url)
+	if err := cmd.Run(); err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("download failed: %w", err)
+	}
+
+	// Verify it's executable
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
+		return "", err
+	}
+
+	return tmpPath, nil
+}
+
+// stopService stops the Pulse service
+func (a *InstallShAdapter) stopService(ctx context.Context, serviceName string) error {
+	cmd := exec.CommandContext(ctx, "systemctl", "stop", serviceName)
+	return cmd.Run()
+}
+
+// startService starts the Pulse service
+func (a *InstallShAdapter) startService(ctx context.Context, serviceName string) error {
+	cmd := exec.CommandContext(ctx, "systemctl", "start", serviceName)
+	return cmd.Run()
+}
+
+// restoreConfig restores configuration from backup
+func (a *InstallShAdapter) restoreConfig(ctx context.Context, backupPath, targetPath string) error {
+	// Remove current config
+	if err := os.RemoveAll(targetPath); err != nil {
+		return fmt.Errorf("failed to remove current config: %w", err)
+	}
+
+	// Copy backup to target
+	cmd := exec.CommandContext(ctx, "cp", "-a", backupPath, targetPath)
+	return cmd.Run()
+}
+
+// installBinary installs a binary to the target location
+func (a *InstallShAdapter) installBinary(ctx context.Context, sourcePath, targetPath string) error {
+	// Backup current binary
+	if _, err := os.Stat(targetPath); err == nil {
+		backupPath := targetPath + ".pre-rollback"
+		_ = os.Rename(targetPath, backupPath)
+	}
+
+	// Copy new binary
+	if err := exec.CommandContext(ctx, "cp", sourcePath, targetPath).Run(); err != nil {
+		return err
+	}
+
+	// Set permissions
+	if err := os.Chmod(targetPath, 0755); err != nil {
+		return err
+	}
+
+	// Set ownership
+	return exec.CommandContext(ctx, "chown", "pulse:pulse", targetPath).Run()
+}
+
+// waitForHealth waits for the service to become healthy
+func (a *InstallShAdapter) waitForHealth(ctx context.Context, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		// Try to hit health endpoint
+		cmd := exec.CommandContext(ctx, "curl", "-fsS", "http://localhost:7655/api/health")
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
+
+		// Wait before retry
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+
+	return fmt.Errorf("service did not become healthy within %v", timeout)
 }
 
 // downloadInstallScript downloads the install.sh script
