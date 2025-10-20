@@ -10,6 +10,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -144,22 +145,22 @@ type Config struct {
 
 // DiscoveryConfig captures overrides for network discovery behaviour.
 type DiscoveryConfig struct {
-	EnvironmentOverride string   `json:"environmentOverride,omitempty"`
-	SubnetAllowlist     []string `json:"subnetAllowlist,omitempty"`
-	SubnetBlocklist     []string `json:"subnetBlocklist,omitempty"`
-	MaxHostsPerScan     int      `json:"maxHostsPerScan,omitempty"`
-	MaxConcurrent       int      `json:"maxConcurrent,omitempty"`
-	EnableReverseDNS    bool     `json:"enableReverseDns"`
-	ScanGateways        bool     `json:"scanGateways"`
-	DialTimeout         int      `json:"dialTimeoutMs,omitempty"`
-	HTTPTimeout         int      `json:"httpTimeoutMs,omitempty"`
+	EnvironmentOverride string   `json:"environment_override,omitempty"`
+	SubnetAllowlist     []string `json:"subnet_allowlist,omitempty"`
+	SubnetBlocklist     []string `json:"subnet_blocklist,omitempty"`
+	MaxHostsPerScan     int      `json:"max_hosts_per_scan,omitempty"`
+	MaxConcurrent       int      `json:"max_concurrent,omitempty"`
+	EnableReverseDNS    bool     `json:"enable_reverse_dns"`
+	ScanGateways        bool     `json:"scan_gateways"`
+	DialTimeout         int      `json:"dial_timeout_ms,omitempty"`
+	HTTPTimeout         int      `json:"http_timeout_ms,omitempty"`
 }
 
 // DefaultDiscoveryConfig returns opinionated defaults for discovery behaviour.
 func DefaultDiscoveryConfig() DiscoveryConfig {
 	return DiscoveryConfig{
-	EnvironmentOverride: "auto",
-		SubnetAllowlist:     []string{},
+		EnvironmentOverride: "auto",
+		SubnetAllowlist:     nil,
 		SubnetBlocklist:     []string{"169.254.0.0/16"},
 		MaxHostsPerScan:     1024,
 		MaxConcurrent:       50,
@@ -180,6 +181,169 @@ func CloneDiscoveryConfig(cfg DiscoveryConfig) DiscoveryConfig {
 		clone.SubnetBlocklist = append([]string(nil), cfg.SubnetBlocklist...)
 	}
 	return clone
+}
+
+// NormalizeDiscoveryConfig ensures a discovery config contains sane values and defaults.
+func NormalizeDiscoveryConfig(cfg DiscoveryConfig) DiscoveryConfig {
+	defaults := DefaultDiscoveryConfig()
+	normalized := CloneDiscoveryConfig(cfg)
+
+	// Normalize environment override and ensure it's valid.
+	normalized.EnvironmentOverride = strings.TrimSpace(normalized.EnvironmentOverride)
+	if normalized.EnvironmentOverride == "" {
+		normalized.EnvironmentOverride = defaults.EnvironmentOverride
+	} else if !IsValidDiscoveryEnvironment(normalized.EnvironmentOverride) {
+		log.Warn().
+			Str("environment", normalized.EnvironmentOverride).
+			Msg("Unknown discovery environment override detected; falling back to auto")
+		normalized.EnvironmentOverride = defaults.EnvironmentOverride
+	}
+
+	normalized.SubnetAllowlist = sanitizeCIDRList(normalized.SubnetAllowlist)
+	if normalized.SubnetAllowlist == nil {
+		normalized.SubnetAllowlist = []string{}
+	}
+
+	normalized.SubnetBlocklist = sanitizeCIDRList(normalized.SubnetBlocklist)
+	if normalized.SubnetBlocklist == nil {
+		normalized.SubnetBlocklist = append([]string(nil), defaults.SubnetBlocklist...)
+	}
+
+	if normalized.MaxHostsPerScan <= 0 {
+		normalized.MaxHostsPerScan = defaults.MaxHostsPerScan
+	}
+	if normalized.MaxConcurrent <= 0 {
+		normalized.MaxConcurrent = defaults.MaxConcurrent
+	}
+	if normalized.DialTimeout <= 0 {
+		normalized.DialTimeout = defaults.DialTimeout
+	}
+	if normalized.HTTPTimeout <= 0 {
+		normalized.HTTPTimeout = defaults.HTTPTimeout
+	}
+
+	return normalized
+}
+
+func sanitizeCIDRList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	cleaned := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, raw := range values {
+		entry := strings.TrimSpace(raw)
+		if entry == "" {
+			continue
+		}
+		// Avoid duplicates to keep config minimal.
+		if _, exists := seen[entry]; exists {
+			continue
+		}
+		seen[entry] = struct{}{}
+		cleaned = append(cleaned, entry)
+	}
+	if len(cleaned) == 0 {
+		return []string{}
+	}
+	return cleaned
+}
+
+// UnmarshalJSON supports both legacy camelCase and new snake_case field names.
+func (d *DiscoveryConfig) UnmarshalJSON(data []byte) error {
+	type modern struct {
+		EnvironmentOverride *string   `json:"environment_override"`
+		SubnetAllowlist     *[]string `json:"subnet_allowlist"`
+		SubnetBlocklist     *[]string `json:"subnet_blocklist"`
+		MaxHostsPerScan     *int      `json:"max_hosts_per_scan"`
+		MaxConcurrent       *int      `json:"max_concurrent"`
+		EnableReverseDNS    *bool     `json:"enable_reverse_dns"`
+		ScanGateways        *bool     `json:"scan_gateways"`
+		DialTimeout         *int      `json:"dial_timeout_ms"`
+		HTTPTimeout         *int      `json:"http_timeout_ms"`
+	}
+	type legacy struct {
+		EnvironmentOverride *string   `json:"environmentOverride"`
+		SubnetAllowlist     *[]string `json:"subnetAllowlist"`
+		SubnetBlocklist     *[]string `json:"subnetBlocklist"`
+		MaxHostsPerScan     *int      `json:"maxHostsPerScan"`
+		MaxConcurrent       *int      `json:"maxConcurrent"`
+		EnableReverseDNS    *bool     `json:"enableReverseDns"`
+		ScanGateways        *bool     `json:"scanGateways"`
+		DialTimeout         *int      `json:"dialTimeoutMs"`
+		HTTPTimeout         *int      `json:"httpTimeoutMs"`
+	}
+
+	var modernPayload modern
+	if err := json.Unmarshal(data, &modernPayload); err != nil {
+		return err
+	}
+
+	var legacyPayload legacy
+	_ = json.Unmarshal(data, &legacyPayload)
+
+	cfg := DefaultDiscoveryConfig()
+
+	if modernPayload.EnvironmentOverride != nil {
+		cfg.EnvironmentOverride = strings.TrimSpace(*modernPayload.EnvironmentOverride)
+	} else if legacyPayload.EnvironmentOverride != nil {
+		cfg.EnvironmentOverride = strings.TrimSpace(*legacyPayload.EnvironmentOverride)
+	}
+
+	switch {
+	case modernPayload.SubnetAllowlist != nil:
+		cfg.SubnetAllowlist = sanitizeCIDRList(*modernPayload.SubnetAllowlist)
+	case legacyPayload.SubnetAllowlist != nil:
+		cfg.SubnetAllowlist = sanitizeCIDRList(*legacyPayload.SubnetAllowlist)
+	default:
+		cfg.SubnetAllowlist = []string{}
+	}
+
+	switch {
+	case modernPayload.SubnetBlocklist != nil:
+		cfg.SubnetBlocklist = sanitizeCIDRList(*modernPayload.SubnetBlocklist)
+	case legacyPayload.SubnetBlocklist != nil:
+		cfg.SubnetBlocklist = sanitizeCIDRList(*legacyPayload.SubnetBlocklist)
+	}
+
+	if modernPayload.MaxHostsPerScan != nil {
+		cfg.MaxHostsPerScan = *modernPayload.MaxHostsPerScan
+	} else if legacyPayload.MaxHostsPerScan != nil {
+		cfg.MaxHostsPerScan = *legacyPayload.MaxHostsPerScan
+	}
+
+	if modernPayload.MaxConcurrent != nil {
+		cfg.MaxConcurrent = *modernPayload.MaxConcurrent
+	} else if legacyPayload.MaxConcurrent != nil {
+		cfg.MaxConcurrent = *legacyPayload.MaxConcurrent
+	}
+
+	if modernPayload.EnableReverseDNS != nil {
+		cfg.EnableReverseDNS = *modernPayload.EnableReverseDNS
+	} else if legacyPayload.EnableReverseDNS != nil {
+		cfg.EnableReverseDNS = *legacyPayload.EnableReverseDNS
+	}
+
+	if modernPayload.ScanGateways != nil {
+		cfg.ScanGateways = *modernPayload.ScanGateways
+	} else if legacyPayload.ScanGateways != nil {
+		cfg.ScanGateways = *legacyPayload.ScanGateways
+	}
+
+	if modernPayload.DialTimeout != nil {
+		cfg.DialTimeout = *modernPayload.DialTimeout
+	} else if legacyPayload.DialTimeout != nil {
+		cfg.DialTimeout = *legacyPayload.DialTimeout
+	}
+
+	if modernPayload.HTTPTimeout != nil {
+		cfg.HTTPTimeout = *modernPayload.HTTPTimeout
+	} else if legacyPayload.HTTPTimeout != nil {
+		cfg.HTTPTimeout = *legacyPayload.HTTPTimeout
+	}
+
+	*d = NormalizeDiscoveryConfig(cfg)
+	return nil
 }
 
 // IsValidDiscoveryEnvironment reports whether the supplied override is recognised.
@@ -429,7 +593,7 @@ func Load() (*Config, error) {
 			if systemSettings.DiscoverySubnet != "" {
 				cfg.DiscoverySubnet = systemSettings.DiscoverySubnet
 			}
-			cfg.Discovery = CloneDiscoveryConfig(systemSettings.DiscoveryConfig)
+			cfg.Discovery = NormalizeDiscoveryConfig(CloneDiscoveryConfig(systemSettings.DiscoveryConfig))
 			// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
@@ -819,15 +983,15 @@ func Load() (*Config, error) {
 	}
 	if allowlistEnv := strings.TrimSpace(os.Getenv("DISCOVERY_SUBNET_ALLOWLIST")); allowlistEnv != "" {
 		parts := splitAndTrim(allowlistEnv)
-		cfg.Discovery.SubnetAllowlist = parts
+		cfg.Discovery.SubnetAllowlist = sanitizeCIDRList(parts)
 		cfg.EnvOverrides["discoverySubnetAllowlist"] = true
-		log.Info().Int("allowlistCount", len(parts)).Msg("Discovery subnet allowlist overridden by DISCOVERY_SUBNET_ALLOWLIST")
+		log.Info().Int("allowlistCount", len(cfg.Discovery.SubnetAllowlist)).Msg("Discovery subnet allowlist overridden by DISCOVERY_SUBNET_ALLOWLIST")
 	}
 	if blocklistEnv := strings.TrimSpace(os.Getenv("DISCOVERY_SUBNET_BLOCKLIST")); blocklistEnv != "" {
 		parts := splitAndTrim(blocklistEnv)
-		cfg.Discovery.SubnetBlocklist = parts
+		cfg.Discovery.SubnetBlocklist = sanitizeCIDRList(parts)
 		cfg.EnvOverrides["discoverySubnetBlocklist"] = true
-		log.Info().Int("blocklistCount", len(parts)).Msg("Discovery subnet blocklist overridden by DISCOVERY_SUBNET_BLOCKLIST")
+		log.Info().Int("blocklistCount", len(cfg.Discovery.SubnetBlocklist)).Msg("Discovery subnet blocklist overridden by DISCOVERY_SUBNET_BLOCKLIST")
 	}
 	if maxHostsEnv := strings.TrimSpace(os.Getenv("DISCOVERY_MAX_HOSTS_PER_SCAN")); maxHostsEnv != "" {
 		if v, err := strconv.Atoi(maxHostsEnv); err == nil && v > 0 {
@@ -895,6 +1059,8 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["logFormat"] = true
 		log.Info().Str("format", logFormat).Msg("Log format overridden by LOG_FORMAT env var")
 	}
+
+	cfg.Discovery = NormalizeDiscoveryConfig(cfg.Discovery)
 	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
 		if d, err := time.ParseDuration(connectionTimeout + "s"); err == nil {
 			cfg.ConnectionTimeout = d

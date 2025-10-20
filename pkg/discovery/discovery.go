@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -29,11 +30,44 @@ type DiscoveredServer struct {
 	Release  string `json:"release,omitempty"`
 }
 
+// DiscoveryError represents a structured error during discovery
+type DiscoveryError struct {
+	IP        string    `json:"ip,omitempty"`
+	Port      int       `json:"port,omitempty"`
+	Phase     string    `json:"phase"`
+	ErrorType string    `json:"error_type"` // "timeout", "connection_refused", "no_identification", "phase_error", etc.
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
 // DiscoveryResult contains all discovered servers
 type DiscoveryResult struct {
-	Servers     []DiscoveredServer `json:"servers"`
-	Errors      []string           `json:"errors,omitempty"`
-	Environment *EnvironmentInfo   `json:"environment,omitempty"`
+	Servers          []DiscoveredServer `json:"servers"`
+	Errors           []string           `json:"errors,omitempty"`            // Deprecated: kept for backward compatibility
+	StructuredErrors []DiscoveryError   `json:"structured_errors,omitempty"` // New structured error format
+	Environment      *EnvironmentInfo   `json:"environment,omitempty"`
+}
+
+// AddError adds a structured error to the result (also maintains backward-compatible error list)
+func (r *DiscoveryResult) AddError(phase, errorType, message, ip string, port int) {
+	structuredErr := DiscoveryError{
+		IP:        ip,
+		Port:      port,
+		Phase:     phase,
+		ErrorType: errorType,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+	r.StructuredErrors = append(r.StructuredErrors, structuredErr)
+
+	// Also add to legacy errors for backward compatibility
+	if ip != "" && port > 0 {
+		r.Errors = append(r.Errors, fmt.Sprintf("%s [%s:%d]: %s", phase, ip, port, message))
+	} else if ip != "" {
+		r.Errors = append(r.Errors, fmt.Sprintf("%s [%s]: %s", phase, ip, message))
+	} else {
+		r.Errors = append(r.Errors, fmt.Sprintf("%s: %s", phase, message))
+	}
 }
 
 // EnvironmentInfo captures metadata about the environment scan.
@@ -96,44 +130,103 @@ func NewScannerWithProfile(profile *envdetect.EnvironmentProfile) *Scanner {
 // ServerCallback is called when a server is discovered
 type ServerCallback func(server DiscoveredServer, phase string)
 
+// ProgressCallback is called to report scan progress
+type ProgressCallback func(progress ScanProgress)
+
+// ScanProgress represents the current state of the scan
+type ScanProgress struct {
+	CurrentPhase    string  `json:"current_phase"`
+	PhaseNumber     int     `json:"phase_number"`
+	TotalPhases     int     `json:"total_phases"`
+	TargetsInPhase  int     `json:"targets_in_phase"`
+	ProcessedInPhase int    `json:"processed_in_phase"`
+	TotalTargets    int     `json:"total_targets"`
+	TotalProcessed  int     `json:"total_processed"`
+	ServersFound    int     `json:"servers_found"`
+	Percentage      float64 `json:"percentage"`
+}
+
 // DiscoverServers scans the network for Proxmox VE and PBS servers
 func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*DiscoveryResult, error) {
-	return s.DiscoverServersWithCallback(ctx, subnet, nil)
+	return s.DiscoverServersWithCallbacks(ctx, subnet, nil, nil)
 }
 
 // DiscoverServersWithCallback scans and calls callback for each discovered server
 func (s *Scanner) DiscoverServersWithCallback(ctx context.Context, subnet string, callback ServerCallback) (*DiscoveryResult, error) {
+	return s.DiscoverServersWithCallbacks(ctx, subnet, callback, nil)
+}
+
+// DiscoverServersWithCallbacks scans and calls callbacks for servers and progress
+func (s *Scanner) DiscoverServersWithCallbacks(ctx context.Context, subnet string, serverCallback ServerCallback, progressCallback ProgressCallback) (*DiscoveryResult, error) {
 	activeProfile, err := s.resolveProfile(subnet)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &DiscoveryResult{
-		Servers:     []DiscoveredServer{},
-		Errors:      []string{},
-		Environment: buildEnvironmentInfo(activeProfile),
+		Servers:          []DiscoveredServer{},
+		Errors:           []string{},
+		StructuredErrors: []DiscoveryError{},
+		Environment:      buildEnvironmentInfo(activeProfile),
 	}
 
 	seenIPs := make(map[string]struct{})
 
+	// Calculate total targets and phases for progress tracking
+	// Use a preview map to ensure we count only unique IPs that will actually be scanned
+	previewSeen := make(map[string]struct{})
+	var totalTargets int
+	var validPhases []envdetect.SubnetPhase
+	phases := append([]envdetect.SubnetPhase(nil), activeProfile.Phases...)
+	sort.SliceStable(phases, func(i, j int) bool {
+		return phases[i].Priority < phases[j].Priority
+	})
+
+	// Count extra targets first (they scan first)
+	extraTargetCount := len(s.collectExtraTargets(activeProfile, previewSeen))
+	if extraTargetCount > 0 {
+		totalTargets += extraTargetCount
+	}
+
+	// Then count phase targets, respecting deduplication
+	for _, phase := range phases {
+		if !s.shouldSkipPhase(ctx, phase) {
+			phaseIPs, _ := s.expandPhaseIPs(phase, previewSeen)
+			if len(phaseIPs) > 0 {
+				totalTargets += len(phaseIPs)
+				validPhases = append(validPhases, phase)
+			}
+		}
+	}
+
+	totalPhases := len(validPhases)
+	if extraTargetCount > 0 {
+		totalPhases++ // Include extra_targets phase
+	}
+
+	var totalProcessed int
+	phaseNumber := 0
+
 	// Scan explicit extra targets first, if any.
 	extraIPs := s.collectExtraTargets(activeProfile, seenIPs)
 	if len(extraIPs) > 0 {
+		phaseNumber++
 		log.Info().
 			Int("count", len(extraIPs)).
 			Msg("Starting discovery for explicit extra targets")
-		if err := s.runPhase(ctx, "extra_targets", extraIPs, callback, result); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("extra_targets: %v", err))
+		if err := s.runPhaseWithProgress(ctx, "extra_targets", phaseNumber, totalPhases, extraIPs, serverCallback, progressCallback, &totalProcessed, totalTargets, result); err != nil {
+			errType := "phase_error"
+			if errors.Is(err, context.Canceled) {
+				errType = "canceled"
+			} else if errors.Is(err, context.DeadlineExceeded) {
+				errType = "timeout"
+			}
+			result.AddError("extra_targets", errType, err.Error(), "", 0)
 			if errors.Is(err, context.Canceled) {
 				return result, ctx.Err()
 			}
 		}
 	}
-
-	phases := append([]envdetect.SubnetPhase(nil), activeProfile.Phases...)
-	sort.SliceStable(phases, func(i, j int) bool {
-		return phases[i].Priority < phases[j].Priority
-	})
 
 	for _, phase := range phases {
 		if err := ctx.Err(); err != nil {
@@ -157,6 +250,7 @@ func (s *Scanner) DiscoverServersWithCallback(ctx context.Context, subnet string
 			continue
 		}
 
+		phaseNumber++
 		log.Info().
 			Str("phase", phase.Name).
 			Int("subnets", subnetCount).
@@ -164,8 +258,14 @@ func (s *Scanner) DiscoverServersWithCallback(ctx context.Context, subnet string
 			Float64("confidence", phase.Confidence).
 			Msg("Starting discovery phase")
 
-		if err := s.runPhase(ctx, phase.Name, phaseIPs, callback, result); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", phase.Name, err))
+		if err := s.runPhaseWithProgress(ctx, phase.Name, phaseNumber, totalPhases, phaseIPs, serverCallback, progressCallback, &totalProcessed, totalTargets, result); err != nil {
+			errType := "phase_error"
+			if errors.Is(err, context.Canceled) {
+				errType = "canceled"
+			} else if errors.Is(err, context.DeadlineExceeded) {
+				errType = "timeout"
+			}
+			result.AddError(phase.Name, errType, err.Error(), "", 0)
 			if errors.Is(err, context.Canceled) {
 				return result, ctx.Err()
 			}
@@ -191,6 +291,8 @@ type phaseError struct {
 }
 
 // scanWorker scans IPs from the channel
+// NOTE: This function is kept for backward compatibility but is not actively used.
+// New code should use scanWorkerWithProgress which includes progress tracking.
 func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, phase string, ipChan <-chan string, resultChan chan<- discoveredResult, errorChan chan<- phaseError) {
 	defer wg.Done()
 
@@ -210,6 +312,32 @@ func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, phase stri
 	}
 }
 
+// scanWorkerWithProgress scans IPs and reports progress
+func (s *Scanner) scanWorkerWithProgress(ctx context.Context, wg *sync.WaitGroup, phase string, ipChan <-chan string, resultChan chan<- discoveredResult, progressChan chan<- int) {
+	defer wg.Done()
+
+	for ip := range ipChan {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if server := s.checkPort8006(ctx, ip); server != nil {
+				resultChan <- discoveredResult{Phase: phase, Server: server}
+			}
+
+			if server := s.checkServer(ctx, ip, 8007, "pbs"); server != nil {
+				resultChan <- discoveredResult{Phase: phase, Server: server}
+			}
+
+			// Signal that this IP has been processed
+			progressChan <- 1
+		}
+	}
+}
+
+// runPhase runs a scanning phase without progress tracking
+// NOTE: This function is kept for backward compatibility but is not actively used.
+// New code should use runPhaseWithProgress which includes progress tracking.
 func (s *Scanner) runPhase(ctx context.Context, phase string, ips []string, callback ServerCallback, result *DiscoveryResult) error {
 	if len(ips) == 0 {
 		return nil
@@ -273,6 +401,119 @@ func (s *Scanner) runPhase(ctx context.Context, phase string, ips []string, call
 				continue
 			}
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %s", perr.Phase, perr.Message))
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return nil
+}
+
+// runPhaseWithProgress wraps runPhase with progress tracking and reporting
+func (s *Scanner) runPhaseWithProgress(ctx context.Context, phase string, phaseNumber, totalPhases int, ips []string, serverCallback ServerCallback, progressCallback ProgressCallback, totalProcessed *int, totalTargets int, result *DiscoveryResult) error {
+	if len(ips) == 0 {
+		return nil
+	}
+
+	var phaseProcessed atomic.Int32
+	targetsInPhase := len(ips)
+
+	// Report initial progress for this phase
+	if progressCallback != nil {
+		progressCallback(ScanProgress{
+			CurrentPhase:     phase,
+			PhaseNumber:      phaseNumber,
+			TotalPhases:      totalPhases,
+			TargetsInPhase:   targetsInPhase,
+			ProcessedInPhase: 0,
+			TotalTargets:     totalTargets,
+			TotalProcessed:   *totalProcessed,
+			ServersFound:     len(result.Servers),
+			Percentage:       float64(*totalProcessed) / float64(totalTargets) * 100,
+		})
+	}
+
+	workerCount := s.policy.MaxConcurrent
+	if workerCount <= 0 {
+		workerCount = 1
+	}
+
+	ipChan := make(chan string, len(ips))
+	resultChan := make(chan discoveredResult, len(ips))
+	progressChan := make(chan int, len(ips)) // Signal when an IP is processed
+
+	var wg sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go s.scanWorkerWithProgress(ctx, &wg, phase, ipChan, resultChan, progressChan)
+	}
+
+	for _, ip := range ips {
+		ipChan <- ip
+	}
+	close(ipChan)
+
+	go func() {
+		wg.Wait()
+		close(resultChan)
+		close(progressChan)
+	}()
+
+	// Track how often to report progress (every 10 IPs or 5% of phase, whichever is smaller)
+	reportInterval := min(10, max(1, targetsInPhase/20))
+	lastReported := 0
+
+	for resultChan != nil || progressChan != nil {
+		select {
+		case res, ok := <-resultChan:
+			if !ok {
+				resultChan = nil
+				continue
+			}
+			if res.Server == nil {
+				continue
+			}
+
+			result.Servers = append(result.Servers, *res.Server)
+
+			log.Debug().
+				Str("phase", res.Phase).
+				Str("ip", res.Server.IP).
+				Str("type", res.Server.Type).
+				Str("hostname", res.Server.Hostname).
+				Msg("Discovered server")
+
+			if serverCallback != nil {
+				serverCallback(*res.Server, res.Phase)
+			}
+
+		case _, ok := <-progressChan:
+			if !ok {
+				progressChan = nil
+				continue
+			}
+
+			phaseProcessed.Add(1)
+			*totalProcessed++
+			processed := int(phaseProcessed.Load())
+
+			// Report progress at intervals
+			if progressCallback != nil && (processed-lastReported >= reportInterval || processed == targetsInPhase) {
+				lastReported = processed
+				percentage := float64(*totalProcessed) / float64(totalTargets) * 100
+				progressCallback(ScanProgress{
+					CurrentPhase:     phase,
+					PhaseNumber:      phaseNumber,
+					TotalPhases:      totalPhases,
+					TargetsInPhase:   targetsInPhase,
+					ProcessedInPhase: processed,
+					TotalTargets:     totalTargets,
+					TotalProcessed:   *totalProcessed,
+					ServersFound:     len(result.Servers),
+					Percentage:       percentage,
+				})
+			}
+
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -504,39 +745,48 @@ func max(a, b int) int {
 func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServer {
 	address := net.JoinHostPort(ip, "8006")
 
-	// First attempt a TLS handshake so we can inspect certificate metadata.
+	// First attempt a TLS handshake with proper timeout so we can inspect certificate metadata.
 	var tlsState *tls.ConnectionState
-    timeout := s.policy.DialTimeout
-    if timeout <= 0 {
-        timeout = time.Second
-    }
-    dialer := &net.Dialer{Timeout: timeout}
+	timeout := s.policy.DialTimeout
+	if timeout <= 0 {
+		timeout = time.Second
+	}
 
-    tlsConn, tlsErr := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{InsecureSkipVerify: true})
+	// Use context with timeout for TLS dial to prevent hangs
+	tlsCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	dialer := &net.Dialer{Timeout: timeout}
+	tlsConn, tlsErr := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{InsecureSkipVerify: true})
 	if tlsErr != nil {
-		// Fallback to a simple TCP dial to confirm the port is open.
-        conn, err := dialer.DialContext(ctx, "tcp", address)
-        if err != nil {
-            return nil // Port not open
-        }
-        conn.Close()
+		// If TLS fails completely, try a context-aware TCP dial
+		conn, err := dialer.DialContext(tlsCtx, "tcp", address)
+		if err != nil {
+			return nil // Port not open or unreachable
+		}
+		conn.Close()
+		// Port is open but TLS failed - continue to HTTP check
 	} else {
 		state := tlsConn.ConnectionState()
 		tlsState = &state
 		tlsConn.Close()
 	}
 
-	serverType := "pve"
-	if tlsState != nil {
-		if guess := inferTypeFromCertificate(*tlsState); guess != "" {
-			serverType = guess
-		}
-	}
-
+	// Track whether we got positive identification
+	positiveIdentification := false
+	serverType := "pve" // Default assumption
 	version := "Unknown"
 	var release string
 
-	// Try to get version without auth (some installations allow it)
+	// Infer from certificate if available
+	if tlsState != nil {
+		if guess := inferTypeFromCertificate(*tlsState); guess != "" {
+			serverType = guess
+			positiveIdentification = true // Certificate indicates Proxmox
+		}
+	}
+
+	// Try to get version or authentication headers
 	versionURL := fmt.Sprintf("https://%s/api2/json/version", address)
 	if req, err := http.NewRequestWithContext(ctx, "GET", versionURL, nil); err == nil {
 		if resp, err := s.httpClient.Do(req); err == nil {
@@ -554,6 +804,7 @@ func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServe
 				if err := json.NewDecoder(resp.Body).Decode(&versionResp); err == nil && versionResp.Data.Version != "" {
 					version = versionResp.Data.Version
 					release = versionResp.Data.Release
+					positiveIdentification = true // Got valid version data
 
 					if guess := inferTypeFromMetadata(
 						versionResp.Data.Version,
@@ -566,19 +817,21 @@ func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServe
 						serverType = guess
 					}
 
-					log.Info().
+					log.Debug().
 						Str("ip", ip).
 						Int("port", 8006).
 						Str("version", version).
 						Msg("Got server version without auth")
 				}
 			case http.StatusUnauthorized, http.StatusForbidden:
+				// Check for Proxmox-specific auth headers
 				if guess := inferTypeFromMetadata(
 					resp.Header.Get("WWW-Authenticate"),
 					resp.Header.Get("Server"),
 					resp.Header.Get("Proxmox-Product"),
 				); guess != "" {
 					serverType = guess
+					positiveIdentification = true // Proxmox auth headers present
 				}
 			}
 		}
@@ -587,13 +840,25 @@ func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServe
 	// Fallback: probe PMG-specific endpoints if we still think this is a PVE server.
 	if serverType != "pmg" && s.isPMGServer(ctx, address) {
 		serverType = "pmg"
+		positiveIdentification = true
+	}
+
+	// Only report server if we got positive identification
+	// (not just an open port)
+	if !positiveIdentification {
+		log.Debug().
+			Str("ip", ip).
+			Int("port", 8006).
+			Msg("Port 8006 open but no Proxmox identification found")
+		return nil
 	}
 
 	log.Info().
 		Str("ip", ip).
 		Int("port", 8006).
 		Str("type", serverType).
-		Msg("Found potential server (port open)")
+		Str("version", version).
+		Msg("Discovered Proxmox server")
 
 	server := &DiscoveredServer{
 		IP:      ip,
@@ -604,16 +869,16 @@ func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServe
 	}
 
 	// Try to resolve hostname via reverse DNS
-    if s.policy.EnableReverseDNS {
-        names, err := net.DefaultResolver.LookupAddr(ctx, ip)
-        if err == nil && len(names) > 0 {
-            hostname := strings.TrimSuffix(names[0], ".")
-            server.Hostname = hostname
-            log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
-        }
-    }
+	if s.policy.EnableReverseDNS {
+		names, err := net.DefaultResolver.LookupAddr(ctx, ip)
+		if err == nil && len(names) > 0 {
+			hostname := strings.TrimSuffix(names[0], ".")
+			server.Hostname = hostname
+			log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
+		}
+	}
 
-    return server
+	return server
 }
 
 // isPMGServer checks if a server is PMG by checking for PMG-specific endpoints
@@ -732,48 +997,38 @@ func inferTypeFromMetadata(parts ...string) string {
 
 // checkServer checks if a server is running at the given IP and port
 func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverType string) *DiscoveredServer {
-	// First check if port is open
-    address := net.JoinHostPort(ip, strconv.Itoa(port))
-    timeout := s.policy.DialTimeout
-    if timeout <= 0 {
-        timeout = time.Second
-    }
-    dialer := &net.Dialer{Timeout: timeout}
-
-    conn, err := dialer.DialContext(ctx, "tcp", address)
-    if err != nil {
-        return nil // Port not open
-    }
-    conn.Close()
-
-	// Port is open - this is likely a Proxmox/PBS server
-	// Since most installations require auth for version endpoint,
-	// we'll return it as a discovered server based on the port alone
-
-	log.Info().
-		Str("ip", ip).
-		Int("port", port).
-		Str("type", serverType).
-		Msg("Found potential server (port open)")
-
-	server := &DiscoveredServer{
-		IP:      ip,
-		Port:    port,
-		Type:    serverType,
-		Version: "Unknown", // Will be determined after auth
+	// First check if port is open with context-aware dial
+	address := net.JoinHostPort(ip, strconv.Itoa(port))
+	timeout := s.policy.DialTimeout
+	if timeout <= 0 {
+		timeout = time.Second
 	}
 
-	// Try to get version without auth (some installations allow it)
-	url := fmt.Sprintf("https://%s/api2/json/version", address)
+	dialCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
+	dialer := &net.Dialer{Timeout: timeout}
+	conn, err := dialer.DialContext(dialCtx, "tcp", address)
+	if err != nil {
+		return nil // Port not open
+	}
+	conn.Close()
+
+	// Port is open - verify it's actually a Proxmox server
+	positiveIdentification := false
+	version := "Unknown"
+	var release string
+
+	// Try to get version or authentication headers
+	url := fmt.Sprintf("https://%s/api2/json/version", address)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err == nil {
 		resp, err := s.httpClient.Do(req)
 		if err == nil {
 			defer resp.Body.Close()
 
-			// Only try to parse if we got a successful response
-			if resp.StatusCode == 200 {
+			switch resp.StatusCode {
+			case http.StatusOK:
 				var versionResp struct {
 					Data struct {
 						Version string `json:"version"`
@@ -782,30 +1037,65 @@ func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverTy
 				}
 
 				if err := json.NewDecoder(resp.Body).Decode(&versionResp); err == nil && versionResp.Data.Version != "" {
-					server.Version = versionResp.Data.Version
-					server.Release = versionResp.Data.Release
+					version = versionResp.Data.Version
+					release = versionResp.Data.Release
+					positiveIdentification = true
 
-					log.Info().
+					log.Debug().
 						Str("ip", ip).
 						Int("port", port).
-						Str("version", server.Version).
+						Str("version", version).
 						Msg("Got server version without auth")
+				}
+			case http.StatusUnauthorized, http.StatusForbidden:
+				// Check for Proxmox-specific auth headers
+				if inferTypeFromMetadata(
+					resp.Header.Get("WWW-Authenticate"),
+					resp.Header.Get("Server"),
+					resp.Header.Get("Proxmox-Product"),
+				) != "" {
+					positiveIdentification = true
 				}
 			}
 		}
 	}
 
-	// Try to resolve hostname via reverse DNS
-    if s.policy.EnableReverseDNS {
-        names, err := net.DefaultResolver.LookupAddr(ctx, ip)
-        if err == nil && len(names) > 0 {
-            hostname := strings.TrimSuffix(names[0], ".")
-            server.Hostname = hostname
-            log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
-        }
-    }
+	// Only report server if we got positive identification
+	if !positiveIdentification {
+		log.Debug().
+			Str("ip", ip).
+			Int("port", port).
+			Str("expected_type", serverType).
+			Msg("Port open but no Proxmox identification found")
+		return nil
+	}
 
-    return server
+	log.Info().
+		Str("ip", ip).
+		Int("port", port).
+		Str("type", serverType).
+		Str("version", version).
+		Msg("Discovered Proxmox server")
+
+	server := &DiscoveredServer{
+		IP:      ip,
+		Port:    port,
+		Type:    serverType,
+		Version: version,
+		Release: release,
+	}
+
+	// Try to resolve hostname via reverse DNS
+	if s.policy.EnableReverseDNS {
+		names, err := net.DefaultResolver.LookupAddr(ctx, ip)
+		if err == nil && len(names) > 0 {
+			hostname := strings.TrimSuffix(names[0], ".")
+			server.Hostname = hostname
+			log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
+		}
+	}
+
+	return server
 }
 
 // getProxmoxHostname tries to get the hostname of a Proxmox VE server
