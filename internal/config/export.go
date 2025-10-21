@@ -161,6 +161,23 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	default:
 		fmt.Printf("Warning: Config was exported from unsupported version %s. Proceeding with best effort.\n", exportData.Version)
 	}
+
+	tx, err := newImportTransaction(c.configDir)
+	if err != nil {
+		return fmt.Errorf("failed to start import transaction: %w", err)
+	}
+	defer tx.Cleanup()
+
+	c.beginTransaction(tx)
+	defer c.endTransaction(tx)
+
+	committed := false
+	defer func() {
+		if !committed {
+			tx.Rollback()
+		}
+	}()
+
 	// Import all configurations
 	if err := c.SaveNodesConfig(exportData.Nodes.PVEInstances, exportData.Nodes.PBSInstances, exportData.Nodes.PMGInstances); err != nil {
 		return fmt.Errorf("failed to import nodes config: %w", err)
@@ -201,7 +218,14 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		if err := c.SaveOIDCConfig(*exportData.OIDC); err != nil {
 			return fmt.Errorf("failed to import oidc configuration: %w", err)
 		}
-	} else {
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit import transaction: %w", err)
+	}
+	committed = true
+
+	if exportData.OIDC == nil {
 		// Remove existing OIDC config if backup did not include one
 		if err := os.Remove(c.oidcFile); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove existing oidc configuration: %w", err)
