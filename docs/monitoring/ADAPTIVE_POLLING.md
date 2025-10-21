@@ -1,7 +1,7 @@
 # Adaptive Polling Architecture
 
 ## Overview
-Phase 2 introduces a scheduler that adapts poll cadence based on freshness, errors, and workload. The goal is to prioritize stale or changing instances while backing off on healthy, idle targets.
+Pulse uses an adaptive polling scheduler that adapts poll cadence based on freshness, errors, and workload. The goal is to prioritize stale or changing instances while backing off on healthy, idle targets.
 
 ```mermaid
 flowchart TD
