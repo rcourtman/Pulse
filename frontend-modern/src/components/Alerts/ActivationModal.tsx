@@ -163,7 +163,7 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
 
     if (success) {
       await props.refreshActiveAlerts();
-      showSuccess('Notifications activated! You'll now receive alerts when issues are detected.');
+      showSuccess('Notifications activated! You\'ll now receive alerts when issues are detected.');
       if (props.onActivated) {
         await props.onActivated();
       }
@@ -249,7 +249,7 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {violationCount() > 0
                     ? 'These alerts are currently active. When you activate, notifications will be sent to your configured channels.'
-                    : 'No alerts triggered yet. When you activate, you'll be notified immediately if any issues are detected.'}
+                    : 'No alerts triggered yet. When you activate, you\'ll be notified immediately if any issues are detected.'}
                 </p>
                 <Show
                   when={violationCount() > 0}
