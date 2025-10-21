@@ -135,6 +135,23 @@ func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Notify about existing critical alerts after activation
+	activeAlerts := h.monitor.GetAlertManager().GetActiveAlerts()
+	criticalCount := 0
+	for _, alert := range activeAlerts {
+		if alert.Level == alerts.AlertLevelCritical && !alert.Acknowledged {
+			// Re-dispatch critical alerts to trigger notifications
+			h.monitor.GetAlertManager().NotifyExistingAlert(alert.ID)
+			criticalCount++
+		}
+	}
+
+	if criticalCount > 0 {
+		log.Info().
+			Int("criticalAlerts", criticalCount).
+			Msg("Sent notifications for existing critical alerts after activation")
+	}
+
 	log.Info().Msg("Alert notifications activated")
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
