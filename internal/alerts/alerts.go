@@ -925,6 +925,21 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	ensureValidHysteresis(config.NodeDefaults.Temperature, "node.temperature")
 	ensureValidHysteresis(&config.StorageDefault, "storage")
 
+	// Validate timezone if quiet hours are enabled
+	if config.Schedule.QuietHours.Enabled {
+		if config.Schedule.QuietHours.Timezone != "" {
+			_, err := time.LoadLocation(config.Schedule.QuietHours.Timezone)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("timezone", config.Schedule.QuietHours.Timezone).
+					Msg("Invalid timezone in quiet hours config, disabling quiet hours")
+				// Disable quiet hours rather than silently using wrong timezone
+				config.Schedule.QuietHours.Enabled = false
+			}
+		}
+	}
+
 	m.config = config
 	for id, override := range m.config.Overrides {
 		override.PoweredOffSeverity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
@@ -4153,19 +4168,6 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					Str("alertID", alertID).
 					Msg("Added alert to recently resolved")
 
-				// Schedule cleanup after 5 minutes
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Error().Interface("panic", r).Str("alertID", alertID).Msg("Panic in cleanup goroutine")
-						}
-					}()
-					time.Sleep(5 * time.Minute)
-					m.resolvedMutex.Lock()
-					delete(m.recentlyResolved, alertID)
-					m.resolvedMutex.Unlock()
-				}()
-
 				log.Info().
 					Str("resource", resourceName).
 					Str("metric", metricType).
@@ -4343,18 +4345,28 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 // GetActiveAlerts returns all active alerts
 func (m *Manager) GetActiveAlerts() []Alert {
 	m.mu.RLock()
-	// Make a quick copy of the map to avoid holding the lock too long
-	alertsCopy := make(map[string]*Alert, len(m.activeAlerts))
-	for k, v := range m.activeAlerts {
-		alertsCopy[k] = v
-	}
-	m.mu.RUnlock()
+	defer m.mu.RUnlock()
 
-	alerts := make([]Alert, 0, len(alertsCopy))
-	for _, alert := range alertsCopy {
+	alerts := make([]Alert, 0, len(m.activeAlerts))
+	for _, alert := range m.activeAlerts {
 		alerts = append(alerts, *alert)
 	}
 	return alerts
+}
+
+// NotifyExistingAlert re-dispatches a notification for an existing active alert
+// Used when activation state changes from pending to active
+func (m *Manager) NotifyExistingAlert(alertID string) {
+	m.mu.RLock()
+	alert, exists := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	// Dispatch notification for existing alert
+	m.dispatchAlert(alert, true)
 }
 
 // GetRecentlyResolved returns recently resolved alerts
@@ -6063,6 +6075,16 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		}
 	}
 
+	// Clean up old recently resolved alerts (older than 5 minutes)
+	fiveMinutesAgo := now.Add(-5 * time.Minute)
+	m.resolvedMutex.Lock()
+	for alertID, resolved := range m.recentlyResolved {
+		if resolved.ResolvedTime.Before(fiveMinutesAgo) {
+			delete(m.recentlyResolved, alertID)
+		}
+	}
+	m.resolvedMutex.Unlock()
+
 	// Clean up stale pending alerts (older than max time threshold window)
 	// This prevents memory leak from deleted resources that never triggered alerts
 	maxPendingAge := 10 * time.Minute // Longest time threshold + safety buffer
@@ -6588,6 +6610,10 @@ func (m *Manager) checkEscalations() {
 func (m *Manager) Stop() {
 	close(m.escalationStop)
 	m.historyManager.Stop()
+
+	// Give background goroutines time to exit cleanly
+	time.Sleep(100 * time.Millisecond)
+
 	// Save active alerts before stopping
 	if err := m.SaveActiveAlerts(); err != nil {
 		log.Error().Err(err).Msg("Failed to save active alerts on stop")
