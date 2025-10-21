@@ -284,6 +284,27 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 
 > Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.
 
+### `pulse-sensor-proxy/config.yaml`
+
+The sensor proxy reads `/etc/pulse-sensor-proxy/config.yaml` (or the path supplied via `PULSE_SENSOR_PROXY_CONFIG`). Key fields:
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `allowed_source_subnets` | list(string) | auto-detected host CIDRs | Restrict which networks can reach the UNIX socket listener. |
+| `allowed_peer_uids` / `allowed_peer_gids` | list(uint32) | empty | Required when Pulse runs in a container; use mapped UID/GID. |
+| `allow_idmapped_root` | bool | `true` | Governs acceptance of ID-mapped root callers. |
+| `allowed_idmap_users` | list(string) | `["root"]` | Restricts which ID-mapped usernames are accepted. |
+| `metrics_address` | string | `default` (maps to `127.0.0.1:9127`) | Set to `"disabled"` to turn metrics off. |
+| `rate_limit.per_peer_interval_ms` | int | `1000` | Milliseconds between allowed RPCs per UID. Set `>=100` in production. |
+| `rate_limit.per_peer_burst` | int | `5` | Number of requests allowed in a burst; should meet or exceed node count. |
+
+Example (also shipped as `cmd/pulse-sensor-proxy/config.example.yaml`):
+```yaml
+rate_limit:
+  per_peer_interval_ms: 500   # 2 rps
+  per_peer_burst: 10          # allow 10-node sweep
+```
+
 ---
 
 ## 🔄 Automatic Updates

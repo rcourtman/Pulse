@@ -108,13 +108,29 @@ if privilegedMethods[method] && isIDMappedRoot(credentials) {
 
 ## Rate Limiting
 
-### Per-Peer Limits
-- **Rate**: ~12 requests per minute (`rate.Every(5s)`)
-- **Burst**: 2 requests (short spikes are tolerated)
-- **Per-peer concurrency**: Maximum 2 simultaneous RPCs
-- **Global concurrency**: 8 total in-flight RPCs across all peers
-- **Penalty**: 2 s enforced delay when validation fails (payloads too large, unauthorized methods)
-- **Cleanup**: Idle peer entries removed after 10 minutes
+### Per-Peer Limits (commit 46b8b8d)
+
+- **Rate:** 1 request per second (`per_peer_interval_ms = 1000`)
+- **Burst:** 5 requests (enough to sweep five nodes per polling window)
+- **Per-peer concurrency:** Maximum 2 concurrent RPCs
+- **Global concurrency:** 8 simultaneous RPCs across all peers
+- **Penalty:** 2 s enforced delay on validation failures (oversized payloads, unauthorized methods)
+- **Cleanup:** Peer entries expire after 10 minutes of inactivity
+
+### Configurable Overrides
+
+Administrators can raise or lower thresholds via `/etc/pulse-sensor-proxy/config.yaml`:
+
+```yaml
+rate_limit:
+  per_peer_interval_ms: 500   # 2 rps
+  per_peer_burst: 10          # allow 10-node sweep
+```
+
+Security guidance:
+- Keep `per_peer_interval_ms ≥ 100` in production; lower values expand the attack surface for noisy callers.
+- Ensure UID/GID filters stay in place when increasing throughput, and continue to ship audit logs off-host.
+- Monitor `pulse_proxy_limiter_penalties_total` alongside `pulse_proxy_limiter_rejects_total` to spot abusive or compromised clients.
 
 ### Per-Node Concurrency
 - **Limit**: 1 concurrent SSH request per node

@@ -695,10 +695,46 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 - Standalone Proxmox nodes work but only monitor that single node
 - Fallback: Re-run setup script manually to reconfigure cluster access
 
-**SSH Fan-Out Scaling:**
-- Proxy SSHs to each node sequentially during each polling cycle
-- Large clusters (10+ nodes) at short intervals may trigger rate limiting or increase load
-- Consider implementing caching or throttling if you experience SSH connection issues
+**Rate Limiting & Scaling** (updated in commit 46b8b8d):
+
+**What changed:** pulse-sensor-proxy now defaults to 1 request per second with a burst of 5 per calling UID. Earlier builds throttled after two calls every five seconds, which caused temperature tiles to flicker or fall back to `--` as soon as clusters reached three or more nodes.
+
+**Symptoms of saturation:**
+- Temperature widgets flicker between values and `--`, or entire node rows disappear after adding new hardware
+- `Settings → System → Updates` shows no proxy restarts, yet scheduler health reports breaker openings for temperature pollers
+- Proxy logs include `limiter.rejection` or `Rate limit exceeded` entries for the container UID
+
+**Diagnose:**
+1. Check scheduler health for temperature pollers:
+   ```bash
+   curl -s http://localhost:7655/api/monitoring/scheduler/health \
+     | jq '.instances[] | select(.key | contains("temperature")) \
+       | {key, lastSuccess: .pollStatus.lastSuccess, breaker: .breaker.state, deadLetter: .deadLetter.present}'
+   ```
+   Breakers that remain `open` or repeated dead letters indicate the proxy is rejecting calls.
+2. Inspect limiter metrics on the host:
+   ```bash
+   curl -s http://127.0.0.1:9127/metrics \
+     | grep -E 'pulse_proxy_limiter_(rejects|penalties)_total'
+   ```
+   A rising counter confirms the limiter is backing off callers.
+3. Review logs for throttling:
+   ```bash
+   journalctl -u pulse-sensor-proxy -n 100 | grep -i "rate limit"
+   ```
+
+**Tuning guidance:** Add a `rate_limit` block to `/etc/pulse-sensor-proxy/config.yaml` (see `cmd/pulse-sensor-proxy/config.example.yaml`) when clusters grow beyond the defaults. Use the formula `per_peer_interval_ms = polling_interval_ms / node_count` and set `per_peer_burst ≥ node_count` to allow one full sweep per polling window.
+
+| Deployment size | Nodes | 10 s poll interval → interval_ms | Suggested burst | Notes |
+| --- | --- | --- | --- | --- |
+| Small | 1–3 | 1000 (default) | 5 | Works for most single Proxmox hosts. |
+| Medium | 4–10 | 500 | 10 | Halves wait time; keep burst ≥ node count. |
+| Large | 10–20 | 250 | 20 | Monitor CPU on proxy; consider staggering polls. |
+| XL | 30+ | 100–150 | 30–50 | Only enable after validating proxy host capacity. |
+
+**Security note:** Lower intervals increase throughput and reduce UI staleness, but they also allow untrusted callers to issue more RPCs per second. Keep `per_peer_interval_ms ≥ 100` in production and continue to rely on UID allow-lists plus audit logs when raising limits.
+
+**SSH latency monitoring:**
 - Monitor SSH latency metrics: `curl -s http://127.0.0.1:9127/metrics | grep pulse_proxy_ssh_latency`
 
 **Requires Proxmox Cluster Membership:**
