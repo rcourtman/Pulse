@@ -135,16 +135,59 @@ type ProgressCallback func(progress ScanProgress)
 
 // ScanProgress represents the current state of the scan
 type ScanProgress struct {
-	CurrentPhase    string  `json:"current_phase"`
-	PhaseNumber     int     `json:"phase_number"`
-	TotalPhases     int     `json:"total_phases"`
-	TargetsInPhase  int     `json:"targets_in_phase"`
-	ProcessedInPhase int    `json:"processed_in_phase"`
-	TotalTargets    int     `json:"total_targets"`
-	TotalProcessed  int     `json:"total_processed"`
-	ServersFound    int     `json:"servers_found"`
-	Percentage      float64 `json:"percentage"`
+	CurrentPhase     string  `json:"current_phase"`
+	PhaseNumber      int     `json:"phase_number"`
+	TotalPhases      int     `json:"total_phases"`
+	TargetsInPhase   int     `json:"targets_in_phase"`
+	ProcessedInPhase int     `json:"processed_in_phase"`
+	TotalTargets     int     `json:"total_targets"`
+	TotalProcessed   int     `json:"total_processed"`
+	ServersFound     int     `json:"servers_found"`
+	Percentage       float64 `json:"percentage"`
 }
+
+type EndpointProbeFinding struct {
+	Endpoint     string
+	Status       int
+	Headers      http.Header
+	ProductGuess string
+	Error        error
+}
+
+type ProxmoxProbeResult struct {
+	IP                string
+	Port              int
+	Reachable         bool
+	TLSState          *tls.ConnectionState
+	TLSHandshakeError error
+
+	Version       string
+	Release       string
+	VersionStatus int
+	VersionError  error
+	Headers       http.Header
+
+	EndpointFindings map[string]EndpointProbeFinding
+
+	ProductScores   map[string]float64
+	ProductEvidence map[string][]string
+	PrimaryProduct  string
+	PrimaryScore    float64
+
+	Positive        bool
+	PositiveReasons []string
+	Err             error
+}
+
+const (
+	productPVE = "pve"
+	productPMG = "pmg"
+	productPBS = "pbs"
+
+	productPositiveThreshold = 0.7
+)
+
+var proxmoxProbePorts = [...]int{8006, 8007}
 
 // DiscoverServers scans the network for Proxmox VE and PBS servers
 func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*DiscoveryResult, error) {
@@ -290,6 +333,104 @@ type phaseError struct {
 	Message string
 }
 
+func (s *Scanner) discoverAtPort(ctx context.Context, ip string, port int) *DiscoveredServer {
+	probe := s.probeProxmoxService(ctx, ip, port)
+	if probe == nil || !probe.Positive {
+		if probe != nil && probe.Err != nil && !errors.Is(probe.Err, context.Canceled) {
+			log.Debug().
+				Str("ip", ip).
+				Int("port", port).
+				Float64("confidence", probe.PrimaryScore).
+				Err(probe.Err).
+				Msg("Probe completed without identification")
+		}
+		return nil
+	}
+
+	return s.buildServerFromProbe(ctx, probe)
+}
+
+func (s *Scanner) buildServerFromProbe(ctx context.Context, probe *ProxmoxProbeResult) *DiscoveredServer {
+	product := strings.TrimSpace(probe.PrimaryProduct)
+	if product == "" {
+		log.Debug().
+			Str("ip", probe.IP).
+			Int("port", probe.Port).
+			Float64("confidence", probe.PrimaryScore).
+			Msg("Probe identified Proxmox server but product type is ambiguous")
+		return nil
+	}
+
+	version := strings.TrimSpace(probe.Version)
+	if version == "" {
+		version = "Unknown"
+	}
+
+	server := &DiscoveredServer{
+		IP:      probe.IP,
+		Port:    probe.Port,
+		Type:    product,
+		Version: version,
+		Release: probe.Release,
+	}
+
+	s.populateServerHostname(ctx, server)
+
+	log.Info().
+		Str("ip", server.IP).
+		Int("port", server.Port).
+		Str("type", server.Type).
+		Str("version", server.Version).
+		Float64("confidence", probe.PrimaryScore).
+		Msg("Discovered Proxmox server")
+
+	if len(probe.PositiveReasons) > 0 {
+		log.Debug().
+			Str("ip", server.IP).
+			Int("port", server.Port).
+			Str("type", server.Type).
+			Float64("confidence", probe.PrimaryScore).
+			Strs("evidence", probe.PositiveReasons).
+			Msg("Probe evidence")
+	}
+
+	return server
+}
+
+func (s *Scanner) populateServerHostname(ctx context.Context, server *DiscoveredServer) {
+	if server == nil {
+		return
+	}
+
+	if s.policy.EnableReverseDNS {
+		names, err := net.DefaultResolver.LookupAddr(ctx, server.IP)
+		if err == nil && len(names) > 0 {
+			hostname := strings.TrimSuffix(names[0], ".")
+			if hostname != "" {
+				server.Hostname = hostname
+				log.Debug().
+					Str("ip", server.IP).
+					Int("port", server.Port).
+					Str("hostname", hostname).
+					Msg("Resolved hostname via reverse DNS")
+				return
+			}
+		}
+	}
+
+	switch server.Type {
+	case productPVE, productPBS:
+		if hostname := s.fetchNodeHostname(ctx, server.IP, server.Port); hostname != "" {
+			server.Hostname = hostname
+			log.Debug().
+				Str("ip", server.IP).
+				Int("port", server.Port).
+				Str("hostname", hostname).
+				Msg("Resolved hostname via API nodes endpoint")
+		}
+	}
+}
+
 // scanWorker scans IPs from the channel
 // NOTE: This function is kept for backward compatibility but is not actively used.
 // New code should use scanWorkerWithProgress which includes progress tracking.
@@ -301,12 +442,10 @@ func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, phase stri
 		case <-ctx.Done():
 			return
 		default:
-			if server := s.checkPort8006(ctx, ip); server != nil {
-				resultChan <- discoveredResult{Phase: phase, Server: server}
-			}
-
-			if server := s.checkServer(ctx, ip, 8007, "pbs"); server != nil {
-				resultChan <- discoveredResult{Phase: phase, Server: server}
+			for _, port := range proxmoxProbePorts {
+				if server := s.discoverAtPort(ctx, ip, port); server != nil {
+					resultChan <- discoveredResult{Phase: phase, Server: server}
+				}
 			}
 		}
 	}
@@ -321,12 +460,10 @@ func (s *Scanner) scanWorkerWithProgress(ctx context.Context, wg *sync.WaitGroup
 		case <-ctx.Done():
 			return
 		default:
-			if server := s.checkPort8006(ctx, ip); server != nil {
-				resultChan <- discoveredResult{Phase: phase, Server: server}
-			}
-
-			if server := s.checkServer(ctx, ip, 8007, "pbs"); server != nil {
-				resultChan <- discoveredResult{Phase: phase, Server: server}
+			for _, port := range proxmoxProbePorts {
+				if server := s.discoverAtPort(ctx, ip, port); server != nil {
+					resultChan <- discoveredResult{Phase: phase, Server: server}
+				}
 			}
 
 			// Signal that this IP has been processed
@@ -527,35 +664,35 @@ func (s *Scanner) resolveProfile(subnet string) (*envdetect.EnvironmentProfile, 
 		return cloneProfile(s.profile), nil
 	}
 
-    var (
-        subnets        []net.IPNet
-        renderedSubnets []string
-    )
-    for _, token := range strings.Split(subnet, ",") {
-        token = strings.TrimSpace(token)
-        if token == "" {
-            continue
-        }
-        _, parsedNet, err := net.ParseCIDR(token)
-        if err != nil {
-            return nil, fmt.Errorf("invalid subnet %q: %w", token, err)
-        }
-        subnets = append(subnets, *parsedNet)
-        renderedSubnets = append(renderedSubnets, parsedNet.String())
-    }
+	var (
+		subnets         []net.IPNet
+		renderedSubnets []string
+	)
+	for _, token := range strings.Split(subnet, ",") {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		_, parsedNet, err := net.ParseCIDR(token)
+		if err != nil {
+			return nil, fmt.Errorf("invalid subnet %q: %w", token, err)
+		}
+		subnets = append(subnets, *parsedNet)
+		renderedSubnets = append(renderedSubnets, parsedNet.String())
+	}
 
-    if len(subnets) == 0 {
-        return nil, fmt.Errorf("no valid subnets provided")
-    }
+	if len(subnets) == 0 {
+		return nil, fmt.Errorf("no valid subnets provided")
+	}
 
 	manualProfile := &envdetect.EnvironmentProfile{
 		Type:       envdetect.Unknown,
 		Confidence: 1.0,
 		Policy:     s.policy,
 		Warnings:   []string{"Manual subnet override applied"},
-        Metadata: map[string]string{
-            "manual_subnets": strings.Join(renderedSubnets, ","),
-        },
+		Metadata: map[string]string{
+			"manual_subnets": strings.Join(renderedSubnets, ","),
+		},
 		Phases: []envdetect.SubnetPhase{
 			{
 				Name:       "manual_subnet",
@@ -741,173 +878,357 @@ func max(a, b int) int {
 	return b
 }
 
-// checkPort8006 checks if port 8006 is running PMG or PVE
-func (s *Scanner) checkPort8006(ctx context.Context, ip string) *DiscoveredServer {
-	address := net.JoinHostPort(ip, "8006")
+func newProxmoxProbeResult(ip string, port int) *ProxmoxProbeResult {
+	return &ProxmoxProbeResult{
+		IP:               ip,
+		Port:             port,
+		ProductScores:    map[string]float64{},
+		ProductEvidence:  map[string][]string{},
+		EndpointFindings: map[string]EndpointProbeFinding{},
+	}
+}
 
-	// First attempt a TLS handshake with proper timeout so we can inspect certificate metadata.
-	var tlsState *tls.ConnectionState
-	timeout := s.policy.DialTimeout
-	if timeout <= 0 {
-		timeout = time.Second
+func (r *ProxmoxProbeResult) addConfidence(product, reason string, score float64, positive bool) {
+	if score <= 0 {
+		return
 	}
 
-	// Use context with timeout for TLS dial to prevent hangs
-	tlsCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	dialer := &net.Dialer{Timeout: timeout}
-	tlsConn, tlsErr := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{InsecureSkipVerify: true})
-	if tlsErr != nil {
-		// If TLS fails completely, try a context-aware TCP dial
-		conn, err := dialer.DialContext(tlsCtx, "tcp", address)
-		if err != nil {
-			return nil // Port not open or unreachable
-		}
-		conn.Close()
-		// Port is open but TLS failed - continue to HTTP check
-	} else {
-		state := tlsConn.ConnectionState()
-		tlsState = &state
-		tlsConn.Close()
-	}
-
-	// Track whether we got positive identification
-	positiveIdentification := false
-	serverType := "pve" // Default assumption
-	version := "Unknown"
-	var release string
-
-	// Infer from certificate if available
-	if tlsState != nil {
-		if guess := inferTypeFromCertificate(*tlsState); guess != "" {
-			serverType = guess
-			positiveIdentification = true // Certificate indicates Proxmox
+	if product != "" {
+		r.ProductScores[product] += score
+		if reason != "" {
+			r.ProductEvidence[product] = append(r.ProductEvidence[product], reason)
 		}
 	}
 
-	// Try to get version or authentication headers
-	versionURL := fmt.Sprintf("https://%s/api2/json/version", address)
-	if req, err := http.NewRequestWithContext(ctx, "GET", versionURL, nil); err == nil {
-		if resp, err := s.httpClient.Do(req); err == nil {
-			defer resp.Body.Close()
+	if positive {
+		if reason == "" {
+			reason = "positive identification"
+		}
+		if product != "" {
+			r.PositiveReasons = append(r.PositiveReasons, fmt.Sprintf("%s: %s", product, reason))
+		} else {
+			r.PositiveReasons = append(r.PositiveReasons, reason)
+		}
+	}
+}
 
-			switch resp.StatusCode {
-			case http.StatusOK:
-				var versionResp struct {
-					Data struct {
-						Version string `json:"version"`
-						Release string `json:"release,omitempty"`
-					} `json:"data"`
-				}
+func (r *ProxmoxProbeResult) recordEndpoint(f EndpointProbeFinding) {
+	if f.Endpoint == "" {
+		return
+	}
+	if r.EndpointFindings == nil {
+		r.EndpointFindings = map[string]EndpointProbeFinding{}
+	}
+	r.EndpointFindings[f.Endpoint] = f
+}
 
-				if err := json.NewDecoder(resp.Body).Decode(&versionResp); err == nil && versionResp.Data.Version != "" {
-					version = versionResp.Data.Version
-					release = versionResp.Data.Release
-					positiveIdentification = true // Got valid version data
+func (r *ProxmoxProbeResult) endpointFinding(endpoint string) (EndpointProbeFinding, bool) {
+	if r.EndpointFindings == nil {
+		return EndpointProbeFinding{}, false
+	}
+	f, ok := r.EndpointFindings[endpoint]
+	return f, ok
+}
 
-					if guess := inferTypeFromMetadata(
-						versionResp.Data.Version,
-						versionResp.Data.Release,
-						resp.Header.Get("Server"),
-						resp.Header.Get("Proxmox-Product"),
-						resp.Header.Get("WWW-Authenticate"),
-						strings.Join(resp.Header.Values("Set-Cookie"), " "),
-					); guess != "" {
-						serverType = guess
-					}
+func (r *ProxmoxProbeResult) finalize() {
+	var (
+		bestProduct string
+		bestScore   float64
+	)
+	for product, score := range r.ProductScores {
+		if score > bestScore {
+			bestProduct = product
+			bestScore = score
+		}
+	}
 
-					log.Debug().
-						Str("ip", ip).
-						Int("port", 8006).
-						Str("version", version).
-						Msg("Got server version without auth")
-				}
-			case http.StatusUnauthorized, http.StatusForbidden:
-				// Check for Proxmox-specific auth headers
-				if guess := inferTypeFromMetadata(
-					resp.Header.Get("WWW-Authenticate"),
-					resp.Header.Get("Server"),
-					resp.Header.Get("Proxmox-Product"),
-				); guess != "" {
-					serverType = guess
-					positiveIdentification = true // Proxmox auth headers present
-				}
+	r.PrimaryProduct = bestProduct
+	r.PrimaryScore = bestScore
+	r.Positive = len(r.PositiveReasons) > 0
+	if r.Positive {
+		r.Err = nil
+	}
+}
+
+func (s *Scanner) probeProxmoxService(ctx context.Context, ip string, port int) *ProxmoxProbeResult {
+	address := net.JoinHostPort(ip, strconv.Itoa(port))
+	result := newProxmoxProbeResult(ip, port)
+
+	tlsState, reachable, tlsErr := s.performTLSProbe(ctx, address)
+	result.TLSState = tlsState
+	result.Reachable = reachable
+	result.TLSHandshakeError = tlsErr
+
+	if !reachable {
+		result.Err = tlsErr
+		result.finalize()
+		return result
+	}
+
+	versionFinding, version, release := s.probeVersionEndpoint(ctx, address)
+	result.recordEndpoint(versionFinding)
+	result.VersionStatus = versionFinding.Status
+	result.VersionError = versionFinding.Error
+	result.Version = version
+	result.Release = release
+	result.Headers = cloneHeader(versionFinding.Headers)
+
+	s.applyProductMatchers(ctx, address, result)
+
+	if strings.TrimSpace(result.Version) == "" {
+		result.Version = "Unknown"
+	}
+
+	if !result.Positive {
+		if tlsErr != nil {
+			result.Err = tlsErr
+		} else if result.VersionError != nil {
+			result.Err = result.VersionError
+		} else {
+			result.Err = errors.New("no positive identification")
+		}
+	}
+
+	result.finalize()
+	return result
+}
+
+func (s *Scanner) applyProductMatchers(ctx context.Context, address string, result *ProxmoxProbeResult) {
+	applySharedHeuristics(result)
+	applyPVEHeuristics(result)
+	s.applyPMGHeuristics(ctx, address, result)
+	s.applyPBSHeuristics(ctx, address, result)
+}
+
+func applySharedHeuristics(result *ProxmoxProbeResult) {
+	switch result.Port {
+	case 8006:
+		result.addConfidence(productPVE, "port 8006 reachable", 0.1, false)
+		result.addConfidence(productPMG, "port 8006 reachable", 0.1, false)
+	case 8007:
+		result.addConfidence(productPBS, "port 8007 reachable", 0.2, false)
+	}
+
+	if result.TLSState != nil {
+		if product := inferTypeFromCertificate(*result.TLSState); product != "" {
+			result.addConfidence(product, "TLS certificate metadata", 0.6, true)
+		}
+	}
+
+	versionFinding, ok := result.endpointFinding("api2/json/version")
+	if !ok || versionFinding.Error != nil {
+		return
+	}
+
+	switch versionFinding.Status {
+	case http.StatusOK:
+		if result.Version != "" {
+			result.addConfidence("", "version endpoint JSON responded", 0.35, true)
+		} else {
+			result.addConfidence("", "version endpoint responded", 0.25, true)
+		}
+
+		if versionFinding.ProductGuess != "" {
+			result.addConfidence(versionFinding.ProductGuess, "version endpoint headers", 0.45, true)
+		}
+
+		if guess := inferTypeFromMetadata(result.Version, result.Release); guess != "" {
+			result.addConfidence(guess, "version payload metadata", 0.2, true)
+		}
+
+		if versionFinding.ProductGuess == "" {
+			for _, product := range defaultProductsForPort(result.Port) {
+				result.addConfidence(product, "version endpoint success without explicit product", 0.2, true)
+			}
+		}
+	case http.StatusUnauthorized, http.StatusForbidden:
+		if versionFinding.ProductGuess != "" {
+			result.addConfidence(versionFinding.ProductGuess, "auth headers indicated product", 0.4, true)
+		} else {
+			for _, product := range defaultProductsForPort(result.Port) {
+				reason := fmt.Sprintf("version endpoint on %s port requires authentication", product)
+				result.addConfidence(product, reason, 0.25, true)
 			}
 		}
 	}
+}
 
-	// Fallback: probe PMG-specific endpoints if we still think this is a PVE server.
-	if serverType != "pmg" && s.isPMGServer(ctx, address) {
-		serverType = "pmg"
-		positiveIdentification = true
+func applyPVEHeuristics(result *ProxmoxProbeResult) {
+	if result.Port != 8006 {
+		return
 	}
 
-	// Only report server if we got positive identification
-	// (not just an open port)
-	if !positiveIdentification {
-		log.Debug().
-			Str("ip", ip).
-			Int("port", 8006).
-			Msg("Port 8006 open but no Proxmox identification found")
+	lowerVersion := strings.ToLower(result.Version)
+	lowerRelease := strings.ToLower(result.Release)
+
+	if strings.Contains(lowerVersion, "pve") || strings.Contains(lowerRelease, "pve") {
+		result.addConfidence(productPVE, "version metadata references pve", 0.4, true)
+	}
+
+	if result.Headers != nil {
+		if server := strings.ToLower(result.Headers.Get("Server")); strings.Contains(server, "pve") {
+			result.addConfidence(productPVE, "server header references pve", 0.35, true)
+		}
+	}
+
+	if result.ProductScores[productPMG] >= productPositiveThreshold {
+		return
+	}
+
+	if result.VersionStatus == http.StatusOK && result.Version != "" && result.ProductScores[productPVE] < 0.5 {
+		result.addConfidence(productPVE, "version endpoint success on port 8006", 0.25, true)
+	}
+}
+
+func (s *Scanner) applyPMGHeuristics(ctx context.Context, address string, result *ProxmoxProbeResult) {
+	versionFinding, _ := result.endpointFinding("api2/json/version")
+	hasPMGSignal := false
+
+	if versionFinding.ProductGuess == productPMG {
+		hasPMGSignal = true
+	}
+
+	if result.Headers != nil {
+		if guess := inferTypeFromMetadata(
+			result.Headers.Get("Proxmox-Product"),
+			result.Headers.Get("Server"),
+			result.Headers.Get("WWW-Authenticate"),
+			strings.Join(result.Headers.Values("Set-Cookie"), " "),
+		); guess == productPMG {
+			result.addConfidence(productPMG, "version headers reference pmg", 0.45, true)
+			hasPMGSignal = true
+		}
+	}
+
+	if result.Port != 8006 && !hasPMGSignal {
+		return
+	}
+
+	if result.ProductScores[productPMG] >= productPositiveThreshold {
+		return
+	}
+
+	pmgEndpoints := []struct {
+		Path   string
+		Weight float64
+	}{
+		{"api2/json/statistics/mail", 0.4},
+		{"api2/json/mail/queue", 0.35},
+		{"api2/json/mail/quarantine", 0.35},
+	}
+
+	for _, endpoint := range pmgEndpoints {
+		if _, ok := result.EndpointFindings[endpoint.Path]; !ok {
+			finding := s.probeAPIEndpoint(ctx, address, endpoint.Path)
+			result.recordEndpoint(finding)
+		}
+
+		finding, ok := result.endpointFinding(endpoint.Path)
+		if !ok || finding.Error != nil {
+			continue
+		}
+
+		if finding.ProductGuess == productPMG {
+			result.addConfidence(productPMG, fmt.Sprintf("endpoint %s headers", endpoint.Path), endpoint.Weight, true)
+			continue
+		}
+
+		if finding.Status != http.StatusNotFound && finding.Status != 0 {
+			result.addConfidence(productPMG, fmt.Sprintf("endpoint %s responded", endpoint.Path), endpoint.Weight-0.05, true)
+		}
+	}
+}
+
+func (s *Scanner) applyPBSHeuristics(ctx context.Context, address string, result *ProxmoxProbeResult) {
+	if result.Port != 8007 {
+		return
+	}
+
+	versionFinding, _ := result.endpointFinding("api2/json/version")
+
+	if result.Headers != nil {
+		if guess := inferTypeFromMetadata(
+			result.Headers.Get("Proxmox-Product"),
+			result.Headers.Get("Server"),
+			result.Headers.Get("WWW-Authenticate"),
+			strings.Join(result.Headers.Values("Set-Cookie"), " "),
+		); guess == productPBS {
+			result.addConfidence(productPBS, "version headers reference pbs", 0.4, true)
+		}
+	}
+
+	switch versionFinding.Status {
+	case http.StatusOK:
+		if result.Version != "" {
+			result.addConfidence(productPBS, "version endpoint returned JSON", 0.45, true)
+		} else {
+			result.addConfidence(productPBS, "version endpoint responded", 0.35, true)
+		}
+	case http.StatusUnauthorized, http.StatusForbidden:
+		if versionFinding.ProductGuess == productPBS {
+			result.addConfidence(productPBS, "auth headers indicated PBS", 0.45, true)
+		} else {
+			result.addConfidence(productPBS, "version endpoint on PBS port requires auth", 0.35, true)
+		}
+	default:
+		if result.Reachable && result.ProductScores[productPBS] < 0.25 {
+			result.addConfidence(productPBS, "port 8007 reachable", 0.25, true)
+		}
+	}
+
+	if result.ProductScores[productPBS] >= productPositiveThreshold {
+		return
+	}
+
+	pbsEndpoints := []struct {
+		Path        string
+		Weight      float64
+		SuccessNote string
+	}{
+		{"api2/json/status", 0.45, "status endpoint responded"},
+		{"api2/json/config/datastore", 0.35, "datastore endpoint reachable"},
+	}
+
+	for _, endpoint := range pbsEndpoints {
+		if _, ok := result.EndpointFindings[endpoint.Path]; !ok {
+			finding := s.probeAPIEndpoint(ctx, address, endpoint.Path)
+			result.recordEndpoint(finding)
+		}
+
+		finding, ok := result.endpointFinding(endpoint.Path)
+		if !ok || finding.Error != nil {
+			continue
+		}
+
+		if finding.ProductGuess == productPBS {
+			result.addConfidence(productPBS, fmt.Sprintf("endpoint %s headers", endpoint.Path), endpoint.Weight, true)
+			continue
+		}
+
+		if finding.Status != http.StatusNotFound && finding.Status != 0 {
+			reason := endpoint.SuccessNote
+			if endpoint.Path == "api2/json/config/datastore" && finding.Status == http.StatusUnauthorized {
+				reason = "datastore endpoint requires auth"
+			}
+			result.addConfidence(productPBS, reason, endpoint.Weight-0.05, true)
+		}
+	}
+}
+
+func defaultProductsForPort(port int) []string {
+	switch port {
+	case 8006:
+		return []string{productPVE, productPMG}
+	case 8007:
+		return []string{productPBS}
+	default:
 		return nil
 	}
-
-	log.Info().
-		Str("ip", ip).
-		Int("port", 8006).
-		Str("type", serverType).
-		Str("version", version).
-		Msg("Discovered Proxmox server")
-
-	server := &DiscoveredServer{
-		IP:      ip,
-		Port:    8006,
-		Type:    serverType,
-		Version: version,
-		Release: release,
-	}
-
-	// Try to resolve hostname via reverse DNS
-	if s.policy.EnableReverseDNS {
-		names, err := net.DefaultResolver.LookupAddr(ctx, ip)
-		if err == nil && len(names) > 0 {
-			hostname := strings.TrimSuffix(names[0], ".")
-			server.Hostname = hostname
-			log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
-		}
-	}
-
-	return server
 }
 
-// isPMGServer checks if a server is PMG by checking for PMG-specific endpoints
-func (s *Scanner) isPMGServer(ctx context.Context, address string) bool {
-	endpoints := []string{
-		"api2/json/statistics/mail",
-		"api2/json/mail/queue",
-		"api2/json/mail/quarantine",
-	}
-
-	for _, endpoint := range endpoints {
-		product := s.detectProductFromEndpoint(ctx, address, endpoint)
-		if product == "pmg" {
-			log.Debug().
-				Str("address", address).
-				Str("endpoint", endpoint).
-				Msg("PMG-specific endpoint confirmed")
-			return true
-		}
-	}
-
-	return false
-}
-
-// detectProductFromEndpoint inspects an HTTP endpoint and tries to infer the product type.
-func (s *Scanner) detectProductFromEndpoint(ctx context.Context, address, endpoint string) string {
-	url := fmt.Sprintf("https://%s/%s", address, endpoint)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func (s *Scanner) fetchNodeHostname(ctx context.Context, ip string, port int) string {
+	address := net.JoinHostPort(ip, strconv.Itoa(port))
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://%s/api2/json/nodes", address), nil)
 	if err != nil {
 		return ""
 	}
@@ -918,22 +1239,133 @@ func (s *Scanner) detectProductFromEndpoint(ctx context.Context, address, endpoi
 	}
 	defer resp.Body.Close()
 
-	headerProduct := inferTypeFromMetadata(
+	var nodesResp struct {
+		Data []struct {
+			Node string `json:"node"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&nodesResp); err != nil {
+		return ""
+	}
+
+	if len(nodesResp.Data) > 0 {
+		return nodesResp.Data[0].Node
+	}
+
+	return ""
+}
+
+func (s *Scanner) performTLSProbe(ctx context.Context, address string) (*tls.ConnectionState, bool, error) {
+	timeout := s.policy.DialTimeout
+	if timeout <= 0 {
+		timeout = time.Second
+	}
+
+	dialer := &net.Dialer{Timeout: timeout}
+	tlsConn, err := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{InsecureSkipVerify: true})
+	if err == nil {
+		state := tlsConn.ConnectionState()
+		tlsConn.Close()
+		return &state, true, nil
+	}
+
+	dialCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	conn, tcpErr := dialer.DialContext(dialCtx, "tcp", address)
+	if tcpErr != nil {
+		return nil, false, tcpErr
+	}
+	conn.Close()
+
+	return nil, true, err
+}
+
+func (s *Scanner) probeVersionEndpoint(ctx context.Context, address string) (EndpointProbeFinding, string, string) {
+	const endpoint = "api2/json/version"
+
+	finding := EndpointProbeFinding{Endpoint: endpoint}
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://%s/%s", address, endpoint), nil)
+	if err != nil {
+		finding.Error = err
+		return finding, "", ""
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		finding.Error = err
+		return finding, "", ""
+	}
+	defer resp.Body.Close()
+
+	finding.Status = resp.StatusCode
+	finding.Headers = cloneHeader(resp.Header)
+	finding.ProductGuess = inferTypeFromMetadata(
 		resp.Header.Get("Server"),
 		resp.Header.Get("Proxmox-Product"),
 		resp.Header.Get("WWW-Authenticate"),
 		strings.Join(resp.Header.Values("Set-Cookie"), " "),
 	)
-	if headerProduct != "" {
-		return headerProduct
+
+	if resp.StatusCode != http.StatusOK {
+		return finding, "", ""
 	}
 
-	// If the endpoint responded (not 404) and the path is PMG-specific, treat it as PMG.
-	if resp.StatusCode != http.StatusNotFound && strings.Contains(endpoint, "mail") {
-		return "pmg"
+	var payload struct {
+		Data struct {
+			Version string `json:"version"`
+			Release string `json:"release,omitempty"`
+		} `json:"data"`
 	}
 
-	return ""
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		finding.Error = err
+		return finding, "", ""
+	}
+
+	return finding, payload.Data.Version, payload.Data.Release
+}
+
+func (s *Scanner) probeAPIEndpoint(ctx context.Context, address, endpoint string) EndpointProbeFinding {
+	finding := EndpointProbeFinding{Endpoint: endpoint}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://%s/%s", address, endpoint), nil)
+	if err != nil {
+		finding.Error = err
+		return finding
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		finding.Error = err
+		return finding
+	}
+	defer resp.Body.Close()
+
+	finding.Status = resp.StatusCode
+	finding.Headers = cloneHeader(resp.Header)
+	finding.ProductGuess = inferTypeFromMetadata(
+		resp.Header.Get("Server"),
+		resp.Header.Get("Proxmox-Product"),
+		resp.Header.Get("WWW-Authenticate"),
+		strings.Join(resp.Header.Values("Set-Cookie"), " "),
+	)
+
+	return finding
+}
+
+func cloneHeader(h http.Header) http.Header {
+	if h == nil {
+		return nil
+	}
+	c := make(http.Header, len(h))
+	for k, values := range h {
+		cp := make([]string, len(values))
+		copy(cp, values)
+		c[k] = cp
+	}
+	return c
 }
 
 // inferTypeFromCertificate tries to determine the product based on TLS certificate metadata.
@@ -950,7 +1382,6 @@ func inferTypeFromCertificate(state tls.ConnectionState) string {
 	return inferTypeFromMetadata(parts...)
 }
 
-// inferTypeFromMetadata inspects textual metadata and returns a best-effort product type.
 func inferTypeFromMetadata(parts ...string) string {
 	var builder strings.Builder
 
@@ -995,223 +1426,54 @@ func inferTypeFromMetadata(parts ...string) string {
 	}
 }
 
-// checkServer checks if a server is running at the given IP and port
-func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverType string) *DiscoveredServer {
-	// First check if port is open with context-aware dial
-	address := net.JoinHostPort(ip, strconv.Itoa(port))
-	timeout := s.policy.DialTimeout
-	if timeout <= 0 {
-		timeout = time.Second
-	}
-
-	dialCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	dialer := &net.Dialer{Timeout: timeout}
-	conn, err := dialer.DialContext(dialCtx, "tcp", address)
-	if err != nil {
-		return nil // Port not open
-	}
-	conn.Close()
-
-	// Port is open - verify it's actually a Proxmox server
-	positiveIdentification := false
-	version := "Unknown"
-	var release string
-
-	// Try to get version or authentication headers
-	url := fmt.Sprintf("https://%s/api2/json/version", address)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err == nil {
-		resp, err := s.httpClient.Do(req)
-		if err == nil {
-			defer resp.Body.Close()
-
-			switch resp.StatusCode {
-			case http.StatusOK:
-				var versionResp struct {
-					Data struct {
-						Version string `json:"version"`
-						Release string `json:"release,omitempty"`
-					} `json:"data"`
-				}
-
-				if err := json.NewDecoder(resp.Body).Decode(&versionResp); err == nil && versionResp.Data.Version != "" {
-					version = versionResp.Data.Version
-					release = versionResp.Data.Release
-					positiveIdentification = true
-
-					log.Debug().
-						Str("ip", ip).
-						Int("port", port).
-						Str("version", version).
-						Msg("Got server version without auth")
-				}
-			case http.StatusUnauthorized, http.StatusForbidden:
-				// Check for Proxmox-specific auth headers
-				if inferTypeFromMetadata(
-					resp.Header.Get("WWW-Authenticate"),
-					resp.Header.Get("Server"),
-					resp.Header.Get("Proxmox-Product"),
-				) != "" {
-					positiveIdentification = true
-				}
-			}
-		}
-	}
-
-	// Only report server if we got positive identification
-	if !positiveIdentification {
-		log.Debug().
-			Str("ip", ip).
-			Int("port", port).
-			Str("expected_type", serverType).
-			Msg("Port open but no Proxmox identification found")
+// generateIPs generates all IPs in a subnet
+func (s *Scanner) generateIPs(ipNet *net.IPNet) []string {
+	baseIP := ipNet.IP.Mask(ipNet.Mask).To4()
+	if baseIP == nil {
 		return nil
 	}
 
-	log.Info().
-		Str("ip", ip).
-		Int("port", port).
-		Str("type", serverType).
-		Str("version", version).
-		Msg("Discovered Proxmox server")
-
-	server := &DiscoveredServer{
-		IP:      ip,
-		Port:    port,
-		Type:    serverType,
-		Version: version,
-		Release: release,
+	ones, bits := ipNet.Mask.Size()
+	if bits != 32 {
+		return nil
 	}
 
-	// Try to resolve hostname via reverse DNS
-	if s.policy.EnableReverseDNS {
-		names, err := net.DefaultResolver.LookupAddr(ctx, ip)
-		if err == nil && len(names) > 0 {
-			hostname := strings.TrimSuffix(names[0], ".")
-			server.Hostname = hostname
-			log.Debug().Str("ip", ip).Str("hostname", hostname).Msg("Resolved hostname via DNS")
+	hostBits := bits - ones
+	totalHosts := 1
+	if hostBits > 0 {
+		totalHosts = 1 << hostBits
+	}
+
+	start := 0
+	end := totalHosts
+	if totalHosts > 2 {
+		start = 1
+		end = totalHosts - 1
+	}
+
+	limit := s.policy.MaxHostsPerScan
+	if limit > 0 && limit < (end-start) {
+		end = start + limit
+		log.Debug().
+			Str("subnet", ipNet.String()).
+			Int("limit", limit).
+			Msg("Applying max hosts per scan limit")
+	}
+
+	ips := make([]string, 0, end-start)
+
+	for offset := start; offset < end; offset++ {
+		currIP := make(net.IP, len(baseIP))
+		copy(currIP, baseIP)
+
+		carry := offset
+		for idx := len(currIP) - 1; idx >= 0 && carry > 0; idx-- {
+			currIP[idx] += byte(carry & 0xFF)
+			carry >>= 8
 		}
+
+		ips = append(ips, currIP.String())
 	}
 
-	return server
-}
-
-// getProxmoxHostname tries to get the hostname of a Proxmox VE server
-func (s *Scanner) getProxmoxHostname(ctx context.Context, ip string, port int) string {
-	address := net.JoinHostPort(ip, strconv.Itoa(port))
-	url := fmt.Sprintf("https://%s/api2/json/nodes", address)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return ""
-	}
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-
-	var nodesResp struct {
-		Data []struct {
-			Node string `json:"node"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&nodesResp); err != nil {
-		return ""
-	}
-
-	if len(nodesResp.Data) > 0 {
-		return nodesResp.Data[0].Node
-	}
-
-	return ""
-}
-
-// getPBSHostname tries to get the hostname of a PBS server
-func (s *Scanner) getPBSHostname(ctx context.Context, ip string, port int) string {
-	address := net.JoinHostPort(ip, strconv.Itoa(port))
-	url := fmt.Sprintf("https://%s/api2/json/nodes", address)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return ""
-	}
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-
-	var nodesResp struct {
-		Data []struct {
-			Node string `json:"node"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&nodesResp); err != nil {
-		return ""
-	}
-
-	if len(nodesResp.Data) > 0 {
-		return nodesResp.Data[0].Node
-	}
-
-	return ""
-}
-
-// generateIPs generates all IPs in a subnet
-func (s *Scanner) generateIPs(ipNet *net.IPNet) []string {
-    baseIP := ipNet.IP.Mask(ipNet.Mask).To4()
-    if baseIP == nil {
-        return nil
-    }
-
-    ones, bits := ipNet.Mask.Size()
-    if bits != 32 {
-        return nil
-    }
-
-    hostBits := bits - ones
-    totalHosts := 1
-    if hostBits > 0 {
-        totalHosts = 1 << hostBits
-    }
-
-    start := 0
-    end := totalHosts
-    if totalHosts > 2 {
-        start = 1
-        end = totalHosts - 1
-    }
-
-    limit := s.policy.MaxHostsPerScan
-    if limit > 0 && limit < (end-start) {
-        end = start + limit
-        log.Debug().
-            Str("subnet", ipNet.String()).
-            Int("limit", limit).
-            Msg("Applying max hosts per scan limit")
-    }
-
-    ips := make([]string, 0, end-start)
-
-    for offset := start; offset < end; offset++ {
-        currIP := make(net.IP, len(baseIP))
-        copy(currIP, baseIP)
-
-        carry := offset
-        for idx := len(currIP) - 1; idx >= 0 && carry > 0; idx-- {
-            currIP[idx] += byte(carry & 0xFF)
-            carry >>= 8
-        }
-
-        ips = append(ips, currIP.String())
-    }
-
-    return ips
+	return ips
 }
