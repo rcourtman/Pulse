@@ -67,6 +67,7 @@ QUIET=false
 PULSE_SERVER=""
 STANDALONE=false
 FALLBACK_BASE="${PULSE_SENSOR_PROXY_FALLBACK_URL:-}"
+SKIP_RESTART=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -92,6 +93,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --standalone)
             STANDALONE=true
+            shift
+            ;;
+        --skip-restart)
+            SKIP_RESTART=true
             shift
             ;;
         *)
@@ -797,6 +802,7 @@ if [[ "$STANDALONE" == false ]]; then
     # Ensure container mount via mp configuration
     print_info "Configuring socket bind mount..."
     MOUNT_TARGET="/mnt/pulse-proxy"
+    HOST_SOCKET_SOURCE="/run/pulse-sensor-proxy"
     LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
 
 # Back up container config before modifying
@@ -827,7 +833,7 @@ if [[ -z "$CURRENT_MP" ]]; then
         exit 1
     fi
     print_info "Configuring container mount using $CURRENT_MP..."
-    SET_ERROR=$(pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0" 2>&1)
+    SET_ERROR=$(pct set "$CTID" -${CURRENT_MP} "${HOST_SOCKET_SOURCE},mp=${MOUNT_TARGET},replicate=0" 2>&1)
     if [ $? -eq 0 ]; then
         MOUNT_UPDATED=true
     else
@@ -837,21 +843,26 @@ if [[ -z "$CURRENT_MP" ]]; then
         fi
     fi
 else
-    print_info "Container already has socket mount configured ($CURRENT_MP)"
-    SET_ERROR=$(pct set "$CTID" -${CURRENT_MP} "/run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0" 2>&1)
-    if [ $? -eq 0 ]; then
-        MOUNT_UPDATED=true
+    desired_pattern="^${CURRENT_MP}: ${HOST_SOCKET_SOURCE},mp=${MOUNT_TARGET}"
+    if pct config "$CTID" | grep -q "$desired_pattern"; then
+        print_info "Container already has socket mount configured ($CURRENT_MP)"
     else
-        HOTPLUG_FAILED=true
-        if [ -n "$SET_ERROR" ]; then
-            print_warn "pct set failed: $SET_ERROR"
+        print_info "Updating container mount configuration ($CURRENT_MP)..."
+        SET_ERROR=$(pct set "$CTID" -${CURRENT_MP} "${HOST_SOCKET_SOURCE},mp=${MOUNT_TARGET},replicate=0" 2>&1)
+        if [ $? -eq 0 ]; then
+            MOUNT_UPDATED=true
+        else
+            HOTPLUG_FAILED=true
+            if [ -n "$SET_ERROR" ]; then
+                print_warn "pct set failed: $SET_ERROR"
+            fi
         fi
     fi
 fi
 
 if [[ "$HOTPLUG_FAILED" = true ]]; then
     print_warn "Hot-plugging socket mount failed (container may be running). Updating config directly."
-    CURRENT_MP_LINE="${CURRENT_MP}: /run/pulse-sensor-proxy,mp=${MOUNT_TARGET},replicate=0"
+    CURRENT_MP_LINE="${CURRENT_MP}: ${HOST_SOCKET_SOURCE},mp=${MOUNT_TARGET},replicate=0"
     if ! grep -q "^${CURRENT_MP}:" "$LXC_CONFIG" 2>/dev/null; then
         echo "$CURRENT_MP_LINE" >> "$LXC_CONFIG"
     else
@@ -869,7 +880,7 @@ fi
 print_info "✓ Mount configuration verified in container config"
 
 # Remove legacy lxc.mount.entry directives if present
-if grep -q "lxc.mount.entry: /run/pulse-sensor-proxy" "$LXC_CONFIG"; then
+if grep -q "lxc.mount.entry: ${HOST_SOCKET_SOURCE}" "$LXC_CONFIG"; then
     print_info "Removing legacy lxc.mount.entry directives for pulse-sensor-proxy"
     sed -i '/lxc\.mount\.entry: \/run\/pulse-sensor-proxy/d' "$LXC_CONFIG"
     MOUNT_UPDATED=true
@@ -877,13 +888,21 @@ fi
 
 # Restart container to apply mount if configuration changed or mount missing
 if [[ "$MOUNT_UPDATED" = true ]]; then
-    print_info "Restarting container to activate secure communication..."
-    if [[ "$CT_RUNNING" = true ]]; then
-        pct stop "$CTID" && sleep 2 && pct start "$CTID"
+    if [[ "$SKIP_RESTART" = true ]]; then
+        if [[ "$CT_RUNNING" = true ]]; then
+            print_info "Skipping container restart (--skip-restart provided)."
+        else
+            print_info "Skipping automatic container start (--skip-restart provided)."
+        fi
     else
-        pct start "$CTID"
+        print_info "Restarting container to activate secure communication..."
+        if [[ "$CT_RUNNING" = true ]]; then
+            pct stop "$CTID" && sleep 2 && pct start "$CTID"
+        else
+            pct start "$CTID"
+        fi
+        sleep 5
     fi
-    sleep 5
 fi
 
 # Verify socket directory and file inside container
@@ -893,6 +912,10 @@ if [[ "$HOTPLUG_FAILED" = true && "$CT_RUNNING" = true ]]; then
     print_warn "  pct stop $CTID && sleep 2 && pct start $CTID"
     print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
     # Keep backup in this case since we can't verify
+    [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
+elif [[ "$SKIP_RESTART" = true && "$CT_RUNNING" = false ]]; then
+    print_warn "Socket verification deferred. Start container $CTID and run:"
+    print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
     [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
 else
     print_info "Verifying secure communication channel..."

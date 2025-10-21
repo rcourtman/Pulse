@@ -26,10 +26,26 @@ FORCE_VERSION=""
 FORCE_CHANNEL=""
 SOURCE_BRANCH="main"
 PROXY_MODE=""  # Can be: yes, no, auto, or empty (will prompt)
+PROXY_USER_CHOICE=""
+PROXY_PREPARE_MOUNT=false
+CURRENT_INSTALL_CTID=""
+CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 
 DEBIAN_TEMPLATE_FALLBACK="debian-12-standard_12.12-1_amd64.tar.zst"
 DEBIAN_TEMPLATE=""
+
+handle_install_interrupt() {
+    echo ""
+    print_error "Installation cancelled"
+    if [[ -n "$CURRENT_INSTALL_CTID" ]] && [[ "$CONTAINER_CREATED_FOR_CLEANUP" == "true" ]]; then
+        print_info "Cleaning up container $CURRENT_INSTALL_CTID..."
+        pct stop "$CURRENT_INSTALL_CTID" 2>/dev/null || true
+        sleep 2
+        pct destroy "$CURRENT_INSTALL_CTID" 2>/dev/null || true
+    fi
+    exit 1
+}
 
 # Wrapper for systemctl commands that might hang in unprivileged containers
 safe_systemctl() {
@@ -151,12 +167,14 @@ print_warn() {
 # Returns 0 if user wants proxy, 1 if not
 prompt_proxy_installation() {
     local docker_detected="$1"
-    local default_choice="n"
+    local default_choice="${2:-n}"
 
-    # If Docker is detected, preselect yes
-    if [[ "$docker_detected" == "true" ]]; then
-        default_choice="y"
-    fi
+    # Normalize default to lowercase single character
+    default_choice=$(echo "$default_choice" | tr '[:upper:]' '[:lower:]')
+    case "$default_choice" in
+        y|yes) default_choice="y" ;;
+        *) default_choice="n" ;;
+    esac
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -178,19 +196,15 @@ prompt_proxy_installation() {
         echo ""
     fi
 
-    # Determine prompt text based on default
+    local prompt_text
     if [[ "$default_choice" == "y" ]]; then
-        echo -n "Enable temperature monitoring? [Y/n]: "
+        prompt_text="Enable temperature monitoring? [Y/n]: "
     else
-        echo -n "Enable temperature monitoring? [y/N]: "
+        prompt_text="Enable temperature monitoring? [y/N]: "
     fi
 
-    read -r response
-
-    # Handle empty response (use default)
-    if [[ -z "$response" ]]; then
-        response="$default_choice"
-    fi
+    local response=""
+    safe_read_with_default "$prompt_text" response "$default_choice"
 
     # Normalize to lowercase
     response=$(echo "$response" | tr '[:upper:]' '[:lower:]')
@@ -355,8 +369,9 @@ is_bridge_interface() {
 }
 
 create_lxc_container() {
-    # Set up trap to cleanup on interrupt (CTID will be set later)
-    trap 'echo ""; print_error "Installation cancelled"; exit 1' INT
+    CURRENT_INSTALL_CTID=""
+    CONTAINER_CREATED_FOR_CLEANUP=false
+    trap handle_install_interrupt INT TERM
     
     print_header
     echo "Proxmox VE detected. Installing Pulse in a container."
@@ -419,6 +434,15 @@ create_lxc_container() {
             auto_updates_flag="--enable-auto-updates"
             ENABLE_AUTO_UPDATES=true  # Set the global variable for host installations
         fi
+
+        if [[ -z "$PROXY_MODE" ]]; then
+            echo
+            if prompt_proxy_installation "false" "n"; then
+                PROXY_USER_CHOICE="yes"
+            else
+                PROXY_USER_CHOICE="no"
+            fi
+        fi
         
         echo
         # Try to get cluster-wide IDs, fall back to local
@@ -461,8 +485,9 @@ create_lxc_container() {
             CTID=$custom_ctid
         fi
     fi
-    
+
     print_info "Using container ID: $CTID"
+    CURRENT_INSTALL_CTID="$CTID"
     
     if [[ "$ADVANCED_MODE" == "true" ]]; then
         echo
@@ -536,7 +561,16 @@ create_lxc_container() {
             auto_updates_flag="--enable-auto-updates"
             ENABLE_AUTO_UPDATES=true  # Set the global variable for host installations
         fi
-        
+
+        if [[ -z "$PROXY_MODE" ]]; then
+            echo
+            if prompt_proxy_installation "false" "y"; then
+                PROXY_USER_CHOICE="yes"
+            else
+                PROXY_USER_CHOICE="no"
+            fi
+        fi
+
         # Optional VLAN configuration - defaults to empty (no VLAN) for regular users
         echo
         safe_read_with_default "VLAN ID (press Enter for no VLAN): " vlan_id ""
@@ -981,38 +1015,56 @@ create_lxc_container() {
         NET_CONFIG="${NET_CONFIG},tag=${vlan_id}"
     fi
     
-    # Build container create command
-    local CREATE_CMD="pct create $CTID $TEMPLATE"
-    CREATE_CMD="$CREATE_CMD --hostname $hostname"
-    CREATE_CMD="$CREATE_CMD --memory $memory"
-    CREATE_CMD="$CREATE_CMD --cores $cores"
-    
+    # Build container create command using array to avoid eval issues
+    local CREATE_ARGS=(pct create "$CTID" "$TEMPLATE")
+    CREATE_ARGS+=("--hostname" "$hostname")
+    CREATE_ARGS+=("--memory" "$memory")
+    CREATE_ARGS+=("--cores" "$cores")
+
     if [[ "$cpulimit" != "0" ]]; then
-        CREATE_CMD="$CREATE_CMD --cpulimit $cpulimit"
+        CREATE_ARGS+=("--cpulimit" "$cpulimit")
     fi
-    
-    CREATE_CMD="$CREATE_CMD --rootfs ${storage}:${disk}"
-    CREATE_CMD="$CREATE_CMD --net0 $NET_CONFIG"
-    CREATE_CMD="$CREATE_CMD --unprivileged $unprivileged"
-    CREATE_CMD="$CREATE_CMD --features nesting=1"
-    CREATE_CMD="$CREATE_CMD --onboot $onboot"
-    CREATE_CMD="$CREATE_CMD --startup order=$startup"
-    CREATE_CMD="$CREATE_CMD --protection 0"
-    CREATE_CMD="$CREATE_CMD --swap $swap"
-    
+
+    CREATE_ARGS+=("--rootfs" "${storage}:${disk}")
+    CREATE_ARGS+=("--net0" "$NET_CONFIG")
+    CREATE_ARGS+=("--unprivileged" "$unprivileged")
+    CREATE_ARGS+=("--features" "nesting=1")
+    CREATE_ARGS+=("--onboot" "$onboot")
+    CREATE_ARGS+=("--startup" "order=$startup")
+    CREATE_ARGS+=("--protection" "0")
+    CREATE_ARGS+=("--swap" "$swap")
+
     if [[ -n "$nameserver" ]]; then
-        CREATE_CMD="$CREATE_CMD --nameserver '$nameserver'"
+        CREATE_ARGS+=("--nameserver" "$nameserver")
     fi
-    
+
+    if [[ "$PROXY_MODE" == "yes" || "$PROXY_MODE" == "auto" ]]; then
+        PROXY_PREPARE_MOUNT=true
+    elif [[ -z "$PROXY_MODE" ]] && [[ "$PROXY_USER_CHOICE" == "yes" ]]; then
+        PROXY_PREPARE_MOUNT=true
+    else
+        PROXY_PREPARE_MOUNT=false
+    fi
+
+    if [[ "$PROXY_PREPARE_MOUNT" == "true" ]]; then
+        local PROXY_HOST_PATH="/run/pulse-sensor-proxy"
+        local PROXY_CONTAINER_PATH="/mnt/pulse-proxy"
+        mkdir -p "$PROXY_HOST_PATH"
+        CREATE_ARGS+=("--mp0" "${PROXY_HOST_PATH},mp=${PROXY_CONTAINER_PATH},replicate=0")
+    fi
+
     # Execute container creation (suppress verbose output)
-    if ! eval $CREATE_CMD >/dev/null 2>&1; then
+    if ! "${CREATE_ARGS[@]}" >/dev/null 2>&1; then
         print_error "Failed to create container"
         exit 1
     fi
+    CONTAINER_CREATED_FOR_CLEANUP=true
     
     # From this point on, cleanup container if we fail
     cleanup_on_error() {
         print_error "Installation failed, cleaning up container $CTID..."
+        CURRENT_INSTALL_CTID="$CTID"
+        CONTAINER_CREATED_FOR_CLEANUP=true
         pct stop $CTID 2>/dev/null || true
         sleep 2
         pct destroy $CTID 2>/dev/null || true
@@ -1027,19 +1079,21 @@ create_lxc_container() {
     fi
     sleep 3
     
-    # Wait for network to be ready
+    # Wait for network to provide an IP address
     print_info "Waiting for network..."
     local network_ready=false
     for i in {1..60}; do
-        if pct exec $CTID -- ping -c 1 8.8.8.8 &>/dev/null 2>&1; then
+        local container_ip=""
+        container_ip=$(pct exec $CTID -- hostname -I 2>/dev/null | awk '{print $1}') || true
+        if [[ -n "$container_ip" ]]; then
             network_ready=true
             break
         fi
         sleep 1
     done
-    
+
     if [[ "$network_ready" != "true" ]]; then
-        print_error "Container network failed to come up after 60 seconds"
+        print_error "Container network failed to obtain an IP address after 60 seconds"
         cleanup_on_error
     fi
     
@@ -1189,19 +1243,19 @@ create_lxc_container() {
             # Auto-detect: install if Docker is present
             if [[ "$docker_in_container" == "true" ]]; then
                 install_proxy=true
-            else
-                install_proxy=false
             fi
             ;;
         *)
-            # Empty/unset - prompt the user
-            if prompt_proxy_installation "$docker_in_container"; then
+            # Empty/unset - reuse earlier user choice (defaults handled already)
+            if [[ "$PROXY_USER_CHOICE" == "yes" ]]; then
                 install_proxy=true
-            else
-                install_proxy=false
             fi
             ;;
     esac
+
+    if [[ "$PROXY_MODE" == "auto" ]] && [[ "$install_proxy" != "true" ]]; then
+        print_info "Docker not detected inside container; skipping temperature proxy installation (auto mode)."
+    fi
 
     # Install temperature proxy on host for secure monitoring (if enabled)
     if [[ "$install_proxy" == "true" ]]; then
@@ -1231,12 +1285,12 @@ create_lxc_container() {
             chmod +x "$proxy_script"
 
             # If building from source, copy the binary from the LXC instead of downloading
-            local proxy_install_args="--ctid $CTID"
+            local proxy_install_args=(--ctid "$CTID" --skip-restart)
             if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
                 local local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
                 print_info "Copying locally-built pulse-sensor-proxy binary from container..."
                 if pct pull $CTID /opt/pulse/bin/pulse-sensor-proxy "$local_proxy_binary" 2>/dev/null; then
-                    proxy_install_args="--ctid $CTID --local-binary $local_proxy_binary"
+                    proxy_install_args=(--ctid "$CTID" --local-binary "$local_proxy_binary" --skip-restart)
                     print_info "Using locally-built binary from container"
                 else
                     print_warn "Failed to copy binary from container, will try fallback download"
@@ -1247,7 +1301,7 @@ create_lxc_container() {
                 export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
             fi
 
-            if bash "$proxy_script" $proxy_install_args 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
+            if bash "$proxy_script" "${proxy_install_args[@]}" 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
                 print_info "Temperature proxy installed successfully"
                 # Clean up temporary binary if it was copied
                 [[ -f "$local_proxy_binary" ]] && rm -f "$local_proxy_binary"
@@ -1271,6 +1325,10 @@ create_lxc_container() {
     echo "    pct enter $CTID              # Enter container"
     echo "    pct exec $CTID -- update     # Update Pulse"
     echo
+    
+    CONTAINER_CREATED_FOR_CLEANUP=false
+    CURRENT_INSTALL_CTID=""
+    trap - INT TERM
     
     exit 0
 }
