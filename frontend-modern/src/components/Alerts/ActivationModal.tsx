@@ -163,13 +163,13 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
 
     if (success) {
       await props.refreshActiveAlerts();
-      showSuccess('Alert notifications activated. Notifications will now dispatch to configured destinations.');
+      showSuccess('Notifications activated! You'll now receive alerts when issues are detected.');
       if (props.onActivated) {
         await props.onActivated();
       }
       props.onClose();
     } else {
-      showError('Failed to activate alert notifications. Please try again.');
+      showError('Unable to activate notifications. Please try again.');
     }
 
     setIsSubmitting(false);
@@ -188,9 +188,9 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
           <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden border border-gray-200 dark:border-gray-700">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <div>
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Review alerts before activating</h2>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Ready to activate notifications</h2>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  Monitoring is already running. Confirm thresholds and destinations before enabling notifications.
+                  Review your alert thresholds and notification channels before turning on alerts.
                 </p>
               </div>
               <button
@@ -248,14 +248,14 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {violationCount() > 0
-                    ? 'These alerts are currently open. Activating notifications will send them to configured channels.'
-                    : 'No alerts have breached thresholds yet. Activation will notify you immediately when new issues appear.'}
+                    ? 'These alerts are currently active. When you activate, notifications will be sent to your configured channels.'
+                    : 'No alerts triggered yet. When you activate, you'll be notified immediately if any issues are detected.'}
                 </p>
                 <Show
                   when={violationCount() > 0}
                   fallback={
                     <div class="mt-4 rounded-md border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/30 p-4 text-sm text-gray-600 dark:text-gray-400">
-                      No active violations detected during the observation window.
+                      All systems healthy — no alerts triggered.
                     </div>
                   }
                 >
