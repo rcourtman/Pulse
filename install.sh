@@ -1232,6 +1232,26 @@ create_lxc_container() {
     # Get container IP
     local IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
 
+    if [[ "$IN_CONTAINER" != "true" ]] && [[ "$PROXY_PREPARE_MOUNT" == "true" ]]; then
+        print_info "Configuring pulse-sensor-proxy socket inside container..."
+        if ! pct exec $CTID -- bash -c 'set -e
+ENV_FILE="/etc/pulse/.env"
+SOCKET_LINE="PULSE_SENSOR_PROXY_SOCKET=/mnt/pulse-proxy/pulse-sensor-proxy.sock"
+mkdir -p /etc/pulse
+if [[ -f "$ENV_FILE" ]] && grep -q "^PULSE_SENSOR_PROXY_SOCKET=" "$ENV_FILE" 2>/dev/null; then
+  sed -i "s|^PULSE_SENSOR_PROXY_SOCKET=.*|$SOCKET_LINE|" "$ENV_FILE"
+else
+  echo "$SOCKET_LINE" >> "$ENV_FILE"
+fi'; then
+            print_error "Failed to configure pulse-sensor-proxy socket inside container"
+            cleanup_on_error
+        fi
+
+        if ! pct exec $CTID -- systemctl restart $SERVICE_NAME >/dev/null 2>&1; then
+            print_warn "Unable to restart $SERVICE_NAME inside container; please restart manually"
+        fi
+    fi
+
     # Determine if we should install temperature proxy
     local install_proxy=false
     local docker_in_container=false
