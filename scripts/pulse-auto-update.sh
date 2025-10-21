@@ -168,8 +168,18 @@ perform_update() {
     log info "Downloading and installing update"
     
     # Run install script with specific version
+    local marker_file="$INSTALL_DIR/BUILD_FROM_SOURCE"
+    local -a installer_args=(--version "$new_version")
+    if [[ -f "$marker_file" ]]; then
+        local branch
+        branch=$(tr -d '\r\n' <"$marker_file" 2>/dev/null || true)
+        if [[ -n "$branch" ]]; then
+            installer_args=(--source "$branch" "${installer_args[@]}")
+        fi
+    fi
+
     if curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh" | \
-       bash -s -- --version "$new_version" 2>&1 | \
+       bash -s -- "${installer_args[@]}" 2>&1 | \
        while IFS= read -r line; do
            log info "installer: $line"
        done; then

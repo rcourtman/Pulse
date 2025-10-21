@@ -26,6 +26,7 @@ FORCE_VERSION=""
 FORCE_CHANNEL=""
 SOURCE_BRANCH="main"
 PROXY_MODE=""  # Can be: yes, no, auto, or empty (will prompt)
+BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 
 DEBIAN_TEMPLATE_FALLBACK="debian-12-standard_12.12-1_amd64.tar.zst"
 DEBIAN_TEMPLATE=""
@@ -1111,7 +1112,7 @@ create_lxc_container() {
         install_cmd="$install_cmd $auto_updates_flag"
     fi
     if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
-        install_cmd="$install_cmd --main"
+        install_cmd="$install_cmd --source '$SOURCE_BRANCH'"
     fi
     if [[ "$frontend_port" != "7655" ]]; then
         install_cmd="FRONTEND_PORT=$frontend_port $install_cmd"
@@ -1120,14 +1121,33 @@ create_lxc_container() {
     # Run installation showing output in real-time so users can see progress/errors
     # Use timeout wrapper if available
     local install_status
-    if command -v timeout >/dev/null 2>&1; then
+    local timeout_duration=300
+
+    if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+        timeout_duration=1200
+    fi
+
+    if [[ -n "${PULSE_CONTAINER_TIMEOUT:-}" ]]; then
+        if [[ "${PULSE_CONTAINER_TIMEOUT}" =~ ^[0-9]+$ ]]; then
+            timeout_duration=${PULSE_CONTAINER_TIMEOUT}
+        else
+            print_warn "Ignoring invalid PULSE_CONTAINER_TIMEOUT value '${PULSE_CONTAINER_TIMEOUT}'"
+        fi
+    fi
+
+    if command -v timeout >/dev/null 2>&1 && [[ "$timeout_duration" -ne 0 ]]; then
         # Show output in real-time with timeout
-        timeout 300 pct exec $CTID -- bash -c "$install_cmd"
+        timeout "$timeout_duration" pct exec $CTID -- bash -c "$install_cmd"
         install_status=$?
         if [[ $install_status -eq 124 ]]; then
-            print_error "Installation timed out after 5 minutes"
-            print_info "This usually happens due to network issues or GitHub rate limiting"
-            print_info "You can enter the container and run 'bash /tmp/install.sh' manually:"
+            print_error "Installation timed out after ${timeout_duration}s"
+            if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+                print_info "Building from source can take more than 15 minutes in containers, especially on first run."
+            else
+                print_info "This usually happens due to network issues or GitHub rate limiting."
+            fi
+            print_info "You can increase or disable the timeout by setting PULSE_CONTAINER_TIMEOUT (set to 0 to disable)."
+            print_info "Then enter the container and run 'bash /tmp/install.sh' manually:"
             print_info "  pct enter $CTID"
             cleanup_on_error
         fi
@@ -1365,13 +1385,22 @@ backup_existing() {
 }
 
 download_pulse() {
+    # Check if we should build from source - do this FIRST to avoid confusing version messages
+    if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+        if ! build_from_source "$SOURCE_BRANCH"; then
+            print_error "Source build failed"
+            exit 1
+        fi
+        return 0
+    fi
+
     print_info "Downloading Pulse..."
-    
+
     # Check for forced version first
     if [[ -n "${FORCE_VERSION}" ]]; then
         LATEST_RELEASE="${FORCE_VERSION}"
         print_info "Installing specific version: $LATEST_RELEASE"
-        
+
         # Verify the version exists (with timeout)
         if command -v timeout >/dev/null 2>&1; then
             if ! timeout 15 curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
@@ -1386,7 +1415,7 @@ download_pulse() {
         # UPDATE_CHANNEL should already be set by main(), but set default if not
         if [[ -z "${UPDATE_CHANNEL:-}" ]]; then
             UPDATE_CHANNEL="stable"
-            
+
             # Allow override via command line
             if [[ -n "${FORCE_CHANNEL}" ]]; then
                 UPDATE_CHANNEL="${FORCE_CHANNEL}"
@@ -1399,7 +1428,7 @@ download_pulse() {
                 fi
             fi
         fi
-        
+
         # Get appropriate release based on channel (with timeout)
         if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
             # Get all releases and find the latest (including pre-releases)
@@ -1418,7 +1447,7 @@ download_pulse() {
                 LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
             fi
         fi
-        
+
         # Fallback: Try direct GitHub redirect if API fails
         if [[ -z "$LATEST_RELEASE" ]]; then
             print_info "GitHub API unavailable, trying alternative method..."
@@ -1428,166 +1457,24 @@ download_pulse() {
                 LATEST_RELEASE=$(curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
             fi
         fi
-        
+
         # Final fallback: Use a known good version
         if [[ -z "$LATEST_RELEASE" ]]; then
             print_warn "Could not determine latest release from GitHub, using fallback version"
             LATEST_RELEASE="v4.5.1"  # Known stable version as fallback
         fi
-        
+
         print_info "Latest version: $LATEST_RELEASE"
     fi
     
-    # Check if we should build from source
-    if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
-        print_info "Building Pulse from source (branch: $SOURCE_BRANCH)..."
-        
-        # Install build dependencies
-        print_info "Installing build dependencies..."
-        if ! (apt-get update >/dev/null 2>&1 && apt-get install -y git make nodejs npm wget >/dev/null 2>&1); then
-            print_error "Failed to install build dependencies"
-            exit 1
-        fi
-        
-        # Check Go version and install newer version if needed
-        GO_MIN_VERSION="1.24"
-        GO_INSTALLED=false
-        if command -v go >/dev/null 2>&1; then
-            GO_VERSION=$(go version | grep -oE '[0-9]+\.[0-9]+' | head -1)
-            if [[ "$(printf '%s\n' "$GO_MIN_VERSION" "$GO_VERSION" | sort -V | head -n1)" == "$GO_MIN_VERSION" ]]; then
-                GO_INSTALLED=true
-                print_info "Go $GO_VERSION is installed (meets minimum $GO_MIN_VERSION)"
-            fi
-        fi
-        
-        if [[ "$GO_INSTALLED" != "true" ]]; then
-            print_info "Installing Go 1.24 (system Go is too old or missing)..."
-            # Detect architecture for Go download
-            ARCH=$(uname -m)
-            case $ARCH in
-                x86_64)
-                    GO_ARCH="amd64"
-                    ;;
-                aarch64)
-                    GO_ARCH="arm64"
-                    ;;
-                armv7l)
-                    GO_ARCH="armv6l"
-                    ;;
-                *)
-                    print_error "Unsupported architecture for Go: $ARCH"
-                    exit 1
-                    ;;
-            esac
-            
-            cd /tmp
-            wget -q "https://go.dev/dl/go1.24.7.linux-${GO_ARCH}.tar.gz"
-            rm -rf /usr/local/go
-            tar -C /usr/local -xzf "go1.24.7.linux-${GO_ARCH}.tar.gz"
-            export PATH=/usr/local/go/bin:$PATH
-            rm "go1.24.7.linux-${GO_ARCH}.tar.gz"
-        fi
-        
-        # Create temp directory for build
-        TEMP_BUILD="/tmp/pulse-build-$$"
-        mkdir -p "$TEMP_BUILD"
-        cd "$TEMP_BUILD"
-        
-        print_info "Cloning repository (branch: $SOURCE_BRANCH)..."
-        if ! git clone --depth 1 --branch "$SOURCE_BRANCH" "https://github.com/$GITHUB_REPO.git" >/dev/null 2>&1; then
-            print_error "Failed to clone repository (branch: $SOURCE_BRANCH)"
-            print_info "Make sure the branch exists and is accessible"
-            exit 1
-        fi
-        
-        cd Pulse
-        
-        print_info "Building frontend..."
-        cd frontend-modern
-        if ! (npm ci >/dev/null 2>&1 && npm run build >/dev/null 2>&1); then
-            print_error "Failed to build frontend"
-            exit 1
-        fi
-        cd ..
-        
-        print_info "Building backend..."
-        # Ensure Go is in PATH for the build
-        export PATH=/usr/local/go/bin:$PATH
-        if ! make build >/dev/null 2>&1; then
-            print_error "Failed to build backend"
-            exit 1
-        fi
-        
-        # Detect and stop existing service BEFORE installing new binary
-        EXISTING_SERVICE=$(detect_service_name)
-        if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
-            print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
-            safe_systemctl stop $EXISTING_SERVICE || true
-            sleep 2  # Give the process time to fully stop and release the binary
-        fi
-        
-        # Ensure install directory and bin subdirectory exist
-        mkdir -p "$INSTALL_DIR/bin"
-        
-        # Copy the built binary
-        if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-            mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
-        fi
-        
-        if ! cp pulse "$INSTALL_DIR/bin/pulse"; then
-            print_error "Failed to copy built binary to $INSTALL_DIR/bin/pulse"
-            if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
-                mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
-            fi
-            exit 1
-        fi
-        
-        chmod +x "$INSTALL_DIR/bin/pulse"
-
-        print_info "Building Docker agent from source..."
-        agent_version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-        if ! go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
-            print_error "Failed to build Docker agent binary"
-            exit 1
-        fi
-
-        cp -f pulse-docker-agent "$INSTALL_DIR/pulse-docker-agent"
-        cp -f pulse-docker-agent "$INSTALL_DIR/bin/pulse-docker-agent"
-        chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-        chown -R pulse:pulse "$INSTALL_DIR"
-        ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
-
-        rm -f pulse-docker-agent
-
-        print_info "Building temperature proxy from source..."
-        if ! go build -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy >/dev/null 2>&1; then
-            print_error "Failed to build temperature proxy binary"
-            exit 1
-        fi
-
-        cp -f pulse-sensor-proxy "$INSTALL_DIR/bin/pulse-sensor-proxy"
-        chmod +x "$INSTALL_DIR/bin/pulse-sensor-proxy"
-        chown pulse:pulse "$INSTALL_DIR/bin/pulse-sensor-proxy"
-
-        rm -f pulse-sensor-proxy
-
-        build_agent_binaries_from_source "$agent_version"
-
-        # Update VERSION file to show it's from source
-        echo "$SOURCE_BRANCH-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
-        
-        # Cleanup
-        cd /
-        rm -rf "$TEMP_BUILD"
-        
-        print_success "Successfully built and installed Pulse from source (branch: $SOURCE_BRANCH)"
-        
-        # Skip the rest of the download/install logic
-        SKIP_DOWNLOAD=true
+    if [[ "$BUILD_FROM_SOURCE" == "true" && "$SKIP_DOWNLOAD" != "true" ]]; then
+        print_error "Source build requested but download path was reached (internal error)"
+        exit 1
     fi
     
     # Only do download if not building from source
     if [[ "$SKIP_DOWNLOAD" != "true" ]]; then
+        rm -f "$BUILD_FROM_SOURCE_MARKER"
         # Detect architecture
         ARCH=$(uname -m)
         case $ARCH in
@@ -1898,6 +1785,205 @@ build_agent_binaries_from_source() {
     done
 }
 
+build_from_source() {
+    local branch="${1:-main}"
+    local original_dir
+    original_dir=$(pwd)
+    local temp_build=""
+    local GO_MIN_VERSION="1.24"
+    local GO_INSTALLED=false
+    local arch=""
+    local go_arch=""
+    local agent_version=""
+    local service_name=""
+
+    print_info "Building Pulse from source (branch: $branch)..."
+
+    print_info "Installing build dependencies..."
+    if ! (apt-get update >/dev/null 2>&1 && apt-get install -y git make nodejs npm wget >/dev/null 2>&1); then
+        print_error "Failed to install build dependencies"
+        return 1
+    fi
+
+    if command -v go >/dev/null 2>&1; then
+        local GO_VERSION
+        GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
+        if [[ "$(printf '%s\n' "$GO_MIN_VERSION" "$GO_VERSION" | sort -V | head -n1)" == "$GO_MIN_VERSION" ]]; then
+            GO_INSTALLED=true
+            print_info "Go $GO_VERSION is installed (meets minimum $GO_MIN_VERSION)"
+        else
+            print_info "Go $GO_VERSION is too old. Installing Go $GO_MIN_VERSION..."
+        fi
+    fi
+
+    if [[ "$GO_INSTALLED" != "true" ]]; then
+        arch=$(uname -m)
+        case "$arch" in
+            x86_64)
+                go_arch="amd64"
+                ;;
+            aarch64)
+                go_arch="arm64"
+                ;;
+            armv7l)
+                go_arch="armv6l"
+                ;;
+            *)
+                print_error "Unsupported architecture for Go: $arch"
+                return 1
+                ;;
+        esac
+
+        if ! cd /tmp; then
+            print_error "Failed to prepare Go installation directory"
+            cd "$original_dir" >/dev/null 2>&1 || true
+            return 1
+        fi
+
+        if ! wget -q "https://go.dev/dl/go1.24.7.linux-${go_arch}.tar.gz"; then
+            print_error "Failed to download Go toolchain"
+            cd "$original_dir" >/dev/null 2>&1 || true
+            return 1
+        fi
+
+        rm -rf /usr/local/go
+        if ! tar -C /usr/local -xzf "go1.24.7.linux-${go_arch}.tar.gz"; then
+            print_error "Failed to extract Go toolchain"
+            rm -f "go1.24.7.linux-${go_arch}.tar.gz"
+            cd "$original_dir" >/dev/null 2>&1 || true
+            return 1
+        fi
+        rm -f "go1.24.7.linux-${go_arch}.tar.gz"
+        cd "$original_dir" >/dev/null 2>&1 || true
+    fi
+
+    export PATH=/usr/local/go/bin:$PATH
+
+    temp_build=$(mktemp -d /tmp/pulse-build-XXXXXX)
+    if [[ ! -d "$temp_build" ]]; then
+        print_error "Failed to create temporary build directory"
+        return 1
+    fi
+
+    if ! git clone --depth 1 --branch "$branch" "https://github.com/$GITHUB_REPO.git" "$temp_build/Pulse" >/dev/null 2>&1; then
+        print_error "Failed to clone repository (branch: $branch)"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+
+    if ! cd "$temp_build/Pulse"; then
+        print_error "Failed to enter source checkout"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+
+    if ! cd frontend-modern; then
+        print_error "Frontend directory missing in repository"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+
+    if ! npm ci >/dev/null 2>&1; then
+        print_warn "npm ci failed, falling back to npm install..."
+        if ! npm install >/dev/null 2>&1; then
+            print_error "Failed to install frontend dependencies"
+            cd "$original_dir" >/dev/null 2>&1 || true
+            rm -rf "$temp_build"
+            return 1
+        fi
+    fi
+
+    if ! npm run build >/dev/null 2>&1; then
+        print_error "Failed to build frontend"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+
+    cd ..
+
+    if ! make build >/dev/null 2>&1; then
+        print_error "Failed to build backend"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+
+    service_name=$(detect_service_name)
+    if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        print_info "Stopping existing Pulse service ($service_name)..."
+        safe_systemctl stop "$service_name" || true
+        sleep 2
+    fi
+
+    mkdir -p "$INSTALL_DIR/bin" "$INSTALL_DIR/scripts"
+
+    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+        mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
+    fi
+
+    if ! cp pulse "$INSTALL_DIR/bin/pulse"; then
+        print_error "Failed to copy built Pulse binary"
+        [[ -f "$INSTALL_DIR/bin/pulse.old" ]] && mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+    chmod +x "$INSTALL_DIR/bin/pulse"
+
+    agent_version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+    if ! go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
+        print_error "Failed to build Docker agent binary"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+
+    cp -f pulse-docker-agent "$INSTALL_DIR/pulse-docker-agent"
+    cp -f pulse-docker-agent "$INSTALL_DIR/bin/pulse-docker-agent"
+    chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
+    ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
+    rm -f pulse-docker-agent
+
+    if ! go build -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy >/dev/null 2>&1; then
+        print_error "Failed to build temperature proxy binary"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+    cp -f pulse-sensor-proxy "$INSTALL_DIR/bin/pulse-sensor-proxy"
+    chmod +x "$INSTALL_DIR/bin/pulse-sensor-proxy"
+    rm -f pulse-sensor-proxy
+
+    build_agent_binaries_from_source "$agent_version"
+
+    for script_name in install-docker-agent.sh install-docker.sh install-sensor-proxy.sh; do
+        if [[ -f "scripts/$script_name" ]]; then
+            cp "scripts/$script_name" "$INSTALL_DIR/scripts/$script_name"
+            chmod 755 "$INSTALL_DIR/scripts/$script_name"
+        fi
+    done
+
+    ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+
+    echo "$branch-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
+    echo "$branch" > "$BUILD_FROM_SOURCE_MARKER"
+
+    chown -R pulse:pulse "$INSTALL_DIR" 2>/dev/null || true
+    chown pulse:pulse "$BUILD_FROM_SOURCE_MARKER" 2>/dev/null || true
+    rm -f "$INSTALL_DIR/bin/pulse.old"
+
+    cd "$original_dir" >/dev/null 2>&1 || true
+    rm -rf "$temp_build"
+
+    SKIP_DOWNLOAD=true
+    print_success "Successfully built and installed Pulse from source (branch: $branch)"
+    return 0
+}
+
 setup_directories() {
     print_info "Setting up directories..."
 
@@ -1950,8 +2036,23 @@ setup_update_command() {
 
 set -e
 
+INSTALL_ROOT="/opt/pulse"
+MARKER_FILE="${INSTALL_ROOT}/BUILD_FROM_SOURCE"
+
+extra_args=()
+if [[ -f "$MARKER_FILE" ]]; then
+    branch=$(tr -d '\r\n' <"$MARKER_FILE" 2>/dev/null || true)
+    if [[ -n "$branch" ]]; then
+        extra_args+=(--source "$branch")
+    fi
+fi
+
 echo "Updating Pulse..."
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+if [[ ${#extra_args[@]} -gt 0 ]]; then
+    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- "${extra_args[@]}"
+else
+    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+fi
 
 echo ""
 echo "Update complete! Pulse will restart automatically."
@@ -2224,172 +2325,22 @@ main() {
     if check_existing_installation; then
         # If building from source was requested, skip the update prompt
         if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
-            print_info "Building Pulse from source (branch: $SOURCE_BRANCH)..."
-            
-            # Install build dependencies
-            print_info "Installing build dependencies..."
-            if ! (apt-get update >/dev/null 2>&1 && apt-get install -y git make nodejs npm wget >/dev/null 2>&1); then
-                print_error "Failed to install build dependencies"
-                exit 1
-            fi
-            
-            # Check for Go installation
-            GO_INSTALLED=false
-            if ! command -v go &> /dev/null; then
-                print_info "Go is not installed. Installing Go 1.24..."
-            else
-                GO_VERSION=$(go version | grep -oP 'go\K[0-9]+\.[0-9]+')
-                if awk "BEGIN {exit !($GO_VERSION < 1.24)}"; then
-                    print_info "Go version $GO_VERSION is too old. Installing Go 1.24..."
-                else
-                    print_info "Go version $GO_VERSION is installed"
-                    GO_INSTALLED=true
-                fi
-            fi
-            
-            if [[ "$GO_INSTALLED" != "true" ]]; then
-                # Detect architecture for Go download
-                ARCH=$(uname -m)
-                case $ARCH in
-                    x86_64)
-                        GO_ARCH="amd64"
-                        ;;
-                    aarch64)
-                        GO_ARCH="arm64"
-                        ;;
-                    armv7l)
-                        GO_ARCH="armv6l"
-                        ;;
-                    *)
-                        print_error "Unsupported architecture: $ARCH"
-                        exit 1
-                        ;;
-                esac
-                
-                cd /tmp
-                wget -q "https://go.dev/dl/go1.24.7.linux-${GO_ARCH}.tar.gz"
-                rm -rf /usr/local/go
-                tar -C /usr/local -xzf "go1.24.7.linux-${GO_ARCH}.tar.gz"
-                export PATH=/usr/local/go/bin:$PATH
-                rm "go1.24.7.linux-${GO_ARCH}.tar.gz"
-            fi
-            
-            # Clone and build
-            print_info "Cloning repository..."
-            TEMP_BUILD_DIR=$(mktemp -d)
-            cd "$TEMP_BUILD_DIR"
-            
-            if ! git clone -b "$SOURCE_BRANCH" "https://github.com/$GITHUB_REPO.git" pulse-src >/dev/null 2>&1; then
-                print_error "Failed to clone repository"
-                rm -rf "$TEMP_BUILD_DIR"
-                exit 1
-            fi
-            
-            cd pulse-src
-            
-            print_info "Installing frontend dependencies..."
-            cd frontend-modern
-            if ! npm install >/dev/null 2>&1; then
-                print_error "Failed to install frontend dependencies"
-                cd /
-                rm -rf "$TEMP_BUILD_DIR"
-                exit 1
-            fi
-            cd ..
-            
-            print_info "Building Pulse..."
-            # Ensure Go is in PATH for the build
-            export PATH=/usr/local/go/bin:$PATH
-            if ! make build >/dev/null 2>&1; then
-                print_error "Build failed"
-                cd /
-                rm -rf "$TEMP_BUILD_DIR"
-                exit 1
-            fi
-            
-            # Detect service name before stopping
-            SERVICE_NAME=$(detect_service_name)
-            
-            # Stop existing service if running
-            if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
-                print_info "Stopping existing Pulse service..."
-                systemctl stop $SERVICE_NAME
-            fi
-            
-            # Install the built binary
-            print_info "Installing Pulse..."
             create_user
             setup_directories
-            
-            # Copy the built binary (Makefile builds to ./pulse not bin/pulse)
-            cp pulse "$INSTALL_DIR/bin/pulse"
-            chmod +x "$INSTALL_DIR/bin/pulse"
-            chown pulse:pulse "$INSTALL_DIR/bin/pulse"
 
-            print_info "Building Docker agent from source..."
-            agent_version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-            if ! go build -ldflags="-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${agent_version}" -o pulse-docker-agent ./cmd/pulse-docker-agent >/dev/null 2>&1; then
-                print_error "Failed to build Docker agent binary"
-                cd /
-                rm -rf "$TEMP_BUILD_DIR"
+            if ! build_from_source "$SOURCE_BRANCH"; then
                 exit 1
             fi
 
-            cp -f pulse-docker-agent "$INSTALL_DIR/pulse-docker-agent"
-            cp -f pulse-docker-agent "$INSTALL_DIR/bin/pulse-docker-agent"
-            chmod +x "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-            chown pulse:pulse "$INSTALL_DIR/pulse-docker-agent" "$INSTALL_DIR/bin/pulse-docker-agent"
-            ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
-            rm -f pulse-docker-agent
-
-            print_info "Building temperature proxy from source..."
-            if ! go build -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy >/dev/null 2>&1; then
-                print_error "Failed to build temperature proxy binary"
-                cd /
-                rm -rf "$TEMP_BUILD_DIR"
-                exit 1
-            fi
-
-            cp -f pulse-sensor-proxy "$INSTALL_DIR/bin/pulse-sensor-proxy"
-            chmod +x "$INSTALL_DIR/bin/pulse-sensor-proxy"
-            chown pulse:pulse "$INSTALL_DIR/bin/pulse-sensor-proxy"
-            rm -f pulse-sensor-proxy
-
-            ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
-
-            mkdir -p "$INSTALL_DIR/scripts"
-            if [[ -f "scripts/install-docker-agent.sh" ]]; then
-                cp "scripts/install-docker-agent.sh" "$INSTALL_DIR/scripts/install-docker-agent.sh"
-                chmod 755 "$INSTALL_DIR/scripts/install-docker-agent.sh"
-                chown pulse:pulse "$INSTALL_DIR/scripts/install-docker-agent.sh"
-            else
-                print_warn "Docker agent install script missing from source checkout; skipping installation"
-            fi
-
-            if [[ -f "scripts/install-docker.sh" ]]; then
-                cp "scripts/install-docker.sh" "$INSTALL_DIR/scripts/install-docker.sh"
-                chmod 755 "$INSTALL_DIR/scripts/install-docker.sh"
-                chown pulse:pulse "$INSTALL_DIR/scripts/install-docker.sh"
-            fi
-
-            if [[ -f "scripts/install-sensor-proxy.sh" ]]; then
-                cp "scripts/install-sensor-proxy.sh" "$INSTALL_DIR/scripts/install-sensor-proxy.sh"
-                chmod 755 "$INSTALL_DIR/scripts/install-sensor-proxy.sh"
-                chown pulse:pulse "$INSTALL_DIR/scripts/install-sensor-proxy.sh"
-            fi
-
-            build_agent_binaries_from_source "$agent_version"
-            
-            # Setup update command and service
             setup_update_command
             install_systemd_service
+
+            if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                setup_auto_updates
+            fi
+
             start_pulse
             create_marker_file
-            
-            # Clean up
-            cd /
-            rm -rf "$TEMP_BUILD_DIR"
-            
             print_completion
             exit 0
         fi
@@ -2970,7 +2921,7 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
-        --main|--source|--from-source|--branch)
+        --source|--from-source|--branch)
             BUILD_FROM_SOURCE=true
             # Optional: specify branch
             if [[ $# -gt 1 ]] && [[ -n "$2" ]] && [[ ! "$2" =~ ^-- ]]; then
@@ -2988,7 +2939,6 @@ while [[ $# -gt 0 ]]; do
             echo "  --rc, --pre        Install latest RC/pre-release version"
             echo "  --stable           Install latest stable version (default)"
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
-            echo "  --main             Build and install from main branch source"
             echo "  --source [BRANCH]  Build and install from source (default: main)"
             echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
             echo "  --proxy MODE       Control temperature proxy installation (yes/no/auto)"
