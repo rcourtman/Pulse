@@ -50,14 +50,30 @@ var (
 )
 
 // newRateLimiter creates a new rate limiter with cleanup loop
-func newRateLimiter(metrics *ProxyMetrics) *rateLimiter {
+// If rateLimitCfg is provided, it overrides the default rate limit settings
+func newRateLimiter(metrics *ProxyMetrics, rateLimitCfg *RateLimitConfig) *rateLimiter {
+	// Use defaults
+	perPeerLimit := defaultPerPeerLimit
+	perPeerBurst := defaultPerPeerBurst
+
+	// Override with config if provided
+	if rateLimitCfg != nil {
+		if rateLimitCfg.PerPeerIntervalMs > 0 {
+			interval := time.Duration(rateLimitCfg.PerPeerIntervalMs) * time.Millisecond
+			perPeerLimit = rate.Every(interval)
+		}
+		if rateLimitCfg.PerPeerBurst > 0 {
+			perPeerBurst = rateLimitCfg.PerPeerBurst
+		}
+	}
+
 	rl := &rateLimiter{
 		entries:   make(map[peerID]*limiterEntry),
 		quitChan:  make(chan struct{}),
 		globalSem: make(chan struct{}, defaultGlobalConcurrency),
 		policy: limiterPolicy{
-			perPeerLimit:       defaultPerPeerLimit,
-			perPeerBurst:       defaultPerPeerBurst,
+			perPeerLimit:       perPeerLimit,
+			perPeerBurst:       perPeerBurst,
 			perPeerConcurrency: defaultPerPeerConcurrency,
 			globalConcurrency:  defaultGlobalConcurrency,
 			penaltyDuration:    defaultPenaltyDuration,

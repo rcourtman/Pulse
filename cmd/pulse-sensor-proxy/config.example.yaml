@@ -1,0 +1,39 @@
+# Pulse Sensor Proxy Configuration
+# This file is optional. If not provided, the proxy will use sensible defaults.
+
+# Network Configuration
+# Specify which networks are allowed to connect to the proxy
+# If not specified, the proxy will auto-detect host IP addresses
+allowed_source_subnets:
+  - "127.0.0.1/32"       # Localhost
+  - "192.168.0.0/24"     # Local network
+
+# Peer Authorization
+# Specify which UIDs/GIDs are allowed to connect
+# Required when running Pulse in a container (use mapped UID/GID from container)
+allowed_peer_uids: [100999]  # Container pulse user UID
+allowed_peer_gids: [100996]  # Container pulse group GID
+
+# ID-Mapped Root Authentication
+# Allow connections from ID-mapped root users (for LXC containers)
+allow_idmapped_root: true
+allowed_idmap_users:
+  - root
+
+# Metrics Server
+# Address for Prometheus metrics endpoint
+metrics_address: "127.0.0.1:9127"
+
+# Rate Limiting (Optional)
+# Control how frequently peers can make requests to prevent abuse
+# Adjust these values based on your deployment size:
+#   - Small (1-3 nodes): Use defaults (1000ms, burst 5)
+#   - Medium (4-10 nodes): 500ms, burst 10
+#   - Large (10+ nodes): 250ms, burst 20
+rate_limit:
+  per_peer_interval_ms: 1000  # Minimum milliseconds between requests per peer (1000ms = 1 qps)
+  per_peer_burst: 5            # Number of requests allowed in a burst (supports up to 5 simultaneous requests)
+
+# Default values if not specified:
+#   per_peer_interval_ms: 1000 (1 second = 1 qps = 60 requests/min)
+#   per_peer_burst: 5
