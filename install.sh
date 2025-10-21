@@ -424,15 +424,20 @@ create_lxc_container() {
             frontend_port=7655
         fi
         
-        echo
-        # Ask about auto-updates
-        echo "Enable automatic updates?"
-        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
-        safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
         auto_updates_flag=""
-        if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
-            auto_updates_flag="--enable-auto-updates"
-            ENABLE_AUTO_UPDATES=true  # Set the global variable for host installations
+        if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+            echo
+            print_info "Skipping auto-update configuration: source builds don't support automatic release updates."
+        else
+            echo
+            # Ask about auto-updates
+            echo "Enable automatic updates?"
+            echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+            safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
+            if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+                auto_updates_flag="--enable-auto-updates"
+                ENABLE_AUTO_UPDATES=true  # Set the global variable for host installations
+            fi
         fi
 
         if [[ -z "$PROXY_MODE" ]]; then
@@ -551,15 +556,20 @@ create_lxc_container() {
             print_info "Using default: 7655"
             frontend_port=7655
         fi
-        # Quick mode should ask about auto-updates too
-        echo
-        echo "Enable automatic updates?"
-        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
-        safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
         auto_updates_flag=""
-        if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
-            auto_updates_flag="--enable-auto-updates"
-            ENABLE_AUTO_UPDATES=true  # Set the global variable for host installations
+        if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+            echo
+            print_info "Skipping auto-update configuration: source builds don't support automatic release updates."
+        else
+            # Quick mode should ask about auto-updates too
+            echo
+            echo "Enable automatic updates?"
+            echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+            safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
+            if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+                auto_updates_flag="--enable-auto-updates"
+                ENABLE_AUTO_UPDATES=true  # Set the global variable for host installations
+            fi
         fi
 
         if [[ -z "$PROXY_MODE" ]]; then
