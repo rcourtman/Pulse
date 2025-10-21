@@ -176,7 +176,7 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 Build and install directly from the main branch to test the latest fixes before they're released:
 ```bash
 # Install from main branch (latest development code)
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --main
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --source
 
 # Install from a specific branch
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --source develop

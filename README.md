@@ -83,7 +83,7 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 
 # Testing: Install from main branch source (for testing latest fixes)
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --main
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --source
 
 # Alternative: Kubernetes (Helm)
 helm registry login ghcr.io
