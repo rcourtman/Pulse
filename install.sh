@@ -1284,6 +1284,13 @@ create_lxc_container() {
         if [[ -f "$proxy_script" ]]; then
             chmod +x "$proxy_script"
 
+            # Stop existing pulse-sensor-proxy service if running to allow binary update
+            if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                print_info "Stopping existing pulse-sensor-proxy service to update binary..."
+                systemctl stop pulse-sensor-proxy 2>/dev/null || true
+                sleep 1
+            fi
+
             # If building from source, copy the binary from the LXC instead of downloading
             local proxy_install_args=(--ctid "$CTID" --skip-restart)
             if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
