@@ -1,21 +1,21 @@
 package discovery
 
 import (
-    "context"
-    "crypto/tls"
-    "crypto/x509"
-    "crypto/x509/pkix"
-    "encoding/json"
-    "net"
-    "net/http"
-    "net/http/httptest"
-    "strconv"
-    "strings"
-    "sync"
-    "testing"
-    "time"
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
 
-    "github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
 )
 
 func newTestScanner(client *http.Client) *Scanner {
@@ -124,23 +124,26 @@ func TestDetectProductFromEndpoint(t *testing.T) {
 	}))
 	defer ts.Close()
 
-    scanner := newTestScanner(ts.Client())
+	scanner := newTestScanner(ts.Client())
 
 	address := strings.TrimPrefix(ts.URL, "https://")
-	if product := scanner.detectProductFromEndpoint(context.Background(), address, "api2/json/statistics/mail"); product != "pmg" {
-		t.Fatalf("detectProductFromEndpoint returned %q, want %q", product, "pmg")
+	finding := scanner.ProbeAPIEndpoint(context.Background(), address, "api2/json/statistics/mail")
+	if finding.ProductGuess != ProductPMG {
+		t.Fatalf("ProbeAPIEndpoint returned %q, want %q", finding.ProductGuess, ProductPMG)
 	}
 
-	if product := scanner.detectProductFromEndpoint(context.Background(), address, "api2/json/version"); product != "pbs" {
-		t.Fatalf("detectProductFromEndpoint returned %q, want %q", product, "pbs")
+	versionFinding := scanner.ProbeAPIEndpoint(context.Background(), address, "api2/json/version")
+	if versionFinding.ProductGuess != ProductPBS {
+		t.Fatalf("ProbeAPIEndpoint returned %q, want %q", versionFinding.ProductGuess, ProductPBS)
 	}
 
-	if product := scanner.detectProductFromEndpoint(context.Background(), address, "api2/json/unknown/path"); product != "" {
-		t.Fatalf("expected empty result for unknown endpoint, got %q", product)
+	unknownFinding := scanner.ProbeAPIEndpoint(context.Background(), address, "api2/json/unknown/path")
+	if unknownFinding.ProductGuess != "" || unknownFinding.Status != http.StatusNotFound {
+		t.Fatalf("expected empty result for unknown endpoint, got %+v", unknownFinding)
 	}
 
 	if len(requestPaths) == 0 {
-		t.Fatalf("expected detectProductFromEndpoint to perform requests")
+		t.Fatalf("expected ProbeAPIEndpoint to perform requests")
 	}
 }
 
@@ -148,8 +151,10 @@ func TestIsPMGServer(t *testing.T) {
 	t.Parallel()
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "statistics/mail") {
-			w.Header().Set("Proxmox-Product", "Proxmox Mail Gateway")
+		w.Header().Set("Proxmox-Product", "Proxmox Mail Gateway")
+		w.Header().Set("WWW-Authenticate", `PMGAuth realm="Proxmox Mail Gateway"`)
+		if strings.Contains(r.URL.Path, "statistics/mail") ||
+			strings.Contains(r.URL.Path, "api2/json/version") {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -157,19 +162,39 @@ func TestIsPMGServer(t *testing.T) {
 	}))
 	defer ts.Close()
 
-    scanner := newTestScanner(ts.Client())
+	scanner := newTestScanner(ts.Client())
 
-	address := strings.TrimPrefix(ts.URL, "https://")
-	if !scanner.isPMGServer(context.Background(), address) {
-		t.Fatalf("expected PMG detection to succeed")
+	host, portStr, err := net.SplitHostPort(ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("SplitHostPort: %v", err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("strconv.Atoi: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	probe := scanner.ProbeProxmoxService(ctx, host, port)
+	if probe == nil || !probe.Positive || probe.PrimaryProduct != ProductPMG {
+		t.Fatalf("expected PMG detection to succeed, got %+v", probe)
 	}
 
 	tsNoMatch := httptest.NewTLSServer(http.NotFoundHandler())
 	defer tsNoMatch.Close()
 
 	scanner.httpClient = tsNoMatch.Client()
-	address = strings.TrimPrefix(tsNoMatch.URL, "https://")
-	if scanner.isPMGServer(context.Background(), address) {
+	host, portStr, err = net.SplitHostPort(tsNoMatch.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("SplitHostPort: %v", err)
+	}
+	port, err = strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("strconv.Atoi: %v", err)
+	}
+	probe = scanner.ProbeProxmoxService(ctx, host, port)
+	if probe != nil && probe.Positive {
 		t.Fatalf("expected PMG detection to fail for endpoints without markers")
 	}
 }
@@ -201,26 +226,26 @@ func TestCheckServerRetrievesVersion(t *testing.T) {
 		t.Fatalf("strconv.Atoi: %v", err)
 	}
 
-    scanner := newTestScanner(ts.Client())
+	scanner := newTestScanner(ts.Client())
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	server := scanner.checkServer(ctx, host, port, "pbs")
-	if server == nil {
-		t.Fatalf("checkServer returned nil")
+	probe := scanner.ProbeProxmoxService(ctx, host, port)
+	if probe == nil || !probe.Positive {
+		t.Fatalf("ProbeProxmoxService returned nil")
 	}
 
-	if server.Type != "pbs" {
-		t.Fatalf("expected type pbs, got %q", server.Type)
+	if probe.PrimaryProduct != ProductPBS {
+		t.Fatalf("expected product pbs, got %q", probe.PrimaryProduct)
 	}
 
-	if server.Version != "2.4.1" {
-		t.Fatalf("expected version 2.4.1, got %q", server.Version)
+	if probe.Version != "2.4.1" {
+		t.Fatalf("expected version 2.4.1, got %q", probe.Version)
 	}
 
-	if server.Release != "1" {
-		t.Fatalf("expected release 1, got %q", server.Release)
+	if probe.Release != "1" {
+		t.Fatalf("expected release 1, got %q", probe.Release)
 	}
 }
 
@@ -249,25 +274,25 @@ func TestCheckServerHandlesUnauthorized(t *testing.T) {
 	srv := startTLSServerOn(t, "127.0.0.1:9008", unauthorizedHandler)
 	_ = srv
 
-    scanner := newTestScanner(&http.Client{
-        Timeout:   500 * time.Millisecond,
-        Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-    })
+	scanner := newTestScanner(&http.Client{
+		Timeout:   500 * time.Millisecond,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	server := scanner.checkServer(ctx, "127.0.0.1", 9008, "pve")
-	if server == nil {
-		t.Fatalf("expected server discovery despite unauthorized response")
+	probe := scanner.ProbeProxmoxService(ctx, "127.0.0.1", 9008)
+	if probe == nil || !probe.Positive {
+		t.Fatalf("expected server discovery despite unauthorized response: %+v", probe)
 	}
 
-	if server.Type != "pve" {
-		t.Fatalf("expected type pve, got %q", server.Type)
+	if probe.PrimaryProduct != ProductPVE {
+		t.Fatalf("expected product pve, got %q", probe.PrimaryProduct)
 	}
 
-	if server.Version != "Unknown" {
-		t.Fatalf("expected version Unknown, got %q", server.Version)
+	if probe.Version != "Unknown" {
+		t.Fatalf("expected version Unknown, got %q", probe.Version)
 	}
 }
 
@@ -338,10 +363,8 @@ func TestDiscoverServersWithCallback(t *testing.T) {
 	var callbacks []DiscoveredServer
 
 	// Add a manual check for the TCP-only port.
-	// We call the unexported helper directly inside the package to ensure it does not panic.
-	if server := scanner.checkServer(ctx, "127.0.0.1", 9009, "pve"); server == nil {
-		// keep discovery results unaffected but verify we survive the TCP-only host
-		t.Fatalf("expected checkServer to handle TCP-only host without panic")
+	if probe := scanner.ProbeProxmoxService(ctx, "127.0.0.1", 9009); probe != nil && probe.Positive {
+		t.Fatalf("expected ProbeProxmoxService to ignore TCP-only host, got %+v", probe)
 	}
 
 	result, err := scanner.DiscoverServersWithCallback(ctx, subnet, func(server DiscoveredServer, phase string) {
