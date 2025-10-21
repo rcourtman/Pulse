@@ -351,7 +351,7 @@ resolve_agent_path_for_uninstall() {
 #     --target https://pulse.example.com|<api-token> \
 #     --target https://pulse-dr.example.com|<api-token>
 # Uninstall:
-#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --uninstall
+#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --uninstall [--purge]
 
 PULSE_URL=""
 DEFAULT_AGENT_PATH="/usr/local/bin/pulse-docker-agent"
@@ -374,6 +374,7 @@ UNRAID_STARTUP="/boot/config/go.d/pulse-docker-agent.sh"
 LOG_PATH="/var/log/pulse-docker-agent.log"
 INTERVAL="30s"
 UNINSTALL=false
+PURGE=false
 TOKEN="${PULSE_TOKEN:-}"
 DOWNLOAD_ARCH=""
 TARGET_SPECS=()
@@ -413,15 +414,25 @@ while [[ $# -gt 0 ]]; do
       OVERRIDE_SPECIFIED="true"
       shift 2
       ;;
+    --purge)
+      PURGE=true
+      shift
+      ;;
     *)
       echo "Unknown option: $1"
       echo "Usage: $0 --url <Pulse URL> --token <API token> [--interval 30s]"
       echo "       $0 --agent-path /custom/path/pulse-docker-agent"
-      echo "       $0 --uninstall"
+      echo "       $0 --uninstall [--purge]"
       exit 1
       ;;
   esac
 done
+
+# Validate purge usage
+if [[ "$PURGE" = true && "$UNINSTALL" != true ]]; then
+    log_warn "--purge is only valid together with --uninstall; ignoring"
+    PURGE=false
+fi
 
 # Normalize PULSE_URL - strip trailing slashes to prevent double-slash issues
 PULSE_URL="${PULSE_URL%/}"
@@ -658,54 +669,55 @@ fi
 
 # Handle uninstall
 if [ "$UNINSTALL" = true ]; then
-    echo "==================================="
-    echo "Pulse Docker Agent Uninstaller"
-    echo "==================================="
-    echo ""
+    log_header "Pulse Docker Agent Uninstaller"
 
-    # Stop and disable systemd service
-    if command -v systemctl &> /dev/null && [ -f "$SERVICE_PATH" ]; then
-        echo "Stopping systemd service..."
+    if command -v systemctl &> /dev/null; then
+        log_info "Stopping pulse-docker-agent service"
         systemctl stop pulse-docker-agent 2>/dev/null || true
+        log_info "Disabling pulse-docker-agent service"
         systemctl disable pulse-docker-agent 2>/dev/null || true
-        rm -f "$SERVICE_PATH"
-        systemctl daemon-reload
-        echo "✓ Systemd service removed"
+        if [ -f "$SERVICE_PATH" ]; then
+            rm -f "$SERVICE_PATH"
+            log_success "Removed unit file: $SERVICE_PATH"
+        else
+            log_info "Unit file not present at $SERVICE_PATH"
+        fi
+        systemctl daemon-reload 2>/dev/null || true
+    else
+        log_warn "systemctl not found; skipping service disable"
     fi
 
-    # Stop running agent process
-    if pgrep -f pulse-docker-agent > /dev/null; then
-        echo "Stopping agent process..."
-        pkill -f pulse-docker-agent || true
+    if pgrep -f pulse-docker-agent > /dev/null 2>&1; then
+        log_info "Stopping running agent processes"
+        pkill -f pulse-docker-agent 2>/dev/null || true
         sleep 1
-        echo "✓ Agent process stopped"
     fi
 
-    # Remove binary
     if [ -f "$AGENT_PATH" ]; then
         rm -f "$AGENT_PATH"
-        echo "✓ Agent binary removed"
+        log_success "Removed agent binary: $AGENT_PATH"
+    else
+        log_info "Agent binary not found at $AGENT_PATH"
     fi
 
-    # Remove Unraid startup script
     if [ -f "$UNRAID_STARTUP" ]; then
         rm -f "$UNRAID_STARTUP"
-        echo "✓ Unraid startup script removed"
+        log_success "Removed Unraid startup script: $UNRAID_STARTUP"
     fi
 
-    # Remove log file
-    if [ -f "$LOG_PATH" ]; then
-        rm -f "$LOG_PATH"
-        echo "✓ Log file removed"
+    if [ "$PURGE" = true ]; then
+        if [ -f "$LOG_PATH" ]; then
+            rm -f "$LOG_PATH"
+            log_success "Removed agent log file: $LOG_PATH"
+        else
+            log_info "Agent log file already absent: $LOG_PATH"
+        fi
+    elif [ -f "$LOG_PATH" ]; then
+        log_info "Preserving agent log file at $LOG_PATH (use --purge to remove)"
     fi
 
-    echo ""
-    echo "==================================="
-    echo "✓ Uninstall complete!"
-    echo "==================================="
-    echo ""
-    echo "The Pulse Docker agent has been removed from this system."
-    echo ""
+    log_success "Uninstall complete"
+    log_info "The Pulse Docker agent has been removed from this system."
     exit 0
 fi
 
