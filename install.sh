@@ -186,9 +186,9 @@ prompt_proxy_installation() {
     echo ""
     echo "This will:"
     echo "  • Install pulse-sensor-proxy service on the Proxmox host"
-    echo "  • Create bind mount for container communication"
+    echo "  • Configure container with temperature monitoring bind mount"
     echo "  • Distribute SSH keys to cluster nodes"
-    echo "  • Restart the container to activate"
+    echo "  • Enable temperature monitoring from first boot"
     echo ""
 
     if [[ "$docker_detected" == "true" ]]; then
