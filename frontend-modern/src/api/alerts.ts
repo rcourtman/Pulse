@@ -58,6 +58,12 @@ export class AlertsAPI {
     });
   }
 
+  static async activate(): Promise<{ success: boolean; state: string; activationTime?: string }> {
+    return apiFetchJSON(`${this.baseUrl}/activate`, {
+      method: 'POST',
+    });
+  }
+
   static async clearAlert(alertId: string): Promise<{ success: boolean }> {
     return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(alertId)}/clear`, {
       method: 'POST',

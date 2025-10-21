@@ -24,6 +24,15 @@ const (
 	AlertLevelCritical AlertLevel = "critical"
 )
 
+// ActivationState represents the alert notification activation state
+type ActivationState string
+
+const (
+	ActivationPending ActivationState = "pending_review"
+	ActivationActive  ActivationState = "active"
+	ActivationSnoozed ActivationState = "snoozed"
+)
+
 func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
 	switch strings.ToLower(string(level)) {
 	case string(AlertLevelCritical):
@@ -309,6 +318,9 @@ type GuestLookup struct {
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
 	Enabled                        bool                       `json:"enabled"`
+	ActivationState                ActivationState            `json:"activationState,omitempty"`
+	ObservationWindowHours         int                        `json:"observationWindowHours,omitempty"`
+	ActivationTime                 *time.Time                 `json:"activationTime,omitempty"`
 	GuestDefaults                  ThresholdConfig            `json:"guestDefaults"`
 	NodeDefaults                   ThresholdConfig            `json:"nodeDefaults"`
 	StorageDefault                 HysteresisThreshold        `json:"storageDefault"`
@@ -455,7 +467,9 @@ func NewManager() *Manager {
 		pmgAnomalyTrackers:    make(map[string]*pmgAnomalyTracker),
 		ackState:              make(map[string]ackRecord),
 		config: AlertConfig{
-			Enabled: true,
+			Enabled:                true,
+			ActivationState:        ActivationPending,
+			ObservationWindowHours: 24,
 			GuestDefaults: ThresholdConfig{
 				PoweredOffSeverity: AlertLevelWarning,
 				CPU:                &HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -612,6 +626,15 @@ func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
 // prevent concurrent mutations from racing with consumers.
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	if m.onAlert == nil || alert == nil {
+		return false
+	}
+
+	// Check activation state - only dispatch notifications if active
+	if m.config.ActivationState != ActivationActive {
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("activationState", string(m.config.ActivationState)).
+			Msg("Alert notification suppressed - not activated")
 		return false
 	}
 
@@ -782,6 +805,27 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 
 	config.GuestDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.GuestDefaults.PoweredOffSeverity)
 	config.NodeDefaults.PoweredOffSeverity = normalizePoweredOffSeverity(config.NodeDefaults.PoweredOffSeverity)
+
+	// Migration logic for activation state (backward compatibility)
+	if config.ObservationWindowHours <= 0 {
+		config.ObservationWindowHours = 24
+	}
+	if config.ActivationState == "" {
+		// Determine if this is an existing installation or new
+		// Existing installations have active alerts already
+		isExistingInstall := len(m.activeAlerts) > 0 || len(config.Overrides) > 0
+		if isExistingInstall {
+			// Existing install: auto-activate to preserve behavior
+			config.ActivationState = ActivationActive
+			now := time.Now()
+			config.ActivationTime = &now
+			log.Info().Msg("Migrating existing installation to active alert state")
+		} else {
+			// New install: start in pending review
+			config.ActivationState = ActivationPending
+			log.Info().Msg("New installation: alerts pending activation")
+		}
+	}
 
 	m.config = config
 	for id, override := range m.config.Overrides {
@@ -6548,17 +6592,15 @@ func (m *Manager) LoadActiveAlerts() error {
 		// Only notify for alerts that started recently (within last 2 hours) to avoid spam
 		if alert.Level == AlertLevelCritical && now.Sub(alert.StartTime) < 2*time.Hour {
 			// Use a goroutine and add a small delay to avoid notification spam on startup
-			if m.onAlert != nil {
-				alertCopy := alert.Clone()
-				go func(a *Alert) {
-					time.Sleep(10 * time.Second) // Wait for system to stabilize after restart
-					log.Info().
-						Str("alertID", a.ID).
-						Str("resource", a.ResourceName).
-						Msg("Sending notification for restored critical alert")
-					m.onAlert(a)
-				}(alertCopy)
-			}
+			alertCopy := alert.Clone()
+			go func(a *Alert) {
+				time.Sleep(10 * time.Second) // Wait for system to stabilize after restart
+				log.Info().
+					Str("alertID", a.ID).
+					Str("resource", a.ResourceName).
+					Msg("Attempting to send notification for restored critical alert")
+				m.dispatchAlert(a, false) // Use dispatchAlert to respect activation state and quiet hours
+			}(alertCopy)
 		}
 	}
 
