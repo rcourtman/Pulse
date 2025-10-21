@@ -34,31 +34,15 @@ dist/                       # Generated bundled scripts
 ### Development & Bundling Workflow
 
 ```mermaid
-flowchart TD
-    Author["Author Code\nscripts/lib/*.sh\nscripts/install-*.sh"]
-    WriteTests["Write Tests\nscripts/tests/test-*.sh\nscripts/tests/integration/"]
-    UpdateManifest["Update Bundle Manifest\nscripts/bundle.manifest"]
-    RunTests["Run Tests\nmake test-scripts\nscripts/tests/run.sh"]
-    TestPass{"Tests Pass?"}
-    FixCode["Fix Issues"]
-    Bundle["Bundle Scripts\nmake bundle-scripts\nbash scripts/bundle.sh"]
-    ValidateBundled["Validate Bundled Output\nbash -n dist/*.sh\ndist/*.sh --dry-run"]
-    ValidatePass{"Validation\nPass?"}
-    Distribute["Distribute\ndist/*.sh ready"]
-    UpdateDocs["Update Documentation\nscripts/lib/README.md"]
+flowchart LR
+    Code[Write Code<br/>scripts/lib]
+    Test[Run Tests]
+    Bundle[Bundle<br/>make bundle-scripts]
+    Dist[Distribute<br/>dist/*.sh]
 
-    Author --> WriteTests
-    WriteTests --> UpdateManifest
-    UpdateManifest --> RunTests
-    RunTests --> TestPass
-    TestPass -->|No| FixCode
-    FixCode --> Author
-    TestPass -->|Yes| Bundle
-    Bundle --> ValidateBundled
-    ValidateBundled --> ValidatePass
-    ValidatePass -->|No| FixCode
-    ValidatePass -->|Yes| UpdateDocs
-    UpdateDocs --> Distribute
+    Code --> Test
+    Test --> Bundle
+    Bundle --> Dist
 ```
 
 This workflow emphasizes the library's modular design: develop reusable modules in `scripts/lib`, test thoroughly, bundle for distribution, and validate bundled artifacts before release.

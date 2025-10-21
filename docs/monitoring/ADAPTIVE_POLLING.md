@@ -4,45 +4,16 @@
 Pulse uses an adaptive polling scheduler that adapts poll cadence based on freshness, errors, and workload. The goal is to prioritize stale or changing instances while backing off on healthy, idle targets.
 
 ```mermaid
-flowchart TD
-    PollLoop["PollLoop\n(ticker & config updates)"]
-    Scheduler["Scheduler\ncomputes ScheduledTask"]
-    Staleness["Staleness Tracker\n(last success, freshness score)"]
-    CircuitBreaker["Circuit Breaker\ntracks failure streaks"]
-    Backoff["Backoff Policy\nexponential w/ jitter"]
-    PriorityQ["Priority Queue\nmin-heap by NextRun"]
-    WorkerPool["TaskWorkers\nN concurrent workers"]
-    Metrics["Metrics & History\nPrometheus + retention"]
-    Success["Poll Success"]
-    Failure{"Poll Failure?"}
-    Reschedule["Reschedule\n(next interval)"]
-    BackoffPath["Backoff / Breaker Open"]
-    DeadLetter["Dead-Letter Queue\noperator review"]
+flowchart LR
+    Scheduler[Scheduler]
+    Queue[Priority Queue<br/>by NextRun]
+    Workers[Workers]
 
-    PollLoop --> Scheduler
-    Staleness --> Scheduler
-    CircuitBreaker --> Scheduler
-    Scheduler --> PriorityQ
-
-    PriorityQ -->|due task| WorkerPool
-    WorkerPool --> Failure
-    WorkerPool -->|result| Metrics
-    WorkerPool -->|freshness| Staleness
-
-    Failure -->|No| Success
-    Success --> CircuitBreaker
-    Success --> Reschedule
-    Success --> Metrics
-    Reschedule --> Scheduler
-
-    Failure -->|Yes| BackoffPath
-    BackoffPath --> CircuitBreaker
-    BackoffPath --> Backoff
-    Backoff --> Scheduler
-    Backoff --> DeadLetter
-    DeadLetter -. periodic retry .-> Scheduler
-    CircuitBreaker -. state change .-> Scheduler
-    Metrics --> Scheduler
+    Scheduler -->|schedule| Queue
+    Queue -->|dequeue| Workers
+    Workers -->|success| Scheduler
+    Workers -->|failure| CB[Circuit Breaker]
+    CB -->|backoff| Scheduler
 ```
 
 - **Scheduler** computes `ScheduledTask` entries using adaptive intervals.

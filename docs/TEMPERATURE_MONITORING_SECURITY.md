@@ -19,37 +19,18 @@ This document describes the security architecture of Pulse's temperature monitor
 
 ```mermaid
 graph TD
-    subgraph Host["Proxmox Host (delly)\nTrust Boundary"]
-        Proxy["pulse-sensor-proxy service\nUID 999\nSO_PEERCRED auth\nMethod ACL + per-UID rate limit\nPer-node concurrency = 1"]
-        Socket["Unix socket\n/run/pulse-sensor-proxy.sock\n(0600 bind mount)"]
-        Audit["Audit & Metrics\n/var/log/pulse/... & :9127/metrics"]
-        PrivOps["Privileged RPCs\nensure_cluster_keys | register_nodes | request_cleanup\nHost UID only"]
-    end
+    Container[Pulse Container]
+    Proxy[pulse-sensor-proxy<br/>Host Service]
+    Cluster[Cluster Nodes<br/>SSH sensors -j]
 
-    subgraph Container["Pulse Container (ID-mapped root)"]
-        Backend["Pulse Backend"]
-        Poller["Temperature Poller worker"]
-    end
+    Container -->|Unix Socket<br/>Rate Limited| Proxy
+    Proxy -->|SSH<br/>Forced Command| Cluster
+    Cluster -->|Temperature JSON| Proxy
+    Proxy -->|Temperature JSON| Container
 
-    subgraph Cluster["Cluster Nodes"]
-        SensorCmd["Forced SSH command\n`sensors -j` only\nRestricted authorized_keys entry"]
-    end
-
-    Poller -->|poll request| Backend
-    Backend -->|RPC via bind-mounted socket| Socket
-    Socket --> Proxy
-    Proxy -->|temperature JSON response| Backend
-    Proxy -->|rate-limit reject + 2 s penalty| Reject["429 response"]
-    Reject --> Backend
-
-    Proxy -->|SSH (ed25519 key)\nforced command| SensorCmd
-    SensorCmd -->|temperature JSON| Proxy
-
-    Proxy -->|audit entry + metrics| Audit
-    Audit -->|Prometheus scrape| Metrics["Telemetry Consumers\n(Grafana, watchdog)"]
-
-    PrivOps --> Proxy
-    Backend -. blocked (ID-mapped root) .-> PrivOps
+    style Proxy fill:#e1f5e1
+    style Container fill:#fff4e1
+    style Cluster fill:#e1f0ff
 ```
 
 **Key Principle**: SSH keys never enter containers. All SSH operations are performed by the host-side proxy.

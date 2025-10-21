@@ -12,36 +12,15 @@
 
 ```mermaid
 sequenceDiagram
-    participant Backend as Pulse Backend
-    participant Proxy as Sensor Proxy RPC Server
-    participant Limiter as Limiter (per UID & global)
-    participant Validator as Payload Validator
-    participant SSH as Cluster Node (forced `sensors -j`)
-    participant Metrics as Metrics & Audit Log
+    participant Backend
+    participant Proxy
+    participant Node
 
-    Backend->>Proxy: RPC request (get_temperature)
-    Proxy->>Proxy: Extract SO_PEERCRED (UID/GID/PID)
-    Proxy->>Limiter: Check per-UID rate & concurrency
-    alt Rate limit exceeded
-        Limiter-->>Proxy: reject
-        Proxy-->>Backend: 429 Too Many Requests (2 s penalty)
-        Proxy->>Metrics: increment limiter_rejections_total
-    else Allowed
-        Limiter-->>Proxy: permit
-        Proxy->>Validator: Validate method & payload
-        alt Validation failure
-            Validator-->>Proxy: error
-            Proxy-->>Backend: 400 validation error
-            Proxy->>Metrics: penalty + audit log entry
-        else Valid request
-            Validator-->>Proxy: ok
-            Proxy->>SSH: run `sensors -j` via forced command
-            SSH-->>Proxy: temperature JSON
-            Proxy-->>Backend: telemetry payload
-            Proxy->>Metrics: record success, latency histogram
-            Proxy->>Metrics: append audit/audit trail
-        end
-    end
+    Backend->>Proxy: get_temperature
+    Proxy->>Proxy: Check rate limit
+    Proxy->>Node: SSH sensors -j
+    Node->>Proxy: JSON response
+    Proxy->>Backend: Temperature data
 ```
 
 ### Rate Limit Hits (`pulse_proxy_limiter_rejections_total`)
