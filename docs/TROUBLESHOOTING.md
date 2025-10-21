@@ -174,6 +174,30 @@ systemctl status pulse 2>/dev/null \
 - Try a test service like webhook.site
 - Check logs for response codes (temporarily set `LOG_LEVEL=debug` via **Settings → System → Logging** or export `LOG_LEVEL=debug` and restart; review `webhook.delivery` entries, then revert to `info`)
 
+### Temperature Monitoring Issues
+
+#### Temperature data flickers after adding nodes
+
+**Symptoms:** Dashboard temperatures alternate between values and `--`, or new nodes never show readings. Proxy logs contain `limiter.rejection` messages.
+
+**Diagnosis:**
+1. Confirm you are running a build with commit 46b8b8d or later (defaults are 1 rps, burst 5). Older binaries throttle multi-node clusters aggressively.
+2. Check limiter metrics:
+   ```bash
+   curl -s http://127.0.0.1:9127/metrics \
+     | grep -E 'pulse_proxy_limiter_(rejects|penalties)_total'
+   ```
+   Any recent increment indicates rate-limit saturation.
+3. Inspect scheduler health for temperature pollers (`breaker.state` should be `closed` and `deadLetter.present` must be `false`).
+
+**Fix:** Increase the proxy burst/interval in `/etc/pulse-sensor-proxy/config.yaml`:
+```yaml
+rate_limit:
+  per_peer_interval_ms: 500   # medium cluster (≈10 nodes)
+  per_peer_burst: 10
+```
+Restart `pulse-sensor-proxy`, verify limiter counters stop increasing, and confirm the dashboard stabilises. Document the change in your operations log.
+
 ### VM Disk Monitoring Issues
 
 #### VMs show "-" for disk usage

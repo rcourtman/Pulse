@@ -6,7 +6,7 @@
 - Logs: `/var/log/pulse/sensor-proxy/proxy.log`
 - Audit trail: `/var/log/pulse/sensor-proxy/audit.log` (hash chained, forwarded via rsyslog)
 - Metrics: `http://127.0.0.1:9127/metrics` (set `PULSE_SENSOR_PROXY_METRICS_ADDR` to change/disable)
-- Limiters: ~12 requests/minute per UID (burst 2), per-UID concurrency 2, global concurrency 8, 2 s penalty on validation failures
+- Limiters: 1 request/sec per UID (burst 5), per-UID concurrency 2, global concurrency 8, 2 s penalty on validation failures
 
 ## Monitoring Alerts & Response
 
@@ -71,10 +71,28 @@ Temperature instances should show recent `lastSuccess` timestamps with no DLQ en
    ```
    Expect `breaker.state=="closed"` and `deadLetter.present==false` for all proxy-driven pollers.
 
-### Adjust Rate Limits
-1. Update `limiter_policy` environment overrides (future config).
-2. Restart proxy; monitor limiter metrics to validate new thresholds.
-3. Document change in security runbook.
+### Rate Limit Tuning
+
+| Profile | Nodes | `per_peer_interval_ms` | `per_peer_burst` | Notes |
+| --- | --- | --- | --- | --- |
+| Default | ≤5 | 1000 | 5 | Shipped with commit 46b8b8d; no action needed for single host clusters. |
+| Medium | 6–10 | 500 | 10 | Doubles throughput; monitor `pulse_proxy_limiter_rejects_total`. |
+| Large | 11–20 | 250 | 20 | Confirm proxy CPU stays below 70 % and audit logs remain clean. |
+| XL | 21–40 | 150 | 30 | Requires high-trust environment; ensure UID filters are locked down. |
+
+**Procedure:**
+1. Edit `/etc/pulse-sensor-proxy/config.yaml` and set the desired profile values under `rate_limit`.
+2. Restart the service:
+   ```bash
+   sudo systemctl restart pulse-sensor-proxy
+   ```
+3. Validate:
+   ```bash
+   curl -s http://127.0.0.1:9127/metrics \
+     | grep pulse_proxy_limiter_rejects_total
+   ```
+   The counter should stop incrementing during steady-state polling.
+4. Record the change in the operations log and review audit entries for unexpected callers.
 
 ## Incident Handling
 - **Unauthorized Command Attempt:** audit log shows `command.validation_failed` and limiter penalties; capture correlation ID, check Pulse side for compromised container.
