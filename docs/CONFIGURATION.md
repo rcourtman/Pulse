@@ -384,6 +384,8 @@ These env vars override system.json values. When set, the UI will show a warning
   - Set explicitly when running in containers or whenever auto-detection picks the wrong address
   - Example: `PULSE_PUBLIC_URL="http://192.168.1.100:7655"`
 
+> **Log file behaviour:** When `LOG_FILE` is set, Pulse continues to write logs to stderr while also appending to the specified file. Rotation occurs when the file exceeds `LOG_MAX_SIZE` megabytes (default 100 MB). Rotated files older than `LOG_MAX_AGE` days (default 30) are deleted, and compressing is enabled by default (`LOG_COMPRESS=true`), producing `.gz` archives for rotated files.
+
 #### Authentication Variables (from .env file)
 These should be set in the .env file for security:
 

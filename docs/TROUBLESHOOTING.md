@@ -2,6 +2,23 @@
 
 ## Common Issues and Solutions
 
+### Correlate API Calls with Logs
+
+Every API response includes an `X-Request-ID` header. When escalating issues, capture that value and use it to search the backend logs or log file. The same identifier is emitted as `request_id` in structured logs.
+
+```bash
+# Capture a request ID
+curl -i https://pulse.example.com/api/state | grep X-Request-ID
+
+# Search the rotating log file
+grep 'request_id=abc123' /var/log/pulse/pulse.log
+
+# Docker / kubectl example
+docker logs pulse | grep 'request_id=abc123'
+```
+
+Include the `X-Request-ID` in support tickets or incident notes so responders can jump straight to the relevant log lines.
+
 ### Authentication Problems
 
 #### Forgot Password / Lost Access

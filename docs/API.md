@@ -93,6 +93,14 @@ fetch('/api/nodes', {
 });
 ```
 
+## Common Response Headers
+
+Most endpoints emit a pair of diagnostic headers to help with troubleshooting:
+
+- `X-Request-ID` &mdash; unique identifier assigned to each HTTP request. The same value appears in Pulse logs, enabling quick correlation when raising support tickets or hunting through log files.
+- `X-RateLimit-*` family (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After`) &mdash; surfaced when rate limiting is enabled (default in v4.24.0+).
+- `X-Diagnostics-Cached-At` &mdash; returned only by `/api/diagnostics`; indicates when the current diagnostics payload was generated.
+
 ## Core Endpoints
 
 ### Health Check
@@ -882,6 +890,8 @@ Returns detailed information about:
 - Error logs
 - Performance metrics
 - Service health
+
+> **Caching (v4.24.0+):** Diagnostics results are cached for 45 seconds to protect upstream systems. If the cache is fresh it is returned immediately; otherwise a new probe runs, replacing the cache once complete. Inspect the `X-Diagnostics-Cached-At` header to see when the payload was generated. Probe failures surface in the `errors` array and are tracked by Prometheus metrics (`pulse_diagnostics_*`).
 
 ### Network Discovery
 Discover Proxmox servers on the network.
