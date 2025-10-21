@@ -103,6 +103,50 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// ActivateAlerts activates alert notifications
+func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
+	// Get current config
+	config := h.monitor.GetAlertManager().GetConfig()
+
+	// Check if already active
+	if config.ActivationState == alerts.ActivationActive {
+		if err := utils.WriteJSONResponse(w, map[string]interface{}{
+			"status":  "success",
+			"message": "Alerts already activated",
+			"state":   string(config.ActivationState),
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to write activate response")
+		}
+		return
+	}
+
+	// Activate notifications
+	now := time.Now()
+	config.ActivationState = alerts.ActivationActive
+	config.ActivationTime = &now
+
+	// Update config
+	h.monitor.GetAlertManager().UpdateConfig(config)
+
+	// Save to persistent storage
+	if err := h.monitor.GetConfigPersistence().SaveAlertConfig(config); err != nil {
+		log.Error().Err(err).Msg("Failed to save alert configuration after activation")
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().Msg("Alert notifications activated")
+
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"status":         "success",
+		"message":        "Alert notifications activated",
+		"state":          string(config.ActivationState),
+		"activationTime": config.ActivationTime,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write activate response")
+	}
+}
+
 // GetActiveAlerts returns all active alerts
 func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) {
 	alerts := h.monitor.GetAlertManager().GetActiveAlerts()
@@ -619,6 +663,8 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 		h.GetAlertConfig(w, r)
 	case path == "config" && r.Method == http.MethodPut:
 		h.UpdateAlertConfig(w, r)
+	case path == "activate" && r.Method == http.MethodPost:
+		h.ActivateAlerts(w, r)
 	case path == "active" && r.Method == http.MethodGet:
 		h.GetActiveAlerts(w, r)
 	case path == "history" && r.Method == http.MethodGet:

@@ -3,12 +3,46 @@
 ## Overview
 Phase 2 introduces a scheduler that adapts poll cadence based on freshness, errors, and workload. The goal is to prioritize stale or changing instances while backing off on healthy, idle targets.
 
-```
-┌──────────┐      ┌──────────────┐      ┌──────────────┐      ┌─────────────┐
-│ PollLoop │─────▶│  Scheduler   │─────▶│ Priority Q   │─────▶│ TaskWorkers │
-└──────────┘      └──────────────┘      └──────────────┘      └─────────────┘
-        ▲                   │                    │                    │
-        │                   └─────► Staleness, metrics, circuit breaker feedback ────┘
+```mermaid
+flowchart TD
+    PollLoop["PollLoop\n(ticker & config updates)"]
+    Scheduler["Scheduler\ncomputes ScheduledTask"]
+    Staleness["Staleness Tracker\n(last success, freshness score)"]
+    CircuitBreaker["Circuit Breaker\ntracks failure streaks"]
+    Backoff["Backoff Policy\nexponential w/ jitter"]
+    PriorityQ["Priority Queue\nmin-heap by NextRun"]
+    WorkerPool["TaskWorkers\nN concurrent workers"]
+    Metrics["Metrics & History\nPrometheus + retention"]
+    Success["Poll Success"]
+    Failure{"Poll Failure?"}
+    Reschedule["Reschedule\n(next interval)"]
+    BackoffPath["Backoff / Breaker Open"]
+    DeadLetter["Dead-Letter Queue\noperator review"]
+
+    PollLoop --> Scheduler
+    Staleness --> Scheduler
+    CircuitBreaker --> Scheduler
+    Scheduler --> PriorityQ
+
+    PriorityQ -->|due task| WorkerPool
+    WorkerPool --> Failure
+    WorkerPool -->|result| Metrics
+    WorkerPool -->|freshness| Staleness
+
+    Failure -->|No| Success
+    Success --> CircuitBreaker
+    Success --> Reschedule
+    Success --> Metrics
+    Reschedule --> Scheduler
+
+    Failure -->|Yes| BackoffPath
+    BackoffPath --> CircuitBreaker
+    BackoffPath --> Backoff
+    Backoff --> Scheduler
+    Backoff --> DeadLetter
+    DeadLetter -. periodic retry .-> Scheduler
+    CircuitBreaker -. state change .-> Scheduler
+    Metrics --> Scheduler
 ```
 
 - **Scheduler** computes `ScheduledTask` entries using adaptive intervals.
@@ -73,6 +107,18 @@ Exposed via Prometheus (`:9091/metrics`):
 | **Closed**  | Default. Failures counted.                  | —                                          |
 | **Open**    | ≥3 consecutive failures. Poll suppressed.   | Exponential delay (max 5 min).             |
 | **Half-open**| Retry window elapsed. Limited re-attempt. | Success ⇒ closed. Failure ⇒ open.         |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed: Startup / reset
+    Closed: Default state\nPolling active\nFailure counter increments
+    Closed --> Open: ≥3 consecutive failures
+    Open: Polls suppressed\nScheduler schedules backoff (max 5m)
+    Open --> HalfOpen: Retry window elapsed
+    HalfOpen: Single probe allowed\nBreaker watches probe result
+    HalfOpen --> Closed: Probe success\nReset failure streak & delay
+    HalfOpen --> Open: Probe failure\nIncrease streak & backoff
+```
 
 Backoff configuration:
 

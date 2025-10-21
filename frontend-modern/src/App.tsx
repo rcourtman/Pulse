@@ -44,6 +44,8 @@ import { DockerIcon } from '@/components/icons/DockerIcon';
 import { AlertsIcon } from '@/components/icons/AlertsIcon';
 import { SettingsGearIcon } from '@/components/icons/SettingsGearIcon';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
+import { ActivationBanner } from './components/Alerts/ActivationBanner';
+import { useAlertsActivation } from './stores/alertsActivation';
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -88,6 +90,7 @@ function App() {
       : getGlobalWebSocketStore();
     return store || getGlobalWebSocketStore();
   };
+  const alertsActivation = useAlertsActivation();
 
   const fallbackState: State = {
     nodes: [],
@@ -181,6 +184,11 @@ function App() {
       window.clearTimeout(updateTimeout);
       updateTimeout = window.setTimeout(() => setDataUpdated(false), POLLING_INTERVALS.DATA_FLASH);
     }
+  });
+
+  onMount(() => {
+    void alertsActivation.refreshConfig();
+    void alertsActivation.refreshActiveAlerts();
   });
 
   // No longer need tab state management - using router now
@@ -559,6 +567,15 @@ function App() {
                 <DarkModeContext.Provider value={darkMode}>
                   <SecurityWarning />
                   <DemoBanner />
+                  <ActivationBanner
+                    activationState={alertsActivation.activationState}
+                    activeAlerts={alertsActivation.activeAlerts}
+                    config={alertsActivation.config}
+                    isPastObservationWindow={alertsActivation.isPastObservationWindow}
+                    isLoading={alertsActivation.isLoading}
+                    refreshActiveAlerts={alertsActivation.refreshActiveAlerts}
+                    activate={alertsActivation.activate}
+                  />
                   <UpdateBanner />
                   <LegacySSHBanner />
                   <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6">

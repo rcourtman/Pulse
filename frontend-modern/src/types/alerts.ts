@@ -97,8 +97,13 @@ export interface BackupAlertConfig {
   criticalDays: number;
 }
 
+export type ActivationState = 'pending_review' | 'active' | 'snoozed';
+
 export interface AlertConfig {
   enabled: boolean;
+  activationState?: ActivationState;
+  observationWindowHours?: number;
+  activationTime?: string;
   guestDefaults: AlertThresholds;
   nodeDefaults: AlertThresholds;
   storageDefault: HysteresisThreshold;
