@@ -622,6 +622,53 @@ func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
 	m.onEscalate = cb
 }
 
+// safeCallResolvedCallback invokes onResolved with panic recovery
+func (m *Manager) safeCallResolvedCallback(alertID string, async bool) {
+	if m.onResolved == nil {
+		return
+	}
+
+	callbackFunc := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Str("alertID", alertID).
+					Msg("Panic in onResolved callback")
+			}
+		}()
+		m.onResolved(alertID)
+	}
+
+	if async {
+		go callbackFunc()
+	} else {
+		callbackFunc()
+	}
+}
+
+// safeCallEscalateCallback invokes onEscalate with panic recovery and alert cloning
+func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
+	if m.onEscalate == nil {
+		return
+	}
+
+	// Clone alert to prevent concurrent modification
+	alertCopy := alert.Clone()
+	go func(a *Alert, lvl int) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Str("alertID", a.ID).
+					Int("level", lvl).
+					Msg("Panic in onEscalate callback")
+			}
+		}()
+		m.onEscalate(a, lvl)
+	}(alertCopy, level)
+}
+
 // dispatchAlert delivers an alert to the configured callback, cloning it first to
 // prevent concurrent mutations from racing with consumers.
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
@@ -650,11 +697,53 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 
 	alertCopy := alert.Clone()
 	if async {
-		go m.onAlert(alertCopy)
+		go func(a *Alert) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Str("alertID", a.ID).
+						Str("type", a.Type).
+						Msg("Panic in onAlert callback")
+				}
+			}()
+			m.onAlert(a)
+		}(alertCopy)
 	} else {
-		m.onAlert(alertCopy)
+		// Synchronous calls also need panic recovery to prevent service crash
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Str("alertID", alertCopy.ID).
+						Str("type", alertCopy.Type).
+						Msg("Panic in onAlert callback (synchronous)")
+				}
+			}()
+			m.onAlert(alertCopy)
+		}()
 	}
 	return true
+}
+
+// ensureValidHysteresis ensures clear < trigger for hysteresis thresholds
+func ensureValidHysteresis(threshold *HysteresisThreshold, metricName string) {
+	if threshold == nil {
+		return
+	}
+	if threshold.Clear >= threshold.Trigger {
+		log.Warn().
+			Str("metric", metricName).
+			Float64("trigger", threshold.Trigger).
+			Float64("clear", threshold.Clear).
+			Msg("Invalid hysteresis: clear >= trigger, auto-fixing")
+		// Auto-fix: set clear to 5% below trigger
+		threshold.Clear = threshold.Trigger - 5
+		if threshold.Clear < 0 {
+			threshold.Clear = 0
+		}
+	}
 }
 
 // UpdateConfig updates the alert configuration
@@ -826,6 +915,15 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 			log.Info().Msg("New installation: alerts pending activation")
 		}
 	}
+
+	// Validate hysteresis thresholds to prevent stuck alerts
+	ensureValidHysteresis(config.GuestDefaults.CPU, "guest.cpu")
+	ensureValidHysteresis(config.GuestDefaults.Memory, "guest.memory")
+	ensureValidHysteresis(config.GuestDefaults.Disk, "guest.disk")
+	ensureValidHysteresis(config.NodeDefaults.CPU, "node.cpu")
+	ensureValidHysteresis(config.NodeDefaults.Memory, "node.memory")
+	ensureValidHysteresis(config.NodeDefaults.Temperature, "node.temperature")
+	ensureValidHysteresis(&config.StorageDefault, "storage")
 
 	m.config = config
 	for id, override := range m.config.Overrides {
@@ -1161,9 +1259,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				Str("alertID", alertID).
 				Msg("Alert auto-resolved after configuration change")
 
-			if m.onResolved != nil {
-				go m.onResolved(alertID)
-			}
+			m.safeCallResolvedCallback(alertID, true)
 		}
 	}
 
@@ -3597,9 +3693,7 @@ func (m *Manager) clearAlert(alertID string) {
 
 	m.addRecentlyResolvedUnlocked(alertID, resolvedAlert)
 
-	if m.onResolved != nil {
-		m.onResolved(alertID)
-	}
+	m.safeCallResolvedCallback(alertID, false)
 
 	log.Info().
 		Str("alertID", alertID).
@@ -4428,9 +4522,7 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
-	if m.onResolved != nil {
-		m.onResolved(alertID)
-	}
+	m.safeCallResolvedCallback(alertID, false)
 
 	// Log recovery
 	log.Info().
@@ -4540,9 +4632,7 @@ func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
-	if m.onResolved != nil {
-		m.onResolved(alertID)
-	}
+	m.safeCallResolvedCallback(alertID, false)
 
 	// Log recovery
 	log.Info().
@@ -4652,9 +4742,7 @@ func (m *Manager) clearPMGOfflineAlert(pmg models.PMGInstance) {
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
-	if m.onResolved != nil {
-		m.onResolved(alertID)
-	}
+	m.safeCallResolvedCallback(alertID, false)
 
 	// Log recovery
 	log.Info().
@@ -5761,9 +5849,7 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
-	if m.onResolved != nil {
-		m.onResolved(alertID)
-	}
+	m.safeCallResolvedCallback(alertID, false)
 
 	// Log recovery
 	log.Info().
@@ -5904,9 +5990,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
-	if m.onResolved != nil {
-		m.onResolved(alertID)
-	}
+	m.safeCallResolvedCallback(alertID, false)
 
 	// Log recovery
 	log.Info().
@@ -5976,6 +6060,30 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		} else {
 			// Update with only recent times
 			m.alertRateLimit[alertID] = recentTimes
+		}
+	}
+
+	// Clean up stale pending alerts (older than max time threshold window)
+	// This prevents memory leak from deleted resources that never triggered alerts
+	maxPendingAge := 10 * time.Minute // Longest time threshold + safety buffer
+	for id, pendingTime := range m.pendingAlerts {
+		if now.Sub(pendingTime) > maxPendingAge {
+			delete(m.pendingAlerts, id)
+			log.Debug().
+				Str("resourceID", id).
+				Dur("age", now.Sub(pendingTime)).
+				Msg("Cleaned up stale pending alert entry")
+		}
+	}
+
+	// Clean up old Docker restart tracking (containers not seen in 24h)
+	// Prevents memory leak from ephemeral containers in CI/CD environments
+	for resourceID, record := range m.dockerRestartTracking {
+		if now.Sub(record.lastChecked) > 24*time.Hour {
+			delete(m.dockerRestartTracking, resourceID)
+			log.Debug().
+				Str("resourceID", resourceID).
+				Msg("Cleaned up stale Docker restart tracking entry")
 		}
 	}
 }
@@ -6470,9 +6578,7 @@ func (m *Manager) checkEscalations() {
 					Msg("Alert escalated")
 
 				// Trigger escalation callback
-				if m.onEscalate != nil {
-					go m.onEscalate(alert, i+1)
-				}
+				m.safeCallEscalateCallback(alert, i+1)
 			}
 		}
 	}
@@ -6864,9 +6970,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 
 	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
-	if m.onResolved != nil {
-		m.onResolved(alertID)
-	}
+	m.safeCallResolvedCallback(alertID, true) // Make async to prevent deadlock
 
 	log.Info().
 		Str("alertID", alertID).
