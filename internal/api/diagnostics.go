@@ -13,9 +13,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -51,7 +53,7 @@ type DiagnosticsInfo struct {
 
 // MemorySourceStat aggregates memory-source usage per instance.
 type MemorySourceStat struct {
-	Instance    string `json:"instance"`
+ 	Instance    string `json:"instance"`
 	Source      string `json:"source"`
 	NodeCount   int    `json:"nodeCount"`
 	LastUpdated string `json:"lastUpdated"`
@@ -66,6 +68,38 @@ func isFallbackMemorySource(source string) bool {
 		return false
 	}
 }
+
+const diagnosticsCacheTTL = 45 * time.Second
+
+var (
+	diagnosticsMetricsOnce sync.Once
+
+	diagnosticsCacheMu         sync.RWMutex
+	diagnosticsCache           DiagnosticsInfo
+	diagnosticsCacheTimestamp  time.Time
+
+	diagnosticsCacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "pulse",
+		Subsystem: "diagnostics",
+		Name:      "cache_hits_total",
+		Help:      "Total number of diagnostics cache hits.",
+	})
+
+	diagnosticsCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "pulse",
+		Subsystem: "diagnostics",
+		Name:      "cache_misses_total",
+		Help:      "Total number of diagnostics cache misses.",
+	})
+
+	diagnosticsRefreshDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "pulse",
+		Subsystem: "diagnostics",
+		Name:      "refresh_duration_seconds",
+		Help:      "Duration of diagnostics refresh operations in seconds.",
+		Buckets:   []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30},
+	})
+)
 
 // NodeDiagnostic contains diagnostic info for a Proxmox node
 type NodeDiagnostic struct {
@@ -256,9 +290,53 @@ type AlertsDiagnostic struct {
 
 // handleDiagnostics returns comprehensive diagnostic information
 func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
+	diagnosticsMetricsOnce.Do(func() {
+		prometheus.MustRegister(diagnosticsCacheHits, diagnosticsCacheMisses, diagnosticsRefreshDuration)
+	})
+
+	now := time.Now()
+
+	diagnosticsCacheMu.RLock()
+	cachedDiag := diagnosticsCache
+	cachedAt := diagnosticsCacheTimestamp
+	diagnosticsCacheMu.RUnlock()
+
+	if !cachedAt.IsZero() && now.Sub(cachedAt) <= diagnosticsCacheTTL {
+		diagnosticsCacheHits.Inc()
+		writeDiagnosticsResponse(w, cachedDiag, cachedAt)
+		return
+	}
+
+	diagnosticsCacheMisses.Inc()
+
 	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
 	defer cancel()
 
+	start := time.Now()
+	fresh := r.computeDiagnostics(ctx)
+	diagnosticsRefreshDuration.Observe(time.Since(start).Seconds())
+
+	diagnosticsCacheMu.Lock()
+	diagnosticsCache = fresh
+	diagnosticsCacheTimestamp = time.Now()
+	cachedAt = diagnosticsCacheTimestamp
+	diagnosticsCacheMu.Unlock()
+
+	writeDiagnosticsResponse(w, fresh, cachedAt)
+}
+
+func writeDiagnosticsResponse(w http.ResponseWriter, diag DiagnosticsInfo, cachedAt time.Time) {
+	w.Header().Set("Content-Type", "application/json")
+	if !cachedAt.IsZero() {
+		w.Header().Set("X-Diagnostics-Cached-At", cachedAt.UTC().Format(time.RFC3339))
+	}
+	if err := json.NewEncoder(w).Encode(diag); err != nil {
+		log.Error().Err(err).Msg("Failed to encode diagnostics")
+		http.Error(w, "Failed to generate diagnostics", http.StatusInternalServerError)
+	}
+}
+
+func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	diag := DiagnosticsInfo{
 		Errors: []string{},
 	}
@@ -325,7 +403,6 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 			nodeDiag.Connected = false
 			nodeDiag.Error = err.Error()
 		} else {
-			// Try to get nodes first (this should work for both clustered and standalone)
 			nodes, err := client.GetNodes(ctx)
 			if err != nil {
 				nodeDiag.Connected = false
@@ -333,13 +410,11 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 			} else {
 				nodeDiag.Connected = true
 
-				// Set node details
 				if len(nodes) > 0 {
 					nodeDiag.Details = &NodeDetails{
 						NodeCount: len(nodes),
 					}
 
-					// Get version from first node
 					if status, err := client.GetNodeStatus(ctx, nodes[0].Node); err == nil && status != nil {
 						if status.PVEVersion != "" {
 							nodeDiag.Details.Version = status.PVEVersion
@@ -347,24 +422,14 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 					}
 				}
 
-				// Try to get cluster status (this may fail for standalone nodes, which is OK)
 				if clusterStatus, err := client.GetClusterStatus(ctx); err == nil {
-					nodeDiag.ClusterInfo = &ClusterInfo{
-						Nodes: len(clusterStatus),
-					}
+					nodeDiag.ClusterInfo = &ClusterInfo{Nodes: len(clusterStatus)}
 				} else {
-					// Standalone node or cluster status not available
-					// This is not an error - standalone nodes don't have cluster status
 					log.Debug().Str("node", node.Name).Msg("Cluster status not available (likely standalone node)")
-					nodeDiag.ClusterInfo = &ClusterInfo{
-						Nodes: 1, // Standalone node
-					}
+					nodeDiag.ClusterInfo = &ClusterInfo{Nodes: 1}
 				}
 
-				// Run VM disk monitoring check
 				nodeDiag.VMDiskCheck = r.checkVMDiskMonitoring(ctx, client, node.Name)
-
-				// Run physical disk check
 				nodeDiag.PhysicalDisks = r.checkPhysicalDisks(ctx, client, node.Name)
 			}
 		}
@@ -380,7 +445,6 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 			Host: pbsNode.Host,
 		}
 
-		// Test connection
 		testCfg := pbs.ClientConfig{
 			Host:        pbsNode.Host,
 			User:        pbsNode.User,
@@ -396,15 +460,12 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 			pbsDiag.Connected = false
 			pbsDiag.Error = err.Error()
 		} else {
-			// Try to get version
 			if version, err := client.GetVersion(ctx); err != nil {
 				pbsDiag.Connected = false
 				pbsDiag.Error = "Connection established but version check failed: " + err.Error()
 			} else {
 				pbsDiag.Connected = true
-				pbsDiag.Details = &PBSDetails{
-					Version: version.Version,
-				}
+				pbsDiag.Details = &PBSDetails{Version: version.Version}
 			}
 		}
 
@@ -414,7 +475,6 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	diag.DockerAgents = buildDockerAgentDiagnostic(r.monitor, diag.Version)
 	diag.Alerts = buildAlertsDiagnostic(r.monitor)
 
-	// Include cached monitor snapshots for memory diagnostics if available
 	if r.monitor != nil {
 		snapshots := r.monitor.GetDiagnosticSnapshots()
 		if len(snapshots.Nodes) > 0 {
@@ -473,14 +533,7 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Add any recent errors from logs (this would need a log collector)
-	// For now, just check basic connectivity
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(diag); err != nil {
-		log.Error().Err(err).Msg("Failed to encode diagnostics")
-		http.Error(w, "Failed to generate diagnostics", http.StatusInternalServerError)
-	}
+	return diag
 }
 
 func buildTemperatureProxyDiagnostic(cfg *config.Config, legacyDetected, recommendProxy bool) *TemperatureProxyDiagnostic {

@@ -53,6 +53,15 @@ func ErrorHandler(next http.Handler) http.Handler {
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		rw.Header().Set("X-Request-ID", requestID)
 
+		start := time.Now()
+		routeLabel := normalizeRoute(r.URL.Path)
+		method := r.Method
+
+		defer func() {
+			elapsed := time.Since(start)
+			recordAPIRequest(method, routeLabel, rw.StatusCode(), elapsed)
+		}()
+
 		// Recover from panics
 		defer func() {
 			if err := recover(); err != nil {
@@ -64,7 +73,7 @@ func ErrorHandler(next http.Handler) http.Handler {
 					Bytes("stack", debug.Stack()).
 					Msg("Panic recovered in API handler")
 
-				writeErrorResponse(w, http.StatusInternalServerError, "internal_error",
+				writeErrorResponse(rw, http.StatusInternalServerError, "internal_error",
 					"An unexpected error occurred", nil)
 			}
 		}()
@@ -161,6 +170,13 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 		rw.WriteHeader(http.StatusOK)
 	}
 	return rw.ResponseWriter.Write(b)
+}
+
+func (rw *responseWriter) StatusCode() int {
+	if rw == nil {
+		return http.StatusInternalServerError
+	}
+	return rw.statusCode
 }
 
 // Hijack implements http.Hijacker interface
