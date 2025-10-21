@@ -11,6 +11,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// RateLimitConfig holds rate limiting configuration
+type RateLimitConfig struct {
+	PerPeerIntervalMs int `yaml:"per_peer_interval_ms"` // Milliseconds between requests per peer
+	PerPeerBurst      int `yaml:"per_peer_burst"`       // Number of requests allowed in a burst
+}
+
 // Config holds proxy configuration
 type Config struct {
 	AllowedSourceSubnets []string `yaml:"allowed_source_subnets"`
@@ -20,6 +26,8 @@ type Config struct {
 	AllowedPeerUIDs   []uint32 `yaml:"allowed_peer_uids"`
 	AllowedPeerGIDs   []uint32 `yaml:"allowed_peer_gids"`
 	AllowedIDMapUsers []string `yaml:"allowed_idmap_users"`
+
+	RateLimit *RateLimitConfig `yaml:"rate_limit,omitempty"`
 }
 
 // loadConfig loads configuration from file and environment variables
@@ -148,6 +156,14 @@ func loadConfig(configPath string) (*Config, error) {
 				Strs("auto_detected_subnets", detected).
 				Msg("No allowed_source_subnets configured; using detected host addresses (recommended to configure explicitly)")
 		}
+	}
+
+	// Log rate limit configuration if provided
+	if cfg.RateLimit != nil {
+		log.Info().
+			Int("per_peer_interval_ms", cfg.RateLimit.PerPeerIntervalMs).
+			Int("per_peer_burst", cfg.RateLimit.PerPeerBurst).
+			Msg("Rate limit configuration loaded from config file")
 	}
 
 	return cfg, nil

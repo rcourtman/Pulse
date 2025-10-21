@@ -7,7 +7,7 @@ import (
 
 func TestRateLimiterPenalizeMetrics(t *testing.T) {
     metrics := NewProxyMetrics("test")
-    rl := newRateLimiter(metrics)
+    rl := newRateLimiter(metrics, nil)
     rl.policy.penaltyDuration = 10 * time.Millisecond
 
     start := time.Now()

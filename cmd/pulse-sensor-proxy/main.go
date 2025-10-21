@@ -351,7 +351,7 @@ func runProxy() {
 		socketPath:  socketPath,
 		sshKeyPath:  sshKeyPath,
 		knownHosts:  knownHostsManager,
-		rateLimiter: newRateLimiter(metrics),
+		rateLimiter: newRateLimiter(metrics, cfg.RateLimit),
 		nodeGate:    newNodeGate(),
 		config:      cfg,
 		metrics:     metrics,
