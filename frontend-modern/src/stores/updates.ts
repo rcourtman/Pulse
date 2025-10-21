@@ -100,7 +100,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
     }
 
     // Don't check for updates in Docker or development builds
-    if (version.isDocker || version.isDevelopment) {
+    if (version.isDocker || version.isDevelopment || version.isSourceBuild) {
       setUpdateAvailable(false);
       setUpdateInfo(null);
       return;

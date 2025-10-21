@@ -2244,6 +2244,7 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 			Runtime:       runtime.Version(),
 			Channel:       "stable",
 			IsDocker:      false,
+			IsSourceBuild: false,
 			IsDevelopment: true,
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -2260,6 +2261,7 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 		Runtime:        versionInfo.Runtime,
 		Channel:        versionInfo.Channel,
 		IsDocker:       versionInfo.IsDocker,
+		IsSourceBuild:  versionInfo.IsSourceBuild,
 		IsDevelopment:  versionInfo.IsDevelopment,
 		DeploymentType: versionInfo.DeploymentType,
 	}

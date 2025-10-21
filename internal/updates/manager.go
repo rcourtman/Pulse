@@ -164,6 +164,23 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		return info, nil
 	}
 
+	// Skip update check for source builds
+	if currentInfo.IsSourceBuild {
+		info := &UpdateInfo{
+			Available:      false,
+			CurrentVersion: currentInfo.Version,
+			LatestVersion:  currentInfo.Version,
+		}
+		if useCache {
+			m.statusMu.Lock()
+			m.checkCache[channel] = info
+			m.cacheTime[channel] = time.Now()
+			m.statusMu.Unlock()
+		}
+		m.updateStatus("idle", 0, "Updates not available for source builds")
+		return info, nil
+	}
+
 	// Parse current version first
 	currentVer, err := ParseVersion(currentInfo.Version)
 	if err != nil {

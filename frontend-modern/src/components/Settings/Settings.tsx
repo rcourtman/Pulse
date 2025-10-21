@@ -3257,9 +3257,13 @@ const Settings: Component<SettingsProps> = (props) => {
                           <button
                             type="button"
                             onClick={checkForUpdates}
-                            disabled={checkingForUpdates() || versionInfo()?.isDocker}
+                            disabled={
+                              checkingForUpdates() ||
+                              versionInfo()?.isDocker ||
+                              versionInfo()?.isSourceBuild
+                            }
                             class={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${
-                              versionInfo()?.isDocker
+                              versionInfo()?.isDocker || versionInfo()?.isSourceBuild
                                 ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                                 : 'bg-blue-600 text-white hover:bg-blue-700'
                             }`}
@@ -3280,6 +3284,15 @@ const Settings: Component<SettingsProps> = (props) => {
                             <p class="text-xs text-blue-800 dark:text-blue-200">
                               <strong>Docker Installation:</strong> Updates are managed through
                               Docker. Pull the latest image to update.
+                            </p>
+                          </div>
+                        </Show>
+
+                        <Show when={versionInfo()?.isSourceBuild}>
+                          <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                            <p class="text-xs text-blue-800 dark:text-blue-200">
+                              <strong>Built from source:</strong> Pull the latest code from git and
+                              rebuild to update.
                             </p>
                           </div>
                         </Show>
