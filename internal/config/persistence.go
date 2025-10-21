@@ -20,6 +20,7 @@ import (
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
 	mu            sync.RWMutex
+	tx            *importTransaction
 	configDir     string
 	alertFile     string
 	emailFile     string
@@ -73,6 +74,36 @@ func (c *ConfigPersistence) EnsureConfigDir() error {
 	return os.MkdirAll(c.configDir, 0700)
 }
 
+func (c *ConfigPersistence) beginTransaction(tx *importTransaction) {
+	c.mu.Lock()
+	c.tx = tx
+	c.mu.Unlock()
+}
+
+func (c *ConfigPersistence) endTransaction(tx *importTransaction) {
+	c.mu.Lock()
+	if c.tx == tx {
+		c.tx = nil
+	}
+	c.mu.Unlock()
+}
+
+func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm os.FileMode) error {
+	if c.tx != nil {
+		return c.tx.StageFile(path, data, perm)
+	}
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
 // LoadAPITokens loads API token metadata from disk.
 func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 	c.mu.RLock()
@@ -119,17 +150,7 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 		return err
 	}
 
-	tmp := c.apiTokensFile + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
-		return err
-	}
-
-	if err := os.Rename(tmp, c.apiTokensFile); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-
-	return nil
+	return c.writeConfigFileLocked(c.apiTokensFile, data, 0600)
 }
 
 // SaveAlertConfig saves alert configuration to file
@@ -214,7 +235,7 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		return err
 	}
 
-	if err := os.WriteFile(c.alertFile, data, 0600); err != nil {
+	if err := c.writeConfigFileLocked(c.alertFile, data, 0600); err != nil {
 		return err
 	}
 
@@ -383,7 +404,7 @@ func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) er
 	}
 
 	// Save with restricted permissions (owner read/write only)
-	if err := os.WriteFile(c.emailFile, data, 0600); err != nil {
+	if err := c.writeConfigFileLocked(c.emailFile, data, 0600); err != nil {
 		return err
 	}
 
@@ -458,7 +479,7 @@ func (c *ConfigPersistence) SaveAppriseConfig(config notifications.AppriseConfig
 		data = encrypted
 	}
 
-	if err := os.WriteFile(c.appriseFile, data, 0600); err != nil {
+	if err := c.writeConfigFileLocked(c.appriseFile, data, 0600); err != nil {
 		return err
 	}
 
@@ -533,7 +554,7 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 		data = encrypted
 	}
 
-	if err := os.WriteFile(c.webhookFile, data, 0600); err != nil {
+	if err := c.writeConfigFileLocked(c.webhookFile, data, 0600); err != nil {
 		return err
 	}
 
@@ -791,15 +812,7 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		data = encrypted
 	}
 
-	// Write to temporary file first, then atomically rename
-	tempFile := c.nodesFile + ".tmp"
-	if err := os.WriteFile(tempFile, data, 0600); err != nil {
-		return err
-	}
-
-	// Atomic rename
-	if err := os.Rename(tempFile, c.nodesFile); err != nil {
-		os.Remove(tempFile) // Clean up temp file on error
+	if err := c.writeConfigFileLocked(c.nodesFile, data, 0600); err != nil {
 		return err
 	}
 
@@ -1077,7 +1090,7 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 		return err
 	}
 
-	if err := os.WriteFile(c.systemFile, data, 0600); err != nil {
+	if err := c.writeConfigFileLocked(c.systemFile, data, 0600); err != nil {
 		return err
 	}
 
@@ -1117,7 +1130,7 @@ func (c *ConfigPersistence) SaveOIDCConfig(settings OIDCConfig) error {
 		data = encrypted
 	}
 
-	if err := os.WriteFile(c.oidcFile, data, 0600); err != nil {
+	if err := c.writeConfigFileLocked(c.oidcFile, data, 0600); err != nil {
 		return err
 	}
 
