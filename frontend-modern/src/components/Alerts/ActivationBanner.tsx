@@ -34,10 +34,10 @@ export function ActivationBanner(props: ActivationBannerProps): JSX.Element {
   const observationSummary = createMemo(() => {
     const count = violationCount();
     if (count <= 0) {
-      return 'No alert violations detected during observation yet.';
+      return 'All systems healthy — no alerts triggered.';
     }
     const label = count === 1 ? 'issue' : 'issues';
-    return `${count} ${label} detected during observation.`;
+    return `${count} ${label} detected.`;
   });
 
   const handleReview = async () => {
@@ -76,12 +76,12 @@ export function ActivationBanner(props: ActivationBannerProps): JSX.Element {
                 </svg>
                 <div class="space-y-1">
                   <p class="text-sm font-medium">
-                    Monitoring is live; notifications will start after you review settings.
+                    Monitoring is active. Review your settings to enable notifications.
                   </p>
                   <p class="text-xs text-blue-700 dark:text-blue-200">{observationSummary()}</p>
                   <Show when={props.isPastObservationWindow()}>
                     <p class="text-xs font-semibold text-blue-800 dark:text-blue-100">
-                      24h observation ending—activate to start notifications.
+                      24-hour setup period ending soon — activate to start receiving notifications.
                     </p>
                   </Show>
                 </div>
