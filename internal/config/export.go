@@ -29,6 +29,7 @@ type ExportData struct {
 	System        SystemSettings                `json:"system"`
 	GuestMetadata map[string]*GuestMetadata     `json:"guestMetadata,omitempty"`
 	OIDC          *OIDCConfig                   `json:"oidc,omitempty"`
+	APITokens     []APITokenRecord              `json:"apiTokens,omitempty"`
 }
 
 // ExportConfig exports all configuration with passphrase-based encryption
@@ -79,6 +80,14 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		return "", fmt.Errorf("failed to load oidc configuration: %w", err)
 	}
 
+	apiTokens, err := c.LoadAPITokens()
+	if err != nil {
+		return "", fmt.Errorf("failed to load api tokens: %w", err)
+	}
+	if len(apiTokens) == 0 {
+		apiTokens = nil
+	}
+
 	// Load guest metadata (stored in data directory)
 	// Use PULSE_DATA_DIR if set, otherwise use /etc/pulse for backwards compatibility
 	dataPath := os.Getenv("PULSE_DATA_DIR")
@@ -100,6 +109,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		System:        *systemSettings,
 		GuestMetadata: guestMetadata,
 		OIDC:          oidcConfig,
+		APITokens:     apiTokens,
 	}
 
 	// Marshal to JSON
