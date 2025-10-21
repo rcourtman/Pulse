@@ -13,13 +13,15 @@ Follow these operational procedures for steady-state monitoring, troubleshooting
 **For new deployments or upgrades to v4.24.0:**
 
 1. **Monitoring readiness**
+   - Review available scrape series in [Prometheus Metrics](../monitoring/PROMETHEUS_METRICS.md).
    - Set up Grafana dashboard with:
-     - `pulse_monitor_poll_queue_depth` (gauge)
-     - `pulse_monitor_poll_staleness_seconds` (gauge, per instance)
-     - `pulse_monitor_poll_total` and `pulse_monitor_poll_errors_total` (rate panels)
-     - `pulse_monitor_poll_last_success_timestamp` (new in v4.24.0)
-     - Alerting panels for circuit breaker state (via scheduler health API)
-   - Configure alerts (see §4)
+     - Instance gauges: `pulse_monitor_poll_queue_depth`, `pulse_monitor_poll_staleness_seconds`, `pulse_monitor_poll_last_success_timestamp`
+     - **Per-node coverage:** `pulse_monitor_node_poll_staleness_seconds`, `pulse_monitor_node_poll_errors_total`, `pulse_monitor_node_poll_duration_seconds`
+     - Scheduler health: `pulse_scheduler_queue_depth`, `pulse_scheduler_queue_due_soon`, `pulse_scheduler_dead_letter_depth`, `pulse_scheduler_breaker_state`, and `pulse_scheduler_breaker_failure_count`
+     - Diagnostics cache sanity: `increase(pulse_diagnostics_cache_misses_total[5m])` vs `pulse_diagnostics_cache_hits_total`
+     - HTTP SLA: `rate(pulse_http_request_errors_total{status_class="server_error"}[5m])`
+     - Continue trending `pulse_monitor_poll_total` / `pulse_monitor_poll_errors_total` for throughput
+     - Configure alerts (see §4)
 
 2. **Baseline metrics**
    - Record pre-upgrade metrics if upgrading from < v4.24.0:
@@ -90,9 +92,12 @@ Follow these operational procedures for steady-state monitoring, troubleshooting
    - Review scheduler health dashboard or API endpoint
    - Check for:
      - Queue depth < 50 (alert if > 50 for 10+ minutes)
-     - Staleness < 120s for critical instances
+     - Instance staleness < 60s for healthy instances, < 120s for critical instances
+     - **Per-node staleness** `pulse_monitor_node_poll_staleness_seconds` < 120s
      - DLQ count stable (not growing)
      - Circuit breakers mostly `closed`
+     - Diagnostics cache misses roughly follow hits (`increase(pulse_diagnostics_cache_misses_total[10m])` in line with hits)
+     - HTTP error rate (`rate(pulse_http_request_errors_total{status_class="server_error"}[5m])`) near zero
 
 2. **Weekly reviews**
    - Analyze trends in Grafana:
@@ -121,18 +126,23 @@ Follow these operational procedures for steady-state monitoring, troubleshooting
 1. **Dashboard panels**
    - **Queue Depth**: `pulse_monitor_poll_queue_depth`
      - Use single-stat with alert if > 1.5× active instances for > 10 min
-   - **Instance Staleness**: panel per instance type using `pulse_monitor_poll_staleness_seconds`
+   - **Instance & Node Staleness**: combine `pulse_monitor_poll_staleness_seconds` and `pulse_monitor_node_poll_staleness_seconds`
      - Alert threshold: > 60 s for > 5 min (excluding known failing instances)
    - **Polling Throughput**: rate of `pulse_monitor_poll_total{result="success"}` vs `result="error"`
-   - **Circuit Breakers / DLQ**: table from scheduler health API (via scripted datasource) highlighting non-closed breakers or DLQ entries
+   - **Per-node errors**: table or graph of `pulse_monitor_node_poll_errors_total` to spot noisy nodes
+   - **Scheduler Health**: panels for `pulse_scheduler_queue_depth`, `pulse_scheduler_queue_due_soon`, `pulse_scheduler_dead_letter_depth`, `pulse_scheduler_breaker_state`, `pulse_scheduler_breaker_failure_count`
+   - **Diagnostics Cache**: compare `increase(pulse_diagnostics_cache_hits_total[5m])` vs misses so spikes stand out
+   - **HTTP SLA**: `rate(pulse_http_request_errors_total{status_class="server_error"}[5m])`
    - **Last Success Timestamp** (v4.24.0+): `pulse_monitor_poll_last_success_timestamp` to detect polling gaps
 
 2. **Alerts**
    - Queue depth > threshold for >10 min (Warning), >20 min (Critical)
-   - Staleness > 60 s for >5 min (Critical)
+   - Instance or node staleness > 60 s for >5 min (Critical)
    - Dead-letter count increase > N (based on baseline) triggers Warning
-   - Any breaker stuck in `open` for >10 min triggers Critical
+   - Any breaker stuck in `open` for >10 min (from `pulse_scheduler_breaker_state`) triggers Critical
+   - Queue wait > 5 s (95th percentile on `pulse_scheduler_queue_wait_seconds`) triggers Warning
    - Permanent failures (`pulse_monitor_poll_errors_total{category="permanent"}`) trigger immediate Critical
+   - Diagnostics refresh duration > 20 s alongside miss spikes should page engineering (`pulse_diagnostics_refresh_duration_seconds`)
 
 3. **Notification routing**
    - Ensure alerts route to on-call + feature owner
