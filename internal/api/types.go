@@ -29,6 +29,7 @@ type VersionResponse struct {
 	Runtime         string `json:"runtime,omitempty"`
 	Channel         string `json:"channel,omitempty"`
 	IsDocker        bool   `json:"isDocker"`
+	IsSourceBuild   bool   `json:"isSourceBuild"`
 	IsDevelopment   bool   `json:"isDevelopment"`
 	DeploymentType  string `json:"deploymentType,omitempty"`
 	UpdateAvailable bool   `json:"updateAvailable"`

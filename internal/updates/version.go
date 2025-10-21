@@ -28,6 +28,7 @@ type VersionInfo struct {
 	Runtime        string `json:"runtime"`
 	Channel        string `json:"channel,omitempty"`
 	IsDocker       bool   `json:"isDocker"`
+	IsSourceBuild  bool   `json:"isSourceBuild"`
 	IsDevelopment  bool   `json:"isDevelopment"`
 	DeploymentType string `json:"deploymentType"`
 }
@@ -128,6 +129,7 @@ func GetCurrentVersion() (*VersionInfo, error) {
 			Channel:        detectChannelFromVersion(normalized),
 			IsDevelopment:  isDev,
 			IsDocker:       isDockerEnvironment(),
+			IsSourceBuild:  isSourceBuildEnvironment(),
 			DeploymentType: GetDeploymentType(),
 		}
 	}
@@ -287,6 +289,23 @@ func isDockerEnvironment() bool {
 	return false
 }
 
+// isSourceBuildEnvironment checks if running from a source build
+func isSourceBuildEnvironment() bool {
+	markerPaths := []string{
+		"BUILD_FROM_SOURCE",
+		"/opt/pulse/BUILD_FROM_SOURCE",
+		filepath.Join(filepath.Dir(os.Args[0]), "BUILD_FROM_SOURCE"),
+	}
+
+	for _, path := range markerPaths {
+		if fileExists(path) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // fileExists checks if a file exists
 func fileExists(path string) bool {
 	// Use os.Stat instead of exec.Command for better performance and reliability
@@ -299,6 +318,10 @@ func GetDeploymentType() string {
 	// Check if running in Docker
 	if isDockerEnvironment() {
 		return "docker"
+	}
+
+	if isSourceBuildEnvironment() {
+		return "source"
 	}
 
 	// Check for ProxmoxVE LXC installation (has update command)

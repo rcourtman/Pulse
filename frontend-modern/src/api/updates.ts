@@ -26,6 +26,7 @@ export interface VersionInfo {
   runtime: string;
   channel?: string;
   isDocker: boolean;
+  isSourceBuild: boolean;
   isDevelopment: boolean;
   deploymentType?: string;
 }
