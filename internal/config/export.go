@@ -84,8 +84,8 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load api tokens: %w", err)
 	}
-	if len(apiTokens) == 0 {
-		apiTokens = nil
+	if apiTokens == nil {
+		apiTokens = []APITokenRecord{}
 	}
 
 	// Load guest metadata (stored in data directory)
@@ -99,7 +99,7 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 
 	// Create export data
 	exportData := ExportData{
-		Version:       "4.0",
+		Version:       "4.1",
 		ExportedAt:    time.Now(),
 		Nodes:         *nodes,
 		Alerts:        *alertConfig,
@@ -153,9 +153,13 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	}
 
 	// Check version compatibility (warn but don't fail)
-	if exportData.Version != "4.0" {
-		// Log warning but continue - future versions might be compatible
-		fmt.Printf("Warning: Config was exported from version %s, current version is 4.0\n", exportData.Version)
+	switch exportData.Version {
+	case "4.1", "":
+		// current version, nothing to do
+	case "4.0":
+		fmt.Printf("Notice: Config was exported from version 4.0. API tokens were not included in that format.\n")
+	default:
+		fmt.Printf("Warning: Config was exported from unsupported version %s. Proceeding with best effort.\n", exportData.Version)
 	}
 	// Import all configurations
 	if err := c.SaveNodesConfig(exportData.Nodes.PVEInstances, exportData.Nodes.PBSInstances, exportData.Nodes.PMGInstances); err != nil {
@@ -180,6 +184,16 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	if err := c.SaveSystemSettings(exportData.System); err != nil {
 		return fmt.Errorf("failed to import system settings: %w", err)
+	}
+
+	// Import API tokens for newer export formats
+	if exportData.Version == "4.1" {
+		if exportData.APITokens == nil {
+			exportData.APITokens = []APITokenRecord{}
+		}
+		if err := c.SaveAPITokens(exportData.APITokens); err != nil {
+			return fmt.Errorf("failed to import api tokens: %w", err)
+		}
 	}
 
 	// Import OIDC configuration
