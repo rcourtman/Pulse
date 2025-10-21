@@ -114,31 +114,15 @@ For webhooks that require authentication or custom headers:
 ## Custom Payload Templates
 
 ```mermaid
-flowchart TD
-    AlertEvent["Alert Event Triggered"]
-    GatherData["Gather Alert Data\n(Level, Type, Resource, Node, etc.)"]
-    ResolveURL["Resolve URL Template\n({{urlpath}}, {{urlquery}}"]
-    ResolvePayload["Resolve Payload Template\n(variable substitution)"]
-    ApplyFunctions["Apply Template Functions\n(title, upper, lower, printf)"]
-    Dispatch["HTTP POST Request"]
-    CheckResponse{"Response\nStatus?"}
-    Success["200-299: Success\nLog delivery"]
-    Retry["429/5xx: Retry\n(exponential backoff)"]
-    Failure["4xx: Failure\nLog error"]
-    TrackDelivery["Update Delivery Metrics\npulse_webhook_deliveries_total"]
+flowchart LR
+    Alert[Alert Triggered]
+    Template[Render Template<br/>Variables & Functions]
+    Send[HTTP POST]
 
-    AlertEvent --> GatherData
-    GatherData --> ResolveURL
-    ResolveURL --> ResolvePayload
-    ResolvePayload --> ApplyFunctions
-    ApplyFunctions --> Dispatch
-    Dispatch --> CheckResponse
-    CheckResponse -->|Success| Success
-    CheckResponse -->|Transient Error| Retry
-    CheckResponse -->|Permanent Error| Failure
-    Success --> TrackDelivery
-    Retry --> TrackDelivery
-    Failure --> TrackDelivery
+    Alert --> Template
+    Template --> Send
+    Send -->|2xx| Success[Delivered]
+    Send -->|5xx| Retry[Retry with Backoff]
 ```
 
 For generic webhooks, you can define custom JSON payloads using Go template syntax.
