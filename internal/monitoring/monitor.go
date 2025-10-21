@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
@@ -30,6 +31,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -109,7 +111,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	}
 
 	nvmeTempsByNode := make(map[string][]models.NVMeTemp)
-	for _, node := range nodes {
+    for _, node := range nodes {
 		if node.Temperature == nil || !node.Temperature.Available || len(node.Temperature.NVMe) == 0 {
 			continue
 		}
@@ -294,10 +296,12 @@ func (r *realExecutor) Execute(ctx context.Context, task PollTask) {
 		}
 		r.monitor.pollPMGInstance(ctx, task.InstanceName, task.PMGClient)
 	default:
-		log.Debug().
-			Str("instance", task.InstanceName).
-			Str("type", task.InstanceType).
-			Msg("PollExecutor received unsupported task type")
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().
+				Str("instance", task.InstanceName).
+				Str("type", task.InstanceType).
+				Msg("PollExecutor received unsupported task type")
+		}
 	}
 }
 
@@ -598,7 +602,9 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 
 	host, removed := m.state.RemoveDockerHost(hostID)
 	if !removed {
-		log.Debug().Str("dockerHostID", hostID).Msg("Docker host not present in state during removal; proceeding to clear alerts")
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().Str("dockerHostID", hostID).Msg("Docker host not present in state during removal; proceeding to clear alerts")
+		}
 		host = models.DockerHost{
 			ID:          hostID,
 			Hostname:    hostID,
@@ -2230,12 +2236,16 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 	currentCount := atomic.AddInt32(&m.activePollCount, 1)
 	if currentCount > 2 {
 		atomic.AddInt32(&m.activePollCount, -1)
-		log.Debug().Int32("activePolls", currentCount-1).Msg("Too many concurrent polls, skipping")
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().Int32("activePolls", currentCount-1).Msg("Too many concurrent polls, skipping")
+		}
 		return
 	}
 	defer atomic.AddInt32(&m.activePollCount, -1)
 
-	log.Debug().Msg("Starting polling cycle")
+	if logging.IsLevelEnabled(zerolog.DebugLevel) {
+		log.Debug().Msg("Starting polling cycle")
+	}
 	startTime := time.Now()
 	now := startTime
 
@@ -2259,7 +2269,9 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 	m.pollCounter++
 	m.mu.Unlock()
 
-	log.Debug().Dur("duration", time.Since(startTime)).Msg("Polling cycle completed")
+	if logging.IsLevelEnabled(zerolog.DebugLevel) {
+		log.Debug().Dur("duration", time.Since(startTime)).Msg("Polling cycle completed")
+	}
 
 	// Broadcasting is now handled by the timer in Start()
 }
@@ -2268,7 +2280,9 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 // This keeps WebSocket broadcasts aligned with in-memory acknowledgement updates.
 func (m *Monitor) syncAlertsToState() {
 	if m.pruneStaleDockerAlerts() {
-		log.Debug().Msg("Pruned stale docker alerts during sync")
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().Msg("Pruned stale docker alerts during sync")
+		}
 	}
 
 	activeAlerts := m.alertManager.GetActiveAlerts()
@@ -2290,7 +2304,7 @@ func (m *Monitor) syncAlertsToState() {
 			AckTime:      alert.AckTime,
 			AckUser:      alert.AckUser,
 		})
-		if alert.Acknowledged {
+		if alert.Acknowledged && logging.IsLevelEnabled(zerolog.DebugLevel) {
 			log.Debug().Str("alertID", alert.ID).Interface("ackTime", alert.AckTime).Msg("Syncing acknowledged alert")
 		}
 	}
@@ -2396,11 +2410,15 @@ func (m *Monitor) startTaskWorkers(ctx context.Context, workers int) {
 }
 
 func (m *Monitor) taskWorker(ctx context.Context, id int) {
-	log.Debug().Int("worker", id).Msg("Task worker started")
+	if logging.IsLevelEnabled(zerolog.DebugLevel) {
+		log.Debug().Int("worker", id).Msg("Task worker started")
+	}
 	for {
 		task, ok := m.taskQueue.WaitNext(ctx)
 		if !ok {
-			log.Debug().Int("worker", id).Msg("Task worker stopping")
+			if logging.IsLevelEnabled(zerolog.DebugLevel) {
+				log.Debug().Int("worker", id).Msg("Task worker stopping")
+			}
 			return
 		}
 
@@ -2413,11 +2431,28 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 
 func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) {
 	if !m.allowExecution(task) {
-		log.Debug().
-			Str("instance", task.InstanceName).
-			Str("type", string(task.InstanceType)).
-			Msg("Task blocked by circuit breaker")
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().
+				Str("instance", task.InstanceName).
+				Str("type", string(task.InstanceType)).
+				Msg("Task blocked by circuit breaker")
+		}
 		return
+	}
+
+	if m.pollMetrics != nil {
+		wait := time.Duration(0)
+		if !task.NextRun.IsZero() {
+			wait = time.Since(task.NextRun)
+			if wait < 0 {
+				wait = 0
+			}
+		}
+		instanceType := string(task.InstanceType)
+		if strings.TrimSpace(instanceType) == "" {
+			instanceType = "unknown"
+		}
+		m.pollMetrics.RecordQueueWait(instanceType, wait)
 	}
 
 	executor := m.getExecutor()
@@ -2571,6 +2606,7 @@ func (m *Monitor) sendToDeadLetter(task ScheduledTask, err error) {
 	next.Interval = 30 * time.Minute
 	next.NextRun = time.Now().Add(next.Interval)
 	m.deadLetterQueue.Upsert(next)
+	m.updateDeadLetterMetrics()
 
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 	now := time.Now()
@@ -2606,6 +2642,30 @@ func classifyDLQReason(err error) string {
 	return "permanent_failure"
 }
 
+func (m *Monitor) updateDeadLetterMetrics() {
+	if m.pollMetrics == nil || m.deadLetterQueue == nil {
+		return
+	}
+
+	size := m.deadLetterQueue.Size()
+	if size <= 0 {
+		m.pollMetrics.UpdateDeadLetterCounts(nil)
+		return
+	}
+
+	tasks := m.deadLetterQueue.PeekAll(size)
+	m.pollMetrics.UpdateDeadLetterCounts(tasks)
+}
+
+func (m *Monitor) updateBreakerMetric(instanceType InstanceType, instance string, breaker *circuitBreaker) {
+	if m.pollMetrics == nil || breaker == nil {
+		return
+	}
+
+	state, failures, retryAt, _, _ := breaker.stateDetails()
+	m.pollMetrics.SetBreakerState(string(instanceType), instance, state, failures, retryAt)
+}
+
 func (m *Monitor) randomFloat() float64 {
 	if m.rng == nil {
 		m.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -2617,7 +2677,9 @@ func (m *Monitor) updateQueueDepthMetric() {
 	if m.pollMetrics == nil || m.taskQueue == nil {
 		return
 	}
-	m.pollMetrics.SetQueueDepth(m.taskQueue.Size())
+	snapshot := m.taskQueue.Snapshot()
+	m.pollMetrics.SetQueueDepth(snapshot.Depth)
+	m.pollMetrics.UpdateQueueSnapshot(snapshot)
 }
 
 func (m *Monitor) allowExecution(task ScheduledTask) bool {
@@ -2626,7 +2688,9 @@ func (m *Monitor) allowExecution(task ScheduledTask) bool {
 	}
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 	breaker := m.ensureBreaker(key)
-	return breaker.allow(time.Now())
+	allowed := breaker.allow(time.Now())
+	m.updateBreakerMetric(task.InstanceType, task.InstanceName, breaker)
+	return allowed
 }
 
 func (m *Monitor) ensureBreaker(key string) *circuitBreaker {
@@ -2691,6 +2755,7 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 		m.mu.Unlock()
 		if breaker != nil {
 			breaker.recordSuccess()
+			m.updateBreakerMetric(instanceType, instance, breaker)
 		}
 		return
 	}
@@ -2721,6 +2786,7 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 	m.mu.Unlock()
 	if breaker != nil {
 		breaker.recordFailure(now)
+		m.updateBreakerMetric(instanceType, instance, breaker)
 	}
 }
 
@@ -2751,6 +2817,9 @@ func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 	// Queue snapshot
 	if m.taskQueue != nil {
 		response.Queue = m.taskQueue.Snapshot()
+		if m.pollMetrics != nil {
+			m.pollMetrics.UpdateQueueSnapshot(response.Queue)
+		}
 	}
 
 	// Dead-letter queue snapshot
@@ -2771,6 +2840,7 @@ func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 			Count: m.deadLetterQueue.Size(),
 			Tasks: deadLetterTasks,
 		}
+		m.updateDeadLetterMetrics()
 	}
 
 	// Circuit breaker snapshots
@@ -2834,6 +2904,19 @@ func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 		}
 	}
 	m.mu.RUnlock()
+	for key, breaker := range breakerRefs {
+		instanceType := InstanceType("unknown")
+		instanceName := key
+		if parts := strings.SplitN(key, "::", 2); len(parts) == 2 {
+			if parts[0] != "" {
+				instanceType = InstanceType(parts[0])
+			}
+			if parts[1] != "" {
+				instanceName = parts[1]
+			}
+		}
+		m.updateBreakerMetric(instanceType, instanceName, breaker)
+	}
 
 	keySet := make(map[string]struct{})
 	for k := range instanceInfos {
@@ -3010,6 +3093,7 @@ func isTransientError(err error) bool {
 // pollPVEInstance polls a single PVE instance
 func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, client PVEClientInterface) {
 	start := time.Now()
+	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pve")
@@ -3040,12 +3124,16 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	select {
 	case <-ctx.Done():
 		pollErr = ctx.Err()
-		log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
+		if debugEnabled {
+			log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
+		}
 		return
 	default:
 	}
 
-	log.Debug().Str("instance", instanceName).Msg("Polling PVE instance")
+	if debugEnabled {
+		log.Debug().Str("instance", instanceName).Msg("Polling PVE instance")
+	}
 
 	// Get instance config
 	var instanceCfg *config.PVEInstance
@@ -3130,6 +3218,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Convert to models
 	var modelNodes []models.Node
 	for _, node := range nodes {
+		nodeStart := time.Now()
 		displayName := getNodeDisplayName(instanceCfg, node.Node)
 
 		modelNode := models.Node{
@@ -3581,7 +3670,49 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}
 		}
 
-		modelNodes = append(modelNodes, modelNode)
+        if m.pollMetrics != nil {
+            nodeNameLabel := strings.TrimSpace(node.Node)
+            if nodeNameLabel == "" {
+                nodeNameLabel = strings.TrimSpace(modelNode.DisplayName)
+            }
+            if nodeNameLabel == "" {
+                nodeNameLabel = "unknown-node"
+            }
+
+            success := true
+            nodeErrReason := ""
+            health := strings.ToLower(strings.TrimSpace(modelNode.ConnectionHealth))
+            if health != "" && health != "healthy" {
+                success = false
+                nodeErrReason = fmt.Sprintf("connection health %s", health)
+            }
+
+            status := strings.ToLower(strings.TrimSpace(modelNode.Status))
+            if success && status != "" && status != "online" {
+                success = false
+                nodeErrReason = fmt.Sprintf("status %s", status)
+            }
+
+            var nodeErr error
+            if !success {
+                if nodeErrReason == "" {
+                    nodeErrReason = "unknown node error"
+                }
+                nodeErr = fmt.Errorf(nodeErrReason)
+            }
+
+            m.pollMetrics.RecordNodeResult(NodePollResult{
+                InstanceName: instanceName,
+                InstanceType: "pve",
+                NodeName:     nodeNameLabel,
+                Success:      success,
+                Error:        nodeErr,
+                StartTime:    nodeStart,
+                EndTime:      time.Now(),
+            })
+        }
+
+        modelNodes = append(modelNodes, modelNode)
 	}
 
 	if len(modelNodes) == 0 && len(prevInstanceNodes) > 0 {
@@ -4781,6 +4912,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 // pollPBSInstance polls a single PBS instance
 func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, client *pbs.Client) {
 	start := time.Now()
+	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pbs")
@@ -4809,24 +4941,30 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
     // Check if context is cancelled
     select {
-    case <-ctx.Done():
+	case <-ctx.Done():
 		pollErr = ctx.Err()
-        log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
-        return
-    default:
-    }
+		if debugEnabled {
+			log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
+		}
+		return
+	default:
+	}
 
-    log.Debug().Str("instance", instanceName).Msg("Polling PBS instance")
+	if debugEnabled {
+		log.Debug().Str("instance", instanceName).Msg("Polling PBS instance")
+	}
 
     // Get instance config
     var instanceCfg *config.PBSInstance
     for _, cfg := range m.config.PBSInstances {
         if cfg.Name == instanceName {
             instanceCfg = &cfg
-            log.Debug().
-                Str("instance", instanceName).
-                Bool("monitorDatastores", cfg.MonitorDatastores).
-                Msg("Found PBS instance config")
+            if debugEnabled {
+                log.Debug().
+                    Str("instance", instanceName).
+                    Bool("monitorDatastores", cfg.MonitorDatastores).
+                    Msg("Found PBS instance config")
+            }
             break
         }
     }
@@ -4855,13 +4993,17 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
         m.resetAuthFailures(instanceName, "pbs")
         m.state.SetConnectionHealth("pbs-"+instanceName, true)
 
-        log.Debug().
-            Str("instance", instanceName).
-            Str("version", version.Version).
-            Bool("monitorDatastores", instanceCfg.MonitorDatastores).
-            Msg("PBS version retrieved successfully")
-    } else {
-        log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
+        if debugEnabled {
+            log.Debug().
+                Str("instance", instanceName).
+                Str("version", version.Version).
+                Bool("monitorDatastores", instanceCfg.MonitorDatastores).
+                Msg("PBS version retrieved successfully")
+        }
+	} else {
+        if debugEnabled {
+            log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
+        }
 
         ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
         defer cancel2()
@@ -4893,7 +5035,9 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
     // Get node status (CPU, memory, etc.)
     nodeStatus, err := client.GetNodeStatus(ctx)
     if err != nil {
-        log.Debug().Err(err).Str("instance", instanceName).Msg("Could not get PBS node status (may need Sys.Audit permission)")
+        if debugEnabled {
+            log.Debug().Err(err).Str("instance", instanceName).Msg("Could not get PBS node status (may need Sys.Audit permission)")
+        }
     } else if nodeStatus != nil {
         pbsInst.CPU = nodeStatus.CPU
         if nodeStatus.Memory.Total > 0 {
@@ -5092,6 +5236,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 // pollPMGInstance polls a single Proxmox Mail Gateway instance
 func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client *pmg.Client) {
 	start := time.Now()
+	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pmg")
@@ -5121,12 +5266,16 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	select {
 	case <-ctx.Done():
 		pollErr = ctx.Err()
-		log.Debug().Str("instance", instanceName).Msg("PMG polling cancelled by context")
+		if debugEnabled {
+			log.Debug().Str("instance", instanceName).Msg("PMG polling cancelled by context")
+		}
 		return
 	default:
 	}
 
-	log.Debug().Str("instance", instanceName).Msg("Polling PMG instance")
+	if debugEnabled {
+		log.Debug().Str("instance", instanceName).Msg("Polling PMG instance")
+	}
 
 	var instanceCfg *config.PMGInstance
 	for idx := range m.config.PMGInstances {
@@ -5182,7 +5331,9 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	cluster, err := client.GetClusterStatus(ctx, true)
 	if err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to retrieve PMG cluster status")
+		if debugEnabled {
+			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to retrieve PMG cluster status")
+		}
 	}
 
 	backupNodes := make(map[string]struct{})
@@ -5204,10 +5355,12 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 			// Fetch queue status for this node
 			if queueData, qErr := client.GetQueueStatus(ctx, entry.Name); qErr != nil {
-				log.Debug().Err(qErr).
-					Str("instance", instanceName).
-					Str("node", entry.Name).
-					Msg("Failed to fetch PMG queue status")
+				if debugEnabled {
+					log.Debug().Err(qErr).
+						Str("instance", instanceName).
+						Str("node", entry.Name).
+						Msg("Failed to fetch PMG queue status")
+				}
 			} else if queueData != nil {
 				total := queueData.Active + queueData.Deferred + queueData.Hold + queueData.Incoming
 				node.QueueStatus = &models.PMGQueueStatus{
@@ -5243,10 +5396,12 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 		backups, backupErr := client.ListBackups(ctx, nodeName)
 		if backupErr != nil {
-			log.Debug().Err(backupErr).
-				Str("instance", instanceName).
-				Str("node", nodeName).
-				Msg("Failed to list PMG configuration backups")
+			if debugEnabled {
+				log.Debug().Err(backupErr).
+					Str("instance", instanceName).
+					Str("node", nodeName).
+					Msg("Failed to list PMG configuration backups")
+			}
 			continue
 		}
 
@@ -5268,10 +5423,12 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	log.Debug().
-		Str("instance", instanceName).
-		Int("backupCount", len(pmgBackups)).
-		Msg("PMG backups polled")
+	if debugEnabled {
+		log.Debug().
+			Str("instance", instanceName).
+			Int("backupCount", len(pmgBackups)).
+			Msg("PMG backups polled")
+	}
 
 	if stats, err := client.GetMailStatistics(ctx, "day"); err != nil {
 		log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail statistics")
@@ -5299,7 +5456,9 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 
 	if counts, err := client.GetMailCount(ctx, 24); err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail count data")
+		if debugEnabled {
+			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail count data")
+		}
 	} else if len(counts) > 0 {
 		points := make([]models.PMGMailCountPoint, 0, len(counts))
 		for _, entry := range counts {
@@ -5327,7 +5486,9 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 
 	if scores, err := client.GetSpamScores(ctx); err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG spam score distribution")
+		if debugEnabled {
+			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG spam score distribution")
+		}
 	} else if len(scores) > 0 {
 		buckets := make([]models.PMGSpamBucket, 0, len(scores))
 		for _, bucket := range scores {

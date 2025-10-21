@@ -1,10 +1,13 @@
 package logging
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +31,10 @@ type Config struct {
 	Format    string // "json", "console", or "auto"
 	Level     string // "debug", "info", "warn", "error"
 	Component string // optional component name
+	FilePath  string // optional log file path
+	MaxSizeMB int    // rotate after this size (MB)
+	MaxAgeDays int   // keep rotated logs for this many days
+	Compress  bool   // gzip rotated logs
 }
 
 // Option customizes logger construction.
@@ -63,6 +70,11 @@ func Init(cfg Config) zerolog.Logger {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 	writer := selectWriter(cfg.Format)
+	if fileWriter, err := newRollingFileWriter(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "logging: unable to configure file output: %v\n", err)
+	} else if fileWriter != nil {
+		writer = io.MultiWriter(writer, fileWriter)
+	}
 	component := strings.TrimSpace(cfg.Component)
 
 	contextBuilder := zerolog.New(writer).With().Timestamp()
@@ -92,6 +104,27 @@ func InitFromConfig(ctx context.Context, cfg Config) (zerolog.Logger, error) {
 	}
 	if envFormat := os.Getenv("LOG_FORMAT"); envFormat != "" {
 		cfg.Format = envFormat
+	}
+	if envFile := os.Getenv("LOG_FILE"); envFile != "" {
+		cfg.FilePath = envFile
+	}
+	if envSize := os.Getenv("LOG_MAX_SIZE"); envSize != "" {
+		if size, err := strconv.Atoi(envSize); err == nil {
+			cfg.MaxSizeMB = size
+		}
+	}
+	if envAge := os.Getenv("LOG_MAX_AGE"); envAge != "" {
+		if age, err := strconv.Atoi(envAge); err == nil {
+			cfg.MaxAgeDays = age
+		}
+	}
+	if envCompress := os.Getenv("LOG_COMPRESS"); envCompress != "" {
+		switch strings.ToLower(strings.TrimSpace(envCompress)) {
+		case "0", "false", "no":
+			cfg.Compress = false
+		default:
+			cfg.Compress = true
+		}
 	}
 
 	if !isValidLevel(cfg.Level) {
@@ -304,4 +337,169 @@ func enrichWithRequestID(logger zerolog.Logger, ctx context.Context) zerolog.Log
 		return logger.With().Str("request_id", id).Logger()
 	}
 	return logger
+}
+
+type rollingFileWriter struct {
+	mu          sync.Mutex
+	path        string
+	file        *os.File
+	currentSize int64
+	maxBytes    int64
+	maxAge      time.Duration
+	compress    bool
+}
+
+func newRollingFileWriter(cfg Config) (io.Writer, error) {
+	path := strings.TrimSpace(cfg.FilePath)
+	if path == "" {
+		return nil, nil
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("create log directory: %w", err)
+	}
+
+	writer := &rollingFileWriter{
+		path:     path,
+		maxBytes: int64(cfg.MaxSizeMB) * 1024 * 1024,
+		maxAge:   time.Duration(cfg.MaxAgeDays) * 24 * time.Hour,
+		compress: cfg.Compress,
+	}
+
+	if writer.maxBytes <= 0 {
+		writer.maxBytes = 100 * 1024 * 1024 // default 100MB
+	}
+
+	if err := writer.openOrCreateLocked(); err != nil {
+		return nil, err
+	}
+	writer.cleanupOldFiles()
+	return writer, nil
+}
+
+func (w *rollingFileWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if err := w.openOrCreateLocked(); err != nil {
+		return 0, err
+	}
+
+	if w.maxBytes > 0 && w.currentSize+int64(len(p)) > w.maxBytes {
+		if err := w.rotateLocked(); err != nil {
+			return 0, err
+		}
+	}
+
+	n, err := w.file.Write(p)
+	if n > 0 {
+		w.currentSize += int64(n)
+	}
+	return n, err
+}
+
+func (w *rollingFileWriter) openOrCreateLocked() error {
+	if w.file != nil {
+		return nil
+	}
+
+	file, err := os.OpenFile(w.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("open log file: %w", err)
+	}
+	w.file = file
+
+	info, err := file.Stat()
+	if err != nil {
+		w.currentSize = 0
+		return nil
+	}
+	w.currentSize = info.Size()
+	return nil
+}
+
+func (w *rollingFileWriter) rotateLocked() error {
+	if err := w.closeLocked(); err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(w.path); err == nil {
+		rotated := fmt.Sprintf("%s.%s", w.path, time.Now().Format("20060102-150405"))
+		if err := os.Rename(w.path, rotated); err == nil {
+			if w.compress {
+				go compressAndRemove(rotated)
+			}
+		}
+	}
+
+	w.cleanupOldFiles()
+	return w.openOrCreateLocked()
+}
+
+func (w *rollingFileWriter) closeLocked() error {
+	if w.file == nil {
+		return nil
+	}
+	err := w.file.Close()
+	w.file = nil
+	w.currentSize = 0
+	return err
+}
+
+func (w *rollingFileWriter) cleanupOldFiles() {
+	if w.maxAge <= 0 {
+		return
+	}
+
+	dir := filepath.Dir(w.path)
+	base := filepath.Base(w.path)
+	prefix := base + "."
+	cutoff := time.Now().Add(-w.maxAge)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+	}
+}
+
+func compressAndRemove(path string) {
+	in, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer in.Close()
+
+	outPath := path + ".gz"
+	out, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return
+	}
+
+	gw := gzip.NewWriter(out)
+	if _, err = io.Copy(gw, in); err != nil {
+		gw.Close()
+		out.Close()
+		return
+	}
+	if err := gw.Close(); err != nil {
+		out.Close()
+		return
+	}
+	out.Close()
+	_ = os.Remove(path)
 }
