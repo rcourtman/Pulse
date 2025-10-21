@@ -717,7 +717,7 @@ func DefaultSystemSettings() *SystemSettings {
 		PBSPollingInterval:  60,
 		PMGPollingInterval:  60,
 		AutoUpdateEnabled:   false,
-		DiscoveryEnabled:    true,
+		DiscoveryEnabled:    false,
 		DiscoverySubnet:     "auto",
 		DiscoveryConfig:     defaultDiscovery,
 		AllowEmbedding:      false,

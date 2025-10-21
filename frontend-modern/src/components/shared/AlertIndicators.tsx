@@ -1,6 +1,7 @@
-import { Component } from 'solid-js';
+import { Component, createMemo } from 'solid-js';
 import type { Alert } from '@/types/api';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 
 const getMetadataUnit = (alert: Alert): string | undefined => {
   const rawUnit = alert.metadata?.['unit'];
@@ -69,7 +70,9 @@ interface AlertIndicatorProps {
 }
 
 export const AlertIndicator: Component<AlertIndicatorProps> = (props) => {
-  if (!props.severity) return null;
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  if (!alertsEnabled() || !props.severity) return null;
 
   const dotClass = props.severity === 'critical' ? 'bg-red-500 animate-pulse' : 'bg-orange-500';
 
@@ -110,6 +113,10 @@ interface AlertCountBadgeProps {
 }
 
 export const AlertCountBadge: Component<AlertCountBadgeProps> = (props) => {
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  if (!alertsEnabled()) return null;
+
   const badgeClass =
     props.severity === 'critical' ? 'bg-red-500 text-white' : 'bg-orange-500 text-white';
 

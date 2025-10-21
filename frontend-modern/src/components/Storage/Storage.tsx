@@ -14,12 +14,15 @@ import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 
 type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
 
 const Storage: Component = () => {
   const navigate = useNavigate();
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const [viewMode, setViewMode] = usePersistentSignal<'node' | 'storage'>(
     'storageViewMode',
     'node',
@@ -795,9 +798,12 @@ const Storage: Component = () => {
                                 return nodes.join(', ');
                               });
 
-                              const alertStyles = getAlertStyles(
-                                storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
-                                activeAlerts,
+                              const alertStyles = createMemo(() =>
+                                getAlertStyles(
+                                  storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
+                                  activeAlerts,
+                                  alertsEnabled(),
+                                ),
                               );
 
                               const parentNodeOnline = createMemo(() => {
@@ -808,7 +814,7 @@ const Storage: Component = () => {
                               });
 
                               const showAlertHighlight = createMemo(
-                                () => alertStyles.hasUnacknowledgedAlert && parentNodeOnline(),
+                                () => alertStyles().hasUnacknowledgedAlert && parentNodeOnline(),
                               );
 
                               const isCephStorage = createMemo(() => isCephType(storage.type));
@@ -934,7 +940,7 @@ const Storage: Component = () => {
                               );
 
                               const hasAcknowledgedOnlyAlert = createMemo(
-                                () => alertStyles.hasAcknowledgedOnlyAlert && parentNodeOnline(),
+                                () => alertStyles().hasAcknowledgedOnlyAlert && parentNodeOnline(),
                               );
 
                               const rowClass = createMemo(() => {
@@ -946,7 +952,7 @@ const Storage: Component = () => {
 
                                 if (showAlertHighlight()) {
                                   classes.push(
-                                    alertStyles.severity === 'critical'
+                                    alertStyles().severity === 'critical'
                                       ? 'bg-red-50 dark:bg-red-950/30'
                                       : 'bg-yellow-50 dark:bg-yellow-950/20',
                                   );
@@ -972,7 +978,7 @@ const Storage: Component = () => {
                               const rowStyle = createMemo(() => {
                                 if (showAlertHighlight()) {
                                   const color =
-                                    alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+                                    alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
                                   return {
                                     'box-shadow': `inset 4px 0 0 0 ${color}`,
                                   };

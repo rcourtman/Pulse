@@ -354,13 +354,33 @@ As of v4.24.0, containerized deployments use **pulse-sensor-proxy** which elimin
 
 **For new installations:** The proxy is installed automatically during LXC setup. No action required.
 
+**Installed from inside an existing LXC?** The container-only installer cannot create the host bind mount. Run the host-side script below on your Proxmox node to enable temperature monitoring. When Pulse is running in that container, append the server URL so the proxy script can fall back to downloading the binary from Pulse itself if GitHub isn’t available.
+
 **For existing installations (pre-v4.24.0):** Upgrade your deployment to use the proxy:
 
 ```bash
 # On your Proxmox host
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
-  bash -s -- --ctid <your-pulse-container-id>
+  bash -s -- --ctid <your-pulse-container-id> --pulse-server http://<pulse-container-ip>:7655
 ```
+
+> **Heads up for v4.23.x:** Those builds don't ship a standalone `pulse-sensor-proxy` binary yet and the HTTP fallback still requires authentication. Either upgrade to a newer release, install Pulse from source (`install.sh --source main`), or pass a locally built binary with `--local-binary /path/to/pulse-sensor-proxy`.
+
+### Manual / Automated Host Configuration
+
+If you prefer to manage the proxy installation yourself (Ansible, Salt, etc.), follow these steps:
+
+1. **Copy the installer**  
+   Download `install-sensor-proxy.sh` from the repository (or cache it internally) and distribute it to the Proxmox host(s).
+2. **Run with required flags**  
+   Execute it with the container ID and Pulse URL:  
+   `bash install-sensor-proxy.sh --ctid <ctid> --pulse-server http://<pulse-container-ip>:7655`
+3. **Verify bind mount**  
+   Check `/etc/pve/lxc/<ctid>.conf` for the `mp` entry and ensure `/mnt/pulse-proxy/pulse-sensor-proxy.sock` exists inside the container after the restart.
+4. **Re-run after adding Proxmox nodes**  
+   The script is idempotent; rerun it anytime you add Proxmox nodes so their SSH keys are provisioned.
+
+Document these steps in your automation so GitHub/network hiccups still succeed by pulling the proxy binary directly from the running Pulse instance.
 
 ### Legacy Security Concerns (Pre-v4.24.0)
 

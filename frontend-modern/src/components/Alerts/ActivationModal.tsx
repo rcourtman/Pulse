@@ -185,7 +185,7 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
       <Portal>
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div class="absolute inset-0 bg-black/50 dark:bg-black/60" onClick={props.onClose} />
-          <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden border border-gray-200 dark:border-gray-700">
+          <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden border border-gray-200 dark:border-gray-700 flex flex-col">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Ready to activate notifications</h2>
@@ -206,7 +206,7 @@ export function ActivationModal(props: ActivationModalProps): JSX.Element {
               </button>
             </div>
 
-            <div class="px-6 py-5 space-y-6 overflow-y-auto">
+            <div class="px-6 py-5 space-y-6 flex-1 overflow-y-auto">
               <section>
                 <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wide">
                   Current thresholds

@@ -397,64 +397,155 @@ else
             ;;
     esac
 
-    # If fallback URL is provided (e.g., from Pulse setup script), use it directly
-    # Try GitHub first for releases
     GITHUB_REPO="rcourtman/Pulse"
     DOWNLOAD_SUCCESS=false
+    ATTEMPTED_SOURCES=()
+    LATEST_RELEASE_TAG=""
 
-    if [[ "$VERSION" == "latest" ]]; then
-        RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-        print_info "Fetching latest release info..."
-        RELEASE_ERROR=$(mktemp)
-        RELEASE_DATA=$(curl -fSL "$RELEASE_URL" 2>"$RELEASE_ERROR")
-        CURL_EXIT=$?
-        if [ $CURL_EXIT -ne 0 ] && [ -s "$RELEASE_ERROR" ]; then
-            print_warn "Failed to fetch GitHub release info: $(cat "$RELEASE_ERROR")"
-        fi
-        rm -f "$RELEASE_ERROR"
-        VERSION=$(echo "$RELEASE_DATA" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
-
-        if [[ -n "$VERSION" ]]; then
-            print_info "Latest version: $VERSION"
-            DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$BINARY_NAME"
-            print_info "Downloading $BINARY_NAME from GitHub..."
-            DOWNLOAD_ERROR=$(mktemp)
-            if curl -fSL "$DOWNLOAD_URL" -o "$BINARY_PATH.tmp" 2>"$DOWNLOAD_ERROR"; then
-                DOWNLOAD_SUCCESS=true
-                rm -f "$DOWNLOAD_ERROR"
+    fetch_latest_release_tag() {
+        local api_url="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+        local tmp_err
+        tmp_err=$(mktemp)
+        local response
+        response=$(curl --fail --silent --location --connect-timeout 10 --max-time 30 "$api_url" 2>"$tmp_err")
+        local status=$?
+        if [[ $status -ne 0 ]]; then
+            if [[ -s "$tmp_err" ]]; then
+                print_warn "Failed to resolve latest GitHub release: $(cat "$tmp_err")"
             else
-                if [ -s "$DOWNLOAD_ERROR" ]; then
-                    print_warn "GitHub download failed: $(cat "$DOWNLOAD_ERROR")"
-                fi
-                rm -f "$DOWNLOAD_ERROR"
+                print_warn "Failed to resolve latest GitHub release (HTTP $status)"
             fi
+            rm -f "$tmp_err"
+            return 1
         fi
-    fi
+        rm -f "$tmp_err"
+        local tag
+        tag=$(echo "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [[ -z "$tag" ]]; then
+            print_warn "Could not parse latest release tag from GitHub response"
+            return 1
+        fi
+        LATEST_RELEASE_TAG="$tag"
+        return 0
+    }
 
-    # Fall back to Pulse server if GitHub failed or fallback is provided
-    if [[ "$DOWNLOAD_SUCCESS" != true ]] && [[ -n "$FALLBACK_BASE" ]]; then
-        FALLBACK_URL="${FALLBACK_BASE%/}?arch=${ARCH_LABEL}"
-        print_info "Downloading $BINARY_NAME from Pulse server..."
-        FALLBACK_ERROR=$(mktemp)
-        if curl -fSL "$FALLBACK_URL" -o "$BINARY_PATH.tmp" 2>"$FALLBACK_ERROR"; then
+    attempt_github_asset_or_tarball() {
+        local tag="$1"
+        [[ -z "$tag" ]] && return 1
+
+        local asset_url="https://github.com/$GITHUB_REPO/releases/download/${tag}/${BINARY_NAME}"
+        ATTEMPTED_SOURCES+=("GitHub release asset ${tag}")
+        print_info "Downloading $BINARY_NAME from GitHub release ${tag}..."
+        local tmp_err
+        tmp_err=$(mktemp)
+        if curl --fail --silent --location --connect-timeout 10 --max-time 120 "$asset_url" -o "$BINARY_PATH.tmp" 2>"$tmp_err"; then
+            rm -f "$tmp_err"
             DOWNLOAD_SUCCESS=true
-            rm -f "$FALLBACK_ERROR"
-        else
-            if [ -s "$FALLBACK_ERROR" ]; then
-                print_error "Pulse server download failed: $(cat "$FALLBACK_ERROR")"
+            return 0
+        fi
+
+        local asset_error=""
+        if [[ -s "$tmp_err" ]]; then
+            asset_error="$(cat "$tmp_err")"
+        fi
+        rm -f "$tmp_err"
+        rm -f "$BINARY_PATH.tmp" 2>/dev/null || true
+
+        local tarball_name="pulse-${tag}-linux-${ARCH_LABEL#linux-}.tar.gz"
+        local tarball_url="https://github.com/$GITHUB_REPO/releases/download/${tag}/${tarball_name}"
+        ATTEMPTED_SOURCES+=("GitHub release tarball ${tarball_name}")
+        print_info "Downloading ${tarball_name} to extract pulse-sensor-proxy..."
+        tmp_err=$(mktemp)
+        local tarball_tmp
+        tarball_tmp=$(mktemp)
+        if curl --fail --silent --location --connect-timeout 10 --max-time 240 "$tarball_url" -o "$tarball_tmp" 2>"$tmp_err"; then
+            if tar -tzf "$tarball_tmp" >/dev/null 2>&1 && tar -xzf "$tarball_tmp" -C "$(dirname "$tarball_tmp")" ./bin/pulse-sensor-proxy >/dev/null 2>&1; then
+                mv "$(dirname "$tarball_tmp")/bin/pulse-sensor-proxy" "$BINARY_PATH.tmp"
+                rm -f "$tarball_tmp" "$tmp_err"
+                DOWNLOAD_SUCCESS=true
+                return 0
+            else
+                print_warn "Release tarball did not contain expected ./bin/pulse-sensor-proxy"
             fi
-            rm -f "$FALLBACK_ERROR"
+        else
+            if [[ -s "$tmp_err" ]]; then
+                print_warn "Tarball download failed: $(cat "$tmp_err")"
+            else
+                print_warn "Tarball download failed (HTTP error)"
+            fi
+        fi
+        rm -f "$tarball_tmp" "$tmp_err"
+        if [[ -n "$asset_error" ]]; then
+            print_warn "GitHub release asset error: $asset_error"
+        fi
+        return 1
+    }
+
+    REQUESTED_VERSION="${VERSION:-latest}"
+    if [[ "$REQUESTED_VERSION" == "latest" || "$REQUESTED_VERSION" == "main" || -z "$REQUESTED_VERSION" ]]; then
+        if fetch_latest_release_tag; then
+            attempt_github_asset_or_tarball "$LATEST_RELEASE_TAG" || true
+        fi
+    else
+        attempt_github_asset_or_tarball "$REQUESTED_VERSION" || true
+    fi
+
+    if [[ "$DOWNLOAD_SUCCESS" != true ]] && [[ -n "$FALLBACK_BASE" ]]; then
+        fallback_url="$FALLBACK_BASE"
+        if [[ "$fallback_url" == *"?"* ]]; then
+            fallback_url="$fallback_url"
+        elif [[ "$fallback_url" == *"pulse-sensor-proxy-"* ]]; then
+            fallback_url="${fallback_url}"
+        else
+            fallback_url="${fallback_url%/}?arch=${ARCH_LABEL}"
+        fi
+
+        ATTEMPTED_SOURCES+=("Fallback ${fallback_url}")
+        print_info "Downloading $BINARY_NAME from fallback source..."
+        fallback_err=$(mktemp)
+        if curl --fail --silent --location --connect-timeout 10 --max-time 120 "$fallback_url" -o "$BINARY_PATH.tmp" 2>"$fallback_err"; then
+            rm -f "$fallback_err"
+            DOWNLOAD_SUCCESS=true
+        else
+            if [[ -s "$fallback_err" ]]; then
+                print_error "Fallback download failed: $(cat "$fallback_err")"
+            else
+                print_error "Fallback download failed (HTTP error)"
+            fi
+            rm -f "$fallback_err"
+            rm -f "$BINARY_PATH.tmp" 2>/dev/null || true
         fi
     fi
 
-    # Exit if both methods failed
+    if [[ "$DOWNLOAD_SUCCESS" != true ]] && [[ -n "$CTID" ]] && command -v pct >/dev/null 2>&1; then
+        pull_targets=(
+            "/opt/pulse/bin/${BINARY_NAME}"
+            "/opt/pulse/bin/pulse-sensor-proxy"
+        )
+        for src in "${pull_targets[@]}"; do
+            tmp_pull=$(mktemp)
+            if pct pull "$CTID" "$src" "$tmp_pull" >/dev/null 2>&1; then
+                mv "$tmp_pull" "$BINARY_PATH.tmp"
+                print_info "Copied pulse-sensor-proxy binary from container $CTID ($src)"
+                DOWNLOAD_SUCCESS=true
+                break
+            fi
+            rm -f "$tmp_pull"
+        done
+    fi
+
     if [[ "$DOWNLOAD_SUCCESS" != true ]]; then
-        print_error "Failed to download binary from GitHub and Pulse server"
-        print_error "Check network connectivity and firewall rules"
+        print_error "Unable to download pulse-sensor-proxy binary."
+        if [[ ${#ATTEMPTED_SOURCES[@]} -gt 0 ]]; then
+            print_error "Sources attempted:"
+            for src in "${ATTEMPTED_SOURCES[@]}"; do
+                print_error "  - $src"
+            done
+        fi
+        print_error "Publish a GitHub release with binary assets or ensure a Pulse server is reachable."
         exit 1
     fi
 
-    # Make executable and move to final location
     chmod +x "$BINARY_PATH.tmp"
     mv "$BINARY_PATH.tmp" "$BINARY_PATH"
     print_info "Binary installed to $BINARY_PATH"

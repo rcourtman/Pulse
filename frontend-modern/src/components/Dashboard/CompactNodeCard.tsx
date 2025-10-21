@@ -6,6 +6,7 @@ import { AlertIndicator } from '@/components/shared/AlertIndicators';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 
 interface CompactNodeCardProps {
   node: Node;
@@ -16,6 +17,8 @@ interface CompactNodeCardProps {
 
 const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
   const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
   const isOnline = () => props.node.status === 'online' && props.node.uptime > 0;
 
@@ -29,11 +32,15 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
   const displayName = () => getNodeDisplayName(props.node);
   const showActualName = () => hasAlternateDisplayName(props.node);
 
-  const alertStyles = getAlertStyles(props.node.id || props.node.name, activeAlerts);
-  const nodeAlerts = createMemo(() =>
-    getResourceAlerts(props.node.id || props.node.name, activeAlerts),
+  const alertStyles = createMemo(() =>
+    getAlertStyles(props.node.id || props.node.name, activeAlerts, alertsEnabled()),
   );
-  const unacknowledgedNodeAlerts = createMemo(() => nodeAlerts().filter((alert) => !alert.acknowledged));
+  const nodeAlerts = createMemo(() =>
+    getResourceAlerts(props.node.id || props.node.name, activeAlerts, alertsEnabled()),
+  );
+  const unacknowledgedNodeAlerts = createMemo(() =>
+    nodeAlerts().filter((alert) => !alert.acknowledged),
+  );
 
   // Get status color
   const getMetricColor = (value: number, type: 'cpu' | 'mem' | 'disk') => {
@@ -72,9 +79,9 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
             : !isOnline()
               ? 'border-red-500'
-              : alertStyles.hasUnacknowledgedAlert
+            : alertStyles().hasUnacknowledgedAlert
                 ? 'border-orange-500'
-                : alertStyles.hasAcknowledgedOnlyAlert
+                : alertStyles().hasAcknowledgedOnlyAlert
                   ? 'border-gray-400 dark:border-gray-600'
                   : 'border-gray-200 dark:border-gray-700'
         } border transition-all cursor-pointer hover:scale-[1.01]`}
@@ -119,8 +126,8 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
         </Show>
 
         {/* Alert indicator */}
-        <Show when={alertStyles.hasUnacknowledgedAlert}>
-          <AlertIndicator severity={alertStyles.severity} alerts={unacknowledgedNodeAlerts()} />
+        <Show when={alertStyles().hasUnacknowledgedAlert}>
+          <AlertIndicator severity={alertStyles().severity} alerts={unacknowledgedNodeAlerts()} />
         </Show>
 
         {/* Metrics */}
@@ -155,9 +162,9 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
           : !isOnline()
             ? 'border-red-500'
-            : alertStyles.hasUnacknowledgedAlert
+            : alertStyles().hasUnacknowledgedAlert
               ? 'border-orange-500'
-              : alertStyles.hasAcknowledgedOnlyAlert
+              : alertStyles().hasAcknowledgedOnlyAlert
                 ? 'border-gray-400 dark:border-gray-600'
                 : 'border-gray-200 dark:border-gray-700'
       } cursor-pointer transition-all hover:scale-[1.02]`}
@@ -196,8 +203,8 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
               {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}
             </span>
           </Show>
-          <Show when={alertStyles.hasUnacknowledgedAlert}>
-            <AlertIndicator severity={alertStyles.severity} alerts={unacknowledgedNodeAlerts()} />
+        <Show when={alertStyles().hasUnacknowledgedAlert}>
+          <AlertIndicator severity={alertStyles().severity} alerts={unacknowledgedNodeAlerts()} />
           </Show>
         </div>
         <span class="text-xs text-gray-500 dark:text-gray-400">

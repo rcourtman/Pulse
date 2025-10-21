@@ -9,10 +9,12 @@ import type {
   VM,
   Container,
 } from '@/types/api';
+import type { ActivationState as ActivationStateType } from '@/types/alerts';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 import { notificationStore } from './notifications';
 import { eventBus } from './events';
+import { ALERTS_ACTIVATION_EVENT, isAlertsActivationEnabled } from '@/utils/alertsActivation';
 
 // Type-safe WebSocket store
 export function createWebSocketStore(url: string) {
@@ -78,6 +80,66 @@ export function createWebSocketStore(url: string) {
 
   // Track alerts with pending acknowledgment changes to prevent race conditions
   const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
+
+  let alertsEnabled = isAlertsActivationEnabled();
+  let lastActiveAlertsPayload: Record<string, Alert> = {};
+
+  const applyActiveAlerts = (alertsMap: Record<string, Alert>) => {
+    // Remove alerts that no longer exist
+    const currentAlertIds = Object.keys(activeAlerts);
+    currentAlertIds.forEach((id) => {
+      if (!alertsMap[id]) {
+        setActiveAlerts(id, undefined as unknown as Alert);
+      }
+    });
+
+    // Add or update alerts with pending acknowledgment safeguards
+    Object.entries(alertsMap).forEach(([id, alert]) => {
+      if (pendingAckChanges.has(id)) {
+        const pending = pendingAckChanges.get(id)!;
+
+        if (pending.ack) {
+          if (!alert.acknowledged) {
+            logger.debug(
+              `Skipping update for alert ${id} - awaiting server acknowledgment confirmation`,
+            );
+            return;
+          }
+
+          const serverAckTime = alert.ackTime || '';
+          const previousAckTime = pending.previousAckTime || '';
+          if (serverAckTime === previousAckTime) {
+            logger.debug(
+              `Server ack time for alert ${id} unchanged (${serverAckTime}); treating as confirmed`,
+            );
+          }
+        } else if (alert.acknowledged) {
+          logger.debug(
+            `Skipping update for alert ${id} - awaiting server unacknowledge confirmation`,
+          );
+          return;
+        }
+
+        pendingAckChanges.delete(id);
+      }
+
+      setActiveAlerts(id, alert);
+    });
+
+    setState('activeAlerts', Object.values(alertsMap));
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener(
+      ALERTS_ACTIVATION_EVENT,
+      (event: Event) => {
+        const detail = (event as CustomEvent<ActivationStateType | null>).detail;
+        alertsEnabled = detail === 'active';
+        applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
+      },
+      { passive: true },
+    );
+  }
 
   let ws: WebSocket | null = null;
   let reconnectTimeout: number;
@@ -317,9 +379,6 @@ export function createWebSocketStore(url: string) {
               setState('physicalDisks', message.data.physicalDisks);
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {
-              // Received activeAlerts update
-
-              // Update alerts atomically to prevent race conditions
               const newAlerts: Record<string, Alert> = {};
               if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
                 message.data.activeAlerts.forEach((alert: Alert) => {
@@ -327,53 +386,8 @@ export function createWebSocketStore(url: string) {
                 });
               }
 
-              // Clear existing alerts and set new ones
-              const currentAlertIds = Object.keys(activeAlerts);
-              currentAlertIds.forEach((id) => {
-                if (!newAlerts[id]) {
-                  setActiveAlerts(id, undefined as unknown as Alert);
-                }
-              });
-
-              // Add new alerts (skip those with pending acknowledgment changes until server confirms)
-              Object.entries(newAlerts).forEach(([id, alert]) => {
-                // Skip updating if this alert has a pending acknowledgment change
-                if (pendingAckChanges.has(id)) {
-                  const pending = pendingAckChanges.get(id)!;
-
-                  if (pending.ack) {
-                    // Expecting an acknowledged alert
-                    if (!alert.acknowledged) {
-                      logger.debug(
-                        `Skipping update for alert ${id} - awaiting server acknowledgment confirmation`,
-                      );
-                      return;
-                    }
-
-                    const serverAckTime = alert.ackTime || '';
-                    const previousAckTime = pending.previousAckTime || '';
-                    if (serverAckTime === previousAckTime) {
-                      logger.debug(
-                        `Server ack time for alert ${id} unchanged (${serverAckTime}); treating as confirmed`,
-                      );
-                    }
-                  } else {
-                    // Expecting an unacknowledged alert
-                    if (alert.acknowledged) {
-                      logger.debug(
-                        `Skipping update for alert ${id} - awaiting server unacknowledge confirmation`,
-                      );
-                      return;
-                    }
-                  }
-
-                  pendingAckChanges.delete(id);
-                }
-                setActiveAlerts(id, alert);
-              });
-
-              // Updated activeAlerts - also sync to state for badge count
-              setState('activeAlerts', message.data.activeAlerts);
+              lastActiveAlertsPayload = newAlerts;
+              applyActiveAlerts(alertsEnabled ? newAlerts : {});
             }
             // Sync recently resolved alerts
             if (message.data.recentlyResolved !== undefined) {

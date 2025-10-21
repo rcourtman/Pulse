@@ -184,7 +184,7 @@ If you previously followed the legacy guide (manual `lxc.mount.entry` and `/run/
 
 This is the same workflow you used originally—no extra commands are required. Just remove the node from Pulse, click “Copy install script,” run it on the Proxmox host, and add the node again.
 
-> **Advanced option**: If you’d rather refresh in place without removing the node, you can rerun the host-side installer directly (e.g. `sudo /opt/pulse/scripts/install-sensor-proxy.sh --ctid <id>`). The script is idempotent, but re-adding through the UI guarantees the full host + Pulse configuration is rebuilt.
+> **Advanced option**: If you’d rather refresh in place without removing the node, you can rerun the host-side installer directly (e.g. `sudo /opt/pulse/scripts/install-sensor-proxy.sh --ctid <id> --pulse-server http://<pulse-container-ip>:7655`). The script is idempotent, but re-adding through the UI guarantees the full host + Pulse configuration is rebuilt.
 
 ### Runtime Verification
 

@@ -35,6 +35,14 @@ import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { showTokenReveal } from '@/stores/tokenReveal';
 import { updateStore } from '@/stores/updates';
+
+const COMMON_DISCOVERY_SUBNETS = [
+  '192.168.1.0/24',
+  '192.168.0.0/24',
+  '10.0.0.0/24',
+  '172.16.0.0/24',
+  '192.168.10.0/24',
+];
 // Type definitions
 interface DiscoveredServer {
   ip: string;
@@ -360,9 +368,92 @@ const Settings: Component<SettingsProps> = (props) => {
   // System settings
   // PBS polling interval removed - fixed at 10 seconds
   const [allowedOrigins, setAllowedOrigins] = createSignal('*');
-  const [discoveryEnabled, setDiscoveryEnabled] = createSignal(true);
+  const [discoveryEnabled, setDiscoveryEnabled] = createSignal(false);
   const [discoverySubnet, setDiscoverySubnet] = createSignal('auto');
+  const [discoveryMode, setDiscoveryMode] = createSignal<'auto' | 'custom'>('auto');
+  const [discoverySubnetDraft, setDiscoverySubnetDraft] = createSignal('');
+  const [lastCustomSubnet, setLastCustomSubnet] = createSignal('');
+  const [discoverySubnetError, setDiscoverySubnetError] = createSignal<string | undefined>();
+  const [savingDiscoverySettings, setSavingDiscoverySettings] = createSignal(false);
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
+  let discoverySubnetInputRef: HTMLInputElement | undefined;
+
+  const parseSubnetList = (value: string) => {
+    const seen = new Set<string>();
+    return value
+      .split(',')
+      .map((token) => token.trim())
+      .filter((token) => {
+        if (!token || token.toLowerCase() === 'auto' || seen.has(token)) {
+          return false;
+        }
+        seen.add(token);
+        return true;
+      });
+  };
+
+  const normalizeSubnetList = (value: string) => parseSubnetList(value).join(', ');
+
+  const currentDraftSubnetValue = () => {
+    if (discoveryMode() === 'custom') {
+      return discoverySubnetDraft();
+    }
+    const draft = discoverySubnetDraft();
+    if (draft.trim() !== '') {
+      return draft;
+    }
+    const saved = discoverySubnet();
+    return saved.toLowerCase() === 'auto' ? '' : saved;
+  };
+
+  const isValidCIDR = (value: string) => {
+    const subnets = parseSubnetList(value);
+    if (subnets.length === 0) {
+      return false;
+    }
+
+    return subnets.every((token) => {
+      const [network, prefix] = token.split('/');
+      if (!network || typeof prefix === 'undefined') {
+        return false;
+      }
+
+      const prefixNumber = Number(prefix);
+      if (!Number.isInteger(prefixNumber) || prefixNumber < 0 || prefixNumber > 32) {
+        return false;
+      }
+
+      const octets = network.split('.');
+      if (octets.length !== 4) {
+        return false;
+      }
+
+      return octets.every((octet) => {
+        if (octet === '') return false;
+        if (!/^\d+$/.test(octet)) return false;
+        const valueNumber = Number(octet);
+        return valueNumber >= 0 && valueNumber <= 255;
+      });
+    });
+  };
+
+  const applySavedDiscoverySubnet = (subnet?: string | null) => {
+    const raw = typeof subnet === 'string' ? subnet.trim() : '';
+    if (raw === '' || raw.toLowerCase() === 'auto') {
+      setDiscoverySubnet('auto');
+      setDiscoveryMode('auto');
+      setDiscoverySubnetDraft('');
+    } else {
+      setDiscoveryMode('custom');
+      const normalizedValue = normalizeSubnetList(raw);
+      setDiscoverySubnet(normalizedValue);
+      setDiscoverySubnetDraft(normalizedValue);
+      setLastCustomSubnet(normalizedValue);
+      setDiscoverySubnetError(undefined);
+      return;
+    }
+    setDiscoverySubnetError(undefined);
+  };
   // Connection timeout removed - backend-only setting
 
   // Iframe embedding settings
@@ -893,6 +984,187 @@ const Settings: Component<SettingsProps> = (props) => {
     }
   };
 
+  const handleDiscoveryEnabledChange = async (enabled: boolean): Promise<boolean> => {
+    if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
+      return false;
+    }
+
+    const previousEnabled = discoveryEnabled();
+    const previousSubnet = discoverySubnet();
+    let subnetToSend = discoverySubnet();
+
+    if (enabled) {
+      if (discoveryMode() === 'custom') {
+        const trimmedDraft = discoverySubnetDraft().trim();
+        if (!trimmedDraft) {
+          setDiscoverySubnetError('Enter at least one subnet before enabling discovery');
+          notificationStore.error('Enter at least one subnet before enabling discovery');
+          return false;
+        }
+        if (!isValidCIDR(trimmedDraft)) {
+          setDiscoverySubnetError('Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)');
+          notificationStore.error('Enter valid CIDR subnet values before enabling discovery');
+          return false;
+        }
+        const normalizedDraft = normalizeSubnetList(trimmedDraft);
+        setDiscoverySubnetDraft(normalizedDraft);
+        setDiscoverySubnetError(undefined);
+        subnetToSend = normalizedDraft;
+      } else {
+        subnetToSend = 'auto';
+        setDiscoverySubnetError(undefined);
+      }
+    }
+
+    setDiscoveryEnabled(enabled);
+    setSavingDiscoverySettings(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({
+        discoveryEnabled: enabled,
+        discoverySubnet: subnetToSend,
+      });
+      applySavedDiscoverySubnet(subnetToSend);
+      if (enabled && subnetToSend !== 'auto') {
+        setLastCustomSubnet(subnetToSend);
+      }
+
+      if (enabled) {
+        await triggerDiscoveryScan({ quiet: true });
+        notificationStore.success('Discovery enabled — scanning network...', 2000);
+      } else {
+        notificationStore.info('Discovery disabled', 2000);
+        setDiscoveryScanStatus((prev) => ({
+          ...prev,
+          scanning: false,
+        }));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to update discovery setting:', error);
+      notificationStore.error('Failed to update discovery setting');
+      setDiscoveryEnabled(previousEnabled);
+      applySavedDiscoverySubnet(previousSubnet);
+      return false;
+    } finally {
+      setSavingDiscoverySettings(false);
+      await loadDiscoveredNodes();
+    }
+  };
+
+  const commitDiscoverySubnet = async (rawValue: string): Promise<boolean> => {
+    if (envOverrides().discoverySubnet) {
+      return false;
+    }
+
+    const value = rawValue.trim();
+    if (!value) {
+      setDiscoverySubnetError('Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)');
+      return false;
+    }
+    if (!isValidCIDR(value)) {
+      setDiscoverySubnetError('Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)');
+      return false;
+    }
+
+    const normalizedValue = normalizeSubnetList(value);
+    if (!normalizedValue) {
+      setDiscoverySubnetError('Enter at least one valid subnet in CIDR format');
+      return false;
+    }
+
+    const previousSubnet = discoverySubnet();
+    const previousNormalized =
+      previousSubnet.toLowerCase() === 'auto' ? '' : normalizeSubnetList(previousSubnet);
+
+    if (normalizedValue === previousNormalized) {
+      setDiscoverySubnetDraft(normalizedValue);
+      setDiscoverySubnetError(undefined);
+      setLastCustomSubnet(normalizedValue);
+      return true;
+    }
+
+    setSavingDiscoverySettings(true);
+
+    try {
+      setDiscoverySubnetError(undefined);
+      await SettingsAPI.updateSystemSettings({
+        discoveryEnabled: discoveryEnabled(),
+        discoverySubnet: normalizedValue,
+      });
+      setLastCustomSubnet(normalizedValue);
+      applySavedDiscoverySubnet(normalizedValue);
+      if (discoveryEnabled()) {
+        await triggerDiscoveryScan({ quiet: true });
+        notificationStore.success('Discovery subnet updated — scanning network...', 2000);
+      } else {
+        notificationStore.success('Discovery subnet saved', 2000);
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to update discovery subnet:', error);
+      notificationStore.error('Failed to update discovery subnet');
+      applySavedDiscoverySubnet(previousSubnet);
+      setDiscoverySubnetDraft(previousSubnet === 'auto' ? '' : normalizeSubnetList(previousSubnet));
+      return false;
+    } finally {
+      setDiscoverySubnetError(undefined);
+      setSavingDiscoverySettings(false);
+      await loadDiscoveredNodes();
+    }
+  };
+
+  const handleDiscoveryModeChange = async (mode: 'auto' | 'custom') => {
+    if (envOverrides().discoverySubnet || savingDiscoverySettings()) {
+      return;
+    }
+    if (mode === discoveryMode()) {
+      return;
+    }
+
+    if (mode === 'auto') {
+      const previousSubnet = discoverySubnet();
+      setDiscoveryMode('auto');
+      setDiscoverySubnetDraft('');
+      setDiscoverySubnetError(undefined);
+      setSavingDiscoverySettings(true);
+      try {
+        await SettingsAPI.updateSystemSettings({
+          discoveryEnabled: discoveryEnabled(),
+          discoverySubnet: 'auto',
+        });
+        applySavedDiscoverySubnet('auto');
+        if (discoveryEnabled()) {
+          await triggerDiscoveryScan({ quiet: true });
+        }
+        notificationStore.info(
+          'Auto discovery scans each network phase. Large networks may take longer.',
+          4000,
+        );
+      } catch (error) {
+        console.error('Failed to update discovery subnet:', error);
+        notificationStore.error('Failed to update discovery subnet');
+        applySavedDiscoverySubnet(previousSubnet);
+      } finally {
+        setSavingDiscoverySettings(false);
+        await loadDiscoveredNodes();
+      }
+      return;
+    }
+
+    setDiscoveryMode('custom');
+    const rawDraft =
+      discoverySubnet() !== 'auto' ? discoverySubnet() : lastCustomSubnet() || '';
+    const normalizedDraft = normalizeSubnetList(rawDraft);
+    setDiscoverySubnetDraft(normalizedDraft);
+    setDiscoverySubnetError(undefined);
+    queueMicrotask(() => {
+      discoverySubnetInputRef?.focus();
+      discoverySubnetInputRef?.select();
+    });
+  };
+
   // Load nodes and system settings on mount
   onMount(async () => {
     // Subscribe to events
@@ -963,6 +1235,10 @@ const Settings: Component<SettingsProps> = (props) => {
         lastScanStartedAt: data.scanning ? (data.timestamp ?? Date.now()) : prev.lastScanStartedAt,
         lastResultAt: !data.scanning && data.timestamp ? data.timestamp : prev.lastResultAt,
       }));
+
+      if (typeof data.subnet === 'string' && data.subnet !== discoverySubnet()) {
+        applySavedDiscoverySubnet(data.subnet);
+      }
     });
 
     // Poll for node updates when modal is open
@@ -1026,9 +1302,9 @@ const Settings: Component<SettingsProps> = (props) => {
           setAllowedOrigins(systemSettings.allowedOrigins || '*');
           // Connection timeout is backend-only
           // Load discovery settings
-          // Backend defaults to true, so we should respect that
-          setDiscoveryEnabled(systemSettings.discoveryEnabled ?? true); // Default to true if undefined
-          setDiscoverySubnet(systemSettings.discoverySubnet || 'auto');
+          // Backend defaults to false, so we should respect that
+          setDiscoveryEnabled(systemSettings.discoveryEnabled ?? false); // Default to false if undefined
+          applySavedDiscoverySubnet(systemSettings.discoverySubnet);
           // Load embedding settings
           setAllowEmbedding(systemSettings.allowEmbedding ?? false);
           setAllowedEmbedOrigins(systemSettings.allowedEmbedOrigins || '');
@@ -1623,38 +1899,18 @@ const Settings: Component<SettingsProps> = (props) => {
                         <Toggle
                           checked={discoveryEnabled()}
                           onChange={async (e) => {
-                            if (envOverrides().discoveryEnabled) {
+                            if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
+                              e.preventDefault();
                               return;
                             }
-                            const newValue = e.currentTarget.checked;
-                            setDiscoveryEnabled(newValue);
-                            try {
-                              await SettingsAPI.updateSystemSettings({
-                                discoveryEnabled: newValue,
-                                discoverySubnet: discoverySubnet(),
-                              });
-                              if (newValue) {
-                                await triggerDiscoveryScan({ quiet: true });
-                                notificationStore.success(
-                                  'Discovery enabled — scanning network...',
-                                  2000,
-                                );
-                              } else {
-                                notificationStore.info('Discovery disabled', 2000);
-                                setDiscoveryScanStatus((prev) => ({
-                                  ...prev,
-                                  scanning: false,
-                                }));
-                              }
-                            } catch (error) {
-                              console.error('Failed to update discovery setting:', error);
-                              notificationStore.error('Failed to update discovery setting');
-                              setDiscoveryEnabled(!newValue);
-                            } finally {
-                              await loadDiscoveredNodes();
+                            const success = await handleDiscoveryEnabledChange(
+                              e.currentTarget.checked,
+                            );
+                            if (!success) {
+                              e.currentTarget.checked = discoveryEnabled();
                             }
                           }}
-                          disabled={envOverrides().discoveryEnabled}
+                          disabled={envOverrides().discoveryEnabled || savingDiscoverySettings()}
                           containerClass="gap-2"
                           label={
                             <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
@@ -2048,6 +2304,19 @@ const Settings: Component<SettingsProps> = (props) => {
                                 {(err) => <li>{err}</li>}
                               </For>
                             </ul>
+                            <Show
+                              when={
+                                discoveryMode() === 'auto' &&
+                                (discoveryScanStatus().errors || []).some((err) =>
+                                  /timed out|timeout/i.test(err),
+                                )
+                              }
+                            >
+                              <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
+                                Large networks can time out in auto mode. Switch to a custom subnet
+                                for faster, targeted scans.
+                              </p>
+                            </Show>
                           </div>
                         </Show>
                         <Show
@@ -2169,38 +2438,18 @@ const Settings: Component<SettingsProps> = (props) => {
                         <Toggle
                           checked={discoveryEnabled()}
                           onChange={async (e) => {
-                            if (envOverrides().discoveryEnabled) {
+                            if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
+                              e.preventDefault();
                               return;
                             }
-                            const newValue = e.currentTarget.checked;
-                            setDiscoveryEnabled(newValue);
-                            try {
-                              await SettingsAPI.updateSystemSettings({
-                                discoveryEnabled: newValue,
-                                discoverySubnet: discoverySubnet(),
-                              });
-                              if (newValue) {
-                                await triggerDiscoveryScan({ quiet: true });
-                                notificationStore.success(
-                                  'Discovery enabled — scanning network...',
-                                  2000,
-                                );
-                              } else {
-                                notificationStore.info('Discovery disabled', 2000);
-                                setDiscoveryScanStatus((prev) => ({
-                                  ...prev,
-                                  scanning: false,
-                                }));
-                              }
-                            } catch (error) {
-                              console.error('Failed to update discovery setting:', error);
-                              notificationStore.error('Failed to update discovery setting');
-                              setDiscoveryEnabled(!newValue);
-                            } finally {
-                              await loadDiscoveredNodes();
+                            const success = await handleDiscoveryEnabledChange(
+                              e.currentTarget.checked,
+                            );
+                            if (!success) {
+                              e.currentTarget.checked = discoveryEnabled();
                             }
                           }}
-                          disabled={envOverrides().discoveryEnabled}
+                          disabled={envOverrides().discoveryEnabled || savingDiscoverySettings()}
                           containerClass="gap-2"
                           label={
                             <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
@@ -2483,6 +2732,19 @@ const Settings: Component<SettingsProps> = (props) => {
                                 {(err) => <li>{err}</li>}
                               </For>
                             </ul>
+                            <Show
+                              when={
+                                discoveryMode() === 'auto' &&
+                                (discoveryScanStatus().errors || []).some((err) =>
+                                  /timed out|timeout/i.test(err),
+                                )
+                              }
+                            >
+                              <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
+                                Large networks can time out in auto mode. Switch to a custom subnet
+                                for faster, targeted scans.
+                              </p>
+                            </Show>
                           </div>
                         </Show>
                         <Show
@@ -2605,38 +2867,18 @@ const Settings: Component<SettingsProps> = (props) => {
                         <Toggle
                           checked={discoveryEnabled()}
                           onChange={async (e) => {
-                            if (envOverrides().discoveryEnabled) {
+                            if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
+                              e.preventDefault();
                               return;
                             }
-                            const newValue = e.currentTarget.checked;
-                            setDiscoveryEnabled(newValue);
-                            try {
-                              await SettingsAPI.updateSystemSettings({
-                                discoveryEnabled: newValue,
-                                discoverySubnet: discoverySubnet(),
-                              });
-                              if (newValue) {
-                                await triggerDiscoveryScan({ quiet: true });
-                                notificationStore.success(
-                                  'Discovery enabled — scanning network...',
-                                  2000,
-                                );
-                              } else {
-                                notificationStore.info('Discovery disabled', 2000);
-                                setDiscoveryScanStatus((prev) => ({
-                                  ...prev,
-                                  scanning: false,
-                                }));
-                              }
-                            } catch (error) {
-                              console.error('Failed to update discovery setting:', error);
-                              notificationStore.error('Failed to update discovery setting');
-                              setDiscoveryEnabled(!newValue);
-                            } finally {
-                              await loadDiscoveredNodes();
+                            const success = await handleDiscoveryEnabledChange(
+                              e.currentTarget.checked,
+                            );
+                            if (!success) {
+                              e.currentTarget.checked = discoveryEnabled();
                             }
                           }}
-                          disabled={envOverrides().discoveryEnabled}
+                          disabled={envOverrides().discoveryEnabled || savingDiscoverySettings()}
                           containerClass="gap-2"
                           label={
                             <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
@@ -2899,6 +3141,19 @@ const Settings: Component<SettingsProps> = (props) => {
                                 {(err) => <li>{err}</li>}
                               </For>
                             </ul>
+                            <Show
+                              when={
+                                discoveryMode() === 'auto' &&
+                                (discoveryScanStatus().errors || []).some((err) =>
+                                  /timed out|timeout/i.test(err),
+                                )
+                              }
+                            >
+                              <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
+                                Large networks can time out in auto mode. Switch to a custom subnet
+                                for faster, targeted scans.
+                              </p>
+                            </Show>
                           </div>
                         </Show>
                         <Show
@@ -3036,6 +3291,288 @@ const Settings: Component<SettingsProps> = (props) => {
                       </ul>
                     </div>
                   </div>
+                </Card>
+
+                <Card padding="lg" class="space-y-5">
+                  <SectionHeader
+                    title="Network discovery"
+                    description="Control how Pulse scans for Proxmox services on your network."
+                    size="sm"
+                    align="left"
+                  />
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                      <p class="font-medium text-gray-900 dark:text-gray-100">Automatic scanning</p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Enable discovery to surface Proxmox VE, PBS, and PMG endpoints automatically.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={discoveryEnabled()}
+                      onChange={async (e) => {
+                        if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
+                          e.preventDefault();
+                          return;
+                        }
+                        const success = await handleDiscoveryEnabledChange(e.currentTarget.checked);
+                        if (!success) {
+                          e.currentTarget.checked = discoveryEnabled();
+                        }
+                      }}
+                      disabled={envOverrides().discoveryEnabled || savingDiscoverySettings()}
+                      containerClass="gap-2"
+                      label={
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {discoveryEnabled() ? 'On' : 'Off'}
+                        </span>
+                      }
+                    />
+                  </div>
+
+                  <Show when={discoveryEnabled()}>
+                    <div class="space-y-4 rounded-lg border border-gray-200 bg-white/40 p-3 dark:border-gray-600 dark:bg-gray-800/40">
+                      <fieldset class="space-y-2">
+                        <legend class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Scan scope
+                        </legend>
+                        <div class="space-y-2">
+                          <label
+                            class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${
+                              discoveryMode() === 'auto'
+                                ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
+                                : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="discoveryMode"
+                              value="auto"
+                              checked={discoveryMode() === 'auto'}
+                              onChange={async () => {
+                                if (discoveryMode() !== 'auto') {
+                                  await handleDiscoveryModeChange('auto');
+                                }
+                              }}
+                              disabled={envOverrides().discoverySubnet || savingDiscoverySettings()}
+                              class="mt-1 h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <div class="space-y-1">
+                              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                Auto (slower, full scan)
+                              </p>
+                              <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Scans container, local, and gateway networks. Large networks may time
+                                out after two minutes.
+                              </p>
+                            </div>
+                          </label>
+
+                          <label
+                            class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${
+                              discoveryMode() === 'custom'
+                                ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
+                                : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="discoveryMode"
+                              value="custom"
+                              checked={discoveryMode() === 'custom'}
+                              onChange={() => {
+                                if (discoveryMode() !== 'custom') {
+                                  handleDiscoveryModeChange('custom');
+                                }
+                              }}
+                              disabled={envOverrides().discoverySubnet || savingDiscoverySettings()}
+                              class="mt-1 h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <div class="space-y-1">
+                              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                Custom subnet (faster)
+                              </p>
+                              <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Limit discovery to one or more CIDR ranges to finish faster on large networks.
+                              </p>
+                            </div>
+                          </label>
+                          <Show when={discoveryMode() === 'custom'}>
+                            <div class="flex flex-wrap items-center gap-2 pl-9 pr-2">
+                              <span class="text-[0.68rem] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                Common networks:
+                              </span>
+                              <For each={COMMON_DISCOVERY_SUBNETS}>
+                                {(preset) => {
+                                  const baseValue = currentDraftSubnetValue();
+                                  const currentSelections = parseSubnetList(baseValue);
+                                  const isActive = currentSelections.includes(preset);
+                                  return (
+                                    <button
+                                      type="button"
+                                      class={`rounded-full border px-2.5 py-1 text-[0.7rem] transition-colors ${
+                                        isActive
+                                          ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
+                                          : 'border-gray-200 bg-gray-100 text-gray-700 hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
+                                      }`}
+                                      onClick={async () => {
+                                        if (envOverrides().discoverySubnet) {
+                                          return;
+                                        }
+                                        let selections = [...currentSelections];
+                                        if (isActive) {
+                                          selections = selections.filter((item) => item !== preset);
+                                        } else {
+                                          selections.push(preset);
+                                        }
+
+                                        if (selections.length === 0) {
+                                          setDiscoverySubnetDraft('');
+                                          setLastCustomSubnet('');
+                                          setDiscoverySubnetError(
+                                            'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)',
+                                          );
+                                          return;
+                                        }
+
+                                        const updatedValue = normalizeSubnetList(selections.join(', '));
+                                        setDiscoveryMode('custom');
+                                        setDiscoverySubnetDraft(updatedValue);
+                                        setLastCustomSubnet(updatedValue);
+                                        setDiscoverySubnetError(undefined);
+                                        await commitDiscoverySubnet(updatedValue);
+                                      }}
+                                      disabled={envOverrides().discoverySubnet}
+                                      classList={{
+                                        'cursor-not-allowed opacity-60': envOverrides().discoverySubnet,
+                                      }}
+                                    >
+                                      {preset}
+                                    </button>
+                                  );
+                                }}
+                              </For>
+                            </div>
+                          </Show>
+                        </div>
+                      </fieldset>
+
+                      <div class="space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                          <label
+                            for="discoverySubnetInput"
+                            class="text-xs font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            Discovery subnet
+                          </label>
+                          <span
+                            class="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-300 cursor-help"
+                            title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
+                          >
+                            <svg
+                              class="h-4 w-4"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            >
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <path d="M12 16v-4"></path>
+                              <path d="M12 8h.01"></path>
+                            </svg>
+                          </span>
+                        </div>
+                        <input
+                          id="discoverySubnetInput"
+                          ref={(el) => {
+                            discoverySubnetInputRef = el;
+                          }}
+                          type="text"
+                          value={discoverySubnetDraft()}
+                          placeholder={
+                            discoveryMode() === 'auto'
+                              ? 'auto (scan every network phase)'
+                              : '192.168.1.0/24, 10.0.0.0/24'
+                          }
+                          class={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            envOverrides().discoverySubnet
+                              ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200 cursor-not-allowed opacity-60'
+                              : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/70'
+                          }`}
+                          disabled={envOverrides().discoverySubnet}
+                          onInput={(e) => {
+                            if (envOverrides().discoverySubnet) {
+                              return;
+                            }
+                            const rawValue = e.currentTarget.value;
+                            setDiscoverySubnetDraft(rawValue);
+                            if (discoveryMode() !== 'custom') {
+                              setDiscoveryMode('custom');
+                            }
+                            setLastCustomSubnet(rawValue);
+                            const trimmed = rawValue.trim();
+                            if (!trimmed) {
+                              setDiscoverySubnetError(undefined);
+                              return;
+                            }
+                            if (!isValidCIDR(trimmed)) {
+                              setDiscoverySubnetError('Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)');
+                            } else {
+                              setDiscoverySubnetError(undefined);
+                            }
+                          }}
+                          onBlur={async (e) => {
+                            if (envOverrides().discoverySubnet || discoveryMode() !== 'custom') {
+                              return;
+                            }
+                            const rawValue = e.currentTarget.value;
+                            setDiscoverySubnetDraft(rawValue);
+                            const trimmed = rawValue.trim();
+                            if (!trimmed) {
+                              setDiscoverySubnetError(
+                                'Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)',
+                              );
+                              return;
+                            }
+                            if (!isValidCIDR(trimmed)) {
+                              setDiscoverySubnetError('Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)');
+                              return;
+                            }
+                            setDiscoverySubnetError(undefined);
+                            await commitDiscoverySubnet(rawValue);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLInputElement).blur();
+                            }
+                          }}
+                        />
+                        <Show when={discoverySubnetError()}>
+                          <p class="text-xs text-red-600 dark:text-red-400">
+                            {discoverySubnetError()}
+                          </p>
+                        </Show>
+                        <Show when={!discoverySubnetError() && discoveryMode() === 'auto'}>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">
+                            Auto scans every reachable network phase. Large networks may time out —
+                            switch to custom subnets to narrow the search.
+                          </p>
+                        </Show>
+                        <Show when={!discoverySubnetError() && discoveryMode() === 'custom'}>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">
+                            Example: 192.168.1.0/24, 10.0.0.0/24 (comma-separated). Smaller ranges finish faster and avoid timeouts.
+                          </p>
+                        </Show>
+                      </div>
+                    </div>
+                  </Show>
+
+                  <Show when={envOverrides().discoveryEnabled || envOverrides().discoverySubnet}>
+                    <div class="rounded-lg border border-amber-200 bg-amber-100/80 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                      Discovery settings are locked by environment variables. Update the service
+                      configuration and restart Pulse to change them here.
+                    </div>
+                  </Show>
                 </Card>
 
                 <Card padding="lg" class="space-y-3">

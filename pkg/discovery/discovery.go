@@ -48,6 +48,24 @@ type DiscoveryResult struct {
 	Environment      *EnvironmentInfo   `json:"environment,omitempty"`
 }
 
+// friendlyPhaseName converts technical phase names to user-friendly descriptions
+func friendlyPhaseName(phase string) string {
+	friendlyNames := map[string]string{
+		"lxc_container_network":      "Container network",
+		"docker_bridge_network":      "Docker bridge network",
+		"docker_container_network":   "Docker container network",
+		"host_local_network":         "Local network",
+		"inferred_gateway_network":   "Gateway network",
+		"extra_targets":              "Additional targets",
+		"proxmox_cluster_network":    "Proxmox cluster network",
+	}
+
+	if friendly, ok := friendlyNames[phase]; ok {
+		return friendly
+	}
+	return phase
+}
+
 // AddError adds a structured error to the result (also maintains backward-compatible error list)
 func (r *DiscoveryResult) AddError(phase, errorType, message, ip string, port int) {
 	structuredErr := DiscoveryError{
@@ -60,13 +78,14 @@ func (r *DiscoveryResult) AddError(phase, errorType, message, ip string, port in
 	}
 	r.StructuredErrors = append(r.StructuredErrors, structuredErr)
 
-	// Also add to legacy errors for backward compatibility
+	// Also add to legacy errors for backward compatibility (use friendly phase name for display)
+	friendlyPhase := friendlyPhaseName(phase)
 	if ip != "" && port > 0 {
-		r.Errors = append(r.Errors, fmt.Sprintf("%s [%s:%d]: %s", phase, ip, port, message))
+		r.Errors = append(r.Errors, fmt.Sprintf("%s [%s:%d]: %s", friendlyPhase, ip, port, message))
 	} else if ip != "" {
-		r.Errors = append(r.Errors, fmt.Sprintf("%s [%s]: %s", phase, ip, message))
+		r.Errors = append(r.Errors, fmt.Sprintf("%s [%s]: %s", friendlyPhase, ip, message))
 	} else {
-		r.Errors = append(r.Errors, fmt.Sprintf("%s: %s", phase, message))
+		r.Errors = append(r.Errors, fmt.Sprintf("%s: %s", friendlyPhase, message))
 	}
 }
 
@@ -259,12 +278,16 @@ func (s *Scanner) DiscoverServersWithCallbacks(ctx context.Context, subnet strin
 			Msg("Starting discovery for explicit extra targets")
 		if err := s.runPhaseWithProgress(ctx, "extra_targets", phaseNumber, totalPhases, extraIPs, serverCallback, progressCallback, &totalProcessed, totalTargets, result); err != nil {
 			errType := "phase_error"
+			errMsg := err.Error()
+
 			if errors.Is(err, context.Canceled) {
 				errType = "canceled"
 			} else if errors.Is(err, context.DeadlineExceeded) {
 				errType = "timeout"
+				// Provide user-friendly timeout message
+				errMsg = fmt.Sprintf("Scan timed out after 2 minutes - this is normal for large networks. Servers found in earlier phases are still available.")
 			}
-			result.AddError("extra_targets", errType, err.Error(), "", 0)
+			result.AddError("extra_targets", errType, errMsg, "", 0)
 			if errors.Is(err, context.Canceled) {
 				return result, ctx.Err()
 			}
@@ -303,12 +326,16 @@ func (s *Scanner) DiscoverServersWithCallbacks(ctx context.Context, subnet strin
 
 		if err := s.runPhaseWithProgress(ctx, phase.Name, phaseNumber, totalPhases, phaseIPs, serverCallback, progressCallback, &totalProcessed, totalTargets, result); err != nil {
 			errType := "phase_error"
+			errMsg := err.Error()
+
 			if errors.Is(err, context.Canceled) {
 				errType = "canceled"
 			} else if errors.Is(err, context.DeadlineExceeded) {
 				errType = "timeout"
+				// Provide user-friendly timeout message
+				errMsg = fmt.Sprintf("Scan timed out after 2 minutes - this is normal for large networks. Servers found in earlier phases are still available.")
 			}
-			result.AddError(phase.Name, errType, err.Error(), "", 0)
+			result.AddError(phase.Name, errType, errMsg, "", 0)
 			if errors.Is(err, context.Canceled) {
 				return result, ctx.Err()
 			}

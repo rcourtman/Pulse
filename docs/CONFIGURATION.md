@@ -129,7 +129,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
   "adaptivePollingBaseInterval": 10,   // Target cadence (seconds)
   "adaptivePollingMinInterval": 5,     // Fastest cadence (seconds)
   "adaptivePollingMaxInterval": 300,   // Slowest cadence (seconds)
-  "discoveryEnabled": true,            // Enable/disable network discovery for Proxmox/PBS servers
+  "discoveryEnabled": false,           // Enable/disable network discovery for Proxmox/PBS servers
   "discoverySubnet": "auto",           // CIDR to scan ("auto" discovers common ranges)
   "theme": ""                          // UI theme preference: "", "light", or "dark"
 }
@@ -362,7 +362,7 @@ Settings are loaded in this order (later overrides earlier):
 #### Configuration Variables (override system.json)
 These env vars override system.json values. When set, the UI will show a warning and disable the affected fields:
 
-- `DISCOVERY_ENABLED` - Enable/disable network discovery (default: true)
+- `DISCOVERY_ENABLED` - Enable/disable network discovery (default: false)
 - `DISCOVERY_SUBNET` - Custom network to scan (default: auto-scans common networks)
 - `CONNECTION_TIMEOUT` - API timeout in seconds (default: 10)
 - `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)
