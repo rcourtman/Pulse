@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # install-sensor-proxy.sh - Installs pulse-sensor-proxy on Proxmox host for secure temperature monitoring
+# Supports --uninstall [--purge] to remove the proxy and cleanup resources.
 # This script is idempotent and can be safely re-run
 
 set -euo pipefail
@@ -59,6 +60,192 @@ configure_local_authorized_key() {
     fi
 }
 
+BINARY_PATH="/usr/local/bin/pulse-sensor-proxy"
+SERVICE_PATH="/etc/systemd/system/pulse-sensor-proxy.service"
+RUNTIME_DIR="/run/pulse-sensor-proxy"
+SOCKET_PATH="${RUNTIME_DIR}/pulse-sensor-proxy.sock"
+WORK_DIR="/var/lib/pulse-sensor-proxy"
+SSH_DIR="${WORK_DIR}/ssh"
+CONFIG_DIR="/etc/pulse-sensor-proxy"
+CLEANUP_SCRIPT_PATH="/usr/local/bin/pulse-sensor-cleanup.sh"
+CLEANUP_PATH_UNIT="/etc/systemd/system/pulse-sensor-cleanup.path"
+CLEANUP_SERVICE_UNIT="/etc/systemd/system/pulse-sensor-cleanup.service"
+CLEANUP_REQUEST_PATH="${WORK_DIR}/cleanup-request.json"
+SERVICE_USER="pulse-sensor-proxy"
+LOG_DIR="/var/log/pulse/sensor-proxy"
+
+cleanup_local_authorized_keys() {
+    local auth_keys_file="/root/.ssh/authorized_keys"
+    if [[ ! -f "$auth_keys_file" ]]; then
+        return
+    fi
+
+    if grep -q '# pulse-\(managed\|proxy\)-key$' "$auth_keys_file"; then
+        if sed -i -e '/# pulse-managed-key$/d' -e '/# pulse-proxy-key$/d' "$auth_keys_file"; then
+            print_info "Removed Pulse SSH keys from ${auth_keys_file}"
+        else
+            print_warn "Failed to clean Pulse SSH keys from ${auth_keys_file}"
+        fi
+    fi
+}
+
+cleanup_cluster_authorized_keys_manual() {
+    local nodes=()
+    if command -v pvecm >/dev/null 2>&1; then
+        while IFS= read -r node_ip; do
+            [[ -n "$node_ip" ]] && nodes+=("$node_ip")
+        done < <(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}')
+    fi
+
+    if [[ ${#nodes[@]} -eq 0 ]]; then
+        cleanup_local_authorized_keys
+        return
+    fi
+
+    local local_ips
+    local_ips="$(hostname -I 2>/dev/null || echo "")"
+    local local_hostnames
+    local_hostnames="$(hostname 2>/dev/null || echo "") $(hostname -f 2>/dev/null || echo "")"
+
+    for node_ip in "${nodes[@]}"; do
+        local is_local=false
+        for local_ip in $local_ips; do
+            if [[ "$node_ip" == "$local_ip" ]]; then
+                is_local=true
+                break
+            fi
+        done
+
+        if [[ " $local_hostnames " == *" $node_ip "* ]]; then
+            is_local=true
+        fi
+
+        if [[ "$node_ip" == "127.0.0.1" || "$node_ip" == "localhost" ]]; then
+            is_local=true
+        fi
+
+        if [[ "$is_local" == true ]]; then
+            cleanup_local_authorized_keys
+            continue
+        fi
+
+        print_info "Removing Pulse SSH keys from node ${node_ip}"
+        if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+            "sed -i -e '/# pulse-managed-key\$/d' -e '/# pulse-proxy-key\$/d' /root/.ssh/authorized_keys" 2>/dev/null; then
+            print_info "  SSH keys cleaned on ${node_ip}"
+        else
+            print_warn "  Unable to clean Pulse SSH keys on ${node_ip}"
+        fi
+    done
+
+    cleanup_local_authorized_keys
+}
+
+perform_uninstall() {
+    print_info "Starting pulse-sensor-proxy uninstall..."
+
+    if command -v systemctl >/dev/null 2>&1; then
+        print_info "Stopping pulse-sensor-proxy service"
+        systemctl stop pulse-sensor-proxy 2>/dev/null || true
+        print_info "Disabling pulse-sensor-proxy service"
+        systemctl disable pulse-sensor-proxy 2>/dev/null || true
+
+        print_info "Stopping cleanup path watcher"
+        systemctl stop pulse-sensor-cleanup.path 2>/dev/null || true
+        systemctl disable pulse-sensor-cleanup.path 2>/dev/null || true
+        systemctl stop pulse-sensor-cleanup.service 2>/dev/null || true
+        systemctl disable pulse-sensor-cleanup.service 2>/dev/null || true
+    else
+        print_warn "systemctl not available; skipping service disable"
+    fi
+
+    if [[ -x "$CLEANUP_SCRIPT_PATH" ]]; then
+        print_info "Invoking cleanup script to remove Pulse SSH keys"
+        mkdir -p "$WORK_DIR"
+        cat > "$CLEANUP_REQUEST_PATH" <<'EOF'
+{"host":""}
+EOF
+        if "$CLEANUP_SCRIPT_PATH"; then
+            print_success "Cleanup script removed Pulse SSH keys"
+        else
+            print_warn "Cleanup script reported errors; attempting manual cleanup"
+            cleanup_cluster_authorized_keys_manual
+        fi
+        rm -f "$CLEANUP_REQUEST_PATH"
+    else
+        cleanup_cluster_authorized_keys_manual
+    fi
+
+    if [[ -f "$BINARY_PATH" ]]; then
+        rm -f "$BINARY_PATH"
+        print_success "Removed binary ${BINARY_PATH}"
+    else
+        print_info "Binary already absent at ${BINARY_PATH}"
+    fi
+
+    if [[ -f "$SERVICE_PATH" ]]; then
+        rm -f "$SERVICE_PATH"
+        print_success "Removed service unit ${SERVICE_PATH}"
+    fi
+
+    if [[ -f "$CLEANUP_PATH_UNIT" ]]; then
+        rm -f "$CLEANUP_PATH_UNIT"
+        print_success "Removed cleanup path unit ${CLEANUP_PATH_UNIT}"
+    fi
+
+    if [[ -f "$CLEANUP_SERVICE_UNIT" ]]; then
+        rm -f "$CLEANUP_SERVICE_UNIT"
+        print_success "Removed cleanup service unit ${CLEANUP_SERVICE_UNIT}"
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload 2>/dev/null || true
+    fi
+
+    rm -f "$CLEANUP_SCRIPT_PATH" "$CLEANUP_REQUEST_PATH" 2>/dev/null || true
+    rm -f "$SOCKET_PATH" 2>/dev/null || true
+    rm -rf "$RUNTIME_DIR" 2>/dev/null || true
+
+    if [[ "$PURGE" == true ]]; then
+        print_info "Purging Pulse sensor proxy state"
+        rm -rf "$WORK_DIR" "$CONFIG_DIR" 2>/dev/null || true
+        if [[ -d "$LOG_DIR" ]]; then
+            print_info "Removing log directory ${LOG_DIR}"
+        fi
+        rm -rf "$LOG_DIR" 2>/dev/null || true
+
+        if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+            if userdel --remove "$SERVICE_USER" 2>/dev/null; then
+                print_success "Removed service user ${SERVICE_USER}"
+            elif userdel "$SERVICE_USER" 2>/dev/null; then
+                print_success "Removed service user ${SERVICE_USER}"
+            else
+                print_warn "Failed to remove service user ${SERVICE_USER}"
+            fi
+        fi
+
+        if getent group "$SERVICE_USER" >/dev/null 2>&1; then
+            if groupdel "$SERVICE_USER" 2>/dev/null; then
+                print_success "Removed service group ${SERVICE_USER}"
+            else
+                print_warn "Failed to remove service group ${SERVICE_USER}"
+            fi
+        fi
+    else
+        if [[ -d "$WORK_DIR" ]]; then
+            print_info "Preserving data directory ${WORK_DIR} (use --purge to remove)"
+        fi
+        if [[ -d "$CONFIG_DIR" ]]; then
+            print_info "Preserving config directory ${CONFIG_DIR} (use --purge to remove)"
+        fi
+        if [[ -d "$LOG_DIR" ]]; then
+            print_info "Preserving log directory ${LOG_DIR} (use --purge to remove)"
+        fi
+    fi
+
+    print_success "pulse-sensor-proxy uninstall complete"
+}
+
 # Parse arguments first to check for standalone mode
 CTID=""
 VERSION="latest"
@@ -68,6 +255,8 @@ PULSE_SERVER=""
 STANDALONE=false
 FALLBACK_BASE="${PULSE_SENSOR_PROXY_FALLBACK_URL:-}"
 SKIP_RESTART=false
+UNINSTALL=false
+PURGE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -99,12 +288,30 @@ while [[ $# -gt 0 ]]; do
             SKIP_RESTART=true
             shift
             ;;
+        --uninstall)
+            UNINSTALL=true
+            shift
+            ;;
+        --purge)
+            PURGE=true
+            shift
+            ;;
         *)
             print_error "Unknown option: $1"
             exit 1
             ;;
     esac
 done
+
+if [[ "$PURGE" == true && "$UNINSTALL" != true ]]; then
+    print_warn "--purge is only valid together with --uninstall; ignoring"
+    PURGE=false
+fi
+
+if [[ "$UNINSTALL" == true ]]; then
+    perform_uninstall
+    exit 0
+fi
 
 # If --pulse-server was provided, use it as the fallback base
 if [[ -n "$PULSE_SERVER" ]]; then
@@ -125,6 +332,7 @@ if [[ "$STANDALONE" == false ]]; then
         print_error "Missing required argument: --ctid <container-id>"
         echo "Usage: $0 --ctid <container-id> [--pulse-server <url>] [--version <version>] [--local-binary <path>]"
         echo "   Or: $0 --standalone [--pulse-server <url>] [--version <version>] [--local-binary <path>]"
+        echo "   Or: $0 --uninstall [--purge]"
         exit 1
     fi
 
@@ -140,12 +348,6 @@ if [[ "$STANDALONE" == true ]]; then
 else
     print_info "Installing pulse-sensor-proxy for container $CTID"
 fi
-
-BINARY_PATH="/usr/local/bin/pulse-sensor-proxy"
-SERVICE_PATH="/etc/systemd/system/pulse-sensor-proxy.service"
-RUNTIME_DIR="/run/pulse-sensor-proxy"
-SOCKET_PATH="/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
-SSH_DIR="/var/lib/pulse-sensor-proxy/ssh"
 
 # Create dedicated service account if it doesn't exist
 if ! id -u pulse-sensor-proxy >/dev/null 2>&1; then
