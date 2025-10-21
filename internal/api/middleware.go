@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rs/zerolog/log"
 )
 
@@ -42,8 +44,14 @@ func ErrorHandler(next http.Handler) http.Handler {
 			return
 		}
 
+		// Add request ID to context, honoring any incoming header value.
+		incomingID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+		ctxWithID, requestID := logging.WithRequestID(r.Context(), incomingID)
+		r = r.WithContext(ctxWithID)
+
 		// Create a custom response writer to capture status codes
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		rw.Header().Set("X-Request-ID", requestID)
 
 		// Recover from panics
 		defer func() {
@@ -52,6 +60,7 @@ func ErrorHandler(next http.Handler) http.Handler {
 					Interface("error", err).
 					Str("path", r.URL.Path).
 					Str("method", r.Method).
+					Str("request_id", requestID).
 					Bytes("stack", debug.Stack()).
 					Msg("Panic recovered in API handler")
 
@@ -59,9 +68,6 @@ func ErrorHandler(next http.Handler) http.Handler {
 					"An unexpected error occurred", nil)
 			}
 		}()
-
-		// Add request ID to context
-		requestID := fmt.Sprintf("%d", time.Now().UnixNano())
 
 		// Call the next handler
 		next.ServeHTTP(rw, r)
