@@ -31,9 +31,93 @@ PROXY_PREPARE_MOUNT=false
 CURRENT_INSTALL_CTID=""
 CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
+DETECTED_CTID=""
 
 DEBIAN_TEMPLATE_FALLBACK="debian-12-standard_12.12-1_amd64.tar.zst"
 DEBIAN_TEMPLATE=""
+
+detect_lxc_ctid() {
+    local ctid=""
+
+    if [[ -r /proc/1/cgroup ]]; then
+        ctid=$(sed 's/\\x2d/-/g' /proc/1/cgroup 2>/dev/null | grep -Eo '(lxc|machine-lxc)-[0-9]+' | tail -n1 | grep -Eo '[0-9]+' | tail -n1)
+        if [[ -n "$ctid" ]]; then
+            echo "$ctid"
+            return
+        fi
+    fi
+
+    if command -v hostname >/dev/null 2>&1; then
+        ctid=$(hostname 2>/dev/null || true)
+        if [[ "$ctid" =~ ^[0-9]+$ ]]; then
+            echo "$ctid"
+            return
+        fi
+    fi
+
+    if command -v hostnamectl >/dev/null 2>&1; then
+        ctid=$(hostnamectl hostname 2>/dev/null || true)
+        if [[ "$ctid" =~ ^[0-9]+$ ]]; then
+            echo "$ctid"
+            return
+        fi
+    fi
+
+    if command -v findmnt >/dev/null 2>&1; then
+        local mount_src
+        mount_src=$(findmnt -no SOURCE / 2>/dev/null || true)
+        if [[ "$mount_src" =~ -([0-9]+)-disk ]]; then
+            echo "${BASH_REMATCH[1]}"
+            return
+        fi
+    fi
+
+    if command -v df >/dev/null 2>&1; then
+        local root_src
+        root_src=$(df -P / 2>/dev/null | awk 'NR==2 {print $1}')
+        if [[ "$root_src" =~ -([0-9]+)-disk ]]; then
+            echo "${BASH_REMATCH[1]}"
+            return
+        fi
+    fi
+}
+
+auto_detect_container_environment() {
+    if [[ "$IN_CONTAINER" == "true" ]]; then
+        if [[ -z "$DETECTED_CTID" ]]; then
+            DETECTED_CTID=$(detect_lxc_ctid 2>/dev/null || true)
+        fi
+        return
+    fi
+
+    local virt_type=""
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        virt_type=$(systemd-detect-virt --container 2>/dev/null || true)
+        if [[ -n "$virt_type" && "$virt_type" != "none" ]]; then
+            IN_CONTAINER=true
+            if [[ "$virt_type" == "docker" ]]; then
+                IN_DOCKER=true
+            fi
+        fi
+    fi
+
+    if [[ "$IN_CONTAINER" != "true" ]]; then
+        if [[ -f /.dockerenv ]] || grep -qa docker /proc/1/cgroup 2>/dev/null || grep -qa docker /proc/self/cgroup 2>/dev/null; then
+            IN_CONTAINER=true
+            IN_DOCKER=true
+        elif grep -qaE '(lxc|machine-lxc)' /proc/1/cgroup 2>/dev/null; then
+            IN_CONTAINER=true
+        elif [[ -r /proc/1/environ ]] && grep -qa 'container=lxc' /proc/1/environ 2>/dev/null; then
+            IN_CONTAINER=true
+        fi
+    fi
+
+    if [[ "$IN_CONTAINER" == "true" ]]; then
+        if [[ -z "$DETECTED_CTID" ]]; then
+            DETECTED_CTID=$(detect_lxc_ctid 2>/dev/null || true)
+        fi
+    fi
+}
 
 handle_install_interrupt() {
     echo ""
@@ -2375,7 +2459,9 @@ print_completion() {
     print_header
     print_success "Pulse installation completed!"
     echo
-    echo -e "${GREEN}Access Pulse at:${NC} http://${IP}:${PORT}"
+    local PULSE_URL="http://${IP}:${PORT}"
+
+    echo -e "${GREEN}Access Pulse at:${NC} ${PULSE_URL}"
     echo
     echo -e "${YELLOW}Quick commands:${NC}"
     echo "  systemctl status $SERVICE_NAME    - Check status"
@@ -2386,6 +2472,16 @@ print_completion() {
     echo "  Update:     curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
     echo "  Reset:      curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --reset"
     echo "  Uninstall:  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --uninstall"
+
+    if [[ "$IN_CONTAINER" == "true" ]]; then
+        local proxy_ctid="${DETECTED_CTID:-<your-container-id>}"
+        echo
+        echo -e "${YELLOW}Temperature monitoring:${NC}"
+        echo "  Run on the Proxmox host to enable secure temperature collection:"
+        echo "    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \\"
+        echo "      bash -s -- --ctid ${proxy_ctid} --pulse-server ${PULSE_URL}"
+        echo "  See docs/TEMPERATURE_MONITORING.md for details."
+    fi
     
     # Show auto-update status if timer exists
     if systemctl list-unit-files --no-legend | grep -q "^pulse-update.timer"; then
@@ -3056,6 +3152,8 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+auto_detect_container_environment
 
 # Export for use in download_pulse function
 export FORCE_VERSION FORCE_CHANNEL

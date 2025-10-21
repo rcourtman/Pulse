@@ -21,6 +21,7 @@ import type {
 } from '@/types/api';
 import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 type OverrideType =
   | 'guest'
   | 'node'
@@ -232,6 +233,8 @@ interface ThresholdsTableProps {
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
   const [searchTerm, setSearchTerm] = createSignal('');
   const [editingId, setEditingId] = createSignal<string | null>(null);
@@ -393,6 +396,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
   // Check if there's an active alert for a resource/metric
   const hasActiveAlert = (resourceId: string, metric: string): boolean => {
+    if (!alertsEnabled()) return false;
     if (!props.activeAlerts) return false;
     const alertKey = `${resourceId}-${metric}`;
     return alertKey in props.activeAlerts;

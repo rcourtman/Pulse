@@ -13,6 +13,7 @@ import { getAlertStyles } from '@/utils/alerts';
 // import type { DockerHostSummary } from './DockerHostSummaryTable';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
 import { useWebSocket } from '@/App';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 
 interface DockerHostsProps {
   hosts: DockerHost[];
@@ -110,6 +111,8 @@ const DockerContainerRow: Component<{
   activeAlerts?: Record<string, Alert>;
 }> = (props) => {
   const { container, host } = props.entry;
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const containerId = createMemo(() => buildContainerId(container, host.id));
   const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(containerId()) ?? false);
 
@@ -129,11 +132,12 @@ const DockerContainerRow: Component<{
   };
 
   const alertStyles = createMemo(() => {
+    if (!alertsEnabled()) return defaultAlertStyles;
     if (!props.activeAlerts) return defaultAlertStyles;
     try {
       // Convert Store to plain object if needed
       const alertsObj = typeof props.activeAlerts === 'object' ? { ...props.activeAlerts } : props.activeAlerts;
-      return getAlertStyles(containerResourceId(), alertsObj) || defaultAlertStyles;
+      return getAlertStyles(containerResourceId(), alertsObj, alertsEnabled()) || defaultAlertStyles;
     } catch (e) {
       console.warn('Error getting alert styles for container:', containerResourceId(), e);
       return defaultAlertStyles;

@@ -98,7 +98,10 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 		log.Error().Err(err).Msg("Failed to save alert configuration")
 	}
 
-	if err := utils.WriteJSONResponse(w, map[string]string{"status": "success"}); err != nil {
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Alert configuration updated successfully",
+	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write alert config update response")
 	}
 }
@@ -111,9 +114,10 @@ func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 	// Check if already active
 	if config.ActivationState == alerts.ActivationActive {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"status":  "success",
-			"message": "Alerts already activated",
-			"state":   string(config.ActivationState),
+			"success":        true,
+			"message":        "Alerts already activated",
+			"state":          string(config.ActivationState),
+			"activationTime": config.ActivationTime,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write activate response")
 		}
@@ -155,7 +159,7 @@ func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 	log.Info().Msg("Alert notifications activated")
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"status":         "success",
+		"success":        true,
 		"message":        "Alert notifications activated",
 		"state":          string(config.ActivationState),
 		"activationTime": config.ActivationTime,

@@ -33,7 +33,7 @@ dev: frontend backend
 	sudo systemctl restart pulse-hot-dev
 
 dev-hot:
-	./scripts/dev-hot.sh
+	./scripts/hot-dev.sh
 
 # Clean build artifacts
 clean:

@@ -1,7 +1,31 @@
 import type { Alert } from '@/types/api';
+import { isAlertsActivationEnabled } from '@/utils/alertsActivation';
+
+const noAlertStyles = {
+  rowClass: '',
+  indicatorClass: '',
+  badgeClass: '',
+  hasAlert: false,
+  alertCount: 0,
+  severity: null as 'critical' | 'warning' | null,
+  hasPoweredOffAlert: false,
+  hasNonPoweredOffAlert: false,
+  hasUnacknowledgedAlert: false,
+  unacknowledgedCount: 0,
+  acknowledgedCount: 0,
+  hasAcknowledgedOnlyAlert: false,
+};
 
 // Get alert highlighting styles based on active alerts for a resource
-export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, Alert>) => {
+export const getAlertStyles = (
+  resourceId: string,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsActivationEnabled(),
+) => {
+  if (!alertsEnabled) {
+    return noAlertStyles;
+  }
+
   const alertsForResource = Object.values(activeAlerts).filter(
     (alert) => alert.resourceId === resourceId,
   );
@@ -86,6 +110,8 @@ export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, 
 export const getResourceAlerts = (
   resourceId: string,
   activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsActivationEnabled(),
 ): Alert[] => {
+  if (!alertsEnabled) return [];
   return Object.values(activeAlerts).filter((alert) => alert.resourceId === resourceId);
 };

@@ -3104,41 +3104,117 @@ if [ "$EUID" -ne 0 ]; then
    exit 1
 fi
 
-# Check if running inside a container (LXC/Docker)
-if [ -f /run/systemd/container ] || [ -f /.dockerenv ] || [ ! -z "${container:-}" ]; then
-   echo ""
-   echo "❌ ERROR: This script is running inside a container!"
-   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-   echo ""
-   echo "This setup script must be run on the Proxmox VE host itself,"
-   echo "not inside an LXC container or Docker container."
-   echo ""
-   echo "Please:"
-   echo "  1. Exit this container (type 'exit')"
-   echo "  2. Run the script directly on your Proxmox host"
-   echo ""
-   echo "The script needs access to 'pveum' commands which are only"
-   echo "available on the Proxmox VE host system."
-   echo ""
-   exit 1
-fi
+# Detect environment (Proxmox host vs LXC guest)
+detect_environment() {
+    if command -v pveum >/dev/null 2>&1 && command -v pveversion >/dev/null 2>&1; then
+        echo "pve_host"
+        return
+    fi
 
-# Check if pveum command exists
-if ! command -v pveum &> /dev/null; then
-   echo ""
-   echo "❌ ERROR: 'pveum' command not found!"
-   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-   echo ""
-   echo "This script must be run on a Proxmox VE host."
-   echo "The 'pveum' command is required to create users and tokens."
-   echo ""
-   echo "If you're seeing this error, you might be:"
-   echo "  • Running on a non-Proxmox system"
-   echo "  • Inside an LXC container (exit and run on the host)"
-   echo "  • On a PBS server (use the PBS setup script instead)"
-   echo ""
-   exit 1
-fi
+    if [ -f /proc/1/cgroup ] && grep -qE '/(lxc|machine\.slice/machine-lxc)' /proc/1/cgroup 2>/dev/null; then
+        echo "lxc_guest"
+        return
+    fi
+
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        if systemd-detect-virt -q -c 2>/dev/null; then
+            local virt_type
+            virt_type=$(systemd-detect-virt -c 2>/dev/null | tr '[:upper:]' '[:lower:]')
+            if echo "$virt_type" | grep -q "lxc"; then
+                echo "lxc_guest"
+                return
+            fi
+        fi
+    fi
+
+    echo "unknown"
+}
+
+detect_lxc_ctid() {
+    local ctid=""
+    if [ -f /proc/1/cgroup ]; then
+        ctid=$(sed 's/\\x2d/-/g' /proc/1/cgroup 2>/dev/null | grep -Eo '(lxc|machine-lxc)-[0-9]+' | tail -n1 | grep -Eo '[0-9]+' | tail -n1)
+        if [ -n "$ctid" ]; then
+            echo "$ctid"
+            return
+        fi
+    fi
+
+    if command -v hostname >/dev/null 2>&1; then
+        ctid=$(hostname 2>/dev/null)
+        if echo "$ctid" | grep -qE '^[0-9]+$'; then
+            echo "$ctid"
+            return
+        fi
+    fi
+
+    echo ""
+}
+
+ENVIRONMENT=$(detect_environment)
+
+case "$ENVIRONMENT" in
+    pve_host)
+        echo "Detected Proxmox VE host environment."
+        echo ""
+        ;;
+    lxc_guest)
+        echo "Detected Proxmox LXC container environment."
+        echo ""
+        LXC_CTID=$(detect_lxc_ctid)
+        CTID_DISPLAY="$LXC_CTID"
+        if [ -n "$LXC_CTID" ]; then
+            echo "  • Container ID: $LXC_CTID"
+        else
+            CTID_DISPLAY="<your-pulse-container-id>"
+            echo "  • Unable to auto-detect container ID."
+            echo "    Replace '${CTID_DISPLAY}' in the commands below with your container ID."
+        fi
+        echo ""
+        echo "Run the following commands on your Proxmox host to continue:"
+        echo ""
+        cat <<EOF
+# 1) Create or reuse the Pulse monitoring API token
+pveum user add pulse-monitor@pam --comment "Pulse monitoring service"
+pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
+pveum user token add pulse-monitor@pam %s --privsep 0
+
+# 2) Install or update pulse-sensor-proxy on the host
+curl -sSL "%s/api/install/install-sensor-proxy.sh" | bash -s -- --ctid ${CTID_DISPLAY} --pulse-server "%s"
+
+# 3) Ensure the proxy socket is mounted into this container
+NEXT_MP=\$(pct config ${CTID_DISPLAY} | awk '\$1 ~ /^mp[0-9]+:/ && index(\$0, "mp=/mnt/pulse-proxy") {gsub(":", "", \$1); print \$1; exit}')
+if [ -z "\$NEXT_MP" ]; then NEXT_MP="mp0"; fi
+pct set ${CTID_DISPLAY} -\${NEXT_MP} /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy,replicate=0
+pct exec ${CTID_DISPLAY} -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock && echo "Socket OK"
+
+EOF
+        echo "For the simplest experience, run this script on your Proxmox host instead:"
+        echo "  curl -sSL \"%s/api/setup-script?type=pve&host=%s&pulse_url=%s\" | bash"
+        echo ""
+        echo "Exiting without error. Re-run after completing the host steps."
+        exit 0
+        ;;
+    *)
+        echo "This script requires Proxmox host tooling (pveum)."
+        echo ""
+        echo "Run on your Proxmox host:"
+        echo "  curl -sSL \"%s/api/setup-script?type=pve&host=%s&pulse_url=%s\" | bash"
+        echo ""
+        echo "Manual setup steps:"
+        echo "  1. On Proxmox host, create API token:"
+        echo "       pveum user add pulse-monitor@pam --comment \"Pulse monitoring service\""
+        echo "       pveum aclmod / -user pulse-monitor@pam -role PVEAuditor"
+        echo "       pveum user token add pulse-monitor@pam %s --privsep 0"
+        echo ""
+        echo "  2. In Pulse: Settings → Nodes → Add Node (enter token from above)"
+        echo ""
+        echo "  3. (Optional) For temperature monitoring on containerized Pulse:"
+        echo "       %s/api/install/install-sensor-proxy.sh --ctid <your-pulse-container-id> --pulse-server %s"
+        echo ""
+        exit 1
+        ;;
+esac
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Main Menu
@@ -4345,11 +4421,14 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
     echo "  Host URL: YOUR_PROXMOX_HOST:8006"
 echo ""
 fi
-`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
+`, serverName, time.Now().Format("2006-01-02 15:04:05"),
+			tokenName, pulseURL, pulseURL, pulseURL, serverHost, pulseURL,
+			pulseURL, serverHost, pulseURL, tokenName, pulseURL, pulseURL,
+			pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
 			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
-			pulseURL, "%s", "%s", pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, tokenName)
+			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash

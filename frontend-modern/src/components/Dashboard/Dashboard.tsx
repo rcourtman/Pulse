@@ -4,6 +4,7 @@ import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
@@ -33,6 +34,8 @@ export function Dashboard(props: DashboardProps) {
   const navigate = useNavigate();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
@@ -796,7 +799,7 @@ export function Dashboard(props: DashboardProps) {
                                 return (
                                   <GuestRow
                                     guest={guest}
-                                    alertStyles={getAlertStyles(guestId, activeAlerts)}
+                                    alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
                                     customUrl={metadata?.customUrl}
                                     onTagClick={handleTagClick}
                                     activeSearch={search()}

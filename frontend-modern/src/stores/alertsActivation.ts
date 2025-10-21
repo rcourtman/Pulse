@@ -2,13 +2,28 @@ import { createSignal } from 'solid-js';
 import { AlertsAPI } from '@/api/alerts';
 import type { AlertConfig, ActivationState as ActivationStateType } from '@/types/alerts';
 import type { Alert } from '@/types/api';
+import { setGlobalActivationState } from '@/utils/alertsActivation';
 
 // Create signals for activation state
 const [config, setConfig] = createSignal<AlertConfig | null>(null);
-const [activationState, setActivationState] = createSignal<ActivationStateType | null>(null);
+const [activationState, setActivationStateSignal] = createSignal<ActivationStateType | null>(null);
 const [isLoading, setIsLoading] = createSignal(false);
 const [activeAlerts, setActiveAlerts] = createSignal<Alert[]>([]);
 const [lastError, setLastError] = createSignal<string | null>(null);
+
+const applyActivationState = (state: ActivationStateType | null) => {
+  setActivationStateSignal(state);
+  setGlobalActivationState(state);
+};
+
+const ensureConfigLoaded = async (): Promise<AlertConfig | null> => {
+  let current = config();
+  if (!current) {
+    await refreshConfig();
+    current = config();
+  }
+  return current;
+};
 
 // Refresh config from API
 const refreshConfig = async (): Promise<void> => {
@@ -17,7 +32,7 @@ const refreshConfig = async (): Promise<void> => {
     setLastError(null);
     const alertConfig = await AlertsAPI.getConfig();
     setConfig(alertConfig);
-    setActivationState(alertConfig.activationState || 'active');
+    applyActivationState(alertConfig.activationState || 'active');
   } catch (error) {
     console.error('Failed to fetch alert config:', error);
     setLastError(error instanceof Error ? error.message : 'Unknown error');
@@ -59,6 +74,35 @@ const activate = async (): Promise<boolean> => {
   }
 };
 
+const updateActivationState = async (state: ActivationStateType): Promise<boolean> => {
+  try {
+    setIsLoading(true);
+    setLastError(null);
+    const current = await ensureConfigLoaded();
+    if (!current) {
+      throw new Error('Alert configuration is unavailable');
+    }
+    const updated: AlertConfig = { ...current, activationState: state };
+    const result = await AlertsAPI.updateConfig(updated);
+    if (!result.success) {
+      return false;
+    }
+    setConfig(updated);
+    applyActivationState(state);
+    return true;
+  } catch (error) {
+    console.error('Failed to update activation state:', error);
+    setLastError(error instanceof Error ? error.message : 'Unknown error');
+    return false;
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+const deactivate = async (): Promise<boolean> => updateActivationState('pending_review');
+
+const snooze = async (): Promise<boolean> => updateActivationState('snoozed');
+
 // Check if past observation window
 const isPastObservationWindow = (): boolean => {
   const cfg = config();
@@ -89,6 +133,8 @@ export const useAlertsActivation = () => ({
   refreshConfig,
   refreshActiveAlerts,
   activate,
+  deactivate,
+  snooze,
 });
 
 // Initialize on module load

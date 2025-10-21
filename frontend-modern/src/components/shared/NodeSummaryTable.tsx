@@ -7,6 +7,7 @@ import { getAlertStyles } from '@/utils/alerts';
 import { Card } from '@/components/shared/Card';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { getCpuTemperature } from '@/utils/temperature';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -22,6 +23,8 @@ interface NodeSummaryTableProps {
 
 export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const { activeAlerts, state } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   type CountSortKey = 'vmCount' | 'containerCount' | 'storageCount' | 'diskCount' | 'backupCount';
   type SortKey =
     | 'default'
@@ -423,15 +426,19 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const isSelected = () => props.selectedNode === nodeId;
                 // Use the full resource ID for alert matching
                 const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;
-                const alertStyles = getAlertStyles(resourceId, activeAlerts);
-                const showAlertHighlight = alertStyles.hasUnacknowledgedAlert && online;
+                const alertStyles = createMemo(() =>
+                  getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
+                );
+                const showAlertHighlight = createMemo(
+                  () => alertStyles().hasUnacknowledgedAlert && online,
+                );
 
                 const rowStyle = createMemo(() => {
                   const styles: Record<string, string> = {};
                   const shadows: string[] = [];
 
-                  if (showAlertHighlight) {
-                    const color = alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+                  if (showAlertHighlight()) {
+                    const color = alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
                     shadows.push(`inset 4px 0 0 0 ${color}`);
                   }
 
@@ -454,8 +461,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     return `cursor-pointer transition-all duration-200 relative bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:shadow-sm z-10`;
                   }
 
-                  if (showAlertHighlight) {
-                    return alertStyles.severity === 'critical'
+                  if (showAlertHighlight()) {
+                    return alertStyles().severity === 'critical'
                       ? 'cursor-pointer transition-all duration-200 relative bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/40 hover:shadow-sm'
                       : 'cursor-pointer transition-all duration-200 relative bg-yellow-50 dark:bg-yellow-950/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/30 hover:shadow-sm';
                   }

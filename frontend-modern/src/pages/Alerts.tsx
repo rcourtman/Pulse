@@ -8,7 +8,6 @@ import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, Back
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
-import { Toggle } from '@/components/shared/Toggle';
 import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
@@ -19,6 +18,7 @@ import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container, DockerHost, DockerContainer } from '@/types/api';
 import { useNavigate, useLocation } from '@solidjs/router';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
@@ -317,6 +317,56 @@ export function Alerts() {
   const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
+  const alertsActivation = useAlertsActivation();
+  const [isSwitchingActivation, setIsSwitchingActivation] = createSignal(false);
+  const isAlertsActive = createMemo(() => alertsActivation.activationState() === 'active');
+
+  const handleActivateAlerts = async () => {
+    if (alertsActivation.isLoading() || isSwitchingActivation()) {
+      return;
+    }
+    setIsSwitchingActivation(true);
+    try {
+      const success = await alertsActivation.activate();
+      if (success) {
+        showSuccess('Alerts activated! You\'ll now receive alerts when issues are detected.');
+        try {
+          await alertsActivation.refreshActiveAlerts();
+        } catch (error) {
+          console.error('Failed to refresh alerts after activation', error);
+        }
+      } else {
+        showError('Unable to activate alerts. Please try again.');
+      }
+    } finally {
+      setIsSwitchingActivation(false);
+    }
+  };
+
+  const handleDeactivateAlerts = async () => {
+    if (isSwitchingActivation()) {
+      return;
+    }
+    setIsSwitchingActivation(true);
+    try {
+      const success = await alertsActivation.deactivate();
+      if (success) {
+        showSuccess('Alerts deactivated. Nothing will be sent until you activate them again.');
+        try {
+          await alertsActivation.refreshActiveAlerts();
+        } catch (error) {
+          console.error('Failed to refresh alerts after deactivation', error);
+        }
+      } else {
+        showError('Unable to deactivate alerts. Please try again.');
+      }
+    } catch (error) {
+      console.error('Deactivate alerts failed', error);
+      showError('Unable to deactivate alerts. Please try again.');
+    } finally {
+      setIsSwitchingActivation(false);
+    }
+  };
 
   const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
 
@@ -341,6 +391,12 @@ export function Alerts() {
 
     if (currentPath !== expectedPath && !isThresholdsSubPath) {
       navigate(expectedPath, { replace: true });
+    }
+  });
+
+  createEffect(() => {
+    if (!isAlertsActive() && activeTab() !== 'overview') {
+      handleTabChange('overview');
     }
   });
 
@@ -1211,11 +1267,51 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     <div class="space-y-4">
       {/* Header with better styling */}
       <Card padding="md">
-        <SectionHeader
-          title={headerMeta().title}
-          description={headerMeta().description}
-          size="lg"
-        />
+        <div class="flex items-center justify-between gap-4">
+          <SectionHeader
+            title={headerMeta().title}
+            description={headerMeta().description}
+            size="lg"
+          />
+          <Show when={activeTab() === 'overview'}>
+            <div class="flex items-center gap-3">
+              <span
+                class={`text-sm font-medium ${
+                  isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                {isAlertsActive() ? 'Alerts enabled' : 'Alerts disabled'}
+              </span>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <span class="sr-only">Toggle alerts</span>
+                <input
+                  type="checkbox"
+                  class="sr-only peer"
+                  checked={isAlertsActive()}
+                  disabled={alertsActivation.isLoading() || isSwitchingActivation()}
+                  onChange={(event) => {
+                    if (event.currentTarget.checked) {
+                      void handleActivateAlerts();
+                    } else {
+                      void handleDeactivateAlerts();
+                    }
+                  }}
+                />
+                <div
+                  class={`relative w-11 h-6 rounded-full transition ${
+                    isAlertsActive() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                  } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
+                >
+                  <span
+                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${
+                      isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </div>
+              </label>
+            </div>
+          </Show>
+        </div>
       </Card>
 
       {/* Save notification bar - only show when there are unsaved changes */}
@@ -1419,6 +1515,10 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         </Card>
       </Show>
 
+      <div class={`transition-opacity ${
+        isAlertsActive() ? 'opacity-100' : 'opacity-50 pointer-events-none'
+      }`}>
+
       <Card padding="none" class="relative lg:flex">
         <div
           class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}
@@ -1439,24 +1539,39 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                     </Show>
                     <div class="space-y-1.5">
                       <For each={group.items}>
-                        {(item) => (
-                          <button
-                            type="button"
-                            aria-current={activeTab() === item.id ? 'page' : undefined}
-                            class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${
-                              activeTab() === item.id
-                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
-                            }`}
-                            onClick={() => handleTabChange(item.id)}
-                            title={sidebarCollapsed() ? item.label : undefined}
-                          >
-                            {item.icon}
-                            <Show when={!sidebarCollapsed()}>
-                              <span class="truncate">{item.label}</span>
-                            </Show>
-                          </button>
-                        )}
+                        {(item) => {
+                          const disabled = () => item.id !== 'overview' && !isAlertsActive();
+                          return (
+                            <button
+                              type="button"
+                              aria-current={activeTab() === item.id ? 'page' : undefined}
+                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${
+                                activeTab() === item.id
+                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                              } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                              disabled={disabled()}
+                              onClick={() => {
+                                if (disabled()) return;
+                                handleTabChange(item.id);
+                              }}
+                              title={
+                                sidebarCollapsed()
+                                  ? disabled()
+                                    ? 'Activate alerts to configure'
+                                    : item.label
+                                  : disabled()
+                                    ? 'Activate alerts to configure'
+                                    : undefined
+                              }
+                            >
+                              {item.icon}
+                              <Show when={!sidebarCollapsed()}>
+                                <span class="truncate">{item.label}</span>
+                              </Show>
+                            </button>
+                          );
+                        }}
                       </For>
                     </div>
                   </div>
@@ -1475,19 +1590,27 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                   style="-webkit-overflow-scrolling: touch;"
                 >
                   <For each={flatTabs}>
-                    {(tab) => (
-                      <button
-                        type="button"
-                        class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
-                          activeTab() === tab.id
-                            ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                        }`}
-                        onClick={() => handleTabChange(tab.id)}
-                      >
-                        {tab.label}
-                      </button>
-                    )}
+                    {(tab) => {
+                      const disabled = () => tab.id !== 'overview' && !isAlertsActive();
+                      return (
+                        <button
+                          type="button"
+                          class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                            activeTab() === tab.id
+                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                          } ${disabled() ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                          disabled={disabled()}
+                          onClick={() => {
+                            if (disabled()) return;
+                            handleTabChange(tab.id);
+                          }}
+                          title={disabled() ? 'Activate alerts to configure' : undefined}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    }}
                   </For>
                 </div>
               </div>
@@ -1616,6 +1739,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           </div>
         </div>
       </Card>
+      </div>
     </div>
   );
 }

@@ -131,7 +131,7 @@ type Config struct {
 	AutoUpdateTime          string        `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
 
 	// Discovery settings
-	DiscoveryEnabled bool            `envconfig:"DISCOVERY_ENABLED" default:"true"`
+	DiscoveryEnabled bool            `envconfig:"DISCOVERY_ENABLED" default:"false"`
 	DiscoverySubnet  string          `envconfig:"DISCOVERY_SUBNET" default:"auto"`
 	Discovery        DiscoveryConfig `json:"discoveryConfig"`
 
@@ -511,7 +511,7 @@ func Load() (*Config, error) {
 		IframeEmbeddingAllow:  "SAMEORIGIN",
 		PBSPollingInterval:    60 * time.Second, // Default PBS polling (slower)
 		PMGPollingInterval:    60 * time.Second, // Default PMG polling (aggregated stats)
-		DiscoveryEnabled:      true,
+		DiscoveryEnabled:      false,
 		DiscoverySubnet:       "auto",
 		EnvOverrides:          make(map[string]bool),
 	OIDC:                  NewOIDCConfig(),
