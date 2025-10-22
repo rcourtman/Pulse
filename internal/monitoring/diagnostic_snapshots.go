@@ -21,6 +21,9 @@ type NodeMemoryRaw struct {
 	Cached              uint64 `json:"cached"`
 	Shared              uint64 `json:"shared"`
 	EffectiveAvailable  uint64 `json:"effectiveAvailable"`
+	RRDAvailable        uint64 `json:"rrdAvailable,omitempty"`
+	RRDUsed             uint64 `json:"rrdUsed,omitempty"`
+	RRDTotal            uint64 `json:"rrdTotal,omitempty"`
 	TotalMinusUsed      uint64 `json:"totalMinusUsed,omitempty"`
 	FallbackTotal       uint64 `json:"fallbackTotal,omitempty"`
 	FallbackUsed        uint64 `json:"fallbackUsed,omitempty"`
@@ -137,6 +140,15 @@ func (m *Monitor) logNodeMemorySource(instance, node string, snapshot NodeMemory
 	}
 	if snapshot.Raw.TotalMinusUsed > 0 {
 		evt = evt.Uint64("rawTotalMinusUsed", snapshot.Raw.TotalMinusUsed)
+	}
+	if snapshot.Raw.RRDAvailable > 0 {
+		evt = evt.Uint64("rrdAvailable", snapshot.Raw.RRDAvailable)
+	}
+	if snapshot.Raw.RRDUsed > 0 {
+		evt = evt.Uint64("rrdUsed", snapshot.Raw.RRDUsed)
+	}
+	if snapshot.Raw.RRDTotal > 0 {
+		evt = evt.Uint64("rrdTotal", snapshot.Raw.RRDTotal)
 	}
 	if snapshot.Memory.Total > 0 {
 		evt = evt.Int64("total", snapshot.Memory.Total)
