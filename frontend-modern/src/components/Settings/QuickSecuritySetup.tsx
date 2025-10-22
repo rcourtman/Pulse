@@ -117,6 +117,19 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       setCredentials(newCredentials);
       setShowCredentials(true);
 
+      try {
+        sessionStorage.removeItem('pulse_auth');
+        sessionStorage.removeItem('pulse_auth_user');
+      } catch (storageError) {
+        console.warn('Unable to clear cached auth session storage', storageError);
+      }
+
+      try {
+        localStorage.removeItem('apiToken');
+      } catch (storageError) {
+        console.warn('Unable to clear cached API token', storageError);
+      }
+
       // Show success message
       showSuccess(
         isRotation

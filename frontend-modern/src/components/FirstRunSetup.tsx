@@ -131,8 +131,22 @@ export const FirstRunSetup: Component = () => {
 
       // Save credentials for display
       setSavedUsername(username());
-      setSavedPassword(useCustomPassword() ? password() : generatedPassword());
+      setSavedPassword(finalPassword);
       setSavedToken(token);
+
+      // Clear any cached credentials from prior sessions so a reload doesn't auto-submit again
+      try {
+        sessionStorage.removeItem('pulse_auth');
+        sessionStorage.removeItem('pulse_auth_user');
+      } catch (storageError) {
+        console.warn('Unable to clear cached auth session storage', storageError);
+      }
+
+      try {
+        localStorage.removeItem('apiToken');
+      } catch (storageError) {
+        console.warn('Unable to clear cached API token', storageError);
+      }
 
       const bootstrapRecord: APITokenRecord = {
         id: 'bootstrap-token',
