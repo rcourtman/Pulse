@@ -2,10 +2,13 @@ import { JSX } from 'solid-js';
 
 type ToggleSize = 'xs' | 'sm' | 'md';
 
-interface ToggleChangeEvent {
+export interface ToggleChangeEvent {
   currentTarget: {
     checked: boolean;
   };
+  preventDefault: () => void;
+  stopPropagation: () => void;
+  readonly defaultPrevented: boolean;
 }
 
 interface BaseToggleProps {
@@ -37,8 +40,25 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   const handleClick = () => {
     if (isDisabled()) return;
     const next = !props.checked;
-    props.onToggle?.();
-    props.onChange?.({ currentTarget: { checked: next } });
+    let defaultPrevented = false;
+
+    const event: ToggleChangeEvent = {
+      currentTarget: { checked: next },
+      preventDefault() {
+        defaultPrevented = true;
+      },
+      stopPropagation() {
+        /* noop for synthetic toggle event */
+      },
+      get defaultPrevented() {
+        return defaultPrevented;
+      },
+    };
+
+    props.onChange?.(event);
+    if (!event.defaultPrevented) {
+      props.onToggle?.();
+    }
   };
 
   return (

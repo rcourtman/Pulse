@@ -8,6 +8,7 @@ import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, Back
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
+import { Toggle } from '@/components/shared/Toggle';
 import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
@@ -3688,6 +3689,7 @@ function HistoryTab() {
   // Apply filters to get the final alert data
   const alertData = createMemo(() => {
     let filtered = severityAndSearchFilteredAlerts();
+    const currentTimeFilter = timeFilter();
 
     // Selected bar filter (takes precedence over time filter)
     if (selectedBarIndex() !== null) {
@@ -3700,13 +3702,14 @@ function HistoryTab() {
         const alertTime = new Date(alert.startTime).getTime();
         return alertTime >= bucketStart && alertTime < bucketEnd;
       });
-    } else if (timeFilter() !== 'all') {
+    } else if (currentTimeFilter !== 'all') {
       const now = Date.now();
-      const cutoff = {
+      const cutoffMap: Record<'24h' | '7d' | '30d', number> = {
         '24h': now - 24 * 60 * 60 * 1000,
         '7d': now - 7 * 24 * 60 * 60 * 1000,
         '30d': now - 30 * 24 * 60 * 60 * 1000,
-      }[timeFilter()];
+      };
+      const cutoff = cutoffMap[currentTimeFilter];
 
       if (cutoff) {
         filtered = filtered.filter((a) => new Date(a.startTime).getTime() > cutoff);
@@ -4217,7 +4220,7 @@ function HistoryTab() {
       <div class="flex flex-wrap gap-2 mb-4">
         <select
           value={timeFilter()}
-          onChange={(e) => setTimeFilter(e.currentTarget.value)}
+          onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
           class="px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
         >
           <option value="24h">Last 24h</option>
@@ -4228,7 +4231,7 @@ function HistoryTab() {
 
         <select
           value={severityFilter()}
-          onChange={(e) => setSeverityFilter(e.currentTarget.value)}
+          onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
           class="px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
         >
           <option value="all">All Levels</option>

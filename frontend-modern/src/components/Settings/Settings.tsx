@@ -18,6 +18,7 @@ import { UpdatesAPI } from '@/api/updates';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
+import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
@@ -1898,7 +1899,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         </span>
                         <Toggle
                           checked={discoveryEnabled()}
-                          onChange={async (e) => {
+                          onChange={async (e: ToggleChangeEvent) => {
                             if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
                               e.preventDefault();
                               return;
@@ -2437,7 +2438,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         </span>
                         <Toggle
                           checked={discoveryEnabled()}
-                          onChange={async (e) => {
+                          onChange={async (e: ToggleChangeEvent) => {
                             if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
                               e.preventDefault();
                               return;
@@ -2866,7 +2867,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         </span>
                         <Toggle
                           checked={discoveryEnabled()}
-                          onChange={async (e) => {
+                          onChange={async (e: ToggleChangeEvent) => {
                             if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
                               e.preventDefault();
                               return;
@@ -3309,7 +3310,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     </div>
                     <Toggle
                       checked={discoveryEnabled()}
-                      onChange={async (e) => {
+                      onChange={async (e: ToggleChangeEvent) => {
                         if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
                           e.preventDefault();
                           return;

@@ -93,6 +93,8 @@ Yes! When you add one cluster node, Pulse automatically discovers and monitors a
 Reduce `metricsRetentionDays` in settings and restart
 
 ### How do I monitor adaptive polling?
+**New in v4.25.0:** The adaptive scheduler now exposes staleness scores, circuit breaker state, and per-resource poll metrics so you can trace why work was delayed.
+
 **New in v4.24.0:** Pulse includes adaptive polling that automatically adjusts polling intervals based on system load.
 
 **Monitor adaptive polling:**
@@ -111,7 +113,8 @@ Reduce `metricsRetentionDays` in settings and restart
 
 See [Adaptive Polling Documentation](monitoring/ADAPTIVE_POLLING.md) for complete details.
 
-### What's new about rate limiting in v4.24.0?
+### What's new about rate limiting in v4.25.0?
+**New in v4.25.0:** Adaptive polling metrics and circuit breaker states are now exposed alongside rate-limit headers, making throttling decisions easier to interpret.
 Pulse now returns standard rate limit headers with all API responses:
 
 **Response Headers:**

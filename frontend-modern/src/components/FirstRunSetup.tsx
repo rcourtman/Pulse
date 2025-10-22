@@ -11,7 +11,6 @@ export const FirstRunSetup: Component = () => {
   const [password, setPassword] = createSignal('');
   const [confirmPassword, setConfirmPassword] = createSignal('');
   const [useCustomPassword, setUseCustomPassword] = createSignal(false);
-  const [generatedPassword, setGeneratedPassword] = createSignal('');
   const [, setApiToken] = createSignal('');
   const [isSettingUp, setIsSettingUp] = createSignal(false);
   const [showCredentials, setShowCredentials] = createSignal(false);
@@ -96,9 +95,6 @@ export const FirstRunSetup: Component = () => {
 
     // Generate password if not custom
     const finalPassword = useCustomPassword() ? password() : generatePassword();
-    if (!useCustomPassword()) {
-      setGeneratedPassword(finalPassword);
-    }
 
     // Generate API token
     const token = generateToken();

@@ -107,6 +107,7 @@ systemctl status pulse-update.timer         # Check status
 - Creates backup before updating
 - Automatically rolls back if update fails
 - Logs all activity to systemd journal
+- **New in v4.25.0**: Adaptive monitoring now ships with circuit breakers, staleness tracking, and richer poll metrics while the Helm chart streamlines Kubernetes installs bundled with the binary.
 - **New in v4.24.0**: Rollback history is retained in Settings → System → Updates; use the new 'Restore previous version' button if the latest build regresses
 
 #### View Update Logs
@@ -138,7 +139,7 @@ docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:late
 
 ### Rollback to Previous Version
 
-**New in v4.24.0:** Pulse retains previous versions and allows easy rollback if an update causes issues.
+**New in v4.25.0:** Pulse retains previous versions and allows easy rollback if an update causes issues, now backed by detailed scheduler metrics so you can see why a rollback triggered.
 
 #### Via UI (Recommended)
 1. Navigate to **Settings → System → Updates**
@@ -187,7 +188,7 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 
 ### Runtime Logging Configuration
 
-**New in v4.24.0:** Adjust logging settings without restarting Pulse.
+**New in v4.25.0:** Adjust logging settings without restarting Pulse; the structured logging subsystem now centralizes format, destinations, and rotation controls.
 
 #### Via UI
 Navigate to **Settings → System → Logging** to configure:
@@ -209,7 +210,7 @@ docker run -e LOG_LEVEL=debug -e LOG_FORMAT=json rcourtman/pulse:latest
 
 ### Adaptive Polling
 
-**New in v4.24.0:** Adaptive polling is now enabled by default, automatically adjusting polling intervals based on system load and responsiveness. Monitor status via **Settings → System → Monitoring** or the new Scheduler Health API at `/api/monitoring/scheduler/health`.
+**New in v4.25.0:** Adaptive polling now publishes staleness scores, circuit breaker states, and poll timings in `/api/monitoring/scheduler/health`, giving operators context when the scheduler slows down.
 
 ## Troubleshooting
 
