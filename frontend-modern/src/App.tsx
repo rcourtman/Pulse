@@ -22,7 +22,6 @@ import { Alerts } from './pages/Alerts';
 import { DockerHosts } from './components/Docker/DockerHosts';
 import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import NotificationContainer from './components/NotificationContainer';
 import { SecurityWarning } from './components/SecurityWarning';
 import { Login } from './components/Login';
 import { logger } from './utils/logger';
@@ -585,7 +584,6 @@ function App() {
                     </AppLayout>
                   </div>
                   <ToastContainer />
-                  <NotificationContainer />
                   <TokenRevealDialog />
                   <TooltipRoot />
                 </DarkModeContext.Provider>

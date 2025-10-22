@@ -145,7 +145,7 @@ const Toast: Component<ToastProps> = (props) => {
 // Declare global interface extension
 declare global {
   interface Window {
-    showToast: (type: ToastType, title: string, message?: string, duration?: number) => void;
+    showToast: (type: ToastType, title: string, message?: string, duration?: number) => string;
   }
 }
 
@@ -158,8 +158,9 @@ export const ToastContainer: Component = () => {
 
   // Expose global toast function
   window.showToast = (type: ToastType, title: string, message?: string, duration?: number) => {
-    const id = Date.now().toString();
+    const id = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
     setToasts([...toasts(), { id, type, title, message, duration }]);
+    return id;
   };
 
   return (
