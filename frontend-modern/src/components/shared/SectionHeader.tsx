@@ -31,11 +31,11 @@ export function SectionHeader(props: SectionHeaderProps) {
   const sizeClass = () => {
     switch (local.size) {
       case 'sm':
-        return 'text-base';
+        return 'text-base sm:text-lg';
       case 'lg':
-        return 'text-2xl';
+        return 'text-xl sm:text-2xl lg:text-3xl';
       default:
-        return 'text-lg';
+        return 'text-lg sm:text-xl';
     }
   };
 
@@ -47,13 +47,13 @@ export function SectionHeader(props: SectionHeaderProps) {
         </span>
       </Show>
       <h2
-        class={`${sizeClass()} font-semibold text-gray-900 dark:text-gray-100 ${local.titleClass ?? ''}`.trim()}
+        class={`${sizeClass()} font-semibold leading-snug text-gray-900 dark:text-gray-100 ${local.titleClass ?? ''}`.trim()}
       >
         {local.title}
       </h2>
       <Show when={local.description}>
         <p
-          class={`text-sm text-gray-600 dark:text-gray-400 ${local.descriptionClass ?? ''}`.trim()}
+          class={`text-sm sm:text-base text-gray-600 dark:text-gray-400 ${local.descriptionClass ?? ''}`.trim()}
         >
           {local.description}
         </p>
