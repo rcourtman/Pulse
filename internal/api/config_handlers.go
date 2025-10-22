@@ -23,12 +23,12 @@ import (
 
 	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	discoveryinternal "github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	discoveryinternal "github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -89,6 +89,14 @@ func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFu
 // SetMonitor updates the monitor reference used by the config handlers.
 func (h *ConfigHandlers) SetMonitor(m *monitoring.Monitor) {
 	h.monitor = m
+}
+
+// SetConfig updates the configuration reference used by the handlers.
+func (h *ConfigHandlers) SetConfig(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	h.config = cfg
 }
 
 // cleanupExpiredCodes removes expired or used setup codes periodically
@@ -2862,12 +2870,12 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 			}
 
 			response := map[string]interface{}{
-				"servers":      result.Servers,
-				"errors":       result.Errors,
-				"environment":  result.Environment,
-				"cached":       true,
-				"updated":      updatedUnix,
-				"age":          ageSeconds,
+				"servers":     result.Servers,
+				"errors":      result.Errors,
+				"environment": result.Environment,
+				"cached":      true,
+				"updated":     updatedUnix,
+				"age":         ageSeconds,
 			}
 
 			w.Header().Set("Content-Type", "application/json")

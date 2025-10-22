@@ -132,6 +132,16 @@ func (rm *ReloadableMonitor) GetMonitor() *Monitor {
 	return rm.monitor
 }
 
+// GetConfig returns the current configuration used by the monitor.
+func (rm *ReloadableMonitor) GetConfig() *config.Config {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	if rm.config == nil {
+		return nil
+	}
+	return rm.config
+}
+
 // GetState returns the current state
 func (rm *ReloadableMonitor) GetState() interface{} {
 	return rm.GetMonitor().GetState()
