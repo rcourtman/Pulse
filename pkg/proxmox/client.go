@@ -1050,6 +1050,95 @@ type VMFileSystem struct {
 	DiskRaw    []interface{} `json:"disk"` // Raw disk device info from API
 }
 
+func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
+	type rawVMFileSystem struct {
+		Name       string        `json:"name"`
+		Type       string        `json:"type"`
+		Mountpoint string        `json:"mountpoint"`
+		TotalBytes interface{}   `json:"total-bytes"`
+		UsedBytes  interface{}   `json:"used-bytes"`
+		DiskRaw    []interface{} `json:"disk"`
+	}
+
+	var raw rawVMFileSystem
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	total, err := parseUint64Flexible(raw.TotalBytes)
+	if err != nil {
+		return err
+	}
+	used, err := parseUint64Flexible(raw.UsedBytes)
+	if err != nil {
+		return err
+	}
+
+	fs.Name = raw.Name
+	fs.Type = raw.Type
+	fs.Mountpoint = raw.Mountpoint
+	fs.TotalBytes = total
+	fs.UsedBytes = used
+	fs.DiskRaw = raw.DiskRaw
+	fs.Disk = ""
+	return nil
+}
+
+func parseUint64Flexible(value interface{}) (uint64, error) {
+	switch v := value.(type) {
+	case nil:
+		return 0, nil
+	case uint64:
+		return v, nil
+	case int:
+		if v < 0 {
+			return 0, nil
+		}
+		return uint64(v), nil
+	case int64:
+		if v < 0 {
+			return 0, nil
+		}
+		return uint64(v), nil
+	case float64:
+		if v < 0 {
+			return 0, nil
+		}
+		return uint64(v), nil
+	case json.Number:
+		return parseUint64Flexible(v.String())
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return 0, nil
+		}
+		if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+			u, err := strconv.ParseUint(s[2:], 16, 64)
+			if err != nil {
+				return 0, err
+			}
+			return u, nil
+		}
+		if strings.ContainsAny(s, ".eE") {
+			f, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				return 0, err
+			}
+			if f < 0 {
+				return 0, nil
+			}
+			return uint64(f), nil
+		}
+		u, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return u, nil
+	default:
+		return 0, fmt.Errorf("unsupported type %T for uint64 conversion", value)
+	}
+}
+
 type VMIpAddress struct {
 	Address string `json:"ip-address"`
 	Prefix  int    `json:"prefix"`
