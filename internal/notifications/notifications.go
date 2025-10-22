@@ -3,6 +3,7 @@ package notifications
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -171,6 +172,15 @@ func copyAppriseConfig(cfg AppriseConfig) AppriseConfig {
 // NormalizeAppriseConfig cleans and normalizes Apprise configuration values.
 func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 	normalized := cfg
+
+	mode := strings.ToLower(strings.TrimSpace(string(normalized.Mode)))
+	switch mode {
+	case string(AppriseModeHTTP):
+		normalized.Mode = AppriseModeHTTP
+	default:
+		normalized.Mode = AppriseModeCLI
+	}
+
 	normalized.CLIPath = strings.TrimSpace(normalized.CLIPath)
 	if normalized.CLIPath == "" {
 		normalized.CLIPath = "apprise"
@@ -198,10 +208,28 @@ func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 		seen[lower] = struct{}{}
 		cleanTargets = append(cleanTargets, trimmed)
 	}
-
 	normalized.Targets = cleanTargets
-	if len(cleanTargets) == 0 {
-		normalized.Enabled = false
+
+	normalized.ServerURL = strings.TrimSpace(normalized.ServerURL)
+	normalized.ServerURL = strings.TrimRight(normalized.ServerURL, "/")
+
+	normalized.ConfigKey = strings.TrimSpace(normalized.ConfigKey)
+
+	normalized.APIKey = strings.TrimSpace(normalized.APIKey)
+	normalized.APIKeyHeader = strings.TrimSpace(normalized.APIKeyHeader)
+	if normalized.APIKeyHeader == "" {
+		normalized.APIKeyHeader = "X-API-KEY"
+	}
+
+	switch normalized.Mode {
+	case AppriseModeCLI:
+		if len(normalized.Targets) == 0 {
+			normalized.Enabled = false
+		}
+	case AppriseModeHTTP:
+		if normalized.ServerURL == "" {
+			normalized.Enabled = false
+		}
 	}
 
 	return normalized
@@ -258,12 +286,26 @@ type WebhookConfig struct {
 	CustomFields map[string]string `json:"customFields,omitempty"`
 }
 
-// AppriseConfig holds Apprise CLI notification settings.
+// AppriseMode identifies how Pulse should deliver notifications through Apprise.
+type AppriseMode string
+
+const (
+	AppriseModeCLI  AppriseMode = "cli"
+	AppriseModeHTTP AppriseMode = "http"
+)
+
+// AppriseConfig holds Apprise notification settings.
 type AppriseConfig struct {
-	Enabled        bool     `json:"enabled"`
-	Targets        []string `json:"targets"`
-	CLIPath        string   `json:"cliPath,omitempty"`
-	TimeoutSeconds int      `json:"timeoutSeconds,omitempty"`
+	Enabled        bool        `json:"enabled"`
+	Mode           AppriseMode `json:"mode,omitempty"`
+	Targets        []string    `json:"targets"`
+	CLIPath        string      `json:"cliPath,omitempty"`
+	TimeoutSeconds int         `json:"timeoutSeconds,omitempty"`
+	ServerURL      string      `json:"serverUrl,omitempty"`
+	ConfigKey      string      `json:"configKey,omitempty"`
+	APIKey         string      `json:"apiKey,omitempty"`
+	APIKeyHeader   string      `json:"apiKeyHeader,omitempty"`
+	SkipTLSVerify  bool        `json:"skipTlsVerify,omitempty"`
 }
 
 // NewNotificationManager creates a new notification manager
@@ -281,9 +323,11 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		webhooks:     []WebhookConfig{},
 		appriseConfig: AppriseConfig{
 			Enabled:        false,
+			Mode:           AppriseModeCLI,
 			Targets:        []string{},
 			CLIPath:        "apprise",
 			TimeoutSeconds: 15,
+			APIKeyHeader:   "X-API-KEY",
 		},
 		groupWindow:       30 * time.Second,
 		pendingAlerts:     make([]*alerts.Alert, 0),
@@ -571,7 +615,7 @@ func (n *NotificationManager) sendGroupedAlerts() {
 		}
 	}
 
-	if appriseConfig.Enabled && len(appriseConfig.Targets) > 0 {
+	if appriseConfig.Enabled {
 		go n.sendGroupedApprise(appriseConfig, alertsToSend)
 	}
 
@@ -604,23 +648,64 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 	}
 
 	cfg := NormalizeAppriseConfig(config)
-	if !cfg.Enabled || len(cfg.Targets) == 0 {
+	if !cfg.Enabled {
 		return
 	}
 
-	primary := alertList[0]
-	alertCount := len(alertList)
+	title, body, notifyType := buildApprisePayload(alertList, n.publicURL)
+	if title == "" && body == "" {
+		log.Warn().Msg("Apprise notification skipped: failed to build payload")
+		return
+	}
+
+	switch cfg.Mode {
+	case AppriseModeHTTP:
+		if err := n.sendAppriseViaHTTP(cfg, title, body, notifyType); err != nil {
+			log.Warn().
+				Err(err).
+				Str("mode", string(cfg.Mode)).
+				Str("serverUrl", cfg.ServerURL).
+				Msg("Failed to send Apprise notification via API")
+		}
+	default:
+		if err := n.sendAppriseViaCLI(cfg, title, body); err != nil {
+			log.Warn().
+				Err(err).
+				Str("mode", string(cfg.Mode)).
+				Str("cliPath", cfg.CLIPath).
+				Strs("targets", cfg.Targets).
+				Msg("Failed to send Apprise notification")
+		}
+	}
+}
+
+func buildApprisePayload(alertList []*alerts.Alert, publicURL string) (string, string, string) {
+	validAlerts := make([]*alerts.Alert, 0, len(alertList))
+	var primary *alerts.Alert
+	for _, alert := range alertList {
+		if alert == nil {
+			continue
+		}
+		if primary == nil {
+			primary = alert
+		}
+		validAlerts = append(validAlerts, alert)
+	}
+
+	if len(validAlerts) == 0 || primary == nil {
+		return "", "", "info"
+	}
 
 	title := fmt.Sprintf("Pulse alert: %s", primary.ResourceName)
-	if alertCount > 1 {
-		title = fmt.Sprintf("Pulse alerts (%d)", alertCount)
+	if len(validAlerts) > 1 {
+		title = fmt.Sprintf("Pulse alerts (%d)", len(validAlerts))
 	}
 
 	var bodyBuilder strings.Builder
 	bodyBuilder.WriteString(primary.Message)
 	bodyBuilder.WriteString("\n\n")
 
-	for _, alert := range alertList {
+	for _, alert := range validAlerts {
 		bodyBuilder.WriteString(fmt.Sprintf("[%s] %s", strings.ToUpper(string(alert.Level)), alert.ResourceName))
 		bodyBuilder.WriteString(fmt.Sprintf(" — value %.2f (threshold %.2f)\n", alert.Value, alert.Threshold))
 		if alert.Node != "" {
@@ -632,11 +717,33 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 		bodyBuilder.WriteString("\n")
 	}
 
-	if n.publicURL != "" {
-		bodyBuilder.WriteString("Dashboard: " + n.publicURL + "\n")
+	if publicURL != "" {
+		bodyBuilder.WriteString("Dashboard: " + publicURL + "\n")
 	}
 
-	body := bodyBuilder.String()
+	return title, bodyBuilder.String(), resolveAppriseNotificationType(validAlerts)
+}
+
+func resolveAppriseNotificationType(alertList []*alerts.Alert) string {
+	notifyType := "info"
+	for _, alert := range alertList {
+		if alert == nil {
+			continue
+		}
+		switch alert.Level {
+		case alerts.AlertLevelCritical:
+			return "failure"
+		case alerts.AlertLevelWarning:
+			notifyType = "warning"
+		}
+	}
+	return notifyType
+}
+
+func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body string) error {
+	if len(cfg.Targets) == 0 {
+		return fmt.Errorf("no Apprise targets configured for CLI delivery")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
 	defer cancel()
@@ -651,12 +758,14 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 
 	output, err := execFn(ctx, cfg.CLIPath, args)
 	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("cliPath", cfg.CLIPath).
-			Strs("targets", cfg.Targets).
-			Msg("Failed to send Apprise notification")
-		return
+		if len(output) > 0 {
+			log.Debug().
+				Str("cliPath", cfg.CLIPath).
+				Strs("targets", cfg.Targets).
+				Str("output", string(output)).
+				Msg("Apprise CLI output (error)")
+		}
+		return err
 	}
 
 	if len(output) > 0 {
@@ -666,6 +775,97 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 			Str("output", string(output)).
 			Msg("Apprise CLI output")
 	}
+	return nil
+}
+
+func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body, notifyType string) error {
+	if cfg.ServerURL == "" {
+		return fmt.Errorf("apprise server URL is not configured")
+	}
+
+	serverURL := cfg.ServerURL
+	lowerURL := strings.ToLower(serverURL)
+	if !strings.HasPrefix(lowerURL, "http://") && !strings.HasPrefix(lowerURL, "https://") {
+		return fmt.Errorf("apprise server URL must start with http or https: %s", serverURL)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
+	defer cancel()
+
+	notifyEndpoint := "/notify"
+	if cfg.ConfigKey != "" {
+		notifyEndpoint = "/notify/" + url.PathEscape(cfg.ConfigKey)
+	}
+
+	requestURL := strings.TrimRight(serverURL, "/") + notifyEndpoint
+
+	payload := map[string]any{
+		"body":  body,
+		"title": title,
+	}
+	if len(cfg.Targets) > 0 {
+		payload["urls"] = cfg.Targets
+	}
+	if notifyType != "" {
+		payload["type"] = notifyType
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Apprise payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create Apprise request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	if cfg.APIKey != "" {
+		if cfg.APIKeyHeader == "" {
+			req.Header.Set("X-API-KEY", cfg.APIKey)
+		} else {
+			req.Header.Set(cfg.APIKeyHeader, cfg.APIKey)
+		}
+	}
+
+	client := &http.Client{
+		Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second,
+	}
+
+	if strings.HasPrefix(lowerURL, "https://") && cfg.SkipTLSVerify {
+		client.Transport = &http.Transport{
+			Proxy:           http.ProxyFromEnvironment,
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to reach Apprise server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	limited := io.LimitReader(resp.Body, WebhookMaxResponseSize)
+	respBody, _ := io.ReadAll(limited)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if len(respBody) > 0 {
+			return fmt.Errorf("apprise server returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		}
+		return fmt.Errorf("apprise server returned HTTP %d", resp.StatusCode)
+	}
+
+	if len(respBody) > 0 {
+		log.Debug().
+			Str("mode", string(cfg.Mode)).
+			Str("serverUrl", cfg.ServerURL).
+			Str("response", string(respBody)).
+			Msg("Apprise API response")
+	}
+
+	return nil
 }
 
 // sendEmail sends an email notification
@@ -878,6 +1078,8 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				if routingKey, ok := webhook.Headers["routing_key"]; ok {
 					dataPtr.CustomFields["routing_key"] = routingKey
 				}
+			case "pushover":
+				dataPtr.CustomFields = ensurePushoverCustomFieldAliases(dataPtr.CustomFields)
 			}
 			serviceDataApplied = true
 		}
@@ -1337,6 +1539,39 @@ func convertWebhookCustomFields(fields map[string]string) map[string]interface{}
 		converted[key] = value
 	}
 	return converted
+}
+
+func ensurePushoverCustomFieldAliases(fields map[string]interface{}) map[string]interface{} {
+	if fields == nil {
+		return nil
+	}
+
+	if _, ok := fields["token"]; !ok || isEmptyInterface(fields["token"]) {
+		if legacy, ok := fields["app_token"]; ok && !isEmptyInterface(legacy) {
+			fields["token"] = legacy
+		}
+	}
+
+	if _, ok := fields["user"]; !ok || isEmptyInterface(fields["user"]) {
+		if legacy, ok := fields["user_token"]; ok && !isEmptyInterface(legacy) {
+			fields["user"] = legacy
+		}
+	}
+
+	return fields
+}
+
+func isEmptyInterface(value interface{}) bool {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v) == ""
+	case fmt.Stringer:
+		return strings.TrimSpace(v.String()) == ""
+	case nil:
+		return true
+	default:
+		return false
+	}
 }
 
 // prepareWebhookData prepares data for template rendering

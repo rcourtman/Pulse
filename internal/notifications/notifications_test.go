@@ -2,6 +2,11 @@ package notifications
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,9 +29,14 @@ func TestNormalizeAppriseConfig(t *testing.T) {
 		Targets:        []string{"  discord://token  ", "", "DISCORD://TOKEN"},
 		CLIPath:        " ",
 		TimeoutSeconds: -5,
+		APIKeyHeader:   "",
 	}
 
 	normalized := NormalizeAppriseConfig(original)
+
+	if normalized.Mode != AppriseModeCLI {
+		t.Fatalf("expected default mode cli, got %q", normalized.Mode)
+	}
 
 	if normalized.CLIPath != "apprise" {
 		t.Fatalf("expected default CLI path 'apprise', got %q", normalized.CLIPath)
@@ -44,10 +54,50 @@ func TestNormalizeAppriseConfig(t *testing.T) {
 		t.Fatalf("unexpected targets normalization result: %#v", normalized.Targets)
 	}
 
+	if normalized.APIKeyHeader != "X-API-KEY" {
+		t.Fatalf("expected default API key header, got %q", normalized.APIKeyHeader)
+	}
+
 	// When all targets removed, enabled should reset to false
 	empty := NormalizeAppriseConfig(AppriseConfig{Enabled: true})
 	if empty.Enabled {
 		t.Fatalf("expected enabled to be false when no targets configured")
+	}
+
+	httpConfig := NormalizeAppriseConfig(AppriseConfig{
+		Enabled:        true,
+		Mode:           AppriseModeHTTP,
+		ServerURL:      "https://apprise.example.com/api/",
+		APIKey:         "  secret ",
+		APIKeyHeader:   "  X-Token ",
+		TimeoutSeconds: 200,
+	})
+
+	if httpConfig.Mode != AppriseModeHTTP {
+		t.Fatalf("expected HTTP mode, got %q", httpConfig.Mode)
+	}
+	if httpConfig.ServerURL != "https://apprise.example.com/api" {
+		t.Fatalf("expected server URL to be trimmed, got %q", httpConfig.ServerURL)
+	}
+	if httpConfig.APIKey != "secret" {
+		t.Fatalf("expected API key to be trimmed, got %q", httpConfig.APIKey)
+	}
+	if httpConfig.APIKeyHeader != "X-Token" {
+		t.Fatalf("expected API key header to be trimmed, got %q", httpConfig.APIKeyHeader)
+	}
+	if httpConfig.TimeoutSeconds != 120 {
+		t.Fatalf("expected timeout to clamp to 120, got %d", httpConfig.TimeoutSeconds)
+	}
+	if !httpConfig.Enabled {
+		t.Fatalf("expected HTTP config with server URL to remain enabled")
+	}
+
+	disabledHTTP := NormalizeAppriseConfig(AppriseConfig{
+		Enabled: true,
+		Mode:    AppriseModeHTTP,
+	})
+	if disabledHTTP.Enabled {
+		t.Fatalf("expected HTTP config without server URL to disable notifications")
 	}
 }
 
@@ -105,6 +155,127 @@ func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
 
 	if capturedArgs[len(capturedArgs)-1] != "discord://token" {
 		t.Fatalf("expected target URL as last argument, got %v", capturedArgs)
+	}
+}
+
+func TestSendGroupedAppriseHTTP(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.local")
+	nm.SetGroupingWindow(0)
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	type apprisePayload struct {
+		Body  string   `json:"body"`
+		Title string   `json:"title"`
+		Type  string   `json:"type"`
+		URLs  []string `json:"urls"`
+	}
+
+	type capturedRequest struct {
+		Method      string
+		Path        string
+		ContentType string
+		APIKey      string
+		Payload     apprisePayload
+	}
+
+	requests := make(chan capturedRequest, 1)
+	errs := make(chan error, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			errs <- err
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		var payload apprisePayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			errs <- err
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		requests <- capturedRequest{
+			Method:      r.Method,
+			Path:        r.URL.Path,
+			ContentType: r.Header.Get("Content-Type"),
+			APIKey:      r.Header.Get("X-Test-Key"),
+			Payload:     payload,
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	nm.SetAppriseConfig(AppriseConfig{
+		Enabled:        true,
+		Mode:           AppriseModeHTTP,
+		ServerURL:      server.URL,
+		ConfigKey:      "primary",
+		APIKey:         "secret",
+		APIKeyHeader:   "X-Test-Key",
+		Targets:        []string{"discord://token"},
+		TimeoutSeconds: 10,
+	})
+
+	alert := &alerts.Alert{
+		ID:           "test",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		Message:      "CPU usage high",
+		Value:        95,
+		Threshold:    90,
+		StartTime:    time.Now().Add(-time.Minute),
+		LastSeen:     time.Now(),
+	}
+
+	nm.mu.Lock()
+	nm.pendingAlerts = append(nm.pendingAlerts, alert)
+	nm.mu.Unlock()
+
+	nm.sendGroupedAlerts()
+
+	var req capturedRequest
+	select {
+	case req = <-requests:
+	case err := <-errs:
+		t.Fatalf("server error: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for Apprise API request")
+	}
+
+	if req.Method != http.MethodPost {
+		t.Fatalf("expected POST request, got %s", req.Method)
+	}
+	if req.Path != "/notify/primary" {
+		t.Fatalf("expected notify path with config key, got %s", req.Path)
+	}
+	if req.ContentType != "application/json" {
+		t.Fatalf("expected JSON content type, got %s", req.ContentType)
+	}
+	if req.APIKey != "secret" {
+		t.Fatalf("expected API key header to be set, got %q", req.APIKey)
+	}
+	if req.Payload.Title != "Pulse alert: vm-100" {
+		t.Fatalf("unexpected title: %s", req.Payload.Title)
+	}
+	if req.Payload.Type != "failure" {
+		t.Fatalf("expected failure notification type, got %s", req.Payload.Type)
+	}
+	if len(req.Payload.URLs) != 1 || req.Payload.URLs[0] != "discord://token" {
+		t.Fatalf("unexpected URLs in payload: %#v", req.Payload.URLs)
+	}
+	if !strings.Contains(req.Payload.Body, "CPU usage high") {
+		t.Fatalf("expected alert message in payload body, got %s", req.Payload.Body)
+	}
+	if !strings.Contains(req.Payload.Body, "Dashboard: https://pulse.local") {
+		t.Fatalf("expected dashboard link in payload body, got %s", req.Payload.Body)
 	}
 }
 

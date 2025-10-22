@@ -89,6 +89,8 @@ export interface SnapshotAlertConfig {
   enabled: boolean;
   warningDays: number;
   criticalDays: number;
+  warningSizeGiB?: number;
+  criticalSizeGiB?: number;
 }
 
 export interface BackupAlertConfig {

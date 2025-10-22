@@ -2514,7 +2514,8 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 				VMID:        vm.VMID,
 				Time:        snapshotTime,
 				Description: fmt.Sprintf("Snapshot of %s taken on %s", vm.Name, snapshotTime.Format("2006-01-02")),
-				VMState:     rand.Float64() > 0.5, // 50% include VM state
+				VMState:     rand.Float64() > 0.5,          // 50% include VM state
+				SizeBytes:   int64(10+rand.Intn(90)) << 30, // 10-99 GiB
 			}
 
 			// Add parent relationship for some snapshots
@@ -2546,7 +2547,8 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 				VMID:        int(ct.VMID),
 				Time:        snapshotTime,
 				Description: fmt.Sprintf("Container snapshot for %s", ct.Name),
-				VMState:     false, // Containers don't have VM state
+				VMState:     false,                        // Containers don't have VM state
+				SizeBytes:   int64(5+rand.Intn(40)) << 30, // 5-44 GiB
 			}
 
 			snapshots = append(snapshots, snapshot)

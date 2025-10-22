@@ -16,7 +16,16 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 
 type BackupSortKey = keyof Pick<
   UnifiedBackup,
-  'backupTime' | 'name' | 'node' | 'vmid' | 'backupType' | 'size' | 'storage' | 'verified' | 'type' | 'owner'
+  | 'backupTime'
+  | 'name'
+  | 'node'
+  | 'vmid'
+  | 'backupType'
+  | 'size'
+  | 'storage'
+  | 'verified'
+  | 'type'
+  | 'owner'
 >;
 const BACKUP_SORT_KEY_VALUES: readonly BackupSortKey[] = [
   'backupTime',
@@ -70,16 +79,10 @@ const UnifiedBackups: Component = () => {
     else if (value === 'pve') setBackupTypeFilter('local');
     else if (value === 'pbs') setBackupTypeFilter('remote');
   };
-  const [sortKey, setSortKey] = usePersistentSignal<BackupSortKey>(
-    'backupsSortKey',
-    'backupTime',
-    {
-      deserialize: (raw) =>
-        BACKUP_SORT_KEY_VALUES.includes(raw as BackupSortKey)
-          ? (raw as BackupSortKey)
-          : 'backupTime',
-    },
-  );
+  const [sortKey, setSortKey] = usePersistentSignal<BackupSortKey>('backupsSortKey', 'backupTime', {
+    deserialize: (raw) =>
+      BACKUP_SORT_KEY_VALUES.includes(raw as BackupSortKey) ? (raw as BackupSortKey) : 'backupTime',
+  });
   const [sortDirection, setSortDirection] = usePersistentSignal<'asc' | 'desc'>(
     'backupsSortDirection',
     'desc',
@@ -188,7 +191,9 @@ const UnifiedBackups: Component = () => {
     pveBackupsState()?.guestSnapshots?.forEach((snapshot) => {
       // Try to find the guest name by matching VMID and instance (not hostname)
       let guestName = '';
-      const vm = state.vms?.find((v) => v.vmid === snapshot.vmid && v.instance === snapshot.instance);
+      const vm = state.vms?.find(
+        (v) => v.vmid === snapshot.vmid && v.instance === snapshot.instance,
+      );
       const ct = state.containers?.find(
         (c) => c.vmid === snapshot.vmid && c.instance === snapshot.instance,
       );
@@ -209,7 +214,7 @@ const UnifiedBackups: Component = () => {
         backupName: snapshot.name, // This is the snapshot name like "current", "pre-upgrade"
         description: snapshot.description || '',
         status: 'ok',
-        size: null,
+        size: typeof snapshot.sizeBytes === 'number' ? snapshot.sizeBytes : null,
         storage: null,
         datastore: null,
         namespace: null,
@@ -291,7 +296,7 @@ const UnifiedBackups: Component = () => {
 
       unified.push({
         backupType: 'remote',
-        vmid: displayType === 'Host' ? backup.vmid : (parseInt(backup.vmid) || 0),
+        vmid: displayType === 'Host' ? backup.vmid : parseInt(backup.vmid) || 0,
         name: backup.comment || '',
         type: displayType,
         node: backup.instance || 'PBS',
@@ -402,7 +407,7 @@ const UnifiedBackups: Component = () => {
       // For regular backups: show Proxmox node in Node column, local storage in Location
       unified.push({
         backupType: backupType,
-        vmid: displayType === 'Host' ? backup.vmid : (backup.vmid || 0),
+        vmid: displayType === 'Host' ? backup.vmid : backup.vmid || 0,
         name: backup.notes || backup.volid?.split('/').pop() || '',
         type: displayType,
         node: backup.node || '', // Proxmox node that has access to this backup
@@ -532,9 +537,7 @@ const UnifiedBackups: Component = () => {
     if (nodeFilter) {
       const node = state.nodes?.find((n) => n.id === nodeFilter);
       if (node) {
-        data = data.filter(
-          (item) => item.instance === node.instance && item.node === node.name,
-        );
+        data = data.filter((item) => item.instance === node.instance && item.node === node.name);
       }
     }
 
@@ -1364,17 +1367,27 @@ const UnifiedBackups: Component = () => {
                       aria-label={availableBackupsTooltipText}
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
-                        showTooltip(availableBackupsTooltipText, rect.left + rect.width / 2, rect.top, {
-                          align: 'center',
-                          direction: 'up',
-                        });
+                        showTooltip(
+                          availableBackupsTooltipText,
+                          rect.left + rect.width / 2,
+                          rect.top,
+                          {
+                            align: 'center',
+                            direction: 'up',
+                          },
+                        );
                       }}
                       onFocus={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
-                        showTooltip(availableBackupsTooltipText, rect.left + rect.width / 2, rect.top, {
-                          align: 'center',
-                          direction: 'up',
-                        });
+                        showTooltip(
+                          availableBackupsTooltipText,
+                          rect.left + rect.width / 2,
+                          rect.top,
+                          {
+                            align: 'center',
+                            direction: 'up',
+                          },
+                        );
                       }}
                       onMouseLeave={() => hideTooltip()}
                       onBlur={() => hideTooltip()}
@@ -1780,12 +1793,9 @@ const UnifiedBackups: Component = () => {
                               }`;
 
                               const breakdown: string[] = [];
-                              if (d.snapshots > 0)
-                                breakdown.push(`Snapshots: ${d.snapshots}`);
-                              if (d.pve > 0)
-                                breakdown.push(`PVE: ${d.pve}`);
-                              if (d.pbs > 0)
-                                breakdown.push(`PBS: ${d.pbs}`);
+                              if (d.snapshots > 0) breakdown.push(`Snapshots: ${d.snapshots}`);
+                              if (d.pve > 0) breakdown.push(`PVE: ${d.pve}`);
+                              if (d.pbs > 0) breakdown.push(`PBS: ${d.pbs}`);
 
                               if (breakdown.length > 0) {
                                 tooltipText += `\n${breakdown.join(' • ')}`;
@@ -2121,7 +2131,8 @@ const UnifiedBackups: Component = () => {
                         onClick={() => handleSort('vmid')}
                         style="width: 60px;"
                       >
-                        {hasHostBackups() ? 'VMID/Host' : 'VMID'} {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                        {hasHostBackups() ? 'VMID/Host' : 'VMID'}{' '}
+                        {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
                         class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"

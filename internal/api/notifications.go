@@ -113,8 +113,14 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 
 	log.Info().
 		Bool("enabled", config.Enabled).
+		Str("mode", string(config.Mode)).
 		Int("targetCount", len(config.Targets)).
 		Str("cliPath", config.CLIPath).
+		Str("serverUrl", config.ServerURL).
+		Str("configKey", config.ConfigKey).
+		Bool("hasApiKey", config.APIKey != "").
+		Str("apiKeyHeader", config.APIKeyHeader).
+		Bool("skipTlsVerify", config.SkipTLSVerify).
 		Int("timeoutSeconds", config.TimeoutSeconds).
 		Msg("Parsed Apprise configuration update")
 
