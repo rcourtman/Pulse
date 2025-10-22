@@ -1135,7 +1135,8 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 	var testVM *proxmox.VM
 	var testVMNode string
 	result.ProblematicVMs = []VMDiskIssue{}
-	for _, vm := range vms {
+	for i := range vms {
+		vm := vms[i]
 		if vm.Template == 0 && vm.Status == "running" {
 			vmNode := strings.TrimSpace(vm.Node)
 			if vmNode == "" {
@@ -1169,7 +1170,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						Issue:  "Agent enabled but failed to get filesystem info: " + err.Error(),
 					})
 					if testVM == nil {
-						testVM = &vm
+						testVM = &vms[i]
 						testVMNode = vmNode
 					}
 				} else if len(fsInfo) == 0 {
@@ -1180,7 +1181,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						Issue:  "Agent returned no filesystem info",
 					})
 					if testVM == nil {
-						testVM = &vm
+						testVM = &vms[i]
 						testVMNode = vmNode
 					}
 				} else {
@@ -1209,7 +1210,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 					}
 
 					if testVM == nil {
-						testVM = &vm
+						testVM = &vms[i]
 						testVMNode = vmNode
 					}
 				}
