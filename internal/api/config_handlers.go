@@ -378,6 +378,62 @@ type NodeResponse struct {
 	ClusterEndpoints     []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
 }
 
+// deriveSchemeAndPort infers the scheme (without ://) and port from a base host URL.
+// Defaults align with Proxmox expectations when details are omitted.
+func deriveSchemeAndPort(baseHost string) (scheme string, port string) {
+	scheme = "https"
+	port = "8006"
+
+	baseHost = strings.TrimSpace(baseHost)
+	if baseHost == "" {
+		return scheme, port
+	}
+
+	candidate := baseHost
+	if !strings.Contains(candidate, "://") {
+		candidate = "https://" + candidate
+	}
+
+	parsed, err := url.Parse(candidate)
+	if err != nil {
+		return scheme, port
+	}
+
+	if parsed.Scheme != "" {
+		scheme = parsed.Scheme
+	}
+
+	if parsed.Port() != "" {
+		port = parsed.Port()
+	}
+
+	return scheme, port
+}
+
+// ensureHostHasPort guarantees that a host string contains an explicit port.
+func ensureHostHasPort(host, port string) string {
+	host = strings.TrimSpace(host)
+	if host == "" || port == "" {
+		return host
+	}
+
+	if _, _, err := net.SplitHostPort(host); err == nil {
+		return host
+	}
+
+	if parsed, err := url.Parse(host); err == nil && parsed.Host != "" {
+		if parsed.Port() != "" {
+			return parsed.Host
+		}
+		host = parsed.Host
+	}
+
+	trimmed := strings.TrimPrefix(host, "[")
+	trimmed = strings.TrimSuffix(trimmed, "]")
+
+	return net.JoinHostPort(trimmed, port)
+}
+
 // validateNodeAPI tests if a cluster node has a working Proxmox API
 // This helps filter out qdevice VMs and other non-Proxmox participants
 func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) bool {
@@ -392,11 +448,14 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 		return false
 	}
 
+	scheme, defaultPort := deriveSchemeAndPort(baseConfig.Host)
+
 	// Create a test configuration for this specific node
 	testConfig := baseConfig
 	testConfig.Host = testHost
 	if !strings.HasPrefix(testConfig.Host, "http") {
-		testConfig.Host = fmt.Sprintf("https://%s:8006", testConfig.Host)
+		hostWithPort := ensureHostHasPort(testConfig.Host, defaultPort)
+		testConfig.Host = fmt.Sprintf("%s://%s", scheme, hostWithPort)
 	}
 
 	// Use a very short timeout for validation - we just need to know if the API exists
@@ -532,11 +591,8 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			Str("node", nodeName).
 			Int("nodes", len(clusterNodes)).
 			Msg("Detected Proxmox cluster")
-
-		scheme := "https://"
-		if strings.HasPrefix(strings.ToLower(clientConfig.Host), "http://") {
-			scheme = "http://"
-		}
+		scheme, defaultPort := deriveSchemeAndPort(clientConfig.Host)
+		schemePrefix := scheme + "://"
 
 		var unvalidatedNodes []proxmox.ClusterStatus
 
@@ -558,15 +614,12 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			if nodeHost == "" {
 				nodeHost = clusterNode.Name
 			}
-			// Ensure host has port (PVE uses 8006)
-			if !strings.Contains(nodeHost, ":") {
-				nodeHost = nodeHost + ":8006"
-			}
+			nodeHost = ensureHostHasPort(nodeHost, defaultPort)
 
 			endpoint := config.ClusterEndpoint{
 				NodeID:   clusterNode.ID,
 				NodeName: clusterNode.Name,
-				Host:     scheme + nodeHost,
+				Host:     schemePrefix + nodeHost,
 				Online:   clusterNode.Online == 1,
 				LastSeen: time.Now(),
 			}
@@ -592,14 +645,12 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 				if nodeHost == "" {
 					continue
 				}
-				if !strings.Contains(nodeHost, ":") {
-					nodeHost = nodeHost + ":8006"
-				}
+				nodeHost = ensureHostHasPort(nodeHost, defaultPort)
 
 				endpoint := config.ClusterEndpoint{
 					NodeID:   clusterNode.ID,
 					NodeName: clusterNode.Name,
-					Host:     scheme + nodeHost,
+					Host:     schemePrefix + nodeHost,
 					Online:   clusterNode.Online == 1,
 					LastSeen: time.Now(),
 				}
