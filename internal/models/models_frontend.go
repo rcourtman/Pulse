@@ -67,30 +67,32 @@ type VMFrontend struct {
 
 // ContainerFrontend represents a Container with frontend-friendly field names
 type ContainerFrontend struct {
-	ID         string  `json:"id"`
-	VMID       int     `json:"vmid"`
-	Name       string  `json:"name"`
-	Node       string  `json:"node"`
-	Instance   string  `json:"instance"`
-	Status     string  `json:"status"`
-	Type       string  `json:"type"`
-	CPU        float64 `json:"cpu"`
-	CPUs       int     `json:"cpus"`
-	Memory     *Memory `json:"memory,omitempty"` // Full memory object
-	Mem        int64   `json:"mem"`              // Maps to Memory.Used
-	MaxMem     int64   `json:"maxmem"`           // Maps to Memory.Total
-	DiskObj    *Disk   `json:"disk,omitempty"`   // Full disk object
-	Disks      []Disk  `json:"disks,omitempty"`  // Individual filesystem/disk usage
-	NetIn      int64   `json:"networkIn"`        // Maps to NetworkIn (camelCase for frontend)
-	NetOut     int64   `json:"networkOut"`       // Maps to NetworkOut (camelCase for frontend)
-	DiskRead   int64   `json:"diskRead"`         // Maps to DiskRead (camelCase for frontend)
-	DiskWrite  int64   `json:"diskWrite"`        // Maps to DiskWrite (camelCase for frontend)
-	Uptime     int64   `json:"uptime"`
-	Template   bool    `json:"template"`
-	LastBackup int64   `json:"lastBackup,omitempty"` // Unix timestamp
-	Tags       string  `json:"tags,omitempty"`       // Joined string
-	Lock       string  `json:"lock,omitempty"`
-	LastSeen   int64   `json:"lastSeen"` // Unix timestamp
+	ID                string                  `json:"id"`
+	VMID              int                     `json:"vmid"`
+	Name              string                  `json:"name"`
+	Node              string                  `json:"node"`
+	Instance          string                  `json:"instance"`
+	Status            string                  `json:"status"`
+	Type              string                  `json:"type"`
+	CPU               float64                 `json:"cpu"`
+	CPUs              int                     `json:"cpus"`
+	Memory            *Memory                 `json:"memory,omitempty"` // Full memory object
+	Mem               int64                   `json:"mem"`              // Maps to Memory.Used
+	MaxMem            int64                   `json:"maxmem"`           // Maps to Memory.Total
+	DiskObj           *Disk                   `json:"disk,omitempty"`   // Full disk object
+	Disks             []Disk                  `json:"disks,omitempty"`  // Individual filesystem/disk usage
+	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
+	IPAddresses       []string                `json:"ipAddresses,omitempty"`
+	NetIn             int64                   `json:"networkIn"`  // Maps to NetworkIn (camelCase for frontend)
+	NetOut            int64                   `json:"networkOut"` // Maps to NetworkOut (camelCase for frontend)
+	DiskRead          int64                   `json:"diskRead"`   // Maps to DiskRead (camelCase for frontend)
+	DiskWrite         int64                   `json:"diskWrite"`  // Maps to DiskWrite (camelCase for frontend)
+	Uptime            int64                   `json:"uptime"`
+	Template          bool                    `json:"template"`
+	LastBackup        int64                   `json:"lastBackup,omitempty"` // Unix timestamp
+	Tags              string                  `json:"tags,omitempty"`       // Joined string
+	Lock              string                  `json:"lock,omitempty"`
+	LastSeen          int64                   `json:"lastSeen"` // Unix timestamp
 }
 
 // DockerHostFrontend represents a Docker host with frontend-friendly fields
@@ -172,6 +174,42 @@ type DockerHostCommandFrontend struct {
 	FailedAt       *int64 `json:"failedAt,omitempty"`
 	FailureReason  string `json:"failureReason,omitempty"`
 	ExpiresAt      *int64 `json:"expiresAt,omitempty"`
+}
+
+// HostFrontend represents a generic infrastructure host exposed to the UI.
+type HostFrontend struct {
+	ID                string                     `json:"id"`
+	Hostname          string                     `json:"hostname"`
+	DisplayName       string                     `json:"displayName"`
+	Platform          string                     `json:"platform,omitempty"`
+	OSName            string                     `json:"osName,omitempty"`
+	OSVersion         string                     `json:"osVersion,omitempty"`
+	KernelVersion     string                     `json:"kernelVersion,omitempty"`
+	Architecture      string                     `json:"architecture,omitempty"`
+	CPUCount          int                        `json:"cpuCount,omitempty"`
+	CPUUsage          float64                    `json:"cpuUsage,omitempty"`
+	LoadAverage       []float64                  `json:"loadAverage,omitempty"`
+	Memory            *Memory                    `json:"memory,omitempty"`
+	Disks             []Disk                     `json:"disks,omitempty"`
+	NetworkInterfaces []HostNetworkInterface     `json:"networkInterfaces,omitempty"`
+	Sensors           *HostSensorSummaryFrontend `json:"sensors,omitempty"`
+	Status            string                     `json:"status"`
+	UptimeSeconds     int64                      `json:"uptimeSeconds,omitempty"`
+	LastSeen          int64                      `json:"lastSeen"`
+	IntervalSeconds   int                        `json:"intervalSeconds,omitempty"`
+	AgentVersion      string                     `json:"agentVersion,omitempty"`
+	TokenID           string                     `json:"tokenId,omitempty"`
+	TokenName         string                     `json:"tokenName,omitempty"`
+	TokenHint         string                     `json:"tokenHint,omitempty"`
+	TokenLastUsedAt   *int64                     `json:"tokenLastUsedAt,omitempty"`
+	Tags              []string                   `json:"tags,omitempty"`
+}
+
+// HostSensorSummaryFrontend mirrors HostSensorSummary with primitives for the frontend.
+type HostSensorSummaryFrontend struct {
+	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
+	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
+	Additional         map[string]float64 `json:"additional,omitempty"`
 }
 
 // StorageFrontend represents Storage with frontend-friendly field names
@@ -263,6 +301,7 @@ type StateFrontend struct {
 	VMs              []VMFrontend             `json:"vms"`
 	Containers       []ContainerFrontend      `json:"containers"`
 	DockerHosts      []DockerHostFrontend     `json:"dockerHosts"`
+	Hosts            []HostFrontend           `json:"hosts"`
 	Storage          []StorageFrontend        `json:"storage"`
 	CephClusters     []CephClusterFrontend    `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk           `json:"physicalDisks"`

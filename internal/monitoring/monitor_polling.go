@@ -975,6 +975,8 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					modelContainer.Disk.Usage = safePercentage(float64(modelContainer.Disk.Used), float64(modelContainer.Disk.Total))
 				}
 
+				m.enrichContainerMetadata(ctx, client, instanceName, n.Node, &modelContainer)
+
 				// Zero out metrics for non-running containers
 				if container.Status != "running" {
 					modelContainer.CPU = 0
