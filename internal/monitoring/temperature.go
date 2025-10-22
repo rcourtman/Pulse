@@ -297,11 +297,18 @@ func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, te
 			continue
 		}
 
-		// Look for Package id (Intel) or Tdie (AMD)
-		if strings.Contains(sensorName, "Package id") || strings.Contains(sensorName, "Tdie") {
+		sensorNameLower := strings.ToLower(sensorName)
+
+		// Look for Package id (Intel) or Tdie/Tctl (AMD control loop temperature)
+		if strings.Contains(sensorName, "Package id") ||
+			strings.Contains(sensorName, "Tdie") ||
+			strings.Contains(sensorNameLower, "tctl") {
 			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) {
 				temp.CPUPackage = tempVal
 				foundPackageTemp = true
+				if tempVal > temp.CPUMax {
+					temp.CPUMax = tempVal
+				}
 			}
 		}
 
