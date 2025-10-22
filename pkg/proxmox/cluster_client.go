@@ -515,6 +515,16 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			return err
 		}
 
+		if isNotImplementedError(errStr) {
+			// Endpoint not implemented on this node/version; bubble up without marking it unhealthy
+			log.Debug().
+				Str("cluster", cc.name).
+				Str("endpoint", clientEndpoint).
+				Err(err).
+				Msg("Endpoint not implemented, not marking cluster node unhealthy")
+			return err
+		}
+
 		if isRateLimited, statusCode := isTransientRateLimitError(err); isRateLimited {
 			backoff := calculateRateLimitBackoff(i)
 			cc.applyRateLimitCooldown(clientEndpoint, backoff)
@@ -626,6 +636,25 @@ func extractStatusCode(errStr string) int {
 	}
 
 	return code
+}
+
+func isNotImplementedError(errStr string) bool {
+	lower := strings.ToLower(errStr)
+	if !strings.Contains(lower, "not implemented") {
+		return false
+	}
+
+	// Common formatting: "status 501", "error 501", "api error 501"
+	if strings.Contains(lower, " 501") || strings.Contains(lower, "status 501") || strings.Contains(lower, "error 501") {
+		return true
+	}
+
+	// Fallback to explicit HTTP status detection
+	if extractStatusCode(errStr) == 501 {
+		return true
+	}
+
+	return false
 }
 
 // GetHealthStatus returns the health status of all nodes
