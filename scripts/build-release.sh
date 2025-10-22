@@ -10,6 +10,9 @@ if [ -x /usr/local/go/bin/go ]; then
     export PATH=/usr/local/go/bin:$PATH
 fi
 
+# Force static binaries so release artifacts run on older glibc hosts
+export CGO_ENABLED=0
+
 VERSION=${1:-$(cat VERSION)}
 BUILD_DIR="build"
 RELEASE_DIR="release"
