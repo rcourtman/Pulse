@@ -1392,6 +1392,30 @@ func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []S
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// When storage is shared across nodes, backups can appear under whichever node reported the content.
+	// Align each backup with the guest's current node so the frontend column matches the VM/CT placement.
+	guestNodeByVMID := make(map[int]string)
+	for _, vm := range s.VMs {
+		if vm.Instance == instanceName && vm.Node != "" {
+			guestNodeByVMID[vm.VMID] = vm.Node
+		}
+	}
+	for _, ct := range s.Containers {
+		if ct.Instance == instanceName && ct.Node != "" {
+			guestNodeByVMID[ct.VMID] = ct.Node
+		}
+	}
+
+	normalizedBackups := make([]StorageBackup, 0, len(backups))
+	for _, backup := range backups {
+		if backup.VMID > 0 {
+			if node, ok := guestNodeByVMID[backup.VMID]; ok {
+				backup.Node = node
+			}
+		}
+		normalizedBackups = append(normalizedBackups, backup)
+	}
+
 	// Create a map of existing backups, excluding those from this instance
 	backupMap := make(map[string]StorageBackup)
 	for _, backup := range s.PVEBackups.StorageBackups {
@@ -1402,7 +1426,7 @@ func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []S
 	}
 
 	// Add or update backups from this instance
-	for _, backup := range backups {
+	for _, backup := range normalizedBackups {
 		backupMap[backup.ID] = backup
 	}
 
