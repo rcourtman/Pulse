@@ -168,6 +168,86 @@ func TestMemoryStatusEffectiveAvailable(t *testing.T) {
 	}
 }
 
+func TestMemoryStatusUnmarshalFlexibleValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    MemoryStatus
+	}{
+		{
+			name:    "numeric strings",
+			payload: `{"total":"16549875712","used":"6050492416","free":"2467389440","available":"10499383296","buffers":"0","cached":"0","shared":"0"}`,
+			want: MemoryStatus{
+				Total:     16549875712,
+				Used:      6050492416,
+				Free:      2467389440,
+				Available: 10499383296,
+				Buffers:   0,
+				Cached:    0,
+				Shared:    0,
+			},
+		},
+		{
+			name:    "scientific notation",
+			payload: `{"total":1.6549875712e+10,"used":6.050492416e+09,"free":2.46738944e+09,"available":1.0499383296e+10,"buffers":0,"cached":0,"shared":0}`,
+			want: MemoryStatus{
+				Total:     16549875712,
+				Used:      6050492416,
+				Free:      2467389440,
+				Available: 10499383296,
+			},
+		},
+		{
+			name:    "float-like strings with spaces",
+			payload: `{"total":" 8589934592.0 ","used":"3221225472.0","free":"536870912.0","avail":"4831838208.0","buffers":"67108864","cached":"4026531840","shared":"0"}`,
+			want: MemoryStatus{
+				Total:   8589934592,
+				Used:    3221225472,
+				Free:    536870912,
+				Avail:   4831838208,
+				Buffers: 67108864,
+				Cached:  4026531840,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var status MemoryStatus
+			if err := json.Unmarshal([]byte(tc.payload), &status); err != nil {
+				t.Fatalf("unexpected error unmarshalling %s payload: %v", tc.name, err)
+			}
+
+			if status.Total != tc.want.Total {
+				t.Fatalf("total: got %d, want %d", status.Total, tc.want.Total)
+			}
+			if status.Used != tc.want.Used {
+				t.Fatalf("used: got %d, want %d", status.Used, tc.want.Used)
+			}
+			if status.Free != tc.want.Free {
+				t.Fatalf("free: got %d, want %d", status.Free, tc.want.Free)
+			}
+			if status.Available != tc.want.Available {
+				t.Fatalf("available: got %d, want %d", status.Available, tc.want.Available)
+			}
+			if status.Avail != tc.want.Avail {
+				t.Fatalf("avail: got %d, want %d", status.Avail, tc.want.Avail)
+			}
+			if status.Buffers != tc.want.Buffers {
+				t.Fatalf("buffers: got %d, want %d", status.Buffers, tc.want.Buffers)
+			}
+			if status.Cached != tc.want.Cached {
+				t.Fatalf("cached: got %d, want %d", status.Cached, tc.want.Cached)
+			}
+			if status.Shared != tc.want.Shared {
+				t.Fatalf("shared: got %d, want %d", status.Shared, tc.want.Shared)
+			}
+		})
+	}
+}
+
+
+
 // TestMemoryStatusEffectiveAvailable_RegressionIssue435 tests the specific scenarios
 // reported in GitHub issue #435 where memory calculations incorrectly included cache/buffers
 func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {

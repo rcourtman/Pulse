@@ -173,6 +173,7 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		VMs:              []models.VM{},
 		Containers:       []models.Container{},
 		PhysicalDisks:    []models.PhysicalDisk{},
+		ReplicationJobs:  []models.ReplicationJob{},
 		LastUpdate:       time.Now(),
 		ConnectionHealth: make(map[string]bool),
 		Stats:            models.Stats{},
@@ -336,12 +337,114 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		PMG: append([]models.PMGBackup(nil), data.PMGBackups...),
 	}
 
+	data.ReplicationJobs = generateReplicationJobs(data.Nodes, data.VMs)
+
 	// Calculate stats
 	data.Stats.StartTime = time.Now()
 	data.Stats.Uptime = 0
 	data.Stats.Version = "v4.9.0-mock"
 
 	return data
+}
+
+func generateReplicationJobs(nodes []models.Node, vms []models.VM) []models.ReplicationJob {
+	if len(nodes) == 0 || len(vms) == 0 {
+		return []models.ReplicationJob{}
+	}
+
+	maxJobs := len(vms)
+	if maxJobs > 8 {
+		maxJobs = 8
+	}
+
+	jobs := make([]models.ReplicationJob, 0, maxJobs)
+	now := time.Now()
+	nodeCount := len(nodes)
+
+	for i := 0; i < maxJobs; i++ {
+		vm := vms[i%len(vms)]
+		instance := vm.Instance
+		if instance == "" {
+			instance = vm.Node
+		}
+
+		jobNumber := i % 3
+		jobID := fmt.Sprintf("%d-%d", vm.VMID, jobNumber)
+		lastSync := now.Add(-time.Duration(300+rand.Intn(3600)) * time.Second)
+		nextSync := lastSync.Add(15 * time.Minute)
+		durationSeconds := 90 + rand.Intn(240)
+		durationHuman := formatSecondsAsClock(durationSeconds)
+		status := "idle"
+		lastStatus := "ok"
+		errorMessage := ""
+		failCount := 0
+
+		roll := rand.Float64()
+		if roll < 0.1 {
+			status = "error"
+			lastStatus = "error"
+			errorMessage = "last sync timed out"
+			failCount = 1 + rand.Intn(2)
+		} else if roll < 0.35 {
+			status = "syncing"
+		}
+
+		targetNode := nodes[(i+1)%nodeCount].Name
+		rate := 80.0 + rand.Float64()*140.0
+
+		job := models.ReplicationJob{
+			ID:                      fmt.Sprintf("%s-%s", instance, jobID),
+			Instance:                instance,
+			JobID:                   jobID,
+			JobNumber:               jobNumber,
+			Guest:                   fmt.Sprintf("%d", vm.VMID),
+			GuestID:                 vm.VMID,
+			GuestName:               vm.Name,
+			GuestType:               vm.Type,
+			GuestNode:               vm.Node,
+			SourceNode:              vm.Node,
+			SourceStorage:           "local-zfs",
+			TargetNode:              targetNode,
+			TargetStorage:           "replica-zfs",
+			Schedule:                "*/15",
+			Type:                    "local",
+			Enabled:                 true,
+			State:                   status,
+			Status:                  status,
+			LastSyncStatus:          lastStatus,
+			LastSyncTime:            ptrTime(lastSync),
+			LastSyncUnix:            lastSync.Unix(),
+			LastSyncDurationSeconds: durationSeconds,
+			LastSyncDurationHuman:   durationHuman,
+			NextSyncTime:            ptrTime(nextSync),
+			NextSyncUnix:            nextSync.Unix(),
+			DurationSeconds:         durationSeconds,
+			DurationHuman:           durationHuman,
+			FailCount:               failCount,
+			Error:                   errorMessage,
+			RateLimitMbps:           ptrFloat64(rate),
+			LastPolled:              now,
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	return jobs
+}
+
+func formatSecondsAsClock(totalSeconds int) string {
+	hours := totalSeconds / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
+}
+
+func ptrFloat64(v float64) *float64 {
+	return &v
 }
 
 func generateNodes(config MockConfig) []models.Node {

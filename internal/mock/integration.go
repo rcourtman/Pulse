@@ -311,6 +311,7 @@ func cloneState(state models.StateSnapshot) models.StateSnapshot {
 		PBSInstances:     append([]models.PBSInstance(nil), state.PBSInstances...),
 		PBSBackups:       append([]models.PBSBackup(nil), state.PBSBackups...),
 		PMGBackups:       append([]models.PMGBackup(nil), state.PMGBackups...),
+		ReplicationJobs:  append([]models.ReplicationJob(nil), state.ReplicationJobs...),
 		Metrics:          append([]models.Metric(nil), state.Metrics...),
 		Performance:      state.Performance,
 		Stats:            state.Stats,
