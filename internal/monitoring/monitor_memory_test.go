@@ -29,64 +29,97 @@ func (s *stubPVEClient) GetNodeStatus(ctx context.Context, node string) (*proxmo
 	return s.nodeStatus, nil
 }
 
-func (s *stubPVEClient) GetNodeRRDData(ctx context.Context, node string, timeframe string, cf string, ds []string) ([]proxmox.NodeRRDPoint, error) {
+func (s *stubPVEClient) GetNodeRRDData(ctx context.Context, node, timeframe, cf string, ds []string) ([]proxmox.NodeRRDPoint, error) {
 	return s.rrdPoints, nil
 }
 
 func (s *stubPVEClient) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetContainers(ctx context.Context, node string) ([]proxmox.Container, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetAllStorage(ctx context.Context) ([]proxmox.Storage, error) {
 	return nil, nil
 }
-func (s *stubPVEClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) { return nil, nil }
+
+func (s *stubPVEClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
+	return nil, nil
+}
+
+func (s *stubPVEClient) GetReplicationStatus(ctx context.Context) ([]proxmox.ReplicationJob, error) {
+	return nil, nil
+}
+
 func (s *stubPVEClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
 	return nil, nil
 }
-func (s *stubPVEClient) IsClusterMember(ctx context.Context) (bool, error) { return false, nil }
+
+func (s *stubPVEClient) IsClusterMember(ctx context.Context) (bool, error) {
+	return false, nil
+}
+
 func (s *stubPVEClient) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	return map[string]interface{}{}, nil
 }
+
+func (s *stubPVEClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "", nil
+}
+
 func (s *stubPVEClient) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error) {
 	return nil, nil
 }
+
 func (s *stubPVEClient) GetCephStatus(ctx context.Context) (*proxmox.CephStatus, error) {
 	return nil, nil
 }
-func (s *stubPVEClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, error) { return nil, nil }
+
+func (s *stubPVEClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, error) {
+	return nil, nil
+}
 
 func floatPtr(v float64) *float64 { return &v }
 
@@ -127,12 +160,10 @@ func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 
 	mon := &Monitor{
 		config: &config.Config{
-			PVEInstances: []config.PVEInstance{
-				{
-					Name: "test",
-					Host: "https://pve",
-				},
-			},
+			PVEInstances: []config.PVEInstance{{
+				Name: "test",
+				Host: "https://pve",
+			}},
 		},
 		state:                models.NewState(),
 		alertManager:         alerts.NewManager(),
@@ -143,6 +174,12 @@ func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 		nodeRRDMemCache:      make(map[string]rrdMemCacheEntry),
 		lastClusterCheck:     make(map[string]time.Time),
 		lastPhysicalDiskPoll: make(map[string]time.Time),
+		failureCounts:        make(map[string]int),
+		lastOutcome:          make(map[string]taskOutcome),
+		pollStatusMap:        make(map[string]*pollStatus),
+		dlqInsightMap:        make(map[string]*dlqInsight),
+		authFailures:         make(map[string]int),
+		lastAuthAttempt:      make(map[string]time.Time),
 	}
 	defer mon.alertManager.Stop()
 
@@ -171,6 +208,9 @@ func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 	}
 	if snap.MemorySource != "rrd-memused" {
 		t.Fatalf("expected memory source rrd-memused, got %q", snap.MemorySource)
+	}
+	if snap.Raw.ProxmoxMemorySource != "rrd-memused" {
+		t.Fatalf("expected proxmox memory source rrd-memused, got %q", snap.Raw.ProxmoxMemorySource)
 	}
 	if snap.Raw.RRDUsed != actualUsed {
 		t.Fatalf("expected snapshot RRD used %d, got %d", actualUsed, snap.Raw.RRDUsed)
