@@ -5891,14 +5891,14 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 						Msg("Failed to fetch PMG queue status")
 				}
 			} else if queueData != nil {
-				total := queueData.Active + queueData.Deferred + queueData.Hold + queueData.Incoming
+				total := queueData.Active.Int64() + queueData.Deferred.Int64() + queueData.Hold.Int64() + queueData.Incoming.Int64()
 				node.QueueStatus = &models.PMGQueueStatus{
-					Active:    queueData.Active,
-					Deferred:  queueData.Deferred,
-					Hold:      queueData.Hold,
-					Incoming:  queueData.Incoming,
-					Total:     total,
-					OldestAge: queueData.OldestAge,
+					Active:    queueData.Active.Int(),
+					Deferred:  queueData.Deferred.Int(),
+					Hold:      queueData.Hold.Int(),
+					Incoming:  queueData.Incoming.Int(),
+					Total:     int(total),
+					OldestAge: queueData.OldestAge.Int64(),
 					UpdatedAt: time.Now(),
 				}
 			}
@@ -5935,8 +5935,9 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}
 
 		for _, b := range backups {
-			backupTime := time.Unix(b.Timestamp, 0)
-			id := fmt.Sprintf("pmg-%s-%s-%d", instanceName, nodeName, b.Timestamp)
+			timestamp := b.Timestamp.Int64()
+			backupTime := time.Unix(timestamp, 0)
+			id := fmt.Sprintf("pmg-%s-%s-%d", instanceName, nodeName, timestamp)
 			if _, exists := seenBackupIDs[id]; exists {
 				continue
 			}
@@ -5947,7 +5948,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 				Node:       nodeName,
 				Filename:   b.Filename,
 				BackupTime: backupTime,
-				Size:       b.Size,
+				Size:       b.Size.Int64(),
 			})
 		}
 	}
@@ -5964,22 +5965,22 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	} else if stats != nil {
 		pmgInst.MailStats = &models.PMGMailStats{
 			Timeframe:            "day",
-			CountTotal:           stats.Count,
-			CountIn:              stats.CountIn,
-			CountOut:             stats.CountOut,
-			SpamIn:               stats.SpamIn,
-			SpamOut:              stats.SpamOut,
-			VirusIn:              stats.VirusIn,
-			VirusOut:             stats.VirusOut,
-			BouncesIn:            stats.BouncesIn,
-			BouncesOut:           stats.BouncesOut,
-			BytesIn:              stats.BytesIn,
-			BytesOut:             stats.BytesOut,
-			GreylistCount:        stats.GreylistCount,
-			JunkIn:               stats.JunkIn,
-			AverageProcessTimeMs: stats.AvgProcessSec * 1000,
-			RBLRejects:           stats.RBLRejects,
-			PregreetRejects:      stats.Pregreet,
+			CountTotal:           stats.Count.Float64(),
+			CountIn:              stats.CountIn.Float64(),
+			CountOut:             stats.CountOut.Float64(),
+			SpamIn:               stats.SpamIn.Float64(),
+			SpamOut:              stats.SpamOut.Float64(),
+			VirusIn:              stats.VirusIn.Float64(),
+			VirusOut:             stats.VirusOut.Float64(),
+			BouncesIn:            stats.BouncesIn.Float64(),
+			BouncesOut:           stats.BouncesOut.Float64(),
+			BytesIn:              stats.BytesIn.Float64(),
+			BytesOut:             stats.BytesOut.Float64(),
+			GreylistCount:        stats.GreylistCount.Float64(),
+			JunkIn:               stats.JunkIn.Float64(),
+			AverageProcessTimeMs: stats.AvgProcessSec.Float64() * 1000,
+			RBLRejects:           stats.RBLRejects.Float64(),
+			PregreetRejects:      stats.Pregreet.Float64(),
 			UpdatedAt:            time.Now(),
 		}
 	}
@@ -5991,22 +5992,22 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	} else if len(counts) > 0 {
 		points := make([]models.PMGMailCountPoint, 0, len(counts))
 		for _, entry := range counts {
-			ts := time.Unix(entry.Time, 0)
+			ts := time.Unix(entry.Time.Int64(), 0)
 			points = append(points, models.PMGMailCountPoint{
 				Timestamp:   ts,
-				Count:       entry.Count,
-				CountIn:     entry.CountIn,
-				CountOut:    entry.CountOut,
-				SpamIn:      entry.SpamIn,
-				SpamOut:     entry.SpamOut,
-				VirusIn:     entry.VirusIn,
-				VirusOut:    entry.VirusOut,
-				RBLRejects:  entry.RBLRejects,
-				Pregreet:    entry.PregreetReject,
-				BouncesIn:   entry.BouncesIn,
-				BouncesOut:  entry.BouncesOut,
-				Greylist:    entry.GreylistCount,
-				Index:       entry.Index,
+				Count:       entry.Count.Float64(),
+				CountIn:     entry.CountIn.Float64(),
+				CountOut:    entry.CountOut.Float64(),
+				SpamIn:      entry.SpamIn.Float64(),
+				SpamOut:     entry.SpamOut.Float64(),
+				VirusIn:     entry.VirusIn.Float64(),
+				VirusOut:    entry.VirusOut.Float64(),
+				RBLRejects:  entry.RBLRejects.Float64(),
+				Pregreet:    entry.PregreetReject.Float64(),
+				BouncesIn:   entry.BouncesIn.Float64(),
+				BouncesOut:  entry.BouncesOut.Float64(),
+				Greylist:    entry.GreylistCount.Float64(),
+				Index:       entry.Index.Int(),
 				Timeframe:   "hour",
 				WindowStart: ts,
 			})
@@ -6023,7 +6024,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		for _, bucket := range scores {
 			buckets = append(buckets, models.PMGSpamBucket{
 				Score: bucket.Level,
-				Count: float64(bucket.Count),
+				Count: float64(bucket.Count.Int()),
 			})
 		}
 		pmgInst.SpamDistribution = buckets
@@ -6031,10 +6032,10 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	quarantine := models.PMGQuarantineTotals{}
 	if spamStatus, err := client.GetQuarantineStatus(ctx, "spam"); err == nil && spamStatus != nil {
-		quarantine.Spam = spamStatus.Count
+		quarantine.Spam = int(spamStatus.Count.Int64())
 	}
 	if virusStatus, err := client.GetQuarantineStatus(ctx, "virus"); err == nil && virusStatus != nil {
-		quarantine.Virus = virusStatus.Count
+		quarantine.Virus = int(virusStatus.Count.Int64())
 	}
 	pmgInst.Quarantine = &quarantine
 

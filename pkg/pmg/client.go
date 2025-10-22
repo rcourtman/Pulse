@@ -55,45 +55,45 @@ type VersionInfo struct {
 }
 
 type MailStatistics struct {
-	Count         float64 `json:"count"`
-	CountIn       float64 `json:"count_in"`
-	CountOut      float64 `json:"count_out"`
-	SpamIn        float64 `json:"spamcount_in"`
-	SpamOut       float64 `json:"spamcount_out"`
-	VirusIn       float64 `json:"viruscount_in"`
-	VirusOut      float64 `json:"viruscount_out"`
-	BouncesIn     float64 `json:"bounces_in"`
-	BouncesOut    float64 `json:"bounces_out"`
-	BytesIn       float64 `json:"bytes_in"`
-	BytesOut      float64 `json:"bytes_out"`
-	GreylistCount float64 `json:"glcount"`
-	JunkIn        float64 `json:"junk_in"`
-	RBLRejects    float64 `json:"rbl_rejects"`
-	Pregreet      float64 `json:"pregreet_rejects"`
-	AvgProcessSec float64 `json:"avptime"`
+	Count         flexibleFloat `json:"count"`
+	CountIn       flexibleFloat `json:"count_in"`
+	CountOut      flexibleFloat `json:"count_out"`
+	SpamIn        flexibleFloat `json:"spamcount_in"`
+	SpamOut       flexibleFloat `json:"spamcount_out"`
+	VirusIn       flexibleFloat `json:"viruscount_in"`
+	VirusOut      flexibleFloat `json:"viruscount_out"`
+	BouncesIn     flexibleFloat `json:"bounces_in"`
+	BouncesOut    flexibleFloat `json:"bounces_out"`
+	BytesIn       flexibleFloat `json:"bytes_in"`
+	BytesOut      flexibleFloat `json:"bytes_out"`
+	GreylistCount flexibleFloat `json:"glcount"`
+	JunkIn        flexibleFloat `json:"junk_in"`
+	RBLRejects    flexibleFloat `json:"rbl_rejects"`
+	Pregreet      flexibleFloat `json:"pregreet_rejects"`
+	AvgProcessSec flexibleFloat `json:"avptime"`
 }
 
 type MailCountEntry struct {
-	Index          int     `json:"index"`
-	Time           int64   `json:"time"`
-	Count          float64 `json:"count"`
-	CountIn        float64 `json:"count_in"`
-	CountOut       float64 `json:"count_out"`
-	SpamIn         float64 `json:"spamcount_in"`
-	SpamOut        float64 `json:"spamcount_out"`
-	VirusIn        float64 `json:"viruscount_in"`
-	VirusOut       float64 `json:"viruscount_out"`
-	BouncesIn      float64 `json:"bounces_in"`
-	BouncesOut     float64 `json:"bounces_out"`
-	RBLRejects     float64 `json:"rbl_rejects"`
-	PregreetReject float64 `json:"pregreet_rejects"`
-	GreylistCount  float64 `json:"glcount"`
+	Index          flexibleInt   `json:"index"`
+	Time           flexibleInt   `json:"time"`
+	Count          flexibleFloat `json:"count"`
+	CountIn        flexibleFloat `json:"count_in"`
+	CountOut       flexibleFloat `json:"count_out"`
+	SpamIn         flexibleFloat `json:"spamcount_in"`
+	SpamOut        flexibleFloat `json:"spamcount_out"`
+	VirusIn        flexibleFloat `json:"viruscount_in"`
+	VirusOut       flexibleFloat `json:"viruscount_out"`
+	BouncesIn      flexibleFloat `json:"bounces_in"`
+	BouncesOut     flexibleFloat `json:"bounces_out"`
+	RBLRejects     flexibleFloat `json:"rbl_rejects"`
+	PregreetReject flexibleFloat `json:"pregreet_rejects"`
+	GreylistCount  flexibleFloat `json:"glcount"`
 }
 
 type SpamScore struct {
-	Level string  `json:"level"`
-	Count int     `json:"count"`
-	Ratio float64 `json:"ratio"`
+	Level string        `json:"level"`
+	Count flexibleInt   `json:"count"`
+	Ratio flexibleFloat `json:"ratio"`
 }
 
 type ClusterStatusEntry struct {
@@ -105,25 +105,25 @@ type ClusterStatusEntry struct {
 }
 
 type QuarantineStatus struct {
-	Count     int     `json:"count"`
-	AvgBytes  float64 `json:"avgbytes"`
-	AvgSpam   float64 `json:"avgspam,omitempty"`
-	Megabytes float64 `json:"mbytes"`
+	Count     flexibleInt   `json:"count"`
+	AvgBytes  flexibleFloat `json:"avgbytes"`
+	AvgSpam   flexibleFloat `json:"avgspam,omitempty"`
+	Megabytes flexibleFloat `json:"mbytes"`
 }
 
 type QueueStatusEntry struct {
-	Active    int   `json:"active"`
-	Deferred  int   `json:"deferred"`
-	Hold      int   `json:"hold"`
-	Incoming  int   `json:"incoming"`
-	OldestAge int64 `json:"oldest_age,omitempty"` // Age of oldest message in seconds
+	Active    flexibleInt `json:"active"`
+	Deferred  flexibleInt `json:"deferred"`
+	Hold      flexibleInt `json:"hold"`
+	Incoming  flexibleInt `json:"incoming"`
+	OldestAge flexibleInt `json:"oldest_age,omitempty"` // Age of oldest message in seconds
 }
 
 // BackupEntry represents a PMG configuration backup stored on a node.
 type BackupEntry struct {
-	Filename  string `json:"filename"`
-	Size      int64  `json:"size"`
-	Timestamp int64  `json:"timestamp"`
+	Filename  string      `json:"filename"`
+	Size      flexibleInt `json:"size"`
+	Timestamp flexibleInt `json:"timestamp"`
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
