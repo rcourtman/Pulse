@@ -133,6 +133,36 @@ func TestParseSensorsJSON_WithCpuAndNvmeData(t *testing.T) {
 	}
 }
 
+func TestParseSensorsJSON_WithAmdTctlOnly(t *testing.T) {
+	collector := &TemperatureCollector{}
+
+	jsonStr := `{
+		"k10temp-pci-00c3": {
+			"Tctl": {"temp1_input": 55.4}
+		}
+	}`
+
+	temp, err := collector.parseSensorsJSON(jsonStr)
+	if err != nil {
+		t.Fatalf("unexpected error parsing sensors output: %v", err)
+	}
+	if temp == nil {
+		t.Fatalf("expected temperature struct, got nil")
+	}
+	if !temp.Available {
+		t.Fatalf("expected temperature to be available when Tctl reading present")
+	}
+	if !temp.HasCPU {
+		t.Fatalf("expected HasCPU to be true when AMD Tctl is present")
+	}
+	if temp.CPUPackage != 55.4 {
+		t.Fatalf("expected cpu package temperature 55.4, got %.2f", temp.CPUPackage)
+	}
+	if temp.CPUMax != 55.4 {
+		t.Fatalf("expected cpu max temperature to follow Tctl value, got %.2f", temp.CPUMax)
+	}
+}
+
 func TestParseSensorsJSON_RPiWrapper(t *testing.T) {
 	collector := &TemperatureCollector{}
 
