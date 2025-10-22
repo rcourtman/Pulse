@@ -1052,6 +1052,26 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	}
 }
 
+// SetConfig refreshes the configuration reference used by the router and dependent handlers.
+func (r *Router) SetConfig(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+
+	if r.config == nil {
+		r.config = cfg
+	} else {
+		*r.config = *cfg
+	}
+
+	if r.configHandlers != nil {
+		r.configHandlers.SetConfig(r.config)
+	}
+	if r.systemSettingsHandler != nil {
+		r.systemSettingsHandler.SetConfig(r.config)
+	}
+}
+
 // reloadSystemSettings loads system settings from disk and caches them
 func (r *Router) reloadSystemSettings() {
 	r.settingsMu.Lock()

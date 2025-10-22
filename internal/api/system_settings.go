@@ -58,6 +58,14 @@ func (h *SystemSettingsHandler) SetMonitor(m interface {
 	h.monitor = m
 }
 
+// SetConfig updates the configuration reference used by the handler.
+func (h *SystemSettingsHandler) SetConfig(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	h.config = cfg
+}
+
 func firstValueForKeys(m map[string]interface{}, keys ...string) (interface{}, bool) {
 	for _, key := range keys {
 		if val, ok := m[key]; ok {
@@ -682,12 +690,12 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	// Security: Use allowlist-based validation (safer than blocklist)
 	// Only permit the specific directives Pulse needs for ProxyJump
 	allowedDirectives := map[string]bool{
-		"host":                    true,
-		"hostname":                true,
-		"proxyjump":               true,
-		"user":                    true,
-		"identityfile":            true,
-		"stricthostkeychecking":   true,
+		"host":                  true,
+		"hostname":              true,
+		"proxyjump":             true,
+		"user":                  true,
+		"identityfile":          true,
+		"stricthostkeychecking": true,
 	}
 
 	// Parse and validate each line

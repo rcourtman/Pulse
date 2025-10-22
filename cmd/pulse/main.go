@@ -148,6 +148,9 @@ func runServer() {
 		}
 		if router != nil {
 			router.SetMonitor(reloadableMonitor.GetMonitor())
+			if cfg := reloadableMonitor.GetConfig(); cfg != nil {
+				router.SetConfig(cfg)
+			}
 		}
 		return nil
 	}
@@ -175,6 +178,9 @@ func runServer() {
 				log.Error().Err(err).Msg("Failed to reload monitor after mock.env change")
 			} else if router != nil {
 				router.SetMonitor(reloadableMonitor.GetMonitor())
+				if cfg := reloadableMonitor.GetConfig(); cfg != nil {
+					router.SetConfig(cfg)
+				}
 			}
 		})
 
