@@ -28,6 +28,7 @@ import Container from 'lucide-solid/icons/container';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Shield from 'lucide-solid/icons/shield';
 import Activity from 'lucide-solid/icons/activity';
+import Loader from 'lucide-solid/icons/loader';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { APITokenRecord } from '@/api/security';
@@ -1779,7 +1780,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 </svg>
                 <span class="text-sm font-medium">You have unsaved changes</span>
               </div>
-              <div class="flex gap-2 w-full sm:w-auto">
+              <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                 <button
                   type="button"
                   class="flex-1 sm:flex-initial px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -1888,7 +1889,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     <Show when={initialLoadComplete()}>
                   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
                     <SectionHeader title="Proxmox VE nodes" size="md" class="flex-1" />
-                    <div class="flex flex-wrap gap-2 items-center justify-end">
+                    <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                       {/* Discovery toggle */}
                       <div
                         class="flex items-center gap-2 sm:gap-3"
@@ -2264,16 +2265,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
-                              <svg
-                                class="h-4 w-4 animate-spin"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                              >
-                                <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
-                                <path d="M22 12a10 10 0 00-10-10" stroke-linecap="round"></path>
-                              </svg>
+                              <Loader class="h-4 w-4 animate-spin" />
                               <span>Scanning your network for Proxmox VE servers…</span>
                             </span>
                           </Show>
@@ -2327,16 +2319,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           }
                         >
                           <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                            <svg
-                              class="h-4 w-4 animate-spin"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            >
-                              <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
-                              <path d="M22 12a10 10 0 00-10-10" stroke-linecap="round"></path>
-                            </svg>
+                            <Loader class="h-4 w-4 animate-spin" />
                             <span>
                               Waiting for responses… this can take up to a minute depending on your
                               network size.
@@ -2427,7 +2410,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <Show when={initialLoadComplete()}>
                   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
                     <SectionHeader title="Proxmox Backup Server nodes" size="md" class="flex-1" />
-                    <div class="flex flex-wrap gap-2 items-center justify-end">
+                    <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                       {/* Discovery toggle */}
                       <div
                         class="flex items-center gap-2 sm:gap-3"
@@ -2692,16 +2675,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
-                              <svg
-                                class="h-4 w-4 animate-spin"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                              >
-                                <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
-                                <path d="M22 12a10 10 0 00-10-10" stroke-linecap="round"></path>
-                              </svg>
+                              <Loader class="h-4 w-4 animate-spin" />
                               <span>Scanning your network for Proxmox Backup Servers…</span>
                             </span>
                           </Show>
@@ -2755,16 +2729,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           }
                         >
                           <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                            <svg
-                              class="h-4 w-4 animate-spin"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            >
-                              <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
-                              <path d="M22 12a10 10 0 00-10-10" stroke-linecap="round"></path>
-                            </svg>
+                            <Loader class="h-4 w-4 animate-spin" />
                             <span>
                               Waiting for responses… this can take up to a minute depending on your
                               network size.
@@ -2856,7 +2821,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <Show when={initialLoadComplete()}>
                   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
                     <SectionHeader title="Proxmox Mail Gateway nodes" size="md" class="flex-1" />
-                    <div class="flex flex-wrap gap-2 items-center justify-end">
+                    <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                       {/* Discovery toggle */}
                       <div
                         class="flex items-center gap-2 sm:gap-3"
@@ -3101,16 +3066,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
-                              <svg
-                                class="h-4 w-4 animate-spin"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                              >
-                                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                <path d="M12 3v6m0 6v6m6-9h-6m-6 0H3" />
-                              </svg>
+                              <Loader class="h-4 w-4 animate-spin" />
                               Scanning network...
                             </span>
                           </Show>
