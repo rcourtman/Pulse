@@ -2510,20 +2510,41 @@ function DestinationsTab(props: DestinationsTabProps) {
       >
         <div class="space-y-4">
           <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery targets</label>
+            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery mode</label>
+            <select
+              class={formControl}
+              value={appriseState().mode}
+              onInput={(e) => {
+                updateApprise({ mode: e.currentTarget.value as 'cli' | 'http' });
+                props.setHasUnsavedChanges(true);
+              }}
+            >
+              <option value="cli">Local Apprise CLI</option>
+              <option value="http">Remote Apprise API</option>
+            </select>
+            <p class={formHelpText}>Choose how Pulse should execute Apprise notifications.</p>
+          </div>
+
+          <div class={formField}>
+            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery targets</label>
             <textarea
               rows={4}
               class={`${formControl} font-mono min-h-[120px]`}
               value={appriseState().targetsText}
-              placeholder={`discord://token\nmailto://alerts@example.com`}
+              placeholder={`discord://token
+mailto://alerts@example.com`}
               onInput={(e) => {
                 updateApprise({ targetsText: e.currentTarget.value });
                 props.setHasUnsavedChanges(true);
               }}
             />
-            <p class={formHelpText}>Enter one Apprise URL per line. Commas are also supported.</p>
+            <p class={formHelpText}>
+              {appriseState().mode === 'http'
+                ? 'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.'
+                : 'Enter one Apprise URL per line. Commas are also supported.'}
+            </p>
           </div>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Show when={appriseState().mode === 'cli'}>
             <div class={formField}>
               <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>CLI path</label>
               <input
@@ -2538,23 +2559,101 @@ function DestinationsTab(props: DestinationsTabProps) {
               />
               <p class={formHelpText}>Leave blank to use the default `apprise` executable.</p>
             </div>
-            <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Timeout (seconds)</label>
-              <input
-                type="number"
-                min="5"
-                max="120"
-                value={appriseState().timeoutSeconds}
-                class={formControl}
-                onInput={(e) => {
-                  const raw = e.currentTarget.valueAsNumber;
-                  const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
-                  updateApprise({ timeoutSeconds: safe });
-                  props.setHasUnsavedChanges(true);
-                }}
-              />
-              <p class={formHelpText}>Maximum time to wait for the Apprise CLI to complete.</p>
+          </Show>
+
+          <Show when={appriseState().mode === 'http'}>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div class={`${formField} sm:col-span-2`}>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Server URL</label>
+                <input
+                  type="text"
+                  value={appriseState().serverUrl}
+                  class={formControl}
+                  placeholder="https://apprise-api.internal:8000"
+                  onInput={(e) => {
+                    updateApprise({ serverUrl: e.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>Point to an Apprise API endpoint such as https://host:8000.</p>
+              </div>
+              <div class={formField}>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Config key (optional)</label>
+                <input
+                  type="text"
+                  value={appriseState().configKey}
+                  class={formControl}
+                  placeholder="default"
+                  onInput={(e) => {
+                    updateApprise({ configKey: e.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>Targets the /notify/&lt;key&gt; endpoint when provided.</p>
+              </div>
+              <div class={formField}>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>API key</label>
+                <input
+                  type="password"
+                  value={appriseState().apiKey}
+                  class={formControl}
+                  placeholder="Optional API key"
+                  onInput={(e) => {
+                    updateApprise({ apiKey: e.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>Included with each request when your Apprise API requires authentication.</p>
+              </div>
+              <div class={formField}>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>API key header</label>
+                <input
+                  type="text"
+                  value={appriseState().apiKeyHeader}
+                  class={formControl}
+                  placeholder="X-API-KEY"
+                  onInput={(e) => {
+                    updateApprise({ apiKeyHeader: e.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>Defaults to X-API-KEY for Apprise API deployments.</p>
+              </div>
+              <div class={`${formField} sm:col-span-2`}>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>TLS verification</label>
+                <label class="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 rounded border border-gray-300 dark:border-gray-600"
+                    checked={appriseState().skipTlsVerify}
+                    onChange={(e) => {
+                      updateApprise({ skipTlsVerify: e.currentTarget.checked });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <span class="text-sm text-gray-600 dark:text-gray-400">Allow self-signed certificates</span>
+                </label>
+                <p class={formHelpText}>Enable only when the Apprise API uses a self-signed certificate.</p>
+              </div>
             </div>
+          </Show>
+
+          <div class={formField}>
+            <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Timeout (seconds)</label>
+            <input
+              type="number"
+              min="5"
+              max="120"
+              value={appriseState().timeoutSeconds}
+              class={formControl}
+              onInput={(e) => {
+                const raw = e.currentTarget.valueAsNumber;
+                const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
+                updateApprise({ timeoutSeconds: safe });
+                props.setHasUnsavedChanges(true);
+              }}
+            />
+            <p class={formHelpText}>Maximum time to wait for Apprise to respond.</p>
           </div>
         </div>
       </SettingsPanel>
