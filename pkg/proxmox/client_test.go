@@ -73,6 +73,41 @@ func TestDiskUnmarshalWearout(t *testing.T) {
 	}
 }
 
+func TestVMFileSystemUnmarshalFlexibleNumbers(t *testing.T) {
+	t.Run("accepts numeric values", func(t *testing.T) {
+		payload := `{"name":"rootfs","type":"zfs","mountpoint":"/","total-bytes":8589934592,"used-bytes":3221225472,"disk":[{"dev":"/dev/vtbd0p2"}]}`
+		var fs VMFileSystem
+		if err := json.Unmarshal([]byte(payload), &fs); err != nil {
+			t.Fatalf("unexpected error unmarshalling numeric fields: %v", err)
+		}
+		if fs.TotalBytes != 8589934592 || fs.UsedBytes != 3221225472 {
+			t.Fatalf("unexpected numeric values: got total=%d used=%d", fs.TotalBytes, fs.UsedBytes)
+		}
+	})
+
+	t.Run("accepts numeric strings", func(t *testing.T) {
+		payload := `{"name":"rootfs","type":"ufs","mountpoint":"/","total-bytes":"5368709120","used-bytes":"2147483648","disk":[{"dev":"/dev/vtbd0p3"}]}`
+		var fs VMFileSystem
+		if err := json.Unmarshal([]byte(payload), &fs); err != nil {
+			t.Fatalf("unexpected error unmarshalling string fields: %v", err)
+		}
+		if fs.TotalBytes != 5368709120 || fs.UsedBytes != 2147483648 {
+			t.Fatalf("unexpected string values: got total=%d used=%d", fs.TotalBytes, fs.UsedBytes)
+		}
+	})
+
+	t.Run("accepts float-like strings", func(t *testing.T) {
+		payload := `{"name":"rootfs","type":"ufs","mountpoint":"/","total-bytes":"1073741824.0","used-bytes":"536870912.0","disk":[{"dev":"/dev/vtbd0p4"}]}`
+		var fs VMFileSystem
+		if err := json.Unmarshal([]byte(payload), &fs); err != nil {
+			t.Fatalf("unexpected error unmarshalling float-like strings: %v", err)
+		}
+		if fs.TotalBytes != 1073741824 || fs.UsedBytes != 536870912 {
+			t.Fatalf("unexpected float string values: got total=%d used=%d", fs.TotalBytes, fs.UsedBytes)
+		}
+	})
+}
+
 func TestMemoryStatusEffectiveAvailable(t *testing.T) {
 	t.Run("nil receiver returns zero", func(t *testing.T) {
 		var status *MemoryStatus
