@@ -790,34 +790,11 @@ function AppLayout(props: {
     navigate(tab.route);
   };
 
-  type PlatformTab = ReturnType<typeof platformTabs>[number];
-  type UtilityTab = ReturnType<typeof utilityTabs>[number];
-
-  const mobileTabs = createMemo<
-    Array<(PlatformTab & { type: 'platform' }) | (UtilityTab & { type: 'utility' })>
-  >(() => {
-    const platformEntries = platformTabs().map((tab) => ({ ...tab, type: 'platform' as const }));
-    const utilityEntries = utilityTabs().map((tab) => ({ ...tab, type: 'utility' as const }));
-    return [...platformEntries, ...utilityEntries];
-  });
-
-  const handleMobileTabChange = (tabId: PlatformTab['id'] | UtilityTab['id']) => {
-    const platform = platformTabs().find((tab) => tab.id === tabId);
-    if (platform) {
-      handlePlatformClick(platform);
-      return;
-    }
-    const utility = utilityTabs().find((tab) => tab.id === tabId);
-    if (utility) {
-      handleUtilityClick(utility);
-    }
-  };
-
   return (
     <div class="pulse-shell">
       {/* Header */}
-      <div class="header mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex items-center justify-between gap-2 sm:gap-3">
+      <div class="header mb-3 flex flex-col gap-3 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0">
+        <div class="flex items-center gap-2 sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
           <svg
             width="20"
             height="20"
@@ -852,7 +829,7 @@ function AppLayout(props: {
             </span>
           </Show>
         </div>
-        <div class="header-controls flex w-full flex-wrap items-center gap-3 justify-start sm:w-auto sm:flex-1 sm:justify-end">
+        <div class="header-controls flex w-full flex-wrap items-center gap-3 justify-start sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end">
           <div class="flex w-full flex-wrap items-center gap-2 justify-start sm:w-auto sm:justify-end">
             <div
               class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
@@ -928,38 +905,6 @@ function AppLayout(props: {
                 </span>
               </button>
             </Show>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Tab Switcher */}
-      <div class="sm:hidden mb-3">
-        <label for="mobile-tab-switcher" class="sr-only">
-          Navigate between tabs
-        </label>
-        <div class="relative">
-          <select
-            id="mobile-tab-switcher"
-            value={getActiveTab()}
-            onChange={(event) => handleMobileTabChange(event.currentTarget.value as PlatformTab['id'] | UtilityTab['id'])}
-            class="w-full appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-9 text-sm font-medium text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:focus:border-blue-400 dark:focus:ring-blue-500/40"
-          >
-            <For each={mobileTabs()}>
-              {(tab) => (
-                <option value={tab.id}>
-                  {tab.type === 'platform' && !tab.enabled ? `${tab.label} (Configure)` : tab.label}
-                </option>
-              )}
-            </For>
-          </select>
-          <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 dark:text-gray-500">
-            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path
-                fill-rule="evenodd"
-                d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08z"
-                clip-rule="evenodd"
-              />
-            </svg>
           </div>
         </div>
       </div>
