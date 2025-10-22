@@ -29,10 +29,12 @@ Grab the `pulse-docker-agent` binary from the release assets (or build it yourse
 ```bash
 # Build from source
 cd /opt/pulse
-GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
 ```
 
 Copy the binary to your Docker host (e.g. `/usr/local/bin/pulse-docker-agent`) and make it executable.
+
+> **Why `CGO_ENABLED=0`?** Building a fully static binary ensures the agent runs on hosts still using older glibc releases (for example Debian 11 with glibc 2.31).
 
 ### Quick install from your Pulse server
 

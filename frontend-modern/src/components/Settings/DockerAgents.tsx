@@ -786,9 +786,12 @@ WantedBy=multi-user.target`;
                     <code>
                       cd /opt/pulse
                       <br />
-                      GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
+                      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
                     </code>
                   </div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    Building with <code class="font-mono text-[11px]">CGO_ENABLED=0</code> keeps the binary fully static so it runs on hosts with older glibc (e.g. Debian 11).
+                  </p>
                   <p class="font-medium text-gray-900 dark:text-gray-100">2. Copy to host</p>
                   <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
                     <code>
