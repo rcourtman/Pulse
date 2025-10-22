@@ -31,6 +31,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -509,6 +510,17 @@ func safeFloat(val float64) float64 {
 	return val
 }
 
+func cloneStringFloatMap(src map[string]float64) map[string]float64 {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
 // shouldRunBackupPoll determines whether a backup polling cycle should execute.
 // Returns whether polling should run, a human-readable skip reason, and the timestamp to record.
 func (m *Monitor) shouldRunBackupPoll(last time.Time, now time.Time) (bool, string, time.Time) {
@@ -547,6 +559,7 @@ func (m *Monitor) shouldRunBackupPoll(last time.Time, now time.Time) (bool, stri
 
 const (
 	dockerConnectionPrefix       = "docker-"
+	hostConnectionPrefix         = "host-"
 	dockerOfflineGraceMultiplier = 4
 	dockerMinimumHealthWindow    = 30 * time.Second
 	dockerMaximumHealthWindow    = 10 * time.Minute
@@ -1266,6 +1279,170 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	return host, nil
 }
 
+// ApplyHostReport ingests a host agent report into the shared state.
+func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.APITokenRecord) (models.Host, error) {
+	hostname := strings.TrimSpace(report.Host.Hostname)
+	if hostname == "" {
+		return models.Host{}, fmt.Errorf("host report missing hostname")
+	}
+
+	identifier := strings.TrimSpace(report.Host.ID)
+	if identifier != "" {
+		identifier = sanitizeDockerHostSuffix(identifier)
+	}
+	if identifier == "" {
+		if machine := sanitizeDockerHostSuffix(report.Host.MachineID); machine != "" {
+			identifier = machine
+		}
+	}
+	if identifier == "" {
+		if agentID := sanitizeDockerHostSuffix(report.Agent.ID); agentID != "" {
+			identifier = agentID
+		}
+	}
+	if identifier == "" {
+		if hostName := sanitizeDockerHostSuffix(hostname); hostName != "" {
+			identifier = hostName
+		}
+	}
+	if identifier == "" {
+		seedParts := uniqueNonEmptyStrings(
+			report.Host.MachineID,
+			report.Agent.ID,
+			report.Host.Hostname,
+		)
+		if len(seedParts) == 0 {
+			seedParts = []string{hostname}
+		}
+		seed := strings.Join(seedParts, "|")
+		sum := sha1.Sum([]byte(seed))
+		identifier = fmt.Sprintf("host-%s", hex.EncodeToString(sum[:6]))
+	}
+
+	existingHosts := m.state.GetHosts()
+	var previous models.Host
+	var hasPrevious bool
+	for _, candidate := range existingHosts {
+		if candidate.ID == identifier {
+			previous = candidate
+			hasPrevious = true
+			break
+		}
+	}
+
+	displayName := strings.TrimSpace(report.Host.DisplayName)
+	if displayName == "" {
+		displayName = hostname
+	}
+
+	timestamp := report.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now().UTC()
+	}
+
+	memory := models.Memory{
+		Total:     report.Metrics.Memory.TotalBytes,
+		Used:      report.Metrics.Memory.UsedBytes,
+		Free:      report.Metrics.Memory.FreeBytes,
+		Usage:     safeFloat(report.Metrics.Memory.Usage),
+		SwapTotal: report.Metrics.Memory.SwapTotal,
+		SwapUsed:  report.Metrics.Memory.SwapUsed,
+	}
+	if memory.Usage <= 0 && memory.Total > 0 {
+		memory.Usage = safePercentage(float64(memory.Used), float64(memory.Total))
+	}
+
+	disks := make([]models.Disk, 0, len(report.Disks))
+	for _, disk := range report.Disks {
+		usage := safeFloat(disk.Usage)
+		if usage <= 0 && disk.TotalBytes > 0 {
+			usage = safePercentage(float64(disk.UsedBytes), float64(disk.TotalBytes))
+		}
+		disks = append(disks, models.Disk{
+			Total:      disk.TotalBytes,
+			Used:       disk.UsedBytes,
+			Free:       disk.FreeBytes,
+			Usage:      usage,
+			Mountpoint: disk.Mountpoint,
+			Type:       disk.Type,
+			Device:     disk.Device,
+		})
+	}
+
+	network := make([]models.HostNetworkInterface, 0, len(report.Network))
+	for _, nic := range report.Network {
+		network = append(network, models.HostNetworkInterface{
+			Name:      nic.Name,
+			MAC:       nic.MAC,
+			Addresses: append([]string(nil), nic.Addresses...),
+			RXBytes:   nic.RXBytes,
+			TXBytes:   nic.TXBytes,
+			SpeedMbps: nic.SpeedMbps,
+		})
+	}
+
+	host := models.Host{
+		ID:                identifier,
+		Hostname:          hostname,
+		DisplayName:       displayName,
+		Platform:          strings.TrimSpace(strings.ToLower(report.Host.Platform)),
+		OSName:            strings.TrimSpace(report.Host.OSName),
+		OSVersion:         strings.TrimSpace(report.Host.OSVersion),
+		KernelVersion:     strings.TrimSpace(report.Host.KernelVersion),
+		Architecture:      strings.TrimSpace(report.Host.Architecture),
+		CPUCount:          report.Host.CPUCount,
+		CPUUsage:          safeFloat(report.Metrics.CPUUsagePercent),
+		LoadAverage:       append([]float64(nil), report.Host.LoadAverage...),
+		Memory:            memory,
+		Disks:             disks,
+		NetworkInterfaces: network,
+		Sensors: models.HostSensorSummary{
+			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
+			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),
+			Additional:         cloneStringFloatMap(report.Sensors.Additional),
+		},
+		Status:          "online",
+		UptimeSeconds:   report.Host.UptimeSeconds,
+		IntervalSeconds: report.Agent.IntervalSeconds,
+		LastSeen:        timestamp,
+		AgentVersion:    strings.TrimSpace(report.Agent.Version),
+		Tags:            append([]string(nil), report.Tags...),
+	}
+
+	if len(host.LoadAverage) == 0 {
+		host.LoadAverage = nil
+	}
+	if len(host.Disks) == 0 {
+		host.Disks = nil
+	}
+	if len(host.NetworkInterfaces) == 0 {
+		host.NetworkInterfaces = nil
+	}
+
+	if tokenRecord != nil {
+		host.TokenID = tokenRecord.ID
+		host.TokenName = tokenRecord.Name
+		host.TokenHint = tokenHintFromRecord(tokenRecord)
+		if tokenRecord.LastUsedAt != nil {
+			t := tokenRecord.LastUsedAt.UTC()
+			host.TokenLastUsedAt = &t
+		} else {
+			now := time.Now().UTC()
+			host.TokenLastUsedAt = &now
+		}
+	} else if hasPrevious {
+		host.TokenID = previous.TokenID
+		host.TokenName = previous.TokenName
+		host.TokenHint = previous.TokenHint
+		host.TokenLastUsedAt = previous.TokenLastUsedAt
+	}
+
+	m.state.UpsertHost(host)
+	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
+
+	return host, nil
+}
+
 const (
 	removedDockerHostsTTL = 24 * time.Hour // Clean up removed hosts tracking after 24 hours
 )
@@ -1657,6 +1834,336 @@ func anyToInt64(val interface{}) int64 {
 		}
 	}
 	return 0
+}
+
+func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName string, container *models.Container) {
+	if container == nil {
+		return
+	}
+
+	ensureContainerRootDiskEntry(container)
+
+	if client == nil || container.Status != "running" {
+		return
+	}
+
+	statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	status, err := client.GetContainerStatus(statusCtx, nodeName, container.VMID)
+	cancel()
+	if err != nil {
+		log.Debug().
+			Err(err).
+			Str("instance", instanceName).
+			Str("node", nodeName).
+			Str("container", container.Name).
+			Int("vmid", container.VMID).
+			Msg("Container status metadata unavailable")
+		return
+	}
+	if status == nil {
+		return
+	}
+
+	addressSet := make(map[string]struct{})
+	addressOrder := make([]string, 0, 4)
+
+	addAddress := func(addr string) {
+		addr = strings.TrimSpace(addr)
+		if addr == "" {
+			return
+		}
+		if _, exists := addressSet[addr]; exists {
+			return
+		}
+		addressSet[addr] = struct{}{}
+		addressOrder = append(addressOrder, addr)
+	}
+
+	for _, addr := range sanitizeGuestAddressStrings(status.IP) {
+		addAddress(addr)
+	}
+	for _, addr := range sanitizeGuestAddressStrings(status.IP6) {
+		addAddress(addr)
+	}
+	for _, addr := range parseContainerRawIPs(status.IPv4) {
+		addAddress(addr)
+	}
+	for _, addr := range parseContainerRawIPs(status.IPv6) {
+		addAddress(addr)
+	}
+
+	networkIfaces := make([]models.GuestNetworkInterface, 0, len(status.Network))
+	for rawName, cfg := range status.Network {
+		if cfg == (proxmox.ContainerNetworkConfig{}) {
+			continue
+		}
+
+		iface := models.GuestNetworkInterface{}
+		name := strings.TrimSpace(cfg.Name)
+		if name == "" {
+			name = strings.TrimSpace(rawName)
+		}
+		if name != "" {
+			iface.Name = name
+		}
+		if mac := strings.TrimSpace(cfg.HWAddr); mac != "" {
+			iface.MAC = mac
+		}
+
+		addrCandidates := make([]string, 0, 4)
+		addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP)...)
+		addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP6)...)
+		addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IPv4)...)
+		addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IPv6)...)
+
+		if len(addrCandidates) > 0 {
+			deduped := dedupeStringsPreserveOrder(addrCandidates)
+			if len(deduped) > 0 {
+				iface.Addresses = deduped
+				for _, addr := range deduped {
+					addAddress(addr)
+				}
+			}
+		}
+
+		if iface.Name != "" || iface.MAC != "" || len(iface.Addresses) > 0 {
+			networkIfaces = append(networkIfaces, iface)
+		}
+	}
+
+	if len(networkIfaces) > 1 {
+		sort.SliceStable(networkIfaces, func(i, j int) bool {
+			left := strings.TrimSpace(networkIfaces[i].Name)
+			right := strings.TrimSpace(networkIfaces[j].Name)
+			return left < right
+		})
+	}
+
+	if len(addressOrder) > 1 {
+		sort.Strings(addressOrder)
+	}
+
+	if len(addressOrder) > 0 {
+		container.IPAddresses = addressOrder
+	}
+
+	if len(networkIfaces) > 0 {
+		container.NetworkInterfaces = networkIfaces
+	}
+
+	if disks := convertContainerDiskInfo(status); len(disks) > 0 {
+		container.Disks = disks
+	}
+
+	ensureContainerRootDiskEntry(container)
+}
+
+func ensureContainerRootDiskEntry(container *models.Container) {
+	if container == nil || len(container.Disks) > 0 {
+		return
+	}
+
+	total := container.Disk.Total
+	used := container.Disk.Used
+	if total <= 0 && used <= 0 {
+		return
+	}
+	if total > 0 && used > total {
+		used = total
+	}
+
+	free := total - used
+	if free < 0 {
+		free = 0
+	}
+
+	usage := container.Disk.Usage
+	if total > 0 && usage <= 0 {
+		usage = safePercentage(float64(used), float64(total))
+	}
+
+	container.Disks = []models.Disk{
+		{
+			Total:      total,
+			Used:       used,
+			Free:       free,
+			Usage:      usage,
+			Mountpoint: "/",
+			Type:       "rootfs",
+		},
+	}
+}
+
+func convertContainerDiskInfo(status *proxmox.Container) []models.Disk {
+	if status == nil || len(status.DiskInfo) == 0 {
+		return nil
+	}
+
+	disks := make([]models.Disk, 0, len(status.DiskInfo))
+	for name, info := range status.DiskInfo {
+		total := clampToInt64(info.Total)
+		used := clampToInt64(info.Used)
+		if total <= 0 && used <= 0 {
+			continue
+		}
+		if total > 0 && used > total {
+			used = total
+		}
+		free := total - used
+		if free < 0 {
+			free = 0
+		}
+
+		disk := models.Disk{
+			Total: total,
+			Used:  used,
+			Free:  free,
+		}
+
+		if total > 0 {
+			disk.Usage = safePercentage(float64(used), float64(total))
+		}
+
+		label := strings.TrimSpace(name)
+		if strings.EqualFold(label, "rootfs") || label == "" {
+			disk.Mountpoint = "/"
+			disk.Type = "rootfs"
+			if device := sanitizeRootFSDevice(status.RootFS); device != "" {
+				disk.Device = device
+			}
+		} else {
+			disk.Mountpoint = label
+			disk.Type = strings.ToLower(label)
+		}
+
+		disks = append(disks, disk)
+	}
+
+	if len(disks) > 1 {
+		sort.SliceStable(disks, func(i, j int) bool {
+			return disks[i].Mountpoint < disks[j].Mountpoint
+		})
+	}
+
+	return disks
+}
+
+func sanitizeRootFSDevice(root string) string {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return ""
+	}
+	if idx := strings.Index(root, ","); idx != -1 {
+		root = root[:idx]
+	}
+	return root
+}
+
+func parseContainerRawIPs(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var data interface{}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil
+	}
+	return collectIPsFromInterface(data)
+}
+
+func collectIPsFromInterface(value interface{}) []string {
+	switch v := value.(type) {
+	case nil:
+		return nil
+	case string:
+		return sanitizeGuestAddressStrings(v)
+	case []interface{}:
+		results := make([]string, 0, len(v))
+		for _, item := range v {
+			results = append(results, collectIPsFromInterface(item)...)
+		}
+		return results
+	case []string:
+		results := make([]string, 0, len(v))
+		for _, item := range v {
+			results = append(results, sanitizeGuestAddressStrings(item)...)
+		}
+		return results
+	case map[string]interface{}:
+		results := make([]string, 0)
+		for _, key := range []string{"ip", "ip6", "ipv4", "ipv6", "address", "value"} {
+			if val, ok := v[key]; ok {
+				results = append(results, collectIPsFromInterface(val)...)
+			}
+		}
+		return results
+	case json.Number:
+		return sanitizeGuestAddressStrings(v.String())
+	default:
+		return nil
+	}
+}
+
+func sanitizeGuestAddressStrings(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+
+	lower := strings.ToLower(value)
+	switch lower {
+	case "dhcp", "manual", "static", "auto", "none", "n/a", "unknown", "0.0.0.0", "::", "::1":
+		return nil
+	}
+
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return unicode.IsSpace(r) || r == ',' || r == ';'
+	})
+
+	if len(parts) > 1 {
+		results := make([]string, 0, len(parts))
+		for _, part := range parts {
+			results = append(results, sanitizeGuestAddressStrings(part)...)
+		}
+		return results
+	}
+
+	if strings.HasPrefix(value, "127.") || strings.HasPrefix(strings.ToLower(value), "0.0.0.0") {
+		return nil
+	}
+
+	lower = strings.ToLower(value)
+	if strings.HasPrefix(lower, "fe80") {
+		return nil
+	}
+
+	if strings.HasPrefix(lower, "::1") {
+		return nil
+	}
+
+	return []string{value}
+}
+
+func dedupeStringsPreserveOrder(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		result = append(result, v)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // GetConnectionStatuses returns the current connection status for all nodes
@@ -5184,6 +5691,8 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					}
 				}
 			}
+
+			m.enrichContainerMetadata(ctx, client, instanceName, res.Node, &container)
 
 			allContainers = append(allContainers, container)
 

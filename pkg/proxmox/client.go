@@ -734,26 +734,55 @@ type VM struct {
 
 // Container represents a Proxmox VE LXC container
 type Container struct {
-	VMID      FlexInt `json:"vmid"` // Changed to FlexInt to handle string VMIDs from some Proxmox versions
-	Name      string  `json:"name"`
-	Node      string  `json:"node"`
-	Status    string  `json:"status"`
-	CPU       float64 `json:"cpu"`
-	CPUs      FlexInt `json:"cpus"`
-	Mem       uint64  `json:"mem"`
-	MaxMem    uint64  `json:"maxmem"`
-	Swap      uint64  `json:"swap"`
-	MaxSwap   uint64  `json:"maxswap"`
-	Disk      uint64  `json:"disk"`
-	MaxDisk   uint64  `json:"maxdisk"`
-	NetIn     uint64  `json:"netin"`
-	NetOut    uint64  `json:"netout"`
-	DiskRead  uint64  `json:"diskread"`
-	DiskWrite uint64  `json:"diskwrite"`
-	Uptime    uint64  `json:"uptime"`
-	Template  int     `json:"template"`
-	Tags      string  `json:"tags"`
-	Lock      string  `json:"lock"`
+	VMID      FlexInt                           `json:"vmid"` // Changed to FlexInt to handle string VMIDs from some Proxmox versions
+	Name      string                            `json:"name"`
+	Node      string                            `json:"node"`
+	Status    string                            `json:"status"`
+	CPU       float64                           `json:"cpu"`
+	CPUs      FlexInt                           `json:"cpus"`
+	Mem       uint64                            `json:"mem"`
+	MaxMem    uint64                            `json:"maxmem"`
+	Swap      uint64                            `json:"swap"`
+	MaxSwap   uint64                            `json:"maxswap"`
+	Disk      uint64                            `json:"disk"`
+	MaxDisk   uint64                            `json:"maxdisk"`
+	NetIn     uint64                            `json:"netin"`
+	NetOut    uint64                            `json:"netout"`
+	DiskRead  uint64                            `json:"diskread"`
+	DiskWrite uint64                            `json:"diskwrite"`
+	Uptime    uint64                            `json:"uptime"`
+	Template  int                               `json:"template"`
+	Tags      string                            `json:"tags"`
+	Lock      string                            `json:"lock"`
+	Hostname  string                            `json:"hostname,omitempty"`
+	IP        string                            `json:"ip,omitempty"`
+	IP6       string                            `json:"ip6,omitempty"`
+	IPv4      json.RawMessage                   `json:"ipv4,omitempty"`
+	IPv6      json.RawMessage                   `json:"ipv6,omitempty"`
+	Network   map[string]ContainerNetworkConfig `json:"network,omitempty"`
+	DiskInfo  map[string]ContainerDiskUsage     `json:"diskinfo,omitempty"`
+	RootFS    string                            `json:"rootfs,omitempty"`
+}
+
+// ContainerNetworkConfig captures basic container network status information.
+type ContainerNetworkConfig struct {
+	Name     string      `json:"name,omitempty"`
+	HWAddr   string      `json:"hwaddr,omitempty"`
+	Bridge   string      `json:"bridge,omitempty"`
+	Method   string      `json:"method,omitempty"`
+	Type     string      `json:"type,omitempty"`
+	IP       interface{} `json:"ip,omitempty"`
+	IP6      interface{} `json:"ip6,omitempty"`
+	IPv4     interface{} `json:"ipv4,omitempty"`
+	IPv6     interface{} `json:"ipv6,omitempty"`
+	Firewall interface{} `json:"firewall,omitempty"`
+	Tag      interface{} `json:"tag,omitempty"`
+}
+
+// ContainerDiskUsage captures disk usage details returned by the LXC status API.
+type ContainerDiskUsage struct {
+	Total uint64 `json:"total,omitempty"`
+	Used  uint64 `json:"used,omitempty"`
 }
 
 // Storage represents a Proxmox VE storage

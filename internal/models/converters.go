@@ -181,6 +181,15 @@ func (c Container) ToFrontend() ContainerFrontend {
 		ct.Disks = c.Disks
 	}
 
+	if len(c.IPAddresses) > 0 {
+		ct.IPAddresses = append([]string(nil), c.IPAddresses...)
+	}
+
+	if len(c.NetworkInterfaces) > 0 {
+		ct.NetworkInterfaces = make([]GuestNetworkInterface, len(c.NetworkInterfaces))
+		copy(ct.NetworkInterfaces, c.NetworkInterfaces)
+	}
+
 	return ct
 }
 
@@ -231,6 +240,68 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 	}
 
 	return h
+}
+
+// ToFrontend converts a Host to HostFrontend.
+func (h Host) ToFrontend() HostFrontend {
+	host := HostFrontend{
+		ID:              h.ID,
+		Hostname:        h.Hostname,
+		DisplayName:     h.DisplayName,
+		Platform:        h.Platform,
+		OSName:          h.OSName,
+		OSVersion:       h.OSVersion,
+		KernelVersion:   h.KernelVersion,
+		Architecture:    h.Architecture,
+		CPUCount:        h.CPUCount,
+		CPUUsage:        h.CPUUsage,
+		Status:          h.Status,
+		UptimeSeconds:   h.UptimeSeconds,
+		IntervalSeconds: h.IntervalSeconds,
+		AgentVersion:    h.AgentVersion,
+		TokenID:         h.TokenID,
+		TokenName:       h.TokenName,
+		TokenHint:       h.TokenHint,
+		Tags:            append([]string(nil), h.Tags...),
+		LastSeen:        h.LastSeen.Unix() * 1000,
+	}
+
+	if host.DisplayName == "" {
+		if h.DisplayName != "" {
+			host.DisplayName = h.DisplayName
+		} else if h.Hostname != "" {
+			host.DisplayName = h.Hostname
+		}
+	}
+
+	if len(h.LoadAverage) > 0 {
+		host.LoadAverage = append([]float64(nil), h.LoadAverage...)
+	}
+
+	if (h.Memory != Memory{}) {
+		mem := h.Memory
+		host.Memory = &mem
+	}
+
+	if len(h.Disks) > 0 {
+		host.Disks = append([]Disk(nil), h.Disks...)
+	}
+
+	if len(h.NetworkInterfaces) > 0 {
+		host.NetworkInterfaces = make([]HostNetworkInterface, len(h.NetworkInterfaces))
+		copy(host.NetworkInterfaces, h.NetworkInterfaces)
+	}
+
+	if s := hostSensorSummaryToFrontend(h.Sensors); s != nil {
+		host.Sensors = s
+	}
+
+	if h.TokenLastUsedAt != nil && !h.TokenLastUsedAt.IsZero() {
+		ts := h.TokenLastUsedAt.Unix() * 1000
+		host.TokenLastUsedAt = &ts
+	}
+
+	return host
 }
 
 // ToFrontend converts a DockerContainer to DockerContainerFrontend
@@ -289,6 +360,35 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 	}
 
 	return container
+}
+
+func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFrontend {
+	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.Additional) == 0 {
+		return nil
+	}
+
+	dest := &HostSensorSummaryFrontend{}
+	if len(src.TemperatureCelsius) > 0 {
+		dest.TemperatureCelsius = copyStringFloatMap(src.TemperatureCelsius)
+	}
+	if len(src.FanRPM) > 0 {
+		dest.FanRPM = copyStringFloatMap(src.FanRPM)
+	}
+	if len(src.Additional) > 0 {
+		dest.Additional = copyStringFloatMap(src.Additional)
+	}
+	return dest
+}
+
+func copyStringFloatMap(src map[string]float64) map[string]float64 {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make(map[string]float64, len(src))
+	for k, v := range src {
+		dest[k] = v
+	}
+	return dest
 }
 
 func toDockerHostCommandFrontend(cmd DockerHostCommandStatus) *DockerHostCommandFrontend {

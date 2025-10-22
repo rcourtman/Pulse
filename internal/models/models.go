@@ -116,28 +116,30 @@ type VM struct {
 
 // Container represents an LXC container
 type Container struct {
-	ID         string    `json:"id"`
-	VMID       int       `json:"vmid"`
-	Name       string    `json:"name"`
-	Node       string    `json:"node"`
-	Instance   string    `json:"instance"`
-	Status     string    `json:"status"`
-	Type       string    `json:"type"`
-	CPU        float64   `json:"cpu"`
-	CPUs       int       `json:"cpus"`
-	Memory     Memory    `json:"memory"`
-	Disk       Disk      `json:"disk"`
-	Disks      []Disk    `json:"disks,omitempty"`
-	NetworkIn  int64     `json:"networkIn"`
-	NetworkOut int64     `json:"networkOut"`
-	DiskRead   int64     `json:"diskRead"`
-	DiskWrite  int64     `json:"diskWrite"`
-	Uptime     int64     `json:"uptime"`
-	Template   bool      `json:"template"`
-	LastBackup time.Time `json:"lastBackup,omitempty"`
-	Tags       []string  `json:"tags,omitempty"`
-	Lock       string    `json:"lock,omitempty"`
-	LastSeen   time.Time `json:"lastSeen"`
+	ID                string                  `json:"id"`
+	VMID              int                     `json:"vmid"`
+	Name              string                  `json:"name"`
+	Node              string                  `json:"node"`
+	Instance          string                  `json:"instance"`
+	Status            string                  `json:"status"`
+	Type              string                  `json:"type"`
+	CPU               float64                 `json:"cpu"`
+	CPUs              int                     `json:"cpus"`
+	Memory            Memory                  `json:"memory"`
+	Disk              Disk                    `json:"disk"`
+	Disks             []Disk                  `json:"disks,omitempty"`
+	NetworkIn         int64                   `json:"networkIn"`
+	NetworkOut        int64                   `json:"networkOut"`
+	DiskRead          int64                   `json:"diskRead"`
+	DiskWrite         int64                   `json:"diskWrite"`
+	Uptime            int64                   `json:"uptime"`
+	Template          bool                    `json:"template"`
+	LastBackup        time.Time               `json:"lastBackup,omitempty"`
+	Tags              []string                `json:"tags,omitempty"`
+	Lock              string                  `json:"lock,omitempty"`
+	LastSeen          time.Time               `json:"lastSeen"`
+	IPAddresses       []string                `json:"ipAddresses,omitempty"`
+	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
 }
 
 // Host represents a generic infrastructure host reporting via external agents.
