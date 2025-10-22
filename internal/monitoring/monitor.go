@@ -111,7 +111,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	}
 
 	nvmeTempsByNode := make(map[string][]models.NVMeTemp)
-    for _, node := range nodes {
+	for _, node := range nodes {
 		if node.Temperature == nil || !node.Temperature.Available || len(node.Temperature.NVMe) == 0 {
 			continue
 		}
@@ -371,7 +371,6 @@ type InstanceHealth struct {
 	DeadLetter  InstanceDLQ        `json:"deadLetter"`
 }
 
-
 func schedulerKey(instanceType InstanceType, name string) string {
 	return string(instanceType) + "::" + name
 }
@@ -386,60 +385,60 @@ func timePtr(t time.Time) *time.Time {
 
 // Monitor handles all monitoring operations
 type Monitor struct {
-	config               *config.Config
-	state                *models.State
-	pveClients           map[string]PVEClientInterface
-	pbsClients           map[string]*pbs.Client
-	pmgClients           map[string]*pmg.Client
-	pollMetrics          *PollMetrics
-	scheduler            *AdaptiveScheduler
-	stalenessTracker     *StalenessTracker
-	taskQueue            *TaskQueue
-	circuitBreakers      map[string]*circuitBreaker
-	deadLetterQueue      *TaskQueue
-	failureCounts        map[string]int
-	lastOutcome          map[string]taskOutcome
-	backoffCfg           backoffConfig
-	rng                  *rand.Rand
-	maxRetryAttempts     int
-	tempCollector        *TemperatureCollector // SSH-based temperature collector
-	mu                   sync.RWMutex
-	startTime            time.Time
-	rateTracker          *RateTracker
-	metricsHistory       *MetricsHistory
-	alertManager         *alerts.Manager
-	notificationMgr      *notifications.NotificationManager
-	configPersist        *config.ConfigPersistence
-	discoveryService     *discovery.Service        // Background discovery service
-	activePollCount      int32                     // Number of active polling operations
-	pollCounter          int64                     // Counter for polling cycles
-	authFailures         map[string]int            // Track consecutive auth failures per node
-	lastAuthAttempt      map[string]time.Time      // Track last auth attempt time
-	lastClusterCheck     map[string]time.Time      // Track last cluster check for standalone nodes
-	lastPhysicalDiskPoll map[string]time.Time      // Track last physical disk poll time per instance
-	lastPVEBackupPoll    map[string]time.Time      // Track last PVE backup poll per instance
-	lastPBSBackupPoll    map[string]time.Time      // Track last PBS backup poll per instance
-	persistence          *config.ConfigPersistence // Add persistence for saving updated configs
-	pbsBackupPollers     map[string]bool           // Track PBS backup polling goroutines per instance
-	runtimeCtx           context.Context           // Context used while monitor is running
-	wsHub                *websocket.Hub            // Hub used for broadcasting state
-	diagMu               sync.RWMutex              // Protects diagnostic snapshot maps
-	nodeSnapshots        map[string]NodeMemorySnapshot
-	guestSnapshots       map[string]GuestMemorySnapshot
-	rrdCacheMu           sync.RWMutex // Protects RRD memavailable cache
-	nodeRRDMemCache      map[string]rrdMemCacheEntry
-	removedDockerHosts   map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
-	dockerCommands       map[string]*dockerHostCommand
-	dockerCommandIndex   map[string]string
-	guestMetadataMu      sync.RWMutex
-	guestMetadataCache   map[string]guestMetadataCacheEntry
-	executor             PollExecutor
-	breakerBaseRetry     time.Duration
-	breakerMaxDelay      time.Duration
+	config                *config.Config
+	state                 *models.State
+	pveClients            map[string]PVEClientInterface
+	pbsClients            map[string]*pbs.Client
+	pmgClients            map[string]*pmg.Client
+	pollMetrics           *PollMetrics
+	scheduler             *AdaptiveScheduler
+	stalenessTracker      *StalenessTracker
+	taskQueue             *TaskQueue
+	circuitBreakers       map[string]*circuitBreaker
+	deadLetterQueue       *TaskQueue
+	failureCounts         map[string]int
+	lastOutcome           map[string]taskOutcome
+	backoffCfg            backoffConfig
+	rng                   *rand.Rand
+	maxRetryAttempts      int
+	tempCollector         *TemperatureCollector // SSH-based temperature collector
+	mu                    sync.RWMutex
+	startTime             time.Time
+	rateTracker           *RateTracker
+	metricsHistory        *MetricsHistory
+	alertManager          *alerts.Manager
+	notificationMgr       *notifications.NotificationManager
+	configPersist         *config.ConfigPersistence
+	discoveryService      *discovery.Service        // Background discovery service
+	activePollCount       int32                     // Number of active polling operations
+	pollCounter           int64                     // Counter for polling cycles
+	authFailures          map[string]int            // Track consecutive auth failures per node
+	lastAuthAttempt       map[string]time.Time      // Track last auth attempt time
+	lastClusterCheck      map[string]time.Time      // Track last cluster check for standalone nodes
+	lastPhysicalDiskPoll  map[string]time.Time      // Track last physical disk poll time per instance
+	lastPVEBackupPoll     map[string]time.Time      // Track last PVE backup poll per instance
+	lastPBSBackupPoll     map[string]time.Time      // Track last PBS backup poll per instance
+	persistence           *config.ConfigPersistence // Add persistence for saving updated configs
+	pbsBackupPollers      map[string]bool           // Track PBS backup polling goroutines per instance
+	runtimeCtx            context.Context           // Context used while monitor is running
+	wsHub                 *websocket.Hub            // Hub used for broadcasting state
+	diagMu                sync.RWMutex              // Protects diagnostic snapshot maps
+	nodeSnapshots         map[string]NodeMemorySnapshot
+	guestSnapshots        map[string]GuestMemorySnapshot
+	rrdCacheMu            sync.RWMutex // Protects RRD memavailable cache
+	nodeRRDMemCache       map[string]rrdMemCacheEntry
+	removedDockerHosts    map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
+	dockerCommands        map[string]*dockerHostCommand
+	dockerCommandIndex    map[string]string
+	guestMetadataMu       sync.RWMutex
+	guestMetadataCache    map[string]guestMetadataCacheEntry
+	executor              PollExecutor
+	breakerBaseRetry      time.Duration
+	breakerMaxDelay       time.Duration
 	breakerHalfOpenWindow time.Duration
-	instanceInfoCache    map[string]*instanceInfo
-	pollStatusMap        map[string]*pollStatus
-	dlqInsightMap        map[string]*dlqInsight
+	instanceInfoCache     map[string]*instanceInfo
+	pollStatusMap         map[string]*pollStatus
+	dlqInsightMap         map[string]*dlqInsight
 }
 
 type rrdMemCacheEntry struct {
@@ -530,10 +529,10 @@ type guestMetadataCacheEntry struct {
 }
 
 type taskOutcome struct {
-	success     bool
-	transient   bool
-	err         error
-	recordedAt  time.Time
+	success    bool
+	transient  bool
+	err        error
+	recordedAt time.Time
 }
 
 func (m *Monitor) getNodeRRDMemAvailable(ctx context.Context, client PVEClientInterface, nodeName string) (uint64, error) {
@@ -1480,8 +1479,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 	taskQueue := NewTaskQueue()
 	deadLetterQueue := NewTaskQueue()
 	breakers := make(map[string]*circuitBreaker)
-failureCounts := make(map[string]int)
-lastOutcome := make(map[string]taskOutcome)
+	failureCounts := make(map[string]int)
+	lastOutcome := make(map[string]taskOutcome)
 	backoff := backoffConfig{
 		Initial:    5 * time.Second,
 		Multiplier: 2,
@@ -1893,7 +1892,6 @@ func (m *Monitor) buildInstanceInfoCache(cfg *config.Config) {
 	}
 }
 
-
 func (m *Monitor) getExecutor() PollExecutor {
 	m.mu.RLock()
 	exec := m.executor
@@ -1999,12 +1997,12 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 	// Create separate tickers for polling and broadcasting
 	// Hardcoded to 10 seconds since Proxmox updates cluster/resources every 10 seconds
-const pollingInterval = 10 * time.Second
+	const pollingInterval = 10 * time.Second
 
-workerCount := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
-m.startTaskWorkers(ctx, workerCount)
+	workerCount := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
+	m.startTaskWorkers(ctx, workerCount)
 
-pollTicker := time.NewTicker(pollingInterval)
+	pollTicker := time.NewTicker(pollingInterval)
 	defer pollTicker.Stop()
 
 	broadcastTicker := time.NewTicker(pollingInterval)
@@ -2694,30 +2692,30 @@ func (m *Monitor) allowExecution(task ScheduledTask) bool {
 }
 
 func (m *Monitor) ensureBreaker(key string) *circuitBreaker {
-    m.mu.Lock()
-    defer m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-    if m.circuitBreakers == nil {
-        m.circuitBreakers = make(map[string]*circuitBreaker)
-    }
-    if breaker, ok := m.circuitBreakers[key]; ok {
-        return breaker
-    }
-    baseRetry := m.breakerBaseRetry
-    if baseRetry <= 0 {
-        baseRetry = 5 * time.Second
-    }
-    maxDelay := m.breakerMaxDelay
-    if maxDelay <= 0 {
-        maxDelay = 5 * time.Minute
-    }
-    halfOpen := m.breakerHalfOpenWindow
-    if halfOpen <= 0 {
-        halfOpen = 30 * time.Second
-    }
-    breaker := newCircuitBreaker(3, baseRetry, maxDelay, halfOpen)
-    m.circuitBreakers[key] = breaker
-    return breaker
+	if m.circuitBreakers == nil {
+		m.circuitBreakers = make(map[string]*circuitBreaker)
+	}
+	if breaker, ok := m.circuitBreakers[key]; ok {
+		return breaker
+	}
+	baseRetry := m.breakerBaseRetry
+	if baseRetry <= 0 {
+		baseRetry = 5 * time.Second
+	}
+	maxDelay := m.breakerMaxDelay
+	if maxDelay <= 0 {
+		maxDelay = 5 * time.Minute
+	}
+	halfOpen := m.breakerHalfOpenWindow
+	if halfOpen <= 0 {
+		halfOpen = 30 * time.Second
+	}
+	breaker := newCircuitBreaker(3, baseRetry, maxDelay, halfOpen)
+	m.circuitBreakers[key] = breaker
+	return breaker
 }
 
 func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, pollErr error) {
@@ -2792,13 +2790,13 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 
 // SchedulerHealthResponse contains complete scheduler health data for API exposure.
 type SchedulerHealthResponse struct {
-	UpdatedAt   time.Time                  `json:"updatedAt"`
-	Enabled     bool                       `json:"enabled"`
-	Queue       QueueSnapshot              `json:"queue"`
-	DeadLetter  DeadLetterSnapshot         `json:"deadLetter"`
-	Breakers    []BreakerSnapshot          `json:"breakers,omitempty"`
-	Staleness   []StalenessSnapshot        `json:"staleness,omitempty"`
-	Instances   []InstanceHealth           `json:"instances"`
+	UpdatedAt  time.Time           `json:"updatedAt"`
+	Enabled    bool                `json:"enabled"`
+	Queue      QueueSnapshot       `json:"queue"`
+	DeadLetter DeadLetterSnapshot  `json:"deadLetter"`
+	Breakers   []BreakerSnapshot   `json:"breakers,omitempty"`
+	Staleness  []StalenessSnapshot `json:"staleness,omitempty"`
+	Instances  []InstanceHealth    `json:"instances"`
 }
 
 // DeadLetterSnapshot contains dead-letter queue data.
@@ -3667,52 +3665,58 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					Bool("isCluster", modelNode.IsClusterMember).
 					Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
 					Msg("Temperature collection failed - check SSH access")
+			} else if temp != nil {
+				log.Debug().
+					Str("node", node.Node).
+					Str("sshHost", sshHost).
+					Bool("available", temp.Available).
+					Msg("Temperature data unavailable after collection")
 			}
 		}
 
-        if m.pollMetrics != nil {
-            nodeNameLabel := strings.TrimSpace(node.Node)
-            if nodeNameLabel == "" {
-                nodeNameLabel = strings.TrimSpace(modelNode.DisplayName)
-            }
-            if nodeNameLabel == "" {
-                nodeNameLabel = "unknown-node"
-            }
+		if m.pollMetrics != nil {
+			nodeNameLabel := strings.TrimSpace(node.Node)
+			if nodeNameLabel == "" {
+				nodeNameLabel = strings.TrimSpace(modelNode.DisplayName)
+			}
+			if nodeNameLabel == "" {
+				nodeNameLabel = "unknown-node"
+			}
 
-            success := true
-            nodeErrReason := ""
-            health := strings.ToLower(strings.TrimSpace(modelNode.ConnectionHealth))
-            if health != "" && health != "healthy" {
-                success = false
-                nodeErrReason = fmt.Sprintf("connection health %s", health)
-            }
+			success := true
+			nodeErrReason := ""
+			health := strings.ToLower(strings.TrimSpace(modelNode.ConnectionHealth))
+			if health != "" && health != "healthy" {
+				success = false
+				nodeErrReason = fmt.Sprintf("connection health %s", health)
+			}
 
-            status := strings.ToLower(strings.TrimSpace(modelNode.Status))
-            if success && status != "" && status != "online" {
-                success = false
-                nodeErrReason = fmt.Sprintf("status %s", status)
-            }
+			status := strings.ToLower(strings.TrimSpace(modelNode.Status))
+			if success && status != "" && status != "online" {
+				success = false
+				nodeErrReason = fmt.Sprintf("status %s", status)
+			}
 
-            var nodeErr error
-            if !success {
-                if nodeErrReason == "" {
-                    nodeErrReason = "unknown node error"
-                }
-                nodeErr = fmt.Errorf(nodeErrReason)
-            }
+			var nodeErr error
+			if !success {
+				if nodeErrReason == "" {
+					nodeErrReason = "unknown node error"
+				}
+				nodeErr = stderrors.New(nodeErrReason)
+			}
 
-            m.pollMetrics.RecordNodeResult(NodePollResult{
-                InstanceName: instanceName,
-                InstanceType: "pve",
-                NodeName:     nodeNameLabel,
-                Success:      success,
-                Error:        nodeErr,
-                StartTime:    nodeStart,
-                EndTime:      time.Now(),
-            })
-        }
+			m.pollMetrics.RecordNodeResult(NodePollResult{
+				InstanceName: instanceName,
+				InstanceType: "pve",
+				NodeName:     nodeNameLabel,
+				Success:      success,
+				Error:        nodeErr,
+				StartTime:    nodeStart,
+				EndTime:      time.Now(),
+			})
+		}
 
-        modelNodes = append(modelNodes, modelNode)
+		modelNodes = append(modelNodes, modelNode)
 	}
 
 	if len(modelNodes) == 0 && len(prevInstanceNodes) > 0 {
@@ -4138,19 +4142,19 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			m.mu.RUnlock()
 
 			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
-				if !shouldPoll {
-					if reason != "" {
-						log.Debug().
-							Str("instance", instanceName).
-							Str("reason", reason).
-							Msg("Skipping PVE backup polling this cycle")
-					}
-				} else {
-					select {
-					case <-ctx.Done():
-						pollErr = ctx.Err()
-						return
-					default:
+			if !shouldPoll {
+				if reason != "" {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("reason", reason).
+						Msg("Skipping PVE backup polling this cycle")
+				}
+			} else {
+				select {
+				case <-ctx.Done():
+					pollErr = ctx.Err()
+					return
+				default:
 					m.mu.Lock()
 					m.lastPVEBackupPoll[instanceName] = newLast
 					m.mu.Unlock()
@@ -4939,8 +4943,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	}
 	defer m.recordTaskResult(InstanceTypePBS, instanceName, pollErr)
 
-    // Check if context is cancelled
-    select {
+	// Check if context is cancelled
+	select {
 	case <-ctx.Done():
 		pollErr = ctx.Err()
 		if debugEnabled {
@@ -4954,285 +4958,286 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		log.Debug().Str("instance", instanceName).Msg("Polling PBS instance")
 	}
 
-    // Get instance config
-    var instanceCfg *config.PBSInstance
-    for _, cfg := range m.config.PBSInstances {
-        if cfg.Name == instanceName {
-            instanceCfg = &cfg
-            if debugEnabled {
-                log.Debug().
-                    Str("instance", instanceName).
-                    Bool("monitorDatastores", cfg.MonitorDatastores).
-                    Msg("Found PBS instance config")
-            }
-            break
-        }
-    }
-    if instanceCfg == nil {
-        log.Error().Str("instance", instanceName).Msg("PBS instance config not found")
-        return
-    }
+	// Get instance config
+	var instanceCfg *config.PBSInstance
+	for _, cfg := range m.config.PBSInstances {
+		if cfg.Name == instanceName {
+			instanceCfg = &cfg
+			if debugEnabled {
+				log.Debug().
+					Str("instance", instanceName).
+					Bool("monitorDatastores", cfg.MonitorDatastores).
+					Msg("Found PBS instance config")
+			}
+			break
+		}
+	}
+	if instanceCfg == nil {
+		log.Error().Str("instance", instanceName).Msg("PBS instance config not found")
+		return
+	}
 
-    // Initialize PBS instance with default values
-    pbsInst := models.PBSInstance{
-        ID:               "pbs-" + instanceName,
-        Name:             instanceName,
-        Host:             instanceCfg.Host,
-        Status:           "offline",
-        Version:          "unknown",
-        ConnectionHealth: "unhealthy",
-        LastSeen:         time.Now(),
-    }
+	// Initialize PBS instance with default values
+	pbsInst := models.PBSInstance{
+		ID:               "pbs-" + instanceName,
+		Name:             instanceName,
+		Host:             instanceCfg.Host,
+		Status:           "offline",
+		Version:          "unknown",
+		ConnectionHealth: "unhealthy",
+		LastSeen:         time.Now(),
+	}
 
-    // Try to get version first
-    version, versionErr := client.GetVersion(ctx)
-    if versionErr == nil {
-        pbsInst.Status = "online"
-        pbsInst.Version = version.Version
-        pbsInst.ConnectionHealth = "healthy"
-        m.resetAuthFailures(instanceName, "pbs")
-        m.state.SetConnectionHealth("pbs-"+instanceName, true)
+	// Try to get version first
+	version, versionErr := client.GetVersion(ctx)
+	if versionErr == nil {
+		pbsInst.Status = "online"
+		pbsInst.Version = version.Version
+		pbsInst.ConnectionHealth = "healthy"
+		m.resetAuthFailures(instanceName, "pbs")
+		m.state.SetConnectionHealth("pbs-"+instanceName, true)
 
-        if debugEnabled {
-            log.Debug().
-                Str("instance", instanceName).
-                Str("version", version.Version).
-                Bool("monitorDatastores", instanceCfg.MonitorDatastores).
-                Msg("PBS version retrieved successfully")
-        }
+		if debugEnabled {
+			log.Debug().
+				Str("instance", instanceName).
+				Str("version", version.Version).
+				Bool("monitorDatastores", instanceCfg.MonitorDatastores).
+				Msg("PBS version retrieved successfully")
+		}
 	} else {
-        if debugEnabled {
-            log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
-        }
+		if debugEnabled {
+			log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
+		}
 
-        ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
-        defer cancel2()
-        _, datastoreErr := client.GetDatastores(ctx2)
-        if datastoreErr == nil {
-            pbsInst.Status = "online"
-            pbsInst.Version = "connected"
-            pbsInst.ConnectionHealth = "healthy"
-            m.resetAuthFailures(instanceName, "pbs")
-            m.state.SetConnectionHealth("pbs-"+instanceName, true)
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel2()
+		_, datastoreErr := client.GetDatastores(ctx2)
+		if datastoreErr == nil {
+			pbsInst.Status = "online"
+			pbsInst.Version = "connected"
+			pbsInst.ConnectionHealth = "healthy"
+			m.resetAuthFailures(instanceName, "pbs")
+			m.state.SetConnectionHealth("pbs-"+instanceName, true)
 
-            log.Info().
-                Str("instance", instanceName).
-                Msg("PBS connected (version unavailable but datastores accessible)")
-        } else {
-            pbsInst.Status = "offline"
-            pbsInst.ConnectionHealth = "error"
-            monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
-            log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PBS")
-            m.state.SetConnectionHealth("pbs-"+instanceName, false)
+			log.Info().
+				Str("instance", instanceName).
+				Msg("PBS connected (version unavailable but datastores accessible)")
+		} else {
+			pbsInst.Status = "offline"
+			pbsInst.ConnectionHealth = "error"
+			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
+			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PBS")
+			m.state.SetConnectionHealth("pbs-"+instanceName, false)
 
-            if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
-                m.recordAuthFailure(instanceName, "pbs")
-                return
-            }
-        }
-    }
+			if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
+				m.recordAuthFailure(instanceName, "pbs")
+				return
+			}
+		}
+	}
 
-    // Get node status (CPU, memory, etc.)
-    nodeStatus, err := client.GetNodeStatus(ctx)
-    if err != nil {
-        if debugEnabled {
-            log.Debug().Err(err).Str("instance", instanceName).Msg("Could not get PBS node status (may need Sys.Audit permission)")
-        }
-    } else if nodeStatus != nil {
-        pbsInst.CPU = nodeStatus.CPU
-        if nodeStatus.Memory.Total > 0 {
-            pbsInst.Memory = float64(nodeStatus.Memory.Used) / float64(nodeStatus.Memory.Total) * 100
-            pbsInst.MemoryUsed = nodeStatus.Memory.Used
-            pbsInst.MemoryTotal = nodeStatus.Memory.Total
-        }
-        pbsInst.Uptime = nodeStatus.Uptime
+	// Get node status (CPU, memory, etc.)
+	nodeStatus, err := client.GetNodeStatus(ctx)
+	if err != nil {
+		if debugEnabled {
+			log.Debug().Err(err).Str("instance", instanceName).Msg("Could not get PBS node status (may need Sys.Audit permission)")
+		}
+	} else if nodeStatus != nil {
+		pbsInst.CPU = nodeStatus.CPU
+		if nodeStatus.Memory.Total > 0 {
+			pbsInst.Memory = float64(nodeStatus.Memory.Used) / float64(nodeStatus.Memory.Total) * 100
+			pbsInst.MemoryUsed = nodeStatus.Memory.Used
+			pbsInst.MemoryTotal = nodeStatus.Memory.Total
+		}
+		pbsInst.Uptime = nodeStatus.Uptime
 
-        log.Debug().
-            Str("instance", instanceName).
-            Float64("cpu", pbsInst.CPU).
-            Float64("memory", pbsInst.Memory).
-            Int64("uptime", pbsInst.Uptime).
-            Msg("PBS node status retrieved")
-    }
+		log.Debug().
+			Str("instance", instanceName).
+			Float64("cpu", pbsInst.CPU).
+			Float64("memory", pbsInst.Memory).
+			Int64("uptime", pbsInst.Uptime).
+			Msg("PBS node status retrieved")
+	}
 
-    // Poll datastores if enabled
-    if instanceCfg.MonitorDatastores {
-        datastores, err := client.GetDatastores(ctx)
-        if err != nil {
-            monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
-            log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get datastores")
-        } else {
-            log.Info().
-                Str("instance", instanceName).
-                Int("count", len(datastores)).
-                Msg("Got PBS datastores")
+	// Poll datastores if enabled
+	if instanceCfg.MonitorDatastores {
+		datastores, err := client.GetDatastores(ctx)
+		if err != nil {
+			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
+			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get datastores")
+		} else {
+			log.Info().
+				Str("instance", instanceName).
+				Int("count", len(datastores)).
+				Msg("Got PBS datastores")
 
-            for _, ds := range datastores {
-                total := ds.Total
-                if total == 0 && ds.TotalSpace > 0 {
-                    total = ds.TotalSpace
-                }
-                used := ds.Used
-                if used == 0 && ds.UsedSpace > 0 {
-                    used = ds.UsedSpace
-                }
-                avail := ds.Avail
-                if avail == 0 && ds.AvailSpace > 0 {
-                    avail = ds.AvailSpace
-                }
-                if total == 0 && used > 0 && avail > 0 {
-                    total = used + avail
-                }
+			for _, ds := range datastores {
+				total := ds.Total
+				if total == 0 && ds.TotalSpace > 0 {
+					total = ds.TotalSpace
+				}
+				used := ds.Used
+				if used == 0 && ds.UsedSpace > 0 {
+					used = ds.UsedSpace
+				}
+				avail := ds.Avail
+				if avail == 0 && ds.AvailSpace > 0 {
+					avail = ds.AvailSpace
+				}
+				if total == 0 && used > 0 && avail > 0 {
+					total = used + avail
+				}
 
-                log.Debug().
-                    Str("store", ds.Store).
-                    Int64("total", total).
-                    Int64("used", used).
-                    Int64("avail", avail).
-                    Int64("orig_total", ds.Total).
-                    Int64("orig_total_space", ds.TotalSpace).
-                    Msg("PBS datastore details")
+				log.Debug().
+					Str("store", ds.Store).
+					Int64("total", total).
+					Int64("used", used).
+					Int64("avail", avail).
+					Int64("orig_total", ds.Total).
+					Int64("orig_total_space", ds.TotalSpace).
+					Msg("PBS datastore details")
 
-                modelDS := models.PBSDatastore{
-                    Name:                ds.Store,
-                    Total:               total,
-                    Used:                used,
-                    Free:                avail,
-                    Usage:               safePercentage(float64(used), float64(total)),
-                    Status:              "available",
-                    DeduplicationFactor: ds.DeduplicationFactor,
-                }
+				modelDS := models.PBSDatastore{
+					Name:                ds.Store,
+					Total:               total,
+					Used:                used,
+					Free:                avail,
+					Usage:               safePercentage(float64(used), float64(total)),
+					Status:              "available",
+					DeduplicationFactor: ds.DeduplicationFactor,
+				}
 
-                namespaces, err := client.ListNamespaces(ctx, ds.Store, "", 0)
-                if err != nil {
-                    log.Warn().Err(err).
-                        Str("instance", instanceName).
-                        Str("datastore", ds.Store).
-                        Msg("Failed to list namespaces")
-                } else {
-                    for _, ns := range namespaces {
-                        nsPath := ns.NS
-                        if nsPath == "" {
-                            nsPath = ns.Path
-                        }
-                        if nsPath == "" {
-                            nsPath = ns.Name
-                        }
+				namespaces, err := client.ListNamespaces(ctx, ds.Store, "", 0)
+				if err != nil {
+					log.Warn().Err(err).
+						Str("instance", instanceName).
+						Str("datastore", ds.Store).
+						Msg("Failed to list namespaces")
+				} else {
+					for _, ns := range namespaces {
+						nsPath := ns.NS
+						if nsPath == "" {
+							nsPath = ns.Path
+						}
+						if nsPath == "" {
+							nsPath = ns.Name
+						}
 
-                        modelNS := models.PBSNamespace{
-                            Path:   nsPath,
-                            Parent: ns.Parent,
-                            Depth:  strings.Count(nsPath, "/"),
-                        }
-                        modelDS.Namespaces = append(modelDS.Namespaces, modelNS)
-                    }
+						modelNS := models.PBSNamespace{
+							Path:   nsPath,
+							Parent: ns.Parent,
+							Depth:  strings.Count(nsPath, "/"),
+						}
+						modelDS.Namespaces = append(modelDS.Namespaces, modelNS)
+					}
 
-                    hasRoot := false
-                    for _, ns := range modelDS.Namespaces {
-                        if ns.Path == "" {
-                            hasRoot = true
-                            break
-                        }
-                    }
-                    if !hasRoot {
-                        modelDS.Namespaces = append([]models.PBSNamespace{{Path: "", Depth: 0}}, modelDS.Namespaces...)
-                    }
-                }
+					hasRoot := false
+					for _, ns := range modelDS.Namespaces {
+						if ns.Path == "" {
+							hasRoot = true
+							break
+						}
+					}
+					if !hasRoot {
+						modelDS.Namespaces = append([]models.PBSNamespace{{Path: "", Depth: 0}}, modelDS.Namespaces...)
+					}
+				}
 
-                pbsInst.Datastores = append(pbsInst.Datastores, modelDS)
-            }
-        }
-    }
+				pbsInst.Datastores = append(pbsInst.Datastores, modelDS)
+			}
+		}
+	}
 
-    // Update state and run alerts
-    m.state.UpdatePBSInstance(pbsInst)
-    log.Info().
-        Str("instance", instanceName).
-        Str("id", pbsInst.ID).
-        Int("datastores", len(pbsInst.Datastores)).
-        Msg("PBS instance updated in state")
+	// Update state and run alerts
+	m.state.UpdatePBSInstance(pbsInst)
+	log.Info().
+		Str("instance", instanceName).
+		Str("id", pbsInst.ID).
+		Int("datastores", len(pbsInst.Datastores)).
+		Msg("PBS instance updated in state")
 
-    if m.alertManager != nil {
-        m.alertManager.CheckPBS(pbsInst)
-    }
+	if m.alertManager != nil {
+		m.alertManager.CheckPBS(pbsInst)
+	}
 
-    // Poll backups if enabled
-    if instanceCfg.MonitorBackups {
-        if len(pbsInst.Datastores) == 0 {
-            log.Debug().
-                Str("instance", instanceName).
-                Msg("No PBS datastores available for backup polling")
-        } else if !m.config.EnableBackupPolling {
-            log.Debug().
-                Str("instance", instanceName).
-                Msg("Skipping PBS backup polling - globally disabled")
-        } else {
-            now := time.Now()
+	// Poll backups if enabled
+	if instanceCfg.MonitorBackups {
+		if len(pbsInst.Datastores) == 0 {
+			log.Debug().
+				Str("instance", instanceName).
+				Msg("No PBS datastores available for backup polling")
+		} else if !m.config.EnableBackupPolling {
+			log.Debug().
+				Str("instance", instanceName).
+				Msg("Skipping PBS backup polling - globally disabled")
+		} else {
+			now := time.Now()
 
-            m.mu.RLock()
-            lastPoll := m.lastPBSBackupPoll[instanceName]
-            inProgress := m.pbsBackupPollers[instanceName]
-            m.mu.RUnlock()
+			m.mu.RLock()
+			lastPoll := m.lastPBSBackupPoll[instanceName]
+			inProgress := m.pbsBackupPollers[instanceName]
+			m.mu.RUnlock()
 
-            shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
-            if !shouldPoll {
-                if reason != "" {
-                    log.Debug().
-                        Str("instance", instanceName).
-                        Str("reason", reason).
-                        Msg("Skipping PBS backup polling this cycle")
-                }
-            } else if inProgress {
-                log.Debug().
-                    Str("instance", instanceName).
-                    Msg("PBS backup polling already in progress")
-            } else {
-                datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
-                copy(datastoreSnapshot, pbsInst.Datastores)
+			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
+			if !shouldPoll {
+				if reason != "" {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("reason", reason).
+						Msg("Skipping PBS backup polling this cycle")
+				}
+			} else if inProgress {
+				log.Debug().
+					Str("instance", instanceName).
+					Msg("PBS backup polling already in progress")
+			} else {
+				datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
+				copy(datastoreSnapshot, pbsInst.Datastores)
 
-                m.mu.Lock()
-                if m.pbsBackupPollers == nil {
-                    m.pbsBackupPollers = make(map[string]bool)
-                }
-                if m.pbsBackupPollers[instanceName] {
-                    m.mu.Unlock()
-                } else {
-                    m.pbsBackupPollers[instanceName] = true
-                    m.lastPBSBackupPoll[instanceName] = newLast
-                    m.mu.Unlock()
+				m.mu.Lock()
+				if m.pbsBackupPollers == nil {
+					m.pbsBackupPollers = make(map[string]bool)
+				}
+				if m.pbsBackupPollers[instanceName] {
+					m.mu.Unlock()
+				} else {
+					m.pbsBackupPollers[instanceName] = true
+					m.lastPBSBackupPoll[instanceName] = newLast
+					m.mu.Unlock()
 
-                    go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
-                        defer func() {
-                            m.mu.Lock()
-                            delete(m.pbsBackupPollers, inst)
-                            m.lastPBSBackupPoll[inst] = time.Now()
-                            m.mu.Unlock()
-                        }()
+					go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
+						defer func() {
+							m.mu.Lock()
+							delete(m.pbsBackupPollers, inst)
+							m.lastPBSBackupPoll[inst] = time.Now()
+							m.mu.Unlock()
+						}()
 
-                        log.Info().
-                            Str("instance", inst).
-                            Int("datastores", len(ds)).
-                            Msg("Starting background PBS backup polling")
+						log.Info().
+							Str("instance", inst).
+							Int("datastores", len(ds)).
+							Msg("Starting background PBS backup polling")
 
-                        backupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-                        defer cancel()
+						backupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+						defer cancel()
 
-                        m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
+						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
 
-                        log.Info().
-                            Str("instance", inst).
-                            Dur("duration", time.Since(start)).
-                            Msg("Completed background PBS backup polling")
-                    }(datastoreSnapshot, instanceName, now, client)
-                }
-            }
-        }
-    } else {
-        log.Debug().
-            Str("instance", instanceName).
-            Msg("PBS backup monitoring disabled")
-    }
+						log.Info().
+							Str("instance", inst).
+							Dur("duration", time.Since(start)).
+							Msg("Completed background PBS backup polling")
+					}(datastoreSnapshot, instanceName, now, client)
+				}
+			}
+		}
+	} else {
+		log.Debug().
+			Str("instance", instanceName).
+			Msg("PBS backup monitoring disabled")
+	}
 }
+
 // pollPMGInstance polls a single Proxmox Mail Gateway instance
 func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client *pmg.Client) {
 	start := time.Now()
