@@ -3,7 +3,7 @@ import { createMemo, For } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 
-type ProxmoxSection = 'overview' | 'storage' | 'backups' | 'mail';
+type ProxmoxSection = 'overview' | 'storage' | 'replication' | 'backups' | 'mail';
 
 interface ProxmoxSectionNavProps {
   current: ProxmoxSection;
@@ -24,6 +24,11 @@ const allSections: Array<{
     id: 'storage',
     label: 'Storage',
     path: '/proxmox/storage',
+  },
+  {
+    id: 'replication',
+    label: 'Replication',
+    path: '/proxmox/replication',
   },
   {
     id: 'mail',

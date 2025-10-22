@@ -26,6 +26,8 @@ export function createWebSocketStore(url: string) {
     vms: [],
     containers: [],
     dockerHosts: [],
+    hosts: [],
+    replicationJobs: [],
     storage: [],
     cephClusters: [],
     physicalDisks: [],
@@ -350,10 +352,13 @@ export function createWebSocketStore(url: string) {
               console.log('[WebSocket] Received null dockerHosts, ignoring');
             }
             if (message.data.storage !== undefined) setState('storage', message.data.storage);
+            if (message.data.hosts !== undefined) setState('hosts', message.data.hosts);
             if (message.data.cephClusters !== undefined)
               setState('cephClusters', message.data.cephClusters);
             if (message.data.pbs !== undefined) setState('pbs', message.data.pbs);
             if (message.data.pmg !== undefined) setState('pmg', message.data.pmg);
+            if (message.data.replicationJobs !== undefined)
+              setState('replicationJobs', message.data.replicationJobs);
             if (message.data.backups !== undefined) {
               setState('backups', message.data.backups);
               if (message.data.backups.pve !== undefined)

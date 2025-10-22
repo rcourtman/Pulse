@@ -17,6 +17,7 @@ import { getGlobalWebSocketStore } from './stores/websocket-global';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import StorageComponent from './components/Storage/Storage';
 import Backups from './components/Backups/Backups';
+import Replication from './components/Replication/Replication';
 import Settings from './components/Settings/Settings';
 import { Alerts } from './pages/Alerts';
 import { DockerHosts } from './components/Docker/DockerHosts';
@@ -96,12 +97,14 @@ function App() {
     vms: [],
     containers: [],
     dockerHosts: [],
+    hosts: [],
     storage: [],
     cephClusters: [],
     physicalDisks: [],
     pbs: [],
-  pmg: [],
-  metrics: [],
+    pmg: [],
+    replicationJobs: [],
+    metrics: [],
   pveBackups: {
     backupTasks: [],
     storageBackups: [],
@@ -607,6 +610,7 @@ function App() {
         component={() => <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />}
       />
       <Route path="/proxmox/storage" component={StorageComponent} />
+      <Route path="/proxmox/replication" component={Replication} />
       <Route path="/proxmox/mail" component={MailGateway} />
       <Route path="/proxmox/backups" component={Backups} />
       <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
