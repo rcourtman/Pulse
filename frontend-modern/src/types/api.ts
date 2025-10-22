@@ -5,6 +5,8 @@ export interface State {
   vms: VM[];
   containers: Container[];
   dockerHosts: DockerHost[];
+  hosts: Host[];
+  replicationJobs: ReplicationJob[];
   storage: Storage[];
   cephClusters: CephCluster[];
   physicalDisks: PhysicalDisk[];
@@ -71,6 +73,7 @@ export interface VM {
   ipAddresses?: string[];
   osName?: string;
   osVersion?: string;
+  agentVersion?: string;
   networkInterfaces?: GuestNetworkInterface[];
   networkIn: number;
   networkOut: number;
@@ -100,6 +103,7 @@ export interface Container {
   ipAddresses?: string[];
   osName?: string;
   osVersion?: string;
+  agentVersion?: string;
   networkInterfaces?: GuestNetworkInterface[];
   networkIn: number;
   networkOut: number;
@@ -188,6 +192,42 @@ export interface DockerContainerNetwork {
   name: string;
   ipv4?: string;
   ipv6?: string;
+}
+
+export interface ReplicationJob {
+  id: string;
+  instance: string;
+  jobId: string;
+  jobNumber?: number;
+  guest?: string;
+  guestId?: number;
+  guestName?: string;
+  guestType?: string;
+  guestNode?: string;
+  sourceNode?: string;
+  sourceStorage?: string;
+  targetNode?: string;
+  targetStorage?: string;
+  schedule?: string;
+  type?: string;
+  enabled: boolean;
+  state?: string;
+  status?: string;
+  lastSyncStatus?: string;
+  lastSyncTime?: number;
+  lastSyncUnix?: number;
+  lastSyncDurationSeconds?: number;
+  lastSyncDurationHuman?: string;
+  nextSyncTime?: number;
+  nextSyncUnix?: number;
+  durationSeconds?: number;
+  durationHuman?: string;
+  failCount?: number;
+  error?: string;
+  comment?: string;
+  removeJob?: string;
+  rateLimitMbps?: number;
+  polledAt?: number;
 }
 
 export interface Storage {

@@ -58,7 +58,9 @@ export function GuestRow(props: GuestRowProps) {
   const hasNetworkInterfaces = createMemo(() => networkInterfaces().length > 0);
   const osName = createMemo(() => props.guest.osName?.trim() ?? '');
   const osVersion = createMemo(() => props.guest.osVersion?.trim() ?? '');
+  const agentVersion = createMemo(() => props.guest.agentVersion?.trim() ?? '');
   const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
+  const hasAgentInfo = createMemo(() => agentVersion().length > 0);
 
   // Update custom URL when prop changes
   createEffect(() => {
@@ -99,6 +101,7 @@ export function GuestRow(props: GuestRowProps) {
   const hasDrawerContent = createMemo(
     () =>
       hasOsInfo() ||
+      hasAgentInfo() ||
       ipAddresses().length > 0 ||
       (memoryExtraLines()?.length ?? 0) > 0 ||
       hasFilesystemDetails() ||
@@ -439,7 +442,7 @@ export function GuestRow(props: GuestRowProps) {
                 }
               >
                 <>
-                  <Show when={hasOsInfo() || ipAddresses().length > 0}>
+                  <Show when={hasOsInfo() || hasAgentInfo() || ipAddresses().length > 0}>
                     <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                       <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Guest Overview</div>
                       <div class="mt-1 space-y-1">
@@ -454,6 +457,16 @@ export function GuestRow(props: GuestRowProps) {
                             <Show when={osVersion().length > 0}>
                               <span title={osVersion()}>{osVersion()}</span>
                             </Show>
+                          </div>
+                        </Show>
+                        <Show when={hasAgentInfo()}>
+                          <div class="flex flex-wrap items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
+                            <span class="uppercase tracking-wide text-[10px] text-gray-400 dark:text-gray-500">
+                              Agent
+                            </span>
+                            <span title={`QEMU guest agent ${agentVersion()}`}>
+                              QEMU guest agent {agentVersion()}
+                            </span>
                           </div>
                         </Show>
                         <Show when={ipAddresses().length > 0}>

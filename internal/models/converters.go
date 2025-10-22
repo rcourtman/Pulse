@@ -2,6 +2,7 @@ package models
 
 import (
 	"strings"
+	"time"
 )
 
 // ToFrontend converts a State to StateFrontend
@@ -117,6 +118,10 @@ func (v VM) ToFrontend() VMFrontend {
 
 	if v.OSVersion != "" {
 		vm.OSVersion = v.OSVersion
+	}
+
+	if v.AgentVersion != "" {
+		vm.AgentVersion = v.AgentVersion
 	}
 
 	if len(v.NetworkInterfaces) > 0 {
@@ -377,6 +382,58 @@ func (c CephCluster) ToFrontend() CephClusterFrontend {
 	if len(c.Services) > 0 {
 		frontend.Services = append([]CephServiceStatus(nil), c.Services...)
 	}
+
+	return frontend
+}
+
+// ToFrontend converts a replication job to a frontend representation.
+func (r ReplicationJob) ToFrontend() ReplicationJobFrontend {
+	frontend := ReplicationJobFrontend{
+		ID:                      r.ID,
+		Instance:                r.Instance,
+		JobID:                   r.JobID,
+		JobNumber:               r.JobNumber,
+		Guest:                   r.Guest,
+		GuestID:                 r.GuestID,
+		GuestName:               r.GuestName,
+		GuestType:               r.GuestType,
+		GuestNode:               r.GuestNode,
+		SourceNode:              r.SourceNode,
+		SourceStorage:           r.SourceStorage,
+		TargetNode:              r.TargetNode,
+		TargetStorage:           r.TargetStorage,
+		Schedule:                r.Schedule,
+		Type:                    r.Type,
+		Enabled:                 r.Enabled,
+		State:                   r.State,
+		Status:                  r.Status,
+		LastSyncStatus:          r.LastSyncStatus,
+		LastSyncUnix:            r.LastSyncUnix,
+		LastSyncDurationSeconds: r.LastSyncDurationSeconds,
+		LastSyncDurationHuman:   r.LastSyncDurationHuman,
+		NextSyncUnix:            r.NextSyncUnix,
+		DurationSeconds:         r.DurationSeconds,
+		DurationHuman:           r.DurationHuman,
+		FailCount:               r.FailCount,
+		Error:                   r.Error,
+		Comment:                 r.Comment,
+		RemoveJob:               r.RemoveJob,
+		RateLimitMbps:           r.RateLimitMbps,
+	}
+
+	if r.LastSyncTime != nil {
+		frontend.LastSyncTime = r.LastSyncTime.UnixMilli()
+	}
+
+	if r.NextSyncTime != nil {
+		frontend.NextSyncTime = r.NextSyncTime.UnixMilli()
+	}
+
+	polledAt := r.LastPolled
+	if polledAt.IsZero() {
+		polledAt = time.Now()
+	}
+	frontend.PolledAt = polledAt.UnixMilli()
 
 	return frontend
 }

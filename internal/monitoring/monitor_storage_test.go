@@ -53,6 +53,10 @@ func (f *fakeStorageClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task,
 	return nil, nil
 }
 
+func (f *fakeStorageClient) GetReplicationStatus(ctx context.Context) ([]proxmox.ReplicationJob, error) {
+	return nil, nil
+}
+
 func (f *fakeStorageClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
 	return nil, nil
 }
@@ -91,6 +95,10 @@ func (f *fakeStorageClient) GetVMNetworkInterfaces(ctx context.Context, node str
 
 func (f *fakeStorageClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	return nil, nil
+}
+
+func (f *fakeStorageClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "", nil
 }
 
 func (f *fakeStorageClient) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {
@@ -198,4 +206,3 @@ func TestPollStorageWithNodesOptimizedRecordsMetricsAndAlerts(t *testing.T) {
 		t.Fatalf("expected storage usage alert to be active")
 	}
 }
-

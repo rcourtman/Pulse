@@ -10,27 +10,28 @@ import (
 // State represents the current state of all monitored resources
 type State struct {
 	mu               sync.RWMutex
-	Nodes            []Node          `json:"nodes"`
-	VMs              []VM            `json:"vms"`
-	Containers       []Container     `json:"containers"`
-	DockerHosts      []DockerHost    `json:"dockerHosts"`
-	Hosts            []Host          `json:"hosts"`
-	Storage          []Storage       `json:"storage"`
-	CephClusters     []CephCluster   `json:"cephClusters"`
-	PhysicalDisks    []PhysicalDisk  `json:"physicalDisks"`
-	PBSInstances     []PBSInstance   `json:"pbs"`
-	PMGInstances     []PMGInstance   `json:"pmg"`
-	PBSBackups       []PBSBackup     `json:"pbsBackups"`
-	PMGBackups       []PMGBackup     `json:"pmgBackups"`
-	Backups          Backups         `json:"backups"`
-	Metrics          []Metric        `json:"metrics"`
-	PVEBackups       PVEBackups      `json:"pveBackups"`
-	Performance      Performance     `json:"performance"`
-	ConnectionHealth map[string]bool `json:"connectionHealth"`
-	Stats            Stats           `json:"stats"`
-	ActiveAlerts     []Alert         `json:"activeAlerts"`
-	RecentlyResolved []ResolvedAlert `json:"recentlyResolved"`
-	LastUpdate       time.Time       `json:"lastUpdate"`
+	Nodes            []Node           `json:"nodes"`
+	VMs              []VM             `json:"vms"`
+	Containers       []Container      `json:"containers"`
+	DockerHosts      []DockerHost     `json:"dockerHosts"`
+	Hosts            []Host           `json:"hosts"`
+	Storage          []Storage        `json:"storage"`
+	CephClusters     []CephCluster    `json:"cephClusters"`
+	PhysicalDisks    []PhysicalDisk   `json:"physicalDisks"`
+	PBSInstances     []PBSInstance    `json:"pbs"`
+	PMGInstances     []PMGInstance    `json:"pmg"`
+	PBSBackups       []PBSBackup      `json:"pbsBackups"`
+	PMGBackups       []PMGBackup      `json:"pmgBackups"`
+	Backups          Backups          `json:"backups"`
+	ReplicationJobs  []ReplicationJob `json:"replicationJobs"`
+	Metrics          []Metric         `json:"metrics"`
+	PVEBackups       PVEBackups       `json:"pveBackups"`
+	Performance      Performance      `json:"performance"`
+	ConnectionHealth map[string]bool  `json:"connectionHealth"`
+	Stats            Stats            `json:"stats"`
+	ActiveAlerts     []Alert          `json:"activeAlerts"`
+	RecentlyResolved []ResolvedAlert  `json:"recentlyResolved"`
+	LastUpdate       time.Time        `json:"lastUpdate"`
 }
 
 // Alert represents an active alert (simplified for State)
@@ -99,6 +100,7 @@ type VM struct {
 	IPAddresses       []string                `json:"ipAddresses,omitempty"`
 	OSName            string                  `json:"osName,omitempty"`
 	OSVersion         string                  `json:"osVersion,omitempty"`
+	AgentVersion      string                  `json:"agentVersion,omitempty"`
 	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
 	NetworkIn         int64                   `json:"networkIn"`
 	NetworkOut        int64                   `json:"networkOut"`
@@ -724,6 +726,43 @@ type GuestSnapshot struct {
 	SizeBytes   int64     `json:"sizeBytes,omitempty"`
 }
 
+// ReplicationJob represents the status of a Proxmox storage replication job.
+type ReplicationJob struct {
+	ID                      string     `json:"id"`
+	Instance                string     `json:"instance"`
+	JobID                   string     `json:"jobId"`
+	JobNumber               int        `json:"jobNumber,omitempty"`
+	Guest                   string     `json:"guest,omitempty"`
+	GuestID                 int        `json:"guestId,omitempty"`
+	GuestName               string     `json:"guestName,omitempty"`
+	GuestType               string     `json:"guestType,omitempty"`
+	GuestNode               string     `json:"guestNode,omitempty"`
+	SourceNode              string     `json:"sourceNode,omitempty"`
+	SourceStorage           string     `json:"sourceStorage,omitempty"`
+	TargetNode              string     `json:"targetNode,omitempty"`
+	TargetStorage           string     `json:"targetStorage,omitempty"`
+	Schedule                string     `json:"schedule,omitempty"`
+	Type                    string     `json:"type,omitempty"`
+	Enabled                 bool       `json:"enabled"`
+	State                   string     `json:"state,omitempty"`
+	Status                  string     `json:"status,omitempty"`
+	LastSyncStatus          string     `json:"lastSyncStatus,omitempty"`
+	LastSyncTime            *time.Time `json:"lastSyncTime,omitempty"`
+	LastSyncUnix            int64      `json:"lastSyncUnix,omitempty"`
+	LastSyncDurationSeconds int        `json:"lastSyncDurationSeconds,omitempty"`
+	LastSyncDurationHuman   string     `json:"lastSyncDurationHuman,omitempty"`
+	NextSyncTime            *time.Time `json:"nextSyncTime,omitempty"`
+	NextSyncUnix            int64      `json:"nextSyncUnix,omitempty"`
+	DurationSeconds         int        `json:"durationSeconds,omitempty"`
+	DurationHuman           string     `json:"durationHuman,omitempty"`
+	FailCount               int        `json:"failCount,omitempty"`
+	Error                   string     `json:"error,omitempty"`
+	Comment                 string     `json:"comment,omitempty"`
+	RemoveJob               string     `json:"removeJob,omitempty"`
+	RateLimitMbps           *float64   `json:"rateLimitMbps,omitempty"`
+	LastPolled              time.Time  `json:"lastPolled"`
+}
+
 // Performance represents performance metrics
 type Performance struct {
 	APICallDuration  map[string]float64 `json:"apiCallDuration"`
@@ -766,6 +805,7 @@ func NewState() *State {
 			PBS: make([]PBSBackup, 0),
 			PMG: make([]PMGBackup, 0),
 		},
+		ReplicationJobs:  make([]ReplicationJob, 0),
 		Metrics:          make([]Metric, 0),
 		PVEBackups:       pveBackups,
 		ConnectionHealth: make(map[string]bool),
@@ -1444,6 +1484,55 @@ func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []S
 	s.PVEBackups.StorageBackups = newBackups
 	s.syncBackupsLocked()
 	s.LastUpdate = time.Now()
+}
+
+// UpdateReplicationJobsForInstance updates replication jobs for a specific instance.
+func (s *State) UpdateReplicationJobsForInstance(instanceName string, jobs []ReplicationJob) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	filtered := make([]ReplicationJob, 0, len(s.ReplicationJobs))
+	for _, job := range s.ReplicationJobs {
+		if job.Instance != instanceName {
+			filtered = append(filtered, job)
+		}
+	}
+
+	now := time.Now()
+	for _, job := range jobs {
+		if job.Instance == "" {
+			job.Instance = instanceName
+		}
+		if job.JobID == "" {
+			job.JobID = job.ID
+		}
+		if job.LastPolled.IsZero() {
+			job.LastPolled = now
+		}
+		filtered = append(filtered, job)
+	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].Instance == filtered[j].Instance {
+			if filtered[i].GuestID == filtered[j].GuestID {
+				if filtered[i].JobNumber == filtered[j].JobNumber {
+					if filtered[i].JobID == filtered[j].JobID {
+						return filtered[i].ID < filtered[j].ID
+					}
+					return filtered[i].JobID < filtered[j].JobID
+				}
+				return filtered[i].JobNumber < filtered[j].JobNumber
+			}
+			if filtered[i].GuestID == 0 || filtered[j].GuestID == 0 {
+				return filtered[i].Guest < filtered[j].Guest
+			}
+			return filtered[i].GuestID < filtered[j].GuestID
+		}
+		return filtered[i].Instance < filtered[j].Instance
+	})
+
+	s.ReplicationJobs = filtered
+	s.LastUpdate = now
 }
 
 // UpdateGuestSnapshotsForInstance updates guest snapshots for a specific instance, merging with existing snapshots

@@ -393,6 +393,9 @@ func (noopPVEClient) GetStorage(ctx context.Context, node string) ([]proxmox.Sto
 }
 func (noopPVEClient) GetAllStorage(ctx context.Context) ([]proxmox.Storage, error) { return nil, nil }
 func (noopPVEClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error)   { return nil, nil }
+func (noopPVEClient) GetReplicationStatus(ctx context.Context) ([]proxmox.ReplicationJob, error) {
+	return nil, nil
+}
 func (noopPVEClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
 	return nil, nil
 }
@@ -420,6 +423,10 @@ func (noopPVEClient) GetVMNetworkInterfaces(ctx context.Context, node string, vm
 }
 func (noopPVEClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	return map[string]interface{}{}, nil
+}
+
+func (noopPVEClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "", nil
 }
 func (noopPVEClient) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {
 	return nil, nil
