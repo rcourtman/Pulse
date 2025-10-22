@@ -2,6 +2,7 @@ import { Component, Show, createSignal, For, createEffect, on } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { showSuccess, showError } from '@/utils/toast';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import Loader from 'lucide-solid/icons/loader';
 
 interface DiscoveredServer {
   ip: string;
@@ -370,21 +371,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                           </svg>
                         }
                       >
-                        <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                          <circle
-                            class="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            stroke-width="4"
-                          ></circle>
-                          <path
-                            class="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
+                        <Loader class="animate-spin h-4 w-4" />
                       </Show>
                     </button>
                   </div>
@@ -393,25 +380,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                 {/* Show loading message when scanning with no results yet */}
                 <Show when={isScanning() && !discoveryResult()}>
                   <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <svg
-                      class="animate-spin h-12 w-12 mx-auto mb-4 text-blue-500"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle
-                        class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4"
-                      ></circle>
-                      <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
+                    <Loader class="animate-spin h-12 w-12 mx-auto mb-4 text-blue-500" />
                     <p>Scanning network...</p>
                     <p class="text-xs mt-2">Servers will appear here as they're discovered</p>
                   </div>
