@@ -561,3 +561,24 @@ func TestTemperatureCollector_ConcurrentCollectTemperature(t *testing.T) {
 		t.Fatalf("expected proxy failures to stay below disable threshold, got %d", collector.proxyFailures)
 	}
 }
+
+func TestDisableLegacySSHOnAuthFailure(t *testing.T) {
+	collector := &TemperatureCollector{}
+
+	if !collector.disableLegacySSHOnAuthFailure(fmt.Errorf("ssh command failed: Permission denied (publickey)."), "node-1", "host-1") {
+		t.Fatalf("expected authentication errors to disable legacy SSH")
+	}
+	if !collector.legacySSHDisabled.Load() {
+		t.Fatalf("expected legacy SSH to be marked disabled")
+	}
+
+	// Repeated auth errors should still return true but not change the flag.
+	if !collector.disableLegacySSHOnAuthFailure(fmt.Errorf("permission denied"), "node-1", "host-1") {
+		t.Fatalf("expected repeated authentication errors to continue reporting disabled state")
+	}
+
+	// Non-authentication errors should not trigger disablement.
+	if collector.disableLegacySSHOnAuthFailure(fmt.Errorf("connection timed out"), "node-1", "host-1") {
+		t.Fatalf("expected non-authentication errors to leave legacy SSH enabled")
+	}
+}

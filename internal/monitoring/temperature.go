@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -40,6 +41,8 @@ type TemperatureCollector struct {
 	proxyMu            sync.Mutex
 	proxyFailures      int
 	proxyCooldownUntil time.Time
+	missingKeyWarned   atomic.Bool
+	legacySSHDisabled  atomic.Bool
 }
 
 // NewTemperatureCollector creates a new temperature collector
@@ -106,10 +109,28 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 			return &models.Temperature{Available: false}, nil
 		}
 
+		if tc.legacySSHDisabled.Load() {
+			return &models.Temperature{Available: false}, nil
+		}
+
+		if strings.TrimSpace(tc.sshKeyPath) == "" {
+			tc.logMissingSSHKey(nil)
+			return &models.Temperature{Available: false}, nil
+		}
+
+		if _, keyErr := os.Stat(tc.sshKeyPath); keyErr != nil {
+			tc.logMissingSSHKey(keyErr)
+			return &models.Temperature{Available: false}, nil
+		}
+
 		// Direct SSH (legacy method for non-containerized deployments)
 		// Try sensors first, fall back to Raspberry Pi method if that fails
 		output, err = tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null")
 		if err != nil || strings.TrimSpace(output) == "" {
+			if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
+				return &models.Temperature{Available: false}, nil
+			}
+
 			// Try Raspberry Pi temperature method
 			output, err = tc.runSSHCommand(ctx, host, "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null")
 			if err == nil && strings.TrimSpace(output) != "" {
@@ -118,6 +139,10 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 				if parseErr == nil {
 					return temp, nil
 				}
+			}
+
+			if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
+				return &models.Temperature{Available: false}, nil
 			}
 
 			log.Debug().
@@ -150,6 +175,12 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 
 // runSSHCommand executes a command on a remote node via SSH
 func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command string) (string, error) {
+	if strings.TrimSpace(tc.sshKeyPath) != "" {
+		if _, err := os.Stat(tc.sshKeyPath); err != nil {
+			return "", fmt.Errorf("temperature SSH key unavailable: %w", err)
+		}
+	}
+
 	if err := tc.ensureHostKey(ctx, host); err != nil {
 		return "", err
 	}
@@ -208,6 +239,45 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 	}
 
 	return outputStr, nil
+}
+
+func (tc *TemperatureCollector) logMissingSSHKey(cause error) {
+	if tc.missingKeyWarned.Load() {
+		return
+	}
+	if tc.missingKeyWarned.CompareAndSwap(false, true) {
+		event := log.Debug().
+			Str("sshKeyPath", tc.sshKeyPath)
+		if cause != nil && !errors.Is(cause, os.ErrNotExist) {
+			event = event.Err(cause)
+		}
+		event.Msg("Temperature SSH key not available; skipping legacy SSH collection")
+	}
+}
+
+func (tc *TemperatureCollector) disableLegacySSHOnAuthFailure(err error, nodeName, host string) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+	authFailure := strings.Contains(msg, "permission denied") ||
+		strings.Contains(msg, "authentication failed") ||
+		strings.Contains(msg, "publickey")
+
+	if !authFailure {
+		return false
+	}
+
+	if tc.legacySSHDisabled.CompareAndSwap(false, true) {
+		log.Warn().
+			Str("node", nodeName).
+			Str("host", host).
+			Err(err).
+			Msg("Disabling legacy SSH temperature collection after authentication failure; configure pulse-sensor-proxy or adjust SSH access.")
+	}
+
+	return true
 }
 
 // parseSensorsJSON parses the JSON output from `sensors -j`
