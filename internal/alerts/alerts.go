@@ -294,9 +294,11 @@ type PMGThresholdConfig struct {
 
 // SnapshotAlertConfig represents snapshot age alert configuration
 type SnapshotAlertConfig struct {
-	Enabled      bool `json:"enabled"`
-	WarningDays  int  `json:"warningDays"`
-	CriticalDays int  `json:"criticalDays"`
+	Enabled         bool    `json:"enabled"`
+	WarningDays     int     `json:"warningDays"`
+	CriticalDays    int     `json:"criticalDays"`
+	WarningSizeGiB  float64 `json:"warningSizeGiB,omitempty"`
+	CriticalSizeGiB float64 `json:"criticalSizeGiB,omitempty"`
 }
 
 // BackupAlertConfig represents backup age alert configuration
@@ -513,9 +515,11 @@ func NewManager() *Manager {
 				QuarantineGrowthCritMin: 500,  // AND ≥500 messages
 			},
 			SnapshotDefaults: SnapshotAlertConfig{
-				Enabled:      false,
-				WarningDays:  30,
-				CriticalDays: 45,
+				Enabled:         false,
+				WarningDays:     30,
+				CriticalDays:    45,
+				WarningSizeGiB:  0,
+				CriticalSizeGiB: 0,
 			},
 			BackupDefaults: BackupAlertConfig{
 				Enabled:      false,
@@ -835,6 +839,21 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	}
 	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
 		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
+	}
+	if config.SnapshotDefaults.CriticalDays == 0 && config.SnapshotDefaults.WarningDays > 0 {
+		config.SnapshotDefaults.CriticalDays = config.SnapshotDefaults.WarningDays
+	}
+	if config.SnapshotDefaults.WarningSizeGiB < 0 {
+		config.SnapshotDefaults.WarningSizeGiB = 0
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
+		config.SnapshotDefaults.CriticalSizeGiB = 0
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB > 0 && config.SnapshotDefaults.WarningSizeGiB > config.SnapshotDefaults.CriticalSizeGiB {
+		config.SnapshotDefaults.WarningSizeGiB = config.SnapshotDefaults.CriticalSizeGiB
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
+		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
 	}
 	if config.BackupDefaults.WarningDays < 0 {
 		config.BackupDefaults.WarningDays = 0
@@ -2991,17 +3010,61 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		}
 		ageDays := ageHours / 24
 
-		var level AlertLevel
-		var threshold int
+		const gib = 1024.0 * 1024 * 1024
+		sizeGiB := 0.0
+		if snapshot.SizeBytes > 0 {
+			sizeGiB = float64(snapshot.SizeBytes) / gib
+		}
+
+		var (
+			ageLevel       AlertLevel
+			ageThreshold   int
+			sizeLevel      AlertLevel
+			sizeThreshold  float64
+			triggeredStats []string
+		)
 
 		if snapshotCfg.CriticalDays > 0 && ageDays >= float64(snapshotCfg.CriticalDays) {
-			level = AlertLevelCritical
-			threshold = snapshotCfg.CriticalDays
+			ageLevel = AlertLevelCritical
+			ageThreshold = snapshotCfg.CriticalDays
+			triggeredStats = append(triggeredStats, "age")
 		} else if snapshotCfg.WarningDays > 0 && ageDays >= float64(snapshotCfg.WarningDays) {
-			level = AlertLevelWarning
-			threshold = snapshotCfg.WarningDays
-		} else {
+			ageLevel = AlertLevelWarning
+			ageThreshold = snapshotCfg.WarningDays
+			triggeredStats = append(triggeredStats, "age")
+		}
+
+		if snapshot.SizeBytes > 0 {
+			if snapshotCfg.CriticalSizeGiB > 0 && sizeGiB >= snapshotCfg.CriticalSizeGiB {
+				sizeLevel = AlertLevelCritical
+				sizeThreshold = snapshotCfg.CriticalSizeGiB
+				triggeredStats = append(triggeredStats, "size")
+			} else if snapshotCfg.WarningSizeGiB > 0 && sizeGiB >= snapshotCfg.WarningSizeGiB {
+				sizeLevel = AlertLevelWarning
+				sizeThreshold = snapshotCfg.WarningSizeGiB
+				triggeredStats = append(triggeredStats, "size")
+			}
+		}
+
+		if ageLevel == "" && sizeLevel == "" {
 			continue
+		}
+
+		var level AlertLevel
+		switch {
+		case ageLevel == AlertLevelCritical || sizeLevel == AlertLevelCritical:
+			level = AlertLevelCritical
+		case ageLevel == AlertLevelWarning || sizeLevel == AlertLevelWarning:
+			level = AlertLevelWarning
+		default:
+			continue
+		}
+
+		useSizePrimary := false
+		if sizeLevel == AlertLevelCritical && ageLevel != AlertLevelCritical {
+			useSizePrimary = true
+		} else if sizeLevel != "" && ageLevel == "" {
+			useSizePrimary = true
 		}
 
 		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
@@ -3030,19 +3093,35 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		}
 
 		ageDaysRounded := math.Round(ageDays*10) / 10
+		sizeGiBRounded := math.Round(sizeGiB*10) / 10
+		reasons := make([]string, 0, 2)
+		if ageLevel != "" {
+			reasons = append(reasons, fmt.Sprintf("%.1f days old (threshold %d days)", ageDaysRounded, ageThreshold))
+		}
+		if sizeLevel != "" {
+			reasons = append(reasons, fmt.Sprintf("%.1f GiB (threshold %.1f GiB)", sizeGiBRounded, sizeThreshold))
+		}
+		reasonText := strings.Join(reasons, " and ")
 		message := fmt.Sprintf(
-			"%s snapshot '%s' for %s is %.1f days old on %s (threshold: %d days)",
+			"%s snapshot '%s' for %s is %s on %s",
 			guestType,
 			snapshotName,
 			guestName,
-			ageDaysRounded,
+			reasonText,
 			snapshot.Node,
-			threshold,
 		)
 
-		thresholdTime := snapshot.Time.Add(time.Duration(threshold) * 24 * time.Hour)
-		if thresholdTime.After(now) {
-			thresholdTime = now
+		alertValue := ageDays
+		alertThreshold := float64(ageThreshold)
+		thresholdTime := now
+		if useSizePrimary {
+			alertValue = sizeGiB
+			alertThreshold = sizeThreshold
+		} else if ageThreshold > 0 {
+			thresholdTime = snapshot.Time.Add(time.Duration(ageThreshold) * 24 * time.Hour)
+			if thresholdTime.After(now) {
+				thresholdTime = now
+			}
 		}
 
 		metadata := map[string]interface{}{
@@ -3050,12 +3129,24 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			"snapshotCreatedAt": snapshot.Time,
 			"snapshotAgeDays":   ageDays,
 			"snapshotAgeHours":  ageHours,
+			"snapshotSizeBytes": snapshot.SizeBytes,
+			"snapshotSizeGiB":   sizeGiB,
 			"guestName":         guestName,
 			"guestType":         guestType,
 			"guestInstance":     snapshot.Instance,
 			"guestNode":         snapshot.Node,
 			"guestVmid":         snapshot.VMID,
-			"thresholdDays":     threshold,
+			"triggeredMetrics":  triggeredStats,
+			"primaryMetric":     "age",
+		}
+		if useSizePrimary {
+			metadata["primaryMetric"] = "size"
+		}
+		if ageLevel != "" {
+			metadata["thresholdDays"] = ageThreshold
+		}
+		if sizeLevel != "" {
+			metadata["thresholdSizeGiB"] = sizeThreshold
 		}
 
 		resourceName := fmt.Sprintf("%s snapshot '%s'", guestName, snapshotName)
@@ -3064,8 +3155,8 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		if existing, exists := m.activeAlerts[alertID]; exists {
 			existing.LastSeen = now
 			existing.Level = level
-			existing.Value = ageDays
-			existing.Threshold = float64(threshold)
+			existing.Value = alertValue
+			existing.Threshold = alertThreshold
 			existing.Message = message
 			existing.ResourceName = resourceName
 			if existing.Metadata == nil {
@@ -3087,8 +3178,8 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			Node:         snapshot.Node,
 			Instance:     snapshot.Instance,
 			Message:      message,
-			Value:        ageDays,
-			Threshold:    float64(threshold),
+			Value:        alertValue,
+			Threshold:    alertThreshold,
 			StartTime:    thresholdTime,
 			LastSeen:     now,
 			Metadata:     metadata,

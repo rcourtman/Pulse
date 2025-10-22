@@ -215,6 +215,21 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
 		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
 	}
+	if config.SnapshotDefaults.CriticalDays == 0 && config.SnapshotDefaults.WarningDays > 0 {
+		config.SnapshotDefaults.CriticalDays = config.SnapshotDefaults.WarningDays
+	}
+	if config.SnapshotDefaults.WarningSizeGiB < 0 {
+		config.SnapshotDefaults.WarningSizeGiB = 0
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
+		config.SnapshotDefaults.CriticalSizeGiB = 0
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB > 0 && config.SnapshotDefaults.WarningSizeGiB > config.SnapshotDefaults.CriticalSizeGiB {
+		config.SnapshotDefaults.WarningSizeGiB = config.SnapshotDefaults.CriticalSizeGiB
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
+		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
+	}
 	if config.BackupDefaults.WarningDays < 0 {
 		config.BackupDefaults.WarningDays = 0
 	}
@@ -277,9 +292,11 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 				SuppressionWindow: 5,
 				HysteresisMargin:  5.0,
 				SnapshotDefaults: alerts.SnapshotAlertConfig{
-					Enabled:      false,
-					WarningDays:  30,
-					CriticalDays: 45,
+					Enabled:         false,
+					WarningDays:     30,
+					CriticalDays:    45,
+					WarningSizeGiB:  0,
+					CriticalSizeGiB: 0,
 				},
 				BackupDefaults: alerts.BackupAlertConfig{
 					Enabled:      false,
@@ -344,6 +361,18 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	}
 	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
 		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
+	}
+	if config.SnapshotDefaults.WarningSizeGiB < 0 {
+		config.SnapshotDefaults.WarningSizeGiB = 0
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
+		config.SnapshotDefaults.CriticalSizeGiB = 0
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB > 0 && config.SnapshotDefaults.WarningSizeGiB > config.SnapshotDefaults.CriticalSizeGiB {
+		config.SnapshotDefaults.WarningSizeGiB = config.SnapshotDefaults.CriticalSizeGiB
+	}
+	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
+		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
 	}
 	if config.BackupDefaults.WarningDays < 0 {
 		config.BackupDefaults.WarningDays = 0
@@ -500,9 +529,11 @@ func (c *ConfigPersistence) LoadAppriseConfig() (*notifications.AppriseConfig, e
 		if os.IsNotExist(err) {
 			defaultCfg := notifications.AppriseConfig{
 				Enabled:        false,
+				Mode:           notifications.AppriseModeCLI,
 				Targets:        []string{},
 				CLIPath:        "apprise",
 				TimeoutSeconds: 15,
+				APIKeyHeader:   "X-API-KEY",
 			}
 			return &defaultCfg, nil
 		}
@@ -684,29 +715,29 @@ type NodesConfig struct {
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
-	PBSPollingInterval      int    `json:"pbsPollingInterval"` // PBS polling interval in seconds
-	PMGPollingInterval      int    `json:"pmgPollingInterval"` // PMG polling interval in seconds
-	BackupPollingInterval   int    `json:"backupPollingInterval,omitempty"`
-	BackupPollingEnabled    *bool  `json:"backupPollingEnabled,omitempty"`
-	AdaptivePollingEnabled        *bool `json:"adaptivePollingEnabled,omitempty"`
-	AdaptivePollingBaseInterval   int   `json:"adaptivePollingBaseInterval,omitempty"`
-	AdaptivePollingMinInterval    int   `json:"adaptivePollingMinInterval,omitempty"`
-	AdaptivePollingMaxInterval    int   `json:"adaptivePollingMaxInterval,omitempty"`
-	BackendPort             int    `json:"backendPort,omitempty"`
-	FrontendPort            int    `json:"frontendPort,omitempty"`
-	AllowedOrigins          string `json:"allowedOrigins,omitempty"`
-	ConnectionTimeout       int    `json:"connectionTimeout,omitempty"`
-	UpdateChannel           string `json:"updateChannel,omitempty"`
-	AutoUpdateEnabled       bool   `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
-	AutoUpdateCheckInterval int    `json:"autoUpdateCheckInterval,omitempty"`
-	AutoUpdateTime          string `json:"autoUpdateTime,omitempty"`
-	LogLevel                string `json:"logLevel,omitempty"`
-	DiscoveryEnabled        bool   `json:"discoveryEnabled"`
-	DiscoverySubnet         string `json:"discoverySubnet,omitempty"`
-	DiscoveryConfig         DiscoveryConfig `json:"discoveryConfig"`
-	Theme                   string `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
-	AllowEmbedding          bool   `json:"allowEmbedding"`                // Allow iframe embedding
-	AllowedEmbedOrigins     string `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
+	PBSPollingInterval          int             `json:"pbsPollingInterval"` // PBS polling interval in seconds
+	PMGPollingInterval          int             `json:"pmgPollingInterval"` // PMG polling interval in seconds
+	BackupPollingInterval       int             `json:"backupPollingInterval,omitempty"`
+	BackupPollingEnabled        *bool           `json:"backupPollingEnabled,omitempty"`
+	AdaptivePollingEnabled      *bool           `json:"adaptivePollingEnabled,omitempty"`
+	AdaptivePollingBaseInterval int             `json:"adaptivePollingBaseInterval,omitempty"`
+	AdaptivePollingMinInterval  int             `json:"adaptivePollingMinInterval,omitempty"`
+	AdaptivePollingMaxInterval  int             `json:"adaptivePollingMaxInterval,omitempty"`
+	BackendPort                 int             `json:"backendPort,omitempty"`
+	FrontendPort                int             `json:"frontendPort,omitempty"`
+	AllowedOrigins              string          `json:"allowedOrigins,omitempty"`
+	ConnectionTimeout           int             `json:"connectionTimeout,omitempty"`
+	UpdateChannel               string          `json:"updateChannel,omitempty"`
+	AutoUpdateEnabled           bool            `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
+	AutoUpdateCheckInterval     int             `json:"autoUpdateCheckInterval,omitempty"`
+	AutoUpdateTime              string          `json:"autoUpdateTime,omitempty"`
+	LogLevel                    string          `json:"logLevel,omitempty"`
+	DiscoveryEnabled            bool            `json:"discoveryEnabled"`
+	DiscoverySubnet             string          `json:"discoverySubnet,omitempty"`
+	DiscoveryConfig             DiscoveryConfig `json:"discoveryConfig"`
+	Theme                       string          `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
+	AllowEmbedding              bool            `json:"allowEmbedding"`                // Allow iframe embedding
+	AllowedEmbedOrigins         string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
 	// APIToken removed - now handled via .env file only
 }
 
@@ -714,13 +745,13 @@ type SystemSettings struct {
 func DefaultSystemSettings() *SystemSettings {
 	defaultDiscovery := DefaultDiscoveryConfig()
 	return &SystemSettings{
-		PBSPollingInterval:  60,
-		PMGPollingInterval:  60,
-		AutoUpdateEnabled:   false,
-		DiscoveryEnabled:    false,
-		DiscoverySubnet:     "auto",
-		DiscoveryConfig:     defaultDiscovery,
-		AllowEmbedding:      false,
+		PBSPollingInterval: 60,
+		PMGPollingInterval: 60,
+		AutoUpdateEnabled:  false,
+		DiscoveryEnabled:   false,
+		DiscoverySubnet:    "auto",
+		DiscoveryConfig:    defaultDiscovery,
+		AllowEmbedding:     false,
 	}
 }
 

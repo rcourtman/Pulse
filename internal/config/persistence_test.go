@@ -145,9 +145,11 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 		TimeThresholds:                 map[string]int{"guest": 0, "node": 0},
 		DockerIgnoredContainerPrefixes: []string{" Runner "},
 		SnapshotDefaults: alerts.SnapshotAlertConfig{
-			Enabled:      true,
-			WarningDays:  20,
-			CriticalDays: 10,
+			Enabled:         true,
+			WarningDays:     20,
+			CriticalDays:    10,
+			WarningSizeGiB:  15,
+			CriticalSizeGiB: 8,
 		},
 		BackupDefaults: alerts.BackupAlertConfig{
 			Enabled:      true,
@@ -209,6 +211,12 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 	}
 	if loaded.SnapshotDefaults.CriticalDays != 10 {
 		t.Fatalf("expected snapshot critical days preserved at 10, got %d", loaded.SnapshotDefaults.CriticalDays)
+	}
+	if loaded.SnapshotDefaults.WarningSizeGiB != 8 {
+		t.Fatalf("expected snapshot warning size normalized to 8, got %.1f", loaded.SnapshotDefaults.WarningSizeGiB)
+	}
+	if loaded.SnapshotDefaults.CriticalSizeGiB != 8 {
+		t.Fatalf("expected snapshot critical size preserved at 8, got %.1f", loaded.SnapshotDefaults.CriticalSizeGiB)
 	}
 }
 
@@ -348,7 +356,7 @@ func TestImportConfigTransactionalSuccess(t *testing.T) {
 	}
 
 	newAlerts := alerts.AlertConfig{
-		Enabled:        true,
+		Enabled:          true,
 		HysteresisMargin: 3.5,
 		StorageDefault: alerts.HysteresisThreshold{
 			Trigger: 70,
@@ -426,7 +434,7 @@ func TestImportConfigTransactionalSuccess(t *testing.T) {
 	}
 
 	oldAlerts := alerts.AlertConfig{
-		Enabled:        true,
+		Enabled:          true,
 		HysteresisMargin: 5,
 		StorageDefault: alerts.HysteresisThreshold{
 			Trigger: 85,
@@ -439,13 +447,13 @@ func TestImportConfigTransactionalSuccess(t *testing.T) {
 	}
 
 	oldSystem := config.SystemSettings{
-		PBSPollingInterval:  120,
-		PMGPollingInterval:  120,
-		AutoUpdateEnabled:   false,
-		DiscoveryEnabled:    true,
-		DiscoverySubnet:     "auto",
-		DiscoveryConfig:     config.DefaultDiscoveryConfig(),
-		Theme:               "light",
+		PBSPollingInterval: 120,
+		PMGPollingInterval: 120,
+		AutoUpdateEnabled:  false,
+		DiscoveryEnabled:   true,
+		DiscoverySubnet:    "auto",
+		DiscoveryConfig:    config.DefaultDiscoveryConfig(),
+		Theme:              "light",
 	}
 	if err := target.SaveSystemSettings(oldSystem); err != nil {
 		t.Fatalf("SaveSystemSettings baseline: %v", err)
@@ -529,7 +537,7 @@ func TestImportConfigRollbackOnFailure(t *testing.T) {
 	}
 
 	newAlerts := alerts.AlertConfig{
-		Enabled:        true,
+		Enabled:          true,
 		HysteresisMargin: 4,
 		StorageDefault: alerts.HysteresisThreshold{
 			Trigger: 65,
@@ -592,7 +600,7 @@ func TestImportConfigRollbackOnFailure(t *testing.T) {
 		t.Fatalf("SaveNodesConfig baseline: %v", err)
 	}
 	baselineAlerts := alerts.AlertConfig{
-		Enabled:        true,
+		Enabled:          true,
 		HysteresisMargin: 5,
 		StorageDefault: alerts.HysteresisThreshold{
 			Trigger: 90,
@@ -703,7 +711,7 @@ func TestImportAcceptsVersion40Bundle(t *testing.T) {
 	}
 
 	newAlerts := alerts.AlertConfig{
-		Enabled:        true,
+		Enabled:          true,
 		HysteresisMargin: 4,
 		StorageDefault: alerts.HysteresisThreshold{
 			Trigger: 75,

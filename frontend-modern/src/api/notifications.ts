@@ -59,9 +59,15 @@ export interface Webhook {
 
 export interface AppriseConfig {
   enabled: boolean;
-  targets: string[];
+  mode?: 'cli' | 'http';
+  targets?: string[];
   cliPath?: string;
   timeoutSeconds?: number;
+  serverUrl?: string;
+  configKey?: string;
+  apiKey?: string;
+  apiKeyHeader?: string;
+  skipTlsVerify?: boolean;
 }
 
 export interface NotificationTestRequest {

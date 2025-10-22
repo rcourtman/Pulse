@@ -14,6 +14,7 @@ type State struct {
 	VMs              []VM            `json:"vms"`
 	Containers       []Container     `json:"containers"`
 	DockerHosts      []DockerHost    `json:"dockerHosts"`
+	Hosts            []Host          `json:"hosts"`
 	Storage          []Storage       `json:"storage"`
 	CephClusters     []CephCluster   `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk  `json:"physicalDisks"`
@@ -135,6 +136,52 @@ type Container struct {
 	Tags       []string  `json:"tags,omitempty"`
 	Lock       string    `json:"lock,omitempty"`
 	LastSeen   time.Time `json:"lastSeen"`
+}
+
+// Host represents a generic infrastructure host reporting via external agents.
+type Host struct {
+	ID                string                 `json:"id"`
+	Hostname          string                 `json:"hostname"`
+	DisplayName       string                 `json:"displayName,omitempty"`
+	Platform          string                 `json:"platform,omitempty"`
+	OSName            string                 `json:"osName,omitempty"`
+	OSVersion         string                 `json:"osVersion,omitempty"`
+	KernelVersion     string                 `json:"kernelVersion,omitempty"`
+	Architecture      string                 `json:"architecture,omitempty"`
+	CPUCount          int                    `json:"cpuCount,omitempty"`
+	CPUUsage          float64                `json:"cpuUsage,omitempty"`
+	Memory            Memory                 `json:"memory"`
+	LoadAverage       []float64              `json:"loadAverage,omitempty"`
+	Disks             []Disk                 `json:"disks,omitempty"`
+	NetworkInterfaces []HostNetworkInterface `json:"networkInterfaces,omitempty"`
+	Sensors           HostSensorSummary      `json:"sensors,omitempty"`
+	Status            string                 `json:"status"`
+	UptimeSeconds     int64                  `json:"uptimeSeconds,omitempty"`
+	IntervalSeconds   int                    `json:"intervalSeconds,omitempty"`
+	LastSeen          time.Time              `json:"lastSeen"`
+	AgentVersion      string                 `json:"agentVersion,omitempty"`
+	TokenID           string                 `json:"tokenId,omitempty"`
+	TokenName         string                 `json:"tokenName,omitempty"`
+	TokenHint         string                 `json:"tokenHint,omitempty"`
+	TokenLastUsedAt   *time.Time             `json:"tokenLastUsedAt,omitempty"`
+	Tags              []string               `json:"tags,omitempty"`
+}
+
+// HostNetworkInterface describes a host network adapter summary.
+type HostNetworkInterface struct {
+	Name      string   `json:"name"`
+	MAC       string   `json:"mac,omitempty"`
+	Addresses []string `json:"addresses,omitempty"`
+	RXBytes   uint64   `json:"rxBytes,omitempty"`
+	TXBytes   uint64   `json:"txBytes,omitempty"`
+	SpeedMbps *int64   `json:"speedMbps,omitempty"`
+}
+
+// HostSensorSummary captures optional per-host sensor readings.
+type HostSensorSummary struct {
+	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
+	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
+	Additional         map[string]float64 `json:"additional,omitempty"`
 }
 
 // DockerHost represents a Docker host reporting metrics via the external agent.
@@ -674,6 +721,7 @@ type GuestSnapshot struct {
 	Description string    `json:"description,omitempty"`
 	Parent      string    `json:"parent,omitempty"`
 	VMState     bool      `json:"vmstate"`
+	SizeBytes   int64     `json:"sizeBytes,omitempty"`
 }
 
 // Performance represents performance metrics
@@ -1044,6 +1092,91 @@ func (s *State) GetDockerHosts() []DockerHost {
 	hosts := make([]DockerHost, len(s.DockerHosts))
 	copy(hosts, s.DockerHosts)
 	return hosts
+}
+
+// UpsertHost inserts or updates a generic host in state.
+func (s *State) UpsertHost(host Host) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	updated := false
+	for i, existing := range s.Hosts {
+		if existing.ID == host.ID {
+			s.Hosts[i] = host
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		s.Hosts = append(s.Hosts, host)
+	}
+
+	sort.Slice(s.Hosts, func(i, j int) bool {
+		return s.Hosts[i].Hostname < s.Hosts[j].Hostname
+	})
+
+	s.LastUpdate = time.Now()
+}
+
+// GetHosts returns a copy of all generic hosts.
+func (s *State) GetHosts() []Host {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	hosts := make([]Host, len(s.Hosts))
+	copy(hosts, s.Hosts)
+	return hosts
+}
+
+// RemoveHost removes a host by ID and returns the removed entry.
+func (s *State) RemoveHost(hostID string) (Host, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.Hosts {
+		if host.ID == hostID {
+			s.Hosts = append(s.Hosts[:i], s.Hosts[i+1:]...)
+			s.LastUpdate = time.Now()
+			return host, true
+		}
+	}
+
+	return Host{}, false
+}
+
+// SetHostStatus updates the status of a host if present.
+func (s *State) SetHostStatus(hostID, status string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.Hosts {
+		if host.ID == hostID {
+			if host.Status != status {
+				host.Status = status
+				s.Hosts[i] = host
+				s.LastUpdate = time.Now()
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// TouchHost updates the last seen timestamp for a host.
+func (s *State) TouchHost(hostID string, ts time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.Hosts {
+		if host.ID == hostID {
+			host.LastSeen = ts
+			s.Hosts[i] = host
+			s.LastUpdate = time.Now()
+			return true
+		}
+	}
+	return false
 }
 
 // UpdateStorage updates the storage in the state

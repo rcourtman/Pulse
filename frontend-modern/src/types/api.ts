@@ -607,6 +607,7 @@ export interface GuestSnapshot {
   description: string;
   parent: string;
   vmstate: boolean;
+  sizeBytes?: number;
 }
 
 export interface Performance {

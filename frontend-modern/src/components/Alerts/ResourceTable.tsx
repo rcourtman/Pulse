@@ -25,7 +25,8 @@ const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   // PMG (Proxmox Mail Gateway) thresholds
   'queue warn': 'Early warning when total mail queue exceeds this message count.',
   'queue crit': 'Critical alert requiring urgent action when queue reaches this size.',
-  'deferred warn': 'Early warning for messages stuck in deferred queue (waiting to retry delivery).',
+  'deferred warn':
+    'Early warning for messages stuck in deferred queue (waiting to retry delivery).',
   'deferred crit': 'Critical threshold for deferred messages indicating serious delivery problems.',
   'hold warn': 'Early warning when administratively held messages exceed this count.',
   'hold crit': 'Critical alert for held messages requiring immediate moderation attention.',
@@ -38,7 +39,10 @@ const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'growth warn %': 'Early warning when quarantine growth rate exceeds this percentage.',
   'growth warn min': 'Minimum new messages required before growth percentage triggers warning.',
   'growth crit %': 'Critical quarantine growth rate requiring immediate investigation.',
-  'growth crit min': 'Minimum new messages required before growth percentage triggers critical alert.',
+  'growth crit min':
+    'Minimum new messages required before growth percentage triggers critical alert.',
+  'warning size (gib)': 'Total snapshot size in GiB that raises a warning.',
+  'critical size (gib)': 'Total snapshot size in GiB that raises a critical alert.',
 };
 
 const OFFLINE_ALERTS_TOOLTIP =
@@ -117,7 +121,11 @@ interface ResourceTableProps {
   formatMetricValue: (metric: string, value: number | undefined) => string;
   hasActiveAlert: (resourceId: string, metric: string) => boolean;
   globalDefaults?: Record<string, number | undefined>;
-  setGlobalDefaults?: (value: Record<string, number | undefined> | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>)) => void;
+  setGlobalDefaults?: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
   setHasUnsavedChanges?: (value: boolean) => void;
   globalDisableFlag?: () => boolean;
   onToggleGlobalDisable?: () => void;
@@ -150,7 +158,10 @@ export function ResourceTable(props: ResourceTableProps) {
     return Boolean(props.globalDefaults);
   };
 
-  const [activeMetricInput, setActiveMetricInput] = createSignal<{ resourceId: string; metric: string } | null>(null);
+  const [activeMetricInput, setActiveMetricInput] = createSignal<{
+    resourceId: string;
+    metric: string;
+  } | null>(null);
   const [showDelayRow, setShowDelayRow] = createSignal(false);
 
   // Track changes to global defaults and factory defaults for debugging
@@ -174,12 +185,14 @@ export function ResourceTable(props: ResourceTableProps) {
       console.log('[ResourceTable] Missing props, returning false');
       return false;
     }
-    const result = Object.keys(props.factoryDefaults).some(key => {
+    const result = Object.keys(props.factoryDefaults).some((key) => {
       const current = props.globalDefaults?.[key];
       const factory = props.factoryDefaults?.[key];
       const differs = current !== undefined && current !== factory;
       if (differs) {
-        console.log(`[ResourceTable] Difference found: ${key} current=${current} factory=${factory}`);
+        console.log(
+          `[ResourceTable] Difference found: ${key} current=${current} factory=${factory}`,
+        );
       }
       return differs;
     });
@@ -189,26 +202,26 @@ export function ResourceTable(props: ResourceTableProps) {
 
   const normalizeMetricKey = (column: string): string => {
     const key = column.trim().toLowerCase();
-    const mapped = (
-      new Map<string, string>([
-        ['cpu %', 'cpu'],
-        ['memory %', 'memory'],
-        ['disk %', 'disk'],
-        ['disk r mb/s', 'diskRead'],
-        ['disk w mb/s', 'diskWrite'],
-        ['net in mb/s', 'networkIn'],
-        ['net out mb/s', 'networkOut'],
-        ['usage %', 'usage'],
-        ['temp °c', 'temperature'],
-        ['temperature °c', 'temperature'],
-        ['temperature', 'temperature'],
-        ['restart count', 'restartCount'],
-        ['restart window', 'restartWindow'],
-        ['restart window (s)', 'restartWindow'],
-        ['memory warn %', 'memoryWarnPct'],
-        ['memory critical %', 'memoryCriticalPct'],
-      ])
-    ).get(key);
+    const mapped = new Map<string, string>([
+      ['cpu %', 'cpu'],
+      ['memory %', 'memory'],
+      ['disk %', 'disk'],
+      ['disk r mb/s', 'diskRead'],
+      ['disk w mb/s', 'diskWrite'],
+      ['net in mb/s', 'networkIn'],
+      ['net out mb/s', 'networkOut'],
+      ['usage %', 'usage'],
+      ['temp °c', 'temperature'],
+      ['temperature °c', 'temperature'],
+      ['temperature', 'temperature'],
+      ['restart count', 'restartCount'],
+      ['restart window', 'restartWindow'],
+      ['restart window (s)', 'restartWindow'],
+      ['memory warn %', 'memoryWarnPct'],
+      ['memory critical %', 'memoryCriticalPct'],
+      ['warning size (gib)', 'warningSizeGiB'],
+      ['critical size (gib)', 'criticalSizeGiB'],
+    ]).get(key);
     if (mapped) {
       return mapped;
     }
@@ -233,6 +246,9 @@ export function ResourceTable(props: ResourceTableProps) {
     if (['cpu', 'memory', 'disk', 'usage', 'memoryWarnPct', 'memoryCriticalPct'].includes(metric)) {
       return { min: -1, max: 100 };
     }
+    if (['warningSizeGiB', 'criticalSizeGiB'].includes(metric)) {
+      return { min: -1, max: 100000 };
+    }
     if (metric === 'restartCount') {
       return { min: -1, max: 50 };
     }
@@ -244,6 +260,9 @@ export function ResourceTable(props: ResourceTableProps) {
 
   const metricStep = (metric: string): string | number => {
     if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
+      return 'any';
+    }
+    if (['warningSizeGiB', 'criticalSizeGiB'].includes(metric)) {
       return 'any';
     }
     return 1;
@@ -280,10 +299,7 @@ export function ResourceTable(props: ResourceTableProps) {
     return value;
   };
 
-  const totalColumnCount = () =>
-    props.columns.length +
-    3 +
-    (props.showOfflineAlertsColumn ? 1 : 0);
+  const totalColumnCount = () => props.columns.length + 3 + (props.showOfflineAlertsColumn ? 1 : 0);
 
   const getColumnHeaderTooltip = (column: string): string | undefined => {
     const normalized = column.trim().toLowerCase();
@@ -324,9 +340,14 @@ export function ResourceTable(props: ResourceTableProps) {
 
     return (
       <div class="flex flex-wrap items-center gap-3">
-        <Show when={meta.host} fallback={
-          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{meta.displayName || groupKey}</span>
-        }>
+        <Show
+          when={meta.host}
+          fallback={
+            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {meta.displayName || groupKey}
+            </span>
+          }
+        >
           {(host) => (
             <a
               href={host() as string}
@@ -342,9 +363,9 @@ export function ResourceTable(props: ResourceTableProps) {
         </Show>
         <Show when={meta.clusterName}>
           <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-              {meta.clusterName}
-            </span>
-          </Show>
+            {meta.clusterName}
+          </span>
+        </Show>
       </div>
     );
   };
@@ -397,7 +418,10 @@ export function ResourceTable(props: ResourceTableProps) {
 
   const offlineStateOrder: OfflineState[] = ['off', 'warning', 'critical'];
 
-  const offlineStateConfig: Record<OfflineState, { label: string; className: string; title: string }> = {
+  const offlineStateConfig: Record<
+    OfflineState,
+    { label: string; className: string; title: string }
+  > = {
     off: {
       label: 'Off',
       className:
@@ -423,7 +447,11 @@ export function ResourceTable(props: ResourceTableProps) {
     return offlineStateOrder[(idx + 1) % offlineStateOrder.length];
   };
 
-  const renderOfflineStateButton = (state: OfflineState, disabled: boolean, onToggle: () => void) => {
+  const renderOfflineStateButton = (
+    state: OfflineState,
+    disabled: boolean,
+    onToggle: () => void,
+  ) => {
     const config = offlineStateConfig[state];
     return (
       <button
@@ -485,10 +513,17 @@ export function ResourceTable(props: ResourceTableProps) {
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             {/* Global Defaults Row */}
-            <Show when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}>
-              <tr class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}>
+            <Show
+              when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
+            >
+              <tr
+                class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+              >
                 <td class="p-1 px-2 text-center align-middle">
-                  <Show when={props.onToggleGlobalDisable} fallback={<span class="text-sm text-gray-400">-</span>}>
+                  <Show
+                    when={props.onToggleGlobalDisable}
+                    fallback={<span class="text-sm text-gray-400">-</span>}
+                  >
                     <div class="flex items-center justify-center">
                       <TogglePrimitive
                         size="sm"
@@ -551,7 +586,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                 ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 italic placeholder:text-gray-400 dark:placeholder:text-gray-500 placeholder:opacity-60 pointer-events-none'
                                 : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                             }`}
-                            title={isOff() ? 'Click to enable this metric' : 'Set to -1 to disable alerts for this metric'}
+                            title={
+                              isOff()
+                                ? 'Click to enable this metric'
+                                : 'Set to -1 to disable alerts for this metric'
+                            }
                           />
                           <Show when={isOff()}>
                             <button
@@ -577,25 +616,33 @@ export function ResourceTable(props: ResourceTableProps) {
                 </For>
                 <Show when={props.showOfflineAlertsColumn}>
                   <td class="p-1 px-2 text-center align-middle">
-                    <Show when={props.onSetGlobalOfflineState} fallback={
-                      <Show when={props.onToggleGlobalDisableOffline} fallback={<span class="text-sm text-gray-400">-</span>}>
-                        {(() => {
-                          const defaultDisabled = props.globalDisableOfflineFlag?.() ?? false;
-                          return renderToggleBadge({
-                            isEnabled: !defaultDisabled,
-                            size: 'md',
-                            onToggle: () => {
-                              props.onToggleGlobalDisableOffline?.();
-                              props.setHasUnsavedChanges?.(true);
-                            },
-                            labelEnabled: 'On',
-                            labelDisabled: 'Off',
-                            titleEnabled: 'Offline alerts currently enabled by default. Click to disable.',
-                            titleDisabled: 'Offline alerts currently disabled by default. Click to enable.',
-                          });
-                        })()}
-                      </Show>
-                    }>
+                    <Show
+                      when={props.onSetGlobalOfflineState}
+                      fallback={
+                        <Show
+                          when={props.onToggleGlobalDisableOffline}
+                          fallback={<span class="text-sm text-gray-400">-</span>}
+                        >
+                          {(() => {
+                            const defaultDisabled = props.globalDisableOfflineFlag?.() ?? false;
+                            return renderToggleBadge({
+                              isEnabled: !defaultDisabled,
+                              size: 'md',
+                              onToggle: () => {
+                                props.onToggleGlobalDisableOffline?.();
+                                props.setHasUnsavedChanges?.(true);
+                              },
+                              labelEnabled: 'On',
+                              labelDisabled: 'Off',
+                              titleEnabled:
+                                'Offline alerts currently enabled by default. Click to disable.',
+                              titleDisabled:
+                                'Offline alerts currently disabled by default. Click to enable.',
+                            });
+                          })()}
+                        </Show>
+                      }
+                    >
                       {(() => {
                         const disabledGlobally = props.globalDisableFlag?.() ?? false;
                         const defaultDisabled = props.globalDisableOfflineFlag?.() ?? false;
@@ -617,12 +664,18 @@ export function ResourceTable(props: ResourceTableProps) {
                 </Show>
                 <td class="p-1 px-2 text-center align-middle">
                   <div class="flex items-center justify-center gap-1">
-                    <Show when={props.showDelayColumn && typeof props.onMetricDelayChange === 'function'}>
+                    <Show
+                      when={
+                        props.showDelayColumn && typeof props.onMetricDelayChange === 'function'
+                      }
+                    >
                       <button
                         type="button"
                         onClick={() => setShowDelayRow(!showDelayRow())}
                         class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
-                        title={showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'}
+                        title={
+                          showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'
+                        }
                       >
                         <svg
                           class={`w-4 h-4 transition-transform ${showDelayRow() ? 'rotate-180' : ''}`}
@@ -646,12 +699,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                         title="Reset to factory defaults"
                       >
-                        <svg
-                          class="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path
                             stroke-linecap="round"
                             stroke-linejoin="round"
@@ -668,8 +716,16 @@ export function ResourceTable(props: ResourceTableProps) {
                 </td>
               </tr>
             </Show>
-            <Show when={showDelayRow() && props.showDelayColumn && typeof props.onMetricDelayChange === 'function'}>
-              <tr class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}>
+            <Show
+              when={
+                showDelayRow() &&
+                props.showDelayColumn &&
+                typeof props.onMetricDelayChange === 'function'
+              }
+            >
+              <tr
+                class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+              >
                 <td class="p-1 px-2 text-center align-middle">
                   <span class="text-sm text-gray-400">-</span>
                 </td>
@@ -754,394 +810,422 @@ export function ResourceTable(props: ResourceTableProps) {
                       {/* Resources in this group */}
                       <For each={resources}>
                         {(resource) => {
-                        const isEditing = () => props.editingId() === resource.id;
-                        const thresholds = (): Record<string, number | undefined> => {
-                          if (isEditing()) {
-                            return props.editingThresholds();
-                          }
-                          return resource.thresholds ?? {};
-                        };
-                        const displayValue = (metric: string): number => {
-                          const parseNumeric = (value: unknown): number | undefined => {
-                            if (value === undefined || value === null) return undefined;
-                            if (typeof value === 'number') return value;
-                            const parsed = Number(value);
-                            return Number.isFinite(parsed) ? parsed : undefined;
-                          };
-
-                          const extract = (source: Record<string, unknown> | undefined) =>
-                            parseNumeric(source?.[metric]);
-
-                          const defaults = resource.defaults as Record<string, unknown> | undefined;
-
-                          if (isEditing()) {
-                            const edited = extract(thresholds() as Record<string, unknown>);
-                            if (edited !== undefined) {
-                              return edited;
+                          const isEditing = () => props.editingId() === resource.id;
+                          const thresholds = (): Record<string, number | undefined> => {
+                            if (isEditing()) {
+                              return props.editingThresholds();
                             }
+                            return resource.thresholds ?? {};
+                          };
+                          const displayValue = (metric: string): number => {
+                            const parseNumeric = (value: unknown): number | undefined => {
+                              if (value === undefined || value === null) return undefined;
+                              if (typeof value === 'number') return value;
+                              const parsed = Number(value);
+                              return Number.isFinite(parsed) ? parsed : undefined;
+                            };
+
+                            const extract = (source: Record<string, unknown> | undefined) =>
+                              parseNumeric(source?.[metric]);
+
+                            const defaults = resource.defaults as
+                              | Record<string, unknown>
+                              | undefined;
+
+                            if (isEditing()) {
+                              const edited = extract(thresholds() as Record<string, unknown>);
+                              if (edited !== undefined) {
+                                return edited;
+                              }
+                              const fallback = extract(defaults);
+                              return fallback !== undefined ? fallback : 0;
+                            }
+
+                            const liveValue = extract(
+                              resource.thresholds as Record<string, unknown> | undefined,
+                            );
+                            if (liveValue !== undefined) {
+                              return liveValue;
+                            }
+
                             const fallback = extract(defaults);
                             return fallback !== undefined ? fallback : 0;
-                          }
+                          };
+                          const isOverridden = (metric: string) => {
+                            return (
+                              resource.thresholds?.[metric] !== undefined &&
+                              resource.thresholds?.[metric] !== null
+                            );
+                          };
 
-                          const liveValue = extract(resource.thresholds as Record<string, unknown> | undefined);
-                          if (liveValue !== undefined) {
-                            return liveValue;
-                          }
-
-                          const fallback = extract(defaults);
-                          return fallback !== undefined ? fallback : 0;
-                        };
-                        const isOverridden = (metric: string) => {
                           return (
-                            resource.thresholds?.[metric] !== undefined &&
-                            resource.thresholds?.[metric] !== null
-                          );
-                        };
-
-                        return (
-                          <tr
-                            class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
-                          >
-                            {/* Alert toggle column */}
-                            <td class="p-1 px-2 text-center align-middle">
-                              <Show when={props.onToggleDisabled}>
-                                {(() => {
-                                  const globallyDisabled = props.globalDisableFlag?.() ?? false;
-                                  const isChecked = !globallyDisabled && !resource.disabled;
-                                  return (
-                                    <div class="flex items-center justify-center">
-                                      <TogglePrimitive
-                                        size="sm"
-                                        checked={isChecked}
-                                        disabled={globallyDisabled}
-                                        onToggle={() => !globallyDisabled && props.onToggleDisabled?.(resource.id)}
-                                        class="my-[1px]"
-                                        title={
-                                          globallyDisabled
-                                            ? 'Alerts disabled globally'
-                                            : resource.disabled
-                                              ? 'Click to enable alerts'
-                                              : 'Click to disable alerts'
-                                        }
-                                        ariaLabel={isChecked ? 'Alerts enabled for this resource' : 'Alerts disabled for this resource'}
-                                      />
-                                    </div>
-                                  );
-                                })()}
-                              </Show>
-                            </td>
-                          <td class="p-1 px-2">
-                            <div class="flex items-center gap-2">
-                              <Show
-                                when={resource.type === 'node'}
-                                fallback={
-                                  <span
-                                    class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
-                                  >
-                                    {resource.name}
-                                  </span>
-                                }
-                              >
-                                <div class="flex flex-wrap items-center gap-3" title={resource.status || undefined}>
+                            <tr
+                              class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                            >
+                              {/* Alert toggle column */}
+                              <td class="p-1 px-2 text-center align-middle">
+                                <Show when={props.onToggleDisabled}>
+                                  {(() => {
+                                    const globallyDisabled = props.globalDisableFlag?.() ?? false;
+                                    const isChecked = !globallyDisabled && !resource.disabled;
+                                    return (
+                                      <div class="flex items-center justify-center">
+                                        <TogglePrimitive
+                                          size="sm"
+                                          checked={isChecked}
+                                          disabled={globallyDisabled}
+                                          onToggle={() =>
+                                            !globallyDisabled &&
+                                            props.onToggleDisabled?.(resource.id)
+                                          }
+                                          class="my-[1px]"
+                                          title={
+                                            globallyDisabled
+                                              ? 'Alerts disabled globally'
+                                              : resource.disabled
+                                                ? 'Click to enable alerts'
+                                                : 'Click to disable alerts'
+                                          }
+                                          ariaLabel={
+                                            isChecked
+                                              ? 'Alerts enabled for this resource'
+                                              : 'Alerts disabled for this resource'
+                                          }
+                                        />
+                                      </div>
+                                    );
+                                  })()}
+                                </Show>
+                              </td>
+                              <td class="p-1 px-2">
+                                <div class="flex items-center gap-2">
                                   <Show
-                                    when={resource.host}
+                                    when={resource.type === 'node'}
                                     fallback={
                                       <span
                                         class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                       >
-                                        {resource.type === 'node'
-                                          ? resource.name
-                                          : resource.displayName || resource.name}
+                                        {resource.name}
                                       </span>
                                     }
                                   >
-                                    {(host) => (
-                                      <a
-                                        href={host() as string}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
-                                        class={`text-sm font-medium transition-colors duration-150 ${
-                                          resource.disabled
-                                            ? 'text-gray-500 dark:text-gray-500'
-                                            : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
-                                        }`}
-                                        title={`Open ${resource.displayName || resource.name} web interface`}
+                                    <div
+                                      class="flex flex-wrap items-center gap-3"
+                                      title={resource.status || undefined}
+                                    >
+                                      <Show
+                                        when={resource.host}
+                                        fallback={
+                                          <span
+                                            class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                          >
+                                            {resource.type === 'node'
+                                              ? resource.name
+                                              : resource.displayName || resource.name}
+                                          </span>
+                                        }
                                       >
-                                        {resource.type === 'node'
-                                          ? resource.name
-                                          : resource.displayName || resource.name}
-                                      </a>
-                                    )}
+                                        {(host) => (
+                                          <a
+                                            href={host() as string}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            class={`text-sm font-medium transition-colors duration-150 ${
+                                              resource.disabled
+                                                ? 'text-gray-500 dark:text-gray-500'
+                                                : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
+                                            }`}
+                                            title={`Open ${resource.displayName || resource.name} web interface`}
+                                          >
+                                            {resource.type === 'node'
+                                              ? resource.name
+                                              : resource.displayName || resource.name}
+                                          </a>
+                                        )}
+                                      </Show>
+                                      <Show when={resource.clusterName}>
+                                        <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                          {resource.clusterName}
+                                        </span>
+                                      </Show>
+                                    </div>
                                   </Show>
-                                  <Show when={resource.clusterName}>
-                                    <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                                      {resource.clusterName}
+                                  <Show when={resource.subtitle}>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                                      {resource.subtitle as string}
+                                    </span>
+                                  </Show>
+                                  <Show when={resource.hasOverride || resource.disableConnectivity}>
+                                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                                      Custom
                                     </span>
                                   </Show>
                                 </div>
-                              </Show>
-                              <Show when={resource.subtitle}>
-                                <span class="text-xs text-gray-500 dark:text-gray-400">
-                                  {resource.subtitle as string}
-                                </span>
-                              </Show>
-                              <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
-                                  Custom
-                                </span>
-                              </Show>
-                            </div>
-                          </td>
-                          {/* Metric columns - dynamically rendered based on resource type */}
-                            <For each={props.columns}>
-                              {(column) => {
-                                const metric = normalizeMetricKey(column);
-                                const showMetric = () => resourceSupportsMetric(resource.type, metric);
-                                const bounds = metricBounds(metric);
-                                const isDisabled = () => thresholds()?.[metric] === -1;
+                              </td>
+                              {/* Metric columns - dynamically rendered based on resource type */}
+                              <For each={props.columns}>
+                                {(column) => {
+                                  const metric = normalizeMetricKey(column);
+                                  const showMetric = () =>
+                                    resourceSupportsMetric(resource.type, metric);
+                                  const bounds = metricBounds(metric);
+                                  const isDisabled = () => thresholds()?.[metric] === -1;
 
-                                const openMetricEditor = (e: MouseEvent) => {
-                                  e.stopPropagation();
-                                  setActiveMetricInput({ resourceId: resource.id, metric });
-                                  props.onEdit(
-                                    resource.id,
-                                    resource.thresholds ? { ...resource.thresholds } : {},
-                                    resource.defaults ? { ...resource.defaults } : {},
-                                  );
-                                };
+                                  const openMetricEditor = (e: MouseEvent) => {
+                                    e.stopPropagation();
+                                    setActiveMetricInput({ resourceId: resource.id, metric });
+                                    props.onEdit(
+                                      resource.id,
+                                      resource.thresholds ? { ...resource.thresholds } : {},
+                                      resource.defaults ? { ...resource.defaults } : {},
+                                    );
+                                  };
 
-                                return (
-                                  <td class="p-1 px-2 text-center align-middle">
-                                    <Show
-                                      when={showMetric()}
-                                      fallback={
-                                        <span class="text-sm text-gray-400 dark:text-gray-500">
-                                          -
-                                        </span>
-                                      }
-                                    >
+                                  return (
+                                    <td class="p-1 px-2 text-center align-middle">
                                       <Show
-                                        when={isEditing()}
+                                        when={showMetric()}
                                         fallback={
-                                          <div
-                                            onClick={(event) => {
-                                              openMetricEditor(event);
-                                            }}
-                                            class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 py-0.5 transition-colors"
-                                            title="Click to edit this metric"
-                                          >
-                                            <MetricValueWithHeat
-                                              resourceId={resource.id}
-                                              metric={metric}
-                                              value={displayValue(metric)}
-                                              isOverridden={isOverridden(metric)}
-                                            />
-                                          </div>
+                                          <span class="text-sm text-gray-400 dark:text-gray-500">
+                                            -
+                                          </span>
                                         }
                                       >
-                                        <div class="flex items-center justify-center">
-                                          <input
-                                            type="number"
-                                            min={bounds.min}
-                                            max={bounds.max}
-                                            step={metricStep(metric)}
-                                            value={thresholds()?.[metric] ?? ''}
-                                            placeholder={isDisabled() ? 'Off' : ''}
-                                            title="Set to -1 to disable alerts for this metric"
-                                            ref={(el) => {
-                                              if (
-                                                isEditing() &&
-                                                activeMetricInput()?.resourceId === resource.id &&
-                                                activeMetricInput()?.metric === metric
-                                              ) {
-                                                queueMicrotask(() => {
-                                                  el.focus();
-                                                  el.select();
-                                                });
-                                              }
-                                            }}
-                                            onInput={(e) => {
-                                              const raw = e.currentTarget.value;
-                                              if (raw === '') {
-                                                props.setEditingThresholds({
-                                                  ...props.editingThresholds(),
-                                                  [metric]: undefined,
-                                                });
-                                                return;
-                                              }
-                                              const val = parseFloat(raw);
-                                              if (!Number.isNaN(val)) {
-                                                props.setEditingThresholds({
-                                                  ...props.editingThresholds(),
-                                                  [metric]: val,
-                                                });
-                                              }
-                                            }}
-                                            onBlur={() => {
-                                              if (props.editingId() === resource.id) {
-                                                props.onSaveEdit(resource.id);
-                                              }
-                                              setActiveMetricInput(null);
-                                            }}
-                                            class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                                              isDisabled()
-                                                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
-                                                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
-                                            }`}
-                                          />
-                                        </div>
+                                        <Show
+                                          when={isEditing()}
+                                          fallback={
+                                            <div
+                                              onClick={(event) => {
+                                                openMetricEditor(event);
+                                              }}
+                                              class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 py-0.5 transition-colors"
+                                              title="Click to edit this metric"
+                                            >
+                                              <MetricValueWithHeat
+                                                resourceId={resource.id}
+                                                metric={metric}
+                                                value={displayValue(metric)}
+                                                isOverridden={isOverridden(metric)}
+                                              />
+                                            </div>
+                                          }
+                                        >
+                                          <div class="flex items-center justify-center">
+                                            <input
+                                              type="number"
+                                              min={bounds.min}
+                                              max={bounds.max}
+                                              step={metricStep(metric)}
+                                              value={thresholds()?.[metric] ?? ''}
+                                              placeholder={isDisabled() ? 'Off' : ''}
+                                              title="Set to -1 to disable alerts for this metric"
+                                              ref={(el) => {
+                                                if (
+                                                  isEditing() &&
+                                                  activeMetricInput()?.resourceId === resource.id &&
+                                                  activeMetricInput()?.metric === metric
+                                                ) {
+                                                  queueMicrotask(() => {
+                                                    el.focus();
+                                                    el.select();
+                                                  });
+                                                }
+                                              }}
+                                              onInput={(e) => {
+                                                const raw = e.currentTarget.value;
+                                                if (raw === '') {
+                                                  props.setEditingThresholds({
+                                                    ...props.editingThresholds(),
+                                                    [metric]: undefined,
+                                                  });
+                                                  return;
+                                                }
+                                                const val = parseFloat(raw);
+                                                if (!Number.isNaN(val)) {
+                                                  props.setEditingThresholds({
+                                                    ...props.editingThresholds(),
+                                                    [metric]: val,
+                                                  });
+                                                }
+                                              }}
+                                              onBlur={() => {
+                                                if (props.editingId() === resource.id) {
+                                                  props.onSaveEdit(resource.id);
+                                                }
+                                                setActiveMetricInput(null);
+                                              }}
+                                              class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
+                                                isDisabled()
+                                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
+                                                  : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+                                              }`}
+                                            />
+                                          </div>
+                                        </Show>
                                       </Show>
-                                    </Show>
-                                  </td>
-                                );
-                              }}
-                            </For>
+                                    </td>
+                                  );
+                                }}
+                              </For>
 
-                            {/* Offline Alerts column - Connectivity/powered-off alerts */}
-                            <Show when={props.showOfflineAlertsColumn}>
-                              <td class="p-1 px-2 text-center align-middle">
-                                {(() => {
-                                  const disabledGlobally = props.globalDisableFlag?.() ?? false;
-                                  const supportsTriState =
-                                    typeof props.onSetOfflineState === 'function' &&
-                                    (resource.type === 'guest' || resource.type === 'dockerContainer');
+                              {/* Offline Alerts column - Connectivity/powered-off alerts */}
+                              <Show when={props.showOfflineAlertsColumn}>
+                                <td class="p-1 px-2 text-center align-middle">
+                                  {(() => {
+                                    const disabledGlobally = props.globalDisableFlag?.() ?? false;
+                                    const supportsTriState =
+                                      typeof props.onSetOfflineState === 'function' &&
+                                      (resource.type === 'guest' ||
+                                        resource.type === 'dockerContainer');
 
-                                  if (supportsTriState) {
-                                    const defaultDisabled = props.globalDisableOfflineFlag?.() ?? false;
-                                    const defaultSeverity = props.globalOfflineSeverity ?? 'warning';
+                                    if (supportsTriState) {
+                                      const defaultDisabled =
+                                        props.globalDisableOfflineFlag?.() ?? false;
+                                      const defaultSeverity =
+                                        props.globalOfflineSeverity ?? 'warning';
 
-                                    let state: OfflineState;
-                                    if (resource.disableConnectivity) {
-                                      state = 'off';
-                                    } else if (resource.poweredOffSeverity) {
-                                      state = resource.poweredOffSeverity;
-                                    } else if (defaultDisabled) {
-                                      state = 'off';
-                                    } else {
-                                      state = defaultSeverity === 'critical' ? 'critical' : 'warning';
+                                      let state: OfflineState;
+                                      if (resource.disableConnectivity) {
+                                        state = 'off';
+                                      } else if (resource.poweredOffSeverity) {
+                                        state = resource.poweredOffSeverity;
+                                      } else if (defaultDisabled) {
+                                        state = 'off';
+                                      } else {
+                                        state =
+                                          defaultSeverity === 'critical' ? 'critical' : 'warning';
+                                      }
+
+                                      return renderOfflineStateButton(
+                                        state,
+                                        disabledGlobally,
+                                        () => {
+                                          if (disabledGlobally) return;
+                                          const next = nextOfflineState(state);
+                                          props.onSetOfflineState?.(resource.id, next);
+                                        },
+                                      );
                                     }
 
-                                    return renderOfflineStateButton(state, disabledGlobally, () => {
-                                      if (disabledGlobally) return;
-                                      const next = nextOfflineState(state);
-                                      props.onSetOfflineState?.(resource.id, next);
+                                    if (!props.onToggleNodeConnectivity) {
+                                      return <span class="text-sm text-gray-400">-</span>;
+                                    }
+
+                                    const globalOfflineDisabled =
+                                      props.globalDisableOfflineFlag?.() ?? false;
+                                    return renderToggleBadge({
+                                      isEnabled:
+                                        !globalOfflineDisabled && !resource.disableConnectivity,
+                                      disabled: disabledGlobally,
+                                      onToggle: () => {
+                                        if (disabledGlobally) return;
+                                        props.onToggleNodeConnectivity?.(resource.id);
+                                      },
+                                      titleEnabled:
+                                        'Offline alerts enabled. Click to disable for this resource.',
+                                      titleDisabled:
+                                        'Offline alerts disabled. Click to enable for this resource.',
+                                      titleWhenDisabled: 'Offline alerts controlled globally',
                                     });
-                                  }
+                                  })()}
+                                </td>
+                              </Show>
 
-                                  if (!props.onToggleNodeConnectivity) {
-                                    return <span class="text-sm text-gray-400">-</span>;
-                                  }
-
-                                  const globalOfflineDisabled = props.globalDisableOfflineFlag?.() ?? false;
-                                  return renderToggleBadge({
-                                    isEnabled: !globalOfflineDisabled && !resource.disableConnectivity,
-                                    disabled: disabledGlobally,
-                                    onToggle: () => {
-                                      if (disabledGlobally) return;
-                                      props.onToggleNodeConnectivity?.(resource.id);
-                                    },
-                                    titleEnabled: 'Offline alerts enabled. Click to disable for this resource.',
-                                    titleDisabled: 'Offline alerts disabled. Click to enable for this resource.',
-                                    titleWhenDisabled: 'Offline alerts controlled globally',
-                                  });
-                                })()}
-                              </td>
-                            </Show>
-
-                            {/* Actions column */}
-                            <td class="p-1 px-2">
-                              <div class="flex items-center justify-center gap-1">
-                                <Show
-                                  when={!isEditing()}
-                                  fallback={
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        props.onCancelEdit();
-                                        setActiveMetricInput(null);
-                                      }}
-                                      class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                      title="Cancel editing"
-                                    >
-                                      <svg
-                                        class="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          stroke-linecap="round"
-                                          stroke-linejoin="round"
-                                          stroke-width="2"
-                                          d="M6 18L18 6M6 6l12 12"
-                                        />
-                                      </svg>
-                                    </button>
-                                  }
-                                >
-                                  <Show when={resource.type !== 'dockerHost'}>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        props.onEdit(
-                                          resource.id,
-                                          resource.thresholds ? { ...resource.thresholds } : {},
-                                          resource.defaults ? { ...resource.defaults } : {},
-                                        )
-                                      }
-                                      class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                      title="Edit thresholds"
-                                    >
-                                      <svg
-                                        class="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          stroke-linecap="round"
-                                          stroke-linejoin="round"
-                                          stroke-width="2"
-                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                        />
-                                      </svg>
-                                    </button>
-                                  </Show>
+                              {/* Actions column */}
+                              <td class="p-1 px-2">
+                                <div class="flex items-center justify-center gap-1">
                                   <Show
-                                    when={
-                                      resource.hasOverride ||
-                                      ((resource.type === 'node' || resource.type === 'dockerHost') &&
-                                        resource.disableConnectivity)
+                                    when={!isEditing()}
+                                    fallback={
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          props.onCancelEdit();
+                                          setActiveMetricInput(null);
+                                        }}
+                                        class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                        title="Cancel editing"
+                                      >
+                                        <svg
+                                          class="w-4 h-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"
+                                          />
+                                        </svg>
+                                      </button>
                                     }
                                   >
-                                    <button
-                                      type="button"
-                                      onClick={() => props.onRemoveOverride(resource.id)}
-                                      class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                      title="Remove override"
-                                    >
-                                      <svg
-                                        class="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
+                                    <Show when={resource.type !== 'dockerHost'}>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          props.onEdit(
+                                            resource.id,
+                                            resource.thresholds ? { ...resource.thresholds } : {},
+                                            resource.defaults ? { ...resource.defaults } : {},
+                                          )
+                                        }
+                                        class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                        title="Edit thresholds"
                                       >
-                                        <path
-                                          stroke-linecap="round"
-                                          stroke-linejoin="round"
-                                          stroke-width="2"
-                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                        />
-                                      </svg>
-                                    </button>
+                                        <svg
+                                          class="w-4 h-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                          />
+                                        </svg>
+                                      </button>
+                                    </Show>
+                                    <Show
+                                      when={
+                                        resource.hasOverride ||
+                                        ((resource.type === 'node' ||
+                                          resource.type === 'dockerHost') &&
+                                          resource.disableConnectivity)
+                                      }
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => props.onRemoveOverride(resource.id)}
+                                        class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                        title="Remove override"
+                                      >
+                                        <svg
+                                          class="w-4 h-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                          />
+                                        </svg>
+                                      </button>
+                                    </Show>
                                   </Show>
-                                </Show>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }}
                       </For>
                     </>
                   );
@@ -1183,7 +1267,9 @@ export function ResourceTable(props: ResourceTableProps) {
                           return fallback !== undefined ? fallback : 0;
                         }
 
-                        const liveValue = extract(resource.thresholds as Record<string, unknown> | undefined);
+                        const liveValue = extract(
+                          resource.thresholds as Record<string, unknown> | undefined,
+                        );
                         if (liveValue !== undefined) {
                           return liveValue;
                         }
@@ -1205,56 +1291,71 @@ export function ResourceTable(props: ResourceTableProps) {
                           {/* Alert toggle column */}
                           <td class="p-1 px-2 text-center align-middle">
                             <Show when={props.onToggleDisabled}>
-                                {(() => {
-                                  const globallyDisabled = props.globalDisableFlag?.() ?? false;
-                                  const isChecked = !globallyDisabled && !resource.disabled;
-                                  return (
-                                    <div class="flex items-center justify-center">
-                                      <TogglePrimitive
-                                        size="sm"
-                                        checked={isChecked}
-                                        disabled={globallyDisabled}
-                                        onToggle={() => !globallyDisabled && props.onToggleDisabled?.(resource.id)}
-                                        class="my-[1px]"
-                                        title={
-                                          globallyDisabled
-                                            ? 'Alerts disabled globally'
-                                            : resource.disabled
-                                              ? 'Click to enable alerts'
-                                              : 'Click to disable alerts'
-                                        }
-                                        ariaLabel={isChecked ? 'Alerts enabled for this resource' : 'Alerts disabled for this resource'}
-                                      />
-                                    </div>
-                                  );
-                                })()}
-                              </Show>
+                              {(() => {
+                                const globallyDisabled = props.globalDisableFlag?.() ?? false;
+                                const isChecked = !globallyDisabled && !resource.disabled;
+                                return (
+                                  <div class="flex items-center justify-center">
+                                    <TogglePrimitive
+                                      size="sm"
+                                      checked={isChecked}
+                                      disabled={globallyDisabled}
+                                      onToggle={() =>
+                                        !globallyDisabled && props.onToggleDisabled?.(resource.id)
+                                      }
+                                      class="my-[1px]"
+                                      title={
+                                        globallyDisabled
+                                          ? 'Alerts disabled globally'
+                                          : resource.disabled
+                                            ? 'Click to enable alerts'
+                                            : 'Click to disable alerts'
+                                      }
+                                      ariaLabel={
+                                        isChecked
+                                          ? 'Alerts enabled for this resource'
+                                          : 'Alerts disabled for this resource'
+                                      }
+                                    />
+                                  </div>
+                                );
+                              })()}
+                            </Show>
                           </td>
                           <td class="p-1 px-2">
-                            <Show when={resource.type === 'node'} fallback={
-                              <div class="flex items-center gap-2">
-                                <span
-                                  class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
-                                >
-                                  {resource.name}
-                                </span>
-                                <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                  <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
-                                    Custom
-                                  </span>
-                                </Show>
-                              </div>
-                            }>
-                              <div class="flex flex-wrap items-center gap-3" title={resource.status || undefined}>
-                                <Show when={resource.host} fallback={
+                            <Show
+                              when={resource.type === 'node'}
+                              fallback={
+                                <div class="flex items-center gap-2">
                                   <span
                                     class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                   >
-                                    {resource.type === 'node'
-                                      ? resource.name
-                                      : resource.displayName || resource.name}
+                                    {resource.name}
                                   </span>
-                                }>
+                                  <Show when={resource.hasOverride || resource.disableConnectivity}>
+                                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                                      Custom
+                                    </span>
+                                  </Show>
+                                </div>
+                              }
+                            >
+                              <div
+                                class="flex flex-wrap items-center gap-3"
+                                title={resource.status || undefined}
+                              >
+                                <Show
+                                  when={resource.host}
+                                  fallback={
+                                    <span
+                                      class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                    >
+                                      {resource.type === 'node'
+                                        ? resource.name
+                                        : resource.displayName || resource.name}
+                                    </span>
+                                  }
+                                >
                                   {(host) => (
                                     <a
                                       href={host() as string}
@@ -1424,8 +1525,11 @@ export function ResourceTable(props: ResourceTableProps) {
                             <td class="p-1 px-2 text-center align-middle">
                               <Show when={props.onToggleNodeConnectivity}>
                                 {(() => {
-                                  const defaultOfflineDisabled = props.globalDisableOfflineFlag?.() ?? false;
-                                  const isEnabled = !(resource.disableConnectivity || defaultOfflineDisabled);
+                                  const defaultOfflineDisabled =
+                                    props.globalDisableOfflineFlag?.() ?? false;
+                                  const isEnabled = !(
+                                    resource.disableConnectivity || defaultOfflineDisabled
+                                  );
                                   const disabledGlobally = props.globalDisableFlag?.() ?? false;
                                   return (
                                     <StatusBadge
@@ -1438,92 +1542,41 @@ export function ResourceTable(props: ResourceTableProps) {
                                     />
                                   );
                                 })()}
-                            </Show>
-                          </td>
-                        </Show>
+                              </Show>
+                            </td>
+                          </Show>
 
-                        {/* Actions column */}
-                        <td class="p-1 px-2">
-                          <div class="flex items-center justify-center gap-1">
-                            <Show when={typeof resource.toggleEnabled === 'function'}>
-                              <StatusBadge
-                                size="sm"
-                                isEnabled={resource.isEnabled ?? true}
-                                onToggle={resource.toggleEnabled}
-                                titleEnabled={resource.toggleTitleEnabled}
-                                titleDisabled={resource.toggleTitleDisabled}
-                              />
-                            </Show>
-                            <Show
-                              when={resource.editable !== false && typeof props.onEdit === 'function'}
-                              fallback={<span class="text-xs text-gray-400 dark:text-gray-600">—</span>}
-                            >
+                          {/* Actions column */}
+                          <td class="p-1 px-2">
+                            <div class="flex items-center justify-center gap-1">
+                              <Show when={typeof resource.toggleEnabled === 'function'}>
+                                <StatusBadge
+                                  size="sm"
+                                  isEnabled={resource.isEnabled ?? true}
+                                  onToggle={resource.toggleEnabled}
+                                  titleEnabled={resource.toggleTitleEnabled}
+                                  titleDisabled={resource.toggleTitleDisabled}
+                                />
+                              </Show>
                               <Show
-                                when={!isEditing()}
+                                when={
+                                  resource.editable !== false && typeof props.onEdit === 'function'
+                                }
                                 fallback={
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      props.onCancelEdit();
-                                      setActiveMetricInput(null);
-                                    }}
-                                    class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                    title="Cancel editing"
-                                  >
-                                    <svg
-                                      class="w-4 h-4"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M6 18L18 6M6 6l12 12"
-                                      />
-                                    </svg>
-                                  </button>
+                                  <span class="text-xs text-gray-400 dark:text-gray-600">—</span>
                                 }
                               >
-                                <div class="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      props.onEdit(
-                                        resource.id,
-                                        resource.thresholds ? { ...resource.thresholds } : {},
-                                        resource.defaults ? { ...resource.defaults } : {},
-                                      )
-                                    }
-                                    class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                    title="Edit thresholds"
-                                  >
-                                    <svg
-                                      class="w-4 h-4"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                      />
-                                    </svg>
-                                  </button>
-                                  <Show
-                                    when={
-                                      resource.hasOverride ||
-                                      (resource.type === 'node' && resource.disableConnectivity)
-                                    }
-                                  >
+                                <Show
+                                  when={!isEditing()}
+                                  fallback={
                                     <button
                                       type="button"
-                                      onClick={() => props.onRemoveOverride(resource.id)}
-                                      class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                      title="Remove override"
+                                      onClick={() => {
+                                        props.onCancelEdit();
+                                        setActiveMetricInput(null);
+                                      }}
+                                      class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                      title="Cancel editing"
                                     >
                                       <svg
                                         class="w-4 h-4"
@@ -1535,16 +1588,71 @@ export function ResourceTable(props: ResourceTableProps) {
                                           stroke-linecap="round"
                                           stroke-linejoin="round"
                                           stroke-width="2"
-                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                          d="M6 18L18 6M6 6l12 12"
                                         />
                                       </svg>
                                     </button>
-                                  </Show>
-                                </div>
+                                  }
+                                >
+                                  <div class="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        props.onEdit(
+                                          resource.id,
+                                          resource.thresholds ? { ...resource.thresholds } : {},
+                                          resource.defaults ? { ...resource.defaults } : {},
+                                        )
+                                      }
+                                      class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                      title="Edit thresholds"
+                                    >
+                                      <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          stroke-width="2"
+                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <Show
+                                      when={
+                                        resource.hasOverride ||
+                                        (resource.type === 'node' && resource.disableConnectivity)
+                                      }
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => props.onRemoveOverride(resource.id)}
+                                        class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                        title="Remove override"
+                                      >
+                                        <svg
+                                          class="w-4 h-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                          />
+                                        </svg>
+                                      </button>
+                                    </Show>
+                                  </div>
+                                </Show>
                               </Show>
-                            </Show>
-                          </div>
-                        </td>
+                            </div>
+                          </td>
                         </tr>
                       );
                     }}

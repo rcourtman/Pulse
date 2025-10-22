@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, fireEvent, screen, cleanup } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 
-import {
-  ThresholdsTable,
-  normalizeDockerIgnoredInput,
-} from '../ThresholdsTable';
+import { ThresholdsTable, normalizeDockerIgnoredInput } from '../ThresholdsTable';
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 
 vi.mock('@solidjs/router', () => ({
@@ -91,9 +88,21 @@ const baseProps = () => ({
   setBackupDefaults: vi.fn(),
   backupFactoryDefaults: { enabled: false, warningDays: 7, criticalDays: 14 } as BackupAlertConfig,
   resetBackupDefaults: vi.fn(),
-  snapshotDefaults: () => ({ enabled: false, warningDays: 30, criticalDays: 45 }),
+  snapshotDefaults: () => ({
+    enabled: false,
+    warningDays: 30,
+    criticalDays: 45,
+    warningSizeGiB: 0,
+    criticalSizeGiB: 0,
+  }),
   setSnapshotDefaults: vi.fn(),
-  snapshotFactoryDefaults: { enabled: false, warningDays: 30, criticalDays: 45 } as SnapshotAlertConfig,
+  snapshotFactoryDefaults: {
+    enabled: false,
+    warningDays: 30,
+    criticalDays: 45,
+    warningSizeGiB: 0,
+    criticalSizeGiB: 0,
+  } as SnapshotAlertConfig,
   resetSnapshotDefaults: vi.fn(),
   timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5 }),
   metricTimeThresholds: () => ({}),
@@ -126,7 +135,10 @@ const baseProps = () => ({
   setDisableAllDockerHostsOffline: vi.fn(),
 });
 
-const renderThresholdsTable = (options?: { initialPrefixes?: string[]; includeReset?: boolean }) => {
+const renderThresholdsTable = (options?: {
+  initialPrefixes?: string[];
+  includeReset?: boolean;
+}) => {
   let setDockerIgnoredPrefixesMock!: ReturnType<typeof vi.fn>;
   let resetDockerIgnoredPrefixesMock: ReturnType<typeof vi.fn> | undefined;
   let setHasUnsavedChangesMock!: ReturnType<typeof vi.fn>;
@@ -177,9 +189,11 @@ const renderThresholdsTable = (options?: { initialPrefixes?: string[]; includeRe
 
 describe('normalizeDockerIgnoredInput', () => {
   it('trims whitespace and removes empty lines', () => {
-    expect(
-      normalizeDockerIgnoredInput(' runner-  \n\n #system \n\t \njob-'),
-    ).toEqual(['runner-', '#system', 'job-']);
+    expect(normalizeDockerIgnoredInput(' runner-  \n\n #system \n\t \njob-')).toEqual([
+      'runner-',
+      '#system',
+      'job-',
+    ]);
   });
 
   it('returns empty array for blank input', () => {

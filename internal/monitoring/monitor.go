@@ -6431,6 +6431,17 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		return
 	}
 
+	if len(allSnapshots) > 0 {
+		sizeMap := m.collectSnapshotSizes(snapshotCtx, instanceName, client, allSnapshots)
+		if len(sizeMap) > 0 {
+			for i := range allSnapshots {
+				if size, ok := sizeMap[allSnapshots[i].ID]; ok && size > 0 {
+					allSnapshots[i].SizeBytes = size
+				}
+			}
+		}
+	}
+
 	// Update state with guest snapshots for this instance
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
 
@@ -6442,6 +6453,116 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		Str("instance", instanceName).
 		Int("count", len(allSnapshots)).
 		Msg("Guest snapshots polled")
+}
+
+func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string, client PVEClientInterface, snapshots []models.GuestSnapshot) map[string]int64 {
+	sizes := make(map[string]int64, len(snapshots))
+	if len(snapshots) == 0 {
+		return sizes
+	}
+
+	validSnapshots := make(map[string]struct{}, len(snapshots))
+	nodes := make(map[string]struct{})
+
+	for _, snap := range snapshots {
+		validSnapshots[snap.ID] = struct{}{}
+		if snap.Node != "" {
+			nodes[snap.Node] = struct{}{}
+		}
+	}
+
+	if len(nodes) == 0 {
+		return sizes
+	}
+
+	seenVolids := make(map[string]struct{})
+
+	for nodeName := range nodes {
+		if ctx.Err() != nil {
+			break
+		}
+
+		storages, err := client.GetStorage(ctx, nodeName)
+		if err != nil {
+			log.Debug().
+				Err(err).
+				Str("node", nodeName).
+				Str("instance", instanceName).
+				Msg("Failed to get storage list for snapshot sizing")
+			continue
+		}
+
+		for _, storage := range storages {
+			if ctx.Err() != nil {
+				break
+			}
+
+			contentTypes := strings.ToLower(storage.Content)
+			if !strings.Contains(contentTypes, "images") && !strings.Contains(contentTypes, "rootdir") {
+				continue
+			}
+
+			contents, err := client.GetStorageContent(ctx, nodeName, storage.Storage)
+			if err != nil {
+				log.Debug().
+					Err(err).
+					Str("node", nodeName).
+					Str("storage", storage.Storage).
+					Str("instance", instanceName).
+					Msg("Failed to get storage content for snapshot sizing")
+				continue
+			}
+
+			for _, item := range contents {
+				if item.VMID <= 0 {
+					continue
+				}
+
+				if _, seen := seenVolids[item.Volid]; seen {
+					continue
+				}
+
+				snapName := extractSnapshotName(item.Volid)
+				if snapName == "" {
+					continue
+				}
+
+				key := fmt.Sprintf("%s-%s-%d-%s", instanceName, nodeName, item.VMID, snapName)
+				if _, ok := validSnapshots[key]; !ok {
+					continue
+				}
+
+				seenVolids[item.Volid] = struct{}{}
+
+				size := int64(item.Size)
+				if size < 0 {
+					size = 0
+				}
+
+				sizes[key] += size
+			}
+		}
+	}
+
+	return sizes
+}
+
+func extractSnapshotName(volid string) string {
+	if volid == "" {
+		return ""
+	}
+
+	parts := strings.SplitN(volid, ":", 2)
+	remainder := volid
+	if len(parts) == 2 {
+		remainder = parts[1]
+	}
+
+	if idx := strings.Index(remainder, "@"); idx >= 0 && idx+1 < len(remainder) {
+		return strings.TrimSpace(remainder[idx+1:])
+	}
+
+	return ""
 }
 
 // Stop gracefully stops the monitor

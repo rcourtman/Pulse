@@ -221,9 +221,11 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 		Enabled:        true,
 		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
 		SnapshotDefaults: SnapshotAlertConfig{
-			Enabled:      true,
-			WarningDays:  7,
-			CriticalDays: 14,
+			Enabled:         true,
+			WarningDays:     7,
+			CriticalDays:    14,
+			WarningSizeGiB:  0,
+			CriticalSizeGiB: 0,
 		},
 		Overrides: make(map[string]ThresholdConfig),
 	}
@@ -236,13 +238,14 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 	now := time.Now()
 	snapshots := []models.GuestSnapshot{
 		{
-			ID:       "inst-node-100-weekly",
-			Name:     "weekly",
-			Node:     "node",
-			Instance: "inst",
-			Type:     "qemu",
-			VMID:     100,
-			Time:     now.Add(-15 * 24 * time.Hour),
+			ID:        "inst-node-100-weekly",
+			Name:      "weekly",
+			Node:      "node",
+			Instance:  "inst",
+			Type:      "qemu",
+			VMID:      100,
+			Time:      now.Add(-15 * 24 * time.Hour),
+			SizeBytes: 60 << 30,
 		},
 	}
 	guestNames := map[string]string{
@@ -271,6 +274,155 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 	m.mu.RUnlock()
 	if exists {
 		t.Fatalf("expected snapshot alert to be cleared when snapshot missing")
+	}
+}
+
+func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	cfg := AlertConfig{
+		Enabled:        true,
+		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
+		SnapshotDefaults: SnapshotAlertConfig{
+			Enabled:         true,
+			WarningDays:     0,
+			CriticalDays:    0,
+			WarningSizeGiB:  50,
+			CriticalSizeGiB: 100,
+		},
+		Overrides: make(map[string]ThresholdConfig),
+	}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	now := time.Now()
+	snapshots := []models.GuestSnapshot{
+		{
+			ID:        "inst-node-200-sizey",
+			Name:      "pre-maintenance",
+			Node:      "node",
+			Instance:  "inst",
+			Type:      "qemu",
+			VMID:      200,
+			Time:      now.Add(-2 * time.Hour),
+			SizeBytes: int64(120) << 30,
+		},
+	}
+	guestNames := map[string]string{
+		"inst-node-200": "db-server",
+	}
+
+	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+
+	m.mu.RLock()
+	alert, exists := m.activeAlerts["snapshot-age-inst-node-200-sizey"]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected snapshot size alert to be created")
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical level for large snapshot, got %s", alert.Level)
+	}
+	if alert.Value < 119.5 || alert.Value > 120.5 {
+		t.Fatalf("expected alert value near 120 GiB, got %.2f", alert.Value)
+	}
+	if alert.Threshold != 100 {
+		t.Fatalf("expected threshold 100 GiB, got %.2f", alert.Threshold)
+	}
+	if alert.Metadata == nil {
+		t.Fatalf("expected metadata for snapshot alert")
+	}
+	if metric, ok := alert.Metadata["primaryMetric"].(string); !ok || metric != "size" {
+		t.Fatalf("expected primary metric size, got %#v", alert.Metadata["primaryMetric"])
+	}
+	if sizeBytes, ok := alert.Metadata["snapshotSizeBytes"].(int64); !ok || sizeBytes == 0 {
+		t.Fatalf("expected snapshotSizeBytes in metadata")
+	}
+	metrics, ok := alert.Metadata["triggeredMetrics"].([]string)
+	if !ok {
+		t.Fatalf("expected triggeredMetrics slice, got %#v", alert.Metadata["triggeredMetrics"])
+	}
+	foundSize := false
+	for _, metric := range metrics {
+		if metric == "size" {
+			foundSize = true
+			break
+		}
+	}
+	if !foundSize {
+		t.Fatalf("expected size metric recorded in metadata")
+	}
+}
+
+func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	cfg := AlertConfig{
+		Enabled:        true,
+		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
+		SnapshotDefaults: SnapshotAlertConfig{
+			Enabled:         true,
+			WarningDays:     5,
+			CriticalDays:    10,
+			WarningSizeGiB:  40,
+			CriticalSizeGiB: 80,
+		},
+		Overrides: make(map[string]ThresholdConfig),
+	}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	now := time.Now()
+	snapshots := []models.GuestSnapshot{
+		{
+			ID:        "inst-node-300-combined",
+			Name:      "long-running",
+			Node:      "node",
+			Instance:  "inst",
+			Type:      "qemu",
+			VMID:      300,
+			Time:      now.Add(-15 * 24 * time.Hour),
+			SizeBytes: int64(90) << 30,
+		},
+	}
+	guestNames := map[string]string{
+		"inst-node-300": "app-server",
+	}
+
+	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+
+	m.mu.RLock()
+	alert, exists := m.activeAlerts["snapshot-age-inst-node-300-combined"]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected combined snapshot alert to be created")
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical level, got %s", alert.Level)
+	}
+	if !strings.Contains(alert.Message, "days old") || !strings.Contains(strings.ToLower(alert.Message), "gib") {
+		t.Fatalf("expected alert message to reference age and size, got %q", alert.Message)
+	}
+	if alert.Metadata == nil {
+		t.Fatalf("expected metadata for combined alert")
+	}
+	metrics, ok := alert.Metadata["triggeredMetrics"].([]string)
+	if !ok {
+		t.Fatalf("expected triggeredMetrics slice, got %#v", alert.Metadata["triggeredMetrics"])
+	}
+	if len(metrics) < 2 {
+		t.Fatalf("expected both age and size metrics recorded, got %v", metrics)
+	}
+	if metric, ok := alert.Metadata["primaryMetric"].(string); !ok || metric != "age" {
+		t.Fatalf("expected primary metric age, got %#v", alert.Metadata["primaryMetric"])
 	}
 }
 

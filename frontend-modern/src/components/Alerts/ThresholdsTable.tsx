@@ -19,17 +19,15 @@ import type {
   PMGBackup,
   Backups,
 } from '@/types/api';
-import type { RawOverrideConfig, PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
+import type {
+  RawOverrideConfig,
+  PMGThresholdDefaults,
+  SnapshotAlertConfig,
+  BackupAlertConfig,
+} from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-type OverrideType =
-  | 'guest'
-  | 'node'
-  | 'storage'
-  | 'pbs'
-  | 'pmg'
-  | 'dockerHost'
-  | 'dockerContainer';
+type OverrideType = 'guest' | 'node' | 'storage' | 'pbs' | 'pmg' | 'dockerHost' | 'dockerContainer';
 
 type OfflineState = 'off' | 'warning' | 'critical';
 
@@ -110,6 +108,8 @@ export const normalizeDockerIgnoredInput = (value: string): string[] =>
 
 const DEFAULT_SNAPSHOT_WARNING = 30;
 const DEFAULT_SNAPSHOT_CRITICAL = 45;
+const DEFAULT_SNAPSHOT_WARNING_SIZE = 0;
+const DEFAULT_SNAPSHOT_CRITICAL_SIZE = 0;
 const DEFAULT_BACKUP_WARNING = 7;
 const DEFAULT_BACKUP_CRITICAL = 14;
 
@@ -143,13 +143,13 @@ interface ThresholdsTableProps {
   pmgBackups?: PMGBackup[];
   pmgThresholds: () => PMGThresholdDefaults;
   setPMGThresholds: (
-    value:
-      | PMGThresholdDefaults
-      | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
+    value: PMGThresholdDefaults | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
   ) => void;
   guestDefaults: SimpleThresholds;
   setGuestDefaults: (
-    value: Record<string, number | undefined> | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
   guestDisableConnectivity: () => boolean;
   setGuestDisableConnectivity: (value: boolean) => void;
@@ -157,11 +157,43 @@ interface ThresholdsTableProps {
   setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   nodeDefaults: SimpleThresholds;
   setNodeDefaults: (
-    value: Record<string, number | undefined> | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
-  dockerDefaults: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
+  dockerDefaults: {
+    cpu: number;
+    memory: number;
+    restartCount: number;
+    restartWindow: number;
+    memoryWarnPct: number;
+    memoryCriticalPct: number;
+  };
   setDockerDefaults: (
-    value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),
+    value:
+      | {
+          cpu: number;
+          memory: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+        }
+      | ((prev: {
+          cpu: number;
+          memory: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+        }) => {
+          cpu: number;
+          memory: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+        }),
   ) => void;
   dockerIgnoredPrefixes: () => string[];
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
@@ -185,17 +217,13 @@ interface ThresholdsTableProps {
   ) => void;
   snapshotDefaults: () => SnapshotAlertConfig;
   setSnapshotDefaults: (
-    value:
-      | SnapshotAlertConfig
-      | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
+    value: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
   ) => void;
   snapshotFactoryDefaults?: SnapshotAlertConfig;
   resetSnapshotDefaults?: () => void;
   backupDefaults: () => BackupAlertConfig;
   setBackupDefaults: (
-    value:
-      | BackupAlertConfig
-      | ((prev: BackupAlertConfig) => BackupAlertConfig),
+    value: BackupAlertConfig | ((prev: BackupAlertConfig) => BackupAlertConfig),
   ) => void;
   backupFactoryDefaults?: BackupAlertConfig;
   resetBackupDefaults?: () => void;
@@ -306,10 +334,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       if (!el) return false;
       const tag = el.tagName;
       return (
-        tag === 'INPUT' ||
-        tag === 'TEXTAREA' ||
-        tag === 'SELECT' ||
-        el.contentEditable === 'true'
+        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.contentEditable === 'true'
       );
     };
 
@@ -381,6 +406,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       return String(value);
     }
 
+    if (metric === 'warningSizeGiB' || metric === 'criticalSizeGiB') {
+      const rounded = Math.round(value * 10) / 10;
+      return `${rounded} GiB`;
+    }
+
     // MB/s metrics
     if (
       metric === 'diskRead' ||
@@ -403,75 +433,80 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   // Process nodes with their overrides
-const getFriendlyNodeName = (value: string, clusterName?: string): string => {
-  if (!value) return value;
+  const getFriendlyNodeName = (value: string, clusterName?: string): string => {
+    if (!value) return value;
 
-  const clusterLower = clusterName?.toLowerCase().trim();
+    const clusterLower = clusterName?.toLowerCase().trim();
 
-  const normalizeToken = (token?: string | null): string => {
-    if (!token) return '';
-    let result = token.replace(/\(.*?\)/g, ' ').replace(/\s+/g, ' ').trim();
-    if (clusterLower) {
-      result = result
-        .split(' ')
-        .filter((part) => part.toLowerCase() !== clusterLower)
-        .join(' ')
+    const normalizeToken = (token?: string | null): string => {
+      if (!token) return '';
+      let result = token
+        .replace(/\(.*?\)/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
+      if (clusterLower) {
+        result = result
+          .split(' ')
+          .filter((part) => part.toLowerCase() !== clusterLower)
+          .join(' ')
+          .trim();
+      }
+      if (!result) return '';
+      const firstWord = result.split(/\s+/)[0] || result;
+      const withoutDomain = firstWord.includes('.')
+        ? (firstWord.split('.')[0] ?? firstWord)
+        : firstWord;
+      return withoutDomain.trim();
+    };
+
+    const parentheticalMatch = value.match(/\(([^)]+)\)/);
+    const parentheticalRaw = parentheticalMatch?.[1]?.trim();
+
+    let base = normalizeToken(value);
+    if (!base) {
+      base = value.trim();
     }
-    if (!result) return '';
-    const firstWord = result.split(/\s+/)[0] || result;
-    const withoutDomain = firstWord.includes('.') ? firstWord.split('.')[0] ?? firstWord : firstWord;
-    return withoutDomain.trim();
+
+    const parenthetical = normalizeToken(parentheticalRaw);
+    if (parenthetical && parenthetical.toLowerCase() !== base.toLowerCase()) {
+      return parenthetical;
+    }
+
+    return base;
   };
 
-  const parentheticalMatch = value.match(/\(([^)]+)\)/);
-  const parentheticalRaw = parentheticalMatch?.[1]?.trim();
-
-  let base = normalizeToken(value);
-  if (!base) {
-    base = value.trim();
-  }
-
-  const parenthetical = normalizeToken(parentheticalRaw);
-  if (parenthetical && parenthetical.toLowerCase() !== base.toLowerCase()) {
-    return parenthetical;
-  }
-
-  return base;
-};
-
-const buildNodeHeaderMeta = (node: Node) => {
-  const originalDisplayName = node.displayName?.trim() || node.name;
-  const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
-  const hostValue = node.host?.trim();
-  let host: string | undefined;
-  if (hostValue && hostValue !== '') {
-    host = hostValue.startsWith('http')
-      ? hostValue
-      : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
-  } else if (node.name) {
-    host = `https://${node.name.includes(':') ? node.name : `${node.name}:8006`}`;
-  }
-
-  const headerMeta: GroupHeaderMeta = {
-    type: 'node',
-    displayName: friendlyName,
-    rawName: originalDisplayName,
-    host,
-    status: node.status,
-    clusterName: node.isClusterMember ? node.clusterName?.trim() || 'Cluster' : undefined,
-    isClusterMember: node.isClusterMember ?? false,
-  };
-
-  const keys = new Set<string>();
-  [node.name, originalDisplayName, friendlyName].forEach((value) => {
-    if (value && value.trim()) {
-      keys.add(value.trim());
+  const buildNodeHeaderMeta = (node: Node) => {
+    const originalDisplayName = node.displayName?.trim() || node.name;
+    const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
+    const hostValue = node.host?.trim();
+    let host: string | undefined;
+    if (hostValue && hostValue !== '') {
+      host = hostValue.startsWith('http')
+        ? hostValue
+        : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
+    } else if (node.name) {
+      host = `https://${node.name.includes(':') ? node.name : `${node.name}:8006`}`;
     }
-  });
 
-  return { headerMeta, keys };
-};
+    const headerMeta: GroupHeaderMeta = {
+      type: 'node',
+      displayName: friendlyName,
+      rawName: originalDisplayName,
+      host,
+      status: node.status,
+      clusterName: node.isClusterMember ? node.clusterName?.trim() || 'Cluster' : undefined,
+      isClusterMember: node.isClusterMember ?? false,
+    };
+
+    const keys = new Set<string>();
+    [node.name, originalDisplayName, friendlyName].forEach((value) => {
+      if (value && value.trim()) {
+        keys.add(value.trim());
+      }
+    });
+
+    return { headerMeta, keys };
+  };
 
   const nodesWithOverrides = createMemo<Resource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
@@ -496,16 +531,16 @@ const buildNodeHeaderMeta = (node: Node) => {
           );
         });
 
-
       const originalDisplayName = node.displayName?.trim() || node.name;
       const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
       const rawName = node.name;
       const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
       // Build a best-effort management URL for the node
       const hostValue = node.host?.trim() || rawName;
-      const normalizedHost = hostValue.startsWith('http://') || hostValue.startsWith('https://')
-        ? hostValue
-        : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
+      const normalizedHost =
+        hostValue.startsWith('http://') || hostValue.startsWith('https://')
+          ? hostValue
+          : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
 
       return {
         id: node.id,
@@ -602,7 +637,7 @@ const buildNodeHeaderMeta = (node: Node) => {
   }, []);
 
   // Process Docker containers grouped by host
-const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((prev = {}) => {
+  const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((prev = {}) => {
     if (editingId()) {
       return prev;
     }
@@ -646,9 +681,12 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
             );
           });
 
-
         const hasOverride =
-          hasCustomThresholds || override?.disabled || override?.disableConnectivity || overrideSeverity !== undefined || false;
+          hasCustomThresholds ||
+          override?.disabled ||
+          override?.disableConnectivity ||
+          overrideSeverity !== undefined ||
+          false;
 
         const containerName = normalizeContainerName(container);
         const containerNameLower = containerName.toLowerCase();
@@ -770,8 +808,9 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
   });
 
   const countOverrides = (resources: Resource[] | undefined) =>
-    resources?.filter((resource) => resource.hasOverride || resource.disabled || resource.disableConnectivity)
-      .length ?? 0;
+    resources?.filter(
+      (resource) => resource.hasOverride || resource.disabled || resource.disableConnectivity,
+    ).length ?? 0;
 
   const registerSection = (_key: string) => (_el: HTMLDivElement | null) => {
     /* no-op placeholder for future scroll restoration */
@@ -782,6 +821,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
       enabled: false,
       warningDays: DEFAULT_SNAPSHOT_WARNING,
       criticalDays: DEFAULT_SNAPSHOT_CRITICAL,
+      warningSizeGiB: DEFAULT_SNAPSHOT_WARNING_SIZE,
+      criticalSizeGiB: DEFAULT_SNAPSHOT_CRITICAL_SIZE,
     };
 
   const sanitizeSnapshotConfig = (config: SnapshotAlertConfig): SnapshotAlertConfig => {
@@ -795,17 +836,36 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
       critical = warning;
     }
 
+    const rawWarningSize = Number.isFinite(config.warningSizeGiB)
+      ? Number(config.warningSizeGiB)
+      : DEFAULT_SNAPSHOT_WARNING_SIZE;
+    const rawCriticalSize = Number.isFinite(config.criticalSizeGiB)
+      ? Number(config.criticalSizeGiB)
+      : DEFAULT_SNAPSHOT_CRITICAL_SIZE;
+
+    const roundSize = (value: number) => Math.round(Math.max(0, value) * 10) / 10;
+
+    let warningSize = roundSize(rawWarningSize);
+    let criticalSize = roundSize(rawCriticalSize);
+
+    if (criticalSize > 0 && warningSize > criticalSize) {
+      warningSize = criticalSize;
+    }
+    if (criticalSize === 0 && warningSize > 0) {
+      criticalSize = warningSize;
+    }
+
     return {
       enabled: !!config.enabled,
       warningDays: warning,
       criticalDays: critical,
+      warningSizeGiB: warningSize,
+      criticalSizeGiB: criticalSize,
     };
   };
 
   const updateSnapshotDefaults = (
-    updater:
-      | SnapshotAlertConfig
-      | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
+    updater: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
   ) => {
     props.setSnapshotDefaults((prev) => {
       const next =
@@ -822,6 +882,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     return {
       'warning days': current.warningDays ?? 0,
       'critical days': current.criticalDays ?? 0,
+      'warning size (gib)': current.warningSizeGiB ?? 0,
+      'critical size (gib)': current.criticalSizeGiB ?? 0,
     };
   });
 
@@ -830,6 +892,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     return {
       'warning days': factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING,
       'critical days': factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL,
+      'warning size (gib)': factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE,
+      'critical size (gib)': factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE,
     };
   });
 
@@ -859,9 +923,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
   };
 
   const updateBackupDefaults = (
-    updater:
-      | BackupAlertConfig
-      | ((prev: BackupAlertConfig) => BackupAlertConfig),
+    updater: BackupAlertConfig | ((prev: BackupAlertConfig) => BackupAlertConfig),
   ) => {
     props.setBackupDefaults((prev) => {
       const next =
@@ -889,18 +951,21 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     };
   });
 
-const snapshotOverridesCount = createMemo(() => {
-  const current = props.snapshotDefaults();
-  const factory = snapshotFactoryConfig();
-  return current.enabled !== factory.enabled ||
-    (current.warningDays ?? DEFAULT_SNAPSHOT_WARNING) !==
-      (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
-    (current.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) !==
-      (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL)
-    ? 1
-    : 0;
-});
-
+  const snapshotOverridesCount = createMemo(() => {
+    const current = props.snapshotDefaults();
+    const factory = snapshotFactoryConfig();
+    const differs =
+      current.enabled !== factory.enabled ||
+      (current.warningDays ?? DEFAULT_SNAPSHOT_WARNING) !==
+        (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
+      (current.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) !==
+        (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
+      (current.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) !==
+        (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
+      (current.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE) !==
+        (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
+    return differs ? 1 : 0;
+  });
 
   const backupOverridesCount = createMemo(() => {
     const backupCurrent = props.backupDefaults();
@@ -914,7 +979,6 @@ const snapshotOverridesCount = createMemo(() => {
       : 0;
   });
 
-  
   // Process guests with their overrides and group by node
   const guestsGroupedByNode = createMemo<Record<string, Resource[]>>((prev = {}) => {
     // If we're currently editing, return the previous value to avoid re-renders
@@ -941,10 +1005,13 @@ const snapshotOverridesCount = createMemo(() => {
           );
         });
 
-
       // A guest has an override if it has custom thresholds OR is disabled OR has connectivity disabled
       const hasOverride =
-        hasCustomThresholds || override?.disabled || override?.disableConnectivity || overrideSeverity !== undefined || false;
+        hasCustomThresholds ||
+        override?.disabled ||
+        override?.disableConnectivity ||
+        overrideSeverity !== undefined ||
+        false;
 
       return {
         id: guestId,
@@ -1079,11 +1146,10 @@ const snapshotOverridesCount = createMemo(() => {
     const record: Record<string, number> = {};
     PMG_THRESHOLD_COLUMNS.forEach(({ key, normalized }) => {
       const value = defaults[key];
-      record[normalized] =
-        typeof value === 'number' && Number.isFinite(value) ? value : 0;
+      record[normalized] = typeof value === 'number' && Number.isFinite(value) ? value : 0;
     });
-  return record;
-});
+    return record;
+  });
 
   const setPMGGlobalDefaults = (
     value:
@@ -1273,11 +1339,11 @@ const snapshotOverridesCount = createMemo(() => {
           overrides: snapshotOverridesCount(),
           tab: 'proxmox' as const,
         },
-    {
-      key: 'pbs' as const,
-      label: 'PBS Servers',
-      total: props.pbsInstances?.length ?? 0,
-      overrides: countOverrides(pbsServersWithOverrides()),
+        {
+          key: 'pbs' as const,
+          label: 'PBS Servers',
+          total: props.pbsInstances?.length ?? 0,
+          overrides: countOverrides(pbsServersWithOverrides()),
           tab: 'proxmox' as const,
         },
         {
@@ -1344,9 +1410,13 @@ const snapshotOverridesCount = createMemo(() => {
     if (resource.editScope === 'backup') {
       const currentBackupDefaults = props.backupDefaults();
       const nextWarning =
-        editedThresholds['warning days'] ?? currentBackupDefaults.warningDays ?? DEFAULT_BACKUP_WARNING;
+        editedThresholds['warning days'] ??
+        currentBackupDefaults.warningDays ??
+        DEFAULT_BACKUP_WARNING;
       const nextCritical =
-        editedThresholds['critical days'] ?? currentBackupDefaults.criticalDays ?? DEFAULT_BACKUP_CRITICAL;
+        editedThresholds['critical days'] ??
+        currentBackupDefaults.criticalDays ??
+        DEFAULT_BACKUP_CRITICAL;
 
       updateBackupDefaults({
         enabled: currentBackupDefaults.enabled,
@@ -1361,14 +1431,28 @@ const snapshotOverridesCount = createMemo(() => {
     if (resource.editScope === 'snapshot') {
       const currentSnapshotDefaults = props.snapshotDefaults();
       const nextWarning =
-        editedThresholds['warning days'] ?? currentSnapshotDefaults.warningDays ?? DEFAULT_SNAPSHOT_WARNING;
+        editedThresholds['warning days'] ??
+        currentSnapshotDefaults.warningDays ??
+        DEFAULT_SNAPSHOT_WARNING;
       const nextCritical =
-        editedThresholds['critical days'] ?? currentSnapshotDefaults.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL;
+        editedThresholds['critical days'] ??
+        currentSnapshotDefaults.criticalDays ??
+        DEFAULT_SNAPSHOT_CRITICAL;
+      const nextWarningSize =
+        editedThresholds['warning size (gib)'] ??
+        currentSnapshotDefaults.warningSizeGiB ??
+        DEFAULT_SNAPSHOT_WARNING_SIZE;
+      const nextCriticalSize =
+        editedThresholds['critical size (gib)'] ??
+        currentSnapshotDefaults.criticalSizeGiB ??
+        DEFAULT_SNAPSHOT_CRITICAL_SIZE;
 
       updateSnapshotDefaults({
         enabled: currentSnapshotDefaults.enabled,
         warningDays: nextWarning,
         criticalDays: nextCritical,
+        warningSizeGiB: nextWarningSize,
+        criticalSizeGiB: nextCriticalSize,
       });
 
       cancelEdit();
@@ -1467,7 +1551,10 @@ const snapshotOverridesCount = createMemo(() => {
       hysteresisThresholds.disableConnectivity = true;
       delete hysteresisThresholds.poweredOffSeverity;
     } else {
-      if ((resource.type === 'guest' || resource.type === 'dockerContainer') && props.guestDisableConnectivity()) {
+      if (
+        (resource.type === 'guest' || resource.type === 'dockerContainer') &&
+        props.guestDisableConnectivity()
+      ) {
         hysteresisThresholds.disableConnectivity = false;
       } else {
         delete hysteresisThresholds.disableConnectivity;
@@ -1491,7 +1578,11 @@ const snapshotOverridesCount = createMemo(() => {
     setEditingThresholds({});
   };
 
-  const updateMetricDelay = (typeKey: 'guest' | 'node' | 'storage' | 'pbs', metricKey: string, value: number | null) => {
+  const updateMetricDelay = (
+    typeKey: 'guest' | 'node' | 'storage' | 'pbs',
+    metricKey: string,
+    value: number | null,
+  ) => {
     const normalizedMetric = metricKey.trim().toLowerCase();
     if (!normalizedMetric) return;
 
@@ -1576,10 +1667,7 @@ const snapshotOverridesCount = createMemo(() => {
     delete (cleanThresholds as Record<string, unknown>).disabled;
 
     // If enabling (disabled = false) and no custom thresholds exist, remove the override entirely
-    if (
-      !newDisabledState &&
-      (!existingOverride || Object.keys(cleanThresholds).length === 0)
-    ) {
+    if (!newDisabledState && (!existingOverride || Object.keys(cleanThresholds).length === 0)) {
       // Remove the override completely
       props.setOverrides(props.overrides().filter((o) => o.id !== resourceId));
 
@@ -1646,8 +1734,7 @@ const snapshotOverridesCount = createMemo(() => {
         const offlineId = `pbs-offline-${resourceId}`;
         props.removeAlerts(
           (alert) =>
-            alert.resourceId === resourceId &&
-            (alert.id === offlineId || alert.type === 'offline'),
+            alert.resourceId === resourceId && (alert.id === offlineId || alert.type === 'offline'),
         );
       } else if (resource.type === 'dockerContainer') {
         props.removeAlerts(
@@ -1755,9 +1842,7 @@ const snapshotOverridesCount = createMemo(() => {
     if (props.removeAlerts && resource.type === 'dockerHost') {
       const offlineId = `docker-host-offline-${resourceId}`;
       const resourceKey = `docker:${resourceId}`;
-      props.removeAlerts(
-        (alert) => alert.id === offlineId || alert.resourceId === resourceKey,
-      );
+      props.removeAlerts((alert) => alert.id === offlineId || alert.resourceId === resourceKey);
     }
   };
 
@@ -1865,7 +1950,9 @@ const snapshotOverridesCount = createMemo(() => {
 
     if (props.removeAlerts && newDisableConnectivity) {
       if (resource.type === 'guest') {
-        props.removeAlerts((alert) => alert.resourceId === resourceId && alert.type === 'powered-off');
+        props.removeAlerts(
+          (alert) => alert.resourceId === resourceId && alert.type === 'powered-off',
+        );
       } else if (resource.type === 'dockerContainer') {
         props.removeAlerts(
           (alert) =>
@@ -1922,11 +2009,30 @@ const snapshotOverridesCount = createMemo(() => {
       {/* Help Banner */}
       <div class="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3">
         <div class="flex items-start gap-2">
-          <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <div class="text-sm text-blue-900 dark:text-blue-100">
-            <span class="font-medium">Quick tips:</span> Set any threshold to <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">0</code> to disable alerts for that metric. Click on disabled thresholds showing <span class="italic">Off</span> to re-enable them. Resources with custom settings show a <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">Custom</span> badge.
+            <span class="font-medium">Quick tips:</span> Set any threshold to{' '}
+            <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">
+              0
+            </code>{' '}
+            to disable alerts for that metric. Click on disabled thresholds showing{' '}
+            <span class="italic">Off</span> to re-enable them. Resources with custom settings show a{' '}
+            <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">
+              Custom
+            </span>{' '}
+            badge.
           </div>
         </div>
       </div>
@@ -1998,7 +2104,9 @@ const snapshotOverridesCount = createMemo(() => {
                 globalDisableFlag={props.disableAllNodes}
                 onToggleGlobalDisable={() => props.setDisableAllNodes(!props.disableAllNodes())}
                 globalDisableOfflineFlag={props.disableAllNodesOffline}
-                onToggleGlobalDisableOffline={() => props.setDisableAllNodesOffline(!props.disableAllNodesOffline())}
+                onToggleGlobalDisableOffline={() =>
+                  props.setDisableAllNodesOffline(!props.disableAllNodesOffline())
+                }
                 showDelayColumn={true}
                 globalDelaySeconds={props.timeThresholds().node}
                 metricDelaySeconds={props.metricTimeThresholds().node ?? {}}
@@ -2032,22 +2140,42 @@ const snapshotOverridesCount = createMemo(() => {
                 globalDefaults={{ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
                 setGlobalDefaults={(value) => {
                   if (typeof value === 'function') {
-                    const newValue = value({ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory });
-                    props.setNodeDefaults((prev) => ({ ...prev, cpu: newValue.cpu ?? prev.cpu, memory: newValue.memory ?? prev.memory }));
+                    const newValue = value({
+                      cpu: props.nodeDefaults.cpu,
+                      memory: props.nodeDefaults.memory,
+                    });
+                    props.setNodeDefaults((prev) => ({
+                      ...prev,
+                      cpu: newValue.cpu ?? prev.cpu,
+                      memory: newValue.memory ?? prev.memory,
+                    }));
                   } else {
-                    props.setNodeDefaults((prev) => ({ ...prev, cpu: value.cpu ?? prev.cpu, memory: value.memory ?? prev.memory }));
+                    props.setNodeDefaults((prev) => ({
+                      ...prev,
+                      cpu: value.cpu ?? prev.cpu,
+                      memory: value.memory ?? prev.memory,
+                    }));
                   }
                 }}
                 setHasUnsavedChanges={props.setHasUnsavedChanges}
                 globalDisableFlag={props.disableAllPBS}
                 onToggleGlobalDisable={() => props.setDisableAllPBS(!props.disableAllPBS())}
                 globalDisableOfflineFlag={props.disableAllPBSOffline}
-                onToggleGlobalDisableOffline={() => props.setDisableAllPBSOffline(!props.disableAllPBSOffline())}
+                onToggleGlobalDisableOffline={() =>
+                  props.setDisableAllPBSOffline(!props.disableAllPBSOffline())
+                }
                 showDelayColumn={true}
                 globalDelaySeconds={props.timeThresholds().pbs}
                 metricDelaySeconds={props.metricTimeThresholds().pbs ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('pbs', metric, value)}
-                factoryDefaults={props.factoryNodeDefaults ? { cpu: props.factoryNodeDefaults.cpu, memory: props.factoryNodeDefaults.memory } : undefined}
+                factoryDefaults={
+                  props.factoryNodeDefaults
+                    ? {
+                        cpu: props.factoryNodeDefaults.cpu,
+                        memory: props.factoryNodeDefaults.memory,
+                      }
+                    : undefined
+                }
                 onResetDefaults={props.resetNodeDefaults}
               />
             </div>
@@ -2059,7 +2187,15 @@ const snapshotOverridesCount = createMemo(() => {
                 title="VMs & Containers"
                 groupedResources={guestsGroupedByNode()}
                 groupHeaderMeta={guestGroupHeaderMeta()}
-                columns={['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s']}
+                columns={[
+                  'CPU %',
+                  'Memory %',
+                  'Disk %',
+                  'Disk R MB/s',
+                  'Disk W MB/s',
+                  'Net In MB/s',
+                  'Net Out MB/s',
+                ]}
                 activeAlerts={props.activeAlerts}
                 emptyMessage="No VMs or containers match the current filters."
                 onEdit={startEditing}
@@ -2108,8 +2244,22 @@ const snapshotOverridesCount = createMemo(() => {
             <div ref={registerSection('backups')} class="scroll-mt-24">
               <ResourceTable
                 title="Backups"
-                resources={[{ id: "backups-defaults", name: "Global Defaults", thresholds: backupDefaultsRecord(), defaults: backupDefaultsRecord(), editable: true, editScope: "backup" }]}
-                columns={['Warning Days', 'Critical Days']}
+                resources={[
+                  {
+                    id: 'backups-defaults',
+                    name: 'Global Defaults',
+                    thresholds: backupDefaultsRecord(),
+                    defaults: backupDefaultsRecord(),
+                    editable: true,
+                    editScope: 'backup',
+                  },
+                ]}
+                columns={[
+                  'Warning Days',
+                  'Critical Days',
+                  'Warning Size (GiB)',
+                  'Critical Size (GiB)',
+                ]}
                 activeAlerts={props.activeAlerts}
                 emptyMessage=""
                 onEdit={startEditing}
@@ -2171,7 +2321,16 @@ const snapshotOverridesCount = createMemo(() => {
             <div ref={registerSection('snapshots')} class="scroll-mt-24">
               <ResourceTable
                 title="Snapshot Age"
-                resources={[{ id: "snapshots-defaults", name: "Global Defaults", thresholds: snapshotDefaultsRecord(), defaults: snapshotDefaultsRecord(), editable: true, editScope: "snapshot" }]}
+                resources={[
+                  {
+                    id: 'snapshots-defaults',
+                    name: 'Global Defaults',
+                    thresholds: snapshotDefaultsRecord(),
+                    defaults: snapshotDefaultsRecord(),
+                    editable: true,
+                    editScope: 'snapshot',
+                  },
+                ]}
                 columns={['Warning Days', 'Critical Days']}
                 activeAlerts={props.activeAlerts}
                 emptyMessage=""
@@ -2191,6 +2350,8 @@ const snapshotOverridesCount = createMemo(() => {
                     const currentRecord = {
                       'warning days': prev.warningDays ?? 0,
                       'critical days': prev.criticalDays ?? 0,
+                      'warning size (gib)': prev.warningSizeGiB ?? 0,
+                      'critical size (gib)': prev.criticalSizeGiB ?? 0,
                     };
                     const nextRecord =
                       typeof value === 'function'
@@ -2206,6 +2367,14 @@ const snapshotOverridesCount = createMemo(() => {
                         typeof nextRecord['critical days'] === 'number'
                           ? nextRecord['critical days']
                           : prev.criticalDays,
+                      warningSizeGiB:
+                        typeof nextRecord['warning size (gib)'] === 'number'
+                          ? nextRecord['warning size (gib)']
+                          : prev.warningSizeGiB,
+                      criticalSizeGiB:
+                        typeof nextRecord['critical size (gib)'] === 'number'
+                          ? nextRecord['critical size (gib)']
+                          : prev.criticalSizeGiB,
                     };
                   });
                 }}
@@ -2266,12 +2435,15 @@ const snapshotOverridesCount = createMemo(() => {
                 globalDelaySeconds={props.timeThresholds().storage}
                 metricDelaySeconds={props.metricTimeThresholds().storage ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('storage', metric, value)}
-                factoryDefaults={props.factoryStorageDefault !== undefined ? { usage: props.factoryStorageDefault } : undefined}
+                factoryDefaults={
+                  props.factoryStorageDefault !== undefined
+                    ? { usage: props.factoryStorageDefault }
+                    : undefined
+                }
                 onResetDefaults={props.resetStorageDefault}
               />
             </div>
           </Show>
-
         </Show>
 
         <Show when={activeTab() === 'pmg'}>
@@ -2279,7 +2451,8 @@ const snapshotOverridesCount = createMemo(() => {
             when={pmgServersWithOverrides().length > 0}
             fallback={
               <div class="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-                No mail gateways configured yet. Add a PMG instance in Settings to manage thresholds.
+                No mail gateways configured yet. Add a PMG instance in Settings to manage
+                thresholds.
               </div>
             }
           >
@@ -2325,7 +2498,9 @@ const snapshotOverridesCount = createMemo(() => {
                 globalDisableFlag={props.disableAllPMG}
                 onToggleGlobalDisable={() => props.setDisableAllPMG(!props.disableAllPMG())}
                 globalDisableOfflineFlag={props.disableAllPMGOffline}
-                onToggleGlobalDisableOffline={() => props.setDisableAllPMGOffline(!props.disableAllPMGOffline())}
+                onToggleGlobalDisableOffline={() =>
+                  props.setDisableAllPMGOffline(!props.disableAllPMGOffline())
+                }
               />
             </div>
           </Show>
@@ -2383,9 +2558,13 @@ const snapshotOverridesCount = createMemo(() => {
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDisableFlag={props.disableAllDockerHosts}
-                onToggleGlobalDisable={() => props.setDisableAllDockerHosts(!props.disableAllDockerHosts())}
+                onToggleGlobalDisable={() =>
+                  props.setDisableAllDockerHosts(!props.disableAllDockerHosts())
+                }
                 globalDisableOfflineFlag={props.disableAllDockerHostsOffline}
-                onToggleGlobalDisableOffline={() => props.setDisableAllDockerHostsOffline(!props.disableAllDockerHostsOffline())}
+                onToggleGlobalDisableOffline={() =>
+                  props.setDisableAllDockerHostsOffline(!props.disableAllDockerHostsOffline())
+                }
               />
             </div>
           </Show>
@@ -2435,9 +2614,7 @@ const snapshotOverridesCount = createMemo(() => {
                     memoryCriticalPct: props.dockerDefaults.memoryCriticalPct,
                   };
                   const next =
-                    typeof value === 'function'
-                      ? value(current)
-                      : { ...current, ...value };
+                    typeof value === 'function' ? value(current) : { ...current, ...value };
 
                   props.setDockerDefaults((prev) => ({
                     ...prev,
@@ -2451,7 +2628,9 @@ const snapshotOverridesCount = createMemo(() => {
                 }}
                 setHasUnsavedChanges={props.setHasUnsavedChanges}
                 globalDisableFlag={props.disableAllDockerContainers}
-                onToggleGlobalDisable={() => props.setDisableAllDockerContainers(!props.disableAllDockerContainers())}
+                onToggleGlobalDisable={() =>
+                  props.setDisableAllDockerContainers(!props.disableAllDockerContainers())
+                }
                 globalDisableOfflineFlag={() => props.guestDisableConnectivity()}
                 onToggleGlobalDisableOffline={() =>
                   props.setGuestDisableConnectivity(!props.guestDisableConnectivity())

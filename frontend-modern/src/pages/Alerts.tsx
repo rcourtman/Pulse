@@ -157,9 +157,15 @@ interface UIEmailConfig {
 
 interface UIAppriseConfig {
   enabled: boolean;
+  mode: 'cli' | 'http';
   targetsText: string;
   cliPath: string;
   timeoutSeconds: number;
+  serverUrl: string;
+  configKey: string;
+  apiKey: string;
+  apiKeyHeader: string;
+  skipTlsVerify: boolean;
 }
 
 interface QuietHoursConfig {
@@ -239,9 +245,15 @@ export const createDefaultGrouping = (): GroupingConfig => ({
 
 const createDefaultAppriseConfig = (): UIAppriseConfig => ({
   enabled: false,
+  mode: 'cli',
   targetsText: '',
   cliPath: 'apprise',
   timeoutSeconds: 15,
+  serverUrl: '',
+  configKey: '',
+  apiKey: '',
+  apiKeyHeader: 'X-API-KEY',
+  skipTlsVerify: false,
 });
 
 const parseAppriseTargets = (value: string): string[] =>
@@ -486,9 +498,15 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     const config = appriseConfig();
     return {
       enabled: config.enabled,
+      mode: config.mode,
       targets: parseAppriseTargets(config.targetsText),
       cliPath: config.cliPath,
       timeoutSeconds: config.timeoutSeconds,
+      serverUrl: config.serverUrl,
+      configKey: config.configKey,
+      apiKey: config.apiKey,
+      apiKeyHeader: config.apiKeyHeader,
+      skipTlsVerify: config.skipTlsVerify,
     } as AppriseConfig;
   };
 
@@ -1012,12 +1030,18 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         const appriseData = await NotificationsAPI.getAppriseConfig();
         setAppriseConfig({
           enabled: appriseData.enabled ?? false,
+          mode: appriseData.mode === 'http' ? 'http' : 'cli',
           targetsText: formatAppriseTargets(appriseData.targets),
           cliPath: appriseData.cliPath || 'apprise',
           timeoutSeconds:
             typeof appriseData.timeoutSeconds === 'number' && appriseData.timeoutSeconds > 0
               ? appriseData.timeoutSeconds
               : 15,
+          serverUrl: appriseData.serverUrl || '',
+          configKey: appriseData.configKey || '',
+          apiKey: appriseData.apiKey || '',
+          apiKeyHeader: appriseData.apiKeyHeader || 'X-API-KEY',
+          skipTlsVerify: Boolean(appriseData.skipTlsVerify),
         });
       } catch (appriseErr) {
         console.error('Failed to load Apprise configuration:', appriseErr);
@@ -1072,12 +1096,18 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         .then((appriseData) => {
           setAppriseConfig({
             enabled: appriseData.enabled ?? false,
+            mode: appriseData.mode === 'http' ? 'http' : 'cli',
             targetsText: formatAppriseTargets(appriseData.targets),
             cliPath: appriseData.cliPath || 'apprise',
             timeoutSeconds:
               typeof appriseData.timeoutSeconds === 'number' && appriseData.timeoutSeconds > 0
                 ? appriseData.timeoutSeconds
                 : 15,
+            serverUrl: appriseData.serverUrl || '',
+            configKey: appriseData.configKey || '',
+            apiKey: appriseData.apiKey || '',
+            apiKeyHeader: appriseData.apiKeyHeader || 'X-API-KEY',
+            skipTlsVerify: Boolean(appriseData.skipTlsVerify),
           });
         })
         .catch((err) => {
@@ -1484,12 +1514,18 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       const updatedApprise = await NotificationsAPI.updateAppriseConfig(appriseData);
                       setAppriseConfig({
                         enabled: updatedApprise.enabled ?? false,
+                        mode: updatedApprise.mode === 'http' ? 'http' : 'cli',
                         targetsText: formatAppriseTargets(updatedApprise.targets),
                         cliPath: updatedApprise.cliPath || 'apprise',
                         timeoutSeconds:
                           typeof updatedApprise.timeoutSeconds === 'number' && updatedApprise.timeoutSeconds > 0
                             ? updatedApprise.timeoutSeconds
                             : 15,
+                        serverUrl: updatedApprise.serverUrl || '',
+                        configKey: updatedApprise.configKey || '',
+                        apiKey: updatedApprise.apiKey || '',
+                        apiKeyHeader: updatedApprise.apiKeyHeader || 'X-API-KEY',
+                        skipTlsVerify: Boolean(updatedApprise.skipTlsVerify),
                       });
                     }
 
