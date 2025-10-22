@@ -50,6 +50,7 @@ type VMFrontend struct {
 	DiskStatusReason  string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
 	OSName            string                  `json:"osName,omitempty"`
 	OSVersion         string                  `json:"osVersion,omitempty"`
+	AgentVersion      string                  `json:"agentVersion,omitempty"`
 	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
 	IPAddresses       []string                `json:"ipAddresses,omitempty"`
 	NetIn             int64                   `json:"networkIn"`  // Maps to NetworkIn (camelCase for frontend)
@@ -219,25 +220,63 @@ type CephClusterFrontend struct {
 	LastUpdated    int64               `json:"lastUpdated"`
 }
 
+// ReplicationJobFrontend represents a replication job for the frontend.
+type ReplicationJobFrontend struct {
+	ID                      string   `json:"id"`
+	Instance                string   `json:"instance"`
+	JobID                   string   `json:"jobId"`
+	JobNumber               int      `json:"jobNumber,omitempty"`
+	Guest                   string   `json:"guest,omitempty"`
+	GuestID                 int      `json:"guestId,omitempty"`
+	GuestName               string   `json:"guestName,omitempty"`
+	GuestType               string   `json:"guestType,omitempty"`
+	GuestNode               string   `json:"guestNode,omitempty"`
+	SourceNode              string   `json:"sourceNode,omitempty"`
+	SourceStorage           string   `json:"sourceStorage,omitempty"`
+	TargetNode              string   `json:"targetNode,omitempty"`
+	TargetStorage           string   `json:"targetStorage,omitempty"`
+	Schedule                string   `json:"schedule,omitempty"`
+	Type                    string   `json:"type,omitempty"`
+	Enabled                 bool     `json:"enabled"`
+	State                   string   `json:"state,omitempty"`
+	Status                  string   `json:"status,omitempty"`
+	LastSyncStatus          string   `json:"lastSyncStatus,omitempty"`
+	LastSyncTime            int64    `json:"lastSyncTime,omitempty"`
+	LastSyncUnix            int64    `json:"lastSyncUnix,omitempty"`
+	LastSyncDurationSeconds int      `json:"lastSyncDurationSeconds,omitempty"`
+	LastSyncDurationHuman   string   `json:"lastSyncDurationHuman,omitempty"`
+	NextSyncTime            int64    `json:"nextSyncTime,omitempty"`
+	NextSyncUnix            int64    `json:"nextSyncUnix,omitempty"`
+	DurationSeconds         int      `json:"durationSeconds,omitempty"`
+	DurationHuman           string   `json:"durationHuman,omitempty"`
+	FailCount               int      `json:"failCount,omitempty"`
+	Error                   string   `json:"error,omitempty"`
+	Comment                 string   `json:"comment,omitempty"`
+	RemoveJob               string   `json:"removeJob,omitempty"`
+	RateLimitMbps           *float64 `json:"rateLimitMbps,omitempty"`
+	PolledAt                int64    `json:"polledAt,omitempty"`
+}
+
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	Nodes            []NodeFrontend        `json:"nodes"`
-	VMs              []VMFrontend          `json:"vms"`
-	Containers       []ContainerFrontend   `json:"containers"`
-	DockerHosts      []DockerHostFrontend  `json:"dockerHosts"`
-	Storage          []StorageFrontend     `json:"storage"`
-	CephClusters     []CephClusterFrontend `json:"cephClusters"`
-	PhysicalDisks    []PhysicalDisk        `json:"physicalDisks"`
-	PBS              []PBSInstance         `json:"pbs"` // Keep as is
-	PMG              []PMGInstance         `json:"pmg"`
-	PBSBackups       []PBSBackup           `json:"pbsBackups"`
-	PMGBackups       []PMGBackup           `json:"pmgBackups"`
-	Backups          Backups               `json:"backups"`
-	ActiveAlerts     []Alert               `json:"activeAlerts"`     // Active alerts
-	Metrics          map[string]any        `json:"metrics"`          // Empty object for now
-	PVEBackups       PVEBackups            `json:"pveBackups"`       // Keep as is
-	Performance      map[string]any        `json:"performance"`      // Empty object for now
-	ConnectionHealth map[string]bool       `json:"connectionHealth"` // Keep as is
-	Stats            map[string]any        `json:"stats"`            // Empty object for now
-	LastUpdate       int64                 `json:"lastUpdate"`       // Unix timestamp
+	Nodes            []NodeFrontend           `json:"nodes"`
+	VMs              []VMFrontend             `json:"vms"`
+	Containers       []ContainerFrontend      `json:"containers"`
+	DockerHosts      []DockerHostFrontend     `json:"dockerHosts"`
+	Storage          []StorageFrontend        `json:"storage"`
+	CephClusters     []CephClusterFrontend    `json:"cephClusters"`
+	PhysicalDisks    []PhysicalDisk           `json:"physicalDisks"`
+	PBS              []PBSInstance            `json:"pbs"` // Keep as is
+	PMG              []PMGInstance            `json:"pmg"`
+	PBSBackups       []PBSBackup              `json:"pbsBackups"`
+	PMGBackups       []PMGBackup              `json:"pmgBackups"`
+	Backups          Backups                  `json:"backups"`
+	ReplicationJobs  []ReplicationJobFrontend `json:"replicationJobs"`
+	ActiveAlerts     []Alert                  `json:"activeAlerts"`     // Active alerts
+	Metrics          map[string]any           `json:"metrics"`          // Empty object for now
+	PVEBackups       PVEBackups               `json:"pveBackups"`       // Keep as is
+	Performance      map[string]any           `json:"performance"`      // Empty object for now
+	ConnectionHealth map[string]bool          `json:"connectionHealth"` // Keep as is
+	Stats            map[string]any           `json:"stats"`            // Empty object for now
+	LastUpdate       int64                    `json:"lastUpdate"`       // Unix timestamp
 }

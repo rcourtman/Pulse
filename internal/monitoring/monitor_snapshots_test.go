@@ -35,6 +35,9 @@ func (f fakeSnapshotClient) GetAllStorage(ctx context.Context) ([]proxmox.Storag
 func (f fakeSnapshotClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
 	return nil, nil
 }
+func (f fakeSnapshotClient) GetReplicationStatus(ctx context.Context) ([]proxmox.ReplicationJob, error) {
+	return nil, nil
+}
 func (f fakeSnapshotClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
 	if storageContents, ok := f.contents[node]; ok {
 		return storageContents[storage], nil
@@ -65,6 +68,10 @@ func (f fakeSnapshotClient) GetVMNetworkInterfaces(ctx context.Context, node str
 }
 func (f fakeSnapshotClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	return map[string]interface{}{}, nil
+}
+
+func (f fakeSnapshotClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "", nil
 }
 func (f fakeSnapshotClient) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {
 	return nil, nil

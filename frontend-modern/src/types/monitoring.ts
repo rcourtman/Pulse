@@ -84,6 +84,7 @@ export interface Guest {
   };
   osName?: string;
   osVersion?: string;
+  agentVersion?: string;
   ipAddresses?: string[];
   networkInterfaces?: GuestNetworkInterface[];
   template?: boolean;

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -50,6 +51,70 @@ func (f *FlexInt) UnmarshalJSON(data []byte) error {
 	// Convert to int
 	*f = FlexInt(int(floatVal))
 	return nil
+}
+
+func coerceUint64(field string, value interface{}) (uint64, error) {
+	switch v := value.(type) {
+	case nil:
+		return 0, nil
+	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, fmt.Errorf("invalid float value for %s", field)
+		}
+		if v <= 0 {
+			return 0, nil
+		}
+		if v >= math.MaxUint64 {
+			return math.MaxUint64, nil
+		}
+		return uint64(math.Round(v)), nil
+	case int:
+		if v < 0 {
+			return 0, nil
+		}
+		return uint64(v), nil
+	case int64:
+		if v < 0 {
+			return 0, nil
+		}
+		return uint64(v), nil
+	case int32:
+		if v < 0 {
+			return 0, nil
+		}
+		return uint64(v), nil
+	case uint32:
+		return uint64(v), nil
+	case uint64:
+		return v, nil
+	case json.Number:
+		return coerceUint64(field, string(v))
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" || strings.EqualFold(s, "null") {
+			return 0, nil
+		}
+		s = strings.Trim(s, "\"'")
+		s = strings.TrimSpace(s)
+		if s == "" || strings.EqualFold(s, "null") {
+			return 0, nil
+		}
+		s = strings.ReplaceAll(s, ",", "")
+		if strings.ContainsAny(s, ".eE") {
+			f, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse float for %s: %w", field, err)
+			}
+			return coerceUint64(field, f)
+		}
+		val, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse uint for %s: %w", field, err)
+		}
+		return val, nil
+	default:
+		return 0, fmt.Errorf("unsupported type %T for field %s", value, field)
+	}
 }
 
 // Client represents a Proxmox VE API client
@@ -429,6 +494,69 @@ type MemoryStatus struct {
 	Buffers   uint64 `json:"buffers"`   // Reclaimable buffers
 	Cached    uint64 `json:"cached"`    // Reclaimable page cache
 	Shared    uint64 `json:"shared"`    // Shared memory (informational)
+}
+
+func (m *MemoryStatus) UnmarshalJSON(data []byte) error {
+	type rawMemoryStatus struct {
+		Total     interface{} `json:"total"`
+		Used      interface{} `json:"used"`
+		Free      interface{} `json:"free"`
+		Available interface{} `json:"available"`
+		Avail     interface{} `json:"avail"`
+		Buffers   interface{} `json:"buffers"`
+		Cached    interface{} `json:"cached"`
+		Shared    interface{} `json:"shared"`
+	}
+
+	var raw rawMemoryStatus
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	total, err := coerceUint64("total", raw.Total)
+	if err != nil {
+		return err
+	}
+	used, err := coerceUint64("used", raw.Used)
+	if err != nil {
+		return err
+	}
+	free, err := coerceUint64("free", raw.Free)
+	if err != nil {
+		return err
+	}
+	available, err := coerceUint64("available", raw.Available)
+	if err != nil {
+		return err
+	}
+	avail, err := coerceUint64("avail", raw.Avail)
+	if err != nil {
+		return err
+	}
+	buffers, err := coerceUint64("buffers", raw.Buffers)
+	if err != nil {
+		return err
+	}
+	cached, err := coerceUint64("cached", raw.Cached)
+	if err != nil {
+		return err
+	}
+	shared, err := coerceUint64("shared", raw.Shared)
+	if err != nil {
+		return err
+	}
+
+	*m = MemoryStatus{
+		Total:     total,
+		Used:      used,
+		Free:      free,
+		Available: available,
+		Avail:     avail,
+		Buffers:   buffers,
+		Cached:    cached,
+		Shared:    shared,
+	}
+	return nil
 }
 
 // EffectiveAvailable returns the best-effort estimate of reclaimable memory.
@@ -1037,6 +1165,52 @@ func (c *Client) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map
 	}
 
 	return result.Data, nil
+}
+
+// GetVMAgentVersion returns the guest agent version information for a VM if available.
+func (c *Client) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/info", node, vmid))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			Result map[string]interface{} `json:"result"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	extractVersion := func(val interface{}) string {
+		switch v := val.(type) {
+		case string:
+			return strings.TrimSpace(v)
+		case map[string]interface{}:
+			if ver, ok := v["version"]; ok {
+				if s, ok := ver.(string); ok {
+					return strings.TrimSpace(s)
+				}
+			}
+		}
+		return ""
+	}
+
+	if result.Data.Result != nil {
+		if version := extractVersion(result.Data.Result["version"]); version != "" {
+			return version, nil
+		}
+		if qemuGA, ok := result.Data.Result["qemu-ga"]; ok {
+			if version := extractVersion(qemuGA); version != "" {
+				return version, nil
+			}
+		}
+	}
+
+	return "", nil
 }
 
 // VMFileSystem represents filesystem information from QEMU guest agent

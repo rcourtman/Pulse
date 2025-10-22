@@ -48,6 +48,7 @@ type PVEClientInterface interface {
 	GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error)
 	GetAllStorage(ctx context.Context) ([]proxmox.Storage, error)
 	GetBackupTasks(ctx context.Context) ([]proxmox.Task, error)
+	GetReplicationStatus(ctx context.Context) ([]proxmox.ReplicationJob, error)
 	GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error)
 	GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
 	GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
@@ -58,6 +59,7 @@ type PVEClientInterface interface {
 	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
 	GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error)
 	GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error)
 	GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error)
 	GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error)
 	GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error)
@@ -253,6 +255,34 @@ func isLikelyIPAddress(value string) bool {
 	}
 
 	return false
+}
+
+func ensureClusterEndpointURL(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+
+	lower := strings.ToLower(value)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return value
+	}
+
+	if _, _, err := net.SplitHostPort(value); err == nil {
+		return "https://" + value
+	}
+
+	return "https://" + net.JoinHostPort(value, "8006")
+}
+
+func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint) string {
+	if endpoint.Host != "" {
+		return ensureClusterEndpointURL(endpoint.Host)
+	}
+	if endpoint.IP != "" {
+		return ensureClusterEndpointURL(endpoint.IP)
+	}
+	return ""
 }
 
 // PollExecutor defines the contract for executing polling tasks.
@@ -528,6 +558,7 @@ type guestMetadataCacheEntry struct {
 	networkInterfaces []models.GuestNetworkInterface
 	osName            string
 	osVersion         string
+	agentVersion      string
 	fetchedAt         time.Time
 }
 
@@ -1283,15 +1314,15 @@ func sortContent(content string) string {
 	return strings.Join(parts, ",")
 }
 
-func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus) ([]string, []models.GuestNetworkInterface, string, string) {
+func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus) ([]string, []models.GuestNetworkInterface, string, string, string) {
 	if vmStatus == nil || client == nil {
 		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
-		return nil, nil, "", ""
+		return nil, nil, "", "", ""
 	}
 
 	if vmStatus.Agent <= 0 {
 		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
-		return nil, nil, "", ""
+		return nil, nil, "", "", ""
 	}
 
 	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
@@ -1302,7 +1333,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	m.guestMetadataMu.RUnlock()
 
 	if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheTTL {
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
 	}
 
 	// Start with cached values as fallback in case new calls fail
@@ -1310,6 +1341,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	networkIfaces := cloneGuestNetworkInterfaces(cached.networkInterfaces)
 	osName := cached.osName
 	osVersion := cached.osVersion
+	agentVersion := cached.agentVersion
 
 	ifaceCtx, cancelIface := context.WithTimeout(ctx, 5*time.Second)
 	interfaces, err := client.GetVMNetworkInterfaces(ifaceCtx, nodeName, vmid)
@@ -1345,11 +1377,28 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		osVersion = ""
 	}
 
+	versionCtx, cancelVersion := context.WithTimeout(ctx, 3*time.Second)
+	version, err := client.GetVMAgentVersion(versionCtx, nodeName, vmid)
+	cancelVersion()
+	if err != nil {
+		log.Debug().
+			Str("instance", instanceName).
+			Str("vm", vmName).
+			Int("vmid", vmid).
+			Err(err).
+			Msg("Guest agent version unavailable")
+	} else if version != "" {
+		agentVersion = version
+	} else {
+		agentVersion = ""
+	}
+
 	entry := guestMetadataCacheEntry{
 		ipAddresses:       cloneStringSlice(ipAddresses),
 		networkInterfaces: cloneGuestNetworkInterfaces(networkIfaces),
 		osName:            osName,
 		osVersion:         osVersion,
+		agentVersion:      agentVersion,
 		fetchedAt:         time.Now(),
 	}
 
@@ -1360,7 +1409,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	m.guestMetadataCache[key] = entry
 	m.guestMetadataMu.Unlock()
 
-	return ipAddresses, networkIfaces, osName, osVersion
+	return ipAddresses, networkIfaces, osName, osVersion, agentVersion
 }
 
 func guestMetadataCacheKey(instanceName, nodeName string, vmid int) string {
@@ -1875,7 +1924,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 				Bool("hasToken", pve.TokenName != "").
 				Msg("Configuring PVE instance")
 
-			// Check if this is a cluster
+				// Check if this is a cluster
 			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
 				// For clusters, check if endpoints have IPs/resolvable hosts
 				// If not, use the main host for all connections (Proxmox will route cluster API calls)
@@ -1883,34 +1932,27 @@ func New(cfg *config.Config) (*Monitor, error) {
 				endpoints := make([]string, 0, len(pve.ClusterEndpoints))
 
 				for _, ep := range pve.ClusterEndpoints {
-					// Use IP if available, otherwise use host
-					host := ep.IP
-					if host == "" {
-						host = ep.Host
-					}
-
-					// Skip if no host information
-					if host == "" {
+					effectiveURL := clusterEndpointEffectiveURL(ep)
+					if effectiveURL == "" {
 						log.Warn().
 							Str("node", ep.NodeName).
 							Msg("Skipping cluster endpoint with no host/IP")
 						continue
 					}
 
-					// Check if we have a valid IP or a fully qualified hostname (with dots)
-					if strings.Contains(host, ".") || net.ParseIP(host) != nil {
-						hasValidEndpoints = true
-					}
-
-					// Ensure we have the full URL
-					if !strings.HasPrefix(host, "http") {
-						if pve.VerifySSL {
-							host = fmt.Sprintf("https://%s:8006", host)
-						} else {
-							host = fmt.Sprintf("https://%s:8006", host)
+					if parsed, err := url.Parse(effectiveURL); err == nil {
+						hostname := parsed.Hostname()
+						if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
+							hasValidEndpoints = true
+						}
+					} else {
+						hostname := normalizeEndpointHost(effectiveURL)
+						if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
+							hasValidEndpoints = true
 						}
 					}
-					endpoints = append(endpoints, host)
+
+					endpoints = append(endpoints, effectiveURL)
 				}
 
 				// If endpoints are just node names (not FQDNs or IPs), use main host only
@@ -1920,10 +1962,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 						Str("instance", pve.Name).
 						Str("mainHost", pve.Host).
 						Msg("Cluster endpoints are not resolvable, using main host for all cluster operations")
-					endpoints = []string{pve.Host}
-					if !strings.HasPrefix(endpoints[0], "http") {
-						endpoints[0] = fmt.Sprintf("https://%s:8006", endpoints[0])
+					fallback := ensureClusterEndpointURL(pve.Host)
+					if fallback == "" {
+						fallback = ensureClusterEndpointURL(pve.Host)
 					}
+					endpoints = []string{fallback}
 				}
 
 				log.Info().
@@ -3468,13 +3511,24 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	for _, node := range nodes {
 		nodeStart := time.Now()
 		displayName := getNodeDisplayName(instanceCfg, node.Node)
+		connectionHost := instanceCfg.Host
+		if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
+			for _, ep := range instanceCfg.ClusterEndpoints {
+				if strings.EqualFold(ep.NodeName, node.Node) {
+					if effective := clusterEndpointEffectiveURL(ep); effective != "" {
+						connectionHost = effective
+					}
+					break
+				}
+			}
+		}
 
 		modelNode := models.Node{
 			ID:          instanceName + "-" + node.Node,
 			Name:        node.Node,
 			DisplayName: displayName,
 			Instance:    instanceName,
-			Host:        instanceCfg.Host, // Add the actual host URL
+			Host:        connectionHost,
 			Status:      node.Status,
 			Type:        "node",
 			CPU:         safeFloat(node.CPU), // Already in percentage
@@ -3829,27 +3883,22 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
 
 			// Determine SSH hostname to use (most robust approach):
-			// 1. For cluster nodes: Try to find the node's specific IP or host from ClusterEndpoints
-			// 2. For standalone nodes: Use the Host URL from config
-			// 3. Fallback: Use node name (works for simple DNS/hosts setups)
-			sshHost := node.Node // Default fallback
+			// Prefer the resolved host for this node, with cluster overrides when available.
+			sshHost := modelNode.Host
 
 			if modelNode.IsClusterMember && instanceCfg.IsCluster {
-				// Look up this specific node in cluster endpoints to get its individual address
 				for _, ep := range instanceCfg.ClusterEndpoints {
-					if ep.NodeName == node.Node {
-						// Prefer IP address for reliability
-						if ep.IP != "" {
-							sshHost = ep.IP
-						} else if ep.Host != "" {
-							sshHost = ep.Host
+					if strings.EqualFold(ep.NodeName, node.Node) {
+						if effective := clusterEndpointEffectiveURL(ep); effective != "" {
+							sshHost = effective
 						}
 						break
 					}
 				}
-			} else if !modelNode.IsClusterMember {
-				// Standalone node: use the Host URL from config
-				sshHost = modelNode.Host
+			}
+
+			if strings.TrimSpace(sshHost) == "" {
+				sshHost = node.Node
 			}
 
 			temp, err := m.tempCollector.CollectTemperature(tempCtx, sshHost, node.Node)
@@ -4487,7 +4536,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		var individualDisks []models.Disk // Store individual filesystems for multi-disk monitoring
 		var ipAddresses []string
 		var networkInterfaces []models.GuestNetworkInterface
-		var osName, osVersion string
+		var osName, osVersion, agentVersion string
 
 		if res.Type == "qemu" {
 			// Skip templates if configured
@@ -4593,7 +4642,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					}
 
 					// Gather guest metadata from the agent when available
-					guestIPs, guestIfaces, guestOSName, guestOSVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, detailedStatus)
+					guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, detailedStatus)
 					if len(guestIPs) > 0 {
 						ipAddresses = guestIPs
 					}
@@ -4605,6 +4654,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					}
 					if guestOSVersion != "" {
 						osVersion = guestOSVersion
+					}
+					if guestAgentVersion != "" {
+						agentVersion = guestAgentVersion
 					}
 
 					// Always try to get filesystem info if agent is enabled
@@ -4951,6 +5003,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				IPAddresses:       ipAddresses,
 				OSName:            osName,
 				OSVersion:         osVersion,
+				AgentVersion:      agentVersion,
 				NetworkInterfaces: networkInterfaces,
 				NetworkIn:         maxInt64(0, int64(netInRate)),
 				NetworkOut:        maxInt64(0, int64(netOutRate)),
@@ -5111,6 +5164,8 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		m.state.UpdateContainersForInstance(instanceName, allContainers)
 	}
 
+	m.pollReplicationStatus(ctx, instanceName, client, allVMs)
+
 	log.Info().
 		Str("instance", instanceName).
 		Int("vms", len(allVMs)).
@@ -5161,6 +5216,169 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 
 	// Update state with new backup tasks for this instance
 	m.state.UpdateBackupTasksForInstance(instanceName, backupTasks)
+}
+
+// pollReplicationStatus polls storage replication jobs for a PVE instance.
+func (m *Monitor) pollReplicationStatus(ctx context.Context, instanceName string, client PVEClientInterface, vms []models.VM) {
+	log.Debug().Str("instance", instanceName).Msg("Polling replication status")
+
+	jobs, err := client.GetReplicationStatus(ctx)
+	if err != nil {
+		errMsg := err.Error()
+		lowerMsg := strings.ToLower(errMsg)
+		if strings.Contains(errMsg, "501") || strings.Contains(errMsg, "404") || strings.Contains(lowerMsg, "not implemented") || strings.Contains(lowerMsg, "not supported") {
+			log.Debug().
+				Str("instance", instanceName).
+				Msg("Replication API not available on this Proxmox instance")
+			m.state.UpdateReplicationJobsForInstance(instanceName, []models.ReplicationJob{})
+			return
+		}
+
+		monErr := errors.WrapAPIError("get_replication_status", instanceName, err, 0)
+		log.Warn().
+			Err(monErr).
+			Str("instance", instanceName).
+			Msg("Failed to get replication status")
+		return
+	}
+
+	if len(jobs) == 0 {
+		m.state.UpdateReplicationJobsForInstance(instanceName, []models.ReplicationJob{})
+		return
+	}
+
+	vmByID := make(map[int]models.VM, len(vms))
+	for _, vm := range vms {
+		vmByID[vm.VMID] = vm
+	}
+
+	converted := make([]models.ReplicationJob, 0, len(jobs))
+	now := time.Now()
+
+	for idx, job := range jobs {
+		guestID := job.GuestID
+		if guestID == 0 {
+			if parsed, err := strconv.Atoi(strings.TrimSpace(job.Guest)); err == nil {
+				guestID = parsed
+			}
+		}
+
+		guestName := ""
+		guestType := ""
+		guestNode := ""
+		if guestID > 0 {
+			if vm, ok := vmByID[guestID]; ok {
+				guestName = vm.Name
+				guestType = vm.Type
+				guestNode = vm.Node
+			}
+		}
+		if guestNode == "" {
+			guestNode = strings.TrimSpace(job.Source)
+		}
+
+		sourceNode := strings.TrimSpace(job.Source)
+		if sourceNode == "" {
+			sourceNode = guestNode
+		}
+
+		targetNode := strings.TrimSpace(job.Target)
+
+		var lastSyncTime *time.Time
+		if job.LastSyncTime != nil && !job.LastSyncTime.IsZero() {
+			t := job.LastSyncTime.UTC()
+			lastSyncTime = &t
+		}
+
+		var nextSyncTime *time.Time
+		if job.NextSyncTime != nil && !job.NextSyncTime.IsZero() {
+			t := job.NextSyncTime.UTC()
+			nextSyncTime = &t
+		}
+
+		lastSyncDurationHuman := job.LastSyncDurationHuman
+		if lastSyncDurationHuman == "" && job.LastSyncDurationSeconds > 0 {
+			lastSyncDurationHuman = formatSeconds(job.LastSyncDurationSeconds)
+		}
+		durationHuman := job.DurationHuman
+		if durationHuman == "" && job.DurationSeconds > 0 {
+			durationHuman = formatSeconds(job.DurationSeconds)
+		}
+
+		rateLimit := copyFloatPointer(job.RateLimitMbps)
+
+		status := job.Status
+		if status == "" {
+			status = job.State
+		}
+
+		jobID := strings.TrimSpace(job.ID)
+		if jobID == "" {
+			if job.JobNumber > 0 && guestID > 0 {
+				jobID = fmt.Sprintf("%d-%d", guestID, job.JobNumber)
+			} else {
+				jobID = fmt.Sprintf("job-%s-%d", instanceName, idx)
+			}
+		}
+
+		uniqueID := fmt.Sprintf("%s-%s", instanceName, jobID)
+
+		converted = append(converted, models.ReplicationJob{
+			ID:                      uniqueID,
+			Instance:                instanceName,
+			JobID:                   jobID,
+			JobNumber:               job.JobNumber,
+			Guest:                   job.Guest,
+			GuestID:                 guestID,
+			GuestName:               guestName,
+			GuestType:               guestType,
+			GuestNode:               guestNode,
+			SourceNode:              sourceNode,
+			SourceStorage:           job.SourceStorage,
+			TargetNode:              targetNode,
+			TargetStorage:           job.TargetStorage,
+			Schedule:                job.Schedule,
+			Type:                    job.Type,
+			Enabled:                 job.Enabled,
+			State:                   job.State,
+			Status:                  status,
+			LastSyncStatus:          job.LastSyncStatus,
+			LastSyncTime:            lastSyncTime,
+			LastSyncUnix:            job.LastSyncUnix,
+			LastSyncDurationSeconds: job.LastSyncDurationSeconds,
+			LastSyncDurationHuman:   lastSyncDurationHuman,
+			NextSyncTime:            nextSyncTime,
+			NextSyncUnix:            job.NextSyncUnix,
+			DurationSeconds:         job.DurationSeconds,
+			DurationHuman:           durationHuman,
+			FailCount:               job.FailCount,
+			Error:                   job.Error,
+			Comment:                 job.Comment,
+			RemoveJob:               job.RemoveJob,
+			RateLimitMbps:           rateLimit,
+			LastPolled:              now,
+		})
+	}
+
+	m.state.UpdateReplicationJobsForInstance(instanceName, converted)
+}
+
+func formatSeconds(total int) string {
+	if total <= 0 {
+		return ""
+	}
+	hours := total / 3600
+	minutes := (total % 3600) / 60
+	seconds := total % 60
+	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+}
+
+func copyFloatPointer(src *float64) *float64 {
+	if src == nil {
+		return nil
+	}
+	val := *src
+	return &val
 }
 
 // pollPBSInstance polls a single PBS instance

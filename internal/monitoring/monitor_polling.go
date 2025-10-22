@@ -65,21 +65,21 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 				Name: name,
 				Type: InstanceTypePBS,
 			}
-		if m.scheduler != nil {
-			if last, ok := m.scheduler.LastScheduled(InstanceTypePBS, name); ok {
-				desc.LastScheduled = last.NextRun
-				desc.LastInterval = last.Interval
+			if m.scheduler != nil {
+				if last, ok := m.scheduler.LastScheduled(InstanceTypePBS, name); ok {
+					desc.LastScheduled = last.NextRun
+					desc.LastInterval = last.Interval
+				}
 			}
-		}
-		if m.stalenessTracker != nil {
-			if snap, ok := m.stalenessTracker.snapshot(InstanceTypePBS, name); ok {
-				desc.LastSuccess = snap.LastSuccess
-				desc.LastFailure = snap.LastError
-				desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+			if m.stalenessTracker != nil {
+				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePBS, name); ok {
+					desc.LastSuccess = snap.LastSuccess
+					desc.LastFailure = snap.LastError
+					desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+				}
 			}
+			descriptors = append(descriptors, desc)
 		}
-		descriptors = append(descriptors, desc)
-	}
 	}
 
 	if len(m.pmgClients) > 0 {
@@ -93,21 +93,21 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 				Name: name,
 				Type: InstanceTypePMG,
 			}
-		if m.scheduler != nil {
-			if last, ok := m.scheduler.LastScheduled(InstanceTypePMG, name); ok {
-				desc.LastScheduled = last.NextRun
-				desc.LastInterval = last.Interval
+			if m.scheduler != nil {
+				if last, ok := m.scheduler.LastScheduled(InstanceTypePMG, name); ok {
+					desc.LastScheduled = last.NextRun
+					desc.LastInterval = last.Interval
+				}
 			}
-		}
-		if m.stalenessTracker != nil {
-			if snap, ok := m.stalenessTracker.snapshot(InstanceTypePMG, name); ok {
-				desc.LastSuccess = snap.LastSuccess
-				desc.LastFailure = snap.LastError
-				desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+			if m.stalenessTracker != nil {
+				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePMG, name); ok {
+					desc.LastSuccess = snap.LastSuccess
+					desc.LastFailure = snap.LastError
+					desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+				}
 			}
+			descriptors = append(descriptors, desc)
 		}
-		descriptors = append(descriptors, desc)
-	}
 	}
 
 	return descriptors
@@ -280,7 +280,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				var vmStatus *proxmox.VMStatus
 				var ipAddresses []string
 				var networkInterfaces []models.GuestNetworkInterface
-				var osName, osVersion string
+				var osName, osVersion, guestAgentVersion string
 
 				if vm.Status == "running" {
 					// Try to get detailed VM status (but don't wait too long)
@@ -394,7 +394,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				}
 
 				if vm.Status == "running" && vmStatus != nil {
-					guestIPs, guestIfaces, guestOSName, guestOSVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus)
+					guestIPs, guestIfaces, guestOSName, guestOSVersion, agentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus)
 					if len(guestIPs) > 0 {
 						ipAddresses = guestIPs
 					}
@@ -406,6 +406,9 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					}
 					if guestOSVersion != "" {
 						osVersion = guestOSVersion
+					}
+					if agentVersion != "" {
+						guestAgentVersion = agentVersion
 					}
 				}
 
@@ -716,6 +719,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					IPAddresses:       ipAddresses,
 					OSName:            osName,
 					OSVersion:         osVersion,
+					AgentVersion:      guestAgentVersion,
 					NetworkInterfaces: networkInterfaces,
 				}
 

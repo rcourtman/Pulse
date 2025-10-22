@@ -814,6 +814,19 @@ func (cc *ClusterClient) GetBackupTasks(ctx context.Context) ([]Task, error) {
 	return result, err
 }
 
+func (cc *ClusterClient) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, error) {
+	var result []ReplicationJob
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		jobs, err := client.GetReplicationStatus(ctx)
+		if err != nil {
+			return err
+		}
+		result = jobs
+		return nil
+	})
+	return result, err
+}
+
 func (cc *ClusterClient) GetStorageContent(ctx context.Context, node, storage string) ([]StorageContent, error) {
 	var result []StorageContent
 	err := cc.executeWithFailover(ctx, func(client *Client) error {
@@ -918,6 +931,20 @@ func (cc *ClusterClient) GetVMAgentInfo(ctx context.Context, node string, vmid i
 		return nil
 	})
 	return result, err
+}
+
+// GetVMAgentVersion returns the guest agent version for the VM.
+func (cc *ClusterClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	var version string
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		v, err := client.GetVMAgentVersion(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		version = v
+		return nil
+	})
+	return version, err
 }
 
 // GetVMFSInfo returns filesystem information from QEMU guest agent
