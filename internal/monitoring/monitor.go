@@ -1965,9 +1965,6 @@ func ensureContainerRootDiskEntry(container *models.Container) {
 
 	total := container.Disk.Total
 	used := container.Disk.Used
-	if total <= 0 && used <= 0 {
-		return
-	}
 	if total > 0 && used > total {
 		used = total
 	}
@@ -2003,9 +2000,6 @@ func convertContainerDiskInfo(status *proxmox.Container) []models.Disk {
 	for name, info := range status.DiskInfo {
 		total := clampToInt64(info.Total)
 		used := clampToInt64(info.Used)
-		if total <= 0 && used <= 0 {
-			continue
-		}
 		if total > 0 && used > total {
 			used = total
 		}
@@ -2127,11 +2121,16 @@ func sanitizeGuestAddressStrings(value string) []string {
 		return results
 	}
 
-	if strings.HasPrefix(value, "127.") || strings.HasPrefix(strings.ToLower(value), "0.0.0.0") {
-		return nil
+	if idx := strings.Index(value, "/"); idx > 0 {
+		value = strings.TrimSpace(value[:idx])
 	}
 
 	lower = strings.ToLower(value)
+
+	if strings.HasPrefix(value, "127.") || strings.HasPrefix(lower, "0.0.0.0") {
+		return nil
+	}
+
 	if strings.HasPrefix(lower, "fe80") {
 		return nil
 	}
