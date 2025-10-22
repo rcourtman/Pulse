@@ -35,10 +35,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const [isTesting, setIsTesting] = createSignal(false);
 
   // Function to get clean form data
-  const getCleanFormData = () => ({
+  const getCleanFormData = (nodeType: 'pve' | 'pbs' | 'pmg' = props.nodeType) => ({
     name: '',
     host: '',
-    authType: 'token' as 'password' | 'token',
+    authType: nodeType === 'pmg' ? 'password' : ('token' as 'password' | 'token'),
     setupMode: 'auto' as 'auto' | 'manual',
     user: '',
     password: '',
@@ -70,7 +70,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     // Force reset if resetKey changed
     if (key !== undefined && key !== previousResetKey) {
       previousResetKey = key;
-      setFormData(() => getCleanFormData());
+      setFormData(() => getCleanFormData(props.nodeType));
       setQuickSetupCommand('');
       setTestResult(null);
       return;
@@ -79,7 +79,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     // Force reset if node type changed
     if (nodeType !== previousNodeType && previousNodeType !== undefined) {
       previousNodeType = nodeType;
-      setFormData(() => getCleanFormData());
+      setFormData(() => getCleanFormData(props.nodeType));
       setQuickSetupCommand('');
       setTestResult(null);
       return;
@@ -88,7 +88,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
     // Reset when opening for new node
     if (isOpen && !editingNode) {
-      setFormData(() => getCleanFormData());
+      setFormData(() => getCleanFormData(props.nodeType));
       setQuickSetupCommand('');
       setTestResult(null);
     }
@@ -437,23 +437,32 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             Username & Password
                           </span>
                         </label>
-                        <label class="flex items-center">
-                          <input
-                            type="radio"
-                            name="authType"
-                            value="token"
-                            checked={formData().authType === 'token'}
-                            onChange={() => updateField('authType', 'token')}
-                            class="mr-2"
-                          />
-                          <span class="text-sm text-gray-700 dark:text-gray-300">
-                            API Token{' '}
-                            <span class="text-green-600 dark:text-green-400 text-xs ml-1">
-                              (Recommended)
+                        <Show when={props.nodeType !== 'pmg'}>
+                          <label class="flex items-center">
+                            <input
+                              type="radio"
+                              name="authType"
+                              value="token"
+                              checked={formData().authType === 'token'}
+                              onChange={() => updateField('authType', 'token')}
+                              class="mr-2"
+                            />
+                            <span class="text-sm text-gray-700 dark:text-gray-300">
+                              API Token{' '}
+                              <span class="text-green-600 dark:text-green-400 text-xs ml-1">
+                                (Recommended)
+                              </span>
                             </span>
-                          </span>
-                        </label>
+                          </label>
+                        </Show>
                       </div>
+                      <Show when={props.nodeType === 'pmg'}>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                          Proxmox Mail Gateway does not support API tokens. Use a service account with
+                          password authentication (for example <code>root@pam</code> or a dedicated{' '}
+                          <code>api@pmg</code> user).
+                        </p>
+                      </Show>
                     </div>
 
                     {/* Password Auth Fields */}

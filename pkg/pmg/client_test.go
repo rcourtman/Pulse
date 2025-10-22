@@ -222,7 +222,7 @@ func TestClientUsesTokenAuthorizationHeader(t *testing.T) {
 		t.Fatalf("get mail statistics failed: %v", err)
 	}
 
-	if stats == nil || stats.Count != 42 {
+	if stats == nil || stats.Count.Float64() != 42 {
 		t.Fatalf("expected statistics count 42, got %+v", stats)
 	}
 
@@ -276,10 +276,144 @@ func TestListBackups(t *testing.T) {
 	if backup.Filename != "pmg-backup_2024-01-01.tgz" {
 		t.Fatalf("unexpected filename: %s", backup.Filename)
 	}
-	if backup.Size != 123456 {
-		t.Fatalf("unexpected size: %d", backup.Size)
+	if backup.Size.Int64() != 123456 {
+		t.Fatalf("unexpected size: %d", backup.Size.Int64())
 	}
-	if backup.Timestamp != 1704096000 {
-		t.Fatalf("unexpected timestamp: %d", backup.Timestamp)
+	if backup.Timestamp.Int64() != 1704096000 {
+		t.Fatalf("unexpected timestamp: %d", backup.Timestamp.Int64())
+	}
+}
+
+func TestMailEndpointsHandleNullAndStringValues(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/access/ticket":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"ticket":"ticket","CSRFPreventionToken":"csrf"}}`)
+		case "/api2/json/version":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"version":"9.0","release":"1"}}`)
+		case "/api2/json/statistics/mail":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{
+				"count":null,
+				"count_in":"25",
+				"count_out":"5",
+				"spamcount_in":"7",
+				"spamcount_out":null,
+				"viruscount_in":"0",
+				"viruscount_out":"0",
+				"bounces_in":null,
+				"bounces_out":"",
+				"bytes_in":"1024",
+				"bytes_out":"2048",
+				"glcount":"2",
+				"junk_in":"",
+				"rbl_rejects":"1",
+				"pregreet_rejects":null,
+				"avptime":"0.75"
+			}}`)
+		case "/api2/json/statistics/mailcount":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[{
+				"index":"0",
+				"time":"1713724800",
+				"count":"12",
+				"count_in":"8",
+				"count_out":"4",
+				"spamcount_in":null,
+				"spamcount_out":"1",
+				"viruscount_in":"",
+				"viruscount_out":"0",
+				"bounces_in":"1",
+				"bounces_out":"0",
+				"rbl_rejects":"2",
+				"pregreet_rejects":"",
+				"glcount":"3"
+			}]}`)
+		case "/api2/json/quarantine/spamstatus":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"count":null,"avgbytes":"512","mbytes":"0.5"}}`)
+		case "/api2/json/quarantine/virusstatus":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"count":"4","avgbytes":"256","mbytes":"0.25"}}`)
+		case "/api2/json/nodes/mail/postfix/queue":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"active":"3","deferred":null,"hold":"1","incoming":"2","oldest_age":"600"}}`)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:      server.URL,
+		User:      "api@pmg",
+		Password:  "secret",
+		VerifySSL: false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	ctx := context.Background()
+
+	stats, err := client.GetMailStatistics(ctx, "")
+	if err != nil {
+		t.Fatalf("GetMailStatistics failed: %v", err)
+	}
+	if stats == nil {
+		t.Fatal("expected statistics data")
+	}
+	if stats.Count.Float64() != 0 {
+		t.Fatalf("expected count to default to 0, got %v", stats.Count.Float64())
+	}
+	if stats.CountIn.Float64() != 25 {
+		t.Fatalf("expected CountIn 25, got %v", stats.CountIn.Float64())
+	}
+	if stats.BytesIn.Float64() != 1024 {
+		t.Fatalf("expected BytesIn 1024, got %v", stats.BytesIn.Float64())
+	}
+	if stats.AvgProcessSec.Float64() != 0.75 {
+		t.Fatalf("expected AvgProcessSec 0.75, got %v", stats.AvgProcessSec.Float64())
+	}
+
+	counts, err := client.GetMailCount(ctx, 12)
+	if err != nil {
+		t.Fatalf("GetMailCount failed: %v", err)
+	}
+	if len(counts) != 1 {
+		t.Fatalf("expected 1 mail count entry, got %d", len(counts))
+	}
+	entry := counts[0]
+	if entry.Time.Int64() != 1713724800 {
+		t.Fatalf("expected unix time 1713724800, got %d", entry.Time.Int64())
+	}
+	if entry.Count.Float64() != 12 {
+		t.Fatalf("expected count 12, got %v", entry.Count.Float64())
+	}
+	if entry.GreylistCount.Float64() != 3 {
+		t.Fatalf("expected greylist 3, got %v", entry.GreylistCount.Float64())
+	}
+
+	quarantine, err := client.GetQuarantineStatus(ctx, "spam")
+	if err != nil {
+		t.Fatalf("GetQuarantineStatus failed: %v", err)
+	}
+	if quarantine.Count.Int64() != 0 {
+		t.Fatalf("expected spam quarantine count default to 0, got %d", quarantine.Count.Int64())
+	}
+
+	queue, err := client.GetQueueStatus(ctx, "mail")
+	if err != nil {
+		t.Fatalf("GetQueueStatus failed: %v", err)
+	}
+	if queue.Active.Int() != 3 || queue.Deferred.Int() != 0 || queue.Hold.Int() != 1 || queue.Incoming.Int() != 2 {
+		t.Fatalf("unexpected queue values: %+v", queue)
+	}
+	if queue.OldestAge.Int64() != 600 {
+		t.Fatalf("expected oldest age 600, got %d", queue.OldestAge.Int64())
 	}
 }
