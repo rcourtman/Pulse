@@ -10,6 +10,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
+import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
@@ -1795,7 +1796,7 @@ function OverviewTab(props: {
   return (
     <div class="space-y-6">
       {/* Stats Cards */}
-      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
@@ -3073,7 +3074,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                 <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} mb-2 block`}>
                   Grouping strategy
                 </span>
-                <div class="grid grid-cols-2 gap-2">
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
                     class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
                       grouping().byNode
@@ -4221,7 +4222,7 @@ function HistoryTab() {
         <select
           value={timeFilter()}
           onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
-          class="px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
         >
           <option value="24h">Last 24h</option>
           <option value="7d">Last 7d</option>
@@ -4232,14 +4233,14 @@ function HistoryTab() {
         <select
           value={severityFilter()}
           onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
-          class="px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
         >
           <option value="all">All Levels</option>
           <option value="critical">Critical Only</option>
           <option value="warning">Warning Only</option>
         </select>
 
-        <div class="flex-1 max-w-xs">
+        <div class="w-full sm:flex-1 sm:max-w-xs">
           <input
             ref={searchInputRef}
             type="text"
@@ -4273,7 +4274,7 @@ function HistoryTab() {
           >
             {/* Table */}
             <div class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-              <div class="overflow-x-auto">
+              <ScrollableTable minWidth="900px">
                 <table class="w-full min-w-[900px] text-xs sm:text-sm">
                   <thead>
                     <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
@@ -4418,7 +4419,7 @@ function HistoryTab() {
                     </For>
                   </tbody>
                 </table>
-              </div>
+              </ScrollableTable>
             </div>
           </Show>
         }

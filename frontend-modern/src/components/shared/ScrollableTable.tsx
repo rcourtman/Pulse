@@ -1,4 +1,4 @@
-import { Component, JSX, createSignal, createEffect, onMount } from 'solid-js';
+import { Component, JSX, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { Show } from 'solid-js';
 
 interface ScrollableTableProps {
@@ -23,6 +23,9 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
   onMount(() => {
     checkScroll();
     window.addEventListener('resize', checkScroll);
+    onCleanup(() => {
+      window.removeEventListener('resize', checkScroll);
+    });
   });
 
   createEffect(() => {
@@ -43,7 +46,7 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
       <div
         ref={scrollContainer}
         class="overflow-x-auto"
-        style="scrollbar-width: none; -ms-overflow-style: none;"
+        style="scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;"
       >
         <style>{`
           .overflow-x-auto::-webkit-scrollbar { display: none; }

@@ -4,6 +4,7 @@ import { Card } from '@/components/shared/Card';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
 import { formatUptime } from '@/utils/format';
+import { ScrollableTable } from '@/components/shared/ScrollableTable';
 
 export interface DockerHostSummary {
   host: DockerHost;
@@ -114,15 +115,15 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
 
   return (
     <Card padding="none" class="mb-4 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[720px] border-collapse">
+      <ScrollableTable minWidth="720px">
+        <table class="w-full border-collapse">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
               <th
                 class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-1/4 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                 onClick={() => handleSort('name')}
                 onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
-                tabindex="0"
+                tabIndex={0}
                 role="button"
                 aria-label={`Sort by host ${sortKey() === 'name' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
               >
@@ -150,19 +151,19 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 Containers {renderSortIndicator('running')}
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="hidden px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
                 onClick={() => handleSort('uptime')}
               >
                 Uptime {renderSortIndicator('uptime')}
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="hidden px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
                 onClick={() => handleSort('lastSeen')}
               >
                 Last Update {renderSortIndicator('lastSeen')}
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="hidden px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
                 onClick={() => handleSort('agent')}
               >
                 Agent {renderSortIndicator('agent')}
@@ -174,6 +175,8 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
               {(summary) => {
                 const selected = props.selectedHostId() === summary.host.id;
                 const online = isHostOnline(summary.host);
+                const uptimeLabel = summary.uptimeSeconds ? formatUptime(summary.uptimeSeconds) : '—';
+                const agentLabel = summary.host.agentVersion ? `v${summary.host.agentVersion}` : '—';
 
                 const rowStyle = () => {
                   const styles: Record<string, string> = {};
@@ -206,14 +209,16 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                   return className;
                 };
 
+                const agentOutdated = isAgentOutdated(summary.host.agentVersion);
+
                 return (
                   <tr
                     class={rowClass()}
                     style={rowStyle()}
                     onClick={() => props.onSelect(summary.host.id)}
                   >
-                    <td class="pr-2 py-0.5 pl-3 whitespace-nowrap">
-                      <div class="flex items-center gap-1">
+                    <td class="pr-2 py-1 pl-3 align-top">
+                      <div class="flex flex-wrap items-center gap-1">
                         <span class="font-medium text-[11px] text-gray-900 dark:text-gray-100">
                           {summary.host.displayName}
                         </span>
@@ -228,11 +233,51 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                           </span>
                         </Show>
                       </div>
+                      <div class="mt-2 grid grid-cols-1 gap-1 text-[10px] text-gray-500 dark:text-gray-400 sm:hidden">
+                        <div class="flex items-center gap-1">
+                          <span class="font-semibold text-gray-600 dark:text-gray-300">Uptime:</span>
+                          <span>{uptimeLabel}</span>
+                        </div>
+                        <div class="flex items-start gap-1">
+                          <span class="font-semibold text-gray-600 dark:text-gray-300">Last:</span>
+                          <span class="flex-1">
+                            <span>{summary.lastSeenRelative}</span>
+                            <Show when={summary.lastSeenAbsolute}>
+                              <span class="block text-[9px] text-gray-400 dark:text-gray-500">
+                                {summary.lastSeenAbsolute}
+                              </span>
+                            </Show>
+                          </span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1">
+                          <span class="font-semibold text-gray-600 dark:text-gray-300">Agent:</span>
+                          <span
+                            class={
+                              agentOutdated
+                                ? 'rounded px-1 py-0.5 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 font-medium'
+                                : 'rounded px-1 py-0.5 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-medium'
+                            }
+                          >
+                            {agentLabel}
+                          </span>
+                          <Show when={agentOutdated}>
+                            <span class="text-[9px] font-medium text-yellow-600 dark:text-yellow-500">
+                              Update recommended
+                            </span>
+                          </Show>
+                        </div>
+                        <Show when={summary.host.intervalSeconds}>
+                          <div class="flex items-center gap-1">
+                            <span class="font-semibold text-gray-600 dark:text-gray-300">Interval:</span>
+                            <span>{summary.host.intervalSeconds}s</span>
+                          </div>
+                        </Show>
+                      </div>
                     </td>
-                    <td class="px-2 py-0.5">
+                    <td class="px-2 py-1 align-top">
                       {renderDockerStatusBadge(summary.host.status)}
                     </td>
-                    <td class="px-2 py-0.5">
+                    <td class="px-2 py-1 align-top">
                       <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
                         <MetricBar
                           value={summary.cpuPercent}
@@ -241,7 +286,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                         />
                       </Show>
                     </td>
-                    <td class="px-2 py-0.5">
+                    <td class="px-2 py-1 align-top">
                       <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
                         <MetricBar
                           value={summary.memoryPercent}
@@ -251,8 +296,8 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                         />
                       </Show>
                     </td>
-                    <td class="px-2 py-0.5">
-                      <div class="flex justify-center">
+                    <td class="px-2 py-1 align-top">
+                      <div class="flex justify-start sm:justify-center">
                         <MetricBar
                           value={summary.runningPercent}
                           label={`${summary.runningCount}/${summary.totalCount}`}
@@ -260,38 +305,40 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                         />
                       </div>
                     </td>
-                    <td class="px-2 py-0.5 whitespace-nowrap">
+                    <td class="hidden px-2 py-1 align-top whitespace-nowrap sm:table-cell">
                       <span class="text-xs text-gray-600 dark:text-gray-400">
-                        {summary.uptimeSeconds ? formatUptime(summary.uptimeSeconds) : '—'}
+                        {uptimeLabel}
                       </span>
                     </td>
-                    <td class="px-2 py-0.5">
+                    <td class="hidden px-2 py-1 align-top sm:table-cell">
                       <div class="text-sm text-gray-900 dark:text-gray-100">
                         {summary.lastSeenRelative}
                       </div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {summary.lastSeenAbsolute}
-                      </div>
+                      <Show when={summary.lastSeenAbsolute}>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                          {summary.lastSeenAbsolute}
+                        </div>
+                      </Show>
                     </td>
-                    <td class="px-2 py-0.5">
+                    <td class="hidden px-2 py-1 align-top sm:table-cell">
                       <div class="flex flex-col gap-0.5">
                         <Show when={summary.host.agentVersion}>
                           <div class="flex flex-col gap-0.5">
                             <span
                               class={
-                                isAgentOutdated(summary.host.agentVersion)
+                                agentOutdated
                                   ? 'text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-medium inline-block w-fit'
                                   : 'text-[10px] px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium inline-block w-fit'
                               }
                               title={
-                                isAgentOutdated(summary.host.agentVersion)
+                                agentOutdated
                                   ? 'Outdated - Update recommended'
                                   : 'Up to date - Auto-update enabled'
                               }
                             >
                               v{summary.host.agentVersion}
                             </span>
-                            <Show when={isAgentOutdated(summary.host.agentVersion)}>
+                            <Show when={agentOutdated}>
                               <span class="text-[9px] text-yellow-600 dark:text-yellow-500 font-medium">
                                 ⚠ Update available
                               </span>
@@ -311,7 +358,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
             </For>
           </tbody>
         </table>
-      </div>
+      </ScrollableTable>
     </Card>
   );
 };

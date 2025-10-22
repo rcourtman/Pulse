@@ -1353,7 +1353,7 @@ const UnifiedBackups: Component = () => {
         {/* Available Backups chart - keep visible while backups exist or a date filter is active */}
         <Show when={hasAnyBackups() || selectedDateRange() !== null}>
           <Card padding="md">
-            <div class="mb-3 flex items-start justify-between gap-3">
+            <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <SectionHeader
                 title={
                   <div class="flex items-center gap-1.5">
@@ -1416,7 +1416,7 @@ const UnifiedBackups: Component = () => {
                     </div>
                   )}
                 </Show>
-                <div class="flex flex-wrap items-center justify-end gap-2">
+                <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                   <div class="flex items-center gap-1">
                     <button
                       type="button"
@@ -1463,7 +1463,7 @@ const UnifiedBackups: Component = () => {
                       1y
                     </button>
                   </div>
-                  <div class="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                  <div class="hidden h-4 w-px bg-gray-300 dark:bg-gray-600 sm:block"></div>
                   <span class="text-gray-500 dark:text-gray-400">Last {chartTimeRange()} days</span>
                   <Show when={selectedDateRange()}>
                     <button
@@ -1480,7 +1480,7 @@ const UnifiedBackups: Component = () => {
                 </div>
               </div>
             </div>
-            <div class="h-32 relative bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
+            <div class="relative min-h-[14rem] sm:min-h-[12rem] bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
               <Show
                 when={chartData().data.length > 0}
                 fallback={
@@ -1511,7 +1511,9 @@ const UnifiedBackups: Component = () => {
               >
                 <svg
                   class="available-backups-svg w-full h-full"
-                  style="cursor: pointer"
+                  role="img"
+                  aria-label="Available backups chart"
+                  style="cursor: pointer; touch-action: pan-y;"
                   ref={(el) => {
                     // Use createEffect to reactively update the chart
                     createEffect(() => {
