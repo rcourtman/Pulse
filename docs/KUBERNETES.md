@@ -2,6 +2,8 @@
 
 Deploy Pulse to Kubernetes with the bundled Helm chart under `deploy/helm/pulse`. The chart provisions the Pulse hub (web UI + API) and can optionally run the Docker monitoring agent alongside it. Stable builds are published automatically to the GitHub Container Registry (GHCR) whenever a Pulse release goes out.
 
+> **New in v4.25.0:** The Helm chart is shipped with the release archives and pairs with the upgraded monitoring engine (staleness tracking, circuit breakers, detailed poll metrics) so Kubernetes clusters benefit from the same adaptive scheduling improvements as bare-metal installs.
+
 ## Prerequisites
 
 - Kubernetes 1.24 or newer with access to a default `StorageClass`
@@ -90,7 +92,7 @@ server:
       API_TOKENS: docker-agent-token
 ```
 
-### Runtime Logging Configuration (v4.24.0+)
+### Runtime Logging Configuration (v4.25.0+)
 
 Configure logging behavior via environment variables:
 
@@ -113,9 +115,9 @@ server:
 
 **Note:** Logging changes via environment variables require pod restart. Use **Settings → System → Logging** in the UI for runtime changes without restart.
 
-### Adaptive Polling Configuration (v4.24.0+)
+### Adaptive Polling Configuration (v4.25.0+)
 
-Adaptive polling is **enabled by default** in v4.24.0. Configure via environment variables:
+Adaptive polling is **enabled by default** in v4.25.0. Configure via environment variables:
 
 ```yaml
 server:
@@ -210,9 +212,9 @@ Notes:
 - **Rollback:** `helm rollback pulse <revision>`
 - **Uninstall:** `helm uninstall pulse -n pulse` (PVCs remain unless you delete them manually)
 
-### Post-Upgrade Verification (v4.24.0+)
+### Post-Upgrade Verification (v4.25.0+)
 
-After upgrading to v4.24.0 or newer, verify the deployment:
+After upgrading to v4.25.0 or newer, verify the deployment:
 
 1. **Check update history**
    ```bash

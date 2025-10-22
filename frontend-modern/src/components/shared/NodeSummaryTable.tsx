@@ -487,7 +487,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
                     <td
-                      class={`pr-2 py-0.5 whitespace-nowrap ${showAlertHighlight ? 'pl-4' : 'pl-3'}`}
+                      class={`pr-2 py-0.5 whitespace-nowrap ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}
                     >
                       <div class="flex items-center gap-1">
                         <a

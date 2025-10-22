@@ -11,7 +11,12 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHART_DIR="$REPO_ROOT/deploy/helm/pulse"
-DIST_DIR="$REPO_ROOT/dist"
+DIST_DIR_OVERRIDE="${DIST_DIR_OVERRIDE:-${DIST_DIR:-}}"
+if [[ -n "$DIST_DIR_OVERRIDE" ]]; then
+  DIST_DIR="$DIST_DIR_OVERRIDE"
+else
+  DIST_DIR="$REPO_ROOT/dist"
+fi
 HELM_BIN="${HELM_BIN:-helm}"
 OCI_REPO="${OCI_REPO:-ghcr.io/rcourtman/pulse-chart}"
 

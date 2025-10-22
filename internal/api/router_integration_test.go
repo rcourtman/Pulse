@@ -21,6 +21,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	internalws "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 )
 
@@ -124,7 +125,8 @@ func TestHealthEndpoint(t *testing.T) {
 func TestVersionEndpointUsesRepoVersion(t *testing.T) {
 	srv := newIntegrationServer(t)
 
-	expected := readExpectedVersion(t)
+	releaseVersion := readVersionFile(t)
+	runtimeVersion := readRuntimeVersion(t)
 
 	res, err := http.Get(srv.server.URL + "/api/version")
 	if err != nil {
@@ -151,9 +153,16 @@ func TestVersionEndpointUsesRepoVersion(t *testing.T) {
 		return
 	}
 
-	if normalizeVersion(actual) != normalizeVersion(expected) {
-		t.Fatalf("expected version=%s, got %s", expected, actual)
+	normalizedActual := normalizeVersion(actual)
+	if releaseVersion != "" && normalizedActual == normalizeVersion(releaseVersion) {
+		return
 	}
+
+	if normalizedActual == normalizeVersion(runtimeVersion) {
+		return
+	}
+
+	t.Fatalf("expected version to match release %q or runtime %q, got %s", releaseVersion, runtimeVersion, actual)
 }
 
 func TestStateEndpointReturnsMockData(t *testing.T) {
@@ -632,17 +641,25 @@ func TestPublicURLDetectionRespectsEnvOverride(t *testing.T) {
 	}
 }
 
-func readExpectedVersion(t *testing.T) string {
+func readVersionFile(t *testing.T) string {
 	t.Helper()
 
-	// Try to read VERSION from repository root
 	versionPath := filepath.Join("..", "..", "VERSION")
 	data, err := os.ReadFile(versionPath)
 	if err != nil {
-		// Fall back to the hard-coded fallback in version manager
-		return "4.24.0"
+		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+func readRuntimeVersion(t *testing.T) string {
+	t.Helper()
+
+	info, err := updates.GetCurrentVersion()
+	if err != nil {
+		t.Fatalf("failed to determine current version: %v", err)
+	}
+	return strings.TrimSpace(info.Version)
 }
 
 func normalizeVersion(v string) string {

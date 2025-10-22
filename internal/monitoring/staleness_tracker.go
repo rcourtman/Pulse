@@ -203,23 +203,27 @@ type StalenessSnapshot struct {
 
 // Snapshot returns a copy of all staleness data for API exposure.
 func (t *StalenessTracker) Snapshot() []StalenessSnapshot {
-    if t == nil {
-        return nil
-    }
+	if t == nil {
+		return nil
+	}
 
-    t.mu.RLock()
-    defer t.mu.RUnlock()
+	t.mu.RLock()
+	entries := make([]FreshnessSnapshot, 0, len(t.entries))
+	for _, entry := range t.entries {
+		entries = append(entries, entry)
+	}
+	t.mu.RUnlock()
 
-    result := make([]StalenessSnapshot, 0, len(t.entries))
-    for _, entry := range t.entries {
-        score, _ := t.StalenessScore(entry.InstanceType, entry.Instance)
-        result = append(result, StalenessSnapshot{
-            Instance:    entry.Instance,
-            Type:        string(entry.InstanceType),
-            Score:       score,
-            LastSuccess: entry.LastSuccess,
-            LastError:   entry.LastError,
-        })
-    }
-    return result
+	result := make([]StalenessSnapshot, 0, len(entries))
+	for _, entry := range entries {
+		score, _ := t.StalenessScore(entry.InstanceType, entry.Instance)
+		result = append(result, StalenessSnapshot{
+			Instance:    entry.Instance,
+			Type:        string(entry.InstanceType),
+			Score:       score,
+			LastSuccess: entry.LastSuccess,
+			LastError:   entry.LastError,
+		})
+	}
+	return result
 }
