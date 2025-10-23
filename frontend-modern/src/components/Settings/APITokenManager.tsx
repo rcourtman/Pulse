@@ -1,11 +1,13 @@
 import { Component, For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
-import { Card } from '@/components/shared/Card';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { showError, showSuccess } from '@/utils/toast';
 import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { DockerHost } from '@/types/api';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
+import { Card } from '@/components/shared/Card';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { ApiIcon } from '@/components/icons/ApiIcon';
 import {
   API_SCOPE_LABELS,
   API_SCOPE_OPTIONS,
@@ -63,12 +65,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   );
   const scopedTokenCount = createMemo(() => totalTokens() - wildcardCount());
   const hasWildcardTokens = createMemo(() => wildcardCount() > 0);
-  const mostRecentLabel = createMemo(() => {
-    const first = sortedTokens()[0];
-    if (!first) return '—';
-    const timestamp = new Date(first.createdAt).getTime();
-    return Number.isFinite(timestamp) ? formatRelativeTime(timestamp) : '—';
-  });
 
   const [loading, setLoading] = createSignal(true);
   const [isGenerating, setIsGenerating] = createSignal(false);
@@ -140,22 +136,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     return target.every((scope) => selection.includes(scope));
   };
 
-  const presetButtonBase =
-    'flex w-full items-start justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors';
-  const presetButtonActive =
-    'border-blue-400 ring-1 ring-blue-300 bg-blue-50/70 dark:border-blue-500 dark:ring-blue-400/40 dark:bg-blue-900/20';
-  const presetButtonInactive =
-    'border-gray-300 bg-white hover:border-blue-400 dark:border-gray-600 dark:bg-gray-900/60 dark:hover:border-blue-500';
-  const selectedScopeChips = createMemo(() =>
-    selectedScopes()
-      .filter((scope) => scope !== WILDCARD_SCOPE)
-      .map((scope) => ({
-        value: scope,
-        label: API_SCOPE_LABELS[scope] ?? scope,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label)),
-  );
-  const [advancedScopesOpen, setAdvancedScopesOpen] = createSignal(false);
 
   const applyScopePreset = (scopes: string[]) => {
     const unique = Array.from(new Set(scopes)).filter(Boolean);
@@ -302,530 +282,423 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   return (
-    <div class="space-y-6">
-      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div class="space-y-1">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">API tokens</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400">
-            Authenticate host agents, Docker integrations, and automation pipelines with scoped access.
-          </p>
+    <div class="space-y-5">
+      <Card
+        padding="lg"
+        class="border border-gray-200/80 bg-gradient-to-r from-gray-50 via-white to-gray-50 shadow-sm dark:border-gray-700/80 dark:from-gray-900/60 dark:via-gray-900/40 dark:to-gray-900/60"
+      >
+        <div class="flex flex-col gap-6">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200">
+                <ApiIcon class="h-5 w-5" />
+              </div>
+              <SectionHeader
+                label="Token inventory"
+                title="API tokens"
+                description="Monitor usage, rotate credentials, and issue scoped access for automation."
+                size="sm"
+                class="flex-1"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={focusCreateSection}
+              class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+            >
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              New token
+            </button>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="rounded-lg border border-gray-200/70 bg-white/70 p-4 text-sm text-gray-700 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/40 dark:text-gray-300">
+              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Total tokens
+              </div>
+              <div class="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                {totalTokens()}
+              </div>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Stored credentials across all agents
+              </p>
+            </div>
+            <div class="rounded-lg border border-gray-200/70 bg-white/70 p-4 text-sm text-gray-700 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/40 dark:text-gray-300">
+              <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Scoped tokens
+              </div>
+              <div class="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                {scopedTokenCount()}
+              </div>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Limited access tokens with defined scopes
+              </p>
+            </div>
+            <div
+              class={`rounded-lg border p-4 text-sm shadow-sm ${
+                hasWildcardTokens()
+                  ? 'border-amber-300/80 bg-amber-50/80 text-amber-900 dark:border-amber-700/70 dark:bg-amber-900/20 dark:text-amber-100'
+                  : 'border-gray-200/70 bg-white/70 text-gray-700 dark:border-gray-700/70 dark:bg-gray-900/40 dark:text-gray-300'
+              }`}
+            >
+              <div
+                class={`text-[0.7rem] font-semibold uppercase tracking-wide ${
+                  hasWildcardTokens()
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                Full access tokens
+              </div>
+              <div
+                class={`mt-1 text-2xl font-semibold ${
+                  hasWildcardTokens()
+                    ? 'text-amber-800 dark:text-amber-100'
+                    : 'text-gray-900 dark:text-gray-100'
+                }`}
+              >
+                {wildcardCount()}
+              </div>
+              <p
+                class={`mt-1 text-xs ${
+                  hasWildcardTokens()
+                    ? 'text-amber-700 dark:text-amber-200'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                {hasWildcardTokens()
+                  ? 'Legacy wildcard tokens – rotate into scoped presets when possible.'
+                  : 'All tokens scoped – no wildcard credentials detected.'}
+              </p>
+            </div>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={focusCreateSection}
-          class="inline-flex items-center gap-2 self-start rounded-md border border-blue-200 bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-        >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          Generate token
-        </button>
-      </div>
+      </Card>
 
       <Show when={props.refreshing}>
-        <div class="flex items-center gap-2 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 text-xs text-blue-800 dark:text-blue-200">
+        <Card
+          tone="info"
+          padding="sm"
+          class="flex items-center gap-2 border border-blue-200/70 text-xs text-blue-800 dark:border-blue-800/70 dark:text-blue-200"
+        >
           <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke-width="4" stroke="currentColor" />
             <path class="opacity-75" d="M4 12a8 8 0 018-8" stroke-width="4" stroke-linecap="round" stroke="currentColor" />
           </svg>
           <span>Refreshing security status…</span>
-        </div>
+        </Card>
       </Show>
 
-      <div class="space-y-6">
-        <Card padding="lg" class="space-y-6">
-          <div class="space-y-2">
-            <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">Active tokens</h4>
-            <p class="text-sm text-gray-600 dark:text-gray-400">
-              Rotate tokens regularly and scope them to the minimum access required.
-            </p>
-          </div>
-
-          <div class="grid gap-4 sm:grid-cols-3">
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-3">
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Active tokens
-              </p>
-              <p class="text-xl font-semibold text-gray-900 dark:text-gray-100">{totalTokens()}</p>
-            </div>
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-3">
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Scoped tokens
-              </p>
-              <p class="text-xl font-semibold text-gray-900 dark:text-gray-100">{scopedTokenCount()}</p>
-            </div>
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-3">
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                {hasWildcardTokens() ? 'Full access tokens' : 'Last generated'}
-              </p>
-              <p class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                {hasWildcardTokens()
-                  ? wildcardCount()
-                  : totalTokens() > 0
-                    ? mostRecentLabel()
-                    : '—'}
-              </p>
-            </div>
-          </div>
-
-          <Show
-            when={!loading() && totalTokens() > 0}
-            fallback={
-              <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-700/70 bg-white/60 dark:bg-gray-900/30 p-5 text-sm text-gray-600 dark:text-gray-400">
-                <p class="mb-3">
-                  No tokens yet. Generate one to authenticate agents and automation.
-                </p>
-                <button
-                  type="button"
-                  onClick={focusCreateSection}
-                  class="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
-                >
-                  Generate token
-                </button>
-              </div>
-            }
-          >
-            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                <thead class="bg-gray-50 dark:bg-gray-900/60">
-                  <tr>
-                    <th class="py-2 px-3 text-left font-medium text-gray-600 dark:text-gray-400">Label</th>
-                    <th class="py-2 px-3 text-left font-medium text-gray-600 dark:text-gray-400">Token hint</th>
-                    <th class="py-2 px-3 text-left font-medium text-gray-600 dark:text-gray-400">Scopes</th>
-                    <th class="py-2 px-3 text-left font-medium text-gray-600 dark:text-gray-400">Created</th>
-                    <th class="py-2 px-3 text-left font-medium text-gray-600 dark:text-gray-400">Last used</th>
-                    <th class="py-2 px-3 text-right font-medium text-gray-600 dark:text-gray-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                  <For each={sortedTokens()}>
-                    {(token) => {
-                      const usage = dockerTokenUsage().get(token.id);
-                      const hostTitle = usage ? usage.hosts.join(', ') : undefined;
-                      const hostPreview = usage ? usage.hosts.slice(0, 2).join(', ') : '';
-                      const extraCount = usage ? usage.hosts.length - 2 : 0;
-                      const hostSummary =
-                        usage && usage.count === 1
-                          ? usage.hosts[0]
-                          : usage
-                            ? `${hostPreview}${extraCount > 0 ? `, +${extraCount} more` : ''}`
-                            : '';
-                      const hostCountLabel =
-                        usage && usage.count === 1 ? 'host' : usage ? 'hosts' : '';
-                      const rawScopes = token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
-                      const scopeBadges = rawScopes.includes('*')
-                        ? [{ value: '*', label: 'Full access' }]
-                        : rawScopes.map((scope) => ({
-                            value: scope,
-                            label: API_SCOPE_LABELS[scope] ?? scope,
-                          }));
-                      const rowIsWildcard = scopeBadges.some((scope) => scope.value === '*');
-
-                      return (
-                        <tr
-                          class={`transition-colors ${rowIsWildcard ? 'bg-amber-50/60 dark:bg-amber-900/15' : 'bg-white dark:bg-gray-900/20'} hover:bg-gray-50 dark:hover:bg-gray-800/60`}
-                        >
-                          <td class="py-3 px-3 text-gray-900 dark:text-gray-100">
-                            <div class="flex items-center gap-2">
-                              <span class="font-medium">{token.name || 'Untitled token'}</span>
-                              <Show when={usage}>
-                                <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                  Docker
-                                </span>
-                              </Show>
-                            </div>
-                            <Show when={usage}>
-                              <div
-                                class="mt-1 text-xs text-blue-700 dark:text-blue-300"
-                                title={hostTitle}
-                              >
-                                Used by Docker {hostCountLabel}: {hostSummary}
-                              </div>
-                            </Show>
-                          </td>
-                          <td class="py-3 px-3 font-mono text-xs text-gray-600 dark:text-gray-400">
-                            {tokenHint(token)}
-                          </td>
-                          <td class="py-3 px-3">
-                            <div class="flex flex-wrap gap-1">
-                              <For each={scopeBadges}>
-                                {(scope) => {
-                                  const isWildcard = scope.value === '*';
-                                  const badgeClass = isWildcard
-                                    ? 'inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200'
-                                    : 'inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200';
-                                  return (
-                                    <span class={badgeClass} title={scope.value}>
-                                      {scope.label}
-                                    </span>
-                                  );
-                                }}
-                              </For>
-                            </div>
-                          </td>
-                          <td class="py-3 px-3 text-gray-600 dark:text-gray-400">
-                            {formatRelativeTime(new Date(token.createdAt).getTime())}
-                          </td>
-                          <td class="py-3 px-3 text-gray-600 dark:text-gray-400">
-                            {token.lastUsedAt ? formatRelativeTime(new Date(token.lastUsedAt).getTime()) : 'Never'}
-                          </td>
-                          <td class="py-3 px-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(token)}
-                              class="inline-flex items-center rounded-md bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
-                            >
-                              Revoke
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    }}
-                  </For>
-                </tbody>
-              </table>
-            </div>
-          </Show>
-        </Card>
-
-        <Show when={newTokenValue() && !isRevealActiveForCurrentToken()}>
-          <Card padding="lg" tone="success" class="space-y-3 border border-green-300 dark:border-green-700">
-            <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 p-2">
-                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div class="space-y-2">
-                <h3 class="text-base font-semibold text-green-900 dark:text-green-100">
-                  Token ready to copy
-                </h3>
-                <p class="text-sm leading-snug text-green-800 dark:text-green-200">
-                  Tokens are only shown once. Copy it now or store it securely before you leave this page.
-                </p>
-                <Show when={newTokenRecord()}>
-                  <p class="text-xs text-green-900/80 dark:text-green-200/80">
-                    Label{' '}
-                    <span class="font-semibold">{newTokenRecord()?.name || 'Untitled token'}</span>
-                    <Show when={newTokenRecord()?.prefix || newTokenRecord()?.suffix}>
-                      {' '}· Hint{' '}
-                      <code class="rounded bg-green-100 dark:bg-green-900/50 px-1.5 py-0.5 font-mono text-[11px] text-green-800 dark:text-green-200">
-                        {tokenHint(newTokenRecord()!)}
-                      </code>
-                    </Show>
-                  </p>
-                </Show>
-              </div>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={reopenTokenDialog}
-                class="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
-              >
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7h4m0 0v4m0-4l-6 6-4-4-6 6" />
-                </svg>
-                Show token dialog
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setNewTokenValue(null);
-                  setNewTokenRecord(null);
-                }}
-                class="inline-flex items-center rounded-md border border-green-500 px-4 py-2 text-sm font-medium text-green-800 transition-colors hover:bg-green-100 dark:border-green-600 dark:text-green-200 dark:hover:bg-green-900/40"
-              >
-                Dismiss
-              </button>
-            </div>
-          </Card>
-        </Show>
-
+      <Show when={newTokenValue() && !isRevealActiveForCurrentToken()}>
         <Card
-          padding="lg"
-          class={`space-y-6 transition-shadow duration-300 ${createHighlight() ? 'ring-2 ring-blue-500/60 dark:ring-blue-400/60 shadow-lg' : ''}`}
-          ref={(el: HTMLDivElement) => {
-            createSectionRef = el;
-          }}
+          tone="success"
+          padding="sm"
+          class="flex flex-wrap items-center justify-between gap-3 border border-green-300/70 text-sm text-green-800 dark:border-green-700/70 dark:text-green-200"
         >
-          <div class="space-y-6">
-            <div class="space-y-1">
-              <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">Generate new token</h4>
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                Tokens are only displayed once. Follow the steps below to create a scoped credential.
-              </p>
-            </div>
-
-            <ol class="space-y-6 text-sm text-gray-700 dark:text-gray-300">
-              <li class="flex gap-3">
-                <div class="mt-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold uppercase text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                  1
-                </div>
-                <div class="flex-1 space-y-2">
-                  <p class="font-medium text-gray-900 dark:text-gray-100">Name the token</p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Use something descriptive so you can identify the integration later.
-                  </p>
-                  <input
-                    id="api-token-name"
-                    type="text"
-                    value={nameInput()}
-                    onInput={(event) => setNameInput(event.currentTarget.value)}
-                    placeholder="e.g., docker-host-1"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                  />
-                </div>
-              </li>
-
-              <li class="flex gap-3">
-                <div class="mt-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold uppercase text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                  2
-                </div>
-                <div class="flex-1 space-y-2">
-                  <p class="font-medium text-gray-900 dark:text-gray-100">Set a baseline scope</p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Start with a preset that matches the integration, or choose full access if you plan to trim later.
-                  </p>
-                  <div class="space-y-2">
-                    <button
-                      type="button"
-                      class={`${presetButtonBase} ${isFullAccessSelected() ? presetButtonActive : presetButtonInactive}`}
-                      onClick={clearScopes}
-                    >
-                      <div>
-                        <p class="font-semibold text-gray-900 dark:text-gray-100">Full access</p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Legacy wildcard token – grants every permission.</p>
-                      </div>
-                      <span class={`text-xs font-semibold uppercase ${isFullAccessSelected() ? 'text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400'}`}>
-                        {isFullAccessSelected() ? 'Selected' : 'Reset'}
-                      </span>
-                    </button>
-                    <For each={scopePresets}>
-                      {(preset) => (
-                        <button
-                          type="button"
-                          class={`${presetButtonBase} ${presetMatchesSelection(preset.scopes) ? presetButtonActive : presetButtonInactive}`}
-                          onClick={() => applyScopePreset(preset.scopes)}
-                        >
-                          <div>
-                            <p class="font-semibold text-gray-900 dark:text-gray-100">{preset.label}</p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{preset.description}</p>
-                          </div>
-                          <span class={`text-xs font-semibold uppercase ${presetMatchesSelection(preset.scopes) ? 'text-blue-600 dark:text-blue-300' : 'text-blue-500 dark:text-blue-300/80'}`}>
-                            {presetMatchesSelection(preset.scopes) ? 'Selected' : 'Apply'}
-                          </span>
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                  <div class="rounded-md border border-dashed border-gray-300 bg-white px-3 py-2 text-xs text-gray-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-300">
-                    <span class="block text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Current selection
-                    </span>
-                    <Show
-                      when={!isFullAccessSelected() && selectedScopeChips().length > 0}
-                      fallback={<span class="block pt-1 text-xs text-gray-700 dark:text-gray-200">Full access (wildcard)</span>}
-                    >
-                      <div class="pt-1 flex flex-wrap gap-1.5">
-                        <For each={selectedScopeChips()}>
-                          {(chip) => (
-                            <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                              {chip.label}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
-                </div>
-              </li>
-
-              <li class="flex gap-3">
-                <div class="mt-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold uppercase text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                  3
-                </div>
-                <div class="flex-1 space-y-3">
-                  <div>
-                    <p class="font-medium text-gray-900 dark:text-gray-100">Fine-tune permissions</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                      Toggle advanced scopes if the integration needs additional access beyond the preset.
-                    </p>
-                  </div>
-                  <div class="space-y-2">
-                    <Show when={!isFullAccessSelected() && selectedScopeChips().length > 0}>
-                      <div class="flex flex-wrap gap-1.5">
-                        <For each={selectedScopeChips()}>
-                          {(chip) => (
-                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                              {chip.value}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                    <button
-                      type="button"
-                      onClick={() => setAdvancedScopesOpen((open) => !open)}
-                      class={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide transition-colors ${advancedScopesOpen() ? 'text-blue-600 dark:text-blue-300' : 'text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-300'}`}
-                    >
-                      <svg
-                        class={`h-3 w-3 transition-transform ${advancedScopesOpen() ? 'rotate-180' : ''}`}
-                        viewBox="0 0 12 12"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.8"
-                      >
-                        <path d="M3 4.5L6 7.5L9 4.5" stroke-linecap="round" stroke-linejoin="round" />
-                      </svg>
-                      {advancedScopesOpen() ? 'Hide advanced scopes' : 'Add or remove individual scopes'}
-                    </button>
-                  </div>
-                  <Show when={advancedScopesOpen()}>
-                    <div class="space-y-4">
-                      <For each={scopeGroups()}>
-                        {([group, options]) => (
-                          <div class="space-y-2">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                              {group}
-                            </p>
-                            <div class="grid gap-2 sm:grid-cols-2">
-                              <For each={options}>
-                                {(option) => {
-                                  const inputId = `scope-${option.value.replace(/[:]/g, '-')}`;
-                                  const checked = () => selectedScopes().includes(option.value);
-                                  return (
-                                    <label
-                                      for={inputId}
-                                      class={`flex items-start gap-3 rounded-lg border px-3 py-2 text-sm transition-colors ${checked() ? 'border-blue-400 bg-blue-50/70 ring-1 ring-blue-300 dark:border-blue-500 dark:bg-blue-900/30 dark:ring-blue-400/40' : 'border-gray-200 bg-white hover:border-blue-400 dark:border-gray-600 dark:bg-gray-900/50 dark:hover:border-blue-500'}`}
-                                    >
-                                      <input
-                                        id={inputId}
-                                        type="checkbox"
-                                        class="mt-1 h-4 w-4 flex-shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
-                                        checked={checked()}
-                                        onInput={(event) => {
-                                          const isChecked = event.currentTarget.checked;
-                                          setSelectedScopes((prev) => {
-                                            if (isChecked) {
-                                              if (prev.includes(option.value)) return prev;
-                                              return [...prev, option.value];
-                                            }
-                                            return prev.filter((value) => value !== option.value);
-                                          });
-                                        }}
-                                      />
-                                      <div class="space-y-1">
-                                        <p class="font-medium text-gray-900 dark:text-gray-100">
-                                          {option.label}
-                                        </p>
-                                        <Show when={option.description}>
-                                          <p class="text-xs leading-snug text-gray-500 dark:text-gray-400">
-                                            {option.description}
-                                          </p>
-                                        </Show>
-                                        <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                                          {option.value}
-                                        </span>
-                                      </div>
-                                    </label>
-                                  );
-                                }}
-                              </For>
-                            </div>
-                          </div>
-                        )}
-                      </For>
-                    </div>
-                  </Show>
-                </div>
-              </li>
-            </ol>
-          </div>
-
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
-              onClick={handleGenerate}
-              disabled={isGenerating()}
-            >
-              {isGenerating() ? (
-                <>
-                  <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke-width="4" stroke="currentColor" />
-                    <path class="opacity-75" d="M4 12a8 8 0 018-8" stroke-width="4" stroke-linecap="round" stroke="currentColor" />
-                  </svg>
-                  Generating…
-                </>
-              ) : (
-                <>
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Generate token
-                </>
-              )}
+          <span>
+            ✓ Token generated: <strong>{newTokenRecord()?.name || 'Untitled'}</strong> ({tokenHint(newTokenRecord()!)})
+          </span>
+          <div class="flex items-center gap-3 text-xs">
+            <button onClick={reopenTokenDialog} class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100">
+              Show
             </button>
-            <Show when={newTokenValue() && !isRevealActiveForCurrentToken()}>
-              <button
-                type="button"
-                onClick={reopenTokenDialog}
-                class="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600"
-              >
-                View last token
-              </button>
-            </Show>
+            <button
+              onClick={() => {
+                setNewTokenValue(null);
+                setNewTokenRecord(null);
+              }}
+              class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
+            >
+              Dismiss
+            </button>
           </div>
         </Card>
+      </Show>
 
-        <Show when={!loading() && hasWildcardTokens()}>
-          <Card padding="lg" tone="warning" class="space-y-3 border border-amber-300 dark:border-amber-700">
-            <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-200">
-              Full access tokens detected
-            </h4>
-            <p class="text-xs text-amber-900/90 dark:text-amber-100/90">
-              Edit existing tokens to assign scopes, or generate replacements with the presets above so compromised credentials can’t control everything.
-            </p>
+      <Show
+        when={!loading() && totalTokens() > 0}
+        fallback={
+          <Card
+            tone="muted"
+            padding="md"
+            class="border border-dashed border-gray-300/80 text-sm text-gray-600 dark:border-gray-600/70 dark:text-gray-400"
+          >
+            No tokens yet.{' '}
+            <button onClick={focusCreateSection} class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400">
+              Create one
+            </button>{' '}
+            to authenticate agents and integrations.
+          </Card>
+        }
+      >
+        <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/60 px-5 py-4 dark:border-gray-700 dark:bg-gray-900/40">
+            <div>
+              <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Token inventory</h4>
+              <p class="text-xs text-gray-600 dark:text-gray-400">
+                Active credentials sorted by most recent creation date.
+              </p>
+            </div>
             <button
               type="button"
               onClick={focusCreateSection}
-              class="inline-flex w-fit items-center gap-2 rounded-md border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-100"
+              class="inline-flex items-center gap-2 rounded-md border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/20"
             >
-              Review scopes
+              Generate new
             </button>
-          </Card>
-        </Show>
+          </div>
 
-        <Card padding="lg" tone="muted" class="space-y-3">
-          <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Good practices</h4>
-          <ul class="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-            <li class="flex gap-3">
-              <span class="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
-              <span>Issue separate tokens for Docker agents, host agents, and automation pipelines so you can revoke them independently.</span>
-            </li>
-            <li class="flex gap-3">
-              <span class="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
-              <span>Rotate tokens on a schedule and remove ones that haven’t been used recently.</span>
-            </li>
-            <li class="flex gap-3">
-              <span class="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
-              <span>
-                View the{' '}
-                <a
-                  class="font-medium text-blue-600 underline decoration-transparent transition-colors hover:decoration-blue-500 dark:text-blue-300"
-                  href={SCOPES_DOC_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  scoped token guide
-                </a>{' '}
-                for the full list of available permissions.
-              </span>
-            </li>
-          </ul>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-100/80 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900/50 dark:text-gray-400">
+                <tr>
+                  <th class="px-5 py-3">Name</th>
+                  <th class="px-5 py-3">Hint</th>
+                  <th class="px-5 py-3">Scopes</th>
+                  <th class="px-5 py-3">Usage</th>
+                  <th class="px-5 py-3">Created</th>
+                  <th class="px-5 py-3">Last used</th>
+                  <th class="px-5 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
+                <For each={sortedTokens()}>
+                  {(token) => {
+                    const usage = dockerTokenUsage().get(token.id);
+                    const hostSummary =
+                      usage ? (usage.count === 1 ? usage.hosts[0] : `${usage.count} hosts`) : '—';
+                    const rawScopes = token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
+                    const scopeBadges = rawScopes.includes('*')
+                      ? [{ value: '*', label: 'Full' }]
+                      : rawScopes.map((scope) => ({
+                          value: scope,
+                          label: API_SCOPE_LABELS[scope] ?? scope,
+                        }));
+                    const rowIsWildcard = scopeBadges.some((scope) => scope.value === '*');
+
+                    return (
+                      <tr
+                        class={`transition-colors ${
+                          rowIsWildcard
+                            ? 'bg-amber-50/50 dark:bg-amber-900/10'
+                            : 'bg-white dark:bg-gray-900/10'
+                        } hover:bg-blue-50/40 dark:hover:bg-gray-800/50`}
+                      >
+                        <td class="whitespace-nowrap px-5 py-3 font-medium text-gray-900 dark:text-gray-100">
+                          {token.name || 'Untitled'}
+                        </td>
+                        <td class="px-5 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">
+                          {tokenHint(token)}
+                        </td>
+                        <td class="px-5 py-3">
+                          <div class="flex flex-wrap gap-1.5">
+                            <For each={scopeBadges}>
+                              {(scope) => {
+                                const isWildcard = scope.value === '*';
+                                return (
+                                  <span
+                                    class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                      isWildcard
+                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+                                        : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                    }`}
+                                    title={scope.value}
+                                  >
+                                    {scope.label}
+                                  </span>
+                                );
+                              }}
+                            </For>
+                          </div>
+                        </td>
+                        <td class="px-5 py-3 text-gray-600 dark:text-gray-400" title={usage?.hosts.join(', ')}>
+                          {hostSummary}
+                        </td>
+                        <td class="px-5 py-3 text-gray-600 dark:text-gray-400">
+                          {formatRelativeTime(new Date(token.createdAt).getTime())}
+                        </td>
+                        <td class="px-5 py-3 text-gray-600 dark:text-gray-400">
+                          {token.lastUsedAt
+                            ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                            : 'Never'}
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                          <button
+                            onClick={() => handleDelete(token)}
+                            class="text-sm font-semibold text-red-600 transition hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            Revoke
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  }}
+                </For>
+              </tbody>
+            </table>
+          </div>
         </Card>
-      </div>
+      </Show>
+
+      <Card
+        padding="lg"
+        class={`border border-gray-200 dark:border-gray-700 transition-shadow ${
+          createHighlight() ? 'ring-2 ring-blue-500/60 shadow-lg' : ''
+        }`}
+        ref={(el: HTMLDivElement) => {
+          createSectionRef = el;
+        }}
+      >
+        <div class="flex flex-col gap-6">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <SectionHeader
+              size="sm"
+              title="Create token"
+              description="Name the token and choose a scope preset or build a custom set of capabilities."
+              class="flex-1"
+            />
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating()}
+              class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
+            >
+              {isGenerating() ? 'Generating…' : 'Generate'}
+            </button>
+          </div>
+
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                Token name
+              </label>
+              <input
+                type="text"
+                value={nameInput()}
+                onInput={(e) => setNameInput(e.currentTarget.value)}
+                placeholder="e.g. Docker pipeline"
+                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/40"
+              />
+            </div>
+
+            <div class="space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                  Quick presets
+                </span>
+                <button
+                  type="button"
+                  class="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+                  onClick={clearScopes}
+                  title="Legacy wildcard – all permissions"
+                >
+                  Clear selection
+                </button>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    isFullAccessSelected()
+                      ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+                  }`}
+                  onClick={clearScopes}
+                  title="Legacy wildcard – all permissions"
+                >
+                  Full access
+                </button>
+
+                <For each={scopePresets}>
+                  {(preset) => (
+                    <button
+                      type="button"
+                      class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        presetMatchesSelection(preset.scopes)
+                          ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+                      }`}
+                      onClick={() => applyScopePreset(preset.scopes)}
+                      title={preset.description}
+                    >
+                      {preset.label}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+
+            <details class="group rounded-lg border border-gray-200 bg-gray-50/60 p-4 text-sm transition dark:border-gray-700 dark:bg-gray-900/40">
+              <summary class="cursor-pointer text-sm font-semibold text-gray-700 transition hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-300">
+                Custom scopes
+              </summary>
+              <div class="mt-3 space-y-4">
+                <For each={scopeGroups()}>
+                  {([group, options]) => (
+                    <div class="space-y-2">
+                      <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        {group}
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <For each={options}>
+                          {(option) => {
+                            const isActive = () => selectedScopes().includes(option.value);
+                            return (
+                              <button
+                                type="button"
+                                class={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                  isActive()
+                                    ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+                                    : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+                                }`}
+                                onClick={() => {
+                                  setSelectedScopes((prev) => {
+                                    if (prev.includes(option.value)) {
+                                      return prev.filter((v) => v !== option.value);
+                                    }
+                                    return [...prev, option.value];
+                                  });
+                                }}
+                                title={option.description}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </details>
+          </div>
+        </div>
+      </Card>
+
+      <Show when={!loading() && hasWildcardTokens()}>
+        <Card
+          tone="warning"
+          padding="sm"
+          class="flex flex-wrap items-center gap-3 border border-amber-300/70 text-sm text-amber-800 dark:border-amber-700/70 dark:text-amber-100"
+        >
+          ⚠ {wildcardCount()} full access {wildcardCount() === 1 ? 'token' : 'tokens'} – consider switching to scoped presets for least privilege.
+        </Card>
+      </Show>
+
+      <Card tone="muted" padding="sm" class="text-xs text-gray-600 dark:text-gray-400">
+        💡 Separate tokens per integration • Rotate regularly •{' '}
+        <a
+          class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          href={SCOPES_DOC_URL}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Scope reference
+        </a>
+      </Card>
     </div>
   );
 };
