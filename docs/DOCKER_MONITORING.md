@@ -18,6 +18,7 @@ Data is pushed to Pulse over HTTPS using your existing API token – no inbound 
 ## Prerequisites
 
 - Pulse v4.22.0 or newer with an API token enabled (`Settings → Security`)
+- API token with the `docker:report` scope (add `docker:manage` if you use remote lifecycle commands)
 - Docker 20.10+ on Linux (the agent uses the Docker Engine API via the local socket)
 - Access to the Docker socket (`/var/run/docker.sock`) or a configured `DOCKER_HOST`
 - Go 1.24+ if you plan to build the binary from source
@@ -38,7 +39,7 @@ Copy the binary to your Docker host (e.g. `/usr/local/bin/pulse-docker-agent`) a
 
 ### Quick install from your Pulse server
 
-Use the bundled installation script (ships with Pulse v4.22.0+) to deploy and manage the agent. Replace the token placeholder with an API token generated in **Settings → Security**. Create a dedicated token for each Docker host so you can revoke individual credentials without touching others—sharing one token across many hosts makes incident response much harder.
+Use the bundled installation script (ships with Pulse v4.22.0+) to deploy and manage the agent. Replace the token placeholder with an API token generated in **Settings → Security**. Create a dedicated token for each Docker host so you can revoke individual credentials without touching others—sharing one token across many hosts makes incident response much harder. Tokens used here should include the `docker:report` scope so the agent can submit telemetry (add `docker:manage` only if you plan to issue lifecycle commands remotely).
 
 ```bash
 curl -fsSL http://pulse.example.com/install-docker-agent.sh \
@@ -130,7 +131,7 @@ docker run -d \
 | Flag / Env var          | Description                                               | Default         |
 | ----------------------- | --------------------------------------------------------- | --------------- |
 | `--url`, `PULSE_URL`    | Pulse base URL (http/https).                              | `http://localhost:7655` |
-| `--token`, `PULSE_TOKEN`| Pulse API token (required).                               | —               |
+| `--token`, `PULSE_TOKEN`| Pulse API token with `docker:report` scope (required).    | —               |
 | `--target`, `PULSE_TARGETS` | One or more `url|token[|insecure]` entries to fan-out reports to multiple Pulse servers. Separate entries with `;` or repeat the flag. | — |
 | `--interval`, `PULSE_INTERVAL` | Reporting cadence (supports `30s`, `1m`, etc.).     | `30s`           |
 | `--hostname`, `PULSE_HOSTNAME` | Override host name reported to Pulse.              | Docker info / OS hostname |
