@@ -177,15 +177,48 @@ export function GuestRow(props: GuestRowProps) {
     editingValues.set(guestId(), customUrl() || '');
     setEditingValuesVersion(v => v + 1);
     setCurrentlyEditingGuestId(guestId());
-
-    // Focus the input after it renders
-    queueMicrotask(() => {
-      if (urlInputRef) {
-        urlInputRef.focus();
-        urlInputRef.select();
-      }
-    });
   };
+
+  // Auto-focus the input when editing starts
+  createEffect(() => {
+    if (isEditingUrl() && urlInputRef) {
+      urlInputRef.focus();
+      urlInputRef.select();
+    }
+  });
+
+  // Add global click handler to close editor and prevent clicks while editing
+  createEffect(() => {
+    if (isEditingUrl()) {
+      const handleGlobalClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        // If clicking outside the editor, close it and prevent the click
+        if (!target.closest('[data-url-editor]') && currentlyEditingGuestId() === guestId()) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          cancelEditingUrl();
+        }
+      };
+
+      const handleGlobalMouseDown = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest('[data-url-editor]') && currentlyEditingGuestId() === guestId()) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+      };
+
+      // Use capture phase to intercept clicks before they bubble
+      document.addEventListener('mousedown', handleGlobalMouseDown, true);
+      document.addEventListener('click', handleGlobalClick, true);
+      return () => {
+        document.removeEventListener('mousedown', handleGlobalMouseDown, true);
+        document.removeEventListener('click', handleGlobalClick, true);
+      };
+    }
+  });
 
   const saveUrl = async () => {
     // Only save if this guest is the one being edited
@@ -221,10 +254,39 @@ export function GuestRow(props: GuestRowProps) {
     }
   };
 
+  const deleteUrl = async () => {
+    // Only process if this guest is the one being edited
+    if (currentlyEditingGuestId() !== guestId()) return;
+
+    // Clear global editing state
+    editingValues.delete(guestId());
+    setEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingGuestId(null);
+
+    // If there was a URL set, delete it
+    if (customUrl()) {
+      try {
+        await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: '' });
+        setCustomUrl(undefined);
+
+        // Notify parent to update metadata
+        if (props.onCustomUrlUpdate) {
+          props.onCustomUrlUpdate(guestId(), '');
+        }
+
+        showSuccess('Guest URL removed');
+      } catch (err: any) {
+        console.error('Failed to remove guest URL:', err);
+        showError(err.message || 'Failed to remove guest URL');
+      }
+    }
+  };
+
   const cancelEditingUrl = () => {
     // Only cancel if this guest is the one being edited
     if (currentlyEditingGuestId() !== guestId()) return;
 
+    // Just close without saving
     editingValues.delete(guestId());
     setEditingValuesVersion(v => v + 1);
     setCurrentlyEditingGuestId(null);
@@ -375,7 +437,7 @@ export function GuestRow(props: GuestRowProps) {
               </div>
             }
           >
-            <div class="flex-1 flex items-center gap-1">
+            <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
               <input
                 ref={urlInputRef}
                 type="text"
@@ -384,6 +446,13 @@ export function GuestRow(props: GuestRowProps) {
                 onInput={(e) => {
                   editingValues.set(guestId(), e.currentTarget.value);
                   setEditingValuesVersion(v => v + 1);
+                }}
+                onBlur={(e) => {
+                  // Close editor when clicking away, but not if clicking the save/delete buttons
+                  const relatedTarget = e.relatedTarget as HTMLElement;
+                  if (!relatedTarget || !relatedTarget.closest('[data-url-editor-button]')) {
+                    cancelEditingUrl();
+                  }
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -400,38 +469,42 @@ export function GuestRow(props: GuestRowProps) {
               />
               <button
                 type="button"
+                data-url-editor-button
                 onClick={(e) => {
                   e.stopPropagation();
                   saveUrl();
                 }}
-                class="px-2 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                 title="Save (or press Enter)"
               >
                 ✓
               </button>
               <button
                 type="button"
+                data-url-editor-button
                 onClick={(e) => {
                   e.stopPropagation();
-                  cancelEditingUrl();
+                  deleteUrl();
                 }}
-                class="px-2 py-0.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-                title="Cancel (or press Escape)"
+                class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                title="Delete URL"
               >
                 ✕
               </button>
             </div>
           </Show>
 
-          {/* Tag badges */}
-          <div class="flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
-            <TagBadges
-              tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-              maxVisible={3}
-              onTagClick={props.onTagClick}
-              activeSearch={props.activeSearch}
-            />
-          </div>
+          {/* Tag badges - hide when editing URL to save space */}
+          <Show when={!isEditingUrl()}>
+            <div class="flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
+              <TagBadges
+                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+                maxVisible={3}
+                onTagClick={props.onTagClick}
+                activeSearch={props.activeSearch}
+              />
+            </div>
+          </Show>
 
           <Show when={lockLabel()}>
             <span
