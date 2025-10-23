@@ -1,6 +1,5 @@
 import { createMemo, Show, createEffect, createSignal } from 'solid-js';
 import { formatSpeed } from '@/utils/format';
-import { AnimatedMetric } from '@/components/shared/AnimatedMetric';
 
 interface IOMetricProps {
   value: (() => number) | number;
@@ -42,7 +41,7 @@ export function IOMetric(props: IOMetricProps) {
       fallback={<div class="min-h-[24px] flex items-center text-sm text-gray-400">-</div>}
     >
       <div class={`min-h-[24px] text-sm font-mono ${colorClass()} flex items-center`}>
-        <AnimatedMetric value={currentValue()} formatter={(v) => formatSpeed(v, 0)} />
+        {formatSpeed(currentValue(), 0)}
       </div>
     </Show>
   );
