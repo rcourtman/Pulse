@@ -785,6 +785,21 @@ type ContainerDiskUsage struct {
 	Used  uint64 `json:"used,omitempty"`
 }
 
+// ContainerInterfaceAddress describes an IP entry associated with a container interface.
+type ContainerInterfaceAddress struct {
+	Address string `json:"ip-address"`
+	Type    string `json:"ip-address-type"`
+	Prefix  string `json:"prefix"`
+}
+
+// ContainerInterface describes a container network interface returned by Proxmox.
+type ContainerInterface struct {
+	Name        string                      `json:"name"`
+	HWAddr      string                      `json:"hwaddr"`
+	Inet        string                      `json:"inet,omitempty"`
+	IPAddresses []ContainerInterfaceAddress `json:"ip-addresses,omitempty"`
+}
+
 // GetContainerConfig returns the configuration of a specific container
 func (c *Client) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/config", node, vmid))
@@ -1095,59 +1110,28 @@ func (c *Client) getTaskLog(ctx context.Context, node, upid string) ([]string, e
 	return lines, nil
 }
 
-// ExecContainerCommand executes a command within an LXC container and returns the stdout output.
-func (c *Client) ExecContainerCommand(ctx context.Context, node string, vmid int, command []string) (string, error) {
-	if len(command) == 0 {
-		return "", fmt.Errorf("command is required")
-	}
-
-	params := url.Values{}
-	params.Set("command", command[0])
-	for _, arg := range command[1:] {
-		params.Add("extra-args", arg)
-	}
-
-	resp, err := c.post(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/exec", node, vmid), params)
+// GetContainerInterfaces returns the network interfaces (with IPs) for a container.
+func (c *Client) GetContainerInterfaces(ctx context.Context, node string, vmid int) ([]ContainerInterface, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/interfaces", node, vmid))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to execute container command (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("failed to get container interfaces (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var result struct {
-		Data struct {
-			UPID string `json:"upid"`
-		} `json:"data"`
+		Data []ContainerInterface `json:"data"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if result.Data.UPID == "" {
-		return "", fmt.Errorf("exec call did not return a UPID")
-	}
-
-	status, err := c.waitForTaskCompletion(ctx, node, result.Data.UPID)
-	if err != nil {
-		return "", err
-	}
-
-	if status != nil && status.ExitStatus != "" && !strings.EqualFold(status.ExitStatus, "ok") {
-		return "", fmt.Errorf("container command failed: %s", status.ExitStatus)
-	}
-
-	lines, err := c.getTaskLog(ctx, node, result.Data.UPID)
-	if err != nil {
-		return "", err
-	}
-
-	output := strings.Join(lines, "\n")
-	return strings.TrimSpace(output), nil
+	return result.Data, nil
 }
 
 // GetStorageContent returns the content of a specific storage

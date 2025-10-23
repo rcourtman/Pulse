@@ -1017,18 +1017,18 @@ func (cc *ClusterClient) GetContainerConfig(ctx context.Context, node string, vm
 	return result, err
 }
 
-// ExecContainerCommand executes a command within an LXC container using cluster failover
-func (cc *ClusterClient) ExecContainerCommand(ctx context.Context, node string, vmid int, command []string) (string, error) {
-	var output string
+// GetContainerInterfaces returns interface details for a container
+func (cc *ClusterClient) GetContainerInterfaces(ctx context.Context, node string, vmid int) ([]ContainerInterface, error) {
+	var result []ContainerInterface
 	err := cc.executeWithFailover(ctx, func(client *Client) error {
-		result, err := client.ExecContainerCommand(ctx, node, vmid, command)
+		interfaces, err := client.GetContainerInterfaces(ctx, node, vmid)
 		if err != nil {
 			return err
 		}
-		output = result
+		result = interfaces
 		return nil
 	})
-	return output, err
+	return result, err
 }
 
 // IsClusterMember checks if this node is part of a cluster
