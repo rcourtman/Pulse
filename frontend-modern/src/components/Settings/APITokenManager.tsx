@@ -183,8 +183,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       const { token, record } = await SecurityAPI.createToken(trimmedName, scopePayload);
 
       setTokens((prev) => [record, ...prev]);
-      setNewTokenValue(token);
       setNewTokenRecord(record);
+      setNewTokenValue(token);
       setNameInput('');
 
       showTokenReveal({
@@ -212,7 +212,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     }
   };
 
-  const tokenHint = (record: APITokenRecord) => {
+  const tokenHint = (record: APITokenRecord | null | undefined) => {
+    if (!record) return '—';
     if (record.prefix && record.suffix) {
       return `${record.prefix}…${record.suffix}`;
     }
@@ -398,7 +399,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           class="flex flex-wrap items-center justify-between gap-3 border border-green-300/70 text-sm text-green-800 dark:border-green-700/70 dark:text-green-200"
         >
           <span>
-            ✓ Token generated: <strong>{newTokenRecord()?.name || 'Untitled'}</strong> ({tokenHint(newTokenRecord()!)})
+            ✓ Token generated: <strong>{newTokenRecord()?.name || 'Untitled'}</strong> ({tokenHint(newTokenRecord())})
           </span>
           <div class="flex items-center gap-3 text-xs">
             <button onClick={reopenTokenDialog} class="font-medium underline decoration-green-500/50 underline-offset-2 hover:text-green-900 dark:hover:text-green-100">
