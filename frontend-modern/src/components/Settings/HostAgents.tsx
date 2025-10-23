@@ -276,7 +276,6 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
       setShowGenerateTokenModal(false);
       setNewTokenName('');
       setLatestRecord(record);
-      setStepTwoComplete(true);
       showTokenReveal({
         token,
         record,
@@ -464,8 +463,8 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                         : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
                     }`}>
                       {stepTwoComplete()
-                        ? 'Token ready. You can continue to the commands.'
-                        : 'Stored token detected. Confirm to insert it into the commands below.'}
+                        ? 'Token inserted. Proceed to the install commands below.'
+                        : 'Stored token detected. Press confirm to insert it into each command.'}
                     </div>
                     <button
                       type="button"
@@ -477,7 +476,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                           : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
                       }`}
                     >
-                      {stepTwoComplete() ? 'Token ready' : 'Use token in commands'}
+                      {stepTwoComplete() ? 'Token inserted' : 'Insert token into commands'}
                     </button>
                   </div>
                 </Show>
@@ -487,7 +486,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
             <Show when={!requiresToken()}>
               <div class="space-y-3">
                 <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-                  Tokens are optional on this Pulse instance. Confirm to continue to the install commands.
+                  Tokens are optional on this Pulse instance. Confirm to generate commands without embedding a token.
                 </div>
                 <button
                   type="button"
@@ -499,7 +498,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                       : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
                   }`}
                 >
-                  {stepTwoComplete() ? 'Confirmed' : 'Confirm and continue'}
+                  {stepTwoComplete() ? 'No token confirmed' : 'Confirm without token'}
                 </button>
               </div>
             </Show>
