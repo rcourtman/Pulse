@@ -1008,6 +1008,148 @@ func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 	return allTasks, nil
 }
 
+type taskStatusResponse struct {
+	Status     string `json:"status"`
+	ExitStatus string `json:"exitstatus"`
+	Type       string `json:"type"`
+	UPID       string `json:"upid"`
+	ID         string `json:"id"`
+}
+
+type taskLogEntry struct {
+	LineNumber int    `json:"n"`
+	Text       string `json:"t"`
+}
+
+func (c *Client) getTaskStatus(ctx context.Context, node, upid string) (*taskStatusResponse, error) {
+	encodedUPID := url.PathEscape(upid)
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks/%s/status", node, encodedUPID))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get task status (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result struct {
+		Data taskStatusResponse `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}
+
+func (c *Client) waitForTaskCompletion(ctx context.Context, node, upid string) (*taskStatusResponse, error) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		status, err := c.getTaskStatus(ctx, node, upid)
+		if err != nil {
+			return nil, err
+		}
+
+		if status != nil && strings.ToLower(status.Status) != "running" && strings.ToLower(status.Status) != "active" {
+			return status, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (c *Client) getTaskLog(ctx context.Context, node, upid string) ([]string, error) {
+	encodedUPID := url.PathEscape(upid)
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks/%s/log?start=0", node, encodedUPID))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get task log (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result struct {
+		Data []taskLogEntry `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	lines := make([]string, 0, len(result.Data))
+	for _, entry := range result.Data {
+		lines = append(lines, entry.Text)
+	}
+	return lines, nil
+}
+
+// ExecContainerCommand executes a command within an LXC container and returns the stdout output.
+func (c *Client) ExecContainerCommand(ctx context.Context, node string, vmid int, command []string) (string, error) {
+	if len(command) == 0 {
+		return "", fmt.Errorf("command is required")
+	}
+
+	params := url.Values{}
+	params.Set("command", command[0])
+	for _, arg := range command[1:] {
+		params.Add("extra-args", arg)
+	}
+
+	resp, err := c.post(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/exec", node, vmid), params)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to execute container command (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result struct {
+		Data struct {
+			UPID string `json:"upid"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	if result.Data.UPID == "" {
+		return "", fmt.Errorf("exec call did not return a UPID")
+	}
+
+	status, err := c.waitForTaskCompletion(ctx, node, result.Data.UPID)
+	if err != nil {
+		return "", err
+	}
+
+	if status != nil && status.ExitStatus != "" && !strings.EqualFold(status.ExitStatus, "ok") {
+		return "", fmt.Errorf("container command failed: %s", status.ExitStatus)
+	}
+
+	lines, err := c.getTaskLog(ctx, node, result.Data.UPID)
+	if err != nil {
+		return "", err
+	}
+
+	output := strings.Join(lines, "\n")
+	return strings.TrimSpace(output), nil
+}
+
 // GetStorageContent returns the content of a specific storage
 func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([]StorageContent, error) {
 	// Storage content queries can take longer on large storages
