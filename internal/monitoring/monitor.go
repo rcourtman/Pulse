@@ -2221,6 +2221,11 @@ func sanitizeGuestAddressStrings(value string) []string {
 
 	lower = strings.ToLower(value)
 
+	if idx := strings.Index(value, "%"); idx > 0 {
+		value = strings.TrimSpace(value[:idx])
+		lower = strings.ToLower(value)
+	}
+
 	if strings.HasPrefix(value, "127.") || strings.HasPrefix(lower, "0.0.0.0") {
 		return nil
 	}
