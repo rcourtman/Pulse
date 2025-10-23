@@ -347,6 +347,7 @@ func (cw *ConfigWatcher) reloadConfig() {
 					Prefix:    prefix,
 					Suffix:    suffix,
 					CreatedAt: time.Now().UTC(),
+					Scopes:    []string{ScopeWildcard},
 				})
 			}
 		}

@@ -18,12 +18,16 @@ type MockConfig struct {
 	LXCsPerNode             int
 	DockerHostCount         int
 	DockerContainersPerHost int
+	GenericHostCount        int
 	RandomMetrics           bool
 	HighLoadNodes           []string // Specific nodes to simulate high load
 	StoppedPercent          float64  // Percentage of guests that should be stopped
 }
 
-const dockerConnectionPrefix = "docker-"
+const (
+	dockerConnectionPrefix = "docker-"
+	hostConnectionPrefix   = "host-"
+)
 
 var DefaultConfig = MockConfig{
 	NodeCount:               7, // Test the 5-9 node range by default
@@ -31,6 +35,7 @@ var DefaultConfig = MockConfig{
 	LXCsPerNode:             8,
 	DockerHostCount:         3,
 	DockerContainersPerHost: 12,
+	GenericHostCount:        4,
 	RandomMetrics:           true,
 	StoppedPercent:          0.2,
 }
@@ -78,6 +83,35 @@ var dockerVersions = []string{
 var dockerAgentVersions = []string{
 	"0.1.0",
 	"0.1.0-dev",
+}
+
+var genericHostProfiles = []struct {
+	Platform     string
+	OSName       string
+	OSVersion    string
+	Kernel       string
+	Architecture string
+}{
+	{"linux", "Debian GNU/Linux", "12 (bookworm)", "6.8.12-1-amd64", "x86_64"},
+	{"linux", "Ubuntu Server", "24.04 LTS", "6.8.0-31-generic", "x86_64"},
+	{"linux", "Rocky Linux", "9.3", "5.14.0-427.22.1.el9_4.x86_64", "x86_64"},
+	{"linux", "Alpine Linux", "3.20.1", "6.6.32-0-lts", "x86_64"},
+	{"windows", "Windows Server", "2022 Datacenter", "10.0.20348.2244", "x86_64"},
+	{"windows", "Windows 11 Pro", "23H2", "10.0.22631.3737", "x86_64"},
+	{"macos", "macOS Ventura", "13.6.8", "22.6.0", "arm64"},
+	{"macos", "macOS Sonoma", "14.6.1", "23G93", "arm64"},
+}
+
+var genericHostPrefixes = []string{
+	"apollo", "centauri", "ceres", "europa", "hyperion",
+	"kepler", "meridian", "orion", "polaris", "spectrum",
+	"vega", "zenith", "halcyon", "icarus", "rigel",
+}
+
+var hostAgentVersions = []string{
+	"0.1.0",
+	"0.1.1",
+	"0.2.0-alpha",
 }
 
 // Common tags used for VMs and containers
@@ -170,6 +204,7 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 	data := models.StateSnapshot{
 		Nodes:            generateNodes(config),
 		DockerHosts:      generateDockerHosts(config),
+		Hosts:            generateHosts(config),
 		VMs:              []models.VM{},
 		Containers:       []models.Container{},
 		PhysicalDisks:    []models.PhysicalDisk{},
@@ -187,6 +222,10 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 
 	for _, host := range data.DockerHosts {
 		data.ConnectionHealth[dockerConnectionPrefix+host.ID] = host.Status != "offline"
+	}
+
+	for _, host := range data.Hosts {
+		data.ConnectionHealth[hostConnectionPrefix+host.ID] = host.Status != "offline"
 	}
 
 	// Generate VMs and containers for each node
@@ -1066,6 +1105,192 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 	return hosts
 }
 
+func generateHosts(config MockConfig) []models.Host {
+	count := config.GenericHostCount
+	if count <= 0 {
+		return nil
+	}
+
+	now := time.Now()
+	hosts := make([]models.Host, 0, count)
+	usedNames := make(map[string]struct{}, count)
+
+	for i := 0; i < count; i++ {
+		profile := genericHostProfiles[rand.Intn(len(genericHostProfiles))]
+
+		baseName := genericHostPrefixes[rand.Intn(len(genericHostPrefixes))]
+		suffix := 1 + rand.Intn(900)
+		hostname := fmt.Sprintf("%s-%d", baseName, suffix)
+		for {
+			if _, exists := usedNames[hostname]; !exists {
+				usedNames[hostname] = struct{}{}
+				break
+			}
+			suffix++
+			hostname = fmt.Sprintf("%s-%d", baseName, suffix)
+		}
+
+		displayName := strings.ToUpper(hostname[:1]) + hostname[1:]
+
+		cpuCount := 4 + rand.Intn(28) // 4-32 cores
+		if profile.Platform == "macos" {
+			cpuCount = 8 + rand.Intn(10)
+		}
+		cpuUsage := clampFloat(10+rand.Float64()*55, 4, 94)
+
+		memTotalGiB := 16 + rand.Intn(192)
+		if profile.Platform == "macos" {
+			memTotalGiB = 16 + rand.Intn(64)
+		}
+		memTotal := int64(memTotalGiB) << 30
+		memUsage := clampFloat(30+rand.Float64()*50, 12, 96)
+		memUsed := int64(float64(memTotal) * (memUsage / 100.0))
+		memFree := memTotal - memUsed
+
+		swapTotal := int64(rand.Intn(32)) << 30
+		swapUsed := int64(float64(swapTotal) * rand.Float64())
+
+		rootDiskTotal := int64(120+rand.Intn(680)) << 30
+		rootDiskUsage := clampFloat(25+rand.Float64()*55, 8, 95)
+		rootDiskUsed := int64(float64(rootDiskTotal) * (rootDiskUsage / 100.0))
+		rootDisk := models.Disk{
+			Total:      rootDiskTotal,
+			Used:       rootDiskUsed,
+			Free:       rootDiskTotal - rootDiskUsed,
+			Usage:      rootDiskUsage,
+			Mountpoint: "/",
+			Type:       "ext4",
+			Device:     "/dev/sda1",
+		}
+		if profile.Platform == "windows" {
+			rootDisk.Mountpoint = "C:"
+			rootDisk.Type = "ntfs"
+			rootDisk.Device = `\\.\PHYSICALDRIVE0`
+		}
+		if profile.Platform == "macos" {
+			rootDisk.Type = "apfs"
+			rootDisk.Device = "/dev/disk1s1"
+		}
+
+		disks := []models.Disk{rootDisk}
+		if rand.Float64() < 0.45 {
+			dataDiskTotal := int64(200+rand.Intn(1400)) << 30
+			dataDiskUsage := clampFloat(35+rand.Float64()*45, 6, 97)
+			dataDiskUsed := int64(float64(dataDiskTotal) * (dataDiskUsage / 100.0))
+			mount := "/data"
+			device := "/dev/sdb1"
+			fsType := "xfs"
+			if profile.Platform == "windows" {
+				mount = "D:"
+				device = `\\.\PHYSICALDRIVE1`
+				fsType = "ntfs"
+			}
+			if profile.Platform == "macos" {
+				mount = "/Volumes/Data"
+				device = "/dev/disk3s1"
+				fsType = "apfs"
+			}
+			disks = append(disks, models.Disk{
+				Total:      dataDiskTotal,
+				Used:       dataDiskUsed,
+				Free:       dataDiskTotal - dataDiskUsed,
+				Usage:      dataDiskUsage,
+				Mountpoint: mount,
+				Type:       fsType,
+				Device:     device,
+			})
+		}
+
+		primaryIP := fmt.Sprintf("192.168.%d.%d", 10+rand.Intn(60), 10+rand.Intn(200))
+		network := []models.HostNetworkInterface{
+			{
+				Name:      "eth0",
+				MAC:       fmt.Sprintf("02:42:%02x:%02x:%02x:%02x", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256)),
+				Addresses: []string{primaryIP},
+				RXBytes:   uint64(256+rand.Intn(4096)) * 1024 * 1024,
+				TXBytes:   uint64(256+rand.Intn(4096)) * 1024 * 1024,
+			},
+		}
+		if rand.Float64() < 0.32 {
+			network[0].Addresses = append(network[0].Addresses, fmt.Sprintf("10.%d.%d.%d", 10+rand.Intn(90), rand.Intn(200), rand.Intn(200)))
+		}
+
+		var loadAverage []float64
+		if profile.Platform == "linux" {
+			loadAverage = []float64{
+				clampFloat(rand.Float64()*float64(cpuCount)/4, 0.05, float64(cpuCount)*0.8),
+				clampFloat(rand.Float64()*float64(cpuCount)/4, 0.05, float64(cpuCount)*0.8),
+				clampFloat(rand.Float64()*float64(cpuCount)/4, 0.05, float64(cpuCount)*0.8),
+			}
+		}
+
+		sensors := models.HostSensorSummary{}
+		if profile.Platform == "linux" || profile.Platform == "macos" {
+			sensors.TemperatureCelsius = map[string]float64{
+				"cpu.package": clampFloat(38+rand.Float64()*22, 30, 85),
+			}
+			if rand.Float64() < 0.4 {
+				sensors.Additional = map[string]float64{
+					"nvme0": clampFloat(40+rand.Float64()*20, 30, 90),
+				}
+			}
+		}
+
+		status := "online"
+		if rand.Float64() < 0.1 {
+			status = "offline"
+		} else if rand.Float64() < 0.12 {
+			status = "degraded"
+		}
+
+		lastSeen := now.Add(-time.Duration(rand.Intn(60)) * time.Second)
+		if status == "offline" {
+			lastSeen = now.Add(-time.Duration(300+rand.Intn(2400)) * time.Second)
+		}
+
+		uptimeSeconds := int64(3600*(12+rand.Intn(720))) + int64(rand.Intn(3600))
+		intervalSeconds := 30 + rand.Intn(45)
+
+		tags := make([]string, 0, 2)
+		for _, candidate := range []string{"production", "lab", "edge", "backup", "database", "web"} {
+			if rand.Float64() < 0.18 {
+				tags = append(tags, candidate)
+			}
+		}
+
+		host := models.Host{
+			ID:                fmt.Sprintf("host-%s-%d", profile.Platform, i+1),
+			Hostname:          hostname,
+			DisplayName:       displayName,
+			Platform:          profile.Platform,
+			OSName:            profile.OSName,
+			OSVersion:         profile.OSVersion,
+			KernelVersion:     profile.Kernel,
+			Architecture:      profile.Architecture,
+			CPUCount:          cpuCount,
+			CPUUsage:          cpuUsage,
+			LoadAverage:       loadAverage,
+			Memory:            models.Memory{Total: memTotal, Used: memUsed, Free: memFree, Usage: memUsage, SwapTotal: swapTotal, SwapUsed: swapUsed},
+			Disks:             disks,
+			NetworkInterfaces: network,
+			Sensors:           sensors,
+			Status:            status,
+			UptimeSeconds:     uptimeSeconds,
+			IntervalSeconds:   intervalSeconds,
+			LastSeen:          lastSeen,
+			AgentVersion:      hostAgentVersions[rand.Intn(len(hostAgentVersions))],
+			Tags:              tags,
+		}
+
+		hosts = append(hosts, host)
+	}
+
+	sort.Slice(hosts, func(i, j int) bool {
+		return hosts[i].Hostname < hosts[j].Hostname
+	})
+
+	return hosts
+}
 func generateDockerContainers(hostName string, hostIdx int, config MockConfig) []models.DockerContainer {
 	base := config.DockerContainersPerHost
 	if base < 1 {
@@ -2669,6 +2894,7 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 // UpdateMetrics simulates changing metrics over time
 func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 	updateDockerHosts(data, config)
+	updateHosts(data, config)
 
 	if !config.RandomMetrics {
 		return
@@ -3014,6 +3240,70 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 			host.Status = "degraded"
 		} else {
 			host.Status = "online"
+		}
+	}
+}
+
+func updateHosts(data *models.StateSnapshot, config MockConfig) {
+	if len(data.Hosts) == 0 {
+		return
+	}
+
+	now := time.Now()
+	step := int64(updateInterval.Seconds())
+	if step <= 0 {
+		step = 2
+	}
+
+	for i := range data.Hosts {
+		host := &data.Hosts[i]
+
+		if data.ConnectionHealth != nil {
+			data.ConnectionHealth[hostConnectionPrefix+host.ID] = host.Status != "offline"
+		}
+
+		if host.Status == "offline" {
+			if config.RandomMetrics && rand.Float64() < 0.02 {
+				host.Status = "online"
+				host.LastSeen = now
+				host.UptimeSeconds = int64(120 + rand.Intn(3600))
+			}
+			continue
+		}
+
+		host.LastSeen = now.Add(-time.Duration(rand.Intn(25)) * time.Second)
+		host.UptimeSeconds += step
+
+		if !config.RandomMetrics {
+			continue
+		}
+
+		host.CPUUsage = clampFloat(host.CPUUsage+(rand.Float64()-0.5)*5, 4, 97)
+
+		memUsage := clampFloat(host.Memory.Usage+(rand.Float64()-0.5)*3, 12, 96)
+		host.Memory.Usage = memUsage
+		host.Memory.Used = int64(float64(host.Memory.Total) * (memUsage / 100.0))
+		host.Memory.Free = host.Memory.Total - host.Memory.Used
+
+		for j := range host.Disks {
+			change := (rand.Float64() - 0.5) * 1.2
+			host.Disks[j].Usage = clampFloat(host.Disks[j].Usage+change, 5, 98)
+			host.Disks[j].Used = int64(float64(host.Disks[j].Total) * (host.Disks[j].Usage / 100.0))
+			host.Disks[j].Free = host.Disks[j].Total - host.Disks[j].Used
+		}
+
+		if len(host.LoadAverage) == 3 {
+			for j := range host.LoadAverage {
+				host.LoadAverage[j] = clampFloat(host.LoadAverage[j]+(rand.Float64()-0.5)*0.4, 0.05, float64(host.CPUCount))
+			}
+		}
+
+		if host.Status == "degraded" {
+			if rand.Float64() < 0.25 {
+				host.Status = "online"
+			}
+		} else if rand.Float64() < 0.05 {
+			host.Status = "degraded"
 		}
 	}
 }

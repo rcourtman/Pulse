@@ -5,10 +5,11 @@ import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
 import { NodeModal } from './NodeModal';
-import { APITokenManager } from './APITokenManager';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { GuestURLs } from './GuestURLs';
 import { DockerAgents } from './DockerAgents';
+import { HostAgents } from './HostAgents';
+import APITokenManager from './APITokenManager';
 import { OIDCPanel } from './OIDCPanel';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
@@ -23,12 +24,17 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
-import Link from 'lucide-solid/icons/link';
 import Container from 'lucide-solid/icons/container';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Shield from 'lucide-solid/icons/shield';
 import Activity from 'lucide-solid/icons/activity';
 import Loader from 'lucide-solid/icons/loader';
+import Boxes from 'lucide-solid/icons/boxes';
+import Network from 'lucide-solid/icons/network';
+import Terminal from 'lucide-solid/icons/terminal';
+import Monitor from 'lucide-solid/icons/monitor';
+import Laptop from 'lucide-solid/icons/laptop';
+import { ApiIcon } from '@/components/icons/ApiIcon';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { APITokenRecord } from '@/api/security';
@@ -222,8 +228,13 @@ type SettingsTab =
   | 'pbs'
   | 'pmg'
   | 'docker'
+  | 'podman'
+  | 'kubernetes'
+  | 'linuxServers'
+  | 'windowsServers'
+  | 'macServers'
   | 'system'
-  | 'urls'
+  | 'api'
   | 'security'
   | 'diagnostics'
   | 'updates';
@@ -245,13 +256,33 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'Docker Agents',
     description: 'Configure Docker hosts, agent tokens, and polling behaviour for container insights.',
   },
+  podman: {
+    title: 'Podman (container runtime)',
+    description: 'Auto-discovery and agent-based monitoring for Podman hosts is on the roadmap.',
+  },
+  kubernetes: {
+    title: 'Kubernetes',
+    description: 'Cluster-wide monitoring via Pulse is coming soon. Watch this space for Helm charts and operators.',
+  },
+  linuxServers: {
+    title: 'Linux Servers',
+    description: 'Install the host agent on Debian, Ubuntu, RHEL, or other Linux distributions to surface capacity metrics.',
+  },
+  windowsServers: {
+    title: 'Windows Servers',
+    description: 'Native Windows support is planned; compile from source or track development updates here.',
+  },
+  macServers: {
+    title: 'macOS Devices',
+    description: 'Monitor macOS hosts via launchd-backed agents for uptime and temperature insights.',
+  },
   system: {
     title: 'System Settings',
     description: 'Adjust Pulse core behaviour, discovery preferences, and software update cadence.',
   },
-  urls: {
-    title: 'Guest URLs',
-    description: 'Define per-guest deep links to console, dashboards, or third-party tooling.',
+  api: {
+    title: 'API access',
+    description: 'Generate scoped tokens and manage automation credentials for agents and integrations.',
   },
   security: {
     title: 'Security & Access',
@@ -300,10 +331,15 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/pbs')) return 'pbs';
     if (path.includes('/settings/pmg')) return 'pmg';
     if (path.includes('/settings/docker')) return 'docker';
+    if (path.includes('/settings/podman')) return 'podman';
+    if (path.includes('/settings/kubernetes')) return 'kubernetes';
+    if (path.includes('/settings/linuxServers')) return 'linuxServers';
+    if (path.includes('/settings/windowsServers')) return 'windowsServers';
+    if (path.includes('/settings/macServers')) return 'macServers';
     if (path.includes('/settings/system')) return 'system';
+    if (path.includes('/settings/api')) return 'api';
     if (path.includes('/settings/security')) return 'security';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
-    if (path.includes('/settings/urls')) return 'urls';
     if (path.includes('/settings/updates')) return 'updates';
     return 'pve';
   };
@@ -312,12 +348,13 @@ const Settings: Component<SettingsProps> = (props) => {
   const activeTab = () => currentTab();
 
   const setActiveTab = (tab: SettingsTab) => {
-    if (currentTab() !== tab) {
-      setCurrentTab(tab);
-    }
     const targetPath = `/settings/${tab}`;
     if (location.pathname !== targetPath) {
       navigate(targetPath);
+      return;
+    }
+    if (currentTab() !== tab) {
+      setCurrentTab(tab);
     }
   };
 
@@ -693,30 +730,31 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   const tabGroups: {
-    id: 'proxmox' | 'docker' | 'administration';
+    id: 'platforms' | 'administration';
     label: string;
-    items: { id: SettingsTab; label: string; icon: JSX.Element }[];
+    items: { id: SettingsTab; label: string; icon: JSX.Element; disabled?: boolean }[];
   }[] = [
     {
-      id: 'proxmox',
-      label: 'Proxmox',
+      id: 'platforms',
+      label: 'Platforms',
       items: [
         { id: 'pve', label: 'Proxmox VE nodes', icon: <Server class="w-4 h-4" strokeWidth={2} /> },
         { id: 'pbs', label: 'Proxmox Backup Server', icon: <HardDrive class="w-4 h-4" strokeWidth={2} /> },
         { id: 'pmg', label: 'Proxmox Mail Gateway', icon: <Mail class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'urls', label: 'Guest URLs', icon: <Link class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'docker', label: 'Docker hosts', icon: <Container class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'podman', label: 'Podman hosts', icon: <Boxes class="w-4 h-4" strokeWidth={2} />, disabled: true },
+        { id: 'kubernetes', label: 'Kubernetes', icon: <Network class="w-4 h-4" strokeWidth={2} />, disabled: true },
+        { id: 'linuxServers', label: 'Linux servers', icon: <Terminal class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'windowsServers', label: 'Windows servers', icon: <Monitor class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'macServers', label: 'macOS devices', icon: <Laptop class="w-4 h-4" strokeWidth={2} /> },
       ],
-    },
-    {
-      id: 'docker',
-      label: 'Docker',
-      items: [{ id: 'docker', label: 'Docker hosts', icon: <Container class="w-4 h-4" strokeWidth={2} /> }],
     },
     {
       id: 'administration',
       label: 'Administration',
       items: [
         { id: 'system', label: 'System', icon: <SettingsIcon class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'api', label: 'API access', icon: <ApiIcon class="w-4 h-4" /> },
         { id: 'security', label: 'Security', icon: <Shield class="w-4 h-4" strokeWidth={2} /> },
         { id: 'diagnostics', label: 'Diagnostics', icon: <Activity class="w-4 h-4" strokeWidth={2} /> },
       ],
@@ -1802,7 +1840,7 @@ const Settings: Component<SettingsProps> = (props) => {
           </div>
         </Show>
 
-        <Card padding="none" class="relative lg:flex">
+        <Card padding="none" class="relative lg:flex overflow-hidden">
           <div
             class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}
             onMouseEnter={() => setSidebarCollapsed(false)}
@@ -1822,16 +1860,26 @@ const Settings: Component<SettingsProps> = (props) => {
                       </Show>
                       <div class="space-y-1.5">
                         <For each={group.items}>
-                          {(item) => (
+                          {(item) => {
+                            const isActive = () => activeTab() === item.id;
+                            return (
                             <button
                               type="button"
-                              aria-current={activeTab() === item.id ? 'page' : undefined}
-                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${
-                                activeTab() === item.id
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                              aria-current={isActive() ? 'page' : undefined}
+                              disabled={item.disabled}
+                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${
+                                sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'
+                              } text-sm font-medium transition-colors ${
+                                item.disabled
+                                  ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
+                                  : isActive()
+                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
                               }`}
-                              onClick={() => setActiveTab(item.id)}
+                              onClick={() => {
+                                if (item.disabled) return;
+                                setActiveTab(item.id);
+                              }}
                               title={sidebarCollapsed() ? item.label : undefined}
                             >
                               {item.icon}
@@ -1839,7 +1887,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                 <span class="truncate">{item.label}</span>
                               </Show>
                             </button>
-                          )}
+                          );
+                          }}
                         </For>
                       </div>
                     </div>
@@ -1849,7 +1898,7 @@ const Settings: Component<SettingsProps> = (props) => {
             </div>
           </div>
 
-          <div class="flex-1">
+          <div class="flex-1 overflow-hidden">
             <Show when={flatTabs.length > 0}>
               <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
                 <div class="p-1">
@@ -1858,26 +1907,36 @@ const Settings: Component<SettingsProps> = (props) => {
                     style="-webkit-overflow-scrolling: touch;"
                   >
                     <For each={flatTabs}>
-                      {(tab) => (
-                        <button
-                          type="button"
-                          class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
-                            activeTab() === tab.id
-                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                          }`}
-                          onClick={() => setActiveTab(tab.id)}
-                        >
-                          {tab.label}
-                        </button>
-                      )}
+                      {(tab) => {
+                        const isActive = activeTab() === tab.id;
+                        const disabled = tab.disabled;
+                        return (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                              disabled
+                                ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
+                                : isActive
+                                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                            }`}
+                            onClick={() => {
+                              if (disabled) return;
+                              setActiveTab(tab.id);
+                            }}
+                          >
+                            {tab.label}
+                          </button>
+                        );
+                      }}
                     </For>
                   </div>
                 </div>
               </div>
             </Show>
 
-            <div class="p-3 sm:p-6">
+            <div class="p-3 sm:p-6 overflow-x-auto">
                 {/* PVE Nodes Tab */}
                 <Show when={activeTab() === 'pve'}>
                   <div class="space-y-4">
@@ -2394,6 +2453,13 @@ const Settings: Component<SettingsProps> = (props) => {
                         </For>
                       </div>
                     </Show>
+
+                    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <GuestURLs
+                        hasUnsavedChanges={hasUnsavedChanges}
+                        setHasUnsavedChanges={setHasUnsavedChanges}
+                      />
+                    </div>
                   </div>
                 </Show>
               </div>
@@ -3212,6 +3278,37 @@ const Settings: Component<SettingsProps> = (props) => {
             {/* Docker Tab */}
             <Show when={activeTab() === 'docker'}>
               <DockerAgents />
+            </Show>
+
+            {/* Podman Tab */}
+            <Show when={activeTab() === 'podman'}>
+              <PlatformComingSoon
+                name="Podman"
+                description="Pulse will support Podman hosts via the same lightweight agent workflow as Docker. Keep an eye on the release notes for availability."
+              />
+            </Show>
+
+            {/* Kubernetes Tab */}
+            <Show when={activeTab() === 'kubernetes'}>
+              <PlatformComingSoon
+                name="Kubernetes"
+                description="Native Kubernetes monitoring (agents, Helm chart, RBAC templates) is in design. Join the GitHub discussions to weigh in."
+              />
+            </Show>
+
+            {/* Linux Host Agents */}
+            <Show when={activeTab() === 'linuxServers'}>
+              <HostAgents variant="linux" />
+            </Show>
+
+            {/* Windows Host Agents */}
+            <Show when={activeTab() === 'windowsServers'}>
+              <HostAgents variant="windows" />
+            </Show>
+
+            {/* macOS Host Agents */}
+            <Show when={activeTab() === 'macServers'}>
+              <HostAgents variant="macos" />
             </Show>
 
             {/* System Settings Tab */}
@@ -4273,6 +4370,36 @@ const Settings: Component<SettingsProps> = (props) => {
               </div>
             </Show>
 
+            {/* API Access */}
+            <Show when={activeTab() === 'api'}>
+              <div class="space-y-6">
+                <SectionHeader title="API access" size="md" class="mb-2" />
+
+                <Card tone="muted" padding="lg" class="space-y-3">
+                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Generate scoped tokens for Docker agents, host agents, and automation pipelines.
+                    Tokens are shown once—store them securely and rotate when infrastructure changes.
+                  </p>
+                  <a
+                    href="https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md#token-scopes"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="inline-flex w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                  >
+                    View scope reference
+                  </a>
+                </Card>
+
+                <APITokenManager
+                  currentTokenHint={securityStatus()?.apiTokenHint}
+                  onTokensChanged={() => {
+                    void loadSecurityStatus();
+                  }}
+                  refreshing={securityStatusLoading()}
+                />
+              </div>
+            </Show>
+
             {/* Security Tab */}
             <Show when={activeTab() === 'security'}>
               <div class="space-y-6">
@@ -4610,14 +4737,18 @@ const Settings: Component<SettingsProps> = (props) => {
                   </div>
 
                   {/* Content */}
-                  <div class="p-6">
-                    <APITokenManager
-                      currentTokenHint={securityStatus()?.apiTokenHint}
-                      onTokensChanged={() => {
-                        void loadSecurityStatus();
-                      }}
-                      refreshing={securityStatusLoading()}
-                    />
+                  <div class="p-6 space-y-3">
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                      API tokens now live under the dedicated API workspace. Generate new scoped tokens,
+                      review existing access, and rotate credentials from the API menu.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('api')}
+                      class="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                    >
+                      Open API tab
+                    </button>
                   </div>
                 </Card>
 
@@ -6189,13 +6320,6 @@ const Settings: Component<SettingsProps> = (props) => {
               </div>
             </Show>
 
-            {/* Guest URLs Tab */}
-            <Show when={activeTab() === 'urls'}>
-              <GuestURLs
-                hasUnsavedChanges={hasUnsavedChanges}
-                setHasUnsavedChanges={setHasUnsavedChanges}
-              />
-            </Show>
           </div>
           </div>
         </Card>
@@ -6734,6 +6858,24 @@ const Settings: Component<SettingsProps> = (props) => {
         }}
       />
     </>
+  );
+};
+
+const PlatformComingSoon: Component<{ name: string; description?: string }> = (props) => {
+  const description =
+    props.description ??
+    `Support for ${props.name} is on the roadmap. Track progress on GitHub or join our community discussions to weigh in on requirements.`;
+
+  return (
+    <div class="space-y-6">
+      <SectionHeader title={`${props.name} integration`} description={description} />
+      <Card padding="lg">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          We’re collecting feedback and prioritising the engineering work for this platform. If you’d like to influence
+          the roadmap or volunteer for early testing, please open a discussion on GitHub or reach out via Discord.
+        </p>
+      </Card>
+    </div>
   );
 };
 

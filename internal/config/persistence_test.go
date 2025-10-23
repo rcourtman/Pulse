@@ -292,6 +292,7 @@ func TestExportConfigIncludesAPITokens(t *testing.T) {
 			Prefix:    "hash-1",
 			Suffix:    "-0001",
 			CreatedAt: createdAt,
+			Scopes:    []string{config.ScopeWildcard},
 		},
 		{
 			ID:        "token-2",
@@ -300,6 +301,7 @@ func TestExportConfigIncludesAPITokens(t *testing.T) {
 			Prefix:    "hash-2",
 			Suffix:    "-0002",
 			CreatedAt: createdAt.Add(time.Hour),
+			Scopes:    []string{config.ScopeMonitoringRead},
 		},
 	}
 
@@ -401,6 +403,7 @@ func TestImportConfigTransactionalSuccess(t *testing.T) {
 			Prefix:    "hashn1",
 			Suffix:    "n1",
 			CreatedAt: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
+			Scopes:    []string{config.ScopeMonitoringRead, config.ScopeMonitoringWrite},
 		},
 	}
 	if err := source.SaveAPITokens(newTokens); err != nil {
@@ -467,6 +470,7 @@ func TestImportConfigTransactionalSuccess(t *testing.T) {
 			Prefix:    "hasho1",
 			Suffix:    "o1",
 			CreatedAt: time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+			Scopes:    []string{config.ScopeWildcard},
 		},
 	}
 	if err := target.SaveAPITokens(oldTokens); err != nil {
@@ -569,6 +573,7 @@ func TestImportConfigRollbackOnFailure(t *testing.T) {
 			Prefix:    "hashn",
 			Suffix:    "-n",
 			CreatedAt: time.Date(2024, 2, 2, 12, 0, 0, 0, time.UTC),
+			Scopes:    []string{config.ScopeDockerReport},
 		},
 	}
 	if err := source.SaveAPITokens(newTokens); err != nil {
@@ -619,6 +624,7 @@ func TestImportConfigRollbackOnFailure(t *testing.T) {
 			Prefix:    "hasho",
 			Suffix:    "-o",
 			CreatedAt: time.Date(2023, 3, 3, 12, 0, 0, 0, time.UTC),
+			Scopes:    []string{config.ScopeWildcard},
 		},
 	}
 	if err := target.SaveAPITokens(baselineTokens); err != nil {
@@ -763,6 +769,7 @@ func TestImportAcceptsVersion40Bundle(t *testing.T) {
 			Prefix:    "hashk",
 			Suffix:    "-k",
 			CreatedAt: time.Date(2022, 4, 4, 12, 0, 0, 0, time.UTC),
+			Scopes:    []string{config.ScopeWildcard},
 		},
 	}
 	if err := target.SaveAPITokens(baselineTokens); err != nil {

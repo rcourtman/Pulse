@@ -5,6 +5,7 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -616,6 +617,63 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 		// User is authenticated and has admin privileges (or not using proxy auth)
 		handler(w, r)
 	}
+}
+
+// RequireScope ensures that token-authenticated requests include the specified scope.
+// Session-based (browser) requests bypass the scope check.
+func RequireScope(scope string, handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if scope == "" {
+			handler(w, r)
+			return
+		}
+
+		record := getAPITokenRecordFromRequest(r)
+		if record == nil {
+			// Session-authenticated request
+			handler(w, r)
+			return
+		}
+
+		if record.HasScope(scope) {
+			handler(w, r)
+			return
+		}
+
+		log.Warn().
+			Str("token_id", record.ID).
+			Str("required_scope", scope).
+			Msg("API token missing required scope")
+
+		respondMissingScope(w, scope)
+	}
+}
+
+func respondMissingScope(w http.ResponseWriter, scope string) {
+	if w == nil {
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error":         "missing_scope",
+		"requiredScope": scope,
+	})
+}
+
+// ensureScope enforces that the request either originates from a session or a token
+// possessing the specified scope. Returns true when access should continue.
+func ensureScope(w http.ResponseWriter, r *http.Request, scope string) bool {
+	if scope == "" {
+		return true
+	}
+	record := getAPITokenRecordFromRequest(r)
+	if record == nil || record.HasScope(scope) {
+		return true
+	}
+	respondMissingScope(w, scope)
+	return false
 }
 
 func attachAPITokenRecord(r *http.Request, record *config.APITokenRecord) {

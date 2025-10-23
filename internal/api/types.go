@@ -57,6 +57,7 @@ type StateResponse struct {
 	VMs              []models.VM                 `json:"vms"`
 	Containers       []models.Container          `json:"containers"`
 	DockerHosts      []models.DockerHostFrontend `json:"dockerHosts"`
+	Hosts            []models.HostFrontend       `json:"hosts"`
 	Storage          []models.Storage            `json:"storage"`
 	CephClusters     []models.CephCluster        `json:"cephClusters"`
 	PBSInstances     []models.PBSInstance        `json:"pbs"`

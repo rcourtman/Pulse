@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -681,26 +682,59 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case path == "config" && r.Method == http.MethodGet:
+		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
 		h.GetAlertConfig(w, r)
 	case path == "config" && r.Method == http.MethodPut:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
 		h.UpdateAlertConfig(w, r)
 	case path == "activate" && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
 		h.ActivateAlerts(w, r)
 	case path == "active" && r.Method == http.MethodGet:
+		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
 		h.GetActiveAlerts(w, r)
 	case path == "history" && r.Method == http.MethodGet:
+		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
 		h.GetAlertHistory(w, r)
 	case path == "history" && r.Method == http.MethodDelete:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
 		h.ClearAlertHistory(w, r)
 	case path == "bulk/acknowledge" && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
 		h.BulkAcknowledgeAlerts(w, r)
 	case path == "bulk/clear" && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
 		h.BulkClearAlerts(w, r)
 	case strings.HasSuffix(path, "/acknowledge") && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
 		h.AcknowledgeAlert(w, r)
 	case strings.HasSuffix(path, "/unacknowledge") && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
 		h.UnacknowledgeAlert(w, r)
 	case strings.HasSuffix(path, "/clear") && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
 		h.ClearAlert(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
