@@ -319,7 +319,7 @@ GET /install-docker-agent.sh          # Download the installation convenience sc
 GET /download/pulse-docker-agent      # Download the standalone Docker agent binary
 ```
 
-Agent routes require authentication. Use an API token or an authenticated session when calling them from automation. The payload reports restart loops, exit codes, memory pressure, and health probes per container, and Pulse de-duplicates heartbeats per agent ID so you can fan out to multiple Pulse instances safely. Host responses mirror the `/api/state` data, including `issues`, `recentExitCodes`, and `lastSeen` timestamps so external tooling can mimic the built-in Docker workspace.
+Agent routes require authentication. Use an API token or an authenticated session when calling them from automation. When authenticating with tokens, grant `docker:report` for `POST /api/agents/docker/report`, `docker:manage` for Docker host lifecycle endpoints, and `host-agent:report` for host agent submissions. The payload reports restart loops, exit codes, memory pressure, and health probes per container, and Pulse de-duplicates heartbeats per agent ID so you can fan out to multiple Pulse instances safely. Host responses mirror the `/api/state` data, including `issues`, `recentExitCodes`, and `lastSeen` timestamps so external tooling can mimic the built-in Docker workspace.
 
 ## Monitoring Data
 
@@ -491,7 +491,9 @@ Request body:
 #### API Token Management
 Manage API tokens for automation workflows, Docker agents, and tool integrations.
 
-Authentication: Requires an admin session or an existing admin-scoped API token.
+Authentication: Requires an admin session or an API token with the scope(s) below:
+- `settings:read` for `GET /api/security/tokens`
+- `settings:write` for `POST /api/security/tokens` and `DELETE /api/security/tokens/{id}`
 
 **List tokens**
 ```bash
@@ -508,7 +510,8 @@ Response:
       "prefix": "pulse_1a2b",
       "suffix": "c3d4",
       "createdAt": "2025-10-14T12:12:34Z",
-      "lastUsedAt": "2025-10-14T12:21:05Z"
+      "lastUsedAt": "2025-10-14T12:21:05Z",
+      "scopes": ["docker:report", "monitoring:read"]
     }
   ]
 }
@@ -519,9 +522,12 @@ Response:
 POST /api/security/tokens
 Content-Type: application/json
 {
-  "name": "ansible"
+  "name": "ansible",
+  "scopes": ["monitoring:read"]
 }
 ```
+
+> Omit the `scopes` field to mint a full-access token (`["*"]`). When present, the array must include one or more known scopes—see `docs/CONFIGURATION.md` for the canonical list and descriptions.
 
 Response (token value is returned once):
 ```json
@@ -533,7 +539,8 @@ Response (token value is returned once):
     "prefix": "pulse_1a2b",
     "suffix": "c3d4",
     "createdAt": "2025-10-14T12:12:34Z",
-    "lastUsedAt": null
+    "lastUsedAt": null,
+    "scopes": ["monitoring:read"]
   }
 }
 ```

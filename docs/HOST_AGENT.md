@@ -81,7 +81,7 @@ A Windows build will ship shortly. In the meantime run the Linux/WSL binary or c
 | Flag | Description |
 |------|-------------|
 | `--url` | Pulse base URL (defaults to `http://localhost:7655`) |
-| `--token` | API token with monitoring write access |
+| `--token` | API token with the `host-agent:report` scope |
 | `--interval` | Polling interval (`30s` default) |
 | `--hostname` | Override reported hostname |
 | `--agent-id` | Override agent identifier (used as dedupe key) |
