@@ -76,15 +76,15 @@ type Config struct {
 
 	// Monitoring settings
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
-	PBSPollingInterval    time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
-	PMGPollingInterval    time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
-	ConcurrentPolling     bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
-	ConnectionTimeout     time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
-	MetricsRetentionDays  int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
-	BackupPollingCycles   int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
-	BackupPollingInterval time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
-	EnableBackupPolling   bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
-	WebhookBatchDelay     time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
+	PBSPollingInterval          time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
+	PMGPollingInterval          time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
+	ConcurrentPolling           bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
+	ConnectionTimeout           time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
+	MetricsRetentionDays        int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
+	BackupPollingCycles         int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
+	BackupPollingInterval       time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
+	EnableBackupPolling         bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
+	WebhookBatchDelay           time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
 	AdaptivePollingEnabled      bool          `envconfig:"ADAPTIVE_POLLING_ENABLED" default:"false"`
 	AdaptivePollingBaseInterval time.Duration `envconfig:"ADAPTIVE_POLLING_BASE_INTERVAL" default:"10s"`
 	AdaptivePollingMinInterval  time.Duration `envconfig:"ADAPTIVE_POLLING_MIN_INTERVAL" default:"5s"`
@@ -485,36 +485,36 @@ func Load() (*Config, error) {
 
 	// Initialize config with defaults
 	cfg := &Config{
-		BackendHost:           "0.0.0.0",
-		BackendPort:           3000,
-		FrontendHost:          "0.0.0.0",
-		FrontendPort:          7655,
-		ConfigPath:            dataDir,
-		DataPath:              dataDir,
-		ConcurrentPolling:     true,
-		ConnectionTimeout:     60 * time.Second,
-		MetricsRetentionDays:  7,
-		BackupPollingCycles:   10,
-		BackupPollingInterval: 0,
-		EnableBackupPolling:   true,
-		WebhookBatchDelay:     10 * time.Second,
+		BackendHost:                 "0.0.0.0",
+		BackendPort:                 3000,
+		FrontendHost:                "0.0.0.0",
+		FrontendPort:                7655,
+		ConfigPath:                  dataDir,
+		DataPath:                    dataDir,
+		ConcurrentPolling:           true,
+		ConnectionTimeout:           60 * time.Second,
+		MetricsRetentionDays:        7,
+		BackupPollingCycles:         10,
+		BackupPollingInterval:       0,
+		EnableBackupPolling:         true,
+		WebhookBatchDelay:           10 * time.Second,
 		AdaptivePollingEnabled:      false,
 		AdaptivePollingBaseInterval: 10 * time.Second,
 		AdaptivePollingMinInterval:  5 * time.Second,
 		AdaptivePollingMaxInterval:  5 * time.Minute,
-		LogLevel:              "info",
-		LogFormat:             "auto",
-		LogMaxSize:            100,
-		LogMaxAge:             30,
-		LogCompress:           true,
-		AllowedOrigins:        "", // Empty means no CORS headers (same-origin only)
-		IframeEmbeddingAllow:  "SAMEORIGIN",
-		PBSPollingInterval:    60 * time.Second, // Default PBS polling (slower)
-		PMGPollingInterval:    60 * time.Second, // Default PMG polling (aggregated stats)
-		DiscoveryEnabled:      false,
-		DiscoverySubnet:       "auto",
-		EnvOverrides:          make(map[string]bool),
-	OIDC:                  NewOIDCConfig(),
+		LogLevel:                    "info",
+		LogFormat:                   "auto",
+		LogMaxSize:                  100,
+		LogMaxAge:                   30,
+		LogCompress:                 true,
+		AllowedOrigins:              "", // Empty means no CORS headers (same-origin only)
+		IframeEmbeddingAllow:        "SAMEORIGIN",
+		PBSPollingInterval:          60 * time.Second, // Default PBS polling (slower)
+		PMGPollingInterval:          60 * time.Second, // Default PMG polling (aggregated stats)
+		DiscoveryEnabled:            false,
+		DiscoverySubnet:             "auto",
+		EnvOverrides:                make(map[string]bool),
+		OIDC:                        NewOIDCConfig(),
 	}
 
 	cfg.Discovery = DefaultDiscoveryConfig()
@@ -548,26 +548,26 @@ func Load() (*Config, error) {
 				cfg.PMGPollingInterval = time.Duration(systemSettings.PMGPollingInterval) * time.Second
 			}
 
-		if systemSettings.BackupPollingInterval > 0 {
-			cfg.BackupPollingInterval = time.Duration(systemSettings.BackupPollingInterval) * time.Second
-		} else if systemSettings.BackupPollingInterval == 0 {
-			cfg.BackupPollingInterval = 0
-		}
-		if systemSettings.BackupPollingEnabled != nil {
-			cfg.EnableBackupPolling = *systemSettings.BackupPollingEnabled
-		}
-		if systemSettings.AdaptivePollingEnabled != nil {
-			cfg.AdaptivePollingEnabled = *systemSettings.AdaptivePollingEnabled
-		}
-		if systemSettings.AdaptivePollingBaseInterval > 0 {
-			cfg.AdaptivePollingBaseInterval = time.Duration(systemSettings.AdaptivePollingBaseInterval) * time.Second
-		}
-		if systemSettings.AdaptivePollingMinInterval > 0 {
-			cfg.AdaptivePollingMinInterval = time.Duration(systemSettings.AdaptivePollingMinInterval) * time.Second
-		}
-		if systemSettings.AdaptivePollingMaxInterval > 0 {
-			cfg.AdaptivePollingMaxInterval = time.Duration(systemSettings.AdaptivePollingMaxInterval) * time.Second
-		}
+			if systemSettings.BackupPollingInterval > 0 {
+				cfg.BackupPollingInterval = time.Duration(systemSettings.BackupPollingInterval) * time.Second
+			} else if systemSettings.BackupPollingInterval == 0 {
+				cfg.BackupPollingInterval = 0
+			}
+			if systemSettings.BackupPollingEnabled != nil {
+				cfg.EnableBackupPolling = *systemSettings.BackupPollingEnabled
+			}
+			if systemSettings.AdaptivePollingEnabled != nil {
+				cfg.AdaptivePollingEnabled = *systemSettings.AdaptivePollingEnabled
+			}
+			if systemSettings.AdaptivePollingBaseInterval > 0 {
+				cfg.AdaptivePollingBaseInterval = time.Duration(systemSettings.AdaptivePollingBaseInterval) * time.Second
+			}
+			if systemSettings.AdaptivePollingMinInterval > 0 {
+				cfg.AdaptivePollingMinInterval = time.Duration(systemSettings.AdaptivePollingMinInterval) * time.Second
+			}
+			if systemSettings.AdaptivePollingMaxInterval > 0 {
+				cfg.AdaptivePollingMaxInterval = time.Duration(systemSettings.AdaptivePollingMaxInterval) * time.Second
+			}
 
 			if systemSettings.UpdateChannel != "" {
 				cfg.UpdateChannel = systemSettings.UpdateChannel
@@ -602,11 +602,11 @@ func Load() (*Config, error) {
 		} else {
 			// No system.json exists - create default one
 			log.Info().Msg("No system.json found, creating default")
-		defaultSettings := DefaultSystemSettings()
-		defaultSettings.ConnectionTimeout = int(cfg.ConnectionTimeout.Seconds())
-		if err := persistence.SaveSystemSettings(*defaultSettings); err != nil {
-			log.Warn().Err(err).Msg("Failed to create default system.json")
-		}
+			defaultSettings := DefaultSystemSettings()
+			defaultSettings.ConnectionTimeout = int(cfg.ConnectionTimeout.Seconds())
+			if err := persistence.SaveSystemSettings(*defaultSettings); err != nil {
+				log.Warn().Err(err).Msg("Failed to create default system.json")
+			}
 		}
 
 		if oidcSettings, err := persistence.LoadOIDCConfig(); err == nil && oidcSettings != nil {
@@ -783,6 +783,7 @@ func Load() (*Config, error) {
 				Prefix:    prefix,
 				Suffix:    suffix,
 				CreatedAt: time.Now().UTC(),
+				Scopes:    []string{ScopeWildcard},
 			}
 			cfg.APITokens = append(cfg.APITokens, record)
 		}
@@ -800,7 +801,7 @@ func Load() (*Config, error) {
 
 	// Legacy migration: if a single token is present without metadata, wrap it.
 	if !cfg.HasAPITokens() && cfg.APIToken != "" {
-		if record, err := NewHashedAPITokenRecord(cfg.APIToken, "Legacy token", time.Now().UTC()); err == nil {
+		if record, err := NewHashedAPITokenRecord(cfg.APIToken, "Legacy token", time.Now().UTC(), nil); err == nil {
 			cfg.APITokens = []APITokenRecord{*record}
 			cfg.SortAPITokens()
 			log.Info().Msg("Migrated legacy API token into token record store")
@@ -1121,20 +1122,20 @@ func SaveConfig(cfg *Config) error {
 	adaptiveEnabled := cfg.AdaptivePollingEnabled
 	systemSettings := SystemSettings{
 		// Note: PVE polling is hardcoded to 10s
-		UpdateChannel:                 cfg.UpdateChannel,
-		AutoUpdateEnabled:             cfg.AutoUpdateEnabled,
-		AutoUpdateCheckInterval:       int(cfg.AutoUpdateCheckInterval.Hours()),
-		AutoUpdateTime:                cfg.AutoUpdateTime,
-		AllowedOrigins:                cfg.AllowedOrigins,
-		ConnectionTimeout:             int(cfg.ConnectionTimeout.Seconds()),
-		LogLevel:                      cfg.LogLevel,
-		DiscoveryEnabled:              cfg.DiscoveryEnabled,
-		DiscoverySubnet:               cfg.DiscoverySubnet,
-		DiscoveryConfig:               CloneDiscoveryConfig(cfg.Discovery),
-		AdaptivePollingEnabled:        &adaptiveEnabled,
-		AdaptivePollingBaseInterval:   int(cfg.AdaptivePollingBaseInterval / time.Second),
-		AdaptivePollingMinInterval:    int(cfg.AdaptivePollingMinInterval / time.Second),
-		AdaptivePollingMaxInterval:    int(cfg.AdaptivePollingMaxInterval / time.Second),
+		UpdateChannel:               cfg.UpdateChannel,
+		AutoUpdateEnabled:           cfg.AutoUpdateEnabled,
+		AutoUpdateCheckInterval:     int(cfg.AutoUpdateCheckInterval.Hours()),
+		AutoUpdateTime:              cfg.AutoUpdateTime,
+		AllowedOrigins:              cfg.AllowedOrigins,
+		ConnectionTimeout:           int(cfg.ConnectionTimeout.Seconds()),
+		LogLevel:                    cfg.LogLevel,
+		DiscoveryEnabled:            cfg.DiscoveryEnabled,
+		DiscoverySubnet:             cfg.DiscoverySubnet,
+		DiscoveryConfig:             CloneDiscoveryConfig(cfg.Discovery),
+		AdaptivePollingEnabled:      &adaptiveEnabled,
+		AdaptivePollingBaseInterval: int(cfg.AdaptivePollingBaseInterval / time.Second),
+		AdaptivePollingMinInterval:  int(cfg.AdaptivePollingMinInterval / time.Second),
+		AdaptivePollingMaxInterval:  int(cfg.AdaptivePollingMaxInterval / time.Second),
 		// APIToken removed - now handled via .env only
 	}
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {

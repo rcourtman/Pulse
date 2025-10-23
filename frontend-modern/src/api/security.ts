@@ -7,6 +7,7 @@ export interface APITokenRecord {
   suffix: string;
   createdAt: string;
   lastUsedAt?: string;
+  scopes?: string[];
 }
 
 export interface CreateAPITokenResponse {
@@ -20,10 +21,18 @@ export class SecurityAPI {
     return response.tokens ?? [];
   }
 
-  static async createToken(name?: string): Promise<CreateAPITokenResponse> {
+  static async createToken(name?: string, scopes?: string[]): Promise<CreateAPITokenResponse> {
+    const payload: Record<string, unknown> = {};
+    if (name) {
+      payload.name = name;
+    }
+    if (scopes) {
+      payload.scopes = scopes;
+    }
+
     return apiFetchJSON<CreateAPITokenResponse>('/api/security/tokens', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(payload),
     });
   }
 

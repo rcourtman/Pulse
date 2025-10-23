@@ -50,6 +50,7 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 - **Interactive Backup Explorer**: Cross-highlighted bar chart + grid with quick time-range pivots (24h/7d/30d/custom) and contextual tooltips for the busiest jobs
 - Proxmox Mail Gateway analytics: mail volume, spam/virus trends, quarantine health, and cluster node status
 - Optional Docker container monitoring via lightweight agent
+- Standalone host agent for Linux, macOS, and Windows servers to capture uptime, OS metadata, and capacity metrics
 - Config export/import with encryption and authentication
 - Automatic stable updates with safe rollback (opt-in)
 - Dark/light themes, responsive design
@@ -110,7 +111,7 @@ helm install pulse oci://ghcr.io/rcourtman/pulse-chart \
 1. Open `http://<your-server>:7655`
 2. **Complete the mandatory security setup** (first-time only)
 3. Create your admin username and password
-4. Use **Settings → Security → API tokens** to mint dedicated tokens for automation (issue one token per integration so you can revoke credentials individually)
+4. Use **Settings → Security → API tokens** to mint dedicated tokens for automation. Assign scopes so each token only has the permissions it needs (e.g. `docker:report`, `host-agent:report`). Legacy tokens default to full access until you edit and save new scopes.
 
 **Option B: Automated Setup (No UI)**
 For automated deployments, configure authentication via environment variables:
@@ -167,6 +168,10 @@ The script handles user creation, permissions, token generation, and registratio
 ### Monitor Docker Containers (optional)
 
 Deploy the lightweight [Pulse Docker agent](docs/DOCKER_MONITORING.md) on any host running Docker to stream container status and resource data back to Pulse. Install the agent alongside your stack, point it at your Pulse URL and API token, and the **Docker** workspace lights up with host summaries, restart loop detection, per-container CPU/memory charts, and quick filters for stacks and unhealthy workloads.
+
+### Monitor Standalone Servers (optional)
+
+Install the [Pulse host agent](docs/HOST_AGENT.md) on Linux, macOS, or Windows machines that sit outside your Proxmox or Docker estate. Generate an API token scoped to `host-agent:report`, drop it into the install command, and the **Servers** workspace will populate with uptime, OS metadata, and capacity metrics.
 
 ## Docker
 

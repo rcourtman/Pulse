@@ -338,7 +338,7 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
 		cfg.DisableAuth = false
 		cfg.APITokenEnabled = true
-		record, err := config.NewAPITokenRecord(apiToken, "Integration test token")
+		record, err := config.NewAPITokenRecord(apiToken, "Integration test token", nil)
 		if err != nil {
 			t.Fatalf("create API token record: %v", err)
 		}

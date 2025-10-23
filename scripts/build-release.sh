@@ -66,6 +66,13 @@ for build_name in "${!builds[@]}"; do
         -o "$BUILD_DIR/pulse-docker-agent-$build_name" \
         ./cmd/pulse-docker-agent
 
+    # Build host agent binary
+    env $build_env go build \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
+        -trimpath \
+        -o "$BUILD_DIR/pulse-host-agent-$build_name" \
+        ./cmd/pulse-host-agent
+
     # Build temperature proxy binary
     env $build_env go build \
         -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit}" \
@@ -85,6 +92,7 @@ for build_name in "${!builds[@]}"; do
     # Copy binaries and VERSION file
     cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$staging_dir/bin/pulse-docker-agent"
+    cp "$BUILD_DIR/pulse-host-agent-$build_name" "$staging_dir/bin/pulse-host-agent"
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$staging_dir/bin/pulse-sensor-proxy"
     cp "scripts/install-docker-agent.sh" "$staging_dir/scripts/install-docker-agent.sh"
     chmod 755 "$staging_dir/scripts/install-docker-agent.sh"
@@ -112,6 +120,7 @@ mkdir -p "$universal_dir/scripts"
 for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/pulse-${build_name}"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$universal_dir/bin/pulse-docker-agent-${build_name}"
+    cp "$BUILD_DIR/pulse-host-agent-$build_name" "$universal_dir/bin/pulse-host-agent-${build_name}"
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$universal_dir/bin/pulse-sensor-proxy-${build_name}"
 done
 
@@ -188,8 +197,42 @@ esac
 EOF
 chmod +x "$universal_dir/bin/pulse-sensor-proxy"
 
+cat > "$universal_dir/bin/pulse-host-agent" << 'EOF'
+#!/bin/sh
+# Auto-detect architecture and run appropriate pulse-host-agent binary
+
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        exec "$(dirname "$0")/pulse-host-agent-linux-amd64" "$@"
+        ;;
+    aarch64|arm64)
+        exec "$(dirname "$0")/pulse-host-agent-linux-arm64" "$@"
+        ;;
+    armv7l|armhf)
+        exec "$(dirname "$0")/pulse-host-agent-linux-armv7" "$@"
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH" >&2
+        exit 1
+        ;;
+esac
+EOF
+chmod +x "$universal_dir/bin/pulse-host-agent"
+
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
+
+# Build host agent for macOS arm64
+echo "Building host agent for macOS arm64..."
+env GOOS=darwin GOARCH=arm64 go build \
+    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
+    -trimpath \
+    -o "$BUILD_DIR/pulse-host-agent-darwin-arm64" \
+    ./cmd/pulse-host-agent
+
+# Package macOS host agent
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-arm64
 
 # Create universal tarball
 cd "$universal_dir"

@@ -9,6 +9,37 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 )
 
+// Canonical API token scope strings.
+const (
+	ScopeWildcard        = "*"
+	ScopeMonitoringRead  = "monitoring:read"
+	ScopeMonitoringWrite = "monitoring:write"
+	ScopeDockerReport    = "docker:report"
+	ScopeDockerManage    = "docker:manage"
+	ScopeHostReport      = "host-agent:report"
+	ScopeSettingsRead    = "settings:read"
+	ScopeSettingsWrite   = "settings:write"
+)
+
+// AllKnownScopes enumerates scopes recognized by the backend (excluding the wildcard sentinel).
+var AllKnownScopes = []string{
+	ScopeMonitoringRead,
+	ScopeMonitoringWrite,
+	ScopeDockerReport,
+	ScopeDockerManage,
+	ScopeHostReport,
+	ScopeSettingsRead,
+	ScopeSettingsWrite,
+}
+
+var scopeLookup = func() map[string]struct{} {
+	lookup := make(map[string]struct{}, len(AllKnownScopes))
+	for _, scope := range AllKnownScopes {
+		lookup[scope] = struct{}{}
+	}
+	return lookup
+}()
+
 // ErrInvalidToken is returned when a token value is empty or malformed.
 var ErrInvalidToken = errors.New("invalid API token")
 
@@ -21,6 +52,20 @@ type APITokenRecord struct {
 	Suffix     string     `json:"suffix,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	Scopes     []string   `json:"scopes,omitempty"`
+}
+
+// ensureScopes normalizes the scope slice, applying legacy defaults.
+func (r *APITokenRecord) ensureScopes() {
+	if len(r.Scopes) == 0 {
+		r.Scopes = []string{ScopeWildcard}
+		return
+	}
+
+	// Copy to avoid shared underlying slice if this record is reused.
+	scopes := make([]string, len(r.Scopes))
+	copy(scopes, r.Scopes)
+	r.Scopes = scopes
 }
 
 // Clone returns a copy of the record with duplicated pointer fields.
@@ -30,11 +75,12 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 		t := *r.LastUsedAt
 		clone.LastUsedAt = &t
 	}
+	clone.ensureScopes()
 	return clone
 }
 
 // NewAPITokenRecord constructs a metadata record from the provided raw token.
-func NewAPITokenRecord(rawToken, name string) (*APITokenRecord, error) {
+func NewAPITokenRecord(rawToken, name string, scopes []string) (*APITokenRecord, error) {
 	if rawToken == "" {
 		return nil, ErrInvalidToken
 	}
@@ -47,12 +93,13 @@ func NewAPITokenRecord(rawToken, name string) (*APITokenRecord, error) {
 		Prefix:    tokenPrefix(rawToken),
 		Suffix:    tokenSuffix(rawToken),
 		CreatedAt: now,
+		Scopes:    normalizeScopes(scopes),
 	}
 	return record, nil
 }
 
 // NewHashedAPITokenRecord constructs a record from an already hashed token.
-func NewHashedAPITokenRecord(hashedToken, name string, createdAt time.Time) (*APITokenRecord, error) {
+func NewHashedAPITokenRecord(hashedToken, name string, createdAt time.Time, scopes []string) (*APITokenRecord, error) {
 	if hashedToken == "" {
 		return nil, ErrInvalidToken
 	}
@@ -67,6 +114,7 @@ func NewHashedAPITokenRecord(hashedToken, name string, createdAt time.Time) (*AP
 		Prefix:    tokenPrefix(hashedToken),
 		Suffix:    tokenSuffix(hashedToken),
 		CreatedAt: createdAt,
+		Scopes:    normalizeScopes(scopes),
 	}, nil
 }
 
@@ -150,6 +198,7 @@ func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 		if auth.CompareAPIToken(rawToken, record.Hash) {
 			now := time.Now().UTC()
 			c.APITokens[idx].LastUsedAt = &now
+			c.APITokens[idx].ensureScopes()
 			return &c.APITokens[idx], true
 		}
 	}
@@ -158,6 +207,7 @@ func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 
 // UpsertAPIToken inserts or replaces a record by ID.
 func (c *Config) UpsertAPIToken(record APITokenRecord) {
+	record.ensureScopes()
 	for idx, existing := range c.APITokens {
 		if existing.ID == record.ID {
 			c.APITokens[idx] = record
@@ -182,6 +232,9 @@ func (c *Config) RemoveAPIToken(id string) bool {
 
 // SortAPITokens keeps tokens ordered newest-first and syncs the legacy APIToken field.
 func (c *Config) SortAPITokens() {
+	for i := range c.APITokens {
+		c.APITokens[i].ensureScopes()
+	}
 	sort.SliceStable(c.APITokens, func(i, j int) bool {
 		return c.APITokens[i].CreatedAt.After(c.APITokens[j].CreatedAt)
 	})
@@ -192,4 +245,37 @@ func (c *Config) SortAPITokens() {
 	} else {
 		c.APIToken = ""
 	}
+}
+
+// normalizeScopes applies defaults and returns a safe copy of the input slice.
+func normalizeScopes(scopes []string) []string {
+	if len(scopes) == 0 {
+		return []string{ScopeWildcard}
+	}
+	result := make([]string, len(scopes))
+	copy(result, scopes)
+	return result
+}
+
+// HasScope reports whether the record grants the requested scope or wildcard access.
+func (r *APITokenRecord) HasScope(scope string) bool {
+	if scope == "" {
+		return true
+	}
+	r.ensureScopes()
+	for _, candidate := range r.Scopes {
+		if candidate == ScopeWildcard || candidate == scope {
+			return true
+		}
+	}
+	return false
+}
+
+// IsKnownScope reports whether the provided string matches a supported scope identifier.
+func IsKnownScope(scope string) bool {
+	if scope == ScopeWildcard {
+		return true
+	}
+	_, ok := scopeLookup[scope]
+	return ok
 }

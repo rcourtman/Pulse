@@ -194,6 +194,49 @@ export interface DockerContainerNetwork {
   ipv6?: string;
 }
 
+export interface Host {
+  id: string;
+  hostname: string;
+  displayName: string;
+  platform?: string;
+  osName?: string;
+  osVersion?: string;
+  kernelVersion?: string;
+  architecture?: string;
+  cpuCount?: number;
+  cpuUsage?: number;
+  loadAverage?: number[];
+  memory: Memory;
+  disks?: Disk[];
+  networkInterfaces?: HostNetworkInterface[];
+  sensors?: HostSensorSummary;
+  status: string;
+  uptimeSeconds?: number;
+  lastSeen: number;
+  intervalSeconds?: number;
+  agentVersion?: string;
+  tokenId?: string;
+  tokenName?: string;
+  tokenHint?: string;
+  tokenLastUsedAt?: number;
+  tags?: string[];
+}
+
+export interface HostNetworkInterface {
+  name: string;
+  mac?: string;
+  addresses?: string[];
+  rxBytes?: number;
+  txBytes?: number;
+  speedMbps?: number;
+}
+
+export interface HostSensorSummary {
+  temperatureCelsius?: Record<string, number>;
+  fanRpm?: Record<string, number>;
+  additional?: Record<string, number>;
+}
+
 export interface ReplicationJob {
   id: string;
   instance: string;

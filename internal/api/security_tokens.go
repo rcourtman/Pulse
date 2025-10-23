@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,6 +21,7 @@ type apiTokenDTO struct {
 	Suffix     string     `json:"suffix"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	Scopes     []string   `json:"scopes"`
 }
 
 func toAPITokenDTO(record config.APITokenRecord) apiTokenDTO {
@@ -29,7 +32,56 @@ func toAPITokenDTO(record config.APITokenRecord) apiTokenDTO {
 		Suffix:     record.Suffix,
 		CreatedAt:  record.CreatedAt,
 		LastUsedAt: record.LastUsedAt,
+		Scopes:     append([]string{}, record.Scopes...),
 	}
+}
+
+func normalizeRequestedScopes(raw *[]string) ([]string, error) {
+	if raw == nil {
+		return []string{config.ScopeWildcard}, nil
+	}
+
+	requested := *raw
+	if len(requested) == 0 {
+		return nil, fmt.Errorf("select at least one scope or omit the field for full access")
+	}
+
+	seen := make(map[string]struct{}, len(requested))
+	normalized := make([]string, 0, len(requested))
+	hasWildcard := false
+
+	for _, scope := range requested {
+		scope = strings.TrimSpace(scope)
+		if scope == "" {
+			return nil, fmt.Errorf("scope identifiers cannot be blank")
+		}
+		if scope == config.ScopeWildcard {
+			hasWildcard = true
+			continue
+		}
+		if !config.IsKnownScope(scope) {
+			return nil, fmt.Errorf("unknown scope %q", scope)
+		}
+		if _, exists := seen[scope]; exists {
+			continue
+		}
+		seen[scope] = struct{}{}
+		normalized = append(normalized, scope)
+	}
+
+	if hasWildcard {
+		if len(normalized) > 0 {
+			return nil, fmt.Errorf("wildcard '*' cannot be combined with other scopes")
+		}
+		return []string{config.ScopeWildcard}, nil
+	}
+
+	if len(normalized) == 0 {
+		return nil, fmt.Errorf("select at least one scope")
+	}
+
+	sort.Strings(normalized)
+	return normalized, nil
 }
 
 // handleListAPITokens returns all configured API tokens (metadata only).
@@ -51,7 +103,8 @@ func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 }
 
 type createTokenRequest struct {
-	Name string `json:"name"`
+	Name   string    `json:"name"`
+	Scopes *[]string `json:"scopes"`
 }
 
 // handleCreateAPIToken generates and stores a new API token.
@@ -73,6 +126,13 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 		name = "API token"
 	}
 
+	scopes, err := normalizeRequestedScopes(payload.Scopes)
+	if err != nil {
+		log.Warn().Err(err).Msg("Invalid scopes provided for API token creation")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate API token")
@@ -80,7 +140,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	record, err := config.NewAPITokenRecord(rawToken, name)
+	record, err := config.NewAPITokenRecord(rawToken, name, scopes)
 	if err != nil {
 		log.Error().Err(err).Str("token_name", name).Msg("Failed to construct API token record")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)

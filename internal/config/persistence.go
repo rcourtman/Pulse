@@ -126,6 +126,10 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 		return nil, err
 	}
 
+	for i := range tokens {
+		tokens[i].ensureScopes()
+	}
+
 	return tokens, nil
 }
 
@@ -145,7 +149,14 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 		}
 	}
 
-	data, err := json.MarshalIndent(tokens, "", "  ")
+	sanitized := make([]APITokenRecord, len(tokens))
+	for i := range tokens {
+		record := tokens[i]
+		record.ensureScopes()
+		sanitized[i] = record
+	}
+
+	data, err := json.MarshalIndent(sanitized, "", "  ")
 	if err != nil {
 		return err
 	}

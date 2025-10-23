@@ -470,7 +470,25 @@ curl -H "X-API-Token: $ANSIBLE_TOKEN" http://localhost:7655/api/nodes
 # API_TOKEN=your-secure-api-token ./pulse
 ```
 
-> **Tip:** Generate a distinct token for each automation workflow (Ansible, Docker agents, CI runners, etc.) so you can revoke one credential without affecting the others.
+> **Tip:** Generate a distinct token for each automation workflow (Ansible, Docker agents, host agents, CI runners, etc.) so you can revoke one credential without affecting the others.
+
+### Token Scopes
+
+API tokens created in the UI can be restricted to the smallest set of permissions required by an integration:
+
+| Scope | Typical use |
+|-------|-------------|
+| `docker:report` | Docker agent submitting host/container telemetry |
+| `docker:manage` | Docker agent lifecycle commands (restart, stop, etc.) |
+| `host-agent:report` | Pulse host agent reporting OS metrics |
+| `monitoring:read` | Read-only access to dashboards, state API, and alert history |
+| `monitoring:write` | Acknowledge, silence, or clear alerts |
+| `settings:read` | Fetch configuration snapshots and diagnostics |
+| `settings:write` | Modify configuration, manage tokens, trigger updates |
+
+Leaving the scope list empty (or legacy tokens without scopes) grants full access. Tokens generated from specific panels (e.g. **Settings → Agents → Host agents**) automatically apply the relevant scope presets.
+
+> **Upgrade note:** After upgrading, existing tokens are treated as full-access (`*`). Visit **Settings → Security** to edit each legacy token and assign narrower scopes.
 
 **Option 2: Basic Authentication**
 ```bash

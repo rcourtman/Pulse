@@ -39,6 +39,7 @@ type Router struct {
 	configHandlers        *ConfigHandlers
 	notificationHandlers  *NotificationHandlers
 	dockerAgentHandlers   *DockerAgentHandlers
+	hostAgentHandlers     *HostAgentHandlers
 	systemSettingsHandler *SystemSettingsHandler
 	wsHub                 *websocket.Hub
 	reloadFunc            func() error
@@ -120,21 +121,23 @@ func (r *Router) setupRoutes() {
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.config.DataPath)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
+	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/monitoring/scheduler/health", RequireAuth(r.config, r.handleSchedulerHealth))
 	r.mux.HandleFunc("/api/state", r.handleState)
-	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, r.dockerAgentHandlers.HandleReport))
-	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, r.dockerAgentHandlers.HandleCommandAck))
-	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, r.dockerAgentHandlers.HandleDockerHostActions))
+	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleCommandAck)))
+	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", r.handleStorage)
 	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
 	r.mux.HandleFunc("/api/charts", r.handleCharts)
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
-	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", RequireAdmin(r.config, r.handleDiagnosticsRegisterProxyNodes))
-	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, r.handleDiagnosticsDockerPrepareToken))
+	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsRegisterProxyNodes)))
+	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
 	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.handleDownloadPulseSensorProxy)
 	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.handleDownloadInstallerScript)
 	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
@@ -173,9 +176,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			r.configHandlers.HandleGetNodes(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetNodes))(w, req)
 		case http.MethodPost:
-			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleAddNode)(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAddNode))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -184,7 +187,7 @@ func (r *Router) setupRoutes() {
 	// Test node configuration endpoint (for new nodes)
 	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			r.configHandlers.HandleTestNodeConfig(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNodeConfig))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -193,7 +196,7 @@ func (r *Router) setupRoutes() {
 	// Test connection endpoint
 	r.mux.HandleFunc("/api/config/nodes/test-connection", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			r.configHandlers.HandleTestConnection(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestConnection))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -201,13 +204,13 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodPut:
-			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleUpdateNode)(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateNode))(w, req)
 		case http.MethodDelete:
-			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleDeleteNode)(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDeleteNode))(w, req)
 		case http.MethodPost:
 			// Handle test endpoint
 			if strings.HasSuffix(req.URL.Path, "/test") {
-				r.configHandlers.HandleTestNode(w, req)
+				RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNode))(w, req)
 			} else {
 				http.Error(w, "Not found", http.StatusNotFound)
 			}
@@ -220,10 +223,10 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/system", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			r.configHandlers.HandleGetSystemSettings(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetSystemSettings))(w, req)
 		case http.MethodPut:
 			// DEPRECATED - use /api/system/settings/update instead
-			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleUpdateSystemSettingsOLD)(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateSystemSettingsOLD))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -233,9 +236,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/mock-mode", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			r.configHandlers.HandleGetMockMode(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetMockMode))(w, req)
 		case http.MethodPost, http.MethodPut:
-			RequireAdmin(r.configHandlers.config, r.configHandlers.HandleUpdateMockMode)(w, req)
+			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateMockMode))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -248,20 +251,31 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/logout", r.handleLogout)
 	r.mux.HandleFunc("/api/login", r.handleLogin)
 	r.mux.HandleFunc("/api/security/reset-lockout", r.handleResetLockout)
-	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, r.handleOIDCConfig))
+	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
 	r.mux.HandleFunc("/api/security/tokens", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeSettingsRead) {
+				return
+			}
 			r.handleListAPITokens(w, req)
 		case http.MethodPost:
+			if !ensureScope(w, req, config.ScopeSettingsWrite) {
+				return
+			}
 			r.handleCreateAPIToken(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	r.mux.HandleFunc("/api/security/tokens/", RequireAdmin(r.config, r.handleDeleteAPIToken))
+	r.mux.HandleFunc("/api/security/tokens/", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureScope(w, req, config.ScopeSettingsWrite) {
+			return
+		}
+		r.handleDeleteAPIToken(w, req)
+	}))
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
@@ -847,13 +861,13 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/notifications/", r.notificationHandlers.HandleNotifications)
 
 	// Settings routes
-	r.mux.HandleFunc("/api/settings", getSettings)
-	r.mux.HandleFunc("/api/settings/update", updateSettings)
+	r.mux.HandleFunc("/api/settings", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, getSettings)))
+	r.mux.HandleFunc("/api/settings/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateSettings)))
 
 	// System settings and API token management
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings)
-	r.mux.HandleFunc("/api/system/settings", r.systemSettingsHandler.HandleGetSystemSettings)
-	r.mux.HandleFunc("/api/system/settings/update", r.systemSettingsHandler.HandleUpdateSystemSettings)
+	r.mux.HandleFunc("/api/system/settings", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.systemSettingsHandler.HandleGetSystemSettings)))
+	r.mux.HandleFunc("/api/system/settings/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.systemSettingsHandler.HandleUpdateSystemSettings)))
 	r.mux.HandleFunc("/api/system/ssh-config", r.handleSSHConfig)
 	r.mux.HandleFunc("/api/system/verify-temperature-ssh", r.handleVerifyTemperatureSSH)
 	r.mux.HandleFunc("/api/system/proxy-public-key", r.handleProxyPublicKey)
@@ -1039,6 +1053,9 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	}
 	if r.dockerAgentHandlers != nil {
 		r.dockerAgentHandlers.SetMonitor(m)
+	}
+	if r.hostAgentHandlers != nil {
+		r.hostAgentHandlers.SetMonitor(m)
 	}
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetMonitor(m)
@@ -2231,6 +2248,11 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if record := getAPITokenRecordFromRequest(req); record != nil && !record.HasScope(config.ScopeMonitoringRead) {
+		respondMissingScope(w, config.ScopeMonitoringRead)
+		return
+	}
+
 	log.Debug().Msg("[DEBUG] handleState: Before GetState")
 	state := r.monitor.GetState()
 	log.Debug().Msg("[DEBUG] handleState: After GetState, before ToFrontend")
@@ -3257,7 +3279,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		return
 	}
 
-	record, err := config.NewAPITokenRecord(rawToken, name)
+	record, err := config.NewAPITokenRecord(rawToken, name, []string{config.ScopeDockerReport})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to construct token record for docker migration")
 		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)

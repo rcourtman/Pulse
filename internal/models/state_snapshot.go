@@ -8,6 +8,7 @@ type StateSnapshot struct {
 	VMs              []VM             `json:"vms"`
 	Containers       []Container      `json:"containers"`
 	DockerHosts      []DockerHost     `json:"dockerHosts"`
+	Hosts            []Host           `json:"hosts"`
 	Storage          []Storage        `json:"storage"`
 	CephClusters     []CephCluster    `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk   `json:"physicalDisks"`
@@ -46,6 +47,7 @@ func (s *State) GetSnapshot() StateSnapshot {
 		VMs:           append([]VM{}, s.VMs...),
 		Containers:    append([]Container{}, s.Containers...),
 		DockerHosts:   append([]DockerHost{}, s.DockerHosts...),
+		Hosts:         append([]Host{}, s.Hosts...),
 		Storage:       append([]Storage{}, s.Storage...),
 		CephClusters:  append([]CephCluster{}, s.CephClusters...),
 		PhysicalDisks: append([]PhysicalDisk{}, s.PhysicalDisks...),
@@ -102,6 +104,11 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		dockerHosts[i] = host.ToFrontend()
 	}
 
+	hosts := make([]HostFrontend, len(s.Hosts))
+	for i, host := range s.Hosts {
+		hosts[i] = host.ToFrontend()
+	}
+
 	// Convert storage
 	storage := make([]StorageFrontend, len(s.Storage))
 	for i, st := range s.Storage {
@@ -124,6 +131,7 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		VMs:              vms,
 		Containers:       containers,
 		DockerHosts:      dockerHosts,
+		Hosts:            hosts,
 		Storage:          storage,
 		CephClusters:     cephClusters,
 		PhysicalDisks:    s.PhysicalDisks,
