@@ -192,8 +192,11 @@ export function GuestRow(props: GuestRowProps) {
     if (isEditingUrl()) {
       const handleGlobalClick = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
-        // If clicking outside the editor, close it and prevent the click
-        if (!target.closest('[data-url-editor]') && currentlyEditingGuestId() === guestId()) {
+        // Allow clicking another guest name to switch editing
+        const isClickingGuestName = target.closest('[data-guest-name-editable]');
+
+        // If clicking outside the editor (and not another guest name), close it and prevent the click
+        if (!target.closest('[data-url-editor]') && !isClickingGuestName && currentlyEditingGuestId() === guestId()) {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
@@ -203,7 +206,9 @@ export function GuestRow(props: GuestRowProps) {
 
       const handleGlobalMouseDown = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
-        if (!target.closest('[data-url-editor]') && currentlyEditingGuestId() === guestId()) {
+        const isClickingGuestName = target.closest('[data-guest-name-editable]');
+
+        if (!target.closest('[data-url-editor]') && !isClickingGuestName && currentlyEditingGuestId() === guestId()) {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
@@ -407,6 +412,7 @@ export function GuestRow(props: GuestRowProps) {
                   style="cursor: text;"
                   title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
                   onClick={startEditingUrl}
+                  data-guest-name-editable
                 >
                   {props.guest.name}
                 </span>
