@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal, onMount } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useWebSocket } from '@/App';
 import type { Host } from '@/types/api';
@@ -168,6 +168,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
   const [newTokenName, setNewTokenName] = createSignal('');
   const [generateError, setGenerateError] = createSignal<string | null>(null);
   const [latestRecord, setLatestRecord] = createSignal<APITokenRecord | null>(null);
+  const [stepTwoComplete, setStepTwoComplete] = createSignal(false);
 
   const {
     token: apiToken,
@@ -178,6 +179,12 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
     scope: HOST_AGENT_SCOPE,
     storageKey: 'hostAgentToken',
     legacyKeys: ['apiToken'],
+  });
+
+  createEffect(() => {
+    if (!apiToken()) {
+      setStepTwoComplete(false);
+    }
   });
 
   const hosts = createMemo(() => {
@@ -234,13 +241,28 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
     return true;
   };
 
-  const commandReady = () => !requiresToken() || Boolean(apiToken());
+  const tokenReady = () => !requiresToken() || Boolean(apiToken());
+  const commandsUnlocked = () => tokenReady() && stepTwoComplete();
+
+  const acknowledgeTokenUse = () => {
+    if (!requiresToken()) {
+      setStepTwoComplete(true);
+      return;
+    }
+    if (apiToken()) {
+      setStepTwoComplete(true);
+      notificationStore.success('Token ready to embed in the install commands.', 3500);
+    } else {
+      notificationStore.info('Generate or select a token before continuing.', 4000);
+    }
+  };
 
   const openGenerateTokenModal = () => {
     setGenerateError(null);
     const defaultName = `Host agent ${new Date().toISOString().slice(0, 10)}`;
     setNewTokenName(defaultName);
     setShowGenerateTokenModal(true);
+    setStepTwoComplete(false);
   };
 
   const handleCreateToken = async () => {
@@ -254,6 +276,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
       setShowGenerateTokenModal(false);
       setNewTokenName('');
       setLatestRecord(record);
+      setStepTwoComplete(true);
       showTokenReveal({
         token,
         record,
@@ -382,6 +405,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                             setGenerateError(null);
                             setLatestRecord(null);
                             setApiToken(null);
+                            setStepTwoComplete(false);
                           }}
                         >
                           <p class="font-semibold text-gray-900 dark:text-gray-100">{option.label}</p>
@@ -431,10 +455,56 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                 >
                   {isGeneratingToken() ? 'Generating…' : 'Generate token'}
                 </button>
+
+                <Show when={apiToken()}>
+                  <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <div class={`flex-1 rounded-lg border px-4 py-2 text-xs ${
+                      stepTwoComplete()
+                        ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200'
+                        : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
+                    }`}>
+                      {stepTwoComplete()
+                        ? 'Token ready. You can continue to the commands.'
+                        : 'Stored token detected. Confirm to insert it into the commands below.'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={acknowledgeTokenUse}
+                      disabled={stepTwoComplete()}
+                      class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                        stepTwoComplete()
+                          ? 'bg-green-600 text-white cursor-default'
+                          : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+                      }`}
+                    >
+                      {stepTwoComplete() ? 'Token ready' : 'Use token in commands'}
+                    </button>
+                  </div>
+                </Show>
               </div>
             </Show>
 
-            <Show when={commandReady()}>
+            <Show when={!requiresToken()}>
+              <div class="space-y-3">
+                <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                  Tokens are optional on this Pulse instance. Confirm to continue to the install commands.
+                </div>
+                <button
+                  type="button"
+                  onClick={acknowledgeTokenUse}
+                  disabled={stepTwoComplete()}
+                  class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                    stepTwoComplete()
+                      ? 'bg-green-600 text-white cursor-default'
+                      : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+                  }`}
+                >
+                  {stepTwoComplete() ? 'Confirmed' : 'Confirm and continue'}
+                </button>
+              </div>
+            </Show>
+
+            <Show when={commandsUnlocked()}>
               <div class="space-y-3">
                 <div class="flex items-center justify-between">
                   <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{commandStepLabel()}</h4>
@@ -487,10 +557,13 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
               </div>
             </Show>
 
-            <Show when={requiresToken() && !commandReady()}>
+            <Show when={requiresToken() && (!apiToken() || !stepTwoComplete())}>
               <p class="text-xs text-gray-500 dark:text-gray-400">
-                Select or generate an API token to embed it in the install commands.
+                Generate a new token or confirm the stored one to unlock the install commands.
               </p>
+            </Show>
+            <Show when={!requiresToken() && !stepTwoComplete()}>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Confirm the no-token setup to continue.</p>
             </Show>
           </div>
         </Show>
