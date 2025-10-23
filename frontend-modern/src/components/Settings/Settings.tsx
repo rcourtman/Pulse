@@ -25,8 +25,9 @@ import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
 import Container from 'lucide-solid/icons/container';
-import SettingsIcon from 'lucide-solid/icons/settings';
 import Shield from 'lucide-solid/icons/shield';
+import Lock from 'lucide-solid/icons/lock';
+import Key from 'lucide-solid/icons/key';
 import Activity from 'lucide-solid/icons/activity';
 import Loader from 'lucide-solid/icons/loader';
 import Boxes from 'lucide-solid/icons/boxes';
@@ -34,6 +35,9 @@ import Network from 'lucide-solid/icons/network';
 import Terminal from 'lucide-solid/icons/terminal';
 import Monitor from 'lucide-solid/icons/monitor';
 import Laptop from 'lucide-solid/icons/laptop';
+import Sliders from 'lucide-solid/icons/sliders-horizontal';
+import RefreshCw from 'lucide-solid/icons/refresh-cw';
+import Clock from 'lucide-solid/icons/clock';
 import { ApiIcon } from '@/components/icons/ApiIcon';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
@@ -233,9 +237,14 @@ type SettingsTab =
   | 'linuxServers'
   | 'windowsServers'
   | 'macServers'
-  | 'system'
+  | 'system-general'
+  | 'system-network'
+  | 'system-updates'
+  | 'system-backups'
   | 'api'
-  | 'security'
+  | 'security-overview'
+  | 'security-auth'
+  | 'security-sso'
   | 'diagnostics'
   | 'updates';
 
@@ -276,17 +285,37 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'macOS Devices',
     description: 'Monitor macOS hosts via launchd-backed agents for uptime and temperature insights.',
   },
-  system: {
-    title: 'System Settings',
-    description: 'Adjust Pulse core behaviour, discovery preferences, and software update cadence.',
+  'system-general': {
+    title: 'General Settings',
+    description: 'Configure appearance preferences and UI behavior.',
+  },
+  'system-network': {
+    title: 'Network Settings',
+    description: 'Manage CORS, embedding, and network discovery configuration.',
+  },
+  'system-updates': {
+    title: 'Updates',
+    description: 'Check for updates, configure update channels, and manage automatic update checks.',
+  },
+  'system-backups': {
+    title: 'Backup Polling',
+    description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
   },
   api: {
     title: 'API access',
     description: 'Generate scoped tokens and manage automation credentials for agents and integrations.',
   },
-  security: {
-    title: 'Security & Access',
-    description: 'Manage authentication, API tokens, exports, and other security posture tooling.',
+  'security-overview': {
+    title: 'Security Overview',
+    description: 'View your security posture at a glance and monitor authentication status.',
+  },
+  'security-auth': {
+    title: 'Authentication',
+    description: 'Manage password-based authentication and credential rotation.',
+  },
+  'security-sso': {
+    title: 'Single Sign-On',
+    description: 'Configure OIDC providers for enterprise authentication.',
   },
   diagnostics: {
     title: 'Diagnostics',
@@ -336,9 +365,18 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/linuxServers')) return 'linuxServers';
     if (path.includes('/settings/windowsServers')) return 'windowsServers';
     if (path.includes('/settings/macServers')) return 'macServers';
-    if (path.includes('/settings/system')) return 'system';
+    if (path.includes('/settings/system-general')) return 'system-general';
+    if (path.includes('/settings/system-network')) return 'system-network';
+    if (path.includes('/settings/system-updates')) return 'system-updates';
+    if (path.includes('/settings/system-backups')) return 'system-backups';
+    // Legacy redirect: old /settings/system goes to general
+    if (path.includes('/settings/system')) return 'system-general';
     if (path.includes('/settings/api')) return 'api';
-    if (path.includes('/settings/security')) return 'security';
+    if (path.includes('/settings/security-overview')) return 'security-overview';
+    if (path.includes('/settings/security-auth')) return 'security-auth';
+    if (path.includes('/settings/security-sso')) return 'security-sso';
+    // Legacy redirect: old /settings/security goes to overview
+    if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
     if (path.includes('/settings/updates')) return 'updates';
     return 'pve';
@@ -350,7 +388,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const setActiveTab = (tab: SettingsTab) => {
     const targetPath = `/settings/${tab}`;
     if (location.pathname !== targetPath) {
-      navigate(targetPath);
+      navigate(targetPath, { scroll: false });
       return;
     }
     if (currentTab() !== tab) {
@@ -730,7 +768,7 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   const tabGroups: {
-    id: 'platforms' | 'administration';
+    id: 'platforms' | 'administration' | 'system' | 'security';
     label: string;
     items: { id: SettingsTab; label: string; icon: JSX.Element; disabled?: boolean }[];
   }[] = [
@@ -753,10 +791,27 @@ const Settings: Component<SettingsProps> = (props) => {
       id: 'administration',
       label: 'Administration',
       items: [
-        { id: 'system', label: 'System', icon: <SettingsIcon class="w-4 h-4" strokeWidth={2} /> },
         { id: 'api', label: 'API access', icon: <ApiIcon class="w-4 h-4" /> },
-        { id: 'security', label: 'Security', icon: <Shield class="w-4 h-4" strokeWidth={2} /> },
         { id: 'diagnostics', label: 'Diagnostics', icon: <Activity class="w-4 h-4" strokeWidth={2} /> },
+      ],
+    },
+    {
+      id: 'system',
+      label: 'System',
+      items: [
+        { id: 'system-general', label: 'General', icon: <Sliders class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'system-network', label: 'Network', icon: <Network class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'system-updates', label: 'Updates', icon: <RefreshCw class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'system-backups', label: 'Backups', icon: <Clock class="w-4 h-4" strokeWidth={2} /> },
+      ],
+    },
+    {
+      id: 'security',
+      label: 'Security',
+      items: [
+        { id: 'security-overview', label: 'Overview', icon: <Shield class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'security-auth', label: 'Authentication', icon: <Lock class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'security-sso', label: 'Single Sign-On', icon: <Key class="w-4 h-4" strokeWidth={2} /> },
       ],
     },
   ];
@@ -1440,7 +1495,8 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const saveSettings = async () => {
     try {
-      if (activeTab() === 'system') {
+      if (activeTab() === 'system-general' || activeTab() === 'system-network' ||
+          activeTab() === 'system-updates' || activeTab() === 'system-backups') {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
           // PBS polling interval is now fixed at 10 seconds
@@ -1798,7 +1854,9 @@ const Settings: Component<SettingsProps> = (props) => {
         <Show
           when={
             hasUnsavedChanges() &&
-            (activeTab() === 'pve' || activeTab() === 'pbs' || activeTab() === 'system')
+            (activeTab() === 'pve' || activeTab() === 'pbs' ||
+             activeTab() === 'system-general' || activeTab() === 'system-network' ||
+             activeTab() === 'system-updates' || activeTab() === 'system-backups')
           }
         >
           <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 sm:p-4">
@@ -1848,7 +1906,7 @@ const Settings: Component<SettingsProps> = (props) => {
             aria-label="Settings navigation"
             aria-expanded={!sidebarCollapsed()}
           >
-            <div class={`sticky top-24 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
+            <div class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
               <div id="settings-sidebar-menu" class="space-y-6">
                 <For each={tabGroups}>
                   {(group) => (
@@ -3311,11 +3369,53 @@ const Settings: Component<SettingsProps> = (props) => {
               <HostAgents variant="macos" />
             </Show>
 
-            {/* System Settings Tab */}
-            <Show when={activeTab() === 'system'}>
+            {/* System General Tab */}
+            <Show when={activeTab() === 'system-general'}>
               <div class="space-y-6">
-                <SectionHeader title="System configuration" size="md" class="mb-2" />
+                <Card
+                  padding="none"
+                  class="overflow-hidden border border-gray-200 dark:border-gray-700"
+                  border={false}
+                >
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                        <Sliders class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
+                      </div>
+                      <SectionHeader
+                        title="General"
+                        description="Appearance and display preferences"
+                        size="sm"
+                        class="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div class="p-6 space-y-5">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="text-sm text-gray-600 dark:text-gray-400">
+                        <p class="font-medium text-gray-900 dark:text-gray-100">Dark mode</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                          Toggle to match your environment. Pulse remembers this preference on each browser.
+                        </p>
+                      </div>
+                      <Toggle
+                        checked={props.darkMode()}
+                        onChange={(event) => {
+                          const desired = (event.currentTarget as HTMLInputElement).checked;
+                          if (desired !== props.darkMode()) {
+                            props.toggleDarkMode();
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            </Show>
 
+            {/* System Network Tab */}
+            <Show when={activeTab() === 'system-network'}>
+              <div class="space-y-6">
                 <Card
                   tone="info"
                   padding="md"
@@ -3346,8 +3446,26 @@ const Settings: Component<SettingsProps> = (props) => {
                     </div>
                   </div>
                 </Card>
-
-                <Card padding="lg" class="space-y-5">
+                <Card
+                  padding="none"
+                  class="overflow-hidden border border-gray-200 dark:border-gray-700"
+                  border={false}
+                >
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                        <Network class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
+                      </div>
+                      <SectionHeader
+                        title="Network"
+                        description="Discovery, CORS, and embedding settings"
+                        size="sm"
+                        class="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div class="p-6 space-y-8">
+                  <section class="space-y-5">
                   <SectionHeader
                     title="Network discovery"
                     description="Control how Pulse scans for Proxmox services on your network."
@@ -3627,37 +3745,9 @@ const Settings: Component<SettingsProps> = (props) => {
                       configuration and restart Pulse to change them here.
                     </div>
                   </Show>
-                </Card>
+                  </section>
 
-                <Card padding="lg" class="space-y-3">
-                  <SectionHeader
-                    title="Appearance"
-                    description="Switch between light and dark themes. Stored per device and synced to the server when authenticated."
-                    size="sm"
-                    align="left"
-                  />
-                  <div class="flex items-center justify-between gap-3">
-                    <div class="text-sm text-gray-600 dark:text-gray-400">
-                      <p class="font-medium text-gray-900 dark:text-gray-100">Dark mode</p>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Toggle to match your environment. Pulse remembers this preference on each browser.
-                      </p>
-                    </div>
-                    <Toggle
-                      checked={props.darkMode()}
-                      onChange={(event) => {
-                        const desired = (event.currentTarget as HTMLInputElement).checked;
-                        if (desired !== props.darkMode()) {
-                          props.toggleDarkMode();
-                        }
-                      }}
-                    />
-                  </div>
-                </Card>
-
-                <div class="grid gap-4 lg:grid-cols-5">
-                  <Card padding="lg" class="space-y-6 lg:col-span-3">
-                    <section class="space-y-3">
+                  <section class="space-y-3">
                       <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                         <svg
                           width="16"
@@ -3813,26 +3903,34 @@ const Settings: Component<SettingsProps> = (props) => {
                         </span>
                       </p>
                     </Card>
-                  </Card>
+                  </div>
+                </Card>
+              </div>
+            </Show>
 
-                  <Card padding="lg" class="space-y-6 lg:col-span-2">
+            {/* System Updates Tab */}
+            <Show when={activeTab() === 'system-updates'}>
+              <div class="space-y-6">
+                <Card
+                  padding="none"
+                  class="overflow-hidden border border-gray-200 dark:border-gray-700"
+                  border={false}
+                >
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                        <RefreshCw class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
+                      </div>
+                      <SectionHeader
+                        title="Updates"
+                        description="Version checking and automatic update configuration"
+                        size="sm"
+                        class="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div class="p-6 space-y-6">
                     <section class="space-y-4">
-                      <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <polyline points="23 4 23 10 17 10"></polyline>
-                          <polyline points="1 20 1 14 7 14"></polyline>
-                          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
-                        </svg>
-                        Updates
-                      </h4>
-
                       <div class="space-y-4">
                         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
@@ -4073,15 +4171,33 @@ const Settings: Component<SettingsProps> = (props) => {
                         </div>
                       </div>
                     </section>
-                  </Card>
-                </div>
+                  </div>
+                </Card>
+              </div>
+            </Show>
 
-                {/* Backup & Restore - Moved from Security tab */}
+            {/* System Backups Tab */}
+            <Show when={activeTab() === 'system-backups'}>
+              <div class="space-y-6">
                 <Card
-                  padding="lg"
+                  padding="none"
+                  class="overflow-hidden border border-gray-200 dark:border-gray-700"
                   border={false}
-                  class="border border-gray-200 dark:border-gray-700"
                 >
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                        <Clock class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
+                      </div>
+                      <SectionHeader
+                        title="Backups"
+                        description="Backup polling and configuration management"
+                        size="sm"
+                        class="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div class="p-6 space-y-8">
                     <section class="space-y-3">
                       <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -4366,6 +4482,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       </div>
                     </div>
                   </div>
+                  </div>
                 </Card>
               </div>
             </Show>
@@ -4373,21 +4490,38 @@ const Settings: Component<SettingsProps> = (props) => {
             {/* API Access */}
             <Show when={activeTab() === 'api'}>
               <div class="space-y-6">
-                <SectionHeader title="API access" size="md" class="mb-2" />
-
-                <Card tone="muted" padding="lg" class="space-y-3">
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Generate scoped tokens for Docker agents, host agents, and automation pipelines.
-                    Tokens are shown once—store them securely and rotate when infrastructure changes.
-                  </p>
-                  <a
-                    href="https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md#token-scopes"
-                    target="_blank"
-                    rel="noreferrer"
-                    class="inline-flex w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
-                  >
-                    View scope reference
-                  </a>
+                <Card
+                  padding="none"
+                  class="overflow-hidden border border-gray-200 dark:border-gray-700"
+                  border={false}
+                >
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                        <ApiIcon class="w-5 h-5 text-blue-600 dark:text-blue-300" />
+                      </div>
+                      <SectionHeader
+                        title="API Access"
+                        description="Generate scoped tokens for agents and automation"
+                        size="sm"
+                        class="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div class="p-6 space-y-3">
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                      Generate scoped tokens for Docker agents, host agents, and automation pipelines.
+                      Tokens are shown once—store them securely and rotate when infrastructure changes.
+                    </p>
+                    <a
+                      href="https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md#token-scopes"
+                      target="_blank"
+                      rel="noreferrer"
+                      class="inline-flex w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                    >
+                      View scope reference
+                    </a>
+                  </div>
                 </Card>
 
                 <APITokenManager
@@ -4400,8 +4534,8 @@ const Settings: Component<SettingsProps> = (props) => {
               </div>
             </Show>
 
-            {/* Security Tab */}
-            <Show when={activeTab() === 'security'}>
+            {/* Security Overview Tab */}
+            <Show when={activeTab() === 'security-overview'}>
               <div class="space-y-6">
                 <Show when={!securityStatusLoading() && securityStatus()}>
                   <SecurityPostureSummary status={securityStatus()!} />
@@ -4461,53 +4595,64 @@ const Settings: Component<SettingsProps> = (props) => {
                     </div>
                   </Card>
                 </Show>
+              </div>
+            </Show>
 
+            {/* Security Authentication Tab */}
+            <Show when={activeTab() === 'security-auth'}>
+              <div class="space-y-6">
                 {/* Show message when auth is disabled */}
                 <Show when={!securityStatus()?.hasAuthentication}>
-                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="flex items-start gap-3 flex-1">
-                        <svg
-                          class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                          />
-                        </svg>
-                        <div class="flex-1 min-w-0">
-                          <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                            Authentication disabled
-                          </h4>
-                          <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                            DISABLE_AUTH is set, or auth isn't configured yet.
-                          </p>
+                  <Card
+                    padding="none"
+                    class="overflow-hidden border border-amber-200 dark:border-amber-800"
+                    border={false}
+                  >
+                    {/* Header */}
+                    <div class="bg-gradient-to-r from-amber-50 to-amber-50 dark:from-amber-900/20 dark:to-amber-900/20 px-6 py-4 border-b border-amber-200 dark:border-amber-700">
+                      <div class="flex items-center gap-3">
+                        <div class="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
+                          <svg
+                            class="w-5 h-5 text-amber-600 dark:text-amber-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            />
+                          </svg>
                         </div>
+                        <SectionHeader title="Authentication disabled" size="sm" class="flex-1" />
+                        <button
+                          type="button"
+                          onClick={() => setShowQuickSecuritySetup(!showQuickSecuritySetup())}
+                          class="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
+                        >
+                          Setup
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowQuickSecuritySetup(!showQuickSecuritySetup())}
-                        class="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
-                      >
-                        Setup
-                      </button>
                     </div>
-                    <Show when={showQuickSecuritySetup()}>
-                      <div class="mt-3 pt-3 border-t border-amber-200 dark:border-amber-700">
+
+                    {/* Content */}
+                    <div class="p-6">
+                      <p class="text-sm text-amber-700 dark:text-amber-300 mb-4">
+                        DISABLE_AUTH is set, or auth isn't configured yet. Set up password authentication to protect your Pulse instance.
+                      </p>
+
+                      <Show when={showQuickSecuritySetup()}>
                         <QuickSecuritySetup
                           onConfigured={() => {
                             setShowQuickSecuritySetup(false);
                             loadSecurityStatus();
                           }}
                         />
-                      </div>
-                    </Show>
-                  </div>
+                      </Show>
+                    </div>
+                  </Card>
                 </Show>
 
                 {/* Authentication */}
@@ -4523,24 +4668,17 @@ const Settings: Component<SettingsProps> = (props) => {
                     border={false}
                   >
                     {/* Header */}
-                    <div class="bg-gradient-to-r from-gray-50 to-gray-50 dark:from-gray-900/20 dark:to-gray-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                       <div class="flex items-center gap-3">
-                        <div class="p-2 bg-gray-100 dark:bg-gray-900/50 rounded-lg">
-                          <svg
-                            class="w-5 h-5 text-gray-600 dark:text-gray-400"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                            />
-                          </svg>
+                        <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                          <Lock class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
                         </div>
-                        <SectionHeader title="Authentication" size="sm" class="flex-1" />
+                        <SectionHeader
+                          title="Authentication"
+                          description="Password management and credential rotation"
+                          size="sm"
+                          class="flex-1"
+                        />
                       </div>
                     </div>
 
@@ -4697,63 +4835,13 @@ const Settings: Component<SettingsProps> = (props) => {
                     </div>
                   </div>
                 </Show>
+              </div>
+            </Show>
 
-
+            {/* Security Single Sign-On Tab */}
+            <Show when={activeTab() === 'security-sso'}>
+              <div class="space-y-6">
                 <OIDCPanel onConfigUpdated={loadSecurityStatus} />
-
-                {/* Security setup now handled by first-run wizard */}
-
-                {/* API Token - Show always to allow API access even when auth is disabled */}
-                <Card
-                  padding="none"
-                  class="overflow-hidden border border-gray-200 dark:border-gray-700"
-                  border={false}
-                >
-                  {/* Header */}
-                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center gap-3">
-                      <div class="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
-                        <svg
-                          class="w-5 h-5 text-blue-600 dark:text-blue-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                          />
-                        </svg>
-                      </div>
-                      <SectionHeader
-                        title="API token"
-                        description="For automation and integrations"
-                        size="sm"
-                        class="flex-1"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div class="p-6 space-y-3">
-                    <p class="text-sm text-gray-600 dark:text-gray-400">
-                      API tokens now live under the dedicated API workspace. Generate new scoped tokens,
-                      review existing access, and rotate credentials from the API menu.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('api')}
-                      class="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
-                    >
-                      Open API tab
-                    </button>
-                  </div>
-                </Card>
-
-                {/* Advanced - Only show if auth is enabled */}
-                {/* Advanced Options section removed - was only used for Registration Tokens */}
               </div>
             </Show>
 
