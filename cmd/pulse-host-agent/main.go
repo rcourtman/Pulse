@@ -31,6 +31,13 @@ func main() {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	cfg.Logger = &logger
 
+	// Check if we should run as a Windows service
+	if err := runAsWindowsService(cfg, logger); err != nil {
+		logger.Fatal().Err(err).Msg("Windows service failed")
+	}
+
+	// If runAsWindowsService returns nil without error, we're not running as a service
+	// or we're on a non-Windows platform, so run normally
 	agent, err := hostagent.New(cfg)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to initialise host agent")

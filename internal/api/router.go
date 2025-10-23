@@ -129,6 +129,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/state", r.handleState)
 	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/host/", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleDeleteHost)))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
@@ -876,6 +877,13 @@ func (r *Router) setupRoutes() {
 	// Docker agent download endpoints
 	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript)
 	r.mux.HandleFunc("/download/pulse-docker-agent", r.handleDownloadAgent)
+
+	// Host agent download endpoints
+	r.mux.HandleFunc("/install-host-agent.sh", r.handleDownloadHostAgentInstallScript)
+	r.mux.HandleFunc("/install-host-agent.ps1", r.handleDownloadHostAgentInstallScriptPS)
+	r.mux.HandleFunc("/uninstall-host-agent.ps1", r.handleDownloadHostAgentUninstallScriptPS)
+	r.mux.HandleFunc("/download/pulse-host-agent", r.handleDownloadHostAgent)
+
 	r.mux.HandleFunc("/api/agent/version", r.handleAgentVersion)
 	r.mux.HandleFunc("/api/server/info", r.handleServerInfo)
 
@@ -1213,6 +1221,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				config.DefaultOIDCCallbackPath,
 				"/install-docker-agent.sh",             // Docker agent bootstrap script must be public
 				"/download/pulse-docker-agent",         // Agent binary download should not require auth
+				"/install-host-agent.sh",               // Host agent bootstrap script must be public
+				"/install-host-agent.ps1",              // Host agent PowerShell script must be public
+				"/uninstall-host-agent.ps1",            // Host agent uninstall script must be public
+				"/download/pulse-host-agent",           // Host agent binary download should not require auth
 				"/api/agent/version",                   // Agent update checks need to work before auth
 				"/api/server/info",                     // Server info for installer script
 				"/api/install/install-sensor-proxy.sh", // Temperature proxy installer fallback
@@ -1340,7 +1352,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
 			strings.HasPrefix(req.URL.Path, "/download/") ||
 			req.URL.Path == "/simple-stats" ||
-			req.URL.Path == "/install-docker-agent.sh" {
+			req.URL.Path == "/install-docker-agent.sh" ||
+			req.URL.Path == "/install-host-agent.sh" ||
+			req.URL.Path == "/install-host-agent.ps1" ||
+			req.URL.Path == "/uninstall-host-agent.ps1" {
 			// Use the mux for API and special routes
 			r.mux.ServeHTTP(w, req)
 		} else {
@@ -3209,6 +3224,110 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 	}
 
 	http.Error(w, "Agent binary not found", http.StatusNotFound)
+}
+
+// handleDownloadHostAgentInstallScript serves the Host agent installation script
+func (r *Router) handleDownloadHostAgentInstallScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	scriptPath := "/opt/pulse/scripts/install-host-agent.sh"
+	http.ServeFile(w, req, scriptPath)
+}
+
+// handleDownloadHostAgentInstallScriptPS serves the PowerShell installation script for Windows
+func (r *Router) handleDownloadHostAgentInstallScriptPS(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	scriptPath := "/opt/pulse/scripts/install-host-agent.ps1"
+	http.ServeFile(w, req, scriptPath)
+}
+
+// handleDownloadHostAgentUninstallScriptPS serves the PowerShell uninstallation script for Windows
+func (r *Router) handleDownloadHostAgentUninstallScriptPS(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	scriptPath := "/opt/pulse/scripts/uninstall-host-agent.ps1"
+	http.ServeFile(w, req, scriptPath)
+}
+
+// handleDownloadHostAgent serves the Host agent binary
+func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	platformParam := strings.TrimSpace(req.URL.Query().Get("platform"))
+	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
+
+	searchPaths := make([]string, 0, 12)
+
+	// Try platform-specific binary first
+	if platformParam != "" && archParam != "" {
+		searchPaths = append(searchPaths,
+			filepath.Join("/opt/pulse/bin", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
+			filepath.Join("/opt/pulse", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
+			filepath.Join("/app", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
+		)
+	}
+
+	if platformParam != "" {
+		searchPaths = append(searchPaths,
+			filepath.Join("/opt/pulse/bin", "pulse-host-agent-"+platformParam),
+			filepath.Join("/opt/pulse", "pulse-host-agent-"+platformParam),
+			filepath.Join("/app", "pulse-host-agent-"+platformParam),
+		)
+	}
+
+	// Default locations (host architecture)
+	searchPaths = append(searchPaths,
+		filepath.Join("/opt/pulse/bin", "pulse-host-agent"),
+		"/opt/pulse/pulse-host-agent",
+		filepath.Join("/app", "pulse-host-agent"),
+	)
+
+	for _, candidate := range searchPaths {
+		if candidate == "" {
+			continue
+		}
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			http.ServeFile(w, req, candidate)
+			return
+		}
+	}
+
+	http.Error(w, "Host agent binary not found. Please build from source: go build ./cmd/pulse-host-agent", http.StatusNotFound)
 }
 
 func (r *Router) handleDiagnosticsRegisterProxyNodes(w http.ResponseWriter, req *http.Request) {

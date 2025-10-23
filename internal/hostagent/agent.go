@@ -15,12 +15,12 @@ import (
 
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
-	gocpu "github.com/shirou/gopsutil/v3/cpu"
-	godisk "github.com/shirou/gopsutil/v3/disk"
-	gohost "github.com/shirou/gopsutil/v3/host"
-	goload "github.com/shirou/gopsutil/v3/load"
-	gomem "github.com/shirou/gopsutil/v3/mem"
-	gonet "github.com/shirou/gopsutil/v3/net"
+	gocpu "github.com/shirou/gopsutil/v4/cpu"
+	godisk "github.com/shirou/gopsutil/v4/disk"
+	gohost "github.com/shirou/gopsutil/v4/host"
+	goload "github.com/shirou/gopsutil/v4/load"
+	gomem "github.com/shirou/gopsutil/v4/mem"
+	gonet "github.com/shirou/gopsutil/v4/net"
 )
 
 // Config controls the behaviour of the host agent.
@@ -54,8 +54,6 @@ type Agent struct {
 	agentID         string
 	interval        time.Duration
 	trimmedPulseURL string
-
-	prevCPUTimes *gocpu.TimesStat
 }
 
 const defaultInterval = 30 * time.Second
@@ -291,34 +289,17 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 }
 
 func (a *Agent) calculateCPUUsage(ctx context.Context) (float64, error) {
-	times, err := gocpu.TimesWithContext(ctx, false)
+	// Use Percent() with a 1 second measurement interval for cross-platform compatibility
+	// This works reliably on macOS ARM64 where Times() is not implemented
+	percentages, err := gocpu.PercentWithContext(ctx, time.Second, false)
 	if err != nil {
 		return 0, err
 	}
-	if len(times) == 0 {
-		return 0, nil
-	}
-	current := times[0]
-
-	if a.prevCPUTimes == nil {
-		a.prevCPUTimes = &current
+	if len(percentages) == 0 {
 		return 0, nil
 	}
 
-	prev := a.prevCPUTimes
-	a.prevCPUTimes = &current
-
-	deltaTotal := current.Total() - prev.Total()
-	if deltaTotal <= 0 {
-		return 0, nil
-	}
-
-	deltaIdle := current.Idle - prev.Idle
-	if deltaIdle < 0 {
-		deltaIdle = 0
-	}
-
-	usage := (1 - (deltaIdle / deltaTotal)) * 100
+	usage := percentages[0]
 	if usage < 0 {
 		usage = 0
 	}

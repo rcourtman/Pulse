@@ -30,16 +30,14 @@ const hostPlatformOptions: { id: HostPlatform; label: string; description: strin
   {
     id: 'macos',
     label: 'macOS',
-    description: 'Use the universal binary with launchd to keep desktops and servers reporting in the background.',
+    description: 'Use the universal binary with launchd to keep desktops and hosts reporting in the background.',
   },
   {
     id: 'windows',
     label: 'Windows',
-    description: 'Compile the agent for Windows or run it under WSL until native builds ship. Service template included.',
+    description: 'Native Windows service with automatic startup. PowerShell script handles binary download and service installation.',
   },
 ];
-
-const RELEASE_BASE = 'https://github.com/rcourtman/Pulse/releases/latest/download';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
 const pulseUrl = () => {
@@ -50,53 +48,32 @@ const pulseUrl = () => {
 
 const commandsByVariant: Record<HostAgentVariant, { title: string; description: string; snippets: { label: string; command: string; note?: string | JSX.Element }[] }> = {
   all: {
-    title: 'Installation quick start',
+    title: 'Installation',
     description:
-      'Generate an API token from Settings → Security with the host agent reporting scope, then replace the highlighted token placeholder. Agents only require outbound HTTP(S) access to Pulse.',
+      'Run the installer script to automatically download and configure the host agent on any supported platform.',
     snippets: [
       {
-        label: 'Linux (systemd)',
-        command: [
-          `curl -fsSL ${RELEASE_BASE}/pulse-host-agent-linux-amd64 -o /usr/local/bin/pulse-host-agent`,
-          'sudo chmod +x /usr/local/bin/pulse-host-agent',
-          `sudo /usr/local/bin/pulse-host-agent --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
-        ].join(' && '),
-      },
-      {
-        label: 'macOS (launchd)',
-        command: [
-          `curl -fsSL ${RELEASE_BASE}/pulse-host-agent-darwin-arm64 -o /usr/local/bin/pulse-host-agent`,
-          'sudo chmod +x /usr/local/bin/pulse-host-agent',
-          `sudo /usr/local/bin/pulse-host-agent --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
-        ].join(' && '),
+        label: 'Install host agent',
+        command: `curl -fsSL ${pulseUrl()}/install-host-agent.sh | bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
         note: (
           <span>
-            Create <code>~/Library/LaunchAgents/com.pulse.host-agent.plist</code> to keep the agent running between logins.
+            The script downloads the agent binary from Pulse and sets up systemd (Linux) or launchd (macOS) for automatic startup.
           </span>
         ),
-      },
-      {
-        label: 'Ad-hoc execution',
-        command: `/usr/local/bin/pulse-host-agent --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
       },
     ],
   },
   linux: {
     title: 'Install on Linux',
     description:
-      'Download the static binary, make it executable, and (optionally) register it as a systemd service. Replace the token placeholder with an API token scoped for host agent reporting.',
+      'The installer downloads the agent binary and configures it as a systemd service.',
     snippets: [
       {
-        label: 'Install + enable (systemd)',
-        command: [
-          `curl -fsSL ${RELEASE_BASE}/pulse-host-agent-linux-amd64 -o /usr/local/bin/pulse-host-agent`,
-          'sudo chmod +x /usr/local/bin/pulse-host-agent',
-          `sudo /usr/local/bin/pulse-host-agent --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
-        ].join(' && '),
+        label: 'Install with systemd',
+        command: `curl -fsSL ${pulseUrl()}/install-host-agent.sh | bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
         note: (
           <span>
-            For persistence, create <code>/etc/systemd/system/pulse-host-agent.service</code> and enable it with{' '}
-            <code>systemctl enable --now pulse-host-agent</code>.
+            Automatically installs to <code>/usr/local/bin/pulse-host-agent</code> and creates <code>/etc/systemd/system/pulse-host-agent.service</code>.
           </span>
         ),
       },
@@ -105,22 +82,14 @@ const commandsByVariant: Record<HostAgentVariant, { title: string; description: 
   macos: {
     title: 'Install on macOS',
     description:
-      'Use the universal macOS build (arm64) with an API token that grants the host agent reporting scope, then register it via launchd for continuous reporting.',
+      'The installer downloads the universal binary and sets up a launchd service for background monitoring.',
     snippets: [
       {
-        label: 'Install binary',
-        command: [
-          `curl -fsSL ${RELEASE_BASE}/pulse-host-agent-darwin-arm64 -o /usr/local/bin/pulse-host-agent`,
-          'sudo chmod +x /usr/local/bin/pulse-host-agent',
-        ].join(' && '),
-      },
-      {
-        label: 'Launchd service',
-        command: `launchctl load ~/Library/LaunchAgents/com.pulse.host-agent.plist`,
+        label: 'Install with launchd',
+        command: `curl -fsSL ${pulseUrl()}/install-host-agent.sh | bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
         note: (
           <span>
-            Create a plist pointing to{' '}
-            <code>/usr/local/bin/pulse-host-agent --url {pulseUrl()} --token {TOKEN_PLACEHOLDER} --interval 30s</code> to run at login.
+            Creates <code>~/Library/LaunchAgents/com.pulse.host-agent.plist</code> and starts the agent automatically.
           </span>
         ),
       },
@@ -129,19 +98,23 @@ const commandsByVariant: Record<HostAgentVariant, { title: string; description: 
   windows: {
     title: 'Install on Windows',
     description:
-      'Native Windows builds are coming soon. In the interim you can run the Linux binary under WSL or compile from source using an API token scoped for host agent reporting.',
+      'Run the PowerShell script to install and configure the host agent as a Windows service with automatic startup.',
     snippets: [
       {
-        label: 'Compile from source (PowerShell)',
-        command: [
-          'git clone https://github.com/rcourtman/Pulse.git',
-          'cd Pulse',
-          'go build -o pulse-host-agent.exe ./cmd/pulse-host-agent',
-          `./pulse-host-agent.exe --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
-        ].join(' && '),
+        label: 'Install as Windows Service (PowerShell)',
+        command: `irm ${pulseUrl()}/install-host-agent.ps1 | iex`,
         note: (
           <span>
-            Consider registering the executable as a Windows Service via <code>sc.exe</code> or NSSM once native artefacts ship.
+            Run in PowerShell as Administrator. The script will prompt for the Pulse URL and API token, download the agent binary, and install it as a Windows service with automatic startup. The agent runs natively and can access all Windows performance counters.
+          </span>
+        ),
+      },
+      {
+        label: 'Install with parameters (PowerShell)',
+        command: `$env:PULSE_URL="${pulseUrl()}"; $env:PULSE_TOKEN="${TOKEN_PLACEHOLDER}"; irm ${pulseUrl()}/install-host-agent.ps1 | iex`,
+        note: (
+          <span>
+            Non-interactive installation. Set environment variables before running to skip prompts.
           </span>
         ),
       },
@@ -327,34 +300,34 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
 
   const cardTitle = () => {
     if (variant === 'all') {
-      return 'Pulse host agent';
+      return 'Host Monitoring';
     }
     switch (effectiveVariant()) {
       case 'linux':
-        return 'Linux servers';
+        return 'Linux Hosts';
       case 'macos':
-        return 'macOS devices';
+        return 'macOS Hosts';
       case 'windows':
-        return 'Windows servers';
+        return 'Windows Hosts';
       default:
-        return 'Host agents';
+        return 'Host Monitoring';
     }
   };
 
   const cardDescription = () => {
     if (variant === 'all') {
-      return 'Install the Pulse host agent on Linux, macOS, or Windows servers to surface uptime, OS metadata, and capacity metrics.';
+      return 'Install the Pulse host agent on Linux, macOS, or Windows machines to monitor CPU, memory, disk, and uptime.';
     }
     const platform = effectiveVariant();
     switch (platform) {
       case 'linux':
-        return 'Install the Pulse host agent on Debian, Ubuntu, RHEL, Arch, or other Linux hosts to surface uptime and capacity metrics.';
+        return 'Install the Pulse host agent on Debian, Ubuntu, RHEL, Arch, or other Linux distributions.';
       case 'macos':
-        return 'Deploy the lightweight host agent via launchd to keep macOS hardware in view alongside your Proxmox estate.';
+        return 'Deploy the lightweight host agent via launchd to monitor macOS desktops and servers.';
       case 'windows':
-        return 'Track Windows Server hosts with the Pulse agent. Native builds are on the roadmap—compile today or run it under WSL.';
+        return 'Deploy the Pulse host agent as a native Windows service with automatic startup and full access to performance counters.';
       default:
-        return 'Install the Pulse host agent on Linux, macOS, or Windows servers to surface uptime, OS metadata, and capacity metrics.';
+        return 'Install the Pulse host agent on Linux, macOS, or Windows machines to monitor CPU, memory, disk, and uptime.';
     }
   };
 
@@ -394,7 +367,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                       return (
                         <button
                           type="button"
-                          class={`flex flex-col items-start gap-2 rounded-xl border transition-colors p-4 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
+                          class={`flex flex-col items-start gap-2 rounded-lg border transition-colors p-4 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
                             isActive()
                               ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                               : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500'
@@ -450,7 +423,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                   type="button"
                   onClick={openGenerateTokenModal}
                   disabled={isGeneratingToken()}
-                  class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isGeneratingToken() ? 'Generating…' : 'Generate token'}
                 </button>
@@ -470,10 +443,10 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                       type="button"
                       onClick={acknowledgeTokenUse}
                       disabled={stepTwoComplete()}
-                      class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                      class={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                         stepTwoComplete()
                           ? 'bg-green-600 text-white cursor-default'
-                          : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+                          : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
                       }`}
                     >
                       {stepTwoComplete() ? 'Token inserted' : 'Insert token into commands'}
@@ -518,7 +491,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                         window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
                       }
                     }}
-                    class="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                    class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
                   >
                     Copy first command
                   </button>
@@ -601,7 +574,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                   setNewTokenName('');
                   setGenerateError(null);
                 }}
-                class="rounded px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                class="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -609,7 +582,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                 type="button"
                 onClick={handleCreateToken}
                 disabled={isGeneratingToken()}
-                class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+                class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
               >
                 {isGeneratingToken() ? 'Generating…' : 'Generate token'}
               </button>
@@ -618,7 +591,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
         </div>
       </Show>
 
-      <Card padding="lg" class="space-y-4">
+      <Card padding="lg" class="space-y-5">
         <div class="flex items-center justify-between">
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Reporting hosts</h3>
           <span class="text-sm text-gray-500 dark:text-gray-400">{hosts().length} connected</span>
@@ -629,7 +602,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
           fallback={
             <p class="text-sm text-gray-600 dark:text-gray-400">
               {variant === 'windows'
-                ? 'No Windows hosts have reported yet. Compile the agent from source or check back when native artefacts are published.'
+                ? 'No Windows hosts have reported yet. Run the PowerShell installation script above as Administrator to deploy the agent.'
                 : 'No host agents are reporting yet. Deploy the binary using the commands above to see hosts listed here.'}
             </p>
           }
@@ -644,32 +617,92 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                   <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Memory</th>
                   <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Last seen</th>
                   <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Tags</th>
+                  <th class="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
                 <For each={hosts()}>
-                  {(host) => (
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                      <td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">
-                        {host.displayName || host.hostname || host.id}
-                      </td>
-                      <td class="px-3 py-2 text-gray-600 dark:text-gray-300 capitalize">
-                        {host.platform || '—'}
-                      </td>
-                      <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
-                        {host.uptimeSeconds ? formatUptime(host.uptimeSeconds) : '—'}
-                      </td>
-                      <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
-                        {host.memory?.total
-                          ? `${formatBytes(host.memory.used ?? 0)} / ${formatBytes(host.memory.total)}`
-                          : '—'}
-                      </td>
-                      <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
-                        {host.lastSeen ? formatRelativeTime(host.lastSeen) : '—'}
-                      </td>
-                      <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{renderTags(host)}</td>
-                    </tr>
-                  )}
+                  {(host) => {
+                    const [isDeleting, setIsDeleting] = createSignal(false);
+
+                    const handleDelete = async () => {
+                      if (!confirm(`Remove host "${host.displayName || host.hostname || host.id}"?\n\nThis will remove the host from Pulse monitoring. The host agent will re-register if it continues to report.`)) {
+                        return;
+                      }
+
+                      setIsDeleting(true);
+                      try {
+                        const response = await fetch(`/api/agents/host/${host.id}`, {
+                          method: 'DELETE',
+                          credentials: 'include',
+                        });
+
+                        if (!response.ok) {
+                          const errorData = await response.json();
+                          throw new Error(errorData.message || 'Failed to delete host');
+                        }
+
+                        notificationStore.success(`Host "${host.displayName || host.hostname}" removed`, 4000);
+                      } catch (err) {
+                        console.error('Failed to delete host:', err);
+                        notificationStore.error(
+                          err instanceof Error ? err.message : 'Failed to delete host. Please try again.',
+                          6000
+                        );
+                      } finally {
+                        setIsDeleting(false);
+                      }
+                    };
+
+                    return (
+                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                        <td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">
+                          {host.displayName || host.hostname || host.id}
+                        </td>
+                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300 capitalize">
+                          {host.platform || '—'}
+                        </td>
+                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
+                          {host.uptimeSeconds ? formatUptime(host.uptimeSeconds) : '—'}
+                        </td>
+                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
+                          {host.memory?.total
+                            ? `${formatBytes(host.memory.used ?? 0)} / ${formatBytes(host.memory.total)}`
+                            : '—'}
+                        </td>
+                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
+                          {host.lastSeen ? formatRelativeTime(host.lastSeen) : '—'}
+                        </td>
+                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{renderTags(host)}</td>
+                        <td class="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={handleDelete}
+                            disabled={isDeleting()}
+                            class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Remove host from monitoring"
+                          >
+                            {isDeleting() ? (
+                              <>
+                                <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                <span>Removing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span>Remove</span>
+                              </>
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  }}
                 </For>
               </tbody>
             </table>
