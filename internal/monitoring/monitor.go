@@ -56,7 +56,7 @@ type PVEClientInterface interface {
 	GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error)
 	GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error)
 	GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
-	ExecContainerCommand(ctx context.Context, node string, vmid int, command []string) (string, error)
+	GetContainerInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.ContainerInterface, error)
 	GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error)
 	IsClusterMember(ctx context.Context) (bool, error)
 	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
@@ -468,8 +468,6 @@ type Monitor struct {
 	dockerCommandIndex    map[string]string
 	guestMetadataMu       sync.RWMutex
 	guestMetadataCache    map[string]guestMetadataCacheEntry
-	containerIPCacheMu    sync.RWMutex
-	containerIPCache      map[string]containerIPCacheEntry
 	executor              PollExecutor
 	breakerBaseRetry      time.Duration
 	breakerMaxDelay       time.Duration
@@ -483,13 +481,6 @@ type rrdMemCacheEntry struct {
 	available uint64
 	used      uint64
 	total     uint64
-	fetchedAt time.Time
-}
-
-const containerIPCacheTTL = 90 * time.Second
-
-type containerIPCacheEntry struct {
-	addresses []string
 	fetchedAt time.Time
 }
 
@@ -1969,13 +1960,59 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 	}
 
 	if len(addressOrder) == 0 {
-		dynamicIPs := m.lookupDynamicContainerIPs(ctx, client, instanceName, nodeName, container.VMID)
-		if len(dynamicIPs) > 0 {
-			for _, addr := range dynamicIPs {
-				addAddress(addr)
-			}
-			if len(networkIfaces) == 1 && len(networkIfaces[0].Addresses) == 0 {
-				networkIfaces[0].Addresses = dedupeStringsPreserveOrder(dynamicIPs)
+		interfacesCtx, cancelInterfaces := context.WithTimeout(ctx, 5*time.Second)
+		ifaceDetails, ifaceErr := client.GetContainerInterfaces(interfacesCtx, nodeName, container.VMID)
+		cancelInterfaces()
+		if ifaceErr != nil {
+			log.Debug().
+				Err(ifaceErr).
+				Str("instance", instanceName).
+				Str("node", nodeName).
+				Str("container", container.Name).
+				Int("vmid", container.VMID).
+				Msg("Container interface metadata unavailable")
+		} else if len(ifaceDetails) > 0 {
+			for _, detail := range ifaceDetails {
+				parsed := containerNetworkDetails{}
+				parsed.Name = strings.TrimSpace(detail.Name)
+				parsed.MAC = strings.ToUpper(strings.TrimSpace(detail.HWAddr))
+
+				for _, addr := range detail.IPAddresses {
+					stripped := strings.TrimSpace(addr.Address)
+					if stripped == "" {
+						continue
+					}
+					if slash := strings.Index(stripped, "/"); slash > 0 {
+						stripped = stripped[:slash]
+					}
+					parsed.Addresses = append(parsed.Addresses, sanitizeGuestAddressStrings(stripped)...)
+				}
+
+				if len(parsed.Addresses) == 0 && strings.TrimSpace(detail.Inet) != "" {
+					parts := strings.Fields(detail.Inet)
+					for _, part := range parts {
+						stripped := strings.TrimSpace(part)
+						if stripped == "" {
+							continue
+						}
+						if slash := strings.Index(stripped, "/"); slash > 0 {
+							stripped = stripped[:slash]
+						}
+						parsed.Addresses = append(parsed.Addresses, sanitizeGuestAddressStrings(stripped)...)
+					}
+				}
+
+				parsed.Addresses = dedupeStringsPreserveOrder(parsed.Addresses)
+
+				if len(parsed.Addresses) > 0 {
+					for _, addr := range parsed.Addresses {
+						addAddress(addr)
+					}
+				}
+
+				if parsed.Name != "" || parsed.MAC != "" || len(parsed.Addresses) > 0 {
+					mergeContainerNetworkInterface(&networkIfaces, parsed)
+				}
 			}
 		}
 	}
@@ -2353,114 +2390,6 @@ func extractContainerRootDeviceFromConfig(config map[string]interface{}) string 
 	return device
 }
 
-func (m *Monitor) lookupDynamicContainerIPs(ctx context.Context, client PVEClientInterface, instanceName, nodeName string, vmid int) []string {
-	if m == nil || client == nil {
-		return nil
-	}
-
-	cacheKey := fmt.Sprintf("%s|%s|%d", instanceName, nodeName, vmid)
-	now := time.Now()
-
-	m.containerIPCacheMu.RLock()
-	if entry, ok := m.containerIPCache[cacheKey]; ok && now.Sub(entry.fetchedAt) < containerIPCacheTTL {
-		addresses := cloneStringSlice(entry.addresses)
-		m.containerIPCacheMu.RUnlock()
-		return addresses
-	}
-	m.containerIPCacheMu.RUnlock()
-
-	execCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	output, err := client.ExecContainerCommand(execCtx, nodeName, vmid, []string{"ip", "-j", "addr", "show", "scope", "global"})
-	cancel()
-	if err != nil {
-		log.Debug().
-			Err(err).
-			Str("instance", instanceName).
-			Str("node", nodeName).
-			Int("vmid", vmid).
-			Msg("Failed to execute container IP command")
-	}
-
-	addresses := parseContainerIPsFromJSON(output)
-	if len(addresses) == 0 {
-		fallbackCtx, fallbackCancel := context.WithTimeout(ctx, 3*time.Second)
-		fallbackOutput, fallbackErr := client.ExecContainerCommand(fallbackCtx, nodeName, vmid, []string{"hostname", "-I"})
-		fallbackCancel()
-		if fallbackErr != nil {
-			log.Debug().
-				Err(fallbackErr).
-				Str("instance", instanceName).
-				Str("node", nodeName).
-				Int("vmid", vmid).
-				Msg("Failed to execute hostname -I for container")
-		} else {
-			addresses = parseContainerIPsFromWhitespaceList(fallbackOutput)
-		}
-	}
-
-	addresses = dedupeStringsPreserveOrder(addresses)
-
-	m.containerIPCacheMu.Lock()
-	m.containerIPCache[cacheKey] = containerIPCacheEntry{
-		addresses: cloneStringSlice(addresses),
-		fetchedAt: time.Now(),
-	}
-	m.containerIPCacheMu.Unlock()
-
-	return addresses
-}
-
-func parseContainerIPsFromJSON(output string) []string {
-	output = strings.TrimSpace(output)
-	if output == "" {
-		return nil
-	}
-
-	type addrInfo struct {
-		Local string `json:"local"`
-	}
-	type iface struct {
-		Name     string     `json:"ifname"`
-		AddrInfo []addrInfo `json:"addr_info"`
-	}
-
-	var interfaces []iface
-	if err := json.Unmarshal([]byte(output), &interfaces); err != nil {
-		return nil
-	}
-
-	var addresses []string
-	for _, network := range interfaces {
-		for _, info := range network.AddrInfo {
-			sanitized := sanitizeGuestAddressStrings(info.Local)
-			if len(sanitized) > 0 {
-				addresses = append(addresses, sanitized...)
-			}
-		}
-	}
-
-	return addresses
-}
-
-func parseContainerIPsFromWhitespaceList(output string) []string {
-	output = strings.TrimSpace(output)
-	if output == "" {
-		return nil
-	}
-
-	fields := strings.Fields(output)
-	if len(fields) == 0 {
-		return nil
-	}
-
-	var addresses []string
-	for _, field := range fields {
-		addresses = append(addresses, sanitizeGuestAddressStrings(field)...)
-	}
-
-	return addresses
-}
-
 // GetConnectionStatuses returns the current connection status for all nodes
 func (m *Monitor) GetConnectionStatuses() map[string]bool {
 	if mock.IsMockEnabled() {
@@ -2661,7 +2590,6 @@ func New(cfg *config.Config) (*Monitor, error) {
 		dockerCommands:       make(map[string]*dockerHostCommand),
 		dockerCommandIndex:   make(map[string]string),
 		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
-		containerIPCache:     make(map[string]containerIPCacheEntry),
 		instanceInfoCache:    make(map[string]*instanceInfo),
 		pollStatusMap:        make(map[string]*pollStatus),
 		dlqInsightMap:        make(map[string]*dlqInsight),

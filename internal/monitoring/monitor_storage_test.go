@@ -80,8 +80,8 @@ func (f *fakeStorageClient) GetContainerStatus(ctx context.Context, node string,
 func (f *fakeStorageClient) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	return nil, nil
 }
-func (f *fakeStorageClient) ExecContainerCommand(ctx context.Context, node string, vmid int, command []string) (string, error) {
-	return "", nil
+func (f *fakeStorageClient) GetContainerInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.ContainerInterface, error) {
+	return nil, nil
 }
 
 func (f *fakeStorageClient) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
