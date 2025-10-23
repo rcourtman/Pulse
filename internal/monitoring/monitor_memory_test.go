@@ -80,6 +80,9 @@ func (s *stubPVEClient) GetContainerStatus(ctx context.Context, node string, vmi
 func (s *stubPVEClient) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	return nil, nil
 }
+func (s *stubPVEClient) ExecContainerCommand(ctx context.Context, node string, vmid int, command []string) (string, error) {
+	return "", nil
+}
 
 func (s *stubPVEClient) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
 	return nil, nil

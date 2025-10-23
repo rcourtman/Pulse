@@ -414,6 +414,9 @@ func (noopPVEClient) GetContainerStatus(ctx context.Context, node string, vmid i
 func (noopPVEClient) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	return nil, nil
 }
+func (noopPVEClient) ExecContainerCommand(ctx context.Context, node string, vmid int, command []string) (string, error) {
+	return "", nil
+}
 func (noopPVEClient) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
 	return nil, nil
 }
