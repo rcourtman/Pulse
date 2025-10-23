@@ -56,6 +56,10 @@ func (f fakeSnapshotClient) GetVMStatus(ctx context.Context, node string, vmid i
 func (f fakeSnapshotClient) GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error) {
 	return nil, nil
 }
+
+func (f fakeSnapshotClient) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	return nil, nil
+}
 func (f fakeSnapshotClient) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
 	return nil, nil
 }

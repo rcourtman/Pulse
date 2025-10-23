@@ -1003,6 +1003,20 @@ func (cc *ClusterClient) GetContainerStatus(ctx context.Context, node string, vm
 	return result, err
 }
 
+// GetContainerConfig returns the configuration of a specific container
+func (cc *ClusterClient) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		config, err := client.GetContainerConfig(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		result = config
+		return nil
+	})
+	return result, err
+}
+
 // IsClusterMember checks if this node is part of a cluster
 func (cc *ClusterClient) IsClusterMember(ctx context.Context) (bool, error) {
 	var result bool
