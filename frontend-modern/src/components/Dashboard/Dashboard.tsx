@@ -1,5 +1,4 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
@@ -42,15 +41,8 @@ export function Dashboard(props: DashboardProps) {
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>({});
 
-  // Stable guest store using reconcile to prevent row remounting during websocket updates
-  const guestKey = (g: VM | Container) =>
-    g.id ?? (g.instance === g.node ? `${g.node}-${g.vmid}` : `${g.instance}-${g.node}-${g.vmid}`);
-  const [guestStore, setGuestStore] = createStore<(VM | Container)[]>([]);
-
-  // Reconcile guests whenever props change
-  createEffect(() => {
-    setGuestStore(reconcile([...props.vms, ...props.containers], { key: guestKey, merge: true }));
-  });
+  // Combine VMs and containers into a single list for filtering
+  const allGuests = createMemo<(VM | Container)[]>(() => [...props.vms, ...props.containers]);
 
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
@@ -247,9 +239,6 @@ export function Dashboard(props: DashboardProps) {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   });
-
-  // Use the stable guest store
-  const allGuests = createMemo(() => guestStore);
 
   // Filter guests based on current settings
   const filteredGuests = createMemo(() => {

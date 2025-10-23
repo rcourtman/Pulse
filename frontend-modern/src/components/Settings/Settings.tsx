@@ -20,6 +20,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
+import { AgentStepSection } from './AgentStepSection';
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
@@ -448,7 +449,6 @@ const Settings: Component<SettingsProps> = (props) => {
     ],
   },
 ];
-  const agentCards = agentGroups.flatMap((group) => group.agents);
 
   const agentPaths: Record<AgentKey, string> = {
     pve: '/settings/pve',
@@ -2106,66 +2106,85 @@ const Settings: Component<SettingsProps> = (props) => {
 
             <div class="p-3 sm:p-6 overflow-x-auto">
                 <Show when={activeTab() === 'agent-hub'}>
-                  <Card padding="lg" class="space-y-4">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                          Step 1 · Choose a platform
-                        </h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">
-                          Select the integration you want to deploy or manage.
-                        </p>
-                      </div>
-                    </div>
-                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      <For each={agentCards}>
-                        {(card) => {
-                          const isActive = () => selectedAgent() === card.id;
-                          return (
-                            <button
-                              type="button"
-                              disabled={card.disabled}
-                              class={`flex flex-col items-start gap-3 rounded-xl border transition-colors p-4 text-left shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
-                                card.disabled
-                                  ? 'cursor-not-allowed opacity-60 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
-                                  : isActive()
-                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500'
-                              }`}
-                              onClick={() => {
-                                if (card.disabled) return;
-                                handleSelectAgent(card.id);
-                              }}
-                            >
-                              <div class="flex items-center gap-3">
-                                <div
-                                  class={`rounded-md p-2 ${
-                                    isActive()
-                                      ? 'bg-blue-600 text-white'
-                                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
-                                  }`}
-                                >
-                                  {card.icon}
-                                </div>
-                                <div class="flex-1">
-                                  <p class="font-semibold text-gray-900 dark:text-gray-100">
-                                    {card.label}
+                  <AgentStepSection
+                    step="Step 1"
+                    title="Choose a platform"
+                    description="Pick the integration you want to configure. Cards switch the guidance shown in the next step."
+                  >
+                    <Card padding="lg" class="space-y-6">
+                      <For each={agentGroups}>
+                        {(group) => (
+                          <section class="space-y-3">
+                            <header class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+                              <div>
+                                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                  {group.title}
+                                </h4>
+                                <Show when={group.description}>
+                                  <p class="text-xs text-gray-600 dark:text-gray-400">
+                                    {group.description}
                                   </p>
-                                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                    {card.description}
-                                  </p>
-                                </div>
+                                </Show>
                               </div>
-                            </button>
-                          );
-                        }}
+                            </header>
+                            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              <For each={group.agents}>
+                                {(card) => {
+                                  const isActive = () => selectedAgent() === card.id;
+                                  return (
+                                    <button
+                                      type="button"
+                                      disabled={card.disabled}
+                                      class={`flex flex-col items-start gap-3 rounded-xl border transition-colors p-4 text-left shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
+                                        card.disabled
+                                          ? 'cursor-not-allowed opacity-60 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                                          : isActive()
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500'
+                                      }`}
+                                      onClick={() => {
+                                        if (card.disabled) return;
+                                        handleSelectAgent(card.id);
+                                      }}
+                                    >
+                                      <div class="flex items-center gap-3">
+                                        <div
+                                          class={`rounded-md p-2 ${
+                                            isActive()
+                                              ? 'bg-blue-600 text-white'
+                                              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
+                                          }`}
+                                        >
+                                          {card.icon}
+                                        </div>
+                                        <div class="flex-1">
+                                          <p class="font-semibold text-gray-900 dark:text-gray-100">
+                                            {card.label}
+                                          </p>
+                                          <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                            {card.description}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                }}
+                              </For>
+                            </div>
+                          </section>
+                        )}
                       </For>
-                    </div>
-                  </Card>
+                    </Card>
+                  </AgentStepSection>
                 </Show>
                 {/* PVE Nodes Tab */}
                 <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pve'}>
-                  <div class="space-y-4">
+                  <AgentStepSection
+                    step="Step 2"
+                    title="Connect Proxmox VE"
+                    description="Link Pulse to your Proxmox VE cluster with a dedicated API token. Quick setup can scaffold users, roles, and permissions for you."
+                  >
+                    <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
                       <div class="flex items-center justify-center py-8">
                         <span class="text-gray-500">Loading configuration...</span>
@@ -2682,11 +2701,17 @@ const Settings: Component<SettingsProps> = (props) => {
                   </div>
                 </Show>
               </div>
-            </Show>
+            </AgentStepSection>
+          </Show>
 
             {/* PBS Nodes Tab */}
             <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pbs'}>
-              <div class="space-y-4">
+              <AgentStepSection
+                step="Step 2"
+                title="Connect Proxmox Backup Server"
+                description="Provide a PBS API token with backup read access. Use quick setup to generate the token and grant the minimum privileges."
+              >
+                <div class="space-y-4">
                 <Show when={!initialLoadComplete()}>
                   <div class="flex items-center justify-center py-8">
                     <span class="text-gray-500">Loading configuration...</span>
@@ -3092,11 +3117,17 @@ const Settings: Component<SettingsProps> = (props) => {
                   </div>
                 </Show>
               </div>
-            </Show>
+            </AgentStepSection>
+          </Show>
 
             {/* PMG Nodes Tab */}
             <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pmg'}>
-              <div class="space-y-4">
+              <AgentStepSection
+                step="Step 2"
+                title="Connect Proxmox Mail Gateway"
+                description="Onboard each Mail Gateway with a limited API token so Pulse can read queue depth and quarantine metrics."
+              >
+                <div class="space-y-4">
                 <Show when={!initialLoadComplete()}>
                   <div class="flex items-center justify-center py-8">
                     <span class="text-gray-500">Loading configuration...</span>
@@ -3492,11 +3523,18 @@ const Settings: Component<SettingsProps> = (props) => {
                   </div>
                 </Show>
               </div>
-            </Show>
+            </AgentStepSection>
+          </Show>
 
             {/* Docker Tab */}
             <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'docker'}>
-              <DockerAgents />
+              <AgentStepSection
+                step="Step 2"
+                title="Deploy the Docker agent"
+                description="Mint a scoped reporting token and copy the install commands for the Docker host you are onboarding."
+              >
+                <DockerAgents />
+              </AgentStepSection>
             </Show>
 
             {/* Podman Tab */}
@@ -3517,7 +3555,13 @@ const Settings: Component<SettingsProps> = (props) => {
 
             {/* Host Agents */}
             <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'host'}>
-              <HostAgents />
+              <AgentStepSection
+                step="Step 2"
+                title="Install the Pulse host agent"
+                description="Pick the operating system, generate a scoped token, and copy the tailored commands for Linux, macOS, or Windows."
+              >
+                <HostAgents />
+              </AgentStepSection>
             </Show>
 
             {/* System General Tab */}
