@@ -21,7 +21,7 @@ import Replication from './components/Replication/Replication';
 import Settings from './components/Settings/Settings';
 import { Alerts } from './pages/Alerts';
 import { DockerHosts } from './components/Docker/DockerHosts';
-import { ServersOverview } from './components/Hosts/ServersOverview';
+import { HostsOverview } from './components/Hosts/HostsOverview';
 import { ToastContainer } from './components/Toast/Toast';
 import NotificationContainer from './components/NotificationContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -43,7 +43,7 @@ import type { State } from '@/types/api';
 import MailGateway from './components/PMG/MailGateway';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { DockerIcon } from '@/components/icons/DockerIcon';
-import { ServersIcon } from '@/components/icons/ServersIcon';
+import { HostsIcon } from '@/components/icons/HostsIcon';
 import { AlertsIcon } from '@/components/icons/AlertsIcon';
 import { SettingsGearIcon } from '@/components/icons/SettingsGearIcon';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
@@ -90,7 +90,7 @@ function HostsRoute() {
   }
   const { state } = wsContext;
   return (
-    <ServersOverview hosts={state.hosts ?? []} connectionHealth={state.connectionHealth ?? {}} />
+    <HostsOverview hosts={state.hosts ?? []} connectionHealth={state.connectionHealth ?? {}} />
   );
 }
 
@@ -629,7 +629,8 @@ function App() {
       <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
       <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
       <Route path="/docker" component={DockerRoute} />
-      <Route path="/servers" component={HostsRoute} />
+      <Route path="/hosts" component={HostsRoute} />
+      <Route path="/servers" component={() => <Navigate href="/hosts" />} />
       <Route path="/alerts/*" component={Alerts} />
       <Route
         path="/settings/*"
@@ -699,13 +700,14 @@ function AppLayout(props: {
     const path = location.pathname;
     if (path.startsWith('/proxmox')) return 'proxmox';
     if (path.startsWith('/docker')) return 'docker';
-    if (path.startsWith('/servers')) return 'servers';
+    if (path.startsWith('/hosts')) return 'hosts';
+    if (path.startsWith('/servers')) return 'hosts'; // Legacy redirect
     if (path.startsWith('/alerts')) return 'alerts';
     if (path.startsWith('/settings')) return 'settings';
     return 'proxmox';
   };
   const hasDockerHosts = createMemo(() => (props.state().dockerHosts?.length ?? 0) > 0);
-  const hasServers = createMemo(() => (props.state().hosts?.length ?? 0) > 0);
+  const hasHosts = createMemo(() => (props.state().hosts?.length ?? 0) > 0);
   const hasProxmoxHosts = createMemo(
     () =>
       (props.state().nodes?.length ?? 0) > 0 ||
@@ -726,8 +728,8 @@ function AppLayout(props: {
   });
 
   createEffect(() => {
-    if (hasServers()) {
-      markPlatformSeen('servers');
+    if (hasHosts()) {
+      markPlatformSeen('hosts');
     }
   });
 
@@ -758,15 +760,15 @@ function AppLayout(props: {
         ),
       },
       {
-        id: 'servers' as const,
-        label: 'Servers',
-        route: '/servers',
+        id: 'hosts' as const,
+        label: 'Hosts',
+        route: '/hosts',
         settingsRoute: '/settings',
-        tooltip: 'Monitor standalone servers with the host agent',
-        enabled: hasServers() || !!seenPlatforms()['servers'],
-        live: hasServers(),
+        tooltip: 'Monitor hosts with the host agent',
+        enabled: hasHosts() || !!seenPlatforms()['hosts'],
+        live: hasHosts(),
         icon: (
-          <ServersIcon class="w-4 h-4 shrink-0" />
+          <HostsIcon class="w-4 h-4 shrink-0" />
         ),
       },
     ];

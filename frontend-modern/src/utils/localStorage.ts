@@ -100,6 +100,9 @@ export const STORAGE_KEYS = {
   // Docker search
   DOCKER_SEARCH_HISTORY: 'dockerSearchHistory',
 
+  // Hosts search
+  HOSTS_SEARCH_HISTORY: 'hostsSearchHistory',
+
   // Alerts search
   ALERTS_SEARCH_HISTORY: 'alertsSearchHistory',
 

@@ -1,0 +1,460 @@
+import type { Component } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, on } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
+import type { Host } from '@/types/api';
+import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import { Card } from '@/components/shared/Card';
+import { ScrollableTable } from '@/components/shared/ScrollableTable';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { MetricBar } from '@/components/Dashboard/MetricBar';
+import { HostsFilter } from './HostsFilter';
+import { useWebSocket } from '@/App';
+
+// Global drawer state to persist across re-renders
+const drawerState = new Map<string, boolean>();
+
+interface HostsOverviewProps {
+  hosts: Host[];
+  connectionHealth: Record<string, boolean>;
+}
+
+const renderStatusIndicator = (status: string | undefined) => {
+  const normalized = (status || 'offline').toLowerCase();
+
+  const indicatorStyles: Record<string, string> = {
+    online: 'bg-green-500',
+    degraded: 'bg-amber-500',
+    offline: 'bg-red-500',
+  };
+
+  const style = indicatorStyles[normalized] || indicatorStyles.offline;
+
+  return (
+    <div class={`h-2 w-2 rounded-full ${style}`} title={normalized.charAt(0).toUpperCase() + normalized.slice(1)} />
+  );
+};
+
+export const HostsOverview: Component<HostsOverviewProps> = (props) => {
+  const navigate = useNavigate();
+  const wsContext = useWebSocket();
+  const [search, setSearch] = createSignal('');
+
+  const connected = () => wsContext.connected();
+  const reconnecting = () => wsContext.reconnecting();
+
+  const isLoading = createMemo(() => {
+    return !connected() && !reconnecting();
+  });
+
+  const sortedHosts = createMemo(() =>
+    [...props.hosts].sort((a, b) => {
+      const aName = a.displayName || a.hostname || a.id;
+      const bName = b.displayName || b.hostname || b.id;
+      return aName.localeCompare(bName);
+    }),
+  );
+
+  const matchesSearch = (host: Host) => {
+    const term = search().toLowerCase();
+    if (!term) return true;
+
+    const hostname = (host.hostname || '').toLowerCase();
+    const displayName = (host.displayName || '').toLowerCase();
+    const platform = (host.platform || '').toLowerCase();
+    const osName = (host.osName || '').toLowerCase();
+
+    return (
+      hostname.includes(term) ||
+      displayName.includes(term) ||
+      platform.includes(term) ||
+      osName.includes(term)
+    );
+  };
+
+  const filteredHosts = createMemo(() => {
+    return sortedHosts().filter(matchesSearch);
+  });
+
+  return (
+    <div class="space-y-0">
+      <Show when={isLoading()}>
+        <Card padding="lg">
+          <EmptyState
+            icon={
+              <svg
+                class="h-12 w-12 animate-spin text-blue-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            }
+            title={reconnecting() ? 'Reconnecting to host agents...' : 'Loading host data...'}
+            description={
+              reconnecting()
+                ? 'Re-establishing metrics from the monitoring service.'
+                : connected()
+                  ? 'Waiting for the first host update.'
+                  : 'Connecting to the monitoring service.'
+            }
+          />
+        </Card>
+      </Show>
+
+      <Show when={!isLoading()}>
+        <Show
+          when={sortedHosts().length === 0}
+          fallback={
+            <>
+              {/* Filters */}
+              <HostsFilter
+                search={search}
+                setSearch={setSearch}
+                onReset={() => setSearch('')}
+              />
+
+              {/* Host Table */}
+              <Show
+                when={filteredHosts().length > 0}
+                fallback={
+                  <Card padding="lg">
+                    <EmptyState
+                      title="No hosts found"
+                      description={
+                        search().trim()
+                          ? 'No hosts match your search.'
+                          : 'No hosts available'
+                      }
+                    />
+                  </Card>
+                }
+              >
+                <Card padding="none" class="overflow-hidden">
+                      <ScrollableTable>
+                        <table class="w-full border-collapse">
+                          <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                              <th class="pl-4 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[30%]">
+                                Host
+                              </th>
+                              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
+                                Platform
+                              </th>
+                              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[20%]">
+                                CPU
+                              </th>
+                              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[20%]">
+                                Memory
+                              </th>
+                              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
+                                Uptime
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <For each={filteredHosts()}>
+                              {(host) => {
+                                const cpuPercent = () => host.cpuUsage ?? 0;
+                                const memPercent = () => host.memory?.usage ?? 0;
+                                const memUsed = () => formatBytes(host.memory?.used ?? 0);
+                                const memTotal = () => formatBytes(host.memory?.total ?? 0);
+
+                                // Drawer state
+                                const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(host.id) ?? false);
+
+                                // Check if we have additional info to show in drawer
+                                const hasDrawerContent = createMemo(() => {
+                                  return (
+                                    (host.disks && host.disks.length > 0) ||
+                                    (host.networkInterfaces && host.networkInterfaces.length > 0) ||
+                                    host.loadAverage ||
+                                    host.cpuCount ||
+                                    host.kernelVersion ||
+                                    host.architecture ||
+                                    host.agentVersion ||
+                                    (host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0)
+                                  );
+                                });
+
+                                const toggleDrawer = (event: MouseEvent) => {
+                                  if (!hasDrawerContent()) return;
+                                  const target = event.target as HTMLElement;
+                                  if (target.closest('a, button, [data-prevent-toggle]')) {
+                                    return;
+                                  }
+                                  setDrawerOpen((prev) => !prev);
+                                };
+
+                                // Sync drawer state
+                                createEffect(on(() => host.id, (id) => {
+                                  const stored = drawerState.get(id);
+                                  if (stored !== undefined) {
+                                    setDrawerOpen(stored);
+                                  } else {
+                                    setDrawerOpen(false);
+                                  }
+                                }));
+
+                                createEffect(() => {
+                                  drawerState.set(host.id, drawerOpen());
+                                });
+
+                                const rowClass = () => {
+                                  const base = 'border-b border-gray-200 dark:border-gray-700 transition-all duration-200';
+                                  const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
+                                  const clickable = hasDrawerContent() ? 'cursor-pointer' : '';
+                                  const expanded = drawerOpen() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+                                  return `${base} ${hover} ${clickable} ${expanded}`;
+                                };
+
+                                return (
+                                  <>
+                                    <tr class={rowClass()} onClick={toggleDrawer} aria-expanded={drawerOpen()}>
+                                      <td class="pl-4 pr-2 py-2">
+                                        <div>
+                                          <div class="flex items-center gap-2">
+                                            {renderStatusIndicator(host.status)}
+                                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                              {host.displayName || host.hostname || host.id}
+                                            </p>
+                                          </div>
+                                          <Show when={host.displayName && host.displayName !== host.hostname}>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                                              {host.hostname}
+                                            </p>
+                                          </Show>
+                                          <Show when={host.lastSeen}>
+                                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                              Updated {formatRelativeTime(host.lastSeen!)}
+                                            </p>
+                                          </Show>
+                                        </div>
+                                      </td>
+                                      <td class="px-2 py-2">
+                                        <div class="text-xs text-gray-700 dark:text-gray-300">
+                                          <p class="font-medium capitalize">{host.platform || '—'}</p>
+                                          <Show when={host.osName}>
+                                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                              {host.osName} {host.osVersion}
+                                            </p>
+                                          </Show>
+                                        </div>
+                                      </td>
+                                      <td class="px-2 py-2">
+                                        <Show
+                                          when={cpuPercent() > 0}
+                                          fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}
+                                        >
+                                          <MetricBar
+                                            label={`${cpuPercent().toFixed(1)}%`}
+                                            value={cpuPercent()}
+                                            type={cpuPercent() > 80 ? 'danger' : 'primary'}
+                                          />
+                                        </Show>
+                                      </td>
+                                      <td class="px-2 py-2">
+                                        <Show
+                                          when={memPercent() > 0}
+                                          fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}
+                                        >
+                                          <MetricBar
+                                            label={`${memUsed()} / ${memTotal()}`}
+                                            value={memPercent()}
+                                            type={memPercent() > 80 ? 'danger' : 'primary'}
+                                          />
+                                        </Show>
+                                      </td>
+                                      <td class="px-2 py-2">
+                                        <Show
+                                          when={host.uptimeSeconds}
+                                          fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}
+                                        >
+                                          <span class="text-xs text-gray-700 dark:text-gray-300">
+                                            {formatUptime(host.uptimeSeconds!)}
+                                          </span>
+                                        </Show>
+                                      </td>
+                                    </tr>
+
+                                    {/* Drawer - Additional Info */}
+                                    <Show when={drawerOpen() && hasDrawerContent()}>
+                                      <tr class="text-[11px] bg-gray-50/60 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
+                                        <td class="px-4 py-2" colSpan={5}>
+                                          <div class="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                            {/* System Info */}
+                                            <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">System</div>
+                                              <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
+                                                <Show when={host.cpuCount}>
+                                                  <div class="flex items-start gap-1">
+                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">CPUs:</span>
+                                                    <span>{host.cpuCount}</span>
+                                                  </div>
+                                                </Show>
+                                                <Show when={host.loadAverage && host.loadAverage.length > 0}>
+                                                  <div class="flex items-start gap-1">
+                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">Load Avg:</span>
+                                                    <span>{host.loadAverage!.map(l => l.toFixed(2)).join(', ')}</span>
+                                                  </div>
+                                                </Show>
+                                                <Show when={host.architecture}>
+                                                  <div class="flex items-start gap-1">
+                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">Arch:</span>
+                                                    <span>{host.architecture}</span>
+                                                  </div>
+                                                </Show>
+                                                <Show when={host.kernelVersion}>
+                                                  <div class="flex items-start gap-1">
+                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">Kernel:</span>
+                                                    <span class="break-all">{host.kernelVersion}</span>
+                                                  </div>
+                                                </Show>
+                                                <Show when={host.agentVersion}>
+                                                  <div class="flex items-start gap-1">
+                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">Agent:</span>
+                                                    <span>{host.agentVersion}</span>
+                                                  </div>
+                                                </Show>
+                                              </div>
+                                            </div>
+
+                                            {/* Network Interfaces */}
+                                            <Show when={host.networkInterfaces && host.networkInterfaces.length > 0}>
+                                              <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Network</div>
+                                                <div class="mt-1 space-y-1">
+                                                  <For each={host.networkInterfaces?.slice(0, 4)}>
+                                                    {(iface) => (
+                                                      <div class="text-gray-600 dark:text-gray-300">
+                                                        <div class="font-medium">{iface.name}</div>
+                                                        <Show when={iface.addresses && iface.addresses.length > 0}>
+                                                          <div class="flex flex-wrap gap-1 mt-0.5">
+                                                            <For each={iface.addresses}>
+                                                              {(addr) => (
+                                                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                                                  {addr}
+                                                                </span>
+                                                              )}
+                                                            </For>
+                                                          </div>
+                                                        </Show>
+                                                      </div>
+                                                    )}
+                                                  </For>
+                                                </div>
+                                              </div>
+                                            </Show>
+
+                                            {/* Disk Info */}
+                                            <Show when={host.disks && host.disks.length > 0}>
+                                              <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Disks</div>
+                                                <div class="mt-1 space-y-1">
+                                                  <For each={host.disks?.slice(0, 3)}>
+                                                    {(disk) => {
+                                                      const diskPercent = () => disk.usage ?? 0;
+                                                      return (
+                                                        <div class="text-gray-600 dark:text-gray-300">
+                                                          <div class="flex items-center justify-between">
+                                                            <span class="font-medium truncate">{disk.mountpoint || disk.device}</span>
+                                                            <span class="text-[10px] text-gray-500 dark:text-gray-400">
+                                                              {formatBytes(disk.used ?? 0)} / {formatBytes(disk.total ?? 0)}
+                                                            </span>
+                                                          </div>
+                                                          <Show when={diskPercent() > 0}>
+                                                            <div class="mt-0.5">
+                                                              <MetricBar
+                                                                value={diskPercent()}
+                                                                label={`${diskPercent().toFixed(1)}%`}
+                                                                type={diskPercent() > 80 ? 'danger' : 'primary'}
+                                                              />
+                                                            </div>
+                                                          </Show>
+                                                        </div>
+                                                      );
+                                                    }}
+                                                  </For>
+                                                </div>
+                                              </div>
+                                            </Show>
+
+                                            {/* Temperature Sensors */}
+                                            <Show when={host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0}>
+                                              <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Temperatures</div>
+                                                <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
+                                                  <For each={Object.entries(host.sensors!.temperatureCelsius!).slice(0, 5)}>
+                                                    {([name, temp]) => (
+                                                      <div class="flex items-center justify-between">
+                                                        <span class="truncate text-[10px]">{name}</span>
+                                                        <span class={temp > 80 ? 'text-red-600 dark:text-red-400 font-semibold' : ''}>
+                                                          {temp.toFixed(1)}°C
+                                                        </span>
+                                                      </div>
+                                                    )}
+                                                  </For>
+                                                </div>
+                                              </div>
+                                            </Show>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    </Show>
+                                  </>
+                                );
+                              }}
+                            </For>
+                          </tbody>
+                        </table>
+                      </ScrollableTable>
+                    </Card>
+                  </Show>
+            </>
+          }
+        >
+          <Card padding="lg">
+            <EmptyState
+              icon={
+                <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+                  />
+                </svg>
+              }
+              title="No hosts reporting"
+              description="Install the Pulse host agent on Linux, macOS, or Windows machines to begin monitoring."
+              actions={
+                <button
+                  type="button"
+                  onClick={() => navigate('/settings/hosts')}
+                  class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  <span>Set up host agent</span>
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              }
+            />
+          </Card>
+        </Show>
+      </Show>
+    </div>
+  );
+};

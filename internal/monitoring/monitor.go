@@ -702,6 +702,35 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 	return host, nil
 }
 
+// RemoveHostAgent removes a host agent from monitoring state and clears related data.
+func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return models.Host{}, fmt.Errorf("host id is required")
+	}
+
+	host, removed := m.state.RemoveHost(hostID)
+	if !removed {
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().Str("hostID", hostID).Msg("Host not present in state during removal")
+		}
+		host = models.Host{
+			ID:       hostID,
+			Hostname: hostID,
+		}
+	}
+
+	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)
+
+	log.Info().
+		Str("host", host.Hostname).
+		Str("hostID", hostID).
+		Bool("removed", removed).
+		Msg("Host agent removed from monitoring")
+
+	return host, nil
+}
+
 // HideDockerHost marks a docker host as hidden without removing it from state.
 // Hidden hosts will not be shown in the frontend but will continue to accept updates.
 func (m *Monitor) HideDockerHost(hostID string) (models.DockerHost, error) {

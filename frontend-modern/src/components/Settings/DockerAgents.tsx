@@ -1,7 +1,6 @@
 import { Component, createSignal, Show, For, onMount, createEffect, createMemo } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
 import { notificationStore } from '@/stores/notifications';
@@ -415,9 +414,55 @@ WantedBy=multi-user.target`;
   };
 
   return (
-    <div class="space-y-6">
+    <div class="space-y-8">
+      {/* Summary Stats */}
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-900/10 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-blue-600 dark:bg-blue-500 rounded-lg">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+              </svg>
+            </div>
+            <div>
+              <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{dockerHosts().length}</p>
+              <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Docker Hosts</p>
+            </div>
+          </div>
+        </div>
+        <div class="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/20 dark:to-green-900/10 rounded-lg p-4 border border-green-200 dark:border-green-800">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-green-600 dark:bg-green-500 rounded-lg">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{dockerHosts().filter(h => h.status?.toLowerCase() === 'online').length}</p>
+              <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Online Now</p>
+            </div>
+          </div>
+        </div>
+        <div class="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-900/10 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-purple-600 dark:bg-purple-500 rounded-lg">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <div>
+              <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{dockerHosts().reduce((sum, h) => sum + (h.containers?.length || 0), 0)}</p>
+              <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Total Containers</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <SectionHeader title="Docker agent monitoring" size="md" class="flex-1" />
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Setup & Management</h2>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Deploy agents or manage existing Docker hosts</p>
+        </div>
         <button
           type="button"
           onClick={() => setShowInstructions(!showInstructions())}
@@ -490,7 +535,7 @@ WantedBy=multi-user.target`;
                 type="button"
                 onClick={openGenerateTokenModal}
                 disabled={isGeneratingToken()}
-                class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isGeneratingToken() ? 'Generating…' : 'Generate token'}
               </button>
@@ -510,10 +555,10 @@ WantedBy=multi-user.target`;
                     type="button"
                     onClick={acknowledgeTokenUse}
                     disabled={stepTwoComplete()}
-                    class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                    class={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                       stepTwoComplete()
                         ? 'bg-green-600 text-white cursor-default'
-                        : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+                        : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
                     }`}
                   >
                     {stepTwoComplete() ? 'Token inserted' : 'Insert token into command'}
@@ -532,10 +577,10 @@ WantedBy=multi-user.target`;
                 type="button"
                 onClick={acknowledgeTokenUse}
                 disabled={stepTwoComplete()}
-                class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                class={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   stepTwoComplete()
                     ? 'bg-green-600 text-white cursor-default'
-                    : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
                 }`}
               >
                 {stepTwoComplete() ? 'No token confirmed' : 'Confirm without token'}
@@ -556,12 +601,12 @@ WantedBy=multi-user.target`;
                       window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
                     }
                   }}
-                  class="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                  class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
                 >
                   Copy first command
                 </button>
               </div>
-              <div class="relative rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 overflow-x-auto">
+              <div class="relative rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 overflow-x-auto">
                 <code class="text-sm text-gray-900 dark:text-gray-100 font-mono break-all">
                   {getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, apiToken() || TOKEN_PLACEHOLDER)}
                 </code>
@@ -600,7 +645,7 @@ WantedBy=multi-user.target`;
                         window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
                       }
                     }}
-                    class="rounded bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                    class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
                   >
                     Copy
                   </button>
@@ -642,7 +687,7 @@ WantedBy=multi-user.target`;
                           window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
                         }
                       }}
-                      class="absolute right-2 top-2 rounded bg-gray-700 px-3 py-1 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-600"
+                      class="absolute right-2 top-2 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-600"
                     >
                       Copy
                     </button>
@@ -699,7 +744,7 @@ WantedBy=multi-user.target`;
                   setNewTokenName('');
                   setGenerateError(null);
                 }}
-                class="rounded px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                class="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -707,7 +752,7 @@ WantedBy=multi-user.target`;
                 type="button"
                 onClick={handleCreateToken}
                 disabled={isGeneratingToken()}
-                class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+                class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
               >
                 {isGeneratingToken() ? 'Generating…' : 'Generate token'}
               </button>
@@ -896,7 +941,7 @@ WantedBy=multi-user.target`;
                               window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
                             }
                           }}
-                          class="self-start rounded bg-gray-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-700"
+                          class="self-start rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-gray-700"
                         >
                           Copy command
                         </button>
@@ -952,7 +997,7 @@ WantedBy=multi-user.target`;
               <button
                 type="button"
                 onClick={closeRemoveModal}
-                class="rounded px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                class="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 Close
               </button>

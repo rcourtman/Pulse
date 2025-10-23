@@ -227,6 +227,8 @@ interface DiscoveryScanStatus {
 
 type SettingsTab =
   | 'agent-hub'
+  | 'docker'
+  | 'servers'
   | 'podman'
   | 'kubernetes'
   | 'system-general'
@@ -244,12 +246,20 @@ type AgentKey = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host' | 'podman' | 'kubernet
 
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
   'agent-hub': {
-    title: 'Agent Deployments',
-    description: 'Select a platform to generate tokens, deploy agents, or add Proxmox endpoints.',
+    title: 'Proxmox',
+    description: 'Monitor your Proxmox Virtual Environment, Backup Server, and Mail Gateway infrastructure.',
+  },
+  docker: {
+    title: 'Docker',
+    description: 'Monitor Docker hosts, containers, images, and volumes across your infrastructure.',
+  },
+  servers: {
+    title: 'Hosts',
+    description: 'Monitor Linux, macOS, and Windows machines—servers, desktops, and laptops.',
   },
   podman: {
-    title: 'Podman (container runtime)',
-    description: 'Auto-discovery and agent-based monitoring for Podman hosts is on the roadmap.',
+    title: 'Podman',
+    description: 'Container monitoring for Podman hosts is coming soon.',
   },
   kubernetes: {
     title: 'Kubernetes',
@@ -328,6 +338,8 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const deriveTabFromPath = (path: string): SettingsTab => {
     if (path.includes('/settings/agent-hub')) return 'agent-hub';
+    if (path.includes('/settings/docker')) return 'docker';
+    if (path.includes('/settings/hosts') || path.includes('/settings/host-agents') || path.includes('/settings/servers')) return 'servers';
     if (path.includes('/settings/podman')) return 'podman';
     if (path.includes('/settings/kubernetes')) return 'kubernetes';
     if (path.includes('/settings/system-general')) return 'system-general';
@@ -387,64 +399,26 @@ const Settings: Component<SettingsProps> = (props) => {
   agents: Array<{ id: AgentKey; label: string; description: string; icon: JSX.Element; disabled?: boolean }>;
 }[] = [
   {
-    title: 'Proxmox API integrations',
-    description: 'Connect Pulse directly to your Proxmox estate using scoped API tokens.',
+    title: 'Proxmox Products',
+    description: 'Select which Proxmox product to configure',
     agents: [
       {
         id: 'pve',
-        label: 'Proxmox VE',
-        description: 'Connect VE clusters and manage discovery.',
+        label: 'Virtual Environment',
+        description: 'VMs, containers, clusters, and storage',
         icon: <Server class="w-6 h-6" strokeWidth={2} />,
       },
       {
         id: 'pbs',
-        label: 'Proxmox Backup Server',
-        description: 'Monitor backup jobs and datastore health.',
+        label: 'Backup Server',
+        description: 'Backup jobs, datastores, and snapshots',
         icon: <HardDrive class="w-6 h-6" strokeWidth={2} />,
       },
       {
         id: 'pmg',
-        label: 'Proxmox Mail Gateway',
-        description: 'Capture mail flow, spam trends, and queues.',
+        label: 'Mail Gateway',
+        description: 'Mail flow, spam filtering, and queues',
         icon: <Mail class="w-6 h-6" strokeWidth={2} />,
-      },
-    ],
-  },
-  {
-    title: 'Agent deployments',
-    description: 'Install lightweight Pulse agents to report telemetry back to this hub.',
-    agents: [
-      {
-        id: 'docker',
-        label: 'Docker hosts',
-        description: 'Deploy the pulse-docker-agent for container telemetry.',
-        icon: <Container class="w-6 h-6" strokeWidth={2} />,
-      },
-      {
-        id: 'host',
-        label: 'Pulse host agent',
-        description: 'Install on Linux, macOS, or Windows servers.',
-        icon: <Monitor class="w-6 h-6" strokeWidth={2} />,
-      },
-    ],
-  },
-  {
-    title: 'Coming soon',
-    description: 'Roadmap integrations that are currently in development.',
-    agents: [
-      {
-        id: 'podman',
-        label: 'Podman hosts (coming soon)',
-        description: 'Podman agent support is under active development.',
-        icon: <Boxes class="w-6 h-6" strokeWidth={2} />,
-        disabled: true,
-      },
-      {
-        id: 'kubernetes',
-        label: 'Kubernetes (coming soon)',
-        description: 'Native Kubernetes monitoring is on the roadmap.',
-        icon: <Network class="w-6 h-6" strokeWidth={2} />,
-        disabled: true,
       },
     ],
   },
@@ -884,7 +858,7 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   const tabGroups: {
-    id: 'platforms' | 'administration' | 'system' | 'security';
+    id: 'platforms' | 'operations' | 'system' | 'security';
     label: string;
     items: { id: SettingsTab; label: string; icon: JSX.Element; disabled?: boolean }[];
   }[] = [
@@ -892,16 +866,18 @@ const Settings: Component<SettingsProps> = (props) => {
       id: 'platforms',
       label: 'Platforms',
       items: [
-        { id: 'agent-hub', label: 'Agent deployments', icon: <Server class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'podman', label: 'Podman hosts', icon: <Boxes class="w-4 h-4" strokeWidth={2} />, disabled: true },
+        { id: 'agent-hub', label: 'Proxmox', icon: <Server class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'docker', label: 'Docker', icon: <Container class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'servers', label: 'Hosts', icon: <Monitor class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'podman', label: 'Podman', icon: <Boxes class="w-4 h-4" strokeWidth={2} />, disabled: true },
         { id: 'kubernetes', label: 'Kubernetes', icon: <Network class="w-4 h-4" strokeWidth={2} />, disabled: true },
       ],
     },
     {
-      id: 'administration',
-      label: 'Administration',
+      id: 'operations',
+      label: 'Operations',
       items: [
-        { id: 'api', label: 'API access', icon: <ApiIcon class="w-4 h-4" /> },
+        { id: 'api', label: 'API Tokens', icon: <ApiIcon class="w-4 h-4" /> },
         { id: 'diagnostics', label: 'Diagnostics', icon: <Activity class="w-4 h-4" strokeWidth={2} /> },
       ],
     },
@@ -1950,15 +1926,16 @@ const Settings: Component<SettingsProps> = (props) => {
 
   return (
     <>
-      <div class="space-y-4">
-        {/* Header with better styling */}
-        <Card padding="md">
-          <SectionHeader
-            title={headerMeta().title}
-            description={headerMeta().description}
-            size="lg"
-          />
-        </Card>
+      <div class="space-y-6">
+        {/* Page header - no card wrapper for cleaner hierarchy */}
+        <div class="px-1">
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+            {headerMeta().title}
+          </h1>
+          <p class="text-base text-gray-600 dark:text-gray-400">
+            {headerMeta().description}
+          </p>
+        </div>
 
         {/* Save notification bar - only show when there are unsaved changes */}
         <Show
@@ -1969,34 +1946,34 @@ const Settings: Component<SettingsProps> = (props) => {
              activeTab() === 'system-updates' || activeTab() === 'system-backups')
           }
         >
-          <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 sm:p-4">
-            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div class="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+          <div class="bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div class="flex items-start gap-3">
                 <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
+                  class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
                   fill="none"
+                  viewBox="0 0 24 24"
                   stroke="currentColor"
                   stroke-width="2"
                 >
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="8" x2="12" y2="12"></line>
-                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <span class="text-sm font-medium">You have unsaved changes</span>
+                <div>
+                  <p class="font-semibold text-amber-900 dark:text-amber-100">Unsaved changes</p>
+                  <p class="text-sm text-amber-700 dark:text-amber-200 mt-0.5">Your changes will be lost if you navigate away</p>
+                </div>
               </div>
-              <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <div class="flex w-full sm:w-auto gap-3">
                 <button
                   type="button"
-                  class="flex-1 sm:flex-initial px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm transition-colors"
                   onClick={saveSettings}
                 >
                   Save Changes
                 </button>
                 <button
                   type="button"
-                  class="flex-1 sm:flex-initial px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  class="px-4 py-2.5 text-sm font-medium text-amber-700 dark:text-amber-200 hover:underline transition-colors"
                   onClick={() => {
                     window.location.reload();
                   }}
@@ -2010,14 +1987,39 @@ const Settings: Component<SettingsProps> = (props) => {
 
         <Card padding="none" class="relative lg:flex overflow-hidden">
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-300`}
-            onMouseEnter={() => setSidebarCollapsed(false)}
-            onMouseLeave={() => setSidebarCollapsed(true)}
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-64'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[16rem] lg:max-w-[16rem] lg:basis-[16rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200`}
             aria-label="Settings navigation"
             aria-expanded={!sidebarCollapsed()}
           >
-            <div class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-5'} py-6 space-y-6 transition-all duration-300`}>
-              <div id="settings-sidebar-menu" class="space-y-6">
+            <div class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}>
+              <Show when={!sidebarCollapsed()}>
+                <div class="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
+                  <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Settings</h2>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarCollapsed(true)}
+                    class="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    aria-label="Collapse sidebar"
+                  >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    </svg>
+                  </button>
+                </div>
+              </Show>
+              <Show when={sidebarCollapsed()}>
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed(false)}
+                  class="w-full p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Expand sidebar"
+                >
+                  <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </Show>
+              <div id="settings-sidebar-menu" class="space-y-5">
                 <For each={tabGroups}>
                   {(group) => (
                     <div class="space-y-2">
@@ -2104,7 +2106,7 @@ const Settings: Component<SettingsProps> = (props) => {
               </div>
             </Show>
 
-            <div class="p-3 sm:p-6 overflow-x-auto">
+            <div class="p-6 lg:p-8">
                 <Show when={activeTab() === 'agent-hub'}>
                   <AgentStepSection
                     step="Step 1"
@@ -3535,6 +3537,16 @@ const Settings: Component<SettingsProps> = (props) => {
               >
                 <DockerAgents />
               </AgentStepSection>
+            </Show>
+
+            {/* Docker Platform Tab */}
+            <Show when={activeTab() === 'docker'}>
+              <DockerAgents />
+            </Show>
+
+            {/* Servers Platform Tab */}
+            <Show when={activeTab() === 'servers'}>
+              <HostAgents variant="all" />
             </Show>
 
             {/* Podman Tab */}

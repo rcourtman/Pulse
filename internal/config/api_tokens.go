@@ -17,6 +17,7 @@ const (
 	ScopeDockerReport    = "docker:report"
 	ScopeDockerManage    = "docker:manage"
 	ScopeHostReport      = "host-agent:report"
+	ScopeHostManage      = "host-agent:manage"
 	ScopeSettingsRead    = "settings:read"
 	ScopeSettingsWrite   = "settings:write"
 )
@@ -28,6 +29,7 @@ var AllKnownScopes = []string{
 	ScopeDockerReport,
 	ScopeDockerManage,
 	ScopeHostReport,
+	ScopeHostManage,
 	ScopeSettingsRead,
 	ScopeSettingsWrite,
 }

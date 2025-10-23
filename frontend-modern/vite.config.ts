@@ -68,6 +68,14 @@ export default defineConfig({
         target: backendUrl,
         changeOrigin: true,
       },
+      '/install-host-agent.sh': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/install-host-agent.ps1': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
       '/download': {
         target: backendUrl,
         changeOrigin: true,
