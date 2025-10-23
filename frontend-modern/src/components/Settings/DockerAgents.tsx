@@ -45,6 +45,7 @@ export const DockerAgents: Component = () => {
   const [newTokenName, setNewTokenName] = createSignal('');
   const [generateError, setGenerateError] = createSignal<string | null>(null);
   const [latestRecord, setLatestRecord] = createSignal<APITokenRecord | null>(null);
+  const [stepTwoComplete, setStepTwoComplete] = createSignal(false);
 
   const tokenStepLabel = 'Step 2 · Generate API token';
   const commandStepLabel = 'Step 3 · Install command';
@@ -57,6 +58,12 @@ export const DockerAgents: Component = () => {
     scope: DOCKER_REPORT_SCOPE,
     storageKey: 'dockerAgentToken',
     legacyKeys: ['apiToken'],
+  });
+
+  createEffect(() => {
+    if (!apiToken()) {
+      setStepTwoComplete(false);
+    }
   });
 
   const pulseUrl = () => {
@@ -167,7 +174,21 @@ const modalCommandProgress = createMemo(() => {
     fetchSecurityStatus();
   });
 
-  const commandReady = () => !requiresToken() || Boolean(apiToken());
+  const tokenReady = () => !requiresToken() || Boolean(apiToken());
+  const commandsUnlocked = () => tokenReady() && stepTwoComplete();
+
+  const acknowledgeTokenUse = () => {
+    if (!requiresToken()) {
+      setStepTwoComplete(true);
+      return;
+    }
+    if (apiToken()) {
+      setStepTwoComplete(true);
+      notificationStore.success('Token ready to use in the install command.', 3500);
+    } else {
+      notificationStore.info('Generate or select a token before continuing.', 4000);
+    }
+  };
 
   // Find the token record that matches the currently stored token
   const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -206,6 +227,7 @@ const modalCommandProgress = createMemo(() => {
     const defaultName = `Docker host ${new Date().toISOString().slice(0, 10)}`;
     setNewTokenName(defaultName);
     setShowGenerateTokenModal(true);
+    setStepTwoComplete(false);
   };
 
   const handleCreateToken = async () => {
@@ -218,6 +240,7 @@ const modalCommandProgress = createMemo(() => {
       setShowGenerateTokenModal(false);
       setNewTokenName('');
       setLatestRecord(record);
+      setStepTwoComplete(true);
       showTokenReveal({
         token,
         record,
@@ -472,10 +495,56 @@ WantedBy=multi-user.target`;
               >
                 {isGeneratingToken() ? 'Generating…' : 'Generate token'}
               </button>
+
+              <Show when={apiToken()}>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <div class={`flex-1 rounded-lg border px-4 py-2 text-xs ${
+                    stepTwoComplete()
+                      ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200'
+                      : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
+                  }`}>
+                    {stepTwoComplete()
+                      ? 'Token ready. You can continue to the install command.'
+                      : 'Stored token detected. Confirm to insert it into the install command.'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={acknowledgeTokenUse}
+                    disabled={stepTwoComplete()}
+                    class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                      stepTwoComplete()
+                        ? 'bg-green-600 text-white cursor-default'
+                        : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+                    }`}
+                  >
+                    {stepTwoComplete() ? 'Token ready' : 'Use token in commands'}
+                  </button>
+                </div>
+              </Show>
             </div>
           </Show>
 
-          <Show when={commandReady()}>
+          <Show when={!requiresToken()}>
+            <div class="space-y-3">
+              <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                Tokens are optional on this Pulse instance. Confirm to continue to the install command.
+              </div>
+              <button
+                type="button"
+                onClick={acknowledgeTokenUse}
+                disabled={stepTwoComplete()}
+                class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                  stepTwoComplete()
+                    ? 'bg-green-600 text-white cursor-default'
+                    : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+                }`}
+              >
+                {stepTwoComplete() ? 'Confirmed' : 'Confirm and continue'}
+              </button>
+            </div>
+          </Show>
+
+          <Show when={commandsUnlocked()}>
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{commandStepLabel}</label>
@@ -488,10 +557,9 @@ WantedBy=multi-user.target`;
                       window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
                     }
                   }}
-                  disabled={requiresToken() && !apiToken()}
-                  class="px-3 py-1.5 text-xs font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 text-white hover:bg-blue-700"
+                  class="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-blue-600 text-white hover:bg-blue-700"
                 >
-                  Copy
+                  Copy first command
                 </button>
               </div>
               <div class="relative rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 overflow-x-auto">
@@ -503,6 +571,15 @@ WantedBy=multi-user.target`;
                 The installer downloads the agent, creates a systemd service, and starts reporting automatically.
               </p>
             </div>
+          </Show>
+
+          <Show when={requiresToken() && (!apiToken() || !stepTwoComplete())}>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Generate a new token or confirm the stored one to unlock the install command.
+            </p>
+          </Show>
+          <Show when={!requiresToken() && !stepTwoComplete()}>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Confirm the no-token setup to continue.</p>
           </Show>
 
           <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
