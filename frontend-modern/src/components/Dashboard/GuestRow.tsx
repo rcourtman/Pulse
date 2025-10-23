@@ -187,16 +187,22 @@ export function GuestRow(props: GuestRowProps) {
     }
   });
 
+  // Track if we're currently editing to prevent cleanup during re-renders
+  let isCurrentlyMounted = true;
+
   // Add global click handler to close editor and prevent clicks while editing
   createEffect(() => {
-    if (isEditingUrl()) {
+    if (isEditingUrl() && isCurrentlyMounted) {
       const handleGlobalClick = (e: MouseEvent) => {
+        // Double-check we're still the editing guest
+        if (currentlyEditingGuestId() !== guestId()) return;
+
         const target = e.target as HTMLElement;
         // Allow clicking another guest name to switch editing
         const isClickingGuestName = target.closest('[data-guest-name-editable]');
 
         // If clicking outside the editor (and not another guest name), close it and prevent the click
-        if (!target.closest('[data-url-editor]') && !isClickingGuestName && currentlyEditingGuestId() === guestId()) {
+        if (!target.closest('[data-url-editor]') && !isClickingGuestName) {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
@@ -205,10 +211,13 @@ export function GuestRow(props: GuestRowProps) {
       };
 
       const handleGlobalMouseDown = (e: MouseEvent) => {
+        // Double-check we're still the editing guest
+        if (currentlyEditingGuestId() !== guestId()) return;
+
         const target = e.target as HTMLElement;
         const isClickingGuestName = target.closest('[data-guest-name-editable]');
 
-        if (!target.closest('[data-url-editor]') && !isClickingGuestName && currentlyEditingGuestId() === guestId()) {
+        if (!target.closest('[data-url-editor]') && !isClickingGuestName) {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
@@ -452,13 +461,6 @@ export function GuestRow(props: GuestRowProps) {
                 onInput={(e) => {
                   editingValues.set(guestId(), e.currentTarget.value);
                   setEditingValuesVersion(v => v + 1);
-                }}
-                onBlur={(e) => {
-                  // Close editor when clicking away, but not if clicking the save/delete buttons
-                  const relatedTarget = e.relatedTarget as HTMLElement;
-                  if (!relatedTarget || !relatedTarget.closest('[data-url-editor-button]')) {
-                    cancelEditingUrl();
-                  }
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
