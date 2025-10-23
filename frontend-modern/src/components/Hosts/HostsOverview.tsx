@@ -261,7 +261,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                           <MetricBar
                                             label={`${cpuPercent().toFixed(1)}%`}
                                             value={cpuPercent()}
-                                            type={cpuPercent() > 80 ? 'danger' : 'primary'}
+                                            type="cpu"
                                           />
                                         </Show>
                                       </td>
@@ -273,7 +273,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                           <MetricBar
                                             label={`${memUsed()} / ${memTotal()}`}
                                             value={memPercent()}
-                                            type={memPercent() > 80 ? 'danger' : 'primary'}
+                                            type="memory"
                                           />
                                         </Show>
                                       </td>
@@ -379,7 +379,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                                               <MetricBar
                                                                 value={diskPercent()}
                                                                 label={`${diskPercent().toFixed(1)}%`}
-                                                                type={diskPercent() > 80 ? 'danger' : 'primary'}
+                                                                type="disk"
                                                               />
                                                             </div>
                                                           </Show>
