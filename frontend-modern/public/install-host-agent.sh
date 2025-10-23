@@ -246,12 +246,12 @@ fi
 
 # Download agent binary from Pulse server
 DOWNLOAD_URL="$PULSE_URL/download/pulse-host-agent?platform=$PLATFORM&arch=$ARCH"
+CHECKSUM_URL="$PULSE_URL/download/pulse-host-agent.sha256?platform=$PLATFORM&arch=$ARCH"
 TEMP_BINARY="/tmp/pulse-host-agent-$$.tmp"
 
 log_info "Downloading agent binary from $PULSE_URL..."
 
 DOWNLOAD_SUCCESS=false
-CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
 
 if command -v curl &> /dev/null; then
     if curl -fL --progress-bar -o "$TEMP_BINARY" "$DOWNLOAD_URL" 2>&1; then
