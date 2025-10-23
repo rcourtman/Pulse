@@ -46,8 +46,8 @@ export const DockerAgents: Component = () => {
   const [generateError, setGenerateError] = createSignal<string | null>(null);
   const [latestRecord, setLatestRecord] = createSignal<APITokenRecord | null>(null);
 
-  const tokenStepLabel = 'Step 1 · Generate API token';
-  const commandStepLabel = 'Step 2 · Install command';
+  const tokenStepLabel = 'Step 2 · Generate API token';
+  const commandStepLabel = 'Step 3 · Install command';
 
   const {
     token: apiToken,
