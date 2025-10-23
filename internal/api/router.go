@@ -3,9 +3,12 @@ package api
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -881,6 +884,7 @@ func (r *Router) setupRoutes() {
 	// Host agent download endpoints
 	r.mux.HandleFunc("/install-host-agent.sh", r.handleDownloadHostAgentInstallScript)
 	r.mux.HandleFunc("/install-host-agent.ps1", r.handleDownloadHostAgentInstallScriptPS)
+	r.mux.HandleFunc("/uninstall-host-agent.sh", r.handleDownloadHostAgentUninstallScript)
 	r.mux.HandleFunc("/uninstall-host-agent.ps1", r.handleDownloadHostAgentUninstallScriptPS)
 	r.mux.HandleFunc("/download/pulse-host-agent", r.handleDownloadHostAgent)
 
@@ -1223,6 +1227,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/download/pulse-docker-agent",         // Agent binary download should not require auth
 				"/install-host-agent.sh",               // Host agent bootstrap script must be public
 				"/install-host-agent.ps1",              // Host agent PowerShell script must be public
+				"/uninstall-host-agent.sh",             // Host agent uninstall script must be public
 				"/uninstall-host-agent.ps1",            // Host agent uninstall script must be public
 				"/download/pulse-host-agent",           // Host agent binary download should not require auth
 				"/api/agent/version",                   // Agent update checks need to work before auth
@@ -3259,6 +3264,22 @@ func (r *Router) handleDownloadHostAgentInstallScriptPS(w http.ResponseWriter, r
 	http.ServeFile(w, req, scriptPath)
 }
 
+// handleDownloadHostAgentUninstallScript serves the bash uninstallation script for Linux/macOS
+func (r *Router) handleDownloadHostAgentUninstallScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	scriptPath := "/opt/pulse/scripts/uninstall-host-agent.sh"
+	http.ServeFile(w, req, scriptPath)
+}
+
 // handleDownloadHostAgentUninstallScriptPS serves the PowerShell uninstallation script for Windows
 func (r *Router) handleDownloadHostAgentUninstallScriptPS(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
@@ -3322,12 +3343,37 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 			continue
 		}
 		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			// Check if this is a checksum request
+			if strings.HasSuffix(req.URL.Path, ".sha256") {
+				r.serveChecksum(w, req, candidate)
+				return
+			}
 			http.ServeFile(w, req, candidate)
 			return
 		}
 	}
 
 	http.Error(w, "Host agent binary not found. Please build from source: go build ./cmd/pulse-host-agent", http.StatusNotFound)
+}
+
+// serveChecksum computes and serves the SHA256 checksum of a file
+func (r *Router) serveChecksum(w http.ResponseWriter, req *http.Request, filepath string) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		http.Error(w, "Failed to open file", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		http.Error(w, "Failed to compute checksum", http.StatusInternalServerError)
+		return
+	}
+
+	checksum := hex.EncodeToString(hasher.Sum(nil))
+	w.Header().Set("Content-Type", "text/plain")
+	fmt.Fprintf(w, "%s\n", checksum)
 }
 
 func (r *Router) handleDiagnosticsRegisterProxyNodes(w http.ResponseWriter, req *http.Request) {

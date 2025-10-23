@@ -66,6 +66,7 @@ PULSE_TOKEN=""
 INTERVAL="30s"
 UNINSTALL="false"
 PLATFORM=""
+FORCE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -87,6 +88,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --uninstall)
             UNINSTALL="true"
+            shift
+            ;;
+        --force|-f)
+            FORCE=true
             shift
             ;;
         *)
@@ -121,21 +126,23 @@ fi
 
 print_header
 
-# Interactive prompts if parameters not provided
+# Interactive prompts if parameters not provided (unless --force is used)
 if [[ -z "$PULSE_URL" ]]; then
-    log_info "Interactive Installation Mode"
-    echo ""
-    read -p "Enter Pulse server URL (e.g., http://pulse.example.com:7656): " PULSE_URL
-    PULSE_URL=$(echo "$PULSE_URL" | sed 's:/*$::')  # Remove trailing slashes
+    if [[ "$FORCE" == false ]]; then
+        log_info "Interactive Installation Mode"
+        echo ""
+        read -p "Enter Pulse server URL (e.g., http://pulse.example.com:7656): " PULSE_URL
+        PULSE_URL=$(echo "$PULSE_URL" | sed 's:/*$::')  # Remove trailing slashes
+    fi
 fi
 
 if [[ -z "$PULSE_URL" ]]; then
     log_error "Pulse URL is required"
-    echo "Usage: $0 --url <pulse-url> --token <api-token> [--interval 30s] [--platform linux|darwin|windows]"
+    echo "Usage: $0 --url <pulse-url> --token <api-token> [--interval 30s] [--platform linux|darwin|windows] [--force]"
     exit 1
 fi
 
-if [[ -z "$PULSE_TOKEN" ]]; then
+if [[ -z "$PULSE_TOKEN" ]] && [[ "$FORCE" == false ]]; then
     log_warn "No API token provided - agent will attempt to connect without authentication"
     read -p "Enter API token (or press Enter to skip): " PULSE_TOKEN
 
@@ -224,12 +231,17 @@ if [[ -f "$AGENT_PATH" ]]; then
         fi
     fi
 
-    read -p "Reinstall/update agent? (Y/n): " REINSTALL
-    if [[ "$REINSTALL" == "n" ]] || [[ "$REINSTALL" == "N" ]]; then
-        log_info "Installation cancelled"
-        exit 0
+    if [[ "$FORCE" == false ]]; then
+        read -p "Reinstall/update agent? (Y/n): " REINSTALL
+        if [[ "$REINSTALL" == "n" ]] || [[ "$REINSTALL" == "N" ]]; then
+            log_info "Installation cancelled"
+            exit 0
+        fi
+        echo ""
+    else
+        log_info "Force mode: automatically reinstalling/updating agent"
+        echo ""
     fi
-    echo ""
 fi
 
 # Download agent binary from Pulse server
@@ -322,10 +334,17 @@ if [[ -n "$EXPECTED_CHECKSUM" ]]; then
             echo "  Got:      $ACTUAL_CHECKSUM"
             echo ""
             log_warn "The downloaded binary may be corrupted or tampered with."
-            read -p "Continue anyway? (y/N): " CONTINUE_ANYWAY
-            if [[ "$CONTINUE_ANYWAY" != "y" ]] && [[ "$CONTINUE_ANYWAY" != "Y" ]]; then
+
+            if [[ "$FORCE" == false ]]; then
+                read -p "Continue anyway? (y/N): " CONTINUE_ANYWAY
+                if [[ "$CONTINUE_ANYWAY" != "y" ]] && [[ "$CONTINUE_ANYWAY" != "Y" ]]; then
+                    rm -f "$TEMP_BINARY"
+                    log_error "Installation cancelled"
+                    exit 1
+                fi
+            else
+                log_error "Force mode: aborting due to checksum mismatch (security risk)"
                 rm -f "$TEMP_BINARY"
-                log_error "Installation cancelled"
                 exit 1
             fi
         fi
