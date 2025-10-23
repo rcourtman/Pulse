@@ -85,6 +85,17 @@ export function Dashboard(props: DashboardProps) {
     }
   });
 
+  // Callback to update a guest's custom URL in metadata
+  const handleCustomUrlUpdate = (guestId: string, url: string) => {
+    setGuestMetadata((prev) => ({
+      ...prev,
+      [guestId]: {
+        ...(prev[guestId] || { id: guestId }),
+        customUrl: url || undefined,
+      },
+    }));
+  };
+
   // Create a mapping from node ID to node object
   const nodeByInstance = createMemo(() => {
     const map: Record<string, Node> = {};
@@ -230,8 +241,7 @@ export function Dashboard(props: DashboardProps) {
   const allGuests = createMemo(() => {
     const vms = props.vms || [];
     const containers = props.containers || [];
-    const guests: (VM | Container)[] = [...vms, ...containers];
-    return guests;
+    return [...vms, ...containers];
   });
 
   // Filter guests based on current settings
@@ -782,33 +792,32 @@ export function Dashboard(props: DashboardProps) {
                           <NodeGroupHeader node={node!} colspan={11} />
                         </Show>
                         <For each={guests} fallback={<></>}>
-                          {(guest) => (
-                            <ComponentErrorBoundary name="GuestRow">
-                              {(() => {
-                                // Match backend ID generation logic: standalone nodes use "node-vmid", clusters use "instance-node-vmid"
-                                const guestId =
-                                  guest.id ||
-                                  (guest.instance === guest.node
-                                    ? `${guest.node}-${guest.vmid}`
-                                    : `${guest.instance}-${guest.node}-${guest.vmid}`);
-                                const metadata =
-                                  guestMetadata()[guestId] ||
-                                  guestMetadata()[`${guest.node}-${guest.vmid}`];
-                                const parentNode = node ?? resolveParentNode(guest);
-                                const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
-                                return (
-                                  <GuestRow
-                                    guest={guest}
-                                    alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
-                                    customUrl={metadata?.customUrl}
-                                    onTagClick={handleTagClick}
-                                    activeSearch={search()}
-                                    parentNodeOnline={parentNodeOnline}
-                                  />
-                                );
-                              })()}
-                            </ComponentErrorBoundary>
-                          )}
+                          {(guest) => {
+                            // Match backend ID generation logic: standalone nodes use "node-vmid", clusters use "instance-node-vmid"
+                            const guestId =
+                              guest.id ||
+                              (guest.instance === guest.node
+                                ? `${guest.node}-${guest.vmid}`
+                                : `${guest.instance}-${guest.node}-${guest.vmid}`);
+                            const metadata =
+                              guestMetadata()[guestId] ||
+                              guestMetadata()[`${guest.node}-${guest.vmid}`];
+                            const parentNode = node ?? resolveParentNode(guest);
+                            const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
+                            return (
+                              <ComponentErrorBoundary name="GuestRow">
+                                <GuestRow
+                                  guest={guest}
+                                  alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
+                                  customUrl={metadata?.customUrl}
+                                  onTagClick={handleTagClick}
+                                  activeSearch={search()}
+                                  parentNodeOnline={parentNodeOnline}
+                                  onCustomUrlUpdate={handleCustomUrlUpdate}
+                                />
+                              </ComponentErrorBoundary>
+                            );
+                          }}
                         </For>
                       </>
                     );

@@ -6,10 +6,18 @@ import { IOMetric } from './IOMetric';
 import { TagBadges } from './TagBadges';
 import { DiskList } from './DiskList';
 import { isGuestRunning, shouldDisplayGuestMetrics } from '@/utils/status';
+import { GuestMetadataAPI } from '@/api/guestMetadata';
+import { showSuccess, showError } from '@/utils/toast';
 
 type Guest = VM | Container;
 
 const drawerState = new Map<string, boolean>();
+// Global editing state - use a signal so all components react
+const [currentlyEditingGuestId, setCurrentlyEditingGuestId] = createSignal<string | null>(null);
+// Store the editing value globally so it survives re-renders
+const editingValues = new Map<string, string>();
+// Signal to trigger reactivity when editing values change
+const [editingValuesVersion, setEditingValuesVersion] = createSignal(0);
 
 const buildGuestId = (guest: Guest) => {
   if (guest.id) return guest.id;
@@ -44,13 +52,21 @@ interface GuestRowProps {
   onTagClick?: (tag: string) => void;
   activeSearch?: string;
   parentNodeOnline?: boolean;
+  onCustomUrlUpdate?: (guestId: string, url: string) => void;
 }
 
 export function GuestRow(props: GuestRowProps) {
-  const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const initialGuestId = buildGuestId(props.guest);
-  const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(initialGuestId) ?? false);
   const guestId = createMemo(() => buildGuestId(props.guest));
+  const isEditingUrl = createMemo(() => currentlyEditingGuestId() === guestId());
+
+  const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
+  const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(initialGuestId) ?? false);
+  const editingUrlValue = createMemo(() => {
+    editingValuesVersion(); // Subscribe to changes
+    return editingValues.get(guestId()) || '';
+  });
+  let urlInputRef: HTMLInputElement | undefined;
 
   const hasFilesystemDetails = createMemo(() => (props.guest.disks?.length ?? 0) > 0);
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
@@ -62,10 +78,14 @@ export function GuestRow(props: GuestRowProps) {
   const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
   const hasAgentInfo = createMemo(() => agentVersion().length > 0);
 
-  // Update custom URL when prop changes
+  // Update custom URL when prop changes, but only if we're not currently editing
   createEffect(() => {
-    setCustomUrl(props.customUrl);
+    // Don't update customUrl from props if this guest is currently being edited
+    if (currentlyEditingGuestId() !== guestId()) {
+      setCustomUrl(props.customUrl);
+    }
   });
+
 
 
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
@@ -135,10 +155,79 @@ export function GuestRow(props: GuestRowProps) {
   const toggleDrawer = (event: MouseEvent) => {
     if (!canShowDrawer()) return;
     const target = event.target as HTMLElement;
-    if (target.closest('a, button, [data-prevent-toggle]')) {
+    if (target.closest('a, button, input, [data-prevent-toggle]')) {
       return;
     }
     setDrawerOpen((prev) => !prev);
+  };
+
+  const startEditingUrl = (event: MouseEvent) => {
+    event.stopPropagation();
+
+    // If another guest is being edited, save it first
+    const currentEditing = currentlyEditingGuestId();
+    if (currentEditing !== null && currentEditing !== guestId()) {
+      // Find the input for the currently editing guest and blur it
+      const currentInput = document.querySelector(`input[data-guest-id="${currentEditing}"]`) as HTMLInputElement;
+      if (currentInput) {
+        currentInput.blur();
+      }
+    }
+
+    editingValues.set(guestId(), customUrl() || '');
+    setEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingGuestId(guestId());
+
+    // Focus the input after it renders
+    queueMicrotask(() => {
+      if (urlInputRef) {
+        urlInputRef.focus();
+        urlInputRef.select();
+      }
+    });
+  };
+
+  const saveUrl = async () => {
+    // Only save if this guest is the one being edited
+    if (currentlyEditingGuestId() !== guestId()) return;
+
+    const newUrl = (editingValues.get(guestId()) || '').trim();
+
+    // Clear global editing state
+    editingValues.delete(guestId());
+    setEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingGuestId(null);
+
+    // If URL hasn't changed, don't save
+    if (newUrl === (customUrl() || '')) return;
+
+    try {
+      await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: newUrl });
+      setCustomUrl(newUrl || undefined);
+
+      // Notify parent to update metadata
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(guestId(), newUrl);
+      }
+
+      if (newUrl) {
+        showSuccess('Guest URL saved');
+      } else {
+        showSuccess('Guest URL cleared');
+      }
+    } catch (err: any) {
+      console.error('Failed to save guest URL:', err);
+      showError(err.message || 'Failed to save guest URL');
+    }
+  };
+
+  const cancelEditingUrl = () => {
+    // Only cancel if this guest is the one being edited
+    if (currentlyEditingGuestId() !== guestId()) return;
+
+    editingValues.delete(guestId());
+    setEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingGuestId(null);
   };
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
@@ -246,28 +335,92 @@ export function GuestRow(props: GuestRowProps) {
       {/* Name - Sticky column */}
       <td class={firstCellClass()}>
         <div class="flex items-center gap-2">
-          {/* Name - clickable if custom URL is set */}
+          {/* Name - show input when editing, otherwise show name with optional link */}
           <Show
-            when={customUrl()}
+            when={isEditingUrl()}
             fallback={
-              <span
-                class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
-                title={props.guest.name}
-              >
-                {props.guest.name}
-              </span>
+              <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                <span
+                  class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate cursor-text select-none"
+                  style="cursor: text;"
+                  title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                  onClick={startEditingUrl}
+                >
+                  {props.guest.name}
+                </span>
+                <Show when={customUrl()}>
+                  <a
+                    href={customUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    title="Open in new tab"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <svg
+                      class="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
+                    </svg>
+                  </a>
+                </Show>
+              </div>
             }
           >
-            <a
-              href={customUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer truncate"
-              title={`${props.guest.name} - Click to open custom URL`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              {props.guest.name}
-            </a>
+            <div class="flex-1 flex items-center gap-1">
+              <input
+                ref={urlInputRef}
+                type="text"
+                value={editingUrlValue()}
+                data-guest-id={guestId()}
+                onInput={(e) => {
+                  editingValues.set(guestId(), e.currentTarget.value);
+                  setEditingValuesVersion(v => v + 1);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveUrl();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelEditingUrl();
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="https://192.168.1.100:8006"
+                class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  saveUrl();
+                }}
+                class="px-2 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                title="Save (or press Enter)"
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cancelEditingUrl();
+                }}
+                class="px-2 py-0.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                title="Cancel (or press Escape)"
+              >
+                ✕
+              </button>
+            </div>
           </Show>
 
           {/* Tag badges */}

@@ -6,7 +6,6 @@ import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
 import { NodeModal } from './NodeModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { GuestURLs } from './GuestURLs';
 import { DockerAgents } from './DockerAgents';
 import { HostAgents } from './HostAgents';
 import APITokenManager from './APITokenManager';
@@ -32,9 +31,7 @@ import Activity from 'lucide-solid/icons/activity';
 import Loader from 'lucide-solid/icons/loader';
 import Boxes from 'lucide-solid/icons/boxes';
 import Network from 'lucide-solid/icons/network';
-import Terminal from 'lucide-solid/icons/terminal';
 import Monitor from 'lucide-solid/icons/monitor';
-import Laptop from 'lucide-solid/icons/laptop';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
@@ -228,15 +225,9 @@ interface DiscoveryScanStatus {
 }
 
 type SettingsTab =
-  | 'pve'
-  | 'pbs'
-  | 'pmg'
-  | 'docker'
+  | 'agent-hub'
   | 'podman'
   | 'kubernetes'
-  | 'linuxServers'
-  | 'windowsServers'
-  | 'macServers'
   | 'system-general'
   | 'system-network'
   | 'system-updates'
@@ -248,22 +239,12 @@ type SettingsTab =
   | 'diagnostics'
   | 'updates';
 
+type AgentKey = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host' | 'podman' | 'kubernetes';
+
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
-  pve: {
-    title: 'Proxmox VE',
-    description: 'Connect clusters, manage nodes, and control discovery for Proxmox VE.',
-  },
-  pbs: {
-    title: 'Proxmox Backup Server',
-    description: 'Add and maintain Proxmox Backup Server endpoints used for snapshot and archive monitoring.',
-  },
-  pmg: {
-    title: 'Proxmox Mail Gateway',
-    description: 'Monitor mail flow, spam trends, and quarantine health from your PMG nodes.',
-  },
-  docker: {
-    title: 'Docker Agents',
-    description: 'Configure Docker hosts, agent tokens, and polling behaviour for container insights.',
+  'agent-hub': {
+    title: 'Agent Deployments',
+    description: 'Select a platform to generate tokens, deploy agents, or add Proxmox endpoints.',
   },
   podman: {
     title: 'Podman (container runtime)',
@@ -272,18 +253,6 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   kubernetes: {
     title: 'Kubernetes',
     description: 'Cluster-wide monitoring via Pulse is coming soon. Watch this space for Helm charts and operators.',
-  },
-  linuxServers: {
-    title: 'Linux Servers',
-    description: 'Install the host agent on Debian, Ubuntu, RHEL, or other Linux distributions to surface capacity metrics.',
-  },
-  windowsServers: {
-    title: 'Windows Servers',
-    description: 'Native Windows support is planned; compile from source or track development updates here.',
-  },
-  macServers: {
-    title: 'macOS Devices',
-    description: 'Monitor macOS hosts via launchd-backed agents for uptime and temperature insights.',
   },
   'system-general': {
     title: 'General Settings',
@@ -357,35 +326,168 @@ const Settings: Component<SettingsProps> = (props) => {
   const location = useLocation();
 
   const deriveTabFromPath = (path: string): SettingsTab => {
-    if (path.includes('/settings/pbs')) return 'pbs';
-    if (path.includes('/settings/pmg')) return 'pmg';
-    if (path.includes('/settings/docker')) return 'docker';
+    if (path.includes('/settings/agent-hub')) return 'agent-hub';
     if (path.includes('/settings/podman')) return 'podman';
     if (path.includes('/settings/kubernetes')) return 'kubernetes';
-    if (path.includes('/settings/linuxServers')) return 'linuxServers';
-    if (path.includes('/settings/windowsServers')) return 'windowsServers';
-    if (path.includes('/settings/macServers')) return 'macServers';
     if (path.includes('/settings/system-general')) return 'system-general';
     if (path.includes('/settings/system-network')) return 'system-network';
     if (path.includes('/settings/system-updates')) return 'system-updates';
     if (path.includes('/settings/system-backups')) return 'system-backups';
-    // Legacy redirect: old /settings/system goes to general
     if (path.includes('/settings/system')) return 'system-general';
     if (path.includes('/settings/api')) return 'api';
     if (path.includes('/settings/security-overview')) return 'security-overview';
     if (path.includes('/settings/security-auth')) return 'security-auth';
     if (path.includes('/settings/security-sso')) return 'security-sso';
-    // Legacy redirect: old /settings/security goes to overview
     if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
     if (path.includes('/settings/updates')) return 'updates';
-    return 'pve';
+    // Legacy platform paths map to the agent hub
+    if (
+      path.includes('/settings/pve') ||
+      path.includes('/settings/pbs') ||
+      path.includes('/settings/pmg') ||
+      path.includes('/settings/docker') ||
+      path.includes('/settings/linuxServers') ||
+      path.includes('/settings/windowsServers') ||
+      path.includes('/settings/macServers')
+    ) {
+      return 'agent-hub';
+    }
+    return 'agent-hub';
+  };
+
+  const deriveAgentFromPath = (path: string): AgentKey | null => {
+    if (path.includes('/settings/pve')) return 'pve';
+    if (path.includes('/settings/pbs')) return 'pbs';
+    if (path.includes('/settings/pmg')) return 'pmg';
+    if (path.includes('/settings/docker')) return 'docker';
+    if (
+      path.includes('/settings/host') ||
+      path.includes('/settings/host-agents') ||
+      path.includes('/settings/linuxServers') ||
+      path.includes('/settings/windowsServers') ||
+      path.includes('/settings/macServers')
+    ) {
+      return 'host';
+    }
+    if (path.includes('/settings/podman')) return 'podman';
+    if (path.includes('/settings/kubernetes')) return 'kubernetes';
+    return null;
   };
 
   const [currentTab, setCurrentTab] = createSignal<SettingsTab>(deriveTabFromPath(location.pathname));
   const activeTab = () => currentTab();
 
+  const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
+
+  const agentGroups: {
+  title: string;
+  description?: string;
+  agents: Array<{ id: AgentKey; label: string; description: string; icon: JSX.Element; disabled?: boolean }>;
+}[] = [
+  {
+    title: 'Proxmox API integrations',
+    description: 'Connect Pulse directly to your Proxmox estate using scoped API tokens.',
+    agents: [
+      {
+        id: 'pve',
+        label: 'Proxmox VE',
+        description: 'Connect VE clusters and manage discovery.',
+        icon: <Server class="w-6 h-6" strokeWidth={2} />,
+      },
+      {
+        id: 'pbs',
+        label: 'Proxmox Backup Server',
+        description: 'Monitor backup jobs and datastore health.',
+        icon: <HardDrive class="w-6 h-6" strokeWidth={2} />,
+      },
+      {
+        id: 'pmg',
+        label: 'Proxmox Mail Gateway',
+        description: 'Capture mail flow, spam trends, and queues.',
+        icon: <Mail class="w-6 h-6" strokeWidth={2} />,
+      },
+    ],
+  },
+  {
+    title: 'Agent deployments',
+    description: 'Install lightweight Pulse agents to report telemetry back to this hub.',
+    agents: [
+      {
+        id: 'docker',
+        label: 'Docker hosts',
+        description: 'Deploy the pulse-docker-agent for container telemetry.',
+        icon: <Container class="w-6 h-6" strokeWidth={2} />,
+      },
+      {
+        id: 'host',
+        label: 'Pulse host agent',
+        description: 'Install on Linux, macOS, or Windows servers.',
+        icon: <Monitor class="w-6 h-6" strokeWidth={2} />,
+      },
+    ],
+  },
+  {
+    title: 'Coming soon',
+    description: 'Roadmap integrations that are currently in development.',
+    agents: [
+      {
+        id: 'podman',
+        label: 'Podman hosts (coming soon)',
+        description: 'Podman agent support is under active development.',
+        icon: <Boxes class="w-6 h-6" strokeWidth={2} />,
+        disabled: true,
+      },
+      {
+        id: 'kubernetes',
+        label: 'Kubernetes (coming soon)',
+        description: 'Native Kubernetes monitoring is on the roadmap.',
+        icon: <Network class="w-6 h-6" strokeWidth={2} />,
+        disabled: true,
+      },
+    ],
+  },
+];
+  const agentCards = agentGroups.flatMap((group) => group.agents);
+
+  const agentPaths: Record<AgentKey, string> = {
+    pve: '/settings/pve',
+    pbs: '/settings/pbs',
+    pmg: '/settings/pmg',
+    docker: '/settings/docker',
+    host: '/settings/host-agents',
+    podman: '/settings/podman',
+    kubernetes: '/settings/kubernetes',
+  } as Record<AgentKey, string>;
+
+  const handleSelectAgent = (agent: AgentKey) => {
+    setSelectedAgent(agent);
+    if (currentTab() !== 'agent-hub') {
+      setCurrentTab('agent-hub');
+    }
+    const target = agentPaths[agent];
+    if (target && location.pathname !== target) {
+      navigate(target, { scroll: false });
+    }
+  };
+
   const setActiveTab = (tab: SettingsTab) => {
+    if (tab === 'agent-hub' && selectedAgent() === 'podman') {
+      setSelectedAgent('pve');
+    } else if (tab === 'agent-hub' && selectedAgent() === 'kubernetes') {
+      setSelectedAgent('pve');
+    }
+
+    if (tab === 'agent-hub' && !['pve', 'pbs', 'pmg', 'docker', 'host'].includes(selectedAgent())) {
+      setSelectedAgent('pve');
+    }
+
+    if (tab === 'podman') {
+      setSelectedAgent('podman');
+    } else if (tab === 'kubernetes') {
+      setSelectedAgent('kubernetes');
+    }
+
     const targetPath = `/settings/${tab}`;
     if (location.pathname !== targetPath) {
       navigate(targetPath, { scroll: false });
@@ -411,15 +513,29 @@ const Settings: Component<SettingsProps> = (props) => {
       () => location.pathname,
       (path) => {
         if (path === '/settings' || path === '/settings/') {
-          if (currentTab() !== 'pve') {
-            setCurrentTab('pve');
+          if (currentTab() !== 'agent-hub') {
+            setCurrentTab('agent-hub');
           }
+          setSelectedAgent('pve');
           return;
         }
 
         const resolved = deriveTabFromPath(path);
         if (resolved !== currentTab()) {
           setCurrentTab(resolved);
+        }
+
+        if (resolved === 'agent-hub') {
+          const agentFromPath = deriveAgentFromPath(path);
+          if (agentFromPath) {
+            setSelectedAgent(agentFromPath);
+          } else if (!['pve', 'pbs', 'pmg', 'docker', 'host'].includes(selectedAgent())) {
+            setSelectedAgent('pve');
+          }
+        } else if (resolved === 'podman') {
+          setSelectedAgent('podman');
+        } else if (resolved === 'kubernetes') {
+          setSelectedAgent('kubernetes');
         }
       },
     ),
@@ -776,15 +892,9 @@ const Settings: Component<SettingsProps> = (props) => {
       id: 'platforms',
       label: 'Platforms',
       items: [
-        { id: 'pve', label: 'Proxmox VE nodes', icon: <Server class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'pbs', label: 'Proxmox Backup Server', icon: <HardDrive class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'pmg', label: 'Proxmox Mail Gateway', icon: <Mail class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'docker', label: 'Docker hosts', icon: <Container class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'agent-hub', label: 'Agent deployments', icon: <Server class="w-4 h-4" strokeWidth={2} /> },
         { id: 'podman', label: 'Podman hosts', icon: <Boxes class="w-4 h-4" strokeWidth={2} />, disabled: true },
         { id: 'kubernetes', label: 'Kubernetes', icon: <Network class="w-4 h-4" strokeWidth={2} />, disabled: true },
-        { id: 'linuxServers', label: 'Linux servers', icon: <Terminal class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'windowsServers', label: 'Windows servers', icon: <Monitor class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'macServers', label: 'macOS devices', icon: <Laptop class="w-4 h-4" strokeWidth={2} /> },
       ],
     },
     {
@@ -1854,7 +1964,7 @@ const Settings: Component<SettingsProps> = (props) => {
         <Show
           when={
             hasUnsavedChanges() &&
-            (activeTab() === 'pve' || activeTab() === 'pbs' ||
+            (activeTab() === 'agent-hub' ||
              activeTab() === 'system-general' || activeTab() === 'system-network' ||
              activeTab() === 'system-updates' || activeTab() === 'system-backups')
           }
@@ -1995,8 +2105,66 @@ const Settings: Component<SettingsProps> = (props) => {
             </Show>
 
             <div class="p-3 sm:p-6 overflow-x-auto">
+                <Show when={activeTab() === 'agent-hub'}>
+                  <Card padding="lg" class="space-y-4">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                          Step 1 · Choose a platform
+                        </h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                          Select the integration you want to deploy or manage.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      <For each={agentCards}>
+                        {(card) => {
+                          const isActive = () => selectedAgent() === card.id;
+                          return (
+                            <button
+                              type="button"
+                              disabled={card.disabled}
+                              class={`flex flex-col items-start gap-3 rounded-xl border transition-colors p-4 text-left shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
+                                card.disabled
+                                  ? 'cursor-not-allowed opacity-60 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                                  : isActive()
+                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500'
+                              }`}
+                              onClick={() => {
+                                if (card.disabled) return;
+                                handleSelectAgent(card.id);
+                              }}
+                            >
+                              <div class="flex items-center gap-3">
+                                <div
+                                  class={`rounded-md p-2 ${
+                                    isActive()
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
+                                  }`}
+                                >
+                                  {card.icon}
+                                </div>
+                                <div class="flex-1">
+                                  <p class="font-semibold text-gray-900 dark:text-gray-100">
+                                    {card.label}
+                                  </p>
+                                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                    {card.description}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </Card>
+                </Show>
                 {/* PVE Nodes Tab */}
-                <Show when={activeTab() === 'pve'}>
+                <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pve'}>
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
                       <div class="flex items-center justify-center py-8">
@@ -2511,20 +2679,13 @@ const Settings: Component<SettingsProps> = (props) => {
                         </For>
                       </div>
                     </Show>
-
-                    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <GuestURLs
-                        hasUnsavedChanges={hasUnsavedChanges}
-                        setHasUnsavedChanges={setHasUnsavedChanges}
-                      />
-                    </div>
                   </div>
                 </Show>
               </div>
             </Show>
 
             {/* PBS Nodes Tab */}
-            <Show when={activeTab() === 'pbs'}>
+            <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pbs'}>
               <div class="space-y-4">
                 <Show when={!initialLoadComplete()}>
                   <div class="flex items-center justify-center py-8">
@@ -2934,7 +3095,7 @@ const Settings: Component<SettingsProps> = (props) => {
             </Show>
 
             {/* PMG Nodes Tab */}
-            <Show when={activeTab() === 'pmg'}>
+            <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pmg'}>
               <div class="space-y-4">
                 <Show when={!initialLoadComplete()}>
                   <div class="flex items-center justify-center py-8">
@@ -3334,7 +3495,7 @@ const Settings: Component<SettingsProps> = (props) => {
             </Show>
 
             {/* Docker Tab */}
-            <Show when={activeTab() === 'docker'}>
+            <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'docker'}>
               <DockerAgents />
             </Show>
 
@@ -3354,19 +3515,9 @@ const Settings: Component<SettingsProps> = (props) => {
               />
             </Show>
 
-            {/* Linux Host Agents */}
-            <Show when={activeTab() === 'linuxServers'}>
-              <HostAgents variant="linux" />
-            </Show>
-
-            {/* Windows Host Agents */}
-            <Show when={activeTab() === 'windowsServers'}>
-              <HostAgents variant="windows" />
-            </Show>
-
-            {/* macOS Host Agents */}
-            <Show when={activeTab() === 'macServers'}>
-              <HostAgents variant="macos" />
+            {/* Host Agents */}
+            <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'host'}>
+              <HostAgents />
             </Show>
 
             {/* System General Tab */}

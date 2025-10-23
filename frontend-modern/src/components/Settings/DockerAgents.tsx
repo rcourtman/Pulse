@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, For, onCleanup, onMount, createEffect, on, createMemo } from 'solid-js';
+import { Component, createSignal, Show, For, onMount, createEffect, createMemo } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -6,19 +6,17 @@ import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
-import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import type { DockerHost } from '@/types/api';
+import type { APITokenRecord } from '@/api/security';
 import { showTokenReveal } from '@/stores/tokenReveal';
+import { DOCKER_MANAGE_SCOPE, DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
+import { useScopedTokenManager } from '@/hooks/useScopedTokenManager';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
   const [showInstructions, setShowInstructions] = createSignal(true);
 
   let hasLoggedSecurityStatusError = false;
-  let hasLoggedTokenAuthWarning = false;
-  let hasNotifiedTokenLoadError = false;
-  let hasNotifiedTokenAuthFailure = false;
-  let previousTokenStrategy: 'existing' | 'generate' | null = null;
 
   const [showHidden, setShowHidden] = createSignal(false);
 
@@ -42,17 +40,24 @@ export const DockerAgents: Component = () => {
   const [uninstallCommandCopied, setUninstallCommandCopied] = createSignal(false);
   const [removeActionLoading, setRemoveActionLoading] = createSignal<'queue' | 'force' | 'hide' | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
-  const [apiToken, setApiToken] = createSignal<string | null>(null);
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
-  const [availableTokens, setAvailableTokens] = createSignal<APITokenRecord[]>([]);
-  const [loadingTokens, setLoadingTokens] = createSignal(false);
-  const [tokensLoaded, setTokensLoaded] = createSignal(false);
-  const [tokensError, setTokensError] = createSignal(false);
-  const [isGeneratingToken, setIsGeneratingToken] = createSignal(false);
-  const [tokenAccessDenied, setTokenAccessDenied] = createSignal(false);
-  const [selectedTokenStrategy, setSelectedTokenStrategy] = createSignal<'existing' | 'generate' | null>(null);
   const [showGenerateTokenModal, setShowGenerateTokenModal] = createSignal(false);
   const [newTokenName, setNewTokenName] = createSignal('');
+  const [generateError, setGenerateError] = createSignal<string | null>(null);
+  const [latestRecord, setLatestRecord] = createSignal<APITokenRecord | null>(null);
+
+  const tokenStepLabel = 'Step 1 · Generate API token';
+  const commandStepLabel = 'Step 2 · Install command';
+
+  const {
+    token: apiToken,
+    isGeneratingToken,
+    generateToken,
+  } = useScopedTokenManager({
+    scope: DOCKER_REPORT_SCOPE,
+    storageKey: 'dockerAgentToken',
+    legacyKeys: ['apiToken'],
+  });
 
   const pulseUrl = () => {
     if (typeof window !== 'undefined') {
@@ -145,21 +150,6 @@ const modalCommandProgress = createMemo(() => {
       return;
     }
 
-    const readToken = () => window.localStorage.getItem('apiToken');
-    const currentToken = readToken();
-    if (currentToken) {
-      setApiToken(currentToken);
-    }
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === 'apiToken') {
-        setApiToken(event.newValue);
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-    onCleanup(() => window.removeEventListener('storage', handleStorage));
-
     const fetchSecurityStatus = async () => {
       try {
         const response = await fetch('/api/security/status', { credentials: 'include' });
@@ -177,89 +167,9 @@ const modalCommandProgress = createMemo(() => {
     fetchSecurityStatus();
   });
 
-  const loadTokens = async () => {
-    if (loadingTokens()) return;
-    setLoadingTokens(true);
-    setTokensError(false);
-    try {
-      const tokens = await SecurityAPI.listTokens();
-      const sorted = [...tokens].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      setAvailableTokens(sorted);
-      setTokenAccessDenied(false);
-      hasNotifiedTokenAuthFailure = false;
-      hasNotifiedTokenLoadError = false;
-      setTokensLoaded(true);
-    } catch (err) {
-      setTokensError(true);
-      if (err instanceof Error && /authentication required/i.test(err.message)) {
-        setTokenAccessDenied(true);
-        if (!hasLoggedTokenAuthWarning) {
-          hasLoggedTokenAuthWarning = true;
-          console.debug('API token listing requires authentication.');
-        }
-        if (!hasNotifiedTokenAuthFailure) {
-          hasNotifiedTokenAuthFailure = true;
-          notificationStore.error('Authentication required to list API tokens', 6000);
-        }
-      } else {
-        if (!hasNotifiedTokenLoadError) {
-          hasNotifiedTokenLoadError = true;
-          console.error('Failed to load API tokens', err);
-          notificationStore.error('Failed to load API tokens', 6000);
-        }
-      }
-    } finally {
-      setLoadingTokens(false);
-    }
-  };
-
-  const retryTokenLoad = () => {
-    if (loadingTokens()) return;
-    notificationStore.info('Retrying API token load…', 4000);
-    setTokensLoaded(false);
-    void loadTokens();
-  };
-
-  createEffect(on(
-    () => showInstructions(),
-    (isShowing) => {
-      if (isShowing && !tokensLoaded() && !loadingTokens()) {
-        void loadTokens();
-      }
-    }
-  ));
-
-  const hasStoredToken = () => Boolean(apiToken());
-  const canGenerateToken = () => !tokenAccessDenied();
-  const commandReady = () => !requiresToken() || (!!apiToken() && selectedTokenStrategy() !== null);
+  const commandReady = () => !requiresToken() || Boolean(apiToken());
 
   // Find the token record that matches the currently stored token
-  const storedTokenRecord = () => {
-    const hint = securityStatus()?.apiTokenHint;
-    if (!hint) return null;
-
-    return availableTokens().find(token => {
-      const tokenHint = `${token.prefix}...${token.suffix}`;
-      return tokenHint === hint;
-    });
-  };
-
-  createEffect(on(
-    () => [requiresToken(), apiToken(), selectedTokenStrategy()],
-    ([requiresToken, hasToken, strategy]) => {
-      if (!requiresToken) {
-        setSelectedTokenStrategy('existing');
-        return;
-      }
-
-      if (!hasToken && strategy === 'existing') {
-        setSelectedTokenStrategy(null);
-      }
-    }
-  ));
-
   const copyToClipboard = async (text: string): Promise<boolean> => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -291,79 +201,34 @@ const modalCommandProgress = createMemo(() => {
     }
   };
 
-  const handleSelectExistingToken = () => {
-    if (!hasStoredToken()) {
-      if (typeof window !== 'undefined' && window.showToast) {
-        window.showToast('warning', 'No saved token found in this browser. Generate a new token instead.');
-      }
-      return;
-    }
-
-    setSelectedTokenStrategy('existing');
-    if (typeof window !== 'undefined' && window.showToast) {
-      window.showToast('success', 'Install command updated with your saved token.');
-    }
-  };
-
-  const openGenerateTokenFlow = () => {
-    if (!canGenerateToken()) {
-      if (typeof window !== 'undefined' && window.showToast) {
-        window.showToast('error', 'Sign in with an administrator account to generate tokens here.');
-      }
-      return;
-    }
-
-    const currentTokens = availableTokens();
-    const defaultName = `Docker host ${currentTokens.length + 1}`;
-    previousTokenStrategy = selectedTokenStrategy();
-    setSelectedTokenStrategy('generate');
+  const openGenerateTokenModal = () => {
+    setGenerateError(null);
+    const defaultName = `Docker host ${new Date().toISOString().slice(0, 10)}`;
     setNewTokenName(defaultName);
     setShowGenerateTokenModal(true);
   };
 
   const handleCreateToken = async () => {
     if (isGeneratingToken()) return;
-    if (!canGenerateToken()) {
-      notificationStore.error('You need administrator access to create API tokens from here.', 6000);
-      return;
-    }
-
-    setIsGeneratingToken(true);
+    setGenerateError(null);
     try {
-      const currentTokens = availableTokens();
-      const defaultName = `Docker host ${currentTokens.length + 1}`;
-      const desiredName = newTokenName().trim() || defaultName;
-      const { token, record } = await SecurityAPI.createToken(desiredName);
+      const desiredName = newTokenName().trim() || `Docker host ${new Date().toISOString().slice(0, 10)}`;
+      const { token, record } = await generateToken(desiredName);
 
-      // Update the tokens list with the new token
-      const filtered = currentTokens.filter((t) => t.id !== record.id);
-      setAvailableTokens([record, ...filtered]);
-
-      setApiToken(token);
-      setSelectedTokenStrategy('generate');
-      previousTokenStrategy = 'generate';
       setShowGenerateTokenModal(false);
       setNewTokenName('');
+      setLatestRecord(record);
       showTokenReveal({
         token,
         record,
         source: 'docker',
-        note: 'Copy this token into the install command for your Docker agent or other automation.',
+        note: `Copy this token into the install command for your Docker agent. Scope: ${DOCKER_REPORT_SCOPE}.`,
       });
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem('apiToken', token);
-          window.dispatchEvent(new StorageEvent('storage', { key: 'apiToken', newValue: token }));
-        } catch (err) {
-          console.warn('Unable to persist API token in localStorage', err);
-        }
-      }
-      notificationStore.success('New API token generated and added to the install command.', 6000);
+      notificationStore.success('New Docker reporting token generated and added to the install command.', 6000);
     } catch (err) {
       console.error('Failed to generate API token', err);
+      setGenerateError('Failed to generate API token. Confirm you are signed in as an administrator.');
       notificationStore.error('Failed to generate API token', 6000);
-    } finally {
-      setIsGeneratingToken(false);
     }
   };
 
@@ -573,156 +438,47 @@ WantedBy=multi-user.target`;
           <Show when={requiresToken()}>
             <div class="space-y-4">
               <div class="space-y-1">
-                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Step 1 · Choose an API token</p>
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{tokenStepLabel}</p>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  Use the token saved in this browser or create a new credential just for this Docker host. The choice will populate the install command automatically.
+                  Generate a fresh credential for this Docker host. Each token created here is limited to the <code>{DOCKER_REPORT_SCOPE}</code> scope.
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Need lifecycle control or bespoke scopes? Visit <a href="/settings/security" class="text-blue-600 dark:text-blue-300 underline hover:no-underline font-medium">Security → API tokens</a> to craft a custom token and add <code>{DOCKER_MANAGE_SCOPE}</code> if you plan to issue lifecycle commands.
                 </p>
               </div>
 
-              <Show when={loadingTokens()}>
-                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
-                  Loading API tokens…
+              <Show when={generateError()}>
+                <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
+                  {generateError()}
                 </div>
               </Show>
 
-              <Show when={tokensError()}>
-                <div class="space-y-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
-                  <p>
-                    {tokenAccessDenied()
-                      ? 'Authentication required to list API tokens. Sign in with an administrator account, then try again.'
-                      : 'Failed to load API tokens. Please try again.'}
-                  </p>
-                  <div class="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={retryTokenLoad}
-                      class="inline-flex items-center rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                      disabled={loadingTokens()}
-                    >
-                      Retry
-                    </button>
-                    <Show when={!tokenAccessDenied()}>
-                      <span class="text-xs text-red-700 dark:text-red-300">
-                        Still failing? Check network connectivity and server logs.
-                      </span>
-                    </Show>
-                  </div>
-                </div>
-              </Show>
-
-              <div class="grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={handleSelectExistingToken}
-                  disabled={!hasStoredToken()}
-                  class={`relative flex flex-col gap-2 p-4 text-left rounded-lg border transition shadow-sm ${
-                    selectedTokenStrategy() === 'existing'
-                      ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-400/40 bg-blue-50/40 dark:bg-blue-900/10'
-                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50/20 dark:hover:bg-blue-900/10'
-                  } disabled:opacity-60 disabled:cursor-not-allowed`}
-                >
-                  <div class="flex items-start justify-between gap-3">
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Option 1</p>
-                      <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">Use saved token</h4>
-                    </div>
-                    <svg class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Fill the install command with the API token already stored in this browser.
-                  </p>
-                  <Show when={hasStoredToken()}>
-                    <div class="mt-2 space-y-1.5">
-                      <div class="flex items-center gap-2 text-xs text-green-700 dark:text-green-300">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Saved token detected</span>
-                      </div>
-                      <Show when={storedTokenRecord()}>
-                        <div class="pl-6 text-xs text-gray-700 dark:text-gray-300">
-                          <span class="font-medium">{storedTokenRecord()?.name}</span>
-                          <Show when={securityStatus()?.apiTokenHint}>
-                            {' '}·{' '}
-                            <code class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded font-mono text-[11px] text-gray-600 dark:text-gray-400">
-                              {securityStatus()?.apiTokenHint}
-                            </code>
-                          </Show>
-                        </div>
-                      </Show>
-                    </div>
-                  </Show>
-                  <Show when={!hasStoredToken()}>
-                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                      No saved token found on this device.
-                    </p>
-                  </Show>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={openGenerateTokenFlow}
-                  disabled={!canGenerateToken()}
-                  class={`relative flex flex-col gap-2 p-4 text-left rounded-lg border transition shadow-sm ${
-                    selectedTokenStrategy() === 'generate'
-                      ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-400/40 bg-blue-50/40 dark:bg-blue-900/10'
-                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50/20 dark:hover:bg-blue-900/10'
-                  } disabled:opacity-60 disabled:cursor-not-allowed`}
-                >
-                  <div class="flex items-start justify-between gap-3">
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Option 2</p>
-                      <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">Generate new token</h4>
-                    </div>
-                    <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                      Recommended
-                    </span>
-                  </div>
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Create a fresh API token for this host and insert it into the install command automatically.
-                  </p>
-                  <Show when={!canGenerateToken()}>
-                    <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                      Sign in with an administrator account to create tokens in the browser.
-                    </p>
-                  </Show>
-                </button>
-              </div>
-
-              <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                <div class="flex items-start gap-3">
-                  <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <Show when={latestRecord()}>
+                <div class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
-                  <div class="flex-1 text-sm text-gray-700 dark:text-gray-300">
-                    <strong class="text-gray-900 dark:text-gray-100">Best practice:</strong> Give each Docker host its own API token. You can audit or revoke tokens anytime from{' '}
-                    <a href="/settings/security" class="text-blue-600 dark:text-blue-400 underline hover:no-underline font-medium">
-                      Security Settings
-                    </a>
-                    .
-                  </div>
+                  <span>
+                    Token <strong>{latestRecord()?.name}</strong> created ({latestRecord()?.prefix}…{latestRecord()?.suffix}). Copy the full value from the pop-up and store it securely—this is the only time it is shown.
+                  </span>
                 </div>
-              </div>
+              </Show>
 
-              <Show when={!commandReady()}>
-                <div class="rounded-lg border border-dashed border-blue-200 bg-blue-50/60 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
-                  Pick an option above to unlock the install command.
-                </div>
-              </Show>
-              <Show when={!hasStoredToken()}>
-                <div class="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-xs text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-200">
-                  Need a reusable token? Generate one here or visit <a href="/settings/security" class="underline hover:no-underline font-medium">Security Settings</a> to manage tokens across users.
-                </div>
-              </Show>
+              <button
+                type="button"
+                onClick={openGenerateTokenModal}
+                disabled={isGeneratingToken()}
+                class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isGeneratingToken() ? 'Generating…' : 'Generate token'}
+              </button>
             </div>
           </Show>
 
           <Show when={commandReady()}>
             <div class="space-y-2">
               <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Step 2 · Install command</label>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{commandStepLabel}</label>
                 <button
                   type="button"
                   onClick={async () => {
@@ -865,8 +621,7 @@ WantedBy=multi-user.target`;
                 onClick={() => {
                   setShowGenerateTokenModal(false);
                   setNewTokenName('');
-                  setSelectedTokenStrategy(previousTokenStrategy);
-                  previousTokenStrategy = null;
+                  setGenerateError(null);
                 }}
                 class="rounded px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
               >
