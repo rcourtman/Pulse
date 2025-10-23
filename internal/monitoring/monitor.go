@@ -55,6 +55,7 @@ type PVEClientInterface interface {
 	GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
 	GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error)
 	GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error)
+	GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error)
 	IsClusterMember(ctx context.Context) (bool, error)
 	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
@@ -1864,6 +1865,7 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		return
 	}
 
+	rootDeviceHint := ""
 	addressSet := make(map[string]struct{})
 	addressOrder := make([]string, 0, 4)
 
@@ -1931,6 +1933,31 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		}
 	}
 
+	configCtx, cancelConfig := context.WithTimeout(ctx, 5*time.Second)
+	configData, configErr := client.GetContainerConfig(configCtx, nodeName, container.VMID)
+	cancelConfig()
+	if configErr != nil {
+		log.Debug().
+			Err(configErr).
+			Str("instance", instanceName).
+			Str("node", nodeName).
+			Str("container", container.Name).
+			Int("vmid", container.VMID).
+			Msg("Container config metadata unavailable")
+	} else if len(configData) > 0 {
+		if hint := extractContainerRootDeviceFromConfig(configData); hint != "" {
+			rootDeviceHint = hint
+		}
+		for _, detail := range parseContainerConfigNetworks(configData) {
+			if len(detail.Addresses) > 0 {
+				for _, addr := range detail.Addresses {
+					addAddress(addr)
+				}
+			}
+			mergeContainerNetworkInterface(&networkIfaces, detail)
+		}
+	}
+
 	if len(networkIfaces) > 1 {
 		sort.SliceStable(networkIfaces, func(i, j int) bool {
 			left := strings.TrimSpace(networkIfaces[i].Name)
@@ -1956,6 +1983,14 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 	}
 
 	ensureContainerRootDiskEntry(container)
+
+	if rootDeviceHint != "" && len(container.Disks) > 0 {
+		for i := range container.Disks {
+			if container.Disks[i].Mountpoint == "/" && container.Disks[i].Device == "" {
+				container.Disks[i].Device = rootDeviceHint
+			}
+		}
+	}
 }
 
 func ensureContainerRootDiskEntry(container *models.Container) {
@@ -2163,6 +2198,137 @@ func dedupeStringsPreserveOrder(values []string) []string {
 		return nil
 	}
 	return result
+}
+
+type containerNetworkDetails struct {
+	Name      string
+	MAC       string
+	Addresses []string
+}
+
+func parseContainerConfigNetworks(config map[string]interface{}) []containerNetworkDetails {
+	if len(config) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(config))
+	for key := range config {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(key)), "net") {
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	sort.Strings(keys)
+
+	results := make([]containerNetworkDetails, 0, len(keys))
+	for _, key := range keys {
+		raw := fmt.Sprint(config[key])
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+
+		detail := containerNetworkDetails{}
+		parts := strings.Split(raw, ",")
+		for _, part := range parts {
+			kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+			if len(kv) != 2 {
+				continue
+			}
+			k := strings.ToLower(strings.TrimSpace(kv[0]))
+			value := strings.TrimSpace(kv[1])
+			switch k {
+			case "name":
+				detail.Name = value
+			case "hwaddr", "mac", "macaddr":
+				detail.MAC = strings.ToUpper(value)
+			case "ip", "ip6", "ips", "ip6addr", "ip6prefix":
+				detail.Addresses = append(detail.Addresses, sanitizeGuestAddressStrings(value)...)
+			}
+		}
+
+		if detail.Name == "" {
+			detail.Name = strings.TrimSpace(key)
+		}
+		if len(detail.Addresses) > 0 {
+			detail.Addresses = dedupeStringsPreserveOrder(detail.Addresses)
+		}
+
+		if detail.Name != "" || detail.MAC != "" || len(detail.Addresses) > 0 {
+			results = append(results, detail)
+		}
+	}
+
+	if len(results) == 0 {
+		return nil
+	}
+
+	return results
+}
+
+func mergeContainerNetworkInterface(target *[]models.GuestNetworkInterface, detail containerNetworkDetails) {
+	if target == nil {
+		return
+	}
+	if len(detail.Addresses) > 0 {
+		detail.Addresses = dedupeStringsPreserveOrder(detail.Addresses)
+	}
+
+	findMatch := func() int {
+		for i := range *target {
+			if detail.Name != "" && (*target)[i].Name != "" && strings.EqualFold((*target)[i].Name, detail.Name) {
+				return i
+			}
+			if detail.MAC != "" && (*target)[i].MAC != "" && strings.EqualFold((*target)[i].MAC, detail.MAC) {
+				return i
+			}
+		}
+		return -1
+	}
+
+	if idx := findMatch(); idx >= 0 {
+		if detail.Name != "" && (*target)[idx].Name == "" {
+			(*target)[idx].Name = detail.Name
+		}
+		if detail.MAC != "" && (*target)[idx].MAC == "" {
+			(*target)[idx].MAC = detail.MAC
+		}
+		if len(detail.Addresses) > 0 {
+			combined := append((*target)[idx].Addresses, detail.Addresses...)
+			(*target)[idx].Addresses = dedupeStringsPreserveOrder(combined)
+		}
+		return
+	}
+
+	newIface := models.GuestNetworkInterface{
+		Name: detail.Name,
+		MAC:  detail.MAC,
+	}
+	if len(detail.Addresses) > 0 {
+		newIface.Addresses = dedupeStringsPreserveOrder(detail.Addresses)
+	}
+	*target = append(*target, newIface)
+}
+
+func extractContainerRootDeviceFromConfig(config map[string]interface{}) string {
+	if len(config) == 0 {
+		return ""
+	}
+	raw, ok := config["rootfs"]
+	if !ok {
+		return ""
+	}
+
+	value := strings.TrimSpace(fmt.Sprint(raw))
+	if value == "" {
+		return ""
+	}
+
+	parts := strings.Split(value, ",")
+	device := strings.TrimSpace(parts[0])
+	return device
 }
 
 // GetConnectionStatuses returns the current connection status for all nodes

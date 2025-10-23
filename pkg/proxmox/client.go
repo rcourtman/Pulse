@@ -785,6 +785,29 @@ type ContainerDiskUsage struct {
 	Used  uint64 `json:"used,omitempty"`
 }
 
+// GetContainerConfig returns the configuration of a specific container
+func (c *Client) GetContainerConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/config", node, vmid))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	if result.Data == nil {
+		result.Data = make(map[string]interface{})
+	}
+
+	return result.Data, nil
+}
+
 // Storage represents a Proxmox VE storage
 type Storage struct {
 	Storage   string `json:"storage"`
