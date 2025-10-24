@@ -1,6 +1,8 @@
 import {
   Show,
   For,
+  Suspense,
+  lazy,
   createSignal,
   createContext,
   useContext,
@@ -14,14 +16,6 @@ import {
 import type { JSX } from 'solid-js';
 import { Router, Route, Navigate, useNavigate, useLocation } from '@solidjs/router';
 import { getGlobalWebSocketStore } from './stores/websocket-global';
-import { Dashboard } from './components/Dashboard/Dashboard';
-import StorageComponent from './components/Storage/Storage';
-import Backups from './components/Backups/Backups';
-import Replication from './components/Replication/Replication';
-import Settings from './components/Settings/Settings';
-import { Alerts } from './pages/Alerts';
-import { DockerHosts } from './components/Docker/DockerHosts';
-import { HostsOverview } from './components/Hosts/HostsOverview';
 import { ToastContainer } from './components/Toast/Toast';
 import NotificationContainer from './components/NotificationContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -40,7 +34,6 @@ import { LegacySSHBanner } from './components/LegacySSHBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
-import MailGateway from './components/PMG/MailGateway';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { DockerIcon } from '@/components/icons/DockerIcon';
 import { HostsIcon } from '@/components/icons/HostsIcon';
@@ -48,6 +41,26 @@ import { AlertsIcon } from '@/components/icons/AlertsIcon';
 import { SettingsGearIcon } from '@/components/icons/SettingsGearIcon';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
+
+const Dashboard = lazy(() =>
+  import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
+);
+const StorageComponent = lazy(() => import('./components/Storage/Storage'));
+const Backups = lazy(() => import('./components/Backups/Backups'));
+const Replication = lazy(() => import('./components/Replication/Replication'));
+const MailGateway = lazy(() => import('./components/PMG/MailGateway'));
+const AlertsPage = lazy(() =>
+  import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
+);
+const SettingsPage = lazy(() => import('./components/Settings/Settings'));
+const DockerHosts = lazy(() =>
+  import('./components/Docker/DockerHosts').then((module) => ({ default: module.DockerHosts })),
+);
+const HostsOverview = lazy(() =>
+  import('./components/Hosts/HostsOverview').then((module) => ({
+    default: module.HostsOverview,
+  })),
+);
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -564,6 +577,14 @@ function App() {
   // Pass through the store directly (only when initialized)
   const enhancedStore = () => wsStore();
 
+  const DashboardView = () => (
+    <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />
+  );
+
+  const SettingsRoute = () => (
+    <SettingsPage darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+  );
+
   // Root layout component for Router
   const RootLayout = (props: { children?: JSX.Element }) => {
     return (
@@ -618,10 +639,7 @@ function App() {
     <Router root={RootLayout}>
       <Route path="/" component={() => <Navigate href="/proxmox/overview" />} />
       <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
-      <Route
-        path="/proxmox/overview"
-        component={() => <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />}
-      />
+      <Route path="/proxmox/overview" component={DashboardView} />
       <Route path="/proxmox/storage" component={StorageComponent} />
       <Route path="/proxmox/replication" component={Replication} />
       <Route path="/proxmox/mail" component={MailGateway} />
@@ -631,11 +649,8 @@ function App() {
       <Route path="/docker" component={DockerRoute} />
       <Route path="/hosts" component={HostsRoute} />
       <Route path="/servers" component={() => <Navigate href="/hosts" />} />
-      <Route path="/alerts/*" component={Alerts} />
-      <Route
-        path="/settings/*"
-        component={() => <Settings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />}
-      />
+      <Route path="/alerts/*" component={AlertsPage} />
+      <Route path="/settings/*" component={SettingsRoute} />
     </Router>
   );
 }
@@ -1068,7 +1083,9 @@ function AppLayout(props: {
         class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2"
       >
         <div class="pulse-panel">
-          {props.children}
+          <Suspense fallback={<div class="p-6 text-sm text-gray-500 dark:text-gray-400">Loading view...</div>}>
+            {props.children}
+          </Suspense>
         </div>
       </main>
 
