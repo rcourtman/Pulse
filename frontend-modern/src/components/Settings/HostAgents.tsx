@@ -2,7 +2,6 @@ import { Component, For, Show, createEffect, createMemo, createSignal, onMount }
 import type { JSX } from 'solid-js';
 import { useWebSocket } from '@/App';
 import type { Host } from '@/types/api';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Card } from '@/components/shared/Card';
 import CopyButton from '@/components/shared/CopyButton';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
@@ -298,43 +297,8 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
     return apiToken() || TOKEN_PLACEHOLDER;
   };
 
-  const cardTitle = () => {
-    if (variant === 'all') {
-      return 'Host Monitoring';
-    }
-    switch (effectiveVariant()) {
-      case 'linux':
-        return 'Linux Hosts';
-      case 'macos':
-        return 'macOS Hosts';
-      case 'windows':
-        return 'Windows Hosts';
-      default:
-        return 'Host Monitoring';
-    }
-  };
-
-  const cardDescription = () => {
-    if (variant === 'all') {
-      return 'Install the Pulse host agent on Linux, macOS, or Windows machines to monitor CPU, memory, disk, and uptime.';
-    }
-    const platform = effectiveVariant();
-    switch (platform) {
-      case 'linux':
-        return 'Install the Pulse host agent on Debian, Ubuntu, RHEL, Arch, or other Linux distributions.';
-      case 'macos':
-        return 'Deploy the lightweight host agent via launchd to monitor macOS desktops and servers.';
-      case 'windows':
-        return 'Deploy the Pulse host agent as a native Windows service with automatic startup and full access to performance counters.';
-      default:
-        return 'Install the Pulse host agent on Linux, macOS, or Windows machines to monitor CPU, memory, disk, and uptime.';
-    }
-  };
-
   return (
     <div class="space-y-6">
-      <SectionHeader title={cardTitle()} description={cardDescription()} />
-
       <Card padding="lg" class="space-y-5">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
