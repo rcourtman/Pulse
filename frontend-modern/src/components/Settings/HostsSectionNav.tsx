@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For, type JSX } from 'solid-js';
+import { For } from 'solid-js';
 import SquareTerminal from 'lucide-solid/icons/square-terminal';
 
 type HostsSection = 'linux' | 'macos' | 'windows';

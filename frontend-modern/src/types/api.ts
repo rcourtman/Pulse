@@ -139,6 +139,8 @@ export interface DockerHost {
   tokenName?: string;
   tokenHint?: string;
   tokenLastUsedAt?: number;
+  revokedTokenId?: string;
+  tokenRevokedAt?: number;
   hidden?: boolean;
   pendingUninstall?: boolean;
   command?: DockerHostCommand;
@@ -219,6 +221,8 @@ export interface Host {
   tokenName?: string;
   tokenHint?: string;
   tokenLastUsedAt?: number;
+  revokedTokenId?: string;
+  tokenRevokedAt?: number;
   tags?: string[];
 }
 

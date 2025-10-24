@@ -109,6 +109,14 @@ MACOS_LOG_FILE="$MACOS_LOG_DIR/host-agent.log"
 LINUX_LOG_DIR="/var/log/pulse"
 LINUX_LOG_FILE="$LINUX_LOG_DIR/host-agent.log"
 
+SERVICE_MODE="manual"
+MANUAL_START_CMD=""
+MANUAL_START_WRAPPED=""
+UNRAID=false
+if [[ -f /etc/unraid-version ]]; then
+    UNRAID=true
+fi
+
 # Uninstall function
 if [[ "$UNINSTALL" == "true" ]]; then
     log_warn "The --uninstall flag is deprecated."
@@ -386,8 +394,9 @@ EOF
 
     sudo systemctl daemon-reload
     sudo systemctl enable pulse-host-agent
-    sudo systemctl start pulse-host-agent
-    log_success "Systemd service enabled and started"
+    sudo systemctl restart pulse-host-agent
+    log_success "Systemd service enabled and restarted"
+    SERVICE_MODE="systemd"
 
 elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
     log_info "Setting up launchd service..."
@@ -565,10 +574,25 @@ EOF
         echo "  launchctl kickstart -k $LAUNCH_TARGET/com.pulse.host-agent"
         exit 1
     fi
+    SERVICE_MODE="launchd"
 else
     log_warn "Automatic service setup not available for this platform"
+    sudo mkdir -p "$LINUX_LOG_DIR"
     log_info "To run the agent manually:"
-    log_info "  $AGENT_PATH --url $PULSE_URL --token $PULSE_TOKEN --interval $INTERVAL"
+    MANUAL_START_CMD="$AGENT_PATH --url $PULSE_URL --token $PULSE_TOKEN --interval $INTERVAL"
+    MANUAL_START_WRAPPED="nohup $MANUAL_START_CMD >$LINUX_LOG_FILE 2>&1 &"
+    log_info "  $MANUAL_START_CMD"
+    log_info ""
+    log_info "To keep the agent running persistently:"
+    log_info "  $MANUAL_START_WRAPPED"
+    if [[ "$UNRAID" == true ]]; then
+        log_info ""
+        log_info "On Unraid, add the wrapped command to /boot/config/go so it starts on boot."
+    else
+        log_info ""
+        log_info "On systems without systemd, add the wrapped command to /etc/rc.local (or similar) to start on boot."
+    fi
+    SERVICE_MODE="manual"
 fi
 
 # Validate installation
@@ -579,7 +603,7 @@ VALIDATION_SUCCESS=false
 SERVICE_RUNNING=false
 
 # Check if service is running
-if [[ "$PLATFORM" == "linux" ]] && command -v systemctl &> /dev/null; then
+if [[ "$SERVICE_MODE" == "systemd" ]]; then
     SERVICE_STATUS=$(systemctl is-active pulse-host-agent 2>/dev/null || echo "inactive")
     if [[ "$SERVICE_STATUS" == "active" ]]; then
         SERVICE_RUNNING=true
@@ -588,7 +612,7 @@ if [[ "$PLATFORM" == "linux" ]] && command -v systemctl &> /dev/null; then
         log_warn "Service status: $SERVICE_STATUS"
         log_info "Check logs with: sudo journalctl -u pulse-host-agent -n 50"
     fi
-elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
+elif [[ "$SERVICE_MODE" == "launchd" ]]; then
     if launchctl list | grep -q "com.pulse.host-agent"; then
         SERVICE_RUNNING=true
         log_success "Service is running successfully!"
@@ -596,10 +620,12 @@ elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
         log_warn "Service may not be running properly"
         log_info "Check logs with: tail -20 $MACOS_LOG_FILE"
     fi
+else
+    log_info "Skipping automated service validation – start the agent manually using the commands above."
 fi
 
 # Try to verify with API endpoint that agent is reporting
-if [[ "$SERVICE_RUNNING" == true ]]; then
+if [[ "$SERVICE_MODE" != "manual" && "$SERVICE_RUNNING" == true ]]; then
     log_info "Verifying agent registration with Pulse server..."
 
     # Get hostname for verification
@@ -627,42 +653,65 @@ if [[ "$SERVICE_RUNNING" == true ]]; then
     fi
 fi
 
-if [[ "$VALIDATION_SUCCESS" == true ]]; then
+if [[ "$SERVICE_MODE" == "manual" ]]; then
+    log_warn "Service validation requires starting the agent manually."
+    log_info "Run the following to launch the agent in the background:"
+    log_info "  $MANUAL_START_WRAPPED"
+    if [[ "$UNRAID" == true ]]; then
+        log_info "Add the same line to /boot/config/go to auto-start on boot."
+    else
+        log_info "Add the same line to /etc/rc.local (or equivalent) to auto-start on boot."
+    fi
+elif [[ "$VALIDATION_SUCCESS" == true ]]; then
     log_info "Check your Pulse dashboard at: $PULSE_URL"
 else
     log_error "Service validation failed"
     echo ""
     log_info "Troubleshooting:"
     echo ""
-    if [[ "$PLATFORM" == "linux" ]]; then
+    if [[ "$SERVICE_MODE" == "systemd" ]]; then
         echo "  View logs:    sudo journalctl -u pulse-host-agent -f"
         echo "  Check status: sudo systemctl status pulse-host-agent"
         echo "  Restart:      sudo systemctl restart pulse-host-agent"
-    elif [[ "$PLATFORM" == "darwin" ]]; then
+    elif [[ "$SERVICE_MODE" == "launchd" ]]; then
         echo "  View logs:    tail -f $MACOS_LOG_FILE"
         echo "  Check status: launchctl list | grep pulse"
         echo "  Restart:      launchctl unload $LAUNCHD_PLIST && launchctl load $LAUNCHD_PLIST"
+    else
+        echo "  Start agent:  $MANUAL_START_WRAPPED"
+        if [[ "$UNRAID" == true ]]; then
+            echo "  Persist:      Add the wrapped command to /boot/config/go"
+        else
+            echo "  Persist:      Add the wrapped command to /etc/rc.local (or equivalent)"
+        fi
     fi
     echo ""
-    echo "  Manual run:   $AGENT_PATH --url $PULSE_URL $(if [[ -n "$PULSE_TOKEN" ]]; then echo "--token ***"; fi) --interval $INTERVAL"
+    echo "  Manual run:   $MANUAL_START_CMD"
     echo ""
 fi
 
 print_footer
 
 log_info "Service Management Commands:"
-if [[ "$PLATFORM" == "linux" ]]; then
+if [[ "$SERVICE_MODE" == "systemd" ]]; then
     echo "  Start:   sudo systemctl start pulse-host-agent"
     echo "  Stop:    sudo systemctl stop pulse-host-agent"
     echo "  Restart: sudo systemctl restart pulse-host-agent"
     echo "  Status:  sudo systemctl status pulse-host-agent"
     echo "  Logs:    sudo journalctl -u pulse-host-agent -f"
-elif [[ "$PLATFORM" == "darwin" ]]; then
+elif [[ "$SERVICE_MODE" == "launchd" ]]; then
     echo "  Start:   launchctl load $LAUNCHD_PLIST"
     echo "  Stop:    launchctl unload $LAUNCHD_PLIST"
     echo "  Restart: launchctl unload $LAUNCHD_PLIST && launchctl load $LAUNCHD_PLIST"
     echo "  Status:  launchctl list | grep pulse"
     echo "  Logs:    tail -f $MACOS_LOG_FILE"
+else
+    echo "  Start:   $MANUAL_START_WRAPPED"
+    if [[ "$UNRAID" == true ]]; then
+        echo "  Persist: Add the wrapped command to /boot/config/go so it starts on boot"
+    else
+        echo "  Persist: Add the wrapped command to /etc/rc.local (or similar) to start on boot"
+    fi
 fi
 echo ""
 

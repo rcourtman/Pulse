@@ -1,12 +1,10 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
 import type { DockerHost, DockerContainer, Alert } from '@/types/api';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { CopyButton } from '@/components/shared/CopyButton';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { DockerFilter } from './DockerFilter';
 import { getAlertStyles } from '@/utils/alerts';
@@ -389,7 +387,6 @@ const DockerContainerRow: Component<{
 };
 
 export const DockerHosts: Component<DockerHostsProps> = (props) => {
-  const navigate = useNavigate();
   const { initialDataReceived, reconnecting, connected } = useWebSocket();
   const isLoading = createMemo(() => {
     if (typeof initialDataReceived === 'function') {
@@ -673,6 +670,10 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                         const isSelected = () => selectedHostId() === host.id;
                         const containerCount = (host.containers || []).length;
                         const runningCount = (host.containers || []).filter(c => c.state?.toLowerCase() === 'running').length;
+                        const tokenRevokedAt = host.tokenRevokedAt;
+                        const tokenRevoked = typeof tokenRevokedAt === 'number';
+                        const tokenRevokedRelative = tokenRevokedAt ? formatRelativeTime(tokenRevokedAt) : '';
+                        const tokenRevokedTitle = tokenRevokedAt ? new Date(tokenRevokedAt).toLocaleString() : '';
 
                         // Check for alerts on this host's containers
                         const hostAlerts = createMemo(() => {
@@ -713,6 +714,10 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                             base += ' hover:bg-blue-50 dark:hover:bg-blue-900/20';
                           }
 
+                          if (tokenRevoked) {
+                            base += ' opacity-60';
+                          }
+
                           return base;
                         };
 
@@ -740,6 +745,14 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                   {host.displayName}
                                 </span>
                                 {renderDockerStatusBadge(host.status)}
+                                <Show when={tokenRevoked}>
+                                  <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                    <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                      <path fill-rule="evenodd" d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z" clip-rule="evenodd" />
+                                    </svg>
+                                    Token revoked
+                                  </span>
+                                </Show>
                               </div>
                               <Show when={hostAlerts().hasAlerts}>
                                 <span
@@ -762,6 +775,14 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                 <span class="text-[10px] text-gray-500 dark:text-gray-400">{formatRelativeTime(host.lastSeen!)}</span>
                               </Show>
                             </div>
+                            <Show when={tokenRevoked}>
+                              <div class="mt-1 flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300" title={tokenRevokedTitle}>
+                                <svg class="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                  <path fill-rule="evenodd" d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="truncate">Token revoked {tokenRevokedRelative} — data stale</span>
+                              </div>
+                            </Show>
                           </button>
                         );
                       }}
@@ -833,6 +854,14 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                                 <span class="text-xs text-gray-500 dark:text-gray-400">({group.host.hostname})</span>
                                               </Show>
                                               {renderDockerStatusBadge(group.host.status)}
+                                              <Show when={typeof group.host.tokenRevokedAt === 'number'}>
+                                                <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                                  <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                    <path fill-rule="evenodd" d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z" clip-rule="evenodd" />
+                                                  </svg>
+                                                  Token revoked
+                                                </span>
+                                              </Show>
                                               <span class="text-xs text-gray-600 dark:text-gray-400">
                                                 {group.containers.length} {group.containers.length === 1 ? 'container' : 'containers'}
                                               </span>
@@ -843,6 +872,14 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                               </Show>
                                               <Show when={group.host.agentVersion}>
                                                 <span>Agent {group.host.agentVersion}</span>
+                                              </Show>
+                                              <Show when={typeof group.host.tokenRevokedAt === 'number'}>
+                                              <span class="flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                                                  <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                    <path fill-rule="evenodd" d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z" clip-rule="evenodd" />
+                                                  </svg>
+                                                  <span>Revoked {formatRelativeTime(group.host.tokenRevokedAt!)}</span>
+                                                </span>
                                               </Show>
                                             </div>
                                           </div>
@@ -888,6 +925,14 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                   <span class="text-sm text-gray-500 dark:text-gray-400">({host().hostname})</span>
                                 </Show>
                                 {renderDockerStatusBadge(host().status)}
+                                <Show when={typeof host().tokenRevokedAt === 'number'}>
+                                  <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                      <path fill-rule="evenodd" d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z" clip-rule="evenodd" />
+                                    </svg>
+                                    Token revoked
+                                  </span>
+                                </Show>
                                 <span class="text-sm text-gray-600 dark:text-gray-400">
                                   {selectedHostContainers().length} {selectedHostContainers().length === 1 ? 'container' : 'containers'}
                                 </span>
@@ -907,8 +952,28 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                                 <Show when={host().lastSeen}>
                                   <span class="text-xs text-gray-500 dark:text-gray-400">Updated {formatRelativeTime(host().lastSeen!)}</span>
                                 </Show>
+                                <Show when={typeof host().tokenRevokedAt === 'number'}>
+                                  <span class="flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                                    <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                      <path fill-rule="evenodd" d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span>Revoked {formatRelativeTime(host().tokenRevokedAt!)}</span>
+                                  </span>
+                                </Show>
                               </div>
                             </div>
+
+                            <Show when={typeof host().tokenRevokedAt === 'number'}>
+                              <div class="mt-2 flex items-start gap-2 rounded-md bg-amber-100/70 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                                <svg class="h-4 w-4 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                  <path fill-rule="evenodd" d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z" clip-rule="evenodd" />
+                                </svg>
+                                <div class="space-y-1">
+                                  <div class="font-semibold">Agent token was revoked {formatRelativeTime(host().tokenRevokedAt!)}</div>
+                                  <div class="text-[11px] font-medium">No new telemetry will arrive until the agent is reconfigured.</div>
+                                </div>
+                              </div>
+                            </Show>
 
                             {/* Host Metrics */}
                             <Show when={host().status?.toLowerCase() === 'online' || host().status?.toLowerCase() === 'running'}>
