@@ -3,7 +3,6 @@ import { For } from 'solid-js';
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
-import Container from 'lucide-solid/icons/container';
 
 type SettingsSection = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host' | 'podman' | 'kubernetes';
 
@@ -32,11 +31,6 @@ const allSections: Array<{
     id: 'pmg',
     label: 'Mail Gateway',
     icon: Mail,
-  },
-  {
-    id: 'docker',
-    label: 'Docker',
-    icon: Container,
   },
 ];
 
