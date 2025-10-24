@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For, Show, createMemo, createSignal, createEffect, on } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { DockerHost, DockerContainer, Alert } from '@/types/api';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
@@ -406,6 +406,37 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
   const [selectedHostId, setSelectedHostId] = createSignal<string | null>(null);
   const [search, setSearch] = createSignal('');
 
+  // Keyboard listener to auto-focus search
+  let searchInputRef: HTMLInputElement | undefined;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Don't interfere if user is already typing in an input
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+
+    // Don't interfere with modifier key shortcuts (except Shift for capitals)
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      return;
+    }
+
+    // Focus search on printable characters and start typing
+    if (e.key.length === 1 && searchInputRef) {
+      e.preventDefault();
+      searchInputRef.focus();
+      setSearch(search() + e.key);
+    }
+  };
+
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
+
   // Unused - kept for potential future use
   // const hostSummaries = createMemo<DockerHostSummary[]>(() => {
   //   return sortedHosts().map((host) => {
@@ -624,11 +655,13 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                 activeHostName={activeHostName()}
                 onClearHost={() => setSelectedHostId(null)}
                 onReset={() => setSelectedHostId(null)}
+                searchInputRef={(el) => (searchInputRef = el)}
               />
 
               {/* Master-Detail Layout */}
               <div class="flex gap-4">
-                {/* Left: Host List */}
+                {/* Left: Host List - Only show if more than 1 host */}
+                <Show when={sortedHosts().length > 1}>
                 <Card padding="none" class="w-72 flex-shrink-0 overflow-hidden">
                   <div class="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between gap-2">
                     <div>
@@ -640,7 +673,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                       onClick={() => navigate('/settings/docker')}
                       class="inline-flex items-center gap-1 rounded border border-blue-200 dark:border-blue-500/40 bg-white dark:bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-600 dark:text-blue-300 shadow-sm hover:bg-blue-50 dark:hover:bg-blue-500/20 transition-colors"
                     >
-                      <span class="text-base leading-none">+</span>
+                      <span class="flex items-center justify-center">+</span>
                       <span>Add Host</span>
                     </button>
                   </div>
@@ -745,6 +778,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                     </For>
                   </div>
                 </Card>
+                </Show>
 
                 {/* Right: Container List */}
                 <div class="flex-1 min-w-0">
