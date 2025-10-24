@@ -131,7 +131,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                         <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-3 py-2 space-y-2">
                           <div class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300">
                             <span>{clusterName()} Cluster</span>
-                            <span class="ml-auto rounded-full bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-[0.65rem] font-medium text-gray-600 dark:text-gray-400">
+                            <span class="ml-auto text-[0.65rem] font-normal text-gray-500 dark:text-gray-500">
                               {clusterEndpoints().length} nodes
                             </span>
                           </div>
@@ -166,7 +166,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                     </div>
                   </td>
                   <td class="align-top px-3 py-3">
-                    <span class="inline-flex rounded-full bg-gray-200 dark:bg-gray-600 px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+                    <span class="text-xs text-gray-600 dark:text-gray-400">
                       {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                     </span>
                   </td>
@@ -345,7 +345,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                     </div>
                   </td>
                   <td class="align-top px-3 py-3">
-                    <span class="inline-flex rounded-full bg-gray-200 dark:bg-gray-600 px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+                    <span class="text-xs text-gray-600 dark:text-gray-400">
                       {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                     </span>
                   </td>
@@ -526,7 +526,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                     </div>
                   </td>
                   <td class="align-top px-3 py-3">
-                    <span class="inline-flex rounded-full bg-gray-200 dark:bg-gray-600 px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+                    <span class="text-xs text-gray-600 dark:text-gray-400">
                       {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                     </span>
                   </td>

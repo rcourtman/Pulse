@@ -2063,37 +2063,32 @@ const Settings: Component<SettingsProps> = (props) => {
           <div class="flex-1 overflow-hidden">
             <Show when={flatTabs.length > 0}>
               <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
-                <div class="p-1">
-                  <div
-                    class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto scrollbar-hide"
-                    style="-webkit-overflow-scrolling: touch;"
-                  >
-                    <For each={flatTabs}>
-                      {(tab) => {
-                        const isActive = activeTab() === tab.id;
-                        const disabled = tab.disabled;
-                        return (
-                          <button
-                            type="button"
-                            disabled={disabled}
-                            class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
-                              disabled
-                                ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
-                                : isActive
-                                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                            }`}
-                            onClick={() => {
-                              if (disabled) return;
-                              setActiveTab(tab.id);
-                            }}
-                          >
-                            {tab.label}
-                          </button>
-                        );
-                      }}
-                    </For>
-                  </div>
+                <div class="flex gap-1 px-2 py-1 w-full overflow-x-auto scrollbar-hide" style="-webkit-overflow-scrolling: touch;">
+                  <For each={flatTabs}>
+                    {(tab) => {
+                      const isActive = activeTab() === tab.id;
+                      const disabled = tab.disabled;
+                      return (
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                            disabled
+                              ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
+                              : isActive
+                                ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
+                                : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
+                          }`}
+                          onClick={() => {
+                            if (disabled) return;
+                            setActiveTab(tab.id);
+                          }}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    }}
+                  </For>
                 </div>
               </div>
             </Show>
@@ -3179,10 +3174,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                   return (
                                     <button
                                       type="button"
-                                      class={`rounded-full border px-2.5 py-1 text-[0.7rem] transition-colors ${
+                                      class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${
                                         isActive
                                           ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                          : 'border-gray-200 bg-gray-100 text-gray-700 hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
+                                          : 'border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
                                       }`}
                                       onClick={async () => {
                                         if (envOverrides().discoverySubnet) {
