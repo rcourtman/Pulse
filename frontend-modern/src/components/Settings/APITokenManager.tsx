@@ -1,9 +1,9 @@
-import { Component, For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { showError, showSuccess } from '@/utils/toast';
 import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
-import type { DockerHost } from '@/types/api';
+import type { DockerHost, Host } from '@/types/api';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -29,28 +29,50 @@ const SCOPES_DOC_URL =
 const WILDCARD_SCOPE = '*';
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
-  const { state } = useWebSocket();
+  const { state, markDockerHostsTokenRevoked, markHostsTokenRevoked } = useWebSocket();
   const dockerHosts = createMemo<DockerHost[]>(() => state.dockerHosts ?? []);
+  const hosts = createMemo<Host[]>(() => state.hosts ?? []);
   const dockerTokenUsage = createMemo(() => {
-    const usage = new Map<string, { count: number; hosts: string[] }>();
+    type UsageHost = { id: string; label: string };
+    const usage = new Map<string, { count: number; hosts: UsageHost[] }>();
     for (const host of dockerHosts()) {
       const tokenId = host.tokenId;
       if (!tokenId) continue;
-      const displayName = host.displayName?.trim() || host.hostname || host.id;
+      const label = host.displayName?.trim() || host.hostname || host.id;
       const previous = usage.get(tokenId);
       if (previous) {
         usage.set(tokenId, {
           count: previous.count + 1,
-          hosts: [...previous.hosts, displayName],
+          hosts: [...previous.hosts, { id: host.id, label }],
         });
       } else {
-        usage.set(tokenId, { count: 1, hosts: [displayName] });
+        usage.set(tokenId, { count: 1, hosts: [{ id: host.id, label }] });
+      }
+    }
+    return usage;
+  });
+  const hostTokenUsage = createMemo(() => {
+    type UsageHost = { id: string; label: string };
+    const usage = new Map<string, { count: number; hosts: UsageHost[] }>();
+    for (const host of hosts()) {
+      const tokenId = host.tokenId;
+      if (!tokenId) continue;
+      const label = host.displayName?.trim() || host.hostname || host.id;
+      const previous = usage.get(tokenId);
+      if (previous) {
+        usage.set(tokenId, {
+          count: previous.count + 1,
+          hosts: [...previous.hosts, { id: host.id, label }],
+        });
+      } else {
+        usage.set(tokenId, { count: 1, hosts: [{ id: host.id, label }] });
       }
     }
     return usage;
   });
 
   const [tokens, setTokens] = createSignal<APITokenRecord[]>([]);
+  const [tokensLoaded, setTokensLoaded] = createSignal(false);
   const sortedTokens = createMemo(() =>
     [...tokens()].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -159,9 +181,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   const loadTokens = async () => {
     setLoading(true);
+    setTokensLoaded(false);
     try {
       const list = await SecurityAPI.listTokens();
       setTokens(list);
+      setTokensLoaded(true);
     } catch (err) {
       console.error('Failed to load API tokens', err);
       showError('Failed to load API tokens');
@@ -172,6 +196,47 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   onMount(() => {
     void loadTokens();
+  });
+
+  createEffect(() => {
+    if (!tokensLoaded()) return;
+    const activeTokenIds = new Set(tokens().map((token) => token.id));
+    const pendingDockerByToken = new Map<string, string[]>();
+
+    for (const host of dockerHosts()) {
+      const tokenId = host.tokenId;
+      if (!tokenId) continue;
+      if (activeTokenIds.has(tokenId)) continue;
+      if (host.revokedTokenId === tokenId) continue;
+
+      if (!pendingDockerByToken.has(tokenId)) {
+        pendingDockerByToken.set(tokenId, []);
+      }
+      pendingDockerByToken.get(tokenId)!.push(host.id);
+    }
+
+    pendingDockerByToken.forEach((hostIds, tokenId) => {
+      if (hostIds.length === 0) return;
+      markDockerHostsTokenRevoked(tokenId, hostIds);
+    });
+
+    const pendingHostsByToken = new Map<string, string[]>();
+    for (const host of hosts()) {
+      const tokenId = host.tokenId;
+      if (!tokenId) continue;
+      if (activeTokenIds.has(tokenId)) continue;
+      if (host.revokedTokenId === tokenId && host.tokenRevokedAt) continue;
+
+      if (!pendingHostsByToken.has(tokenId)) {
+        pendingHostsByToken.set(tokenId, []);
+      }
+      pendingHostsByToken.get(tokenId)!.push(host.id);
+    }
+
+    pendingHostsByToken.forEach((hostIds, tokenId) => {
+      if (hostIds.length === 0) return;
+      markHostsTokenRevoked(tokenId, hostIds);
+    });
   });
 
   const handleGenerate = async () => {
@@ -231,27 +296,53 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   const handleDelete = async (record: APITokenRecord) => {
-    const usage = dockerTokenUsage().get(record.id);
+    const dockerUsage = dockerTokenUsage().get(record.id);
+    const hostUsage = hostTokenUsage().get(record.id);
     const displayName = tokenNameForDialog(record);
 
-    let message = `Revoke token "${displayName}"? Any agents or integrations using it will stop working.`;
-    if (usage) {
-      const hostListPreview = usage.hosts.slice(0, 5).join(', ');
-      const extraCount = usage.hosts.length - 5;
+    const affectedDockerHostIds = dockerUsage ? dockerUsage.hosts.map((host) => host.id) : [];
+    const affectedHostAgentIds = hostUsage ? hostUsage.hosts.map((host) => host.id) : [];
+    let revokeMessage: string | undefined;
+    const messageChunks: string[] = [];
+    if (dockerUsage) {
+      const hostListPreview = dockerUsage.hosts
+        .slice(0, 5)
+        .map((host) => host.label)
+        .join(', ');
+      const extraCount = dockerUsage.hosts.length - 5;
       const hostSummary =
         extraCount > 0 ? `${hostListPreview}, +${extraCount} more` : hostListPreview;
       const hostCountLabel =
-        usage.count === 1 ? 'a Docker host' : `${usage.count} Docker hosts`;
-      message = `Token "${displayName}" is currently used by ${hostCountLabel}.\nHosts: ${hostSummary}\n\nRevoking it will cause those agents to stop reporting until you update them with a new token.\n\nContinue?`;
+        dockerUsage.count === 1 ? 'Docker host' : `${dockerUsage.count} Docker hosts`;
+      messageChunks.push(`${hostCountLabel}: ${hostSummary}`);
     }
-
-    if (!window.confirm(message)) return;
+    if (hostUsage) {
+      const agentListPreview = hostUsage.hosts
+        .slice(0, 5)
+        .map((host) => host.label)
+        .join(', ');
+      const agentExtra = hostUsage.hosts.length - 5;
+      const agentSummary =
+        agentExtra > 0 ? `${agentListPreview}, +${agentExtra} more` : agentListPreview;
+      const agentCountLabel =
+        hostUsage.count === 1 ? 'host agent' : `${hostUsage.count} host agents`;
+      messageChunks.push(`${agentCountLabel}: ${agentSummary}`);
+    }
+    if (messageChunks.length > 0) {
+      revokeMessage = `Token "${displayName}" was previously used by ${messageChunks.join(' • ')}. Update those agents with a new token.`;
+    }
 
     try {
       await SecurityAPI.deleteToken(record.id);
       setTokens((prev) => prev.filter((token) => token.id !== record.id));
-      showSuccess('Token revoked');
+      showSuccess('Token revoked', revokeMessage);
       props.onTokensChanged?.();
+      if (affectedDockerHostIds.length > 0) {
+        markDockerHostsTokenRevoked(record.id, affectedDockerHostIds);
+      }
+      if (affectedHostAgentIds.length > 0) {
+        markHostsTokenRevoked(record.id, affectedHostAgentIds);
+      }
 
       const current = newTokenRecord();
       if (current && current.id === record.id) {
@@ -467,9 +558,31 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
                 <For each={sortedTokens()}>
                   {(token) => {
-                    const usage = dockerTokenUsage().get(token.id);
-                    const hostSummary =
-                      usage ? (usage.count === 1 ? usage.hosts[0] : `${usage.count} hosts`) : '—';
+                    const dockerUsageEntry = dockerTokenUsage().get(token.id);
+                    const hostUsageEntry = hostTokenUsage().get(token.id);
+                    const usageSegments: string[] = [];
+                    const usageTitleSegments: string[] = [];
+                    if (dockerUsageEntry) {
+                      usageSegments.push(
+                        dockerUsageEntry.count === 1
+                          ? dockerUsageEntry.hosts[0]?.label ?? 'Docker host'
+                          : `${dockerUsageEntry.count} Docker hosts`,
+                      );
+                      usageTitleSegments.push(
+                        `Docker hosts: ${dockerUsageEntry.hosts.map((host) => host.label).join(', ')}`,
+                      );
+                    }
+                    if (hostUsageEntry) {
+                      usageSegments.push(
+                        hostUsageEntry.count === 1
+                          ? `${hostUsageEntry.hosts[0]?.label ?? 'Host agent'} (agent)`
+                          : `${hostUsageEntry.count} host agents`,
+                      );
+                      usageTitleSegments.push(
+                        `Host agents: ${hostUsageEntry.hosts.map((host) => host.label).join(', ')}`,
+                      );
+                    }
+                    const hostSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
                     const rawScopes = token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
                     const scopeBadges = rawScopes.includes('*')
                       ? [{ value: '*', label: 'Full' }]
@@ -514,7 +627,10 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                             </For>
                           </div>
                         </td>
-                        <td class="px-5 py-3 text-gray-600 dark:text-gray-400" title={usage?.hosts.join(', ')}>
+                        <td
+                          class="px-5 py-3 text-gray-600 dark:text-gray-400"
+                          title={usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined}
+                        >
                           {hostSummary}
                         </td>
                         <td class="px-5 py-3 text-gray-600 dark:text-gray-400">

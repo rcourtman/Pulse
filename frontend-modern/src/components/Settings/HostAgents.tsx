@@ -1,20 +1,14 @@
-import { type Component, For, Show, createEffect, createMemo, createSignal, on, onMount } from 'solid-js';
+import { type Component, For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useWebSocket } from '@/App';
 import type { Host } from '@/types/api';
 import { Card } from '@/components/shared/Card';
-import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import { formatBytes, formatRelativeTime, formatUptime, formatAbsoluteTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
 import { HOST_AGENT_SCOPE } from '@/constants/apiScopes';
 import type { SecurityStatus } from '@/types/config';
 import type { APITokenRecord } from '@/api/security';
 import { SecurityAPI } from '@/api/security';
-
-type HostAgentVariant = 'linux' | 'macos' | 'windows';
-
-interface HostAgentsProps {
-  variant?: HostAgentVariant;
-}
 
 const TOKEN_PLACEHOLDER = '<api-token>';
 const pulseUrl = () => {
@@ -30,7 +24,16 @@ const buildDefaultTokenName = () => {
   return `Host agent ${stamp}`;
 };
 
-const commandsByVariant: Record<HostAgentVariant, { title: string; description: string; snippets: { label: string; command: string; note?: string | JSX.Element }[] }> = {
+type HostAgentPlatform = 'linux' | 'macos' | 'windows';
+
+const commandsByPlatform: Record<
+  HostAgentPlatform,
+  {
+    title: string;
+    description: string;
+    snippets: { label: string; command: string; note?: string | JSX.Element }[];
+  }
+> = {
   linux: {
     title: 'Install on Linux',
     description:
@@ -90,14 +93,7 @@ const commandsByVariant: Record<HostAgentVariant, { title: string; description: 
   },
 };
 
-const platformFilters: Record<HostAgentVariant, string[]> = {
-  linux: ['linux'],
-  macos: ['macos'],
-  windows: ['windows'],
-};
-
-export const HostAgents: Component<HostAgentsProps> = (props) => {
-  const variant = () => props.variant ?? 'linux';
+export const HostAgents: Component = () => {
   const { state } = useWebSocket();
 
   let hasLoggedSecurityStatusError = false;
@@ -119,19 +115,6 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
   });
 
 
-  createEffect(
-    on(
-      variant,
-      () => {
-        setLatestRecord(null);
-        setCurrentToken(null);
-        setConfirmedNoToken(false);
-        setTokenName('');
-      },
-      { defer: true },
-    ),
-  );
-
   const allHosts = createMemo(() => {
     const list = state.hosts ?? [];
     return [...list].sort((a, b) => (a.hostname || '').localeCompare(b.hostname || ''));
@@ -143,7 +126,12 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
     return tags.join(', ');
   };
 
-  const installMeta = createMemo(() => commandsByVariant[variant()]);
+  const commandSections = createMemo(() =>
+    Object.entries(commandsByPlatform).map(([platform, meta]) => ({
+      platform: platform as HostAgentPlatform,
+      ...meta,
+    })),
+  );
 
   onMount(() => {
     if (typeof window === 'undefined') {
@@ -251,8 +239,9 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
       <Card padding="lg" class="space-y-5">
         <div class="space-y-1">
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Add a host agent</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400">Run this command on your host to start monitoring.</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{installMeta().description}</p>
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            Generate a token once, then run the matching command on Linux, macOS, or Windows to register new hosts.
+          </p>
         </div>
 
         <div class="space-y-5">
@@ -324,42 +313,56 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
 
             <Show when={commandsUnlocked()}>
               <div class="space-y-3">
-                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Install command</h4>
-                <div class="space-y-3">
-                  <For each={installMeta().snippets}>
-                    {(snippet) => {
-                      const copyCommand = () =>
-                        snippet.command.replace(
-                          TOKEN_PLACEHOLDER,
-                          resolvedToken(),
-                        );
-
-                      return (
-                        <div class="space-y-2">
-                          <div class="flex items-center justify-between gap-3">
-                            <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{snippet.label}</h5>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const success = await copyToClipboard(copyCommand());
-                                if (typeof window !== 'undefined' && window.showToast) {
-                                  window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
-                                }
-                              }}
-                              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
-                            >
-                              Copy command
-                            </button>
-                          </div>
-                          <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
-                            <code>{copyCommand()}</code>
-                          </pre>
-                          <Show when={snippet.note}>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{snippet.note}</p>
-                          </Show>
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Copy the command for the platform you are deploying.
+                </p>
+                <div class="space-y-4">
+                  <For each={commandSections()}>
+                    {(section) => (
+                      <div class="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                        <div class="space-y-1">
+                          <h5 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{section.title}</h5>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">{section.description}</p>
                         </div>
-                      );
-                    }}
+                        <div class="space-y-3">
+                          <For each={section.snippets}>
+                            {(snippet) => {
+                              const copyCommand = () =>
+                                snippet.command.replace(TOKEN_PLACEHOLDER, resolvedToken());
+
+                              return (
+                                <div class="space-y-2">
+                                  <div class="flex items-center justify-between gap-3">
+                                    <h6 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                      {snippet.label}
+                                    </h6>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const success = await copyToClipboard(copyCommand());
+                                        if (typeof window !== 'undefined' && window.showToast) {
+                                          window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                                        }
+                                      }}
+                                      class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                                    >
+                                      Copy command
+                                    </button>
+                                  </div>
+                                  <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
+                                    <code>{copyCommand()}</code>
+                                  </pre>
+                                  <Show when={snippet.note}>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">{snippet.note}</p>
+                                  </Show>
+                                </div>
+                              );
+                            }}
+                          </For>
+                        </div>
+                      </div>
+                    )}
                   </For>
                 </div>
               </div>
@@ -376,121 +379,217 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
         </div>
       </Card>
 
-      <Card padding="lg" class="space-y-5">
-        <div class="flex items-center justify-between">
-          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Reporting hosts</h3>
-          <span class="text-sm text-gray-500 dark:text-gray-400">{allHosts().length} connected</span>
-        </div>
+      <Card>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Reporting hosts</h3>
+            <span class="text-sm text-gray-500 dark:text-gray-400">{allHosts().length} connected</span>
+          </div>
 
-        <Show
-          when={allHosts().length > 0}
-          fallback={
-            <p class="text-sm text-gray-600 dark:text-gray-400">
-              No host agents are reporting yet. Deploy the agent using the commands above to see hosts listed here.
-            </p>
-          }
-        >
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-              <thead class="bg-gray-50 dark:bg-gray-900/40">
-                <tr>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Hostname</th>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Platform</th>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Uptime</th>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Memory</th>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Last seen</th>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Tags</th>
-                  <th class="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-                <For each={allHosts()}>
-                  {(host) => {
-                    const [isDeleting, setIsDeleting] = createSignal(false);
+          <Show
+            when={allHosts().length > 0}
+            fallback={
+              <div class="text-center py-8">
+                <div class="text-gray-400 dark:text-gray-500 mb-2">
+                  <svg class="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                    />
+                  </svg>
+                </div>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                  No host agents are reporting yet.
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  Deploy the agent using the commands above to see hosts listed here.
+                </p>
+              </div>
+            }
+          >
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-200 dark:border-gray-700">
+                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Host</th>
+                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Status</th>
+                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Platform</th>
+                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Uptime</th>
+                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Memory</th>
+                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Last Seen</th>
+                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Tags</th>
+                    <th class="py-3 px-4" />
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                  <For each={allHosts()}>
+                    {(host) => {
+                      const [isDeleting, setIsDeleting] = createSignal(false);
+                      const tokenRevokedAt = host.tokenRevokedAt;
+                      const tokenRevoked = typeof tokenRevokedAt === 'number';
+                      const tokenRevokedRelative = tokenRevokedAt ? formatRelativeTime(tokenRevokedAt) : '';
+                      const lastSeenMs = host.lastSeen ? new Date(host.lastSeen).getTime() : null;
+                      const expectedIntervalMs =
+                        (host.intervalSeconds && host.intervalSeconds > 0 ? host.intervalSeconds : 30) * 1000;
+                      const staleThresholdMs = Math.max(expectedIntervalMs * 3, 60_000);
+                      const isStale =
+                        lastSeenMs === null || Date.now() - lastSeenMs >= staleThresholdMs;
 
-                    const handleDelete = async () => {
-                      if (!confirm(`Remove host "${host.displayName || host.hostname || host.id}"?\n\nThis will remove the host from Pulse monitoring. The host agent will re-register if it continues to report.`)) {
-                        return;
-                      }
+                      const status = (host.status || 'unknown').toLowerCase();
+                      const isOnline =
+                        status === 'online' ||
+                        status === 'running' ||
+                        status === 'healthy';
 
-                      setIsDeleting(true);
-                      try {
-                        const response = await fetch(`/api/agents/host/${host.id}`, {
-                          method: 'DELETE',
-                          credentials: 'include',
-                        });
+                      const baseRowClass = isStale
+                        ? 'bg-gray-50 dark:bg-gray-800/50 opacity-60'
+                        : 'bg-white dark:bg-gray-900';
 
-                        if (!response.ok) {
-                          const errorData = await response.json();
-                          throw new Error(errorData.message || 'Failed to delete host');
+                      const rowClass =
+                        tokenRevoked && !isStale ? `${baseRowClass} opacity-60` : baseRowClass;
+
+                      const handleDelete = async () => {
+                        if (!confirm(`Remove host "${host.displayName || host.hostname || host.id}"?\n\nThis will remove the host from Pulse monitoring. The host agent will re-register if it continues to report.`)) {
+                          return;
                         }
 
-                        notificationStore.success(`Host "${host.displayName || host.hostname}" removed`, 4000);
-                      } catch (err) {
-                        console.error('Failed to delete host:', err);
-                        notificationStore.error(
-                          err instanceof Error ? err.message : 'Failed to delete host. Please try again.',
-                          6000
-                        );
-                      } finally {
-                        setIsDeleting(false);
-                      }
-                    };
+                        setIsDeleting(true);
+                        try {
+                          const response = await fetch(`/api/agents/host/${host.id}`, {
+                            method: 'DELETE',
+                            credentials: 'include',
+                          });
 
-                    return (
-                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                        <td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">
-                          {host.displayName || host.hostname || host.id}
-                        </td>
-                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300 capitalize">
-                          {host.platform || '—'}
-                        </td>
-                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
-                          {host.uptimeSeconds ? formatUptime(host.uptimeSeconds) : '—'}
-                        </td>
-                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
-                          {host.memory?.total
-                            ? `${formatBytes(host.memory.used ?? 0)} / ${formatBytes(host.memory.total)}`
-                            : '—'}
-                        </td>
-                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
-                          {host.lastSeen ? formatRelativeTime(host.lastSeen) : '—'}
-                        </td>
-                        <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{renderTags(host)}</td>
-                        <td class="px-3 py-2 text-right">
-                          <button
-                            type="button"
-                            onClick={handleDelete}
-                            disabled={isDeleting()}
-                            class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Remove host from monitoring"
-                          >
-                            {isDeleting() ? (
-                              <>
-                                <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                <span>Removing...</span>
-                              </>
-                            ) : (
-                              <>
-                                <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span>Remove</span>
-                              </>
-                            )}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  }}
-                </For>
+                          if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.message || 'Failed to delete host');
+                          }
+
+                          notificationStore.success(`Host "${host.displayName || host.hostname}" removed`, 4000);
+                        } catch (err) {
+                          console.error('Failed to delete host:', err);
+                          notificationStore.error(
+                            err instanceof Error ? err.message : 'Failed to delete host. Please try again.',
+                            6000,
+                          );
+                        } finally {
+                          setIsDeleting(false);
+                        }
+                      };
+
+                      return (
+                        <tr class={rowClass}>
+                          <td class="py-3 px-4">
+                            <div class="font-medium text-gray-900 dark:text-gray-100">
+                              {host.displayName || host.hostname || host.id}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                              {host.hostname}
+                            </div>
+                            <Show when={host.agentVersion}>
+                              <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                Agent {host.agentVersion}
+                              </div>
+                            </Show>
+                          </td>
+                          <td class="py-3 px-4">
+                            <div class="flex items-center gap-2">
+                              <span
+                                class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  isOnline
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                }`}
+                              >
+                                {host.status || 'unknown'}
+                              </span>
+                              <Show when={isStale}>
+                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
+                                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  No recent data
+                                </span>
+                              </Show>
+                              <Show when={tokenRevoked}>
+                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                  <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path
+                                      fill-rule="evenodd"
+                                      d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
+                                      clip-rule="evenodd"
+                                    />
+                                  </svg>
+                                  Token revoked
+                                </span>
+                              </Show>
+                            </div>
+                          </td>
+                          <td class="py-3 px-4 text-gray-700 dark:text-gray-300 capitalize">
+                            {host.platform || '—'}
+                          </td>
+                          <td class="py-3 px-4 text-gray-700 dark:text-gray-300">
+                            {host.uptimeSeconds ? formatUptime(host.uptimeSeconds) : '—'}
+                          </td>
+                          <td class="py-3 px-4 text-gray-700 dark:text-gray-300">
+                            {host.memory?.total
+                              ? `${formatBytes(host.memory.used ?? 0)} / ${formatBytes(host.memory.total)}`
+                              : '—'}
+                          </td>
+                          <td class="py-3 px-4">
+                            <div class="text-gray-900 dark:text-gray-100">
+                              {host.lastSeen ? formatRelativeTime(host.lastSeen) : '—'}
+                            </div>
+                            <Show when={host.lastSeen}>
+                              <div class="text-xs text-gray-500 dark:text-gray-400">
+                                {formatAbsoluteTime(host.lastSeen!)}
+                              </div>
+                            </Show>
+                          </td>
+                          <td class="py-3 px-4 text-gray-700 dark:text-gray-300">
+                            {renderTags(host)}
+                          </td>
+                          <td class="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={handleDelete}
+                              disabled={isDeleting() || !isStale}
+                              class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={
+                                isStale
+                                  ? 'Remove this stale host entry from the inventory'
+                                  : 'Host is still reporting — stop the agent before removing'
+                              }
+                            >
+                              {isDeleting() ? (
+                                <>
+                                  <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                  <span>Removing...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  <span>Remove</span>
+                                </>
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }}
+                  </For>
               </tbody>
             </table>
           </div>
         </Show>
+        </div>
       </Card>
     </div>
   );

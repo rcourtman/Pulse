@@ -8,6 +8,8 @@ import type {
   PVEBackups,
   VM,
   Container,
+  DockerHost,
+  Host,
 } from '@/types/api';
 import type { ActivationState as ActivationStateType } from '@/types/alerts';
 import { logger } from '@/utils/logger';
@@ -79,6 +81,78 @@ export function createWebSocketStore(url: string) {
   // blanks without spamming the UI.
   let consecutiveEmptyDockerUpdates = 0;
   let hasReceivedNonEmptyDockerHosts = false;
+
+  const mergeDockerHostRevocations = (incomingHosts: DockerHost[]) => {
+    if (!Array.isArray(incomingHosts) || incomingHosts.length === 0) {
+      return incomingHosts;
+    }
+
+    const existingHosts = state.dockerHosts || [];
+    if (!Array.isArray(existingHosts) || existingHosts.length === 0) {
+      return incomingHosts;
+    }
+
+    return incomingHosts.map((host) => {
+      const previous = existingHosts.find((entry) => entry.id === host.id);
+      if (!previous?.tokenRevokedAt || !previous.revokedTokenId) {
+        return host;
+      }
+
+      const tokenChanged =
+        previous.revokedTokenId &&
+        host.tokenId &&
+        host.tokenId !== previous.revokedTokenId;
+      const tokenUsedAfterRevocation =
+        typeof host.tokenLastUsedAt === 'number' &&
+        host.tokenLastUsedAt >= previous.tokenRevokedAt;
+
+      if (tokenChanged || tokenUsedAfterRevocation) {
+        return host;
+      }
+
+      return {
+        ...host,
+        revokedTokenId: previous.revokedTokenId,
+        tokenRevokedAt: previous.tokenRevokedAt,
+      };
+    });
+  };
+
+  const mergeHostRevocations = (incomingHosts: Host[]) => {
+    if (!Array.isArray(incomingHosts) || incomingHosts.length === 0) {
+      return incomingHosts;
+    }
+
+    const existingHosts = state.hosts || [];
+    if (!Array.isArray(existingHosts) || existingHosts.length === 0) {
+      return incomingHosts;
+    }
+
+    return incomingHosts.map((host) => {
+      const previous = existingHosts.find((entry) => entry.id === host.id);
+      if (!previous?.tokenRevokedAt || !previous.revokedTokenId) {
+        return host;
+      }
+
+      const tokenChanged =
+        previous.revokedTokenId &&
+        host.tokenId &&
+        host.tokenId !== previous.revokedTokenId;
+      const tokenUsedAfterRevocation =
+        typeof host.tokenLastUsedAt === 'number' &&
+        host.tokenLastUsedAt >= previous.tokenRevokedAt;
+
+      if (tokenChanged || tokenUsedAfterRevocation) {
+        return host;
+      }
+
+      return {
+        ...host,
+        revokedTokenId: previous.revokedTokenId,
+        tokenRevokedAt: previous.tokenRevokedAt,
+      };
+    });
+  };
 
   // Track alerts with pending acknowledgment changes to prevent race conditions
   const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
@@ -332,7 +406,7 @@ export function createWebSocketStore(url: string) {
 
                   if (shouldApplyEmptyState) {
                     console.log('[WebSocket] Updating dockerHosts:', incomingHosts.length, 'hosts');
-                    setState('dockerHosts', incomingHosts);
+                    setState('dockerHosts', mergeDockerHostRevocations(incomingHosts));
                   } else {
                     console.debug(
                       '[WebSocket] Skipping transient empty dockerHosts payload',
@@ -343,7 +417,7 @@ export function createWebSocketStore(url: string) {
                   consecutiveEmptyDockerUpdates = 0;
                   hasReceivedNonEmptyDockerHosts = true;
                   console.log('[WebSocket] Updating dockerHosts:', incomingHosts.length, 'hosts');
-                  setState('dockerHosts', incomingHosts);
+                  setState('dockerHosts', mergeDockerHostRevocations(incomingHosts));
                 }
               } else {
                 console.warn('[WebSocket] Received non-array dockerHosts:', typeof message.data.dockerHosts);
@@ -351,8 +425,14 @@ export function createWebSocketStore(url: string) {
             } else if (message.data.dockerHosts === null) {
               console.log('[WebSocket] Received null dockerHosts, ignoring');
             }
+            if (message.data.hosts !== undefined && message.data.hosts !== null) {
+              if (Array.isArray(message.data.hosts)) {
+                setState('hosts', mergeHostRevocations(message.data.hosts));
+              } else {
+                setState('hosts', message.data.hosts);
+              }
+            }
             if (message.data.storage !== undefined) setState('storage', message.data.storage);
-            if (message.data.hosts !== undefined) setState('hosts', message.data.hosts);
             if (message.data.cephClusters !== undefined)
               setState('cephClusters', message.data.cephClusters);
             if (message.data.pbs !== undefined) setState('pbs', message.data.pbs);
@@ -561,6 +641,44 @@ export function createWebSocketStore(url: string) {
       window.clearTimeout(reconnectTimeout);
       reconnectAttempt = 0; // Reset attempts for manual reconnect
       connect();
+    },
+    markDockerHostsTokenRevoked: (tokenId: string, hostIds: string[]) => {
+      if (!hostIds || hostIds.length === 0) {
+        return;
+      }
+      const timestamp = Date.now();
+      setState(
+        'dockerHosts',
+        produce((draft: DockerHost[]) => {
+          if (!Array.isArray(draft)) return;
+          hostIds.forEach((hostId) => {
+            const target = draft.find((host) => host.id === hostId);
+            if (target) {
+              target.revokedTokenId = tokenId;
+              target.tokenRevokedAt = timestamp;
+            }
+          });
+        }),
+      );
+    },
+    markHostsTokenRevoked: (tokenId: string, hostIds: string[]) => {
+      if (!hostIds || hostIds.length === 0) {
+        return;
+      }
+      const timestamp = Date.now();
+      setState(
+        'hosts',
+        produce((draft: Host[]) => {
+          if (!Array.isArray(draft)) return;
+          hostIds.forEach((hostId) => {
+            const target = draft.find((host) => host.id === hostId);
+            if (target) {
+              target.revokedTokenId = tokenId;
+              target.tokenRevokedAt = timestamp;
+            }
+          });
+        }),
+      );
     },
     removeAlerts: (predicate: (alert: Alert) => boolean) => {
       const keysToRemove: string[] = [];
