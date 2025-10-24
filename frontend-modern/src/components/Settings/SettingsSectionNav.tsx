@@ -3,7 +3,7 @@ import { For } from 'solid-js';
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
-import { DockerIcon } from '@/components/icons/DockerIcon';
+import Container from 'lucide-solid/icons/container';
 
 type SettingsSection = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host' | 'podman' | 'kubernetes';
 
@@ -16,7 +16,7 @@ interface SettingsSectionNavProps {
 const allSections: Array<{
   id: SettingsSection;
   label: string;
-  icon: typeof Server | Component<{ class?: string }>;
+  icon: typeof Server;
 }> = [
   {
     id: 'pve',
@@ -36,7 +36,7 @@ const allSections: Array<{
   {
     id: 'docker',
     label: 'Docker',
-    icon: DockerIcon,
+    icon: Container,
   },
 ];
 
@@ -54,7 +54,6 @@ export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) =>
             : `${baseClasses} hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50`;
 
           const Icon = section.icon;
-          const isDockerIcon = section.id === 'docker';
 
           return (
             <button
@@ -63,11 +62,7 @@ export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) =>
               onClick={() => props.onSelect(section.id)}
               aria-pressed={isActive}
             >
-              {isDockerIcon ? (
-                <Icon class="w-4 h-4" />
-              ) : (
-                <Icon size={16} stroke-width={2} />
-              )}
+              <Icon size={16} stroke-width={2} />
               <span>{section.label}</span>
             </button>
           );
