@@ -114,6 +114,10 @@ export const HostsFilter: Component<HostsFilterProps> = (props) => {
                 if (e.key === 'Enter') {
                   commitSearchToHistory(e.currentTarget.value);
                   closeHistory();
+                } else if (e.key === 'Escape') {
+                  props.setSearch('');
+                  closeHistory();
+                  e.currentTarget.blur();
                 } else if (e.key === 'ArrowDown' && searchHistory().length > 0) {
                   e.preventDefault();
                   setIsHistoryOpen(true);

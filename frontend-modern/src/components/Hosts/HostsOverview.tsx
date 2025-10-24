@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For, Show, createMemo, createSignal, createEffect, on } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { Host } from '@/types/api';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
@@ -38,6 +38,37 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const navigate = useNavigate();
   const wsContext = useWebSocket();
   const [search, setSearch] = createSignal('');
+
+  // Keyboard listener to auto-focus search
+  let searchInputRef: HTMLInputElement | undefined;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Don't interfere if user is already typing in an input
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+
+    // Don't interfere with modifier key shortcuts (except Shift for capitals)
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      return;
+    }
+
+    // Focus search on printable characters and start typing
+    if (e.key.length === 1 && searchInputRef) {
+      e.preventDefault();
+      searchInputRef.focus();
+      setSearch(search() + e.key);
+    }
+  };
+
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
 
   const connected = () => wsContext.connected();
   const reconnecting = () => wsContext.reconnecting();
@@ -124,6 +155,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                 search={search}
                 setSearch={setSearch}
                 onReset={() => setSearch('')}
+                searchInputRef={(el) => (searchInputRef = el)}
               />
 
               {/* Host Table */}
