@@ -3,13 +3,12 @@ import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
+import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
 import type { DockerHost } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
-import { showTokenReveal } from '@/stores/tokenReveal';
-import { DOCKER_MANAGE_SCOPE, DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
-import { useScopedTokenManager } from '@/hooks/useScopedTokenManager';
+import { DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
@@ -40,30 +39,10 @@ export const DockerAgents: Component = () => {
   const [removeActionLoading, setRemoveActionLoading] = createSignal<'queue' | 'force' | 'hide' | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
-  const [showGenerateTokenModal, setShowGenerateTokenModal] = createSignal(false);
-  const [newTokenName, setNewTokenName] = createSignal('');
-  const [generateError, setGenerateError] = createSignal<string | null>(null);
+  const [isGeneratingToken, setIsGeneratingToken] = createSignal(false);
+  const [currentToken, setCurrentToken] = createSignal<string | null>(null);
   const [latestRecord, setLatestRecord] = createSignal<APITokenRecord | null>(null);
-  const [stepTwoComplete, setStepTwoComplete] = createSignal(false);
-
-  const tokenStepLabel = 'Step 2 · Generate API token';
-  const commandStepLabel = 'Step 3 · Install command';
-
-  const {
-    token: apiToken,
-    isGeneratingToken,
-    generateToken,
-  } = useScopedTokenManager({
-    scope: DOCKER_REPORT_SCOPE,
-    storageKey: 'dockerAgentToken',
-    legacyKeys: ['apiToken'],
-  });
-
-  createEffect(() => {
-    if (!apiToken()) {
-      setStepTwoComplete(false);
-    }
-  });
+  const [tokenName, setTokenName] = createSignal('');
 
   const pulseUrl = () => {
     if (typeof window !== 'undefined') {
@@ -173,21 +152,7 @@ const modalCommandProgress = createMemo(() => {
     fetchSecurityStatus();
   });
 
-  const tokenReady = () => !requiresToken() || Boolean(apiToken());
-  const commandsUnlocked = () => tokenReady() && stepTwoComplete();
-
-  const acknowledgeTokenUse = () => {
-    if (!requiresToken()) {
-      setStepTwoComplete(true);
-      return;
-    }
-    if (apiToken()) {
-      setStepTwoComplete(true);
-      notificationStore.success('Token ready to use in the install command.', 3500);
-    } else {
-      notificationStore.info('Generate or select a token before continuing.', 4000);
-    }
-  };
+  const showInstallCommand = () => !requiresToken() || Boolean(currentToken());
 
   // Find the token record that matches the currently stored token
   const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -221,35 +186,22 @@ const modalCommandProgress = createMemo(() => {
     }
   };
 
-  const openGenerateTokenModal = () => {
-    setGenerateError(null);
-    const defaultName = `Docker host ${new Date().toISOString().slice(0, 10)}`;
-    setNewTokenName(defaultName);
-    setShowGenerateTokenModal(true);
-    setStepTwoComplete(false);
-  };
-
-  const handleCreateToken = async () => {
+  const handleGenerateToken = async () => {
     if (isGeneratingToken()) return;
-    setGenerateError(null);
+    setIsGeneratingToken(true);
     try {
-      const desiredName = newTokenName().trim() || `Docker host ${new Date().toISOString().slice(0, 10)}`;
-      const { token, record } = await generateToken(desiredName);
+      const name = tokenName().trim() || `Docker host ${new Date().toISOString().slice(0, 10)}`;
+      const { token, record } = await SecurityAPI.createToken(name, [DOCKER_REPORT_SCOPE]);
 
-      setShowGenerateTokenModal(false);
-      setNewTokenName('');
+      setCurrentToken(token);
       setLatestRecord(record);
-      showTokenReveal({
-        token,
-        record,
-        source: 'docker',
-        note: `Copy this token into the install command for your Docker agent. Scope: ${DOCKER_REPORT_SCOPE}.`,
-      });
-      notificationStore.success('New Docker reporting token generated and added to the install command.', 6000);
+      setTokenName('');
+      notificationStore.success('Token generated and inserted into the command below.', 4000);
     } catch (err) {
       console.error('Failed to generate API token', err);
-      setGenerateError('Failed to generate API token. Confirm you are signed in as an administrator.');
-      notificationStore.error('Failed to generate API token', 6000);
+      notificationStore.error('Failed to generate API token. Confirm you are signed in as an administrator.', 6000);
+    } finally {
+      setIsGeneratingToken(false);
     }
   };
 
@@ -415,49 +367,6 @@ WantedBy=multi-user.target`;
 
   return (
     <div class="space-y-8">
-      {/* Summary Stats */}
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-900/10 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-blue-600 dark:bg-blue-500 rounded-lg">
-              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-              </svg>
-            </div>
-            <div>
-              <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{dockerHosts().length}</p>
-              <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Docker Hosts</p>
-            </div>
-          </div>
-        </div>
-        <div class="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/20 dark:to-green-900/10 rounded-lg p-4 border border-green-200 dark:border-green-800">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-green-600 dark:bg-green-500 rounded-lg">
-              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{dockerHosts().filter(h => h.status?.toLowerCase() === 'online').length}</p>
-              <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Online Now</p>
-            </div>
-          </div>
-        </div>
-        <div class="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-900/10 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-purple-600 dark:bg-purple-500 rounded-lg">
-              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
-            <div>
-              <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{dockerHosts().reduce((sum, h) => sum + (h.containers?.length || 0), 0)}</p>
-              <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Total Containers</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Setup & Management</h2>
@@ -503,99 +412,58 @@ WantedBy=multi-user.target`;
           </details>
 
           <Show when={requiresToken()}>
-            <div class="space-y-4">
+            <div class="space-y-3">
               <div class="space-y-1">
-                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{tokenStepLabel}</p>
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate API token</p>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  Generate a fresh credential for this Docker host. Each token created here is limited to the <code>{DOCKER_REPORT_SCOPE}</code> scope.
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  Need lifecycle control or bespoke scopes? Visit <a href="/settings/security" class="text-blue-600 dark:text-blue-300 underline hover:no-underline font-medium">Security → API tokens</a> to craft a custom token and add <code>{DOCKER_MANAGE_SCOPE}</code> if you plan to issue lifecycle commands.
+                  Create a fresh token scoped to <code>{DOCKER_REPORT_SCOPE}</code>
                 </p>
               </div>
 
-              <Show when={generateError()}>
-                <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
-                  {generateError()}
-                </div>
-              </Show>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  value={tokenName()}
+                  onInput={(e) => setTokenName(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isGeneratingToken()) {
+                      handleGenerateToken();
+                    }
+                  }}
+                  placeholder="Token name (optional)"
+                  class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
+                />
+                <button
+                  type="button"
+                  onClick={handleGenerateToken}
+                  disabled={isGeneratingToken()}
+                  class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isGeneratingToken() ? 'Generating…' : currentToken() ? 'Generate another' : 'Generate token'}
+                </button>
+              </div>
 
               <Show when={latestRecord()}>
-                <div class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                <div class="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-xs text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200">
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                   <span>
-                    Token <strong>{latestRecord()?.name}</strong> created ({latestRecord()?.prefix}…{latestRecord()?.suffix}). Copy the full value from the pop-up and store it securely—this is the only time it is shown.
+                    Token <strong>{latestRecord()?.name}</strong> created and inserted into the command below.
                   </span>
                 </div>
               </Show>
-
-              <button
-                type="button"
-                onClick={openGenerateTokenModal}
-                disabled={isGeneratingToken()}
-                class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isGeneratingToken() ? 'Generating…' : 'Generate token'}
-              </button>
-
-              <Show when={apiToken()}>
-                <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <div class={`flex-1 rounded-lg border px-4 py-2 text-xs ${
-                    stepTwoComplete()
-                      ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200'
-                      : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
-                  }`}>
-                    {stepTwoComplete()
-                      ? 'Token inserted. Proceed to the install command below.'
-                      : 'Stored token detected. Press confirm to insert it into the command.'}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={acknowledgeTokenUse}
-                    disabled={stepTwoComplete()}
-                    class={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                      stepTwoComplete()
-                        ? 'bg-green-600 text-white cursor-default'
-                        : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
-                    }`}
-                  >
-                    {stepTwoComplete() ? 'Token inserted' : 'Insert token into command'}
-                  </button>
-                </div>
-              </Show>
             </div>
           </Show>
 
-          <Show when={!requiresToken()}>
-            <div class="space-y-3">
-              <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-                Tokens are optional on this Pulse instance. Confirm to generate commands without embedding a token.
-              </div>
-              <button
-                type="button"
-                onClick={acknowledgeTokenUse}
-                disabled={stepTwoComplete()}
-                class={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  stepTwoComplete()
-                    ? 'bg-green-600 text-white cursor-default'
-                    : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
-                }`}
-              >
-                {stepTwoComplete() ? 'No token confirmed' : 'Confirm without token'}
-              </button>
-            </div>
-          </Show>
-
-          <Show when={commandsUnlocked()}>
+          <Show when={showInstallCommand()}>
             <div class="space-y-2">
               <div class="flex items-center justify-between">
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{commandStepLabel}</label>
+                <label class="text-sm font-semibold text-gray-900 dark:text-gray-100">Install command</label>
                 <button
                   type="button"
                   onClick={async () => {
-                    const command = getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, apiToken() || TOKEN_PLACEHOLDER);
+                    const command = getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER);
                     const success = await copyToClipboard(command);
                     if (typeof window !== 'undefined' && window.showToast) {
                       window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
@@ -603,27 +471,24 @@ WantedBy=multi-user.target`;
                   }}
                   class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
                 >
-                  Copy first command
+                  Copy command
                 </button>
               </div>
               <div class="relative rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 overflow-x-auto">
                 <code class="text-sm text-gray-900 dark:text-gray-100 font-mono break-all">
-                  {getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, apiToken() || TOKEN_PLACEHOLDER)}
+                  {getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER)}
                 </code>
               </div>
               <p class="text-xs text-gray-500 dark:text-gray-400">
-                The installer downloads the agent, creates a systemd service, and starts reporting automatically.
+                Run as root on your Docker host. The installer downloads the agent, creates a systemd service, and starts reporting automatically.
               </p>
             </div>
           </Show>
 
-          <Show when={requiresToken() && (!apiToken() || !stepTwoComplete())}>
+          <Show when={requiresToken() && !currentToken()}>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              Generate a new token or confirm the stored one to unlock the install command.
+              Generate a token to see the install command.
             </p>
-          </Show>
-          <Show when={!requiresToken() && !stepTwoComplete()}>
-            <p class="text-xs text-gray-500 dark:text-gray-400">Confirm the no-token setup to continue.</p>
           </Show>
 
           <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
@@ -708,57 +573,6 @@ WantedBy=multi-user.target`;
             </div>
           </details>
         </Card>
-      </Show>
-
-      {/* Generate token modal */}
-      <Show when={showGenerateTokenModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
-            <div class="space-y-2">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Generate a new Docker API token</h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                Pulse will create a scoped token and insert it into the install command. You can manage or revoke tokens anytime from Security Settings.
-              </p>
-            </div>
-            <div class="mt-4 space-y-2">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="docker-new-token-name">
-                Token name
-              </label>
-              <input
-                id="docker-new-token-name"
-                type="text"
-                value={newTokenName()}
-                onInput={(event) => setNewTokenName(event.currentTarget.value)}
-                class="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
-                placeholder="Docker host token"
-              />
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Friendly names make it easier to audit tokens later (e.g. <code class="font-mono text-xs">docker-prod-01</code>).
-              </p>
-            </div>
-            <div class="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowGenerateTokenModal(false);
-                  setNewTokenName('');
-                  setGenerateError(null);
-                }}
-                class="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateToken}
-                disabled={isGeneratingToken()}
-                class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
-              >
-                {isGeneratingToken() ? 'Generating…' : 'Generate token'}
-              </button>
-            </div>
-          </div>
-        </div>
       </Show>
 
       {/* Remove Docker Host Modal */}
@@ -1240,51 +1054,6 @@ WantedBy=multi-user.target`;
           </Show>
         </div>
       </Card>
-
-      {/* Info Cards */}
-      <div class="grid gap-4 sm:grid-cols-2">
-        <Card tone="info" padding="sm">
-          <div class="flex items-start gap-3">
-            <div class="flex-shrink-0">
-              <svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div class="flex-1 min-w-0">
-              <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Agent-based monitoring</h4>
-              <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Docker hosts run the Pulse agent and push metrics to this server. No inbound firewall rules required.
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card tone="warning" padding="sm">
-          <div class="flex items-start gap-3">
-            <div class="flex-shrink-0">
-              <svg class="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-            <div class="flex-1 min-w-0">
-              <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Agent requirements</h4>
-              <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                The agent needs access to the Docker socket (/var/run/docker.sock) and network connectivity to this Pulse instance.
-              </p>
-            </div>
-          </div>
-        </Card>
-      </div>
     </div>
   );
 };

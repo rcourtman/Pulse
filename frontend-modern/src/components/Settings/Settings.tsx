@@ -2929,10 +2929,6 @@ const Settings: Component<SettingsProps> = (props) => {
 {/* Docker Tab */}
             <Show when={activeTab() === 'proxmox' && selectedAgent() === 'docker'}>
               <div class="space-y-6 mt-6">
-                <SectionHeader
-                  title="Deploy the Docker agent"
-                  description="Generate a scoped reporting token and copy the install commands for the Docker host you are onboarding."
-                />
                 <DockerAgents />
               </div>
             </Show>
@@ -2966,10 +2962,6 @@ const Settings: Component<SettingsProps> = (props) => {
             {/* Host Agents */}
             <Show when={activeTab() === 'proxmox' && selectedAgent() === 'host'}>
               <div class="space-y-6 mt-6">
-                <SectionHeader
-                  title="Install the Pulse host agent"
-                  description="Pick the operating system, generate a scoped token, and copy the tailored commands for Linux, macOS, or Windows."
-                />
                 <HostAgents />
               </div>
             </Show>
