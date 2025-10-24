@@ -21,7 +21,6 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
-import { AgentStepSection } from './AgentStepSection';
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
@@ -2130,12 +2129,11 @@ const Settings: Component<SettingsProps> = (props) => {
 
             <div class="p-6 lg:p-8">
                 <Show when={activeTab() === 'proxmox'}>
-                  <AgentStepSection
-                    step="Step 1"
-                    title="Choose a platform"
-                    description="Pick the integration you want to configure. Cards switch the guidance shown in the next step."
-                  >
-                    <Card padding="lg" class="space-y-6">
+                  <SectionHeader
+                    title="Select an integration"
+                    description="Choose the platform you want to configure. The configuration interface will update based on your selection."
+                  />
+                  <Card padding="lg" class="space-y-6 mt-6">
                       <For each={agentGroups}>
                         {(group) => (
                           <section class="space-y-3">
@@ -2199,19 +2197,14 @@ const Settings: Component<SettingsProps> = (props) => {
                         )}
                       </For>
                     </Card>
-                  </AgentStepSection>
                 </Show>
                 {/* PVE Nodes Tab */}
                 <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pve'}>
-                  <section class="space-y-6">
-                    <header class="space-y-1">
-                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        Connect Proxmox VE
-                      </h3>
-                      <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                        Link Pulse to your Proxmox VE cluster with a dedicated API token. Quick setup can scaffold users, roles, and permissions for you.
-                      </p>
-                    </header>
+                  <div class="space-y-6 mt-6">
+                    <SectionHeader
+                      title="Connect Proxmox VE"
+                      description="Link Pulse to your Proxmox VE cluster with a dedicated API token. Quick setup can scaffold users, roles, and permissions for you."
+                    />
                     <div class="space-y-4">
                       <Show when={!initialLoadComplete()}>
                         <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
@@ -2219,10 +2212,11 @@ const Settings: Component<SettingsProps> = (props) => {
                         </div>
                       </Show>
                       <Show when={initialLoadComplete()}>
-                        <>
-                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                            <SectionHeader title="Proxmox VE nodes" size="md" class="flex-1" />
-                            <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <Card padding="lg">
+                          <div class="space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">Proxmox VE nodes</h4>
+                              <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                               {/* Discovery toggle */}
                               <div
                                 class="flex items-center gap-2 sm:gap-3"
@@ -2334,12 +2328,16 @@ const Settings: Component<SettingsProps> = (props) => {
                               discoveredNodes().filter((n) => n.type === 'pve').length === 0
                             }
                           >
-                            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                              <p>No PVE nodes configured</p>
-                              <p class="text-sm mt-1">Add a node to start monitoring</p>
+                            <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
+                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
+                                <Server class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                              </div>
+                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">No PVE nodes configured</p>
+                              <p class="text-sm text-gray-500 dark:text-gray-400">Add a Proxmox VE node to start monitoring your infrastructure</p>
                             </div>
                           </Show>
-                        </>
+                          </div>
+                        </Card>
                       </Show>
 
                       {/* Discovered PVE nodes - only show when discovery is enabled */}
@@ -2478,20 +2476,16 @@ const Settings: Component<SettingsProps> = (props) => {
                         </div>
                       </Show>
                     </div>
-                  </section>
+                  </div>
                 </Show>
 
                 {/* PBS Nodes Tab */}
                 <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pbs'}>
-                  <section class="space-y-6">
-                    <header class="space-y-1">
-                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        Connect Proxmox Backup Server
-                      </h3>
-                      <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                        Provide a PBS API token with backup read access. Use quick setup to generate the token and grant the minimum privileges.
-                      </p>
-                    </header>
+                  <div class="space-y-6 mt-6">
+                    <SectionHeader
+                      title="Connect Proxmox Backup Server"
+                      description="Provide a PBS API token with backup read access. Use quick setup to generate the token and grant the minimum privileges."
+                    />
                     <div class="space-y-4">
                       <Show when={!initialLoadComplete()}>
                         <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
@@ -2499,10 +2493,11 @@ const Settings: Component<SettingsProps> = (props) => {
                         </div>
                       </Show>
                       <Show when={initialLoadComplete()}>
-                        <>
-                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                            <SectionHeader title="Proxmox Backup Server nodes" size="md" class="flex-1" />
-                            <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <Card padding="lg">
+                          <div class="space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">Proxmox Backup Server nodes</h4>
+                              <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                               {/* Discovery toggle */}
                               <div
                                 class="flex items-center gap-2 sm:gap-3"
@@ -2614,12 +2609,16 @@ const Settings: Component<SettingsProps> = (props) => {
                               discoveredNodes().filter((n) => n.type === 'pbs').length === 0
                             }
                           >
-                            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                              <p>No PBS nodes configured</p>
-                              <p class="text-sm mt-1">Add a node to start monitoring</p>
+                            <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
+                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
+                                <HardDrive class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                              </div>
+                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">No PBS nodes configured</p>
+                              <p class="text-sm text-gray-500 dark:text-gray-400">Add a Proxmox Backup Server to monitor your backup infrastructure</p>
                             </div>
                           </Show>
-                        </>
+                          </div>
+                        </Card>
                       </Show>
 
                       {/* Discovered PBS nodes - only show when discovery is enabled */}
@@ -2758,19 +2757,15 @@ const Settings: Component<SettingsProps> = (props) => {
                         </div>
                       </Show>
                     </div>
-                  </section>
+                  </div>
                 </Show>
 {/* PMG Nodes Tab */}
                 <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pmg'}>
-                  <section class="space-y-6">
-                    <header class="space-y-1">
-                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        Connect Proxmox Mail Gateway
-                      </h3>
-                      <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                        Onboard each Mail Gateway with a limited API token so Pulse can read queue depth and quarantine metrics.
-                      </p>
-                    </header>
+                  <div class="space-y-6 mt-6">
+                    <SectionHeader
+                      title="Connect Proxmox Mail Gateway"
+                      description="Onboard each Mail Gateway with a limited API token so Pulse can read queue depth and quarantine metrics."
+                    />
                     <div class="space-y-4">
                       <Show when={!initialLoadComplete()}>
                         <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
@@ -2779,10 +2774,11 @@ const Settings: Component<SettingsProps> = (props) => {
                       </Show>
 
                       <Show when={initialLoadComplete()}>
-                        <>
-                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                            <SectionHeader title="Proxmox Mail Gateway nodes" size="md" class="flex-1" />
-                            <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <Card padding="lg">
+                          <div class="space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">Proxmox Mail Gateway nodes</h4>
+                              <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                               {/* Discovery toggle */}
                               <div
                                 class="flex items-center gap-2 sm:gap-3"
@@ -2876,12 +2872,16 @@ const Settings: Component<SettingsProps> = (props) => {
                           </Show>
 
                           <Show when={pmgNodes().length === 0}>
-                            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                              <p>No PMG nodes configured</p>
-                              <p class="text-sm mt-1">Add a node to start monitoring mail flow</p>
+                            <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
+                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
+                                <Mail class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                              </div>
+                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">No PMG nodes configured</p>
+                              <p class="text-sm text-gray-500 dark:text-gray-400">Add a Proxmox Mail Gateway to monitor mail queue and quarantine metrics</p>
                             </div>
                           </Show>
-                        </>
+                          </div>
+                        </Card>
                       </Show>
 
                       {/* Discovered PMG nodes - only show when discovery is enabled */}
@@ -3029,17 +3029,17 @@ const Settings: Component<SettingsProps> = (props) => {
                         </div>
                       </Show>
                     </div>
-                  </section>
+                  </div>
                 </Show>
 {/* Docker Tab */}
             <Show when={activeTab() === 'proxmox' && selectedAgent() === 'docker'}>
-              <AgentStepSection
-                step="Step 2"
-                title="Deploy the Docker agent"
-                description="Mint a scoped reporting token and copy the install commands for the Docker host you are onboarding."
-              >
+              <div class="space-y-6 mt-6">
+                <SectionHeader
+                  title="Deploy the Docker agent"
+                  description="Generate a scoped reporting token and copy the install commands for the Docker host you are onboarding."
+                />
                 <DockerAgents />
-              </AgentStepSection>
+              </div>
             </Show>
 
             {/* Docker Platform Tab */}
@@ -3070,13 +3070,13 @@ const Settings: Component<SettingsProps> = (props) => {
 
             {/* Host Agents */}
             <Show when={activeTab() === 'proxmox' && selectedAgent() === 'host'}>
-              <AgentStepSection
-                step="Step 2"
-                title="Install the Pulse host agent"
-                description="Pick the operating system, generate a scoped token, and copy the tailored commands for Linux, macOS, or Windows."
-              >
+              <div class="space-y-6 mt-6">
+                <SectionHeader
+                  title="Install the Pulse host agent"
+                  description="Pick the operating system, generate a scoped token, and copy the tailored commands for Linux, macOS, or Windows."
+                />
                 <HostAgents />
-              </AgentStepSection>
+              </div>
             </Show>
 
             {/* System General Tab */}
