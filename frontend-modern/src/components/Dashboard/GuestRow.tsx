@@ -61,6 +61,7 @@ export function GuestRow(props: GuestRowProps) {
   const isEditingUrl = createMemo(() => currentlyEditingGuestId() === guestId());
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
+  const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
   const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(initialGuestId) ?? false);
   const editingUrlValue = createMemo(() => {
     editingValuesVersion(); // Subscribe to changes
@@ -82,7 +83,17 @@ export function GuestRow(props: GuestRowProps) {
   createEffect(() => {
     // Don't update customUrl from props if this guest is currently being edited
     if (currentlyEditingGuestId() !== guestId()) {
-      setCustomUrl(props.customUrl);
+      const prevUrl = customUrl();
+      const newUrl = props.customUrl;
+
+      // Only animate when URL transitions from empty to having a value
+      if (!prevUrl && newUrl) {
+        setShouldAnimateIcon(true);
+        // Remove animation class after it completes
+        setTimeout(() => setShouldAnimateIcon(false), 200);
+      }
+
+      setCustomUrl(newUrl);
     }
   });
 
@@ -250,6 +261,14 @@ export function GuestRow(props: GuestRowProps) {
 
     try {
       await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: newUrl });
+
+      // Animate if transitioning from no URL to having a URL
+      const hadUrl = !!customUrl();
+      if (!hadUrl && newUrl) {
+        setShouldAnimateIcon(true);
+        setTimeout(() => setShouldAnimateIcon(false), 200);
+      }
+
       setCustomUrl(newUrl || undefined);
 
       // Notify parent to update metadata
@@ -430,7 +449,7 @@ export function GuestRow(props: GuestRowProps) {
                     href={customUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
                     title="Open in new tab"
                     onClick={(event) => event.stopPropagation()}
                   >
