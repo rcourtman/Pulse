@@ -365,94 +365,94 @@ WantedBy=multi-user.target`;
   };
 
   return (
-    <div class="space-y-8">
-        <Card class="space-y-5">
-          <div>
+    <div class="space-y-6">
+        <Card padding="lg" class="space-y-5">
+          <div class="space-y-1">
             <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Add a Docker host</h3>
             <p class="text-sm text-gray-600 dark:text-gray-400">
               Run this command as root on your Docker host to start monitoring.
             </p>
           </div>
 
-          <Show when={requiresToken()}>
-            <div class="space-y-3">
-              <div class="space-y-1">
-                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate API token</p>
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                  Create a fresh token scoped to <code>{DOCKER_REPORT_SCOPE}</code>
+          <div class="space-y-5">
+            <Show when={requiresToken()}>
+              <div class="space-y-3">
+                <div class="space-y-1">
+                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate API token</p>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Create a fresh token scoped to <code>{DOCKER_REPORT_SCOPE}</code>
+                  </p>
+                </div>
+
+                <div class="flex gap-2">
+                  <input
+                    type="text"
+                    value={tokenName()}
+                    onInput={(e) => setTokenName(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isGeneratingToken()) {
+                        handleGenerateToken();
+                      }
+                    }}
+                    placeholder="Token name (optional)"
+                    class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleGenerateToken}
+                    disabled={isGeneratingToken()}
+                    class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isGeneratingToken() ? 'Generating…' : currentToken() ? 'Generate another' : 'Generate token'}
+                  </button>
+                </div>
+
+                <Show when={latestRecord()}>
+                  <div class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>
+                      Token <strong>{latestRecord()?.name}</strong> created and inserted into the command below.
+                    </span>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+
+            <Show when={showInstallCommand()}>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <label class="text-sm font-semibold text-gray-900 dark:text-gray-100">Install command</label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const command = getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER);
+                      const success = await copyToClipboard(command);
+                      if (typeof window !== 'undefined' && window.showToast) {
+                        window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                      }
+                    }}
+                    class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Copy command
+                  </button>
+                </div>
+                <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
+                  <code>{getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER)}</code>
+                </pre>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Run as root on your Docker host. The installer downloads the agent, creates a systemd service, and starts reporting automatically.
                 </p>
               </div>
+            </Show>
 
-              <div class="flex gap-2">
-                <input
-                  type="text"
-                  value={tokenName()}
-                  onInput={(e) => setTokenName(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isGeneratingToken()) {
-                      handleGenerateToken();
-                    }
-                  }}
-                  placeholder="Token name (optional)"
-                  class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
-                />
-                <button
-                  type="button"
-                  onClick={handleGenerateToken}
-                  disabled={isGeneratingToken()}
-                  class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isGeneratingToken() ? 'Generating…' : currentToken() ? 'Generate another' : 'Generate token'}
-                </button>
-              </div>
-
-              <Show when={latestRecord()}>
-                <div class="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-xs text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200">
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>
-                    Token <strong>{latestRecord()?.name}</strong> created and inserted into the command below.
-                  </span>
-                </div>
-              </Show>
-            </div>
-          </Show>
-
-          <Show when={showInstallCommand()}>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <label class="text-sm font-semibold text-gray-900 dark:text-gray-100">Install command</label>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const command = getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER);
-                    const success = await copyToClipboard(command);
-                    if (typeof window !== 'undefined' && window.showToast) {
-                      window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
-                    }
-                  }}
-                  class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  Copy command
-                </button>
-              </div>
-              <div class="relative rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 p-3 overflow-x-auto">
-                <code class="text-sm text-gray-900 dark:text-gray-100 font-mono break-all">
-                  {getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER)}
-                </code>
-              </div>
+            <Show when={requiresToken() && !currentToken()}>
               <p class="text-xs text-gray-500 dark:text-gray-400">
-                Run as root on your Docker host. The installer downloads the agent, creates a systemd service, and starts reporting automatically.
+                Generate a token to see the install command.
               </p>
-            </div>
-          </Show>
-
-          <Show when={requiresToken() && !currentToken()}>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              Generate a token to see the install command.
-            </p>
-          </Show>
+            </Show>
+          </div>
 
           <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
             <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">

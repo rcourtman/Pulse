@@ -234,6 +234,28 @@ export const HostAgents: Component = () => {
     return currentToken() || 'disabled';
   };
 
+  const getSystemdServiceUnit = () => `[Unit]
+Description=Pulse Host Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pulse-host-agent --url ${pulseUrl()} --token ${resolvedToken()} --interval 30s
+Restart=always
+RestartSec=5s
+User=root
+
+[Install]
+WantedBy=multi-user.target`;
+
+  const getManualUninstallCommand = () =>
+    `sudo systemctl stop pulse-host-agent && \\
+sudo systemctl disable pulse-host-agent && \\
+sudo rm -f /etc/systemd/system/pulse-host-agent.service && \\
+sudo rm -f /usr/local/bin/pulse-host-agent && \\
+sudo systemctl daemon-reload`;
+
   return (
     <div class="space-y-6">
       <Card padding="lg" class="space-y-5">
@@ -365,6 +387,84 @@ export const HostAgents: Component = () => {
                     )}
                   </For>
                 </div>
+                <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+                  <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
+                    Advanced options (manual install & uninstall)
+                  </summary>
+                  <div class="mt-3 space-y-4">
+                    <div class="space-y-3 rounded-lg border border-gray-200 bg-white p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
+                      <p class="font-medium text-gray-900 dark:text-gray-100">Manual Linux install</p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Build the agent from source and manage the service yourself instead of using the helper script.
+                      </p>
+                      <p class="font-medium text-gray-900 dark:text-gray-100">1. Build the binary</p>
+                      <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                        <code>
+                          cd /opt/pulse
+                          <br />
+                          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o pulse-host-agent ./cmd/pulse-host-agent
+                        </code>
+                      </div>
+                      <p class="font-medium text-gray-900 dark:text-gray-100">2. Copy to host</p>
+                      <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                        <code>
+                          scp pulse-host-agent user@host:/usr/local/bin/
+                          <br />
+                          ssh user@host sudo chmod +x /usr/local/bin/pulse-host-agent
+                        </code>
+                      </div>
+                      <p class="font-medium text-gray-900 dark:text-gray-100">3. Systemd service template</p>
+                      <div class="relative">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const success = await copyToClipboard(getSystemdServiceUnit());
+                            if (typeof window !== 'undefined' && window.showToast) {
+                              window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
+                            }
+                          }}
+                          class="absolute right-2 top-2 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-600"
+                        >
+                          Copy
+                        </button>
+                        <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950 overflow-x-auto">
+                          <pre>{getSystemdServiceUnit()}</pre>
+                        </div>
+                      </div>
+                      <p class="font-medium text-gray-900 dark:text-gray-100">4. Enable & start</p>
+                      <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                        <code>
+                          sudo systemctl daemon-reload
+                          <br />
+                          sudo systemctl enable --now pulse-host-agent
+                        </code>
+                      </div>
+                    </div>
+                    <div>
+                      <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Manual uninstall</p>
+                      <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <code class="flex-1 break-all rounded bg-gray-900 px-3 py-2 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                          {getManualUninstallCommand()}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const success = await copyToClipboard(getManualUninstallCommand());
+                            if (typeof window !== 'undefined' && window.showToast) {
+                              window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
+                            }
+                          }}
+                          class="self-start rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        Stops the agent, removes the systemd unit, and deletes the binary.
+                      </p>
+                    </div>
+                  </div>
+                </details>
               </div>
             </Show>
 
