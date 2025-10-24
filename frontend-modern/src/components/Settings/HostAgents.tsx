@@ -20,21 +20,36 @@ interface HostAgentsProps {
 
 type HostPlatform = 'linux' | 'macos' | 'windows';
 
-const hostPlatformOptions: { id: HostPlatform; label: string; description: string }[] = [
+const hostPlatformOptions: { id: HostPlatform; label: string; description: string; icon: JSX.Element }[] = [
   {
     id: 'linux',
     label: 'Linux',
     description: 'Download the static binary and enable the systemd service on Debian, Ubuntu, RHEL, Arch, and more.',
+    icon: (
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489.035.23.05.448.078.671.145 1.16.692 1.83 1.529 2.472.836.642 1.943 1.17 3.074 1.17.074 0 .148-.002.221-.007.86-.064 1.49-.433 1.944-1.078.45-.641.726-1.475.904-2.364.179-.891.241-1.846.241-2.65 0-.804.062-1.759.241-2.65.178-.889.454-1.723.904-2.364.454-.645 1.084-1.014 1.944-1.078.073-.005.147-.007.221-.007 1.131 0 2.238.528 3.074 1.17.837.642 1.384 1.312 1.529 2.472.028.223.043.441.078.671.123.805-.009 1.657-.287 2.489-.589 1.771-1.831 3.47-2.716 4.521-.75 1.067-.974 1.928-1.05 3.02-.065 1.491 1.056 5.965-3.17 6.298-.165.013-.325.021-.48.021z" />
+      </svg>
+    ),
   },
   {
     id: 'macos',
     label: 'macOS',
     description: 'Use the universal binary with launchd to keep desktops and hosts reporting in the background.',
+    icon: (
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14.94 5.19A4.38 4.38 0 0 0 16 2a4.44 4.44 0 0 0-3 1.52 4.17 4.17 0 0 0-1 3.09 3.69 3.69 0 0 0 2.94-1.42zm2.52 7.44a4.51 4.51 0 0 1 2.16-3.81 4.66 4.66 0 0 0-3.66-2c-1.56-.16-3 .91-3.83.91s-2-.89-3.3-.87A4.92 4.92 0 0 0 4.69 9.39C2.93 12.45 4.24 17 6 19.47c.8 1.21 1.8 2.58 3.12 2.53s1.75-.82 3.28-.82 2 .82 3.3.79 2.22-1.24 3.06-2.45a11 11 0 0 0 1.38-2.85 4.41 4.41 0 0 1-2.68-4.08z" />
+      </svg>
+    ),
   },
   {
     id: 'windows',
     label: 'Windows',
     description: 'Native Windows service with automatic startup. PowerShell script handles binary download and service installation.',
+    icon: (
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
+      </svg>
+    ),
   },
 ];
 
@@ -331,7 +346,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                       return (
                         <button
                           type="button"
-                          class={`flex flex-col items-start gap-2 rounded-lg border transition-colors p-4 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
+                          class={`flex flex-col items-start gap-3 rounded-lg border transition-colors p-4 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
                             isActive()
                               ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                               : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500'
@@ -344,7 +359,20 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                             setStepTwoComplete(false);
                           }}
                         >
-                          <p class="font-semibold text-gray-900 dark:text-gray-100">{option.label}</p>
+                          <div class="flex items-center gap-3">
+                            <div
+                              class={`rounded-md p-2 ${
+                                isActive()
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
+                              }`}
+                            >
+                              {option.icon}
+                            </div>
+                            <div class="flex-1">
+                              <p class="font-semibold text-gray-900 dark:text-gray-100">{option.label}</p>
+                            </div>
+                          </div>
                           <p class="text-xs text-gray-600 dark:text-gray-400">{option.description}</p>
                         </button>
                       );
