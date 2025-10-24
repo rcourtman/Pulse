@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import Container from 'lucide-solid/icons/container';
+import { siDocker } from 'simple-icons';
 
 interface DockerIconProps {
   class?: string;
@@ -7,5 +7,14 @@ interface DockerIconProps {
 }
 
 export const DockerIcon: Component<DockerIconProps> = (props) => (
-  <Container class={props.class} aria-label={props.title ?? 'Docker'} />
+  <svg
+    class={props.class}
+    role="img"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-label={props.title ?? 'Docker'}
+  >
+    <title>{props.title ?? 'Docker'}</title>
+    <path d={siDocker.path} fill="currentColor" />
+  </svg>
 );
