@@ -11,7 +11,6 @@ import { HOST_AGENT_SCOPE } from '@/constants/apiScopes';
 import type { SecurityStatus } from '@/types/config';
 import type { APITokenRecord } from '@/api/security';
 import { useScopedTokenManager } from '@/hooks/useScopedTokenManager';
-import Monitor from 'lucide-solid/icons/monitor';
 
 type HostAgentVariant = 'all' | 'linux' | 'macos' | 'windows';
 
@@ -21,12 +20,16 @@ interface HostAgentsProps {
 
 type HostPlatform = 'linux' | 'macos' | 'windows';
 
-const hostPlatformOptions: { id: HostPlatform; label: string; description: string; icon: typeof Monitor | JSX.Element }[] = [
+const hostPlatformOptions: { id: HostPlatform; label: string; description: string; icon: JSX.Element }[] = [
   {
     id: 'linux',
     label: 'Linux',
     description: 'Download the static binary and enable the systemd service on Debian, Ubuntu, RHEL, Arch, and more.',
-    icon: Monitor,
+    icon: (
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a6.9 6.9 0 00.131.902c.145 1.16.692 1.83 1.529 2.472.836.642 1.943 1.17 3.074 1.17.074 0 .148-.002.221-.007.86-.064 1.49-.433 1.944-1.078.45-.641.726-1.475.904-2.364.179-.891.241-1.846.241-2.65 0-.804.062-1.759.241-2.65.178-.889.454-1.723.904-2.364.454-.645 1.084-1.014 1.944-1.078.073-.005.147-.007.221-.007 1.131 0 2.238.528 3.074 1.17.837.642 1.384 1.312 1.529 2.472.044.299.073.598.131.902.123.805-.009 1.657-.287 2.489-.589 1.771-1.831 3.47-2.716 4.521-.75 1.067-.974 1.928-1.05 3.02-.065 1.491 1.056 5.965-3.17 6.298-.165.013-.325.021-.48.021zm-4.5-18.5c-.828 0-1.5.672-1.5 1.5s.672 1.5 1.5 1.5 1.5-.672 1.5-1.5-.672-1.5-1.5-1.5zm9 0c-.828 0-1.5.672-1.5 1.5s.672 1.5 1.5 1.5 1.5-.672 1.5-1.5-.672-1.5-1.5-1.5z"/>
+      </svg>
+    ),
   },
   {
     id: 'macos',
@@ -364,11 +367,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                                   : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
                               }`}
                             >
-                              {typeof option.icon === 'function' ? (
-                                <option.icon size={20} stroke-width={2} />
-                              ) : (
-                                option.icon
-                              )}
+                              {option.icon}
                             </div>
                             <div class="flex-1">
                               <p class="font-semibold text-gray-900 dark:text-gray-100">{option.label}</p>
