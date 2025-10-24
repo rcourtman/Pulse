@@ -2098,9 +2098,9 @@ const Settings: Component<SettingsProps> = (props) => {
             </Show>
 
             <div class="p-6 lg:p-8">
-                <Show when={activeTab() === 'proxmox'}>
+                <Show when={activeTab() === 'proxmox' || activeTab() === 'docker'}>
                   <SettingsSectionNav
-                    current={selectedAgent()}
+                    current={activeTab() === 'docker' ? 'docker' : selectedAgent()}
                     onSelect={handleSelectAgent}
                     class="mb-6"
                   />
