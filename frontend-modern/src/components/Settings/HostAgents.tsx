@@ -11,6 +11,7 @@ import { HOST_AGENT_SCOPE } from '@/constants/apiScopes';
 import type { SecurityStatus } from '@/types/config';
 import type { APITokenRecord } from '@/api/security';
 import { useScopedTokenManager } from '@/hooks/useScopedTokenManager';
+import TerminalSquare from 'lucide-solid/icons/terminal-square';
 
 type HostAgentVariant = 'all' | 'linux' | 'macos' | 'windows';
 
@@ -20,19 +21,12 @@ interface HostAgentsProps {
 
 type HostPlatform = 'linux' | 'macos' | 'windows';
 
-const hostPlatformOptions: { id: HostPlatform; label: string; description: string; icon: JSX.Element }[] = [
+const hostPlatformOptions: { id: HostPlatform; label: string; description: string; icon: typeof TerminalSquare | JSX.Element }[] = [
   {
     id: 'linux',
     label: 'Linux',
     description: 'Download the static binary and enable the systemd service on Debian, Ubuntu, RHEL, Arch, and more.',
-    icon: (
-      <svg class="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M6.6 7.1c-.5.7-.9 1.5-1.1 2.3l-.5 1.9c-.4 1.5.3 3.1 1.7 3.9.9.5 2 .8 3.3.8s2.4-.3 3.3-.8c1.4-.8 2.1-2.4 1.7-3.9l-.5-1.9c-.2-.8-.6-1.6-1.1-2.3-.2-2-1.9-3.6-4-3.6s-3.8 1.6-4 3.6Z"/>
-        <path d="M7.3 7.6a.6.6 0 1 1-1.2 0 .6.6 0 0 1 1.2 0Zm6.6 0a.6.6 0 1 1-1.2 0 .6.6 0 0 1 1.2 0Z"/>
-        <path d="M8.8 9.9c.4.5.8.7 1.2.7.4 0 .8-.2 1.2-.7"/>
-        <path d="M7.5 12.5c.5.9 1.5 1.5 2.5 1.5s2-.6 2.5-1.5"/>
-      </svg>
-    ),
+    icon: TerminalSquare,
   },
   {
     id: 'macos',
@@ -346,6 +340,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                   <For each={hostPlatformOptions}>
                     {(option) => {
                       const isActive = () => selectedPlatform() === option.id;
+                      const Icon = option.icon;
                       return (
                         <button
                           type="button"
@@ -370,7 +365,11 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                                   : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
                               }`}
                             >
-                              {option.icon}
+                              {typeof Icon === 'function' ? (
+                                <Icon size={20} stroke-width={2} />
+                              ) : (
+                                Icon
+                              )}
                             </div>
                             <div class="flex-1">
                               <p class="font-semibold text-gray-900 dark:text-gray-100">{option.label}</p>
