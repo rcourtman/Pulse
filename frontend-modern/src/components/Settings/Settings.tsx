@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, For, Show, createEffect, onCleanup, on } from 'solid-js';
+import { Component, createSignal, onMount, For, Show, createEffect, createMemo, onCleanup, on } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
@@ -12,6 +12,7 @@ import APITokenManager from './APITokenManager';
 import { OIDCPanel } from './OIDCPanel';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
+import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTables';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -531,6 +532,10 @@ const Settings: Component<SettingsProps> = (props) => {
   const [discoveryScanStatus, setDiscoveryScanStatus] = createSignal<DiscoveryScanStatus>({
     scanning: false,
   });
+
+  const pveNodes = createMemo(() => nodes().filter((n) => n.type === 'pve'));
+  const pbsNodes = createMemo(() => nodes().filter((n) => n.type === 'pbs'));
+  const pmgNodes = createMemo(() => nodes().filter((n) => n.type === 'pmg'));
 
   // System settings
   // PBS polling interval removed - fixed at 10 seconds
@@ -2181,346 +2186,99 @@ const Settings: Component<SettingsProps> = (props) => {
                 </Show>
                 {/* PVE Nodes Tab */}
                 <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pve'}>
-                  <AgentStepSection
-                    step="Step 2"
-                    title="Connect Proxmox VE"
-                    description="Link Pulse to your Proxmox VE cluster with a dedicated API token. Quick setup can scaffold users, roles, and permissions for you."
-                  >
+                  <section class="space-y-6">
+                    <header class="space-y-1">
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        Connect Proxmox VE
+                      </h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                        Link Pulse to your Proxmox VE cluster with a dedicated API token. Quick setup can scaffold users, roles, and permissions for you.
+                      </p>
+                    </header>
                     <div class="space-y-4">
-                    <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center py-8">
-                        <span class="text-gray-500">Loading configuration...</span>
-                      </div>
-                    </Show>
-                    <Show when={initialLoadComplete()}>
-                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                    <SectionHeader title="Proxmox VE nodes" size="md" class="flex-1" />
-                    <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-                      {/* Discovery toggle */}
-                      <div
-                        class="flex items-center gap-2 sm:gap-3"
-                        title="Enable automatic discovery of Proxmox servers on your network"
-                      >
-                        <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                          Discovery
-                        </span>
-                        <Toggle
-                          checked={discoveryEnabled()}
-                          onChange={async (e: ToggleChangeEvent) => {
-                            if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
-                              e.preventDefault();
-                              return;
-                            }
-                            const success = await handleDiscoveryEnabledChange(
-                              e.currentTarget.checked,
-                            );
-                            if (!success) {
-                              e.currentTarget.checked = discoveryEnabled();
-                            }
-                          }}
-                          disabled={envOverrides().discoveryEnabled || savingDiscoverySettings()}
-                          containerClass="gap-2"
-                          label={
-                            <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                              {discoveryEnabled() ? 'On' : 'Off'}
-                            </span>
-                          }
-                        />
-                      </div>
-
-                      <Show when={discoveryEnabled()}>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            notificationStore.info('Refreshing discovery...', 2000);
-                            try {
-                              await triggerDiscoveryScan({ quiet: true });
-                            } finally {
-                              await loadDiscoveredNodes();
-                            }
-                          }}
-                          class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
-                          title="Refresh discovered servers"
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
-                          </svg>
-                          <span class="hidden sm:inline">Refresh</span>
-                        </button>
+                      <Show when={!initialLoadComplete()}>
+                        <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                          Loading configuration...
+                        </div>
                       </Show>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingNode(null);
-                          setCurrentNodeType('pve');
-                          setModalResetKey((prev) => prev + 1);
-                          setShowNodeModal(true);
-                        }}
-                        class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        <span class="sm:hidden">Add</span>
-                        <span class="hidden sm:inline">Add PVE Node</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="grid gap-4">
-                    <For each={nodes().filter((n) => n.type === 'pve')}>
-                      {(node) => (
-                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
-                          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                            <div class="flex-1 min-w-0">
-                              <div class="flex items-start gap-3">
-                                <div
-                                  class={`flex-shrink-0 w-3 h-3 mt-1.5 rounded-full ${(() => {
-                                    // Find the corresponding node in the WebSocket state
-                                    const stateNode = state.nodes.find(
-                                      (n) => n.instance === node.name,
-                                    );
-                                    // Check if the node has an unhealthy connection or is offline
-                                    if (
-                                      stateNode?.connectionHealth === 'unhealthy' ||
-                                      stateNode?.connectionHealth === 'error' ||
-                                      stateNode?.status === 'offline' ||
-                                      stateNode?.status === 'disconnected'
-                                    ) {
-                                      return 'bg-red-500';
-                                    }
-                                    // Check if connection is degraded (partial cluster connectivity)
-                                    if (stateNode?.connectionHealth === 'degraded') {
-                                      return 'bg-yellow-500';
-                                    }
-                                    // Check if we have a healthy connection
-                                    if (
-                                      stateNode &&
-                                      (stateNode.status === 'online' ||
-                                        stateNode.connectionHealth === 'healthy')
-                                    ) {
-                                      return 'bg-green-500';
-                                    }
-                                    // Fall back to the last known config status if live data hasn't arrived yet
-                                    if (node.status === 'connected') {
-                                      return 'bg-green-500';
-                                    }
-                                    if (
-                                      node.status === 'error' ||
-                                      node.status === 'offline' ||
-                                      node.status === 'disconnected'
-                                    ) {
-                                      return 'bg-red-500';
-                                    }
-                                    if (node.status === 'pending') {
-                                      return 'bg-amber-500 animate-pulse';
-                                    }
-                                    return 'bg-gray-400';
-                                  })()}`}
-                                ></div>
-                                <div class="flex-1 min-w-0">
-                                  <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
-                                    {node.name}
-                                  </h4>
-                                  <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-all">
-                                    {node.host}
-                                  </p>
-                                  <div class="flex flex-wrap gap-1 sm:gap-2 mt-2">
-                                    <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
-                                      {node.user
-                                        ? `User: ${node.user}`
-                                        : `Token: ${node.tokenName}`}
-                                    </span>
-                                    {node.type === 'pve' &&
-                                      'monitorVMs' in node &&
-                                      node.monitorVMs && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          VMs
-                                        </span>
-                                      )}
-                                    {node.type === 'pve' &&
-                                      'monitorContainers' in node &&
-                                      node.monitorContainers && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Containers
-                                        </span>
-                                      )}
-                                    {node.type === 'pve' &&
-                                      'monitorStorage' in node &&
-                                      node.monitorStorage && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Storage
-                                        </span>
-                                      )}
-                                    {node.type === 'pve' &&
-                                      'monitorBackups' in node &&
-                                      node.monitorBackups && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Backups
-                                        </span>
-                                      )}
-                                    {node.type === 'pve' &&
-                                      'monitorPhysicalDisks' in node &&
-                                      node.monitorPhysicalDisks && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Physical Disks
-                                        </span>
-                                      )}
-                                    {node.type === 'pve' && node.temperature?.available && (
-                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                                        Temperature
-                                      </span>
-                                    )}
-                                  </div>
-                                  <Show
-                                    when={
-                                      node.type === 'pve' && 'isCluster' in node && node.isCluster
-                                    }
-                                  >
-                                    <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                      <div class="flex items-center gap-2 mb-2">
-                                        <svg
-                                          width="16"
-                                          height="16"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          class="text-gray-600 dark:text-gray-400"
-                                        >
-                                          <circle
-                                            cx="12"
-                                            cy="12"
-                                            r="3"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                            fill="none"
-                                          />
-                                          <circle
-                                            cx="4"
-                                            cy="12"
-                                            r="2"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                            fill="none"
-                                          />
-                                          <circle
-                                            cx="20"
-                                            cy="12"
-                                            r="2"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                            fill="none"
-                                          />
-                                          <line
-                                            x1="7"
-                                            y1="12"
-                                            x2="9"
-                                            y2="12"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                          />
-                                          <line
-                                            x1="15"
-                                            y1="12"
-                                            x2="17"
-                                            y2="12"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                          />
-                                        </svg>
-                                        <span class="font-semibold text-gray-700 dark:text-gray-300">
-                                          {'clusterName' in node ? node.clusterName : 'Unknown'}{' '}
-                                          Cluster
-                                        </span>
-                                        <span class="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full ml-auto">
-                                          {'clusterEndpoints' in node && node.clusterEndpoints
-                                            ? node.clusterEndpoints.length
-                                            : 0}{' '}
-                                          nodes
-                                        </span>
-                                      </div>
-                                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <For
-                                          each={
-                                            'clusterEndpoints' in node ? node.clusterEndpoints : []
-                                          }
-                                        >
-                                          {(endpoint) => (
-                                            <div class="flex items-center gap-2 text-xs bg-white dark:bg-gray-900 px-2 py-1.5 rounded border border-gray-200 dark:border-gray-700">
-                                              <div
-                                                class={`w-2 h-2 rounded-full flex-shrink-0 ${endpoint.Online ? 'bg-green-500' : 'bg-gray-400'}`}
-                                              ></div>
-                                              <span class="font-medium text-gray-700 dark:text-gray-300">
-                                                {endpoint.NodeName}
-                                              </span>
-                                              <span class="text-gray-500 dark:text-gray-500 ml-auto">
-                                                {endpoint.IP}
-                                              </span>
-                                            </div>
-                                          )}
-                                        </For>
-                                      </div>
-                                      <p class="mt-2 text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                                        <svg
-                                          width="14"
-                                          height="14"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          stroke-width="2"
-                                        >
-                                          <path d="M5 12h14M12 5l7 7-7 7" />
-                                        </svg>
-                                        Automatic failover enabled between cluster nodes
-                                      </p>
-                                    </div>
-                                  </Show>
-                                </div>
-                              </div>
-                            </div>
-                            <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => testNodeConnection(node.id)}
-                                class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-                                title="Test connection"
+                      <Show when={initialLoadComplete()}>
+                        <>
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                            <SectionHeader title="Proxmox VE nodes" size="md" class="flex-1" />
+                            <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                              {/* Discovery toggle */}
+                              <div
+                                class="flex items-center gap-2 sm:gap-3"
+                                title="Enable automatic discovery of Proxmox servers on your network"
                               >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
+                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                  Discovery
+                                </span>
+                                <Toggle
+                                  checked={discoveryEnabled()}
+                                  onChange={async (e: ToggleChangeEvent) => {
+                                    if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    const success = await handleDiscoveryEnabledChange(
+                                      e.currentTarget.checked,
+                                    );
+                                    if (!success) {
+                                      e.currentTarget.checked = discoveryEnabled();
+                                    }
+                                  }}
+                                  disabled={
+                                    envOverrides().discoveryEnabled || savingDiscoverySettings()
+                                  }
+                                  containerClass="gap-2"
+                                  label={
+                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                      {discoveryEnabled() ? 'On' : 'Off'}
+                                    </span>
+                                  }
+                                />
+                              </div>
+
+                              <Show when={discoveryEnabled()}>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    notificationStore.info('Refreshing discovery...', 2000);
+                                    try {
+                                      await triggerDiscoveryScan({ quiet: true });
+                                    } finally {
+                                      await loadDiscoveredNodes();
+                                    }
+                                  }}
+                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  title="Refresh discovered servers"
                                 >
-                                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                                </svg>
-                              </button>
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                  >
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+                                  </svg>
+                                  <span class="hidden sm:inline">Refresh</span>
+                                </button>
+                              </Show>
+
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setEditingNode(node);
-                                  setCurrentNodeType(node.type as 'pve' | 'pbs' | 'pmg');
+                                  setEditingNode(null);
+                                  setCurrentNodeType('pve');
+                                  setModalResetKey((prev) => prev + 1);
                                   setShowNodeModal(true);
                                 }}
-                                class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <svg
                                   width="16"
@@ -2530,413 +2288,277 @@ const Settings: Component<SettingsProps> = (props) => {
                                   stroke="currentColor"
                                   stroke-width="2"
                                 >
-                                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                                  <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => requestDeleteNode(node)}
-                                class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                              >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                >
-                                  <polyline points="3 6 5 6 21 6"></polyline>
-                                  <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-                                </svg>
+                                <span class="sm:hidden">Add</span>
+                                <span class="hidden sm:inline">Add PVE Node</span>
                               </button>
                             </div>
                           </div>
-                        </div>
-                      )}
-                    </For>
 
-                    {nodes().filter((n) => n.type === 'pve').length === 0 &&
-                      discoveredNodes().filter((n) => n.type === 'pve').length === 0 && (
-                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                          <p>No PVE nodes configured</p>
-                          <p class="text-sm mt-1">Add a node to start monitoring</p>
-                        </div>
-                      )}
-
-                    {/* Discovered PVE nodes - only show when discovery is enabled */}
-                    <Show when={discoveryEnabled()}>
-                      <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                          <Show when={discoveryScanStatus().scanning}>
-                            <span class="flex items-center gap-2">
-                              <Loader class="h-4 w-4 animate-spin" />
-                              <span>Scanning your network for Proxmox VE servers…</span>
-                            </span>
-                          </Show>
-                          <Show
-                            when={
-                              !discoveryScanStatus().scanning &&
-                              (discoveryScanStatus().lastResultAt ||
-                                discoveryScanStatus().lastScanStartedAt)
-                            }
-                          >
-                            <span>
-                              Last scan{' '}
-                              {formatRelativeTime(
-                                discoveryScanStatus().lastResultAt ??
-                                  discoveryScanStatus().lastScanStartedAt,
-                              )}
-                            </span>
-                          </Show>
-                        </div>
-                        <Show
-                          when={
-                            discoveryScanStatus().errors && discoveryScanStatus().errors!.length
-                          }
-                        >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
-                            <span class="font-medium">Discovery issues:</span>
-                            <ul class="list-disc ml-4 mt-1 space-y-0.5">
-                              <For each={discoveryScanStatus().errors || []}>
-                                {(err) => <li>{err}</li>}
-                              </For>
-                            </ul>
-                            <Show
-                              when={
-                                discoveryMode() === 'auto' &&
-                                (discoveryScanStatus().errors || []).some((err) =>
-                                  /timed out|timeout/i.test(err),
-                                )
-                              }
-                            >
-                              <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
-                                Large networks can time out in auto mode. Switch to a custom subnet
-                                for faster, targeted scans.
-                              </p>
-                            </Show>
-                          </div>
-                        </Show>
-                        <Show
-                          when={
-                            discoveryScanStatus().scanning &&
-                            discoveredNodes().filter((n) => n.type === 'pve').length === 0
-                          }
-                        >
-                          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                            <Loader class="h-4 w-4 animate-spin" />
-                            <span>
-                              Waiting for responses… this can take up to a minute depending on your
-                              network size.
-                            </span>
-                          </div>
-                        </Show>
-                        <For each={discoveredNodes().filter((n) => n.type === 'pve')}>
-                          {(server) => (
-                            <div
-                              class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                              onClick={() => {
-                                // Pre-fill the modal with discovered server info
-                                setEditingNode({
-                                  id: '',
-                                  type: 'pve',
-                                  name: server.hostname || `pve-${server.ip}`,
-                                  host: `https://${server.ip}:${server.port}`,
-                                  user: '',
-                                  tokenName: '',
-                                  tokenValue: '',
-                                  verifySSL: false,
-                                  monitorVMs: true,
-                                  monitorContainers: true,
-                                  monitorStorage: true,
-                                  monitorBackups: true,
-                                  monitorPhysicalDisks: false,
-                                  status: 'pending',
-                                } as NodeConfigWithStatus);
+                          <Show when={pveNodes().length > 0}>
+                            <PveNodesTable
+                              nodes={pveNodes()}
+                              stateNodes={state.nodes ?? []}
+                              onTestConnection={testNodeConnection}
+                              onEdit={(node) => {
+                                setEditingNode(node);
                                 setCurrentNodeType('pve');
                                 setShowNodeModal(true);
                               }}
+                              onDelete={requestDeleteNode}
+                            />
+                          </Show>
+
+                          <Show
+                            when={
+                              pveNodes().length === 0 &&
+                              discoveredNodes().filter((n) => n.type === 'pve').length === 0
+                            }
+                          >
+                            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                              <p>No PVE nodes configured</p>
+                              <p class="text-sm mt-1">Add a node to start monitoring</p>
+                            </div>
+                          </Show>
+                        </>
+                      </Show>
+
+                      {/* Discovered PVE nodes - only show when discovery is enabled */}
+                      <Show when={discoveryEnabled()}>
+                        <div class="space-y-3">
+                          <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            <Show when={discoveryScanStatus().scanning}>
+                              <span class="flex items-center gap-2">
+                                <Loader class="h-4 w-4 animate-spin" />
+                                <span>Scanning your network for Proxmox VE servers…</span>
+                              </span>
+                            </Show>
+                            <Show
+                              when={
+                                !discoveryScanStatus().scanning &&
+                                (discoveryScanStatus().lastResultAt ||
+                                  discoveryScanStatus().lastScanStartedAt)
+                              }
                             >
-                              <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                                <div class="flex-1 min-w-0">
-                                  <div class="flex items-start gap-3">
-                                    <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
-                                    <div class="flex-1 min-w-0">
-                                      <h4 class="font-medium text-gray-700 dark:text-gray-300">
-                                        {server.hostname || `Proxmox VE at ${server.ip}`}
-                                      </h4>
-                                      <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                                        {server.ip}:{server.port}
-                                      </p>
-                                      <div class="flex items-center gap-2 mt-2">
-                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
-                                          Discovered
-                                        </span>
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">
-                                          Click to configure
-                                        </span>
+                              <span>
+                                Last scan{' '}
+                                {formatRelativeTime(
+                                  discoveryScanStatus().lastResultAt ??
+                                    discoveryScanStatus().lastScanStartedAt,
+                                )}
+                              </span>
+                            </Show>
+                          </div>
+                          <Show
+                            when={
+                              discoveryScanStatus().errors && discoveryScanStatus().errors!.length
+                            }
+                          >
+                            <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                              <span class="font-medium">Discovery issues:</span>
+                              <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                                <For each={discoveryScanStatus().errors || []}>
+                                  {(err) => <li>{err}</li>}
+                                </For>
+                              </ul>
+                              <Show
+                                when={
+                                  discoveryMode() === 'auto' &&
+                                  (discoveryScanStatus().errors || []).some((err) =>
+                                    /timed out|timeout/i.test(err),
+                                  )
+                                }
+                              >
+                                <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
+                                  Large networks can time out in auto mode. Switch to a custom subnet
+                                  for faster, targeted scans.
+                                </p>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show
+                            when={
+                              discoveryScanStatus().scanning &&
+                              discoveredNodes().filter((n) => n.type === 'pve').length === 0
+                            }
+                          >
+                            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                              <Loader class="h-4 w-4 animate-spin" />
+                              <span>
+                                Waiting for responses… this can take up to a minute depending on your
+                                network size.
+                              </span>
+                            </div>
+                          </Show>
+                          <For each={discoveredNodes().filter((n) => n.type === 'pve')}>
+                            {(server) => (
+                              <div
+                                class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                                onClick={() => {
+                                  // Pre-fill the modal with discovered server info
+                                  setEditingNode({
+                                    id: '',
+                                    type: 'pve',
+                                    name: server.hostname || `pve-${server.ip}`,
+                                    host: `https://${server.ip}:${server.port}`,
+                                    user: '',
+                                    tokenName: '',
+                                    tokenValue: '',
+                                    verifySSL: false,
+                                    monitorVMs: true,
+                                    monitorContainers: true,
+                                    monitorStorage: true,
+                                    monitorBackups: true,
+                                    monitorPhysicalDisks: false,
+                                    status: 'pending',
+                                  } as NodeConfigWithStatus);
+                                  setCurrentNodeType('pve');
+                                  setShowNodeModal(true);
+                                }}
+                              >
+                                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                  <div class="flex-1 min-w-0">
+                                    <div class="flex items-start gap-3">
+                                      <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+                                      <div class="flex-1 min-w-0">
+                                        <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                          {server.hostname || `Proxmox VE at ${server.ip}`}
+                                        </h4>
+                                        <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                          {server.ip}:{server.port}
+                                        </p>
+                                        <div class="flex items-center gap-2 mt-2">
+                                          <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                            Discovered
+                                          </span>
+                                          <span class="text-xs text-gray-500 dark:text-gray-400">
+                                            Click to configure
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
+                                  <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    class="text-gray-400 mt-1"
+                                  >
+                                    <path
+                                      d="M12 5v14m-7-7h14"
+                                      stroke="currentColor"
+                                      stroke-width="2"
+                                      stroke-linecap="round"
+                                    />
+                                  </svg>
                                 </div>
-                                <svg
-                                  width="20"
-                                  height="20"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  class="text-gray-400 mt-1"
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </div>
+                  </section>
+                </Show>
+
+                {/* PBS Nodes Tab */}
+                <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pbs'}>
+                  <section class="space-y-6">
+                    <header class="space-y-1">
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        Connect Proxmox Backup Server
+                      </h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                        Provide a PBS API token with backup read access. Use quick setup to generate the token and grant the minimum privileges.
+                      </p>
+                    </header>
+                    <div class="space-y-4">
+                      <Show when={!initialLoadComplete()}>
+                        <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                          Loading configuration...
+                        </div>
+                      </Show>
+                      <Show when={initialLoadComplete()}>
+                        <>
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                            <SectionHeader title="Proxmox Backup Server nodes" size="md" class="flex-1" />
+                            <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                              {/* Discovery toggle */}
+                              <div
+                                class="flex items-center gap-2 sm:gap-3"
+                                title="Enable automatic discovery of PBS servers on your network"
+                              >
+                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                  Discovery
+                                </span>
+                                <Toggle
+                                  checked={discoveryEnabled()}
+                                  onChange={async (e: ToggleChangeEvent) => {
+                                    if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    const success = await handleDiscoveryEnabledChange(
+                                      e.currentTarget.checked,
+                                    );
+                                    if (!success) {
+                                      e.currentTarget.checked = discoveryEnabled();
+                                    }
+                                  }}
+                                  disabled={
+                                    envOverrides().discoveryEnabled || savingDiscoverySettings()
+                                  }
+                                  containerClass="gap-2"
+                                  label={
+                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                      {discoveryEnabled() ? 'On' : 'Off'}
+                                    </span>
+                                  }
+                                />
+                              </div>
+
+                              <Show when={discoveryEnabled()}>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    notificationStore.info('Refreshing discovery...', 2000);
+                                    try {
+                                      await triggerDiscoveryScan({ quiet: true });
+                                    } finally {
+                                      await loadDiscoveredNodes();
+                                    }
+                                  }}
+                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  title="Refresh discovered servers"
                                 >
-                                  <path
-                                    d="M12 5v14m-7-7h14"
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
                                     stroke="currentColor"
                                     stroke-width="2"
-                                    stroke-linecap="round"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
-              </div>
-            </AgentStepSection>
-          </Show>
+                                  >
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+                                  </svg>
+                                  <span class="hidden sm:inline">Refresh</span>
+                                </button>
+                              </Show>
 
-            {/* PBS Nodes Tab */}
-            <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pbs'}>
-              <AgentStepSection
-                step="Step 2"
-                title="Connect Proxmox Backup Server"
-                description="Provide a PBS API token with backup read access. Use quick setup to generate the token and grant the minimum privileges."
-              >
-                <div class="space-y-4">
-                <Show when={!initialLoadComplete()}>
-                  <div class="flex items-center justify-center py-8">
-                    <span class="text-gray-500">Loading configuration...</span>
-                  </div>
-                </Show>
-                <Show when={initialLoadComplete()}>
-                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                    <SectionHeader title="Proxmox Backup Server nodes" size="md" class="flex-1" />
-                    <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-                      {/* Discovery toggle */}
-                      <div
-                        class="flex items-center gap-2 sm:gap-3"
-                        title="Enable automatic discovery of PBS servers on your network"
-                      >
-                        <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                          Discovery
-                        </span>
-                        <Toggle
-                          checked={discoveryEnabled()}
-                          onChange={async (e: ToggleChangeEvent) => {
-                            if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
-                              e.preventDefault();
-                              return;
-                            }
-                            const success = await handleDiscoveryEnabledChange(
-                              e.currentTarget.checked,
-                            );
-                            if (!success) {
-                              e.currentTarget.checked = discoveryEnabled();
-                            }
-                          }}
-                          disabled={envOverrides().discoveryEnabled || savingDiscoverySettings()}
-                          containerClass="gap-2"
-                          label={
-                            <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                              {discoveryEnabled() ? 'On' : 'Off'}
-                            </span>
-                          }
-                        />
-                      </div>
-
-                      <Show when={discoveryEnabled()}>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            notificationStore.info('Refreshing discovery...', 2000);
-                            try {
-                              await triggerDiscoveryScan({ quiet: true });
-                            } finally {
-                              await loadDiscoveredNodes();
-                            }
-                          }}
-                          class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
-                          title="Refresh discovered servers"
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
-                          </svg>
-                          <span class="hidden sm:inline">Refresh</span>
-                        </button>
-                      </Show>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingNode(null);
-                          setCurrentNodeType('pbs');
-                          setModalResetKey((prev) => prev + 1);
-                          setShowNodeModal(true);
-                        }}
-                        class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        <span class="sm:hidden">Add</span>
-                        <span class="hidden sm:inline">Add PBS Node</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="grid gap-4">
-                    <For each={nodes().filter((n) => n.type === 'pbs')}>
-                      {(node) => (
-                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
-                          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                            <div class="flex-1 min-w-0">
-                              <div class="flex items-start gap-3">
-                                <div
-                                  class={`flex-shrink-0 w-3 h-3 mt-1.5 rounded-full ${(() => {
-                                    // Find the corresponding PBS instance in the WebSocket state
-                                    const statePBS = state.pbs.find((p) => p.name === node.name);
-                                    // Check if the PBS has an unhealthy connection or is offline
-                                    if (
-                                      statePBS?.connectionHealth === 'unhealthy' ||
-                                      statePBS?.connectionHealth === 'error' ||
-                                      statePBS?.status === 'offline' ||
-                                      statePBS?.status === 'disconnected'
-                                    ) {
-                                      return 'bg-red-500';
-                                    }
-                                    // Check if connection is degraded (not commonly used for PBS but keeping consistent)
-                                    if (statePBS?.connectionHealth === 'degraded') {
-                                      return 'bg-yellow-500';
-                                    }
-                                    // Check if we have a healthy connection
-                                    if (
-                                      statePBS &&
-                                      (statePBS.status === 'online' ||
-                                        statePBS.connectionHealth === 'healthy')
-                                    ) {
-                                      return 'bg-green-500';
-                                    }
-                                    // Fall back to the last known config status if live data hasn't arrived yet
-                                    if (node.status === 'connected') {
-                                      return 'bg-green-500';
-                                    }
-                                    if (
-                                      node.status === 'error' ||
-                                      node.status === 'offline' ||
-                                      node.status === 'disconnected'
-                                    ) {
-                                      return 'bg-red-500';
-                                    }
-                                    if (node.status === 'pending') {
-                                      return 'bg-amber-500 animate-pulse';
-                                    }
-                                    return 'bg-gray-400';
-                                  })()}`}
-                                ></div>
-                                <div class="flex-1 min-w-0">
-                                  <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
-                                    {node.name}
-                                  </h4>
-                                  <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-all">
-                                    {node.host}
-                                  </p>
-                                  <div class="flex flex-wrap gap-1 sm:gap-2 mt-2">
-                                    <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
-                                      {node.user
-                                        ? `User: ${node.user}`
-                                        : `Token: ${node.tokenName}`}
-                                    </span>
-                                    {node.type === 'pbs' &&
-                                      'monitorDatastores' in node &&
-                                      node.monitorDatastores && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Datastores
-                                        </span>
-                                      )}
-                                    {node.type === 'pbs' &&
-                                      'monitorSyncJobs' in node &&
-                                      node.monitorSyncJobs && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Sync Jobs
-                                        </span>
-                                      )}
-                                    {node.type === 'pbs' &&
-                                      'monitorVerifyJobs' in node &&
-                                      node.monitorVerifyJobs && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Verify Jobs
-                                        </span>
-                                      )}
-                                    {node.type === 'pbs' &&
-                                      'monitorPruneJobs' in node &&
-                                      node.monitorPruneJobs && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Prune Jobs
-                                        </span>
-                                      )}
-                                    {node.type === 'pbs' && node.temperature?.available && (
-                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                                        Temperature
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => testNodeConnection(node.id)}
-                                class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-                                title="Test connection"
-                              >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                >
-                                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                                </svg>
-                              </button>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setEditingNode(node);
-                                  setCurrentNodeType(node.type as 'pve' | 'pbs' | 'pmg');
+                                  setEditingNode(null);
+                                  setCurrentNodeType('pbs');
+                                  setModalResetKey((prev) => prev + 1);
                                   setShowNodeModal(true);
                                 }}
-                                class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <svg
                                   width="16"
@@ -2946,141 +2568,415 @@ const Settings: Component<SettingsProps> = (props) => {
                                   stroke="currentColor"
                                   stroke-width="2"
                                 >
-                                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                                  <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => requestDeleteNode(node)}
-                                class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                              >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                >
-                                  <polyline points="3 6 5 6 21 6"></polyline>
-                                  <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-                                </svg>
+                                <span class="sm:hidden">Add</span>
+                                <span class="hidden sm:inline">Add PBS Node</span>
                               </button>
                             </div>
                           </div>
-                        </div>
-                      )}
-                    </For>
 
-                    {nodes().filter((n) => n.type === 'pbs').length === 0 &&
-                      discoveredNodes().filter((n) => n.type === 'pbs').length === 0 && (
-                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                          <p>No PBS nodes configured</p>
-                          <p class="text-sm mt-1">Add a node to start monitoring</p>
-                        </div>
-                      )}
-
-                    {/* Discovered PBS nodes - only show when discovery is enabled */}
-                    <Show when={discoveryEnabled()}>
-                      <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                          <Show when={discoveryScanStatus().scanning}>
-                            <span class="flex items-center gap-2">
-                              <Loader class="h-4 w-4 animate-spin" />
-                              <span>Scanning your network for Proxmox Backup Servers…</span>
-                            </span>
-                          </Show>
-                          <Show
-                            when={
-                              !discoveryScanStatus().scanning &&
-                              (discoveryScanStatus().lastResultAt ||
-                                discoveryScanStatus().lastScanStartedAt)
-                            }
-                          >
-                            <span>
-                              Last scan{' '}
-                              {formatRelativeTime(
-                                discoveryScanStatus().lastResultAt ??
-                                  discoveryScanStatus().lastScanStartedAt,
-                              )}
-                            </span>
-                          </Show>
-                        </div>
-                        <Show
-                          when={
-                            discoveryScanStatus().errors && discoveryScanStatus().errors!.length
-                          }
-                        >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
-                            <span class="font-medium">Discovery issues:</span>
-                            <ul class="list-disc ml-4 mt-1 space-y-0.5">
-                              <For each={discoveryScanStatus().errors || []}>
-                                {(err) => <li>{err}</li>}
-                              </For>
-                            </ul>
-                            <Show
-                              when={
-                                discoveryMode() === 'auto' &&
-                                (discoveryScanStatus().errors || []).some((err) =>
-                                  /timed out|timeout/i.test(err),
-                                )
-                              }
-                            >
-                              <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
-                                Large networks can time out in auto mode. Switch to a custom subnet
-                                for faster, targeted scans.
-                              </p>
-                            </Show>
-                          </div>
-                        </Show>
-                        <Show
-                          when={
-                            discoveryScanStatus().scanning &&
-                            discoveredNodes().filter((n) => n.type === 'pbs').length === 0
-                          }
-                        >
-                          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                            <Loader class="h-4 w-4 animate-spin" />
-                            <span>
-                              Waiting for responses… this can take up to a minute depending on your
-                              network size.
-                            </span>
-                          </div>
-                        </Show>
-                        <For each={discoveredNodes().filter((n) => n.type === 'pbs')}>
-                          {(server) => (
-                            <div
-                              class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                              onClick={() => {
-                                // Pre-fill the modal with discovered server info
-                                setEditingNode({
-                                  id: '',
-                                  type: 'pbs',
-                                  name: server.hostname || `pbs-${server.ip}`,
-                                  host: `https://${server.ip}:${server.port}`,
-                                  user: '',
-                                  tokenName: '',
-                                  tokenValue: '',
-                                  verifySSL: false,
-                                  monitorDatastores: true,
-                                  monitorSyncJobs: true,
-                                  monitorVerifyJobs: true,
-                                  monitorPruneJobs: true,
-                                  monitorGarbageJobs: true,
-                                  status: 'pending',
-                                } as NodeConfigWithStatus);
+                          <Show when={pbsNodes().length > 0}>
+                            <PbsNodesTable
+                              nodes={pbsNodes()}
+                              statePbs={state.pbs ?? []}
+                              onTestConnection={testNodeConnection}
+                              onEdit={(node) => {
+                                setEditingNode(node);
                                 setCurrentNodeType('pbs');
                                 setShowNodeModal(true);
                               }}
+                              onDelete={requestDeleteNode}
+                            />
+                          </Show>
+
+                          <Show
+                            when={
+                              pbsNodes().length === 0 &&
+                              discoveredNodes().filter((n) => n.type === 'pbs').length === 0
+                            }
+                          >
+                            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                              <p>No PBS nodes configured</p>
+                              <p class="text-sm mt-1">Add a node to start monitoring</p>
+                            </div>
+                          </Show>
+                        </>
+                      </Show>
+
+                      {/* Discovered PBS nodes - only show when discovery is enabled */}
+                      <Show when={discoveryEnabled()}>
+                        <div class="space-y-3">
+                          <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            <Show when={discoveryScanStatus().scanning}>
+                              <span class="flex items-center gap-2">
+                                <Loader class="h-4 w-4 animate-spin" />
+                                <span>Scanning your network for Proxmox Backup Servers…</span>
+                              </span>
+                            </Show>
+                            <Show
+                              when={
+                                !discoveryScanStatus().scanning &&
+                                (discoveryScanStatus().lastResultAt ||
+                                  discoveryScanStatus().lastScanStartedAt)
+                              }
                             >
-                              <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                                <div class="flex-1 min-w-0">
-                                  <div class="flex items-start gap-3">
-                                    <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+                              <span>
+                                Last scan{' '}
+                                {formatRelativeTime(
+                                  discoveryScanStatus().lastResultAt ??
+                                    discoveryScanStatus().lastScanStartedAt,
+                                )}
+                              </span>
+                            </Show>
+                          </div>
+                          <Show
+                            when={
+                              discoveryScanStatus().errors && discoveryScanStatus().errors!.length
+                            }
+                          >
+                            <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                              <span class="font-medium">Discovery issues:</span>
+                              <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                                <For each={discoveryScanStatus().errors || []}>
+                                  {(err) => <li>{err}</li>}
+                                </For>
+                              </ul>
+                              <Show
+                                when={
+                                  discoveryMode() === 'auto' &&
+                                  (discoveryScanStatus().errors || []).some((err) =>
+                                    /timed out|timeout/i.test(err),
+                                  )
+                                }
+                              >
+                                <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
+                                  Large networks can time out in auto mode. Switch to a custom subnet
+                                  for faster, targeted scans.
+                                </p>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show
+                            when={
+                              discoveryScanStatus().scanning &&
+                              discoveredNodes().filter((n) => n.type === 'pbs').length === 0
+                            }
+                          >
+                            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                              <Loader class="h-4 w-4 animate-spin" />
+                              <span>
+                                Waiting for responses… this can take up to a minute depending on your
+                                network size.
+                              </span>
+                            </div>
+                          </Show>
+                          <For each={discoveredNodes().filter((n) => n.type === 'pbs')}>
+                            {(server) => (
+                              <div
+                                class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                                onClick={() => {
+                                  // Pre-fill the modal with discovered server info
+                                  setEditingNode({
+                                    id: '',
+                                    type: 'pbs',
+                                    name: server.hostname || `pbs-${server.ip}`,
+                                    host: `https://${server.ip}:${server.port}`,
+                                    user: '',
+                                    tokenName: '',
+                                    tokenValue: '',
+                                    verifySSL: false,
+                                    monitorDatastores: true,
+                                    monitorSyncJobs: true,
+                                    monitorVerifyJobs: true,
+                                    monitorPruneJobs: true,
+                                    monitorGarbageJobs: true,
+                                    status: 'pending',
+                                  } as NodeConfigWithStatus);
+                                  setCurrentNodeType('pbs');
+                                  setShowNodeModal(true);
+                                }}
+                              >
+                                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                  <div class="flex-1 min-w-0">
+                                    <div class="flex items-start gap-3">
+                                      <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+                                      <div class="flex-1 min-w-0">
+                                        <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                          {server.hostname || `Backup Server at ${server.ip}`}
+                                        </h4>
+                                        <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                          {server.ip}:{server.port}
+                                        </p>
+                                        <div class="flex items-center gap-2 mt-2">
+                                          <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                            Discovered
+                                          </span>
+                                          <span class="text-xs text-gray-500 dark:text-gray-400">
+                                            Click to configure
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    class="text-gray-400 mt-1"
+                                  >
+                                    <path
+                                      d="M12 5v14m-7-7h14"
+                                      stroke="currentColor"
+                                      stroke-width="2"
+                                      stroke-linecap="round"
+                                    />
+                                  </svg>
+                                </div>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </div>
+                  </section>
+                </Show>
+{/* PMG Nodes Tab */}
+                <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pmg'}>
+                  <section class="space-y-6">
+                    <header class="space-y-1">
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        Connect Proxmox Mail Gateway
+                      </h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                        Onboard each Mail Gateway with a limited API token so Pulse can read queue depth and quarantine metrics.
+                      </p>
+                    </header>
+                    <div class="space-y-4">
+                      <Show when={!initialLoadComplete()}>
+                        <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                          Loading configuration...
+                        </div>
+                      </Show>
+
+                      <Show when={initialLoadComplete()}>
+                        <>
+                          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                            <SectionHeader title="Proxmox Mail Gateway nodes" size="md" class="flex-1" />
+                            <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                              {/* Discovery toggle */}
+                              <div
+                                class="flex items-center gap-2 sm:gap-3"
+                                title="Enable automatic discovery of PMG servers on your network"
+                              >
+                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                  Discovery
+                                </span>
+                                <Toggle
+                                  checked={discoveryEnabled()}
+                                  onChange={async (e: ToggleChangeEvent) => {
+                                    if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    const success = await handleDiscoveryEnabledChange(
+                                      e.currentTarget.checked,
+                                    );
+                                    if (!success) {
+                                      e.currentTarget.checked = discoveryEnabled();
+                                    }
+                                  }}
+                                  disabled={
+                                    envOverrides().discoveryEnabled || savingDiscoverySettings()
+                                  }
+                                  containerClass="gap-2"
+                                  label={
+                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                      {discoveryEnabled() ? 'On' : 'Off'}
+                                    </span>
+                                  }
+                                />
+                              </div>
+
+                              <Show when={discoveryEnabled()}>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    notificationStore.info('Refreshing discovery...', 2000);
+                                    try {
+                                      await triggerDiscoveryScan({ quiet: true });
+                                    } finally {
+                                      await loadDiscoveredNodes();
+                                    }
+                                  }}
+                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  title="Refresh discovered servers"
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                  </svg>
+                                  <span class="hidden sm:inline">Refresh</span>
+                                </button>
+                              </Show>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingNode(null);
+                                  setCurrentNodeType('pmg');
+                                  setModalResetKey((prev) => prev + 1);
+                                  setShowNodeModal(true);
+                                }}
+                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span class="sm:hidden">Add</span>
+                                <span class="hidden sm:inline">Add PMG Node</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <Show when={pmgNodes().length > 0}>
+                            <PmgNodesTable
+                              nodes={pmgNodes()}
+                              statePmg={state.pmg ?? []}
+                              onTestConnection={testNodeConnection}
+                              onEdit={(node) => {
+                                setEditingNode(nodes().find((n) => n.id === node.id) ?? null);
+                                setCurrentNodeType('pmg');
+                                setModalResetKey((prev) => prev + 1);
+                                setShowNodeModal(true);
+                              }}
+                              onDelete={requestDeleteNode}
+                            />
+                          </Show>
+
+                          <Show when={pmgNodes().length === 0}>
+                            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                              <p>No PMG nodes configured</p>
+                              <p class="text-sm mt-1">Add a node to start monitoring mail flow</p>
+                            </div>
+                          </Show>
+                        </>
+                      </Show>
+
+                      {/* Discovered PMG nodes - only show when discovery is enabled */}
+                      <Show when={discoveryEnabled()}>
+                        <div class="space-y-3">
+                          <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            <Show when={discoveryScanStatus().scanning}>
+                              <span class="flex items-center gap-2">
+                                <Loader class="h-4 w-4 animate-spin" />
+                                Scanning network...
+                              </span>
+                            </Show>
+                            <Show
+                              when={
+                                !discoveryScanStatus().scanning &&
+                                (discoveryScanStatus().lastResultAt ||
+                                  discoveryScanStatus().lastScanStartedAt)
+                              }
+                            >
+                              <span>
+                                Last scan{' '}
+                                {formatRelativeTime(
+                                  discoveryScanStatus().lastResultAt ??
+                                    discoveryScanStatus().lastScanStartedAt,
+                                )}
+                              </span>
+                            </Show>
+                          </div>
+                          <Show
+                            when={
+                              discoveryScanStatus().errors && discoveryScanStatus().errors!.length
+                            }
+                          >
+                            <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                              <span class="font-medium">Discovery issues:</span>
+                              <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                                <For each={discoveryScanStatus().errors || []}>
+                                  {(err) => <li>{err}</li>}
+                                </For>
+                              </ul>
+                              <Show
+                                when={
+                                  discoveryMode() === 'auto' &&
+                                  (discoveryScanStatus().errors || []).some((err) =>
+                                    /timed out|timeout/i.test(err),
+                                  )
+                                }
+                              >
+                                <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
+                                  Large networks can time out in auto mode. Switch to a custom subnet
+                                  for faster, targeted scans.
+                                </p>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show
+                            when={
+                              discoveryScanStatus().scanning &&
+                              discoveredNodes().filter((n) => n.type === 'pmg').length === 0
+                            }
+                          >
+                            <div class="text-center py-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+                              <svg
+                                class="h-8 w-8 mx-auto mb-2 animate-pulse text-purple-500"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                              >
+                                <circle cx="11" cy="11" r="8" />
+                                <path d="m21 21-4.35-4.35" />
+                              </svg>
+                              <p class="text-sm">Scanning for PMG servers...</p>
+                            </div>
+                          </Show>
+                          <For each={discoveredNodes().filter((n) => n.type === 'pmg')}>
+                            {(server) => (
+                              <div
+                                class="bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-900/20 dark:to-transparent border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
+                                onClick={() => {
+                                  setEditingNode(null);
+                                  setCurrentNodeType('pmg');
+                                  setModalResetKey((prev) => prev + 1);
+                                  setShowNodeModal(true);
+                                  setTimeout(() => {
+                                    const hostInput = document.querySelector(
+                                      'input[placeholder*="192.168"]',
+                                    ) as HTMLInputElement;
+                                    if (hostInput) {
+                                      hostInput.value = server.ip;
+                                      hostInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                    }
+                                  }, 50);
+                                }}
+                              >
+                                <div class="flex items-start justify-between">
+                                  <div class="flex items-start gap-3 flex-1 min-w-0">
+                                    <svg
+                                      width="24"
+                                      height="24"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      stroke-width="2"
+                                      class="text-purple-500 flex-shrink-0 mt-0.5"
+                                    >
+                                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                      <polyline points="22,6 12,13 2,6"></polyline>
+                                    </svg>
                                     <div class="flex-1 min-w-0">
-                                      <h4 class="font-medium text-gray-700 dark:text-gray-300">
-                                        {server.hostname || `Backup Server at ${server.ip}`}
+                                      <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                        {server.hostname || `PMG at ${server.ip}`}
                                       </h4>
                                       <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
                                         {server.ip}:{server.port}
@@ -3095,440 +2991,30 @@ const Settings: Component<SettingsProps> = (props) => {
                                       </div>
                                     </div>
                                   </div>
-                                </div>
-                                <svg
-                                  width="20"
-                                  height="20"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  class="text-gray-400 mt-1"
-                                >
-                                  <path
-                                    d="M12 5v14m-7-7h14"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
-              </div>
-            </AgentStepSection>
-          </Show>
-
-            {/* PMG Nodes Tab */}
-            <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pmg'}>
-              <AgentStepSection
-                step="Step 2"
-                title="Connect Proxmox Mail Gateway"
-                description="Onboard each Mail Gateway with a limited API token so Pulse can read queue depth and quarantine metrics."
-              >
-                <div class="space-y-4">
-                <Show when={!initialLoadComplete()}>
-                  <div class="flex items-center justify-center py-8">
-                    <span class="text-gray-500">Loading configuration...</span>
-                  </div>
-                </Show>
-
-                <Show when={initialLoadComplete()}>
-                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                    <SectionHeader title="Proxmox Mail Gateway nodes" size="md" class="flex-1" />
-                    <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-                      {/* Discovery toggle */}
-                      <div
-                        class="flex items-center gap-2 sm:gap-3"
-                        title="Enable automatic discovery of PMG servers on your network"
-                      >
-                        <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                          Discovery
-                        </span>
-                        <Toggle
-                          checked={discoveryEnabled()}
-                          onChange={async (e: ToggleChangeEvent) => {
-                            if (envOverrides().discoveryEnabled || savingDiscoverySettings()) {
-                              e.preventDefault();
-                              return;
-                            }
-                            const success = await handleDiscoveryEnabledChange(
-                              e.currentTarget.checked,
-                            );
-                            if (!success) {
-                              e.currentTarget.checked = discoveryEnabled();
-                            }
-                          }}
-                          disabled={envOverrides().discoveryEnabled || savingDiscoverySettings()}
-                          containerClass="gap-2"
-                          label={
-                            <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                              {discoveryEnabled() ? 'On' : 'Off'}
-                            </span>
-                          }
-                        />
-                      </div>
-
-                      <Show when={discoveryEnabled()}>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            notificationStore.info('Refreshing discovery...', 2000);
-                            try {
-                              await triggerDiscoveryScan({ quiet: true });
-                            } finally {
-                              await loadDiscoveredNodes();
-                            }
-                          }}
-                          class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
-                          title="Refresh discovered servers"
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                          </svg>
-                          <span class="hidden sm:inline">Refresh</span>
-                        </button>
-                      </Show>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingNode(null);
-                          setCurrentNodeType('pmg');
-                          setModalResetKey((prev) => prev + 1);
-                          setShowNodeModal(true);
-                        }}
-                        class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        <span class="sm:hidden">Add</span>
-                        <span class="hidden sm:inline">Add PMG Node</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="grid gap-4">
-                    <For each={nodes().filter((n) => n.type === 'pmg')}>
-                      {(node) => {
-                        const pmgNode = node as NodeConfigWithStatus & {
-                          monitorMailStats?: boolean;
-                          monitorQueues?: boolean;
-                          monitorQuarantine?: boolean;
-                          monitorDomainStats?: boolean;
-                        };
-                        const statePMG = state.pmg.find((p) => p.name === pmgNode.name);
-
-                        const statusClass = (() => {
-                          if (
-                            statePMG?.connectionHealth === 'unhealthy' ||
-                            statePMG?.connectionHealth === 'error' ||
-                            statePMG?.status === 'offline' ||
-                            statePMG?.status === 'disconnected'
-                          ) {
-                            return 'bg-red-500';
-                          }
-                          if (statePMG?.connectionHealth === 'degraded') {
-                            return 'bg-yellow-500';
-                          }
-                          if (statePMG && (statePMG.status === 'online' || statePMG.connectionHealth === 'healthy')) {
-                            return 'bg-green-500';
-                          }
-                          if (pmgNode.status === 'connected') {
-                            return 'bg-green-500';
-                          }
-                          if (
-                            pmgNode.status === 'error' ||
-                            pmgNode.status === 'offline' ||
-                            pmgNode.status === 'disconnected'
-                          ) {
-                            return 'bg-red-500';
-                          }
-                          if (pmgNode.status === 'pending') {
-                            return 'bg-amber-500 animate-pulse';
-                          }
-                          return 'bg-gray-400';
-                        })();
-
-                        return (
-                          <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
-                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                              <div class="flex-1 min-w-0">
-                                <div class="flex items-start gap-3">
-                                  <div class={`flex-shrink-0 w-3 h-3 mt-1.5 rounded-full ${statusClass}`}></div>
-                                  <div class="flex-1 min-w-0">
-                                    <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
-                                      {pmgNode.name}
-                                    </h4>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-all">
-                                      {pmgNode.host}
-                                    </p>
-                                    <div class="flex flex-wrap gap-1 sm:gap-2 mt-2">
-                                      <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
-                                        {pmgNode.user ? `User: ${pmgNode.user}` : `Token: ${pmgNode.tokenName}`}
-                                      </span>
-                                      {pmgNode.monitorMailStats && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Mail stats
-                                        </span>
-                                      )}
-                                      {pmgNode.monitorQueues && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Queues
-                                        </span>
-                                      )}
-                                      {pmgNode.monitorQuarantine && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Quarantine
-                                        </span>
-                                      )}
-                                      {pmgNode.monitorDomainStats && (
-                                        <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                          Domain stats
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
+                                  <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    class="text-gray-400 mt-1"
+                                  >
+                                    <path
+                                      d="M12 5v14m-7-7h14"
+                                      stroke="currentColor"
+                                      stroke-width="2"
+                                      stroke-linecap="round"
+                                    />
+                                  </svg>
                                 </div>
                               </div>
-                              <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => testNodeConnection(pmgNode.id)}
-                                  class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-                                  title="Test connection"
-                                >
-                                  <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                  >
-                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                                  </svg>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingNode(nodes().find((n) => n.id === pmgNode.id) ?? null);
-                                    setCurrentNodeType('pmg');
-                                    setModalResetKey((prev) => prev + 1);
-                                    setShowNodeModal(true);
-                                  }}
-                                  class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-                                  title="Edit node"
-                                >
-                                  <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                  >
-                                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                  </svg>
-                                </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => requestDeleteNode(pmgNode)}
-                                  class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                  title="Delete node"
-                                >
-                                  <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                  >
-                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      }}
-                    </For>
-
-                    {nodes().filter((n) => n.type === 'pmg').length === 0 && (
-                      <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                        <p>No PMG nodes configured</p>
-                        <p class="text-sm mt-1">Add a node to start monitoring mail flow</p>
-                      </div>
-                    )}
-
-                    {/* Discovered PMG nodes - only show when discovery is enabled */}
-                    <Show when={discoveryEnabled()}>
-                      <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                          <Show when={discoveryScanStatus().scanning}>
-                            <span class="flex items-center gap-2">
-                              <Loader class="h-4 w-4 animate-spin" />
-                              Scanning network...
-                            </span>
-                          </Show>
-                          <Show
-                            when={
-                              !discoveryScanStatus().scanning &&
-                              (discoveryScanStatus().lastResultAt ||
-                                discoveryScanStatus().lastScanStartedAt)
-                            }
-                          >
-                            <span>
-                              Last scan{' '}
-                              {formatRelativeTime(
-                                discoveryScanStatus().lastResultAt ??
-                                  discoveryScanStatus().lastScanStartedAt,
-                              )}
-                            </span>
-                          </Show>
+                            )}
+                          </For>
                         </div>
-                        <Show
-                          when={
-                            discoveryScanStatus().errors && discoveryScanStatus().errors!.length
-                          }
-                        >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
-                            <span class="font-medium">Discovery issues:</span>
-                            <ul class="list-disc ml-4 mt-1 space-y-0.5">
-                              <For each={discoveryScanStatus().errors || []}>
-                                {(err) => <li>{err}</li>}
-                              </For>
-                            </ul>
-                            <Show
-                              when={
-                                discoveryMode() === 'auto' &&
-                                (discoveryScanStatus().errors || []).some((err) =>
-                                  /timed out|timeout/i.test(err),
-                                )
-                              }
-                            >
-                              <p class="mt-2 text-[0.7rem] font-medium text-amber-700 dark:text-amber-300">
-                                Large networks can time out in auto mode. Switch to a custom subnet
-                                for faster, targeted scans.
-                              </p>
-                            </Show>
-                          </div>
-                        </Show>
-                        <Show
-                          when={
-                            discoveryScanStatus().scanning &&
-                            discoveredNodes().filter((n) => n.type === 'pmg').length === 0
-                          }
-                        >
-                          <div class="text-center py-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
-                            <svg
-                              class="h-8 w-8 mx-auto mb-2 animate-pulse text-purple-500"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            >
-                              <circle cx="11" cy="11" r="8" />
-                              <path d="m21 21-4.35-4.35" />
-                            </svg>
-                            <p class="text-sm">Scanning for PMG servers...</p>
-                          </div>
-                        </Show>
-                        <For each={discoveredNodes().filter((n) => n.type === 'pmg')}>
-                          {(server) => (
-                            <div
-                              class="bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-900/20 dark:to-transparent border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
-                              onClick={() => {
-                                setEditingNode(null);
-                                setCurrentNodeType('pmg');
-                                setModalResetKey((prev) => prev + 1);
-                                setShowNodeModal(true);
-                                setTimeout(() => {
-                                  const hostInput = document.querySelector(
-                                    'input[placeholder*="192.168"]',
-                                  ) as HTMLInputElement;
-                                  if (hostInput) {
-                                    hostInput.value = server.ip;
-                                    hostInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                  }
-                                }, 50);
-                              }}
-                            >
-                              <div class="flex items-start justify-between">
-                                <div class="flex items-start gap-3 flex-1 min-w-0">
-                                  <svg
-                                    width="24"
-                                    height="24"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    class="text-purple-500 flex-shrink-0 mt-0.5"
-                                  >
-                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                                    <polyline points="22,6 12,13 2,6"></polyline>
-                                  </svg>
-                                  <div class="flex-1 min-w-0">
-                                    <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
-                                      {server.hostname || `PMG at ${server.ip}`}
-                                    </h4>
-                                    <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                                      {server.ip}:{server.port}
-                                    </p>
-                                    <div class="flex items-center gap-2 mt-2">
-                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
-                                        Discovered
-                                      </span>
-                                      <span class="text-xs text-gray-500 dark:text-gray-400">
-                                        Click to configure
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <svg
-                                  width="20"
-                                  height="20"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  class="text-gray-400 mt-1"
-                                >
-                                  <path
-                                    d="M12 5v14m-7-7h14"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
+                      </Show>
+                    </div>
+                  </section>
                 </Show>
-              </div>
-            </AgentStepSection>
-          </Show>
-
-            {/* Docker Tab */}
+{/* Docker Tab */}
             <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'docker'}>
               <AgentStepSection
                 step="Step 2"
@@ -5657,13 +5143,13 @@ const Settings: Component<SettingsProps> = (props) => {
                         <div class="flex justify-between">
                           <span class="text-gray-600 dark:text-gray-400">PVE Nodes:</span>
                           <span class="font-medium">
-                            {nodes().filter((n) => n.type === 'pve').length}
+                            {pveNodes().length}
                           </span>
                         </div>
                         <div class="flex justify-between">
                           <span class="text-gray-600 dark:text-gray-400">PBS Nodes:</span>
                           <span class="font-medium">
-                            {nodes().filter((n) => n.type === 'pbs').length}
+                            {pbsNodes().length}
                           </span>
                         </div>
                         <div class="flex justify-between">
@@ -6614,10 +6100,9 @@ const Settings: Component<SettingsProps> = (props) => {
                 </div>
               </div>
             </Show>
-
           </div>
-          </div>
-        </Card>
+        </div>
+      </Card>
 
       </div>
 
