@@ -663,19 +663,9 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                 {/* Left: Host List - Only show if more than 1 host */}
                 <Show when={sortedHosts().length > 1}>
                 <Card padding="none" class="w-72 flex-shrink-0 overflow-hidden">
-                  <div class="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between gap-2">
-                    <div>
-                      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Docker Hosts</h3>
-                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sortedHosts().length} {sortedHosts().length === 1 ? 'host' : 'hosts'}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/settings/docker')}
-                      class="inline-flex items-center gap-1 rounded border border-blue-200 dark:border-blue-500/40 bg-white dark:bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-600 dark:text-blue-300 shadow-sm hover:bg-blue-50 dark:hover:bg-blue-500/20 transition-colors"
-                    >
-                      <span class="flex items-center justify-center">+</span>
-                      <span>Add Host</span>
-                    </button>
+                  <div class="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Docker Hosts</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sortedHosts().length} {sortedHosts().length === 1 ? 'host' : 'hosts'}</p>
                   </div>
                   <div class="divide-y divide-gray-200 dark:divide-gray-700">
                     <For each={sortedHosts()}>
@@ -1053,29 +1043,6 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
               <span>
                 Deploy the Pulse Docker agent on at least one Docker host to light up this tab. As soon as an agent reports in, container metrics appear automatically.
               </span>
-            }
-            actions={
-              <>
-                <CopyButton
-                  text={`docker run -d \ \
-  --name pulse-docker-agent \ \
-  -e PULSE_URL="http://<pulse-server>:8080" \ \
-  -e PULSE_TOKEN="<your-api-token>" \ \
-  -v /var/run/docker.sock:/var/run/docker.sock \ \
-  ghcr.io/rcourtman/pulse-docker-agent:latest`}
-                  class="w-full sm:w-auto"
-                >
-                  Copy install command
-                </CopyButton>
-                <a
-                  href="https://github.com/rcourtman/Pulse/blob/main/docs/DOCKER_MONITORING.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Read the Docker monitoring guide
-                </a>
-              </>
             }
           />
         </Card>

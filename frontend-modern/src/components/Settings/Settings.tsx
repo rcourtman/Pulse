@@ -14,6 +14,7 @@ import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
 import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTables';
 import { SettingsSectionNav } from './SettingsSectionNav';
+import { HostsSectionNav } from './HostsSectionNav';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -395,6 +396,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const activeTab = () => currentTab();
 
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
+  const [selectedHostPlatform, setSelectedHostPlatform] = createSignal<'linux' | 'macos' | 'windows'>('linux');
 
   const agentPaths: Record<AgentKey, string> = {
     pve: '/settings/pve',
@@ -415,6 +417,10 @@ const Settings: Component<SettingsProps> = (props) => {
     if (target && location.pathname !== target) {
       navigate(target, { scroll: false });
     }
+  };
+
+  const handleSelectHostPlatform = (platform: 'linux' | 'macos' | 'windows') => {
+    setSelectedHostPlatform(platform);
   };
 
   const setActiveTab = (tab: SettingsTab) => {
@@ -2936,7 +2942,12 @@ const Settings: Component<SettingsProps> = (props) => {
 
             {/* Servers Platform Tab */}
             <Show when={activeTab() === 'hosts'}>
-              <HostAgents variant="all" />
+              <HostsSectionNav
+                current={selectedHostPlatform()}
+                onSelect={handleSelectHostPlatform}
+                class="mb-6"
+              />
+              <HostAgents variant={selectedHostPlatform()} />
             </Show>
 
             {/* Podman Tab */}

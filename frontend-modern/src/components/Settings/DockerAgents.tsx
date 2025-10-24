@@ -12,7 +12,6 @@ import { DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
-  const [showInstructions, setShowInstructions] = createSignal(true);
 
   let hasLoggedSecurityStatusError = false;
 
@@ -367,22 +366,6 @@ WantedBy=multi-user.target`;
 
   return (
     <div class="space-y-8">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Setup & Management</h2>
-          <p class="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Deploy agents or manage existing Docker hosts</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowInstructions(!showInstructions())}
-          class="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-        >
-          {showInstructions() ? 'Hide' : 'Show'} deployment instructions
-        </button>
-      </div>
-
-      {/* Deployment Instructions */}
-      <Show when={showInstructions()}>
         <Card class="space-y-5">
           <div>
             <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Add a Docker host</h3>
@@ -390,26 +373,6 @@ WantedBy=multi-user.target`;
               Run this command as root on your Docker host to start monitoring.
             </p>
           </div>
-
-          <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
-            <summary class="flex cursor-pointer items-center justify-between font-semibold text-gray-800 dark:text-gray-100">
-              <span>What exactly gets installed?</span>
-              <svg class="h-4 w-4 text-gray-500 transition-transform group-open:-rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </summary>
-            <div class="mt-3 space-y-2">
-              <ul class="list-disc space-y-1 pl-5 leading-snug">
-                <li>A single self-contained Go binary (<code class="font-mono text-[11px]">pulse-docker-agent</code>, ~7&nbsp;MB)</li>
-                <li>A systemd unit on Linux or Unraid startup script so the agent restarts after reboots</li>
-                <li>No extra dependencies: it talks directly to <code class="font-mono text-[11px]">/var/run/docker.sock</code> and sends metrics over HTTPS</li>
-                <li>Every report includes a control handshake so Pulse can issue constrained commands (e.g. stop) without running arbitrary shell</li>
-              </ul>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Removing a host tears down the service and autostart hook automatically; keeping the binary for quick reinstalls is optional and called out in the dialog.
-              </p>
-            </div>
-          </details>
 
           <Show when={requiresToken()}>
             <div class="space-y-3">
@@ -573,7 +536,6 @@ WantedBy=multi-user.target`;
             </div>
           </details>
         </Card>
-      </Show>
 
       {/* Remove Docker Host Modal */}
       <Show when={showRemoveModal()}>
