@@ -13,6 +13,7 @@ import { OIDCPanel } from './OIDCPanel';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
 import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTables';
+import { SettingsSectionNav } from './SettingsSectionNav';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -393,37 +394,6 @@ const Settings: Component<SettingsProps> = (props) => {
   const activeTab = () => currentTab();
 
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
-
-  const agentGroups: {
-  title: string;
-  description?: string;
-  agents: Array<{ id: AgentKey; label: string; description: string; icon: JSX.Element; disabled?: boolean }>;
-}[] = [
-  {
-    title: 'Proxmox Products',
-    description: 'Select which Proxmox product to configure',
-    agents: [
-      {
-        id: 'pve',
-        label: 'Virtual Environment',
-        description: 'VMs, containers, clusters, and storage',
-        icon: <Server class="w-6 h-6" strokeWidth={2} />,
-      },
-      {
-        id: 'pbs',
-        label: 'Backup Server',
-        description: 'Backup jobs, datastores, and snapshots',
-        icon: <HardDrive class="w-6 h-6" strokeWidth={2} />,
-      },
-      {
-        id: 'pmg',
-        label: 'Mail Gateway',
-        description: 'Mail flow, spam filtering, and queues',
-        icon: <Mail class="w-6 h-6" strokeWidth={2} />,
-      },
-    ],
-  },
-];
 
   const agentPaths: Record<AgentKey, string> = {
     pve: '/settings/pve',
@@ -2129,82 +2099,15 @@ const Settings: Component<SettingsProps> = (props) => {
 
             <div class="p-6 lg:p-8">
                 <Show when={activeTab() === 'proxmox'}>
-                  <SectionHeader
-                    title="Select an integration"
-                    description="Choose the platform you want to configure. The configuration interface will update based on your selection."
+                  <SettingsSectionNav
+                    current={selectedAgent()}
+                    onSelect={handleSelectAgent}
+                    class="mb-6"
                   />
-                  <Card padding="lg" class="space-y-6 mt-6">
-                      <For each={agentGroups}>
-                        {(group) => (
-                          <section class="space-y-3">
-                            <header class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-                              <div>
-                                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                  {group.title}
-                                </h4>
-                                <Show when={group.description}>
-                                  <p class="text-xs text-gray-600 dark:text-gray-400">
-                                    {group.description}
-                                  </p>
-                                </Show>
-                              </div>
-                            </header>
-                            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                              <For each={group.agents}>
-                                {(card) => {
-                                  const isActive = () => selectedAgent() === card.id;
-                                  return (
-                                    <button
-                                      type="button"
-                                      disabled={card.disabled}
-                                      class={`flex flex-col items-start gap-3 rounded-xl border transition-colors p-4 text-left shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
-                                        card.disabled
-                                          ? 'cursor-not-allowed opacity-60 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
-                                          : isActive()
-                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500'
-                                      }`}
-                                      onClick={() => {
-                                        if (card.disabled) return;
-                                        handleSelectAgent(card.id);
-                                      }}
-                                    >
-                                      <div class="flex items-center gap-3">
-                                        <div
-                                          class={`rounded-md p-2 ${
-                                            isActive()
-                                              ? 'bg-blue-600 text-white'
-                                              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
-                                          }`}
-                                        >
-                                          {card.icon}
-                                        </div>
-                                        <div class="flex-1">
-                                          <p class="font-semibold text-gray-900 dark:text-gray-100">
-                                            {card.label}
-                                          </p>
-                                          <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                            {card.description}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </button>
-                                  );
-                                }}
-                              </For>
-                            </div>
-                          </section>
-                        )}
-                      </For>
-                    </Card>
                 </Show>
                 {/* PVE Nodes Tab */}
                 <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pve'}>
                   <div class="space-y-6 mt-6">
-                    <SectionHeader
-                      title="Connect Proxmox VE"
-                      description="Link Pulse to your Proxmox VE cluster with a dedicated API token. Quick setup can scaffold users, roles, and permissions for you."
-                    />
                     <div class="space-y-4">
                       <Show when={!initialLoadComplete()}>
                         <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
@@ -2482,10 +2385,6 @@ const Settings: Component<SettingsProps> = (props) => {
                 {/* PBS Nodes Tab */}
                 <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pbs'}>
                   <div class="space-y-6 mt-6">
-                    <SectionHeader
-                      title="Connect Proxmox Backup Server"
-                      description="Provide a PBS API token with backup read access. Use quick setup to generate the token and grant the minimum privileges."
-                    />
                     <div class="space-y-4">
                       <Show when={!initialLoadComplete()}>
                         <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
@@ -2762,10 +2661,6 @@ const Settings: Component<SettingsProps> = (props) => {
 {/* PMG Nodes Tab */}
                 <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pmg'}>
                   <div class="space-y-6 mt-6">
-                    <SectionHeader
-                      title="Connect Proxmox Mail Gateway"
-                      description="Onboard each Mail Gateway with a limited API token so Pulse can read queue depth and quarantine metrics."
-                    />
                     <div class="space-y-4">
                       <Show when={!initialLoadComplete()}>
                         <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
