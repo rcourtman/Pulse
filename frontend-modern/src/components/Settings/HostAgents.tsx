@@ -11,7 +11,7 @@ import { HOST_AGENT_SCOPE } from '@/constants/apiScopes';
 import type { SecurityStatus } from '@/types/config';
 import type { APITokenRecord } from '@/api/security';
 import { useScopedTokenManager } from '@/hooks/useScopedTokenManager';
-import TerminalSquare from 'lucide-solid/icons/terminal-square';
+import SquareTerminal from 'lucide-solid/icons/square-terminal';
 
 type HostAgentVariant = 'all' | 'linux' | 'macos' | 'windows';
 
@@ -21,12 +21,12 @@ interface HostAgentsProps {
 
 type HostPlatform = 'linux' | 'macos' | 'windows';
 
-const hostPlatformOptions: { id: HostPlatform; label: string; description: string; icon: typeof TerminalSquare | JSX.Element }[] = [
+const hostPlatformOptions: { id: HostPlatform; label: string; description: string; icon: typeof SquareTerminal | JSX.Element }[] = [
   {
     id: 'linux',
     label: 'Linux',
     description: 'Download the static binary and enable the systemd service on Debian, Ubuntu, RHEL, Arch, and more.',
-    icon: TerminalSquare,
+    icon: SquareTerminal,
   },
   {
     id: 'macos',
