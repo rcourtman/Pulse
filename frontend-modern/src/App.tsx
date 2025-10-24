@@ -999,18 +999,6 @@ function AppLayout(props: {
                 >
                   {platform.icon}
                   <span>{platform.label}</span>
-                  <Show when={!platform.live}>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        navigate(platform.settingsRoute);
-                      }}
-                      class="ml-1 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-600 hover:text-blue-500 focus-visible:outline-none focus-visible:ring-0"
-                    >
-                      Add host
-                    </button>
-                  </Show>
                 </div>
               );
             }}

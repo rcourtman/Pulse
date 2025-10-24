@@ -404,9 +404,33 @@ elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
         security delete-generic-password -s "pulse-host-agent" -a "$USER" 2>/dev/null || true
 
         # Add token to Keychain
-        if security add-generic-password -s "pulse-host-agent" -a "$USER" -w "$PULSE_TOKEN" -U 2>/dev/null; then
-            log_success "Token stored securely in macOS Keychain"
-            USE_KEYCHAIN=true
+        KEYCHAIN_SERVICE="pulse-host-agent"
+        KEYCHAIN_ACCOUNT="$USER"
+
+        KEYCHAIN_APPS=(
+            "/usr/local/bin/pulse-host-agent"
+            "/usr/local/bin/pulse-host-agent-wrapper.sh"
+            "/usr/bin/security"
+        )
+        KEYCHAIN_ARGS=()
+        for app in "${KEYCHAIN_APPS[@]}"; do
+            KEYCHAIN_ARGS+=(-T "$app")
+        done
+
+        if security add-generic-password \
+            -s "$KEYCHAIN_SERVICE" \
+            -a "$KEYCHAIN_ACCOUNT" \
+            -w "$PULSE_TOKEN" \
+            -U \
+            "${KEYCHAIN_ARGS[@]}" 2>/dev/null; then
+            if security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w >/dev/null 2>&1; then
+                log_success "Token stored securely in macOS Keychain"
+                USE_KEYCHAIN=true
+            else
+                log_warn "Token saved but Keychain denied non-interactive read access"
+                log_info "Will fall back to embedding token in the launchd plist"
+                USE_KEYCHAIN=false
+            fi
         else
             log_warn "Failed to store token in Keychain, will use plist instead"
             log_info "You may need to grant Keychain access permissions"
@@ -419,14 +443,21 @@ elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
     # Create wrapper script if using Keychain
     if [[ "$USE_KEYCHAIN" == true ]]; then
         WRAPPER_SCRIPT="/usr/local/bin/pulse-host-agent-wrapper.sh"
+        TMP_WRAPPER=$(mktemp)
 
-        cat > "$WRAPPER_SCRIPT" <<'WRAPPER_EOF'
+        cat > "$TMP_WRAPPER" <<'WRAPPER_EOF'
 #!/bin/bash
 # Pulse Host Agent Wrapper - Reads token from Keychain
-set -e
+set -u
+
+LOG_FILE="$HOME/Library/Logs/Pulse/host-agent-wrapper.log"
+mkdir -p "$(dirname "$LOG_FILE")"
 
 # Read token from Keychain
-PULSE_TOKEN=$(security find-generic-password -s "pulse-host-agent" -w 2>/dev/null || echo "")
+if ! PULSE_TOKEN=$(security find-generic-password -s "pulse-host-agent" -a "$USER" -w 2>/dev/null); then
+    echo "$(date -Is) pulse-host-agent-wrapper: failed to read token from Keychain" >>"$LOG_FILE"
+    PULSE_TOKEN=""
+fi
 
 # Export for agent to use
 export PULSE_TOKEN
@@ -435,7 +466,22 @@ export PULSE_TOKEN
 exec /usr/local/bin/pulse-host-agent "$@"
 WRAPPER_EOF
 
-        chmod +x "$WRAPPER_SCRIPT"
+        if ! sudo mv "$TMP_WRAPPER" "$WRAPPER_SCRIPT"; then
+            if ! mv "$TMP_WRAPPER" "$WRAPPER_SCRIPT" 2>/dev/null; then
+                rm -f "$TMP_WRAPPER"
+                log_error "Failed to write Keychain wrapper to $WRAPPER_SCRIPT. Try re-running with sudo."
+                exit 1
+            fi
+        fi
+
+        if ! sudo chmod 755 "$WRAPPER_SCRIPT" 2>/dev/null && ! chmod 755 "$WRAPPER_SCRIPT" 2>/dev/null; then
+            log_error "Failed to set execute permissions on $WRAPPER_SCRIPT."
+            exit 1
+        fi
+
+        if command -v chown &>/dev/null; then
+            sudo chown root:wheel "$WRAPPER_SCRIPT" 2>/dev/null || sudo chown root:root "$WRAPPER_SCRIPT" 2>/dev/null || true
+        fi
         log_success "Created Keychain wrapper script"
 
         # Create plist using wrapper (token not in plist!)
@@ -502,8 +548,23 @@ EOF
     # Set restrictive permissions on plist
     chmod 600 "$LAUNCHD_PLIST"
 
-    launchctl load "$LAUNCHD_PLIST"
-    log_success "Launchd service enabled and started"
+    LAUNCH_TARGET="gui/$(id -u)"
+
+    # Attempt to unload any existing service instance
+    if launchctl bootout "$LAUNCH_TARGET" "$LAUNCHD_PLIST" 2>/dev/null; then
+        log_info "Replaced existing launchd service definition"
+    fi
+
+    if launchctl bootstrap "$LAUNCH_TARGET" "$LAUNCHD_PLIST"; then
+        launchctl enable "$LAUNCH_TARGET/com.pulse.host-agent" 2>/dev/null || true
+        launchctl kickstart -k "$LAUNCH_TARGET/com.pulse.host-agent" 2>/dev/null || true
+        log_success "Launchd service enabled and started"
+    else
+        log_error "Failed to load launchd service. Try running:"
+        echo "  launchctl bootstrap $LAUNCH_TARGET $LAUNCHD_PLIST"
+        echo "  launchctl kickstart -k $LAUNCH_TARGET/com.pulse.host-agent"
+        exit 1
+    fi
 else
     log_warn "Automatic service setup not available for this platform"
     log_info "To run the agent manually:"

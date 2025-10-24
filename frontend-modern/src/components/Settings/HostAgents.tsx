@@ -1,54 +1,20 @@
-import { type Component, For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { type Component, For, Show, createEffect, createMemo, createSignal, on, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useWebSocket } from '@/App';
 import type { Host } from '@/types/api';
 import { Card } from '@/components/shared/Card';
-import CopyButton from '@/components/shared/CopyButton';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
-import { showTokenReveal } from '@/stores/tokenReveal';
 import { HOST_AGENT_SCOPE } from '@/constants/apiScopes';
 import type { SecurityStatus } from '@/types/config';
 import type { APITokenRecord } from '@/api/security';
-import { useScopedTokenManager } from '@/hooks/useScopedTokenManager';
-import SquareTerminal from 'lucide-solid/icons/square-terminal';
+import { SecurityAPI } from '@/api/security';
 
-type HostAgentVariant = 'all' | 'linux' | 'macos' | 'windows';
+type HostAgentVariant = 'linux' | 'macos' | 'windows';
 
 interface HostAgentsProps {
   variant?: HostAgentVariant;
 }
-
-type HostPlatform = 'linux' | 'macos' | 'windows';
-
-const hostPlatformOptions: { id: HostPlatform; label: string; description: string; icon: typeof SquareTerminal | JSX.Element }[] = [
-  {
-    id: 'linux',
-    label: 'Linux',
-    description: 'Download the static binary and enable the systemd service on Debian, Ubuntu, RHEL, Arch, and more.',
-    icon: SquareTerminal,
-  },
-  {
-    id: 'macos',
-    label: 'macOS',
-    description: 'Use the universal binary with launchd to keep desktops and hosts reporting in the background.',
-    icon: (
-      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M14.94 5.19A4.38 4.38 0 0 0 16 2a4.44 4.44 0 0 0-3 1.52 4.17 4.17 0 0 0-1 3.09 3.69 3.69 0 0 0 2.94-1.42zm2.52 7.44a4.51 4.51 0 0 1 2.16-3.81 4.66 4.66 0 0 0-3.66-2c-1.56-.16-3 .91-3.83.91s-2-.89-3.3-.87A4.92 4.92 0 0 0 4.69 9.39C2.93 12.45 4.24 17 6 19.47c.8 1.21 1.8 2.58 3.12 2.53s1.75-.82 3.28-.82 2 .82 3.3.79 2.22-1.24 3.06-2.45a11 11 0 0 0 1.38-2.85 4.41 4.41 0 0 1-2.68-4.08z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'windows',
-    label: 'Windows',
-    description: 'Native Windows service with automatic startup. PowerShell script handles binary download and service installation.',
-    icon: (
-      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
-      </svg>
-    ),
-  },
-];
 
 const TOKEN_PLACEHOLDER = '<api-token>';
 const pulseUrl = () => {
@@ -57,23 +23,14 @@ const pulseUrl = () => {
   return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
 };
 
+const buildDefaultTokenName = () => {
+  const now = new Date();
+  const iso = now.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+  const stamp = iso.replace('T', ' ').replace(/:/g, '-');
+  return `Host agent ${stamp}`;
+};
+
 const commandsByVariant: Record<HostAgentVariant, { title: string; description: string; snippets: { label: string; command: string; note?: string | JSX.Element }[] }> = {
-  all: {
-    title: 'Installation',
-    description:
-      'Run the installer script to automatically download and configure the host agent on any supported platform.',
-    snippets: [
-      {
-        label: 'Install host agent',
-        command: `curl -fsSL ${pulseUrl()}/install-host-agent.sh | bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
-        note: (
-          <span>
-            The script downloads the agent binary from Pulse and sets up systemd (Linux) or launchd (macOS) for automatic startup.
-          </span>
-        ),
-      },
-    ],
-  },
   linux: {
     title: 'Install on Linux',
     description:
@@ -133,49 +90,51 @@ const commandsByVariant: Record<HostAgentVariant, { title: string; description: 
   },
 };
 
-const platformFilters: Record<HostAgentVariant, string[] | null> = {
-  all: null,
+const platformFilters: Record<HostAgentVariant, string[]> = {
   linux: ['linux'],
   macos: ['macos'],
   windows: ['windows'],
 };
 
 export const HostAgents: Component<HostAgentsProps> = (props) => {
-  const variant: HostAgentVariant = props.variant ?? 'all';
+  const variant = () => props.variant ?? 'linux';
   const { state } = useWebSocket();
 
   let hasLoggedSecurityStatusError = false;
 
-  const [showInstructions, setShowInstructions] = createSignal(true);
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
-  const [showGenerateTokenModal, setShowGenerateTokenModal] = createSignal(false);
-  const [newTokenName, setNewTokenName] = createSignal('');
-  const [generateError, setGenerateError] = createSignal<string | null>(null);
   const [latestRecord, setLatestRecord] = createSignal<APITokenRecord | null>(null);
-  const [stepTwoComplete, setStepTwoComplete] = createSignal(false);
-
-  const {
-    token: apiToken,
-    setToken: setApiToken,
-    isGeneratingToken,
-    generateToken,
-  } = useScopedTokenManager({
-    scope: HOST_AGENT_SCOPE,
-    storageKey: 'hostAgentToken',
-    legacyKeys: ['apiToken'],
-  });
+  const [tokenName, setTokenName] = createSignal('');
+  const [confirmedNoToken, setConfirmedNoToken] = createSignal(false);
+  const [currentToken, setCurrentToken] = createSignal<string | null>(null);
+  const [isGeneratingToken, setIsGeneratingToken] = createSignal(false);
 
   createEffect(() => {
-    if (!apiToken()) {
-      setStepTwoComplete(false);
+    if (requiresToken()) {
+      setConfirmedNoToken(false);
+    } else {
+      setCurrentToken(null);
+      setLatestRecord(null);
     }
   });
 
-  const hosts = createMemo(() => {
+
+  createEffect(
+    on(
+      variant,
+      () => {
+        setLatestRecord(null);
+        setCurrentToken(null);
+        setConfirmedNoToken(false);
+        setTokenName('');
+      },
+      { defer: true },
+    ),
+  );
+
+  const allHosts = createMemo(() => {
     const list = state.hosts ?? [];
-    const filters = platformFilters[variant];
-    const filtered = filters ? list.filter((host) => filters.includes((host.platform ?? '').toLowerCase())) : list;
-    return [...filtered].sort((a, b) => (a.hostname || '').localeCompare(b.hostname || ''));
+    return [...list].sort((a, b) => (a.hostname || '').localeCompare(b.hostname || ''));
   });
 
   const renderTags = (host: Host) => {
@@ -184,15 +143,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
     return tags.join(', ');
   };
 
-  const [selectedPlatform, setSelectedPlatform] = createSignal<HostPlatform>('linux');
-
-  const effectiveVariant = createMemo<HostAgentVariant>(() =>
-    variant === 'all' ? selectedPlatform() : variant,
-  );
-
-  const installMeta = createMemo(() => commandsByVariant[effectiveVariant()]);
-  const tokenStepLabel = () => `${variant === 'all' ? 'Step 2' : 'Step 1'} · Choose an API token`;
-  const commandStepLabel = () => `${variant === 'all' ? 'Step 3' : 'Step 2'} · Installation commands`;
+  const installMeta = createMemo(() => commandsByVariant[variant()]);
 
   onMount(() => {
     if (typeof window === 'undefined') {
@@ -225,52 +176,38 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
     return true;
   };
 
-  const tokenReady = () => !requiresToken() || Boolean(apiToken());
-  const commandsUnlocked = () => tokenReady() && stepTwoComplete();
+  const hasToken = () => Boolean(currentToken());
+  const commandsUnlocked = () => (requiresToken() ? hasToken() : hasToken() || confirmedNoToken());
 
-  const acknowledgeTokenUse = () => {
-    if (!requiresToken()) {
-      setStepTwoComplete(true);
+  const acknowledgeNoToken = () => {
+    if (requiresToken()) {
+      notificationStore.info('Generate or select a token before continuing.', 4000);
       return;
     }
-    if (apiToken()) {
-      setStepTwoComplete(true);
-      notificationStore.success('Token ready to embed in the install commands.', 3500);
-    } else {
-      notificationStore.info('Generate or select a token before continuing.', 4000);
-    }
+    setCurrentToken(null);
+    setLatestRecord(null);
+    setConfirmedNoToken(true);
+    notificationStore.success('Confirmed install commands without an API token.', 3500);
   };
 
-  const openGenerateTokenModal = () => {
-    setGenerateError(null);
-    const defaultName = `Host agent ${new Date().toISOString().slice(0, 10)}`;
-    setNewTokenName(defaultName);
-    setShowGenerateTokenModal(true);
-    setStepTwoComplete(false);
-  };
-
-  const handleCreateToken = async () => {
+  const handleGenerateToken = async () => {
     if (isGeneratingToken()) return;
 
-    setGenerateError(null);
+    setIsGeneratingToken(true);
     try {
-      const desiredName = newTokenName().trim() || `Host agent ${new Date().toISOString().slice(0, 10)}`;
-      const { token, record } = await generateToken(desiredName);
+      const desiredName = tokenName().trim() || buildDefaultTokenName();
+      const { token, record } = await SecurityAPI.createToken(desiredName, [HOST_AGENT_SCOPE]);
 
-      setShowGenerateTokenModal(false);
-      setNewTokenName('');
+      setCurrentToken(token);
       setLatestRecord(record);
-      showTokenReveal({
-        token,
-        record,
-        source: 'host-agent',
-        note: `Copy this token into the host agent install command. Scope: ${HOST_AGENT_SCOPE}.`,
-      });
-      notificationStore.success('Created host agent API token with reporting scope.', 6000);
+      setTokenName('');
+      setConfirmedNoToken(false);
+      notificationStore.success('Token generated and inserted into the command below.', 4000);
     } catch (err) {
       console.error('Failed to generate host agent token', err);
-      setGenerateError('Failed to generate host agent token. Confirm you are signed in as an administrator.');
-      notificationStore.error('Failed to generate API token', 6000);
+      notificationStore.error('Failed to generate host agent token. Confirm you are signed in as an administrator.', 6000);
+    } finally {
+      setIsGeneratingToken(false);
     }
   };
 
@@ -303,152 +240,67 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
   };
 
   const resolvedToken = () => {
-    if (!requiresToken()) {
-      return 'disabled';
+    if (requiresToken()) {
+      return currentToken() || TOKEN_PLACEHOLDER;
     }
-    return apiToken() || TOKEN_PLACEHOLDER;
+    return currentToken() || 'disabled';
   };
 
   return (
     <div class="space-y-6">
       <Card padding="lg" class="space-y-5">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">{installMeta().title}</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">{installMeta().description}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowInstructions(!showInstructions())}
-            class="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-          >
-            {showInstructions() ? 'Hide' : 'Show'} instructions
-          </button>
+        <div class="space-y-1">
+          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Add a host agent</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">Run this command on your host to start monitoring.</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{installMeta().description}</p>
         </div>
 
-        <Show when={showInstructions()}>
-          <div class="space-y-5">
-            <Show when={variant === 'all'}>
-              <div class="space-y-4">
-                <div class="space-y-1">
-                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Step 1 · Choose the operating system</p>
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Pick the platform you are onboarding. The install commands adapt automatically.
-                  </p>
-                </div>
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <For each={hostPlatformOptions}>
-                    {(option) => {
-                      const isActive = () => selectedPlatform() === option.id;
-                      const Icon = option.icon;
-                      return (
-                        <button
-                          type="button"
-                          class={`flex flex-col items-start gap-3 rounded-lg border transition-colors p-4 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900 ${
-                            isActive()
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                              : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300 dark:hover:border-blue-500'
-                          }`}
-                          onClick={() => {
-                            setSelectedPlatform(option.id);
-                            setGenerateError(null);
-                            setLatestRecord(null);
-                            setApiToken(null);
-                            setStepTwoComplete(false);
-                          }}
-                        >
-                          <div class="flex items-center gap-3">
-                            <div
-                              class={`rounded-md p-2 ${
-                                isActive()
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
-                              }`}
-                            >
-                              {typeof Icon === 'function' ? (
-                                <Icon size={20} stroke-width={2} />
-                              ) : (
-                                Icon
-                              )}
-                            </div>
-                            <div class="flex-1">
-                              <p class="font-semibold text-gray-900 dark:text-gray-100">{option.label}</p>
-                            </div>
-                          </div>
-                          <p class="text-xs text-gray-600 dark:text-gray-400">{option.description}</p>
-                        </button>
-                      );
-                    }}
-                  </For>
-                </div>
+        <div class="space-y-5">
+          <Show when={requiresToken()}>
+            <div class="space-y-3">
+              <div class="space-y-1">
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate API token</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                  Create a fresh token scoped to <code>{HOST_AGENT_SCOPE}</code>.
+                </p>
               </div>
-            </Show>
 
-            <Show when={requiresToken()}>
-              <div class="space-y-4">
-                <div class="space-y-1">
-                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{tokenStepLabel()}</p>
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Generate a scoped token for this host. Tokens minted here grant the <code>{HOST_AGENT_SCOPE}</code> permission only.
-                  </p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Need additional scopes? Visit <a href="/settings/security" class="text-blue-600 dark:text-blue-300 underline hover:no-underline font-medium">Security → API tokens</a> to create a bespoke credential.
-                  </p>
-                </div>
-
-                <Show when={generateError()}>
-                  <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
-                    {generateError()}
-                  </div>
-                </Show>
-
-                <Show when={latestRecord()}>
-                  <div class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>
-                      Token <strong>{latestRecord()?.name}</strong> created ({latestRecord()?.prefix}…{latestRecord()?.suffix}). Copy the full value from the pop-up and store it securely—this is the only time it is shown.
-                    </span>
-                  </div>
-                </Show>
-
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  value={tokenName()}
+                  onInput={(event) => setTokenName(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !isGeneratingToken()) {
+                      handleGenerateToken();
+                    }
+                  }}
+                  placeholder="Token name (optional)"
+                  class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
+                />
                 <button
                   type="button"
-                  onClick={openGenerateTokenModal}
+                  onClick={handleGenerateToken}
                   disabled={isGeneratingToken()}
                   class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isGeneratingToken() ? 'Generating…' : 'Generate token'}
+                  {isGeneratingToken() ? 'Generating…' : hasToken() ? 'Generate another' : 'Generate token'}
                 </button>
-
-                <Show when={apiToken()}>
-                  <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <div class={`flex-1 rounded-lg border px-4 py-2 text-xs ${
-                      stepTwoComplete()
-                        ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200'
-                        : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
-                    }`}>
-                      {stepTwoComplete()
-                        ? 'Token inserted. Proceed to the install commands below.'
-                        : 'Stored token detected. Press confirm to insert it into each command.'}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={acknowledgeTokenUse}
-                      disabled={stepTwoComplete()}
-                      class={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                        stepTwoComplete()
-                          ? 'bg-green-600 text-white cursor-default'
-                          : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
-                      }`}
-                    >
-                      {stepTwoComplete() ? 'Token inserted' : 'Insert token into commands'}
-                    </button>
-                  </div>
-                </Show>
               </div>
-            </Show>
+
+              <Show when={latestRecord()}>
+                <div class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>
+                    Token <strong>{latestRecord()?.name}</strong> created ({latestRecord()?.prefix}…{latestRecord()?.suffix}). Commands below now include this credential.
+                  </span>
+                </div>
+              </Show>
+
+            </div>
+          </Show>
 
             <Show when={!requiresToken()}>
               <div class="space-y-3">
@@ -457,147 +309,84 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                 </div>
                 <button
                   type="button"
-                  onClick={acknowledgeTokenUse}
-                  disabled={stepTwoComplete()}
+                  onClick={acknowledgeNoToken}
+                  disabled={confirmedNoToken()}
                   class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                    stepTwoComplete()
+                    confirmedNoToken()
                       ? 'bg-green-600 text-white cursor-default'
                       : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
                   }`}
                 >
-                  {stepTwoComplete() ? 'No token confirmed' : 'Confirm without token'}
+                  {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}
                 </button>
               </div>
             </Show>
 
             <Show when={commandsUnlocked()}>
               <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                  <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{commandStepLabel()}</h4>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const firstSnippet = installMeta().snippets[0];
-                      if (!firstSnippet) return;
-                      const command = firstSnippet.command.replace(TOKEN_PLACEHOLDER, resolvedToken());
-                      const success = await copyToClipboard(command);
-                      if (typeof window !== 'undefined' && window.showToast) {
-                        window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
-                      }
-                    }}
-                    class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    Copy first command
-                  </button>
-                </div>
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Install command</h4>
                 <div class="space-y-3">
                   <For each={installMeta().snippets}>
-                    {(snippet) => (
-                      <div class="space-y-2">
-                        <div class="flex items-center justify-between gap-3">
-                          <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{snippet.label}</h5>
-                          <CopyButton
-                            text={snippet.command.replace(
-                              TOKEN_PLACEHOLDER,
-                              resolvedToken(),
-                            )}
-                          >
-                            Copy command
-                          </CopyButton>
+                    {(snippet) => {
+                      const copyCommand = () =>
+                        snippet.command.replace(
+                          TOKEN_PLACEHOLDER,
+                          resolvedToken(),
+                        );
+
+                      return (
+                        <div class="space-y-2">
+                          <div class="flex items-center justify-between gap-3">
+                            <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{snippet.label}</h5>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const success = await copyToClipboard(copyCommand());
+                                if (typeof window !== 'undefined' && window.showToast) {
+                                  window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                                }
+                              }}
+                              class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                            >
+                              Copy command
+                            </button>
+                          </div>
+                          <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
+                            <code>{copyCommand()}</code>
+                          </pre>
+                          <Show when={snippet.note}>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{snippet.note}</p>
+                          </Show>
                         </div>
-                        <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
-                          <code>
-                            {snippet.command.replace(
-                              TOKEN_PLACEHOLDER,
-                              resolvedToken(),
-                            )}
-                          </code>
-                        </pre>
-                        <Show when={snippet.note}>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">{snippet.note}</p>
-                        </Show>
-                      </div>
-                    )}
+                      );
+                    }}
                   </For>
                 </div>
               </div>
             </Show>
 
-            <Show when={requiresToken() && (!apiToken() || !stepTwoComplete())}>
+            <Show when={requiresToken() && !hasToken()}>
               <p class="text-xs text-gray-500 dark:text-gray-400">
-                Generate a new token or confirm the stored one to unlock the install commands.
+                Generate a new token to unlock the install commands.
               </p>
             </Show>
-            <Show when={!requiresToken() && !stepTwoComplete()}>
+            <Show when={!requiresToken() && !confirmedNoToken() && !hasToken()}>
               <p class="text-xs text-gray-500 dark:text-gray-400">Confirm the no-token setup to continue.</p>
             </Show>
-          </div>
-        </Show>
-      </Card>
-
-      <Show when={showGenerateTokenModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
-            <div class="space-y-2">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Generate a new host agent token</h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                Pulse will create a scoped token for this host and automatically insert it into the install commands. You can manage or revoke tokens anytime from Security settings.
-              </p>
-            </div>
-            <div class="mt-4 space-y-2">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="host-agent-new-token-name">
-                Token name
-              </label>
-              <input
-                id="host-agent-new-token-name"
-                type="text"
-                value={newTokenName()}
-                onInput={(event) => setNewTokenName(event.currentTarget.value)}
-                class="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
-                placeholder="Host agent token"
-              />
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Friendly names make it easier to audit tokens later (e.g. <code class="font-mono text-xs">host-lab-01</code>).
-              </p>
-            </div>
-            <div class="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowGenerateTokenModal(false);
-                  setNewTokenName('');
-                  setGenerateError(null);
-                }}
-                class="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateToken}
-                disabled={isGeneratingToken()}
-                class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
-              >
-                {isGeneratingToken() ? 'Generating…' : 'Generate token'}
-              </button>
-            </div>
-          </div>
         </div>
-      </Show>
+      </Card>
 
       <Card padding="lg" class="space-y-5">
         <div class="flex items-center justify-between">
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Reporting hosts</h3>
-          <span class="text-sm text-gray-500 dark:text-gray-400">{hosts().length} connected</span>
+          <span class="text-sm text-gray-500 dark:text-gray-400">{allHosts().length} connected</span>
         </div>
 
         <Show
-          when={hosts().length > 0}
+          when={allHosts().length > 0}
           fallback={
             <p class="text-sm text-gray-600 dark:text-gray-400">
-              {variant === 'windows'
-                ? 'No Windows hosts have reported yet. Run the PowerShell installation script above as Administrator to deploy the agent.'
-                : 'No host agents are reporting yet. Deploy the binary using the commands above to see hosts listed here.'}
+              No host agents are reporting yet. Deploy the agent using the commands above to see hosts listed here.
             </p>
           }
         >
@@ -615,7 +404,7 @@ export const HostAgents: Component<HostAgentsProps> = (props) => {
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-                <For each={hosts()}>
+                <For each={allHosts()}>
                   {(host) => {
                     const [isDeleting, setIsDeleting] = createSignal(false);
 
