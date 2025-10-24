@@ -227,9 +227,9 @@ interface DiscoveryScanStatus {
 }
 
 type SettingsTab =
-  | 'agent-hub'
+  | 'proxmox'
   | 'docker'
-  | 'servers'
+  | 'hosts'
   | 'podman'
   | 'kubernetes'
   | 'system-general'
@@ -246,7 +246,7 @@ type SettingsTab =
 type AgentKey = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host' | 'podman' | 'kubernetes';
 
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
-  'agent-hub': {
+  proxmox: {
     title: 'Proxmox',
     description: 'Monitor your Proxmox Virtual Environment, Backup Server, and Mail Gateway infrastructure.',
   },
@@ -254,7 +254,7 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'Docker',
     description: 'Monitor Docker hosts, containers, images, and volumes across your infrastructure.',
   },
-  servers: {
+  hosts: {
     title: 'Hosts',
     description: 'Monitor Linux, macOS, and Windows machines—servers, desktops, and laptops.',
   },
@@ -338,9 +338,10 @@ const Settings: Component<SettingsProps> = (props) => {
   const location = useLocation();
 
   const deriveTabFromPath = (path: string): SettingsTab => {
-    if (path.includes('/settings/agent-hub')) return 'agent-hub';
+    if (path.includes('/settings/proxmox')) return 'proxmox';
+    if (path.includes('/settings/agent-hub')) return 'proxmox';
     if (path.includes('/settings/docker')) return 'docker';
-    if (path.includes('/settings/hosts') || path.includes('/settings/host-agents') || path.includes('/settings/servers')) return 'servers';
+    if (path.includes('/settings/hosts') || path.includes('/settings/host-agents') || path.includes('/settings/servers')) return 'hosts';
     if (path.includes('/settings/podman')) return 'podman';
     if (path.includes('/settings/kubernetes')) return 'kubernetes';
     if (path.includes('/settings/system-general')) return 'system-general';
@@ -355,7 +356,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
     if (path.includes('/settings/updates')) return 'updates';
-    // Legacy platform paths map to the agent hub
+    // Legacy platform paths map to the Proxmox tab
     if (
       path.includes('/settings/pve') ||
       path.includes('/settings/pbs') ||
@@ -365,9 +366,9 @@ const Settings: Component<SettingsProps> = (props) => {
       path.includes('/settings/windowsServers') ||
       path.includes('/settings/macServers')
     ) {
-      return 'agent-hub';
+      return 'proxmox';
     }
-    return 'agent-hub';
+    return 'proxmox';
   };
 
   const deriveAgentFromPath = (path: string): AgentKey | null => {
@@ -437,8 +438,8 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const handleSelectAgent = (agent: AgentKey) => {
     setSelectedAgent(agent);
-    if (currentTab() !== 'agent-hub') {
-      setCurrentTab('agent-hub');
+    if (currentTab() !== 'proxmox') {
+      setCurrentTab('proxmox');
     }
     const target = agentPaths[agent];
     if (target && location.pathname !== target) {
@@ -447,13 +448,13 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   const setActiveTab = (tab: SettingsTab) => {
-    if (tab === 'agent-hub' && selectedAgent() === 'podman') {
+    if (tab === 'proxmox' && selectedAgent() === 'podman') {
       setSelectedAgent('pve');
-    } else if (tab === 'agent-hub' && selectedAgent() === 'kubernetes') {
+    } else if (tab === 'proxmox' && selectedAgent() === 'kubernetes') {
       setSelectedAgent('pve');
     }
 
-    if (tab === 'agent-hub' && !['pve', 'pbs', 'pmg', 'docker', 'host'].includes(selectedAgent())) {
+    if (tab === 'proxmox' && !['pve', 'pbs', 'pmg', 'docker', 'host'].includes(selectedAgent())) {
       setSelectedAgent('pve');
     }
 
@@ -488,10 +489,26 @@ const Settings: Component<SettingsProps> = (props) => {
       () => location.pathname,
       (path) => {
         if (path === '/settings' || path === '/settings/') {
-          if (currentTab() !== 'agent-hub') {
-            setCurrentTab('agent-hub');
+          if (currentTab() !== 'proxmox') {
+            setCurrentTab('proxmox');
           }
           setSelectedAgent('pve');
+          return;
+        }
+
+        if (path.startsWith('/settings/agent-hub')) {
+          navigate(path.replace('/settings/agent-hub', '/settings/proxmox'), {
+            replace: true,
+            scroll: false,
+          });
+          return;
+        }
+
+        if (path.startsWith('/settings/servers')) {
+          navigate(path.replace('/settings/servers', '/settings/hosts'), {
+            replace: true,
+            scroll: false,
+          });
           return;
         }
 
@@ -500,7 +517,7 @@ const Settings: Component<SettingsProps> = (props) => {
           setCurrentTab(resolved);
         }
 
-        if (resolved === 'agent-hub') {
+        if (resolved === 'proxmox') {
           const agentFromPath = deriveAgentFromPath(path);
           if (agentFromPath) {
             setSelectedAgent(agentFromPath);
@@ -871,9 +888,9 @@ const Settings: Component<SettingsProps> = (props) => {
       id: 'platforms',
       label: 'Platforms',
       items: [
-        { id: 'agent-hub', label: 'Proxmox', icon: <Server class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'proxmox', label: 'Proxmox', icon: <Server class="w-4 h-4" strokeWidth={2} /> },
         { id: 'docker', label: 'Docker', icon: <Container class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'servers', label: 'Hosts', icon: <Monitor class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'hosts', label: 'Hosts', icon: <Monitor class="w-4 h-4" strokeWidth={2} /> },
         { id: 'podman', label: 'Podman', icon: <Boxes class="w-4 h-4" strokeWidth={2} />, disabled: true },
         { id: 'kubernetes', label: 'Kubernetes', icon: <Network class="w-4 h-4" strokeWidth={2} />, disabled: true },
       ],
@@ -1946,7 +1963,7 @@ const Settings: Component<SettingsProps> = (props) => {
         <Show
           when={
             hasUnsavedChanges() &&
-            (activeTab() === 'agent-hub' ||
+            (activeTab() === 'proxmox' ||
              activeTab() === 'system-general' || activeTab() === 'system-network' ||
              activeTab() === 'system-updates' || activeTab() === 'system-backups')
           }
@@ -2112,7 +2129,7 @@ const Settings: Component<SettingsProps> = (props) => {
             </Show>
 
             <div class="p-6 lg:p-8">
-                <Show when={activeTab() === 'agent-hub'}>
+                <Show when={activeTab() === 'proxmox'}>
                   <AgentStepSection
                     step="Step 1"
                     title="Choose a platform"
@@ -2185,7 +2202,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   </AgentStepSection>
                 </Show>
                 {/* PVE Nodes Tab */}
-                <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pve'}>
+                <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pve'}>
                   <section class="space-y-6">
                     <header class="space-y-1">
                       <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -2465,7 +2482,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 </Show>
 
                 {/* PBS Nodes Tab */}
-                <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pbs'}>
+                <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pbs'}>
                   <section class="space-y-6">
                     <header class="space-y-1">
                       <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -2744,7 +2761,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   </section>
                 </Show>
 {/* PMG Nodes Tab */}
-                <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'pmg'}>
+                <Show when={activeTab() === 'proxmox' && selectedAgent() === 'pmg'}>
                   <section class="space-y-6">
                     <header class="space-y-1">
                       <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -3015,7 +3032,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   </section>
                 </Show>
 {/* Docker Tab */}
-            <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'docker'}>
+            <Show when={activeTab() === 'proxmox' && selectedAgent() === 'docker'}>
               <AgentStepSection
                 step="Step 2"
                 title="Deploy the Docker agent"
@@ -3031,7 +3048,7 @@ const Settings: Component<SettingsProps> = (props) => {
             </Show>
 
             {/* Servers Platform Tab */}
-            <Show when={activeTab() === 'servers'}>
+            <Show when={activeTab() === 'hosts'}>
               <HostAgents variant="all" />
             </Show>
 
@@ -3052,7 +3069,7 @@ const Settings: Component<SettingsProps> = (props) => {
             </Show>
 
             {/* Host Agents */}
-            <Show when={activeTab() === 'agent-hub' && selectedAgent() === 'host'}>
+            <Show when={activeTab() === 'proxmox' && selectedAgent() === 'host'}>
               <AgentStepSection
                 step="Step 2"
                 title="Install the Pulse host agent"
