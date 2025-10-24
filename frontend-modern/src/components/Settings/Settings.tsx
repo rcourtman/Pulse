@@ -25,7 +25,6 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
-import Container from 'lucide-solid/icons/container';
 import Shield from 'lucide-solid/icons/shield';
 import Lock from 'lucide-solid/icons/lock';
 import Key from 'lucide-solid/icons/key';
@@ -38,6 +37,8 @@ import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
 import { ApiIcon } from '@/components/icons/ApiIcon';
+import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
+import { DockerIcon } from '@/components/icons/DockerIcon';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { APITokenRecord } from '@/api/security';
@@ -857,8 +858,8 @@ const Settings: Component<SettingsProps> = (props) => {
       id: 'platforms',
       label: 'Platforms',
       items: [
-        { id: 'proxmox', label: 'Proxmox', icon: <Server class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'docker', label: 'Docker', icon: <Container class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'proxmox', label: 'Proxmox', icon: <ProxmoxIcon class="w-4 h-4" /> },
+        { id: 'docker', label: 'Docker', icon: <DockerIcon class="w-4 h-4" /> },
         { id: 'hosts', label: 'Hosts', icon: <Monitor class="w-4 h-4" strokeWidth={2} /> },
         { id: 'podman', label: 'Podman', icon: <Boxes class="w-4 h-4" strokeWidth={2} />, disabled: true },
         { id: 'kubernetes', label: 'Kubernetes', icon: <Network class="w-4 h-4" strokeWidth={2} />, disabled: true },
