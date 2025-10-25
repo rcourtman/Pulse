@@ -198,6 +198,102 @@ func TestStateEndpointReturnsMockData(t *testing.T) {
 	}
 }
 
+func TestProtectedEndpointsRequireAuthentication(t *testing.T) {
+	passwordHash, err := internalauth.HashPassword("supersecret")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		cfg.DisableAuth = false
+		cfg.AuthUser = "admin"
+		cfg.AuthPass = passwordHash
+	})
+
+	client := &http.Client{}
+
+	endpoints := []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/api/state"},
+		{"GET", "/api/storage/test-storage"},
+		{"GET", "/api/backups"},
+		{"GET", "/api/updates/status"},
+		{"POST", "/api/updates/apply"},
+		{"GET", "/api/alerts/active"},
+		{"GET", "/api/notifications/email"},
+	}
+
+	for _, ep := range endpoints {
+		req, err := http.NewRequest(ep.method, srv.server.URL+ep.path, nil)
+		if err != nil {
+			t.Fatalf("build request for %s %s: %v", ep.method, ep.path, err)
+		}
+
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request for %s %s failed: %v", ep.method, ep.path, err)
+		}
+		_ = res.Body.Close()
+
+		if res.StatusCode != http.StatusUnauthorized && res.StatusCode != http.StatusForbidden {
+			t.Fatalf("expected 401/403 for %s %s, got %d", ep.method, ep.path, res.StatusCode)
+		}
+	}
+}
+
+func TestAPIOnlyModeRequiresToken(t *testing.T) {
+	const rawToken = "apitoken-test-1234567890"
+
+	tokenRecord, err := config.NewAPITokenRecord(rawToken, "test token", []string{config.ScopeMonitoringRead})
+	if err != nil {
+		t.Fatalf("create token record: %v", err)
+	}
+
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		cfg.DisableAuth = false
+		cfg.AuthUser = ""
+		cfg.AuthPass = ""
+		cfg.APITokenEnabled = true
+		cfg.APITokens = []config.APITokenRecord{*tokenRecord}
+	})
+
+	client := &http.Client{}
+
+	// Without token should be rejected.
+	req, err := http.NewRequest("GET", srv.server.URL+"/api/state", nil)
+	if err != nil {
+		t.Fatalf("build unauthenticated request: %v", err)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("unauthenticated request failed: %v", err)
+	}
+	_ = res.Body.Close()
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without API token, got %d", res.StatusCode)
+	}
+
+	// With the correct token should succeed.
+	req, err = http.NewRequest("GET", srv.server.URL+"/api/state", nil)
+	if err != nil {
+		t.Fatalf("build authenticated request: %v", err)
+	}
+	req.Header.Set("X-API-Token", rawToken)
+
+	res, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("authenticated request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 with valid API token, got %d", res.StatusCode)
+	}
+}
+
 func TestServerInfoEndpointReportsDevelopment(t *testing.T) {
 	srv := newIntegrationServer(t)
 
