@@ -707,6 +707,15 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		return false
 	}
 
+	if isMonitorOnlyAlert(alert) {
+		log.Info().
+			Str("alertID", alert.ID).
+			Str("resource", alert.ResourceName).
+			Bool("monitorOnly", true).
+			Msg("Monitor-only alert detected, skipping alert dispatch")
+		return false
+	}
+
 	alertCopy := alert.Clone()
 	if async {
 		go func(a *Alert) {
@@ -737,6 +746,22 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		}()
 	}
 	return true
+}
+
+func isMonitorOnlyAlert(alert *Alert) bool {
+	if alert == nil || alert.Metadata == nil {
+		return false
+	}
+
+	if value, ok := alert.Metadata["monitorOnly"]; ok {
+		switch v := value.(type) {
+		case bool:
+			return v
+		case string:
+			return strings.EqualFold(v, "true")
+		}
+	}
+	return false
 }
 
 // ensureValidHysteresis ensures clear < trigger for hysteresis thresholds
@@ -1653,6 +1678,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	var cpu, memUsage, diskUsage float64
 	var diskRead, diskWrite, netIn, netOut int64
 	var disks []models.Disk
+	var tags []string
 
 	// Extract data based on guest type
 	switch g := guest.(type) {
@@ -1670,6 +1696,9 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
 		disks = g.Disks
+		if len(g.Tags) > 0 {
+			tags = append(tags, g.Tags...)
+		}
 
 		// Debug logging for high memory VMs
 		if memUsage > 85 {
@@ -1693,11 +1722,33 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
 		disks = g.Disks
+		if len(g.Tags) > 0 {
+			tags = append(tags, g.Tags...)
+		}
 	default:
 		log.Debug().
 			Str("type", fmt.Sprintf("%T", guest)).
 			Msg("CheckGuest: unsupported guest type")
 		return
+	}
+
+	settings := parsePulseTags(tags)
+	if settings.Suppress {
+		if cleared := m.suppressGuestAlerts(guestID); cleared {
+			m.saveActiveAlertsAsync("pulse-no-alerts")
+		}
+		log.Debug().
+			Str("guestID", guestID).
+			Msg("Pulse no-alerts tag active; suppressing guest alerts")
+		return
+	}
+
+	monitorOnly := settings.MonitorOnly
+	if monitorOnly || m.guestHasMonitorOnlyAlerts(guestID) {
+		log.Info().
+			Str("guest", name).
+			Bool("monitorOnly", monitorOnly).
+			Msg("Pulse monitor-only status applied")
 	}
 
 	// Handle non-running guests
@@ -1712,7 +1763,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 				m.mu.Unlock()
 				m.clearAlert(fmt.Sprintf("guest-powered-off-%s", guestID))
 			} else {
-				m.checkGuestPoweredOff(guestID, name, node, instanceName, guestType)
+				m.checkGuestPoweredOff(guestID, name, node, instanceName, guestType, monitorOnly)
 			}
 		} else {
 			// For paused/suspended, clear powered-off alert
@@ -1754,6 +1805,14 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	thresholds := m.getGuestThresholds(guest, guestID)
 	m.mu.RUnlock()
 
+	if settings.Relaxed {
+		thresholds = applyRelaxedGuestThresholds(thresholds)
+		log.Info().
+			Str("guest", name).
+			Float64("trigger", thresholds.CPU.Trigger).
+			Msg("Applied relaxed thresholds for pulse-relaxed tag")
+	}
+
 	// If alerts are disabled for this guest, clear any existing alerts and return
 	if thresholds.Disabled {
 		m.mu.Lock()
@@ -1780,9 +1839,19 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		Msg("Checking guest thresholds")
 
 	// Check thresholds (checkMetric will skip if threshold is nil or <= 0)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU, nil)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory, nil)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk, nil)
+	cpuOpts := &metricOptions{MonitorOnly: monitorOnly}
+	memOpts := &metricOptions{MonitorOnly: monitorOnly}
+	diskOpts := &metricOptions{MonitorOnly: monitorOnly}
+
+	if !monitorOnly {
+		cpuOpts = nil
+		memOpts = nil
+		diskOpts = nil
+	}
+
+	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU, cpuOpts)
+	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory, memOpts)
+	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk, diskOpts)
 
 	if thresholds.Disk != nil && thresholds.Disk.Trigger > 0 && len(disks) > 0 {
 		seenDisks := make(map[string]struct{})
@@ -1840,24 +1909,41 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 			}
 
 			m.checkMetric(perDiskResourceID, name, node, instanceName, guestType, "disk", disk.Usage, thresholds.Disk, &metricOptions{
-				Metadata: metadata,
-				Message:  message,
+				Metadata:    metadata,
+				Message:     message,
+				MonitorOnly: monitorOnly,
 			})
 		}
 	}
 
 	// Check I/O metrics (convert bytes/s to MB/s) - checkMetric will skip if threshold is nil or <= 0
 	if thresholds.DiskRead != nil && thresholds.DiskRead.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead, nil)
+		readOpts := &metricOptions{MonitorOnly: monitorOnly}
+		if !monitorOnly {
+			readOpts = nil
+		}
+		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead, readOpts)
 	}
 	if thresholds.DiskWrite != nil && thresholds.DiskWrite.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "diskWrite", float64(diskWrite)/1024/1024, thresholds.DiskWrite, nil)
+		writeOpts := &metricOptions{MonitorOnly: monitorOnly}
+		if !monitorOnly {
+			writeOpts = nil
+		}
+		m.checkMetric(guestID, name, node, instanceName, guestType, "diskWrite", float64(diskWrite)/1024/1024, thresholds.DiskWrite, writeOpts)
 	}
 	if thresholds.NetworkIn != nil && thresholds.NetworkIn.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "networkIn", float64(netIn)/1024/1024, thresholds.NetworkIn, nil)
+		netInOpts := &metricOptions{MonitorOnly: monitorOnly}
+		if !monitorOnly {
+			netInOpts = nil
+		}
+		m.checkMetric(guestID, name, node, instanceName, guestType, "networkIn", float64(netIn)/1024/1024, thresholds.NetworkIn, netInOpts)
 	}
 	if thresholds.NetworkOut != nil && thresholds.NetworkOut.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "networkOut", float64(netOut)/1024/1024, thresholds.NetworkOut, nil)
+		netOutOpts := &metricOptions{MonitorOnly: monitorOnly}
+		if !monitorOnly {
+			netOutOpts = nil
+		}
+		m.checkMetric(guestID, name, node, instanceName, guestType, "networkOut", float64(netOut)/1024/1024, thresholds.NetworkOut, netOutOpts)
 	}
 }
 
@@ -4349,6 +4435,8 @@ func canonicalResourceTypeKeys(resourceType string) []string {
 type metricOptions struct {
 	Metadata map[string]interface{}
 	Message  string
+	// MonitorOnly suppresses external notifications while still tracking the alert.
+	MonitorOnly bool
 }
 
 func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
@@ -4371,6 +4459,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	defer m.mu.Unlock()
 
 	existingAlert, exists := m.activeAlerts[alertID]
+	monitorOnly := opts != nil && opts.MonitorOnly
 
 	// Check for suppression
 	if suppressUntil, suppressed := m.suppressedUntil[alertID]; suppressed && time.Now().Before(suppressUntil) {
@@ -4477,6 +4566,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					alertMetadata[k] = v
 				}
 			}
+			alertMetadata["monitorOnly"] = monitorOnly
 
 			alert := &Alert{
 				ID:           alertID,
@@ -4565,6 +4655,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 			existingAlert.Metadata["resourceType"] = resourceType
 			existingAlert.Metadata["clearThreshold"] = threshold.Clear
+			existingAlert.Metadata["monitorOnly"] = monitorOnly
 			if opts != nil {
 				if opts.Message != "" {
 					existingAlert.Message = opts.Message
@@ -6364,7 +6455,7 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 }
 
 // checkGuestPoweredOff creates an alert for powered-off guests
-func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestType string) {
+func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestType string, monitorOnly bool) {
 	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
 
 	m.mu.Lock()
@@ -6398,6 +6489,10 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 		// Alert already exists, just update LastSeen
 		alert.LastSeen = time.Now()
 		alert.Level = severity
+		if alert.Metadata == nil {
+			alert.Metadata = map[string]interface{}{}
+		}
+		alert.Metadata["monitorOnly"] = monitorOnly
 		return
 	}
 
@@ -6438,6 +6533,9 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 		Acknowledged: false,
+		Metadata: map[string]interface{}{
+			"monitorOnly": monitorOnly,
+		},
 	}
 
 	m.preserveAlertState(alertID, alert)
@@ -6504,16 +6602,22 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 }
 
 // ClearAlert removes an alert from active alerts (but keeps in history)
-func (m *Manager) ClearAlert(alertID string) {
+func (m *Manager) ClearAlert(alertID string) bool {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Remove from active alerts only
-	m.removeActiveAlertNoLock(alertID)
-
-	if m.onResolved != nil {
-		go m.onResolved(alertID)
+	if _, exists := m.activeAlerts[alertID]; !exists {
+		m.mu.Unlock()
+		return false
 	}
+
+	m.clearAlertNoLock(alertID)
+	delete(m.recentAlerts, alertID)
+	delete(m.pendingAlerts, alertID)
+	delete(m.suppressedUntil, alertID)
+	delete(m.alertRateLimit, alertID)
+	m.mu.Unlock()
+
+	m.saveActiveAlertsAsync("manual-clear")
+	return true
 }
 
 // Cleanup removes old acknowledged alerts and cleans up tracking maps
@@ -6625,6 +6729,20 @@ func cloneThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {
 	return &clone
 }
 
+func cloneThresholdConfig(cfg ThresholdConfig) ThresholdConfig {
+	clone := cfg
+	clone.CPU = cloneThreshold(cfg.CPU)
+	clone.Memory = cloneThreshold(cfg.Memory)
+	clone.Disk = cloneThreshold(cfg.Disk)
+	clone.DiskRead = cloneThreshold(cfg.DiskRead)
+	clone.DiskWrite = cloneThreshold(cfg.DiskWrite)
+	clone.NetworkIn = cloneThreshold(cfg.NetworkIn)
+	clone.NetworkOut = cloneThreshold(cfg.NetworkOut)
+	clone.Temperature = cloneThreshold(cfg.Temperature)
+	clone.Usage = cloneThreshold(cfg.Usage)
+	return clone
+}
+
 func (m *Manager) applyThresholdOverride(base ThresholdConfig, override ThresholdConfig) ThresholdConfig {
 	result := base
 
@@ -6697,6 +6815,120 @@ func ensureHysteresisThreshold(threshold *HysteresisThreshold) *HysteresisThresh
 		threshold.Clear = threshold.Trigger - 5.0 // Default 5% margin
 	}
 	return threshold
+}
+
+type pulseTagSettings struct {
+	Suppress    bool
+	MonitorOnly bool
+	Relaxed     bool
+}
+
+func parsePulseTags(tags []string) pulseTagSettings {
+	settings := pulseTagSettings{}
+	for _, raw := range tags {
+		tag := strings.TrimSpace(strings.ToLower(raw))
+		switch tag {
+		case "pulse-no-alerts":
+			settings.Suppress = true
+		case "pulse-monitor-only":
+			settings.MonitorOnly = true
+		case "pulse-relaxed":
+			settings.Relaxed = true
+		}
+	}
+	return settings
+}
+
+func applyRelaxedGuestThresholds(cfg ThresholdConfig) ThresholdConfig {
+	relaxed := cloneThresholdConfig(cfg)
+
+	adjust := func(th **HysteresisThreshold, minTrigger float64) {
+		if *th == nil {
+			*th = &HysteresisThreshold{Trigger: minTrigger, Clear: minTrigger - 5}
+			return
+		}
+		ensureHysteresisThreshold(*th)
+		if (*th).Trigger < minTrigger {
+			(*th).Trigger = minTrigger
+		}
+		if (*th).Clear >= (*th).Trigger {
+			(*th).Clear = (*th).Trigger - 5
+		}
+		if (*th).Clear < 0 {
+			(*th).Clear = 0
+		}
+	}
+
+	adjust(&relaxed.CPU, 95)
+	adjust(&relaxed.Memory, 92)
+	adjust(&relaxed.Disk, 95)
+
+	return relaxed
+}
+
+func (m *Manager) suppressGuestAlerts(guestID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cleared := false
+
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		if alert.ResourceID == guestID || strings.HasPrefix(alert.ResourceID, guestID+"/") || strings.HasPrefix(alertID, guestID) {
+			m.clearAlertNoLock(alertID)
+			delete(m.recentAlerts, alertID)
+			delete(m.pendingAlerts, alertID)
+			delete(m.suppressedUntil, alertID)
+			delete(m.alertRateLimit, alertID)
+			cleared = true
+		}
+	}
+
+	for key := range m.pendingAlerts {
+		if strings.HasPrefix(key, guestID) {
+			delete(m.pendingAlerts, key)
+		}
+	}
+	for key := range m.recentAlerts {
+		if strings.HasPrefix(key, guestID) {
+			delete(m.recentAlerts, key)
+		}
+	}
+	for key := range m.suppressedUntil {
+		if strings.HasPrefix(key, guestID) {
+			delete(m.suppressedUntil, key)
+		}
+	}
+	for key := range m.alertRateLimit {
+		if strings.HasPrefix(key, guestID) {
+			delete(m.alertRateLimit, key)
+		}
+	}
+
+	delete(m.offlineConfirmations, guestID)
+
+	return cleared
+}
+
+func (m *Manager) guestHasMonitorOnlyAlerts(guestID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		if alert.ResourceID != guestID {
+			continue
+		}
+		if isMonitorOnlyAlert(alert) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // evaluateFilterCondition evaluates a single filter condition against a guest
@@ -7148,6 +7380,25 @@ func (m *Manager) SaveActiveAlerts() error {
 
 	log.Info().Int("count", len(alerts)).Msg("Saved active alerts to disk")
 	return nil
+}
+
+func (m *Manager) saveActiveAlertsAsync(context string) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Str("context", context).
+					Msg("Panic in SaveActiveAlerts goroutine")
+			}
+		}()
+		if err := m.SaveActiveAlerts(); err != nil {
+			log.Error().
+				Err(err).
+				Str("context", context).
+				Msg("Failed to save active alerts")
+		}
+	}()
 }
 
 // LoadActiveAlerts restores active alerts from disk

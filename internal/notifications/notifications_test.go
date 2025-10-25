@@ -101,6 +101,46 @@ func TestNormalizeAppriseConfig(t *testing.T) {
 	}
 }
 
+func TestSetCooldownClampsNegativeValues(t *testing.T) {
+	nm := NewNotificationManager("")
+	nm.SetCooldown(-10)
+
+	nm.mu.RLock()
+	if nm.cooldown != 0 {
+		nm.mu.RUnlock()
+		t.Fatalf("expected cooldown to clamp to zero, got %s", nm.cooldown)
+	}
+	nm.mu.RUnlock()
+
+	nm.SetCooldown(5)
+	nm.mu.RLock()
+	if nm.cooldown != 5*time.Minute {
+		nm.mu.RUnlock()
+		t.Fatalf("expected cooldown of five minutes, got %s", nm.cooldown)
+	}
+	nm.mu.RUnlock()
+}
+
+func TestSetGroupingWindowClampsNegativeValues(t *testing.T) {
+	nm := NewNotificationManager("")
+	nm.SetGroupingWindow(-60)
+
+	nm.mu.RLock()
+	if nm.groupWindow != 0 {
+		nm.mu.RUnlock()
+		t.Fatalf("expected grouping window to clamp to zero, got %s", nm.groupWindow)
+	}
+	nm.mu.RUnlock()
+
+	nm.SetGroupingWindow(120)
+	nm.mu.RLock()
+	if nm.groupWindow != 120*time.Second {
+		nm.mu.RUnlock()
+		t.Fatalf("expected grouping window of 120 seconds, got %s", nm.groupWindow)
+	}
+	nm.mu.RUnlock()
+}
+
 func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
 	nm := NewNotificationManager("")
 	nm.SetGroupingWindow(0)
