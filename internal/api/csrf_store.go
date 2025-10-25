@@ -207,7 +207,7 @@ func (c *CSRFTokenStore) saveUnsafe() {
 	}
 
 	// Marshal tokens
-	jsonData, err := json.MarshalIndent(data, "", "  ")
+	jsonData, err := json.Marshal(data)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal CSRF tokens")
 		return

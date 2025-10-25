@@ -3,7 +3,10 @@
 The Pulse host agent extends monitoring to standalone servers that do not expose
 Proxmox or Docker APIs. With it you can surface uptime, OS metadata, CPU load,
 memory/disk utilisation, and connection health for any Linux, macOS, or Windows
-machine alongside the rest of your infrastructure.
+machine alongside the rest of your infrastructure. Beginning with the upcoming
+release the installer now handshakes with Pulse in real time so you can confirm
+registration directly from the UI and receive host-agent alerts alongside your
+existing Docker/Proxmox notifications.
 
 ## Prerequisites
 
@@ -12,6 +15,11 @@ machine alongside the rest of your infrastructure.
 - Outbound HTTP/HTTPS connectivity from the host back to Pulse
 
 > ℹ️ The agent only initiates outbound connections; no inbound firewall rules are required.
+
+If your Pulse instance does not require API tokens (e.g. during an on-premises
+lab install) you can still generate commands without embedding a credential.
+Confirm the warning in **Settings → Agents → Host agents** and the script will
+prompt for a token instead of hard-coding one.
 
 ## Quick Start
 
@@ -150,6 +158,17 @@ Run `pulse-host-agent --help` for the full list.
 
 - **Settings → Agents → Host agents** lists every reporting host and provides ready-made install commands.
 - The **Servers** tab surfaces host telemetry alongside Proxmox/Docker data in the main dashboard.
+
+### Checking installation status
+
+- Click **Check status** under **Settings → Agents → Host agents** and enter the host ID or hostname you just installed.
+- Pulse hits `/api/agents/host/lookup`, highlights the matching row for 10 seconds, and refreshes the connection badge, last-seen timestamp, and agent version in-line.
+- If the host has not checked in yet, the UI returns a friendly "Host has not registered" message so you can retry without re-running the script.
+
+### Alerts and notifications
+
+- Host agents now participate in the main alert engine. Offline detection, metric thresholds, and override scopes (global or per-host) live in **Settings → Alerts → Thresholds** beside your Docker and Proxmox rules.
+- Alert notifications, webhooks, and quiet-hours behaviour reuse the existing pipelines—no extra setup is required once you enable host-agent monitoring.
 
 ## Updating
 

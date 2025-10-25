@@ -162,7 +162,7 @@ func (s *SessionStore) saveUnsafe() {
 	}
 
 	// Marshal sessions
-	data, err := json.MarshalIndent(s.sessions, "", "  ")
+	data, err := json.Marshal(s.sessions)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal sessions")
 		return

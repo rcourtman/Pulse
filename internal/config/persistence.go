@@ -156,7 +156,7 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 		sanitized[i] = record
 	}
 
-	data, err := json.MarshalIndent(sanitized, "", "  ")
+	data, err := json.Marshal(sanitized)
 	if err != nil {
 		return err
 	}
@@ -198,6 +198,32 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
 	}
+
+	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger <= 0 {
+		config.HostDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.HostDefaults.CPU.Clear <= 0 {
+		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
+		if config.HostDefaults.CPU.Clear <= 0 {
+			config.HostDefaults.CPU.Clear = 75
+		}
+	}
+	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger <= 0 {
+		config.HostDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
+	} else if config.HostDefaults.Memory.Clear <= 0 {
+		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
+		if config.HostDefaults.Memory.Clear <= 0 {
+			config.HostDefaults.Memory.Clear = 80
+		}
+	}
+	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger <= 0 {
+		config.HostDefaults.Disk = &alerts.HysteresisThreshold{Trigger: 90, Clear: 85}
+	} else if config.HostDefaults.Disk.Clear <= 0 {
+		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
+		if config.HostDefaults.Disk.Clear <= 0 {
+			config.HostDefaults.Disk.Clear = 85
+		}
+	}
+
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
 	if config.TimeThreshold <= 0 {
 		config.TimeThreshold = 5
@@ -252,7 +278,7 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	}
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
-	data, err := json.MarshalIndent(config, "", "  ")
+	data, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
@@ -290,6 +316,11 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Memory:      &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 					Disk:        &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 					Temperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
+				},
+				HostDefaults: alerts.ThresholdConfig{
+					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
+					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
+					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 				},
 				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 				TimeThreshold:  5,
@@ -345,6 +376,30 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	}
 	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger <= 0 {
 		config.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	}
+	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger <= 0 {
+		config.HostDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.HostDefaults.CPU.Clear <= 0 {
+		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
+		if config.HostDefaults.CPU.Clear <= 0 {
+			config.HostDefaults.CPU.Clear = 75
+		}
+	}
+	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger <= 0 {
+		config.HostDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
+	} else if config.HostDefaults.Memory.Clear <= 0 {
+		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
+		if config.HostDefaults.Memory.Clear <= 0 {
+			config.HostDefaults.Memory.Clear = 80
+		}
+	}
+	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger <= 0 {
+		config.HostDefaults.Disk = &alerts.HysteresisThreshold{Trigger: 90, Clear: 85}
+	} else if config.HostDefaults.Disk.Clear <= 0 {
+		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
+		if config.HostDefaults.Disk.Clear <= 0 {
+			config.HostDefaults.Disk.Clear = 85
+		}
 	}
 	if config.TimeThreshold <= 0 {
 		config.TimeThreshold = 5
@@ -425,7 +480,7 @@ func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) er
 	defer c.mu.Unlock()
 
 	// Marshal to JSON first
-	data, err := json.MarshalIndent(config, "", "  ")
+	data, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
@@ -502,7 +557,7 @@ func (c *ConfigPersistence) SaveAppriseConfig(config notifications.AppriseConfig
 
 	config = notifications.NormalizeAppriseConfig(config)
 
-	data, err := json.MarshalIndent(config, "", "  ")
+	data, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
@@ -578,7 +633,7 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	data, err := json.MarshalIndent(webhooks, "", "  ")
+	data, err := json.Marshal(webhooks)
 	if err != nil {
 		return err
 	}
@@ -811,7 +866,7 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		PMGInstances: pmgInstances,
 	}
 
-	data, err := json.MarshalIndent(config, "", "  ")
+	data, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
@@ -1123,7 +1178,7 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	data, err := json.MarshalIndent(settings, "", "  ")
+	data, err := json.Marshal(settings)
 	if err != nil {
 		return err
 	}
@@ -1159,7 +1214,7 @@ func (c *ConfigPersistence) SaveOIDCConfig(settings OIDCConfig) error {
 	// Do not persist runtime-only flags.
 	settings.EnvOverrides = nil
 
-	data, err := json.MarshalIndent(settings, "", "  ")
+	data, err := json.Marshal(settings)
 	if err != nil {
 		return err
 	}

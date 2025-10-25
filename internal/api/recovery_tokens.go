@@ -218,7 +218,7 @@ func (r *RecoveryTokenStore) saveUnsafe() {
 	}
 
 	// Marshal tokens
-	data, err := json.MarshalIndent(r.tokens, "", "  ")
+	data, err := json.Marshal(r.tokens)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal recovery tokens")
 		return

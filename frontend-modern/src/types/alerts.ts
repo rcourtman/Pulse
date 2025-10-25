@@ -108,6 +108,7 @@ export interface AlertConfig {
   activationTime?: string;
   guestDefaults: AlertThresholds;
   nodeDefaults: AlertThresholds;
+  hostDefaults?: AlertThresholds;
   storageDefault: HysteresisThreshold;
   dockerDefaults?: DockerThresholdConfig;
   dockerIgnoredContainerPrefixes?: string[];
@@ -194,12 +195,14 @@ export interface AlertConfig {
   disableAllStorage?: boolean;
   disableAllPBS?: boolean;
   disableAllPMG?: boolean;
+  disableAllHosts?: boolean;
   disableAllDockerHosts?: boolean;
   disableAllDockerContainers?: boolean;
   disableAllNodesOffline?: boolean;
   disableAllGuestsOffline?: boolean;
   disableAllPBSOffline?: boolean;
   disableAllPMGOffline?: boolean;
+  disableAllHostsOffline?: boolean;
   disableAllDockerHostsOffline?: boolean;
 }
 

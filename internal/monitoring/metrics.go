@@ -2,43 +2,53 @@ package monitoring
 
 import (
 	stdErrors "errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
 )
 
 // PollMetrics manages Prometheus instrumentation for polling activity.
 type PollMetrics struct {
-	pollDuration *prometheus.HistogramVec
-	pollResults  *prometheus.CounterVec
-	pollErrors   *prometheus.CounterVec
-	lastSuccess  *prometheus.GaugeVec
-	staleness    *prometheus.GaugeVec
-	queueDepth   prometheus.Gauge
-	inflight     *prometheus.GaugeVec
-	nodePollDuration *prometheus.HistogramVec
-	nodePollResults  *prometheus.CounterVec
-	nodePollErrors   *prometheus.CounterVec
-	nodeLastSuccess  *prometheus.GaugeVec
-	nodeStaleness    *prometheus.GaugeVec
-	schedulerQueueReady        prometheus.Gauge
-	schedulerQueueDepthByType  *prometheus.GaugeVec
-	schedulerQueueWait         *prometheus.HistogramVec
-	schedulerDeadLetterDepth   *prometheus.GaugeVec
-	schedulerBreakerState      *prometheus.GaugeVec
+	pollDuration                 *prometheus.HistogramVec
+	pollResults                  *prometheus.CounterVec
+	pollErrors                   *prometheus.CounterVec
+	lastSuccess                  *prometheus.GaugeVec
+	staleness                    *prometheus.GaugeVec
+	queueDepth                   prometheus.Gauge
+	inflight                     *prometheus.GaugeVec
+	nodePollDuration             *prometheus.HistogramVec
+	nodePollResults              *prometheus.CounterVec
+	nodePollErrors               *prometheus.CounterVec
+	nodeLastSuccess              *prometheus.GaugeVec
+	nodeStaleness                *prometheus.GaugeVec
+	schedulerQueueReady          prometheus.Gauge
+	schedulerQueueDepthByType    *prometheus.GaugeVec
+	schedulerQueueWait           *prometheus.HistogramVec
+	schedulerDeadLetterDepth     *prometheus.GaugeVec
+	schedulerBreakerState        *prometheus.GaugeVec
 	schedulerBreakerFailureCount *prometheus.GaugeVec
 	schedulerBreakerRetrySeconds *prometheus.GaugeVec
 
-	mu               sync.RWMutex
-	lastSuccessByKey map[string]time.Time
-	nodeLastSuccessByKey map[string]time.Time
-	lastQueueTypeKeys map[string]struct{}
-	lastDLQKeys       map[string]struct{}
-	pending          int
+	mu                   sync.RWMutex
+	lastSuccessByKey     map[metricKey]time.Time
+	nodeLastSuccessByKey map[nodeMetricKey]time.Time
+	lastQueueTypeKeys    map[string]struct{}
+	lastDLQKeys          map[string]struct{}
+	pending              int
+}
+
+type metricKey struct {
+	instanceType string
+	instance     string
+}
+
+type nodeMetricKey struct {
+	instanceType string
+	instance     string
+	node         string
 }
 
 var (
@@ -227,10 +237,10 @@ func newPollMetrics() *PollMetrics {
 			},
 			[]string{"instance_type", "instance"},
 		),
-		lastSuccessByKey:     make(map[string]time.Time),
-		nodeLastSuccessByKey: make(map[string]time.Time),
-		lastQueueTypeKeys:   make(map[string]struct{}),
-		lastDLQKeys:         make(map[string]struct{}),
+		lastSuccessByKey:     make(map[metricKey]time.Time),
+		nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
+		lastQueueTypeKeys:    make(map[string]struct{}),
+		lastDLQKeys:          make(map[string]struct{}),
 	}
 
 	prometheus.MustRegister(
@@ -260,13 +270,13 @@ func newPollMetrics() *PollMetrics {
 
 // NodePollResult captures timing and outcome for a specific node within a poll cycle.
 type NodePollResult struct {
-    InstanceName string
-    InstanceType string
-    NodeName     string
-    Success      bool
-    Error        error
-    StartTime    time.Time
-    EndTime      time.Time
+	InstanceName string
+	InstanceType string
+	NodeName     string
+	Success      bool
+	Error        error
+	StartTime    time.Time
+	EndTime      time.Time
 }
 
 // RecordNodeResult records metrics for an individual node poll.
@@ -275,173 +285,136 @@ func (pm *PollMetrics) RecordNodeResult(result NodePollResult) {
 		return
 	}
 
-    nodeLabel := strings.TrimSpace(result.NodeName)
-    if nodeLabel == "" {
-        nodeLabel = "unknown-node"
-    }
+	instType, inst := sanitizeInstanceLabels(result.InstanceType, result.InstanceName)
+	nodeLabel := normalizeNodeLabel(result.NodeName)
 
-    labels := prometheus.Labels{
-        "instance_type": result.InstanceType,
-        "instance":      result.InstanceName,
-        "node":          nodeLabel,
-    }
+	duration := result.EndTime.Sub(result.StartTime).Seconds()
+	if duration < 0 {
+		duration = 0
+	}
+	pm.nodePollDuration.WithLabelValues(instType, inst, nodeLabel).Observe(duration)
 
-    duration := result.EndTime.Sub(result.StartTime).Seconds()
-    if duration < 0 {
-        duration = 0
-    }
-    pm.nodePollDuration.With(labels).Observe(duration)
+	resultValue := "success"
+	if !result.Success {
+		resultValue = "error"
+	}
+	pm.nodePollResults.WithLabelValues(instType, inst, nodeLabel, resultValue).Inc()
 
-    resultValue := "success"
-    if !result.Success {
-        resultValue = "error"
-    }
-    pm.nodePollResults.With(prometheus.Labels{
-        "instance_type": result.InstanceType,
-        "instance":      result.InstanceName,
-        "node":          nodeLabel,
-        "result":        resultValue,
-    }).Inc()
+	if result.Success {
+		pm.nodeLastSuccess.WithLabelValues(instType, inst, nodeLabel).Set(float64(result.EndTime.Unix()))
+		pm.storeNodeLastSuccess(instType, inst, nodeLabel, result.EndTime)
+		pm.updateNodeStaleness(instType, inst, nodeLabel, 0)
+		return
+	}
 
-    if result.Success {
-        pm.nodeLastSuccess.With(labels).Set(float64(result.EndTime.Unix()))
-        pm.storeNodeLastSuccess(result.InstanceType, result.InstanceName, nodeLabel, result.EndTime)
-        pm.updateNodeStaleness(result.InstanceType, result.InstanceName, nodeLabel, 0)
-        return
-    }
+	errType := pm.classifyError(result.Error)
+	pm.nodePollErrors.WithLabelValues(instType, inst, nodeLabel, errType).Inc()
 
-    errType := pm.classifyError(result.Error)
-    pm.nodePollErrors.With(prometheus.Labels{
-        "instance_type": result.InstanceType,
-        "instance":      result.InstanceName,
-        "node":          nodeLabel,
-        "error_type":    errType,
-    }).Inc()
-
-    if last, ok := pm.lastNodeSuccessFor(result.InstanceType, result.InstanceName, nodeLabel); ok && !last.IsZero() {
-        staleness := result.EndTime.Sub(last).Seconds()
-        if staleness < 0 {
-            staleness = 0
-        }
-        pm.updateNodeStaleness(result.InstanceType, result.InstanceName, nodeLabel, staleness)
-    } else {
-        pm.updateNodeStaleness(result.InstanceType, result.InstanceName, nodeLabel, -1)
+	if last, ok := pm.lastNodeSuccessFor(instType, inst, nodeLabel); ok && !last.IsZero() {
+		staleness := result.EndTime.Sub(last).Seconds()
+		if staleness < 0 {
+			staleness = 0
+		}
+		pm.updateNodeStaleness(instType, inst, nodeLabel, staleness)
+	} else {
+		pm.updateNodeStaleness(instType, inst, nodeLabel, -1)
 	}
 }
 
 // RecordQueueWait observes the time a task spent waiting in the scheduler queue.
 func (pm *PollMetrics) RecordQueueWait(instanceType string, wait time.Duration) {
-    if pm == nil {
-        return
-    }
-    if wait < 0 {
-        wait = 0
-    }
-    instanceType = strings.TrimSpace(instanceType)
-    if instanceType == "" {
-        instanceType = "unknown"
-    }
-    pm.schedulerQueueWait.WithLabelValues(instanceType).Observe(wait.Seconds())
+	if pm == nil {
+		return
+	}
+	if wait < 0 {
+		wait = 0
+	}
+	label := normalizeLabel(instanceType)
+	pm.schedulerQueueWait.WithLabelValues(label).Observe(wait.Seconds())
 }
 
 // UpdateQueueSnapshot updates scheduler queue depth metrics.
 func (pm *PollMetrics) UpdateQueueSnapshot(snapshot QueueSnapshot) {
-    if pm == nil {
-        return
-    }
+	if pm == nil {
+		return
+	}
 
-    pm.schedulerQueueReady.Set(float64(snapshot.DueWithinSeconds))
+	pm.schedulerQueueReady.Set(float64(snapshot.DueWithinSeconds))
 
-    current := make(map[string]struct{}, len(snapshot.PerType))
-    for instanceType, depth := range snapshot.PerType {
-        key := strings.TrimSpace(instanceType)
-        if key == "" {
-            key = "unknown"
-        }
-        pm.schedulerQueueDepthByType.WithLabelValues(key).Set(float64(depth))
-        current[key] = struct{}{}
-    }
+	current := make(map[string]struct{}, len(snapshot.PerType))
+	for instanceType, depth := range snapshot.PerType {
+		key := normalizeLabel(instanceType)
+		pm.schedulerQueueDepthByType.WithLabelValues(key).Set(float64(depth))
+		current[key] = struct{}{}
+	}
 
-    pm.mu.Lock()
-    for key := range pm.lastQueueTypeKeys {
-        if _, ok := current[key]; !ok {
-            pm.schedulerQueueDepthByType.WithLabelValues(key).Set(0)
-        }
-    }
-    pm.lastQueueTypeKeys = current
-    pm.mu.Unlock()
+	pm.mu.Lock()
+	for key := range pm.lastQueueTypeKeys {
+		if _, ok := current[key]; !ok {
+			pm.schedulerQueueDepthByType.WithLabelValues(key).Set(0)
+		}
+	}
+	pm.lastQueueTypeKeys = current
+	pm.mu.Unlock()
 }
 
 // UpdateDeadLetterCounts refreshes dead-letter queue gauges based on the provided tasks.
 func (pm *PollMetrics) UpdateDeadLetterCounts(tasks []DeadLetterTask) {
-    if pm == nil {
-        return
-    }
+	if pm == nil {
+		return
+	}
 
-    current := make(map[string]float64)
-    for _, task := range tasks {
-        instType := strings.TrimSpace(task.Type)
-        if instType == "" {
-            instType = "unknown"
-        }
-        inst := strings.TrimSpace(task.Instance)
-        if inst == "" {
-            inst = "unknown"
-        }
-        key := instType + "::" + inst
-        current[key] = current[key] + 1
-    }
+	current := make(map[string]float64)
+	for _, task := range tasks {
+		instType := normalizeLabel(task.Type)
+		inst := normalizeLabel(task.Instance)
+		key := instType + "::" + inst
+		current[key] = current[key] + 1
+	}
 
-    pm.mu.Lock()
-    prev := pm.lastDLQKeys
-    pm.lastDLQKeys = make(map[string]struct{}, len(current))
-    pm.mu.Unlock()
+	pm.mu.Lock()
+	prev := pm.lastDLQKeys
+	pm.lastDLQKeys = make(map[string]struct{}, len(current))
+	pm.mu.Unlock()
 
-    for key, count := range current {
-        instType, inst := splitInstanceKey(key)
-        pm.schedulerDeadLetterDepth.WithLabelValues(instType, inst).Set(count)
-    }
+	for key, count := range current {
+		instType, inst := splitInstanceKey(key)
+		pm.schedulerDeadLetterDepth.WithLabelValues(instType, inst).Set(count)
+	}
 
-    pm.mu.Lock()
-    for key := range current {
-        pm.lastDLQKeys[key] = struct{}{}
-    }
-    for key := range prev {
-        if _, ok := current[key]; !ok {
-            instType, inst := splitInstanceKey(key)
-            pm.schedulerDeadLetterDepth.WithLabelValues(instType, inst).Set(0)
-        }
-    }
-    pm.mu.Unlock()
+	pm.mu.Lock()
+	for key := range current {
+		pm.lastDLQKeys[key] = struct{}{}
+	}
+	for key := range prev {
+		if _, ok := current[key]; !ok {
+			instType, inst := splitInstanceKey(key)
+			pm.schedulerDeadLetterDepth.WithLabelValues(instType, inst).Set(0)
+		}
+	}
+	pm.mu.Unlock()
 }
 
 // SetBreakerState updates circuit breaker metrics for a specific instance.
 func (pm *PollMetrics) SetBreakerState(instanceType, instance, state string, failures int, retryAt time.Time) {
-    if pm == nil {
-        return
-    }
+	if pm == nil {
+		return
+	}
 
-    instType := strings.TrimSpace(instanceType)
-    if instType == "" {
-        instType = "unknown"
-    }
-    inst := strings.TrimSpace(instance)
-    if inst == "" {
-        inst = "unknown"
-    }
+	instType, inst := sanitizeInstanceLabels(instanceType, instance)
 
 	value := breakerStateToValue(state)
 	pm.schedulerBreakerState.WithLabelValues(instType, inst).Set(value)
 	pm.schedulerBreakerFailureCount.WithLabelValues(instType, inst).Set(float64(failures))
 
-    retrySeconds := 0.0
-    if !retryAt.IsZero() {
-        retrySeconds = retryAt.Sub(time.Now()).Seconds()
-        if retrySeconds < 0 {
-            retrySeconds = 0
-        }
-    }
-    pm.schedulerBreakerRetrySeconds.WithLabelValues(instType, inst).Set(retrySeconds)
+	retrySeconds := 0.0
+	if !retryAt.IsZero() {
+		retrySeconds = retryAt.Sub(time.Now()).Seconds()
+		if retrySeconds < 0 {
+			retrySeconds = 0
+		}
+	}
+	pm.schedulerBreakerRetrySeconds.WithLabelValues(instType, inst).Set(retrySeconds)
 }
 
 // RecordResult records metrics for a polling result.
@@ -450,47 +423,36 @@ func (pm *PollMetrics) RecordResult(result PollResult) {
 		return
 	}
 
-	labels := prometheus.Labels{
-		"instance_type": result.InstanceType,
-		"instance":      result.InstanceName,
-	}
+	instType, inst := sanitizeInstanceLabels(result.InstanceType, result.InstanceName)
 
 	duration := result.EndTime.Sub(result.StartTime).Seconds()
 	if duration < 0 {
 		duration = 0
 	}
-	pm.pollDuration.With(labels).Observe(duration)
+	pm.pollDuration.WithLabelValues(instType, inst).Observe(duration)
 
 	resultValue := "success"
 	if !result.Success {
 		resultValue = "error"
 	}
-	pm.pollResults.With(prometheus.Labels{
-		"instance_type": result.InstanceType,
-		"instance":      result.InstanceName,
-		"result":        resultValue,
-	}).Inc()
+	pm.pollResults.WithLabelValues(instType, inst, resultValue).Inc()
 
 	if result.Success {
-		pm.lastSuccess.With(labels).Set(float64(result.EndTime.Unix()))
-		pm.storeLastSuccess(result.InstanceType, result.InstanceName, result.EndTime)
-		pm.updateStaleness(result.InstanceType, result.InstanceName, 0)
+		pm.lastSuccess.WithLabelValues(instType, inst).Set(float64(result.EndTime.Unix()))
+		pm.storeLastSuccess(instType, inst, result.EndTime)
+		pm.updateStaleness(instType, inst, 0)
 	} else {
 		errType := pm.classifyError(result.Error)
-		pm.pollErrors.With(prometheus.Labels{
-			"instance_type": result.InstanceType,
-			"instance":      result.InstanceName,
-			"error_type":    errType,
-		}).Inc()
+		pm.pollErrors.WithLabelValues(instType, inst, errType).Inc()
 
-		if last, ok := pm.lastSuccessFor(result.InstanceType, result.InstanceName); ok && !last.IsZero() {
+		if last, ok := pm.lastSuccessFor(instType, inst); ok && !last.IsZero() {
 			staleness := result.EndTime.Sub(last).Seconds()
 			if staleness < 0 {
 				staleness = 0
 			}
-			pm.updateStaleness(result.InstanceType, result.InstanceName, staleness)
+			pm.updateStaleness(instType, inst, staleness)
 		} else {
-			pm.updateStaleness(result.InstanceType, result.InstanceName, -1)
+			pm.updateStaleness(instType, inst, -1)
 		}
 	}
 
@@ -555,75 +517,101 @@ func (pm *PollMetrics) decrementPending() {
 }
 
 func (pm *PollMetrics) storeLastSuccess(instanceType, instance string, ts time.Time) {
-    pm.mu.Lock()
-    pm.lastSuccessByKey[pm.key(instanceType, instance)] = ts
-    pm.mu.Unlock()
+	pm.mu.Lock()
+	pm.lastSuccessByKey[makeMetricKey(instanceType, instance)] = ts
+	pm.mu.Unlock()
 }
 
 func (pm *PollMetrics) lastSuccessFor(instanceType, instance string) (time.Time, bool) {
 	pm.mu.RLock()
-	ts, ok := pm.lastSuccessByKey[pm.key(instanceType, instance)]
+	ts, ok := pm.lastSuccessByKey[makeMetricKey(instanceType, instance)]
 	pm.mu.RUnlock()
 	return ts, ok
 }
 
 func (pm *PollMetrics) updateStaleness(instanceType, instance string, value float64) {
-	pm.staleness.WithLabelValues(instanceType, instance).Set(value)
-}
-
-func (pm *PollMetrics) key(instanceType, instance string) string {
-	return fmt.Sprintf("%s::%s", instanceType, instance)
+	instType, inst := sanitizeInstanceLabels(instanceType, instance)
+	pm.staleness.WithLabelValues(instType, inst).Set(value)
 }
 
 func (pm *PollMetrics) storeNodeLastSuccess(instanceType, instance, node string, ts time.Time) {
 	pm.mu.Lock()
-	pm.nodeLastSuccessByKey[pm.nodeKey(instanceType, instance, node)] = ts
+	pm.nodeLastSuccessByKey[makeNodeMetricKey(instanceType, instance, node)] = ts
 	pm.mu.Unlock()
 }
 
 func (pm *PollMetrics) lastNodeSuccessFor(instanceType, instance, node string) (time.Time, bool) {
 	pm.mu.RLock()
-	ts, ok := pm.nodeLastSuccessByKey[pm.nodeKey(instanceType, instance, node)]
+	ts, ok := pm.nodeLastSuccessByKey[makeNodeMetricKey(instanceType, instance, node)]
 	pm.mu.RUnlock()
 	return ts, ok
 }
 
 func (pm *PollMetrics) updateNodeStaleness(instanceType, instance, node string, value float64) {
-	pm.nodeStaleness.WithLabelValues(instanceType, instance, node).Set(value)
-}
-
-func (pm *PollMetrics) nodeKey(instanceType, instance, node string) string {
-	return fmt.Sprintf("%s::%s::%s", instanceType, instance, node)
+	instType, inst := sanitizeInstanceLabels(instanceType, instance)
+	nodeLabel := normalizeLabel(node)
+	pm.nodeStaleness.WithLabelValues(instType, inst, nodeLabel).Set(value)
 }
 
 func splitInstanceKey(key string) (string, string) {
-    parts := strings.SplitN(key, "::", 2)
-    if len(parts) == 2 {
-        if parts[0] == "" {
-            parts[0] = "unknown"
-        }
-        if parts[1] == "" {
-            parts[1] = "unknown"
-        }
-        return parts[0], parts[1]
-    }
-    if key == "" {
-        return "unknown", "unknown"
-    }
-    return "unknown", key
+	parts := strings.SplitN(key, "::", 2)
+	if len(parts) == 2 {
+		return normalizeLabel(parts[0]), normalizeLabel(parts[1])
+	}
+	if key == "" {
+		return "unknown", "unknown"
+	}
+	return "unknown", normalizeLabel(key)
 }
 
 func breakerStateToValue(state string) float64 {
-    switch strings.ToLower(state) {
-    case "closed":
-        return 0
-    case "half_open", "half-open":
-        return 1
-    case "open":
-        return 2
-    default:
-        return -1
-    }
+	switch strings.ToLower(state) {
+	case "closed":
+		return 0
+	case "half_open", "half-open":
+		return 1
+	case "open":
+		return 2
+	default:
+		return -1
+	}
+}
+
+func sanitizeInstanceLabels(instanceType, instance string) (string, string) {
+	return normalizeLabel(instanceType), normalizeLabel(instance)
+}
+
+func makeMetricKey(instanceType, instance string) metricKey {
+	instType, inst := sanitizeInstanceLabels(instanceType, instance)
+	return metricKey{
+		instanceType: instType,
+		instance:     inst,
+	}
+}
+
+func makeNodeMetricKey(instanceType, instance, node string) nodeMetricKey {
+	instType, inst := sanitizeInstanceLabels(instanceType, instance)
+	return nodeMetricKey{
+		instanceType: instType,
+		instance:     inst,
+		node:         normalizeLabel(node),
+	}
+}
+
+func normalizeLabel(value string) string {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return "unknown"
+	}
+	return v
+}
+
+func normalizeNodeLabel(value string) string {
+	label := normalizeLabel(value)
+	if label == "unknown" {
+		return "unknown-node"
+	}
+	return label
 }
 
 func (pm *PollMetrics) classifyError(err error) string {
