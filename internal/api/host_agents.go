@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -75,6 +76,81 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize host agent response")
+	}
+}
+
+// HandleLookup returns host registration details for installer validation.
+func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
+		return
+	}
+
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	hostname := strings.TrimSpace(r.URL.Query().Get("hostname"))
+
+	if id == "" && hostname == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_lookup_param", "Provide either id or hostname to look up a host", nil)
+		return
+	}
+
+	state := h.monitor.GetState()
+
+	var (
+		host  models.Host
+		found bool
+	)
+
+	if id != "" {
+		for _, candidate := range state.Hosts {
+			if candidate.ID == id {
+				host = candidate
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found && hostname != "" {
+		for _, candidate := range state.Hosts {
+			if strings.EqualFold(candidate.Hostname, hostname) || strings.EqualFold(candidate.DisplayName, hostname) {
+				host = candidate
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
+		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
+		return
+	}
+
+	// Ensure the querying token matches the host (when applicable).
+	if record := getAPITokenRecordFromRequest(r); record != nil && host.TokenID != "" && host.TokenID != record.ID {
+		writeErrorResponse(w, http.StatusForbidden, "host_lookup_forbidden", "Host does not belong to this API token", nil)
+		return
+	}
+
+	connected := strings.EqualFold(host.Status, "online") ||
+		strings.EqualFold(host.Status, "running") ||
+		strings.EqualFold(host.Status, "healthy")
+
+	resp := map[string]any{
+		"success": true,
+		"host": map[string]any{
+			"id":           host.ID,
+			"hostname":     host.Hostname,
+			"displayName":  host.DisplayName,
+			"status":       host.Status,
+			"connected":    connected,
+			"lastSeen":     host.LastSeen,
+			"agentVersion": host.AgentVersion,
+		},
+	}
+
+	if err := utils.WriteJSONResponse(w, resp); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize host lookup response")
 	}
 }
 

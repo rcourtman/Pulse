@@ -1,7 +1,7 @@
-import { type Component, For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { type Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useWebSocket } from '@/App';
-import type { Host } from '@/types/api';
+import type { Host, HostLookupResponse } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { formatBytes, formatRelativeTime, formatUptime, formatAbsoluteTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
@@ -9,6 +9,7 @@ import { HOST_AGENT_SCOPE } from '@/constants/apiScopes';
 import type { SecurityStatus } from '@/types/config';
 import type { APITokenRecord } from '@/api/security';
 import { SecurityAPI } from '@/api/security';
+import { MonitoringAPI } from '@/api/monitoring';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
 const pulseUrl = () => {
@@ -104,6 +105,12 @@ export const HostAgents: Component = () => {
   const [confirmedNoToken, setConfirmedNoToken] = createSignal(false);
   const [currentToken, setCurrentToken] = createSignal<string | null>(null);
   const [isGeneratingToken, setIsGeneratingToken] = createSignal(false);
+  const [lookupValue, setLookupValue] = createSignal('');
+  const [lookupResult, setLookupResult] = createSignal<HostLookupResponse | null>(null);
+  const [lookupError, setLookupError] = createSignal<string | null>(null);
+  const [lookupLoading, setLookupLoading] = createSignal(false);
+  const [highlightedHostId, setHighlightedHostId] = createSignal<string | null>(null);
+  let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
   createEffect(() => {
     if (requiresToken()) {
@@ -133,6 +140,62 @@ export const HostAgents: Component = () => {
     })),
   );
 
+  const connectedFromStatus = (status: string | undefined | null) => {
+    if (!status) return false;
+    const value = status.toLowerCase();
+    return value === 'online' || value === 'running' || value === 'healthy';
+  };
+
+  createEffect(() => {
+    const current = lookupResult();
+    if (!current) return;
+
+    const targetId = current.host.id;
+    const targetHostname = current.host.hostname;
+    const hosts = allHosts();
+    const match = hosts.find((host) => host.id === targetId || host.hostname === targetHostname);
+    if (!match) return;
+
+    if (highlightTimer) {
+      clearTimeout(highlightTimer);
+      highlightTimer = null;
+    }
+
+    setHighlightedHostId(match.id);
+    highlightTimer = setTimeout(() => {
+      setHighlightedHostId(null);
+      highlightTimer = null;
+    }, 10_000);
+
+    const updated = {
+      success: true,
+      host: {
+        id: match.id,
+        hostname: match.hostname,
+        displayName: match.displayName,
+        status: match.status,
+        connected: connectedFromStatus(match.status),
+        lastSeen: match.lastSeen ?? Date.now(),
+        agentVersion: match.agentVersion ?? current.host.agentVersion,
+      },
+    } satisfies HostLookupResponse;
+
+    const currentHost = current.host;
+    if (
+      currentHost.status === updated.host.status &&
+      currentHost.connected === updated.host.connected &&
+      currentHost.lastSeen === updated.host.lastSeen &&
+      currentHost.agentVersion === updated.host.agentVersion &&
+      (currentHost.displayName || '') === (updated.host.displayName || '') &&
+      currentHost.hostname === updated.host.hostname
+    ) {
+      return;
+    }
+
+    setLookupResult(updated);
+    setLookupError(null);
+  });
+
   onMount(() => {
     if (typeof window === 'undefined') {
       return;
@@ -156,13 +219,20 @@ export const HostAgents: Component = () => {
   });
 
 
-  const requiresToken = () => {
-    const status = securityStatus();
-    if (status) {
-      return status.requiresAuth || status.apiTokenConfigured;
-    }
-    return true;
-  };
+    const requiresToken = () => {
+      const status = securityStatus();
+      if (status) {
+        return status.requiresAuth || status.apiTokenConfigured;
+      }
+      return true;
+    };
+
+    onCleanup(() => {
+      if (highlightTimer) {
+        clearTimeout(highlightTimer);
+        highlightTimer = null;
+      }
+    });
 
   const hasToken = () => Boolean(currentToken());
   const commandsUnlocked = () => (requiresToken() ? hasToken() : hasToken() || confirmedNoToken());
@@ -232,6 +302,35 @@ export const HostAgents: Component = () => {
       return currentToken() || TOKEN_PLACEHOLDER;
     }
     return currentToken() || 'disabled';
+  };
+
+  const handleLookup = async () => {
+    const query = lookupValue().trim();
+    setLookupError(null);
+
+    if (!query) {
+      setLookupResult(null);
+      setLookupError('Enter a hostname or host ID to check.');
+      return;
+    }
+
+    setLookupLoading(true);
+    try {
+      const result = await MonitoringAPI.lookupHost({ id: query, hostname: query });
+      if (!result) {
+        setLookupResult(null);
+        setLookupError(`No host has reported with "${query}" yet. Try again in a few seconds.`);
+      } else {
+        setLookupResult(result);
+        setLookupError(null);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Host lookup failed.';
+      setLookupResult(null);
+      setLookupError(message);
+    } finally {
+      setLookupLoading(false);
+    }
   };
 
   const getSystemdServiceUnit = () => `[Unit]
@@ -386,6 +485,78 @@ sudo systemctl daemon-reload`;
                       </div>
                     )}
                   </For>
+                </div>
+                <div class="space-y-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+                  <div class="flex items-center justify-between gap-3">
+                    <h5 class="text-sm font-semibold">Check installation status</h5>
+                    <button
+                      type="button"
+                      onClick={handleLookup}
+                      disabled={lookupLoading()}
+                      class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {lookupLoading() ? 'Checking…' : 'Check status'}
+                    </button>
+                  </div>
+                  <p class="text-xs text-blue-800 dark:text-blue-200">
+                    Enter the hostname (or host ID) from the machine you just installed. Pulse returns the latest status instantly.
+                  </p>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <input
+                      type="text"
+                      value={lookupValue()}
+                      onInput={(event) => {
+                        setLookupValue(event.currentTarget.value);
+                        setLookupError(null);
+                        setLookupResult(null);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleLookup();
+                        }
+                      }}
+                      placeholder="Hostname or host ID"
+                      class="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800/60"
+                    />
+                  </div>
+                  <Show when={lookupError()}>
+                    <p class="text-xs font-medium text-red-600 dark:text-red-300">{lookupError()}</p>
+                  </Show>
+                  <Show when={lookupResult()}>
+                    {(result) => {
+                      const host = () => result().host;
+                      const statusBadgeClasses = () =>
+                        host().connected
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200';
+                      return (
+                        <div class="space-y-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100">
+                          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-sm font-semibold">
+                              {host().displayName || host().hostname}
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClasses()}`}>
+                                {host().connected ? 'Connected' : 'Not reporting yet'}
+                              </span>
+                              <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/60 dark:text-blue-200">
+                                {host().status || 'unknown'}
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            Last seen {formatRelativeTime(host().lastSeen)} ({formatAbsoluteTime(host().lastSeen)})
+                          </div>
+                          <Show when={host().agentVersion}>
+                            <div class="text-xs text-blue-700 dark:text-blue-200">
+                              Agent version {host().agentVersion}
+                            </div>
+                          </Show>
+                        </div>
+                      );
+                    }}
+                  </Show>
                 </div>
                 <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
                   <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -542,6 +713,7 @@ sudo systemctl daemon-reload`;
                         status === 'online' ||
                         status === 'running' ||
                         status === 'healthy';
+                      const isHighlighted = highlightedHostId() === host.id;
 
                       const baseRowClass = isStale
                         ? 'bg-gray-50 dark:bg-gray-800/50 opacity-60'
@@ -549,6 +721,9 @@ sudo systemctl daemon-reload`;
 
                       const rowClass =
                         tokenRevoked && !isStale ? `${baseRowClass} opacity-60` : baseRowClass;
+                      const highlightClass = isHighlighted
+                        ? 'ring-2 ring-blue-500/70 dark:ring-blue-400/70 shadow-md'
+                        : '';
 
                       const handleDelete = async () => {
                         if (!confirm(`Remove host "${host.displayName || host.hostname || host.id}"?\n\nThis will remove the host from Pulse monitoring. The host agent will re-register if it continues to report.`)) {
@@ -580,7 +755,7 @@ sudo systemctl daemon-reload`;
                       };
 
                       return (
-                        <tr class={rowClass}>
+                        <tr class={`${rowClass} ${highlightClass}`}>
                           <td class="py-3 px-4">
                             <div class="font-medium text-gray-900 dark:text-gray-100">
                               {host.displayName || host.hostname || host.id}

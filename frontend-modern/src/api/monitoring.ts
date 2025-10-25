@@ -1,4 +1,4 @@
-import type { State, Performance, Stats, DockerHostCommand } from '@/types/api';
+import type { State, Performance, Stats, DockerHostCommand, HostLookupResponse } from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 
 export class MonitoringAPI {
@@ -146,6 +146,56 @@ export class MonitoringAPI {
 
       throw new Error(message);
     }
+  }
+
+  static async lookupHost(params: { id?: string; hostname?: string }): Promise<HostLookupResponse | null> {
+    const search = new URLSearchParams();
+    if (params.id) search.set('id', params.id);
+    if (params.hostname) search.set('hostname', params.hostname);
+
+    if (!search.toString()) {
+      throw new Error('Provide a host identifier or hostname to look up.');
+    }
+
+    const url = `${this.baseUrl}/agents/host/lookup?${search.toString()}`;
+    const response = await apiFetch(url);
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      let message = text?.trim() || `Lookup failed with status ${response.status}`;
+      try {
+        const parsed = text ? JSON.parse(text) : null;
+        if (parsed?.error) {
+          message = parsed.error;
+        }
+      } catch (_err) {
+        // ignore parse error
+      }
+      throw new Error(message);
+    }
+
+    const text = await response.text();
+    if (!text?.trim()) {
+      return null;
+    }
+
+    const data = JSON.parse(text) as HostLookupResponse;
+    const lastSeen = data?.host?.lastSeen as unknown;
+    if (typeof lastSeen === 'string') {
+      const parsed = Date.parse(lastSeen);
+      data.host.lastSeen = Number.isFinite(parsed) ? parsed : Date.now();
+    } else if (typeof lastSeen === 'number') {
+      // assume already a timestamp
+      data.host.lastSeen = lastSeen;
+    } else {
+      data.host.lastSeen = Date.now();
+    }
+
+    return data;
   }
 }
 
