@@ -1,6 +1,8 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
+import { clearStoredAPIToken } from '@/utils/tokenStorage';
+import { clearApiToken as clearApiClientToken } from '@/utils/apiClient';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
@@ -125,7 +127,8 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       }
 
       try {
-        localStorage.removeItem('apiToken');
+        clearStoredAPIToken();
+        clearApiClientToken();
       } catch (storageError) {
         console.warn('Unable to clear cached API token', storageError);
       }

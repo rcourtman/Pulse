@@ -137,45 +137,54 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
-	r.mux.HandleFunc("/api/storage/", r.handleStorage)
-	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
-	r.mux.HandleFunc("/api/charts", r.handleCharts)
+	r.mux.HandleFunc("/api/storage/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorage)))
+	r.mux.HandleFunc("/api/storage-charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageCharts)))
+	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
 	r.mux.HandleFunc("/api/diagnostics/temperature-proxy/register-nodes", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsRegisterProxyNodes)))
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
 	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.handleDownloadPulseSensorProxy)
 	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.handleDownloadInstallerScript)
 	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
-	r.mux.HandleFunc("/api/config", r.handleConfig)
-	r.mux.HandleFunc("/api/backups", r.handleBackups)
-	r.mux.HandleFunc("/api/backups/", r.handleBackups)
-	r.mux.HandleFunc("/api/backups/unified", r.handleBackups)
-	r.mux.HandleFunc("/api/backups/pve", r.handleBackupsPVE)
-	r.mux.HandleFunc("/api/backups/pbs", r.handleBackupsPBS)
-	r.mux.HandleFunc("/api/snapshots", r.handleSnapshots)
+	r.mux.HandleFunc("/api/config", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleConfig)))
+	r.mux.HandleFunc("/api/backups", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackups)))
+	r.mux.HandleFunc("/api/backups/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackups)))
+	r.mux.HandleFunc("/api/backups/unified", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackups)))
+	r.mux.HandleFunc("/api/backups/pve", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackupsPVE)))
+	r.mux.HandleFunc("/api/backups/pbs", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackupsPBS)))
+	r.mux.HandleFunc("/api/snapshots", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleSnapshots)))
 
 	// Guest metadata routes
-	r.mux.HandleFunc("/api/guests/metadata", guestMetadataHandler.HandleGetMetadata)
-	r.mux.HandleFunc("/api/guests/metadata/", func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
+	r.mux.HandleFunc("/api/guests/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeMonitoringRead) {
+				return
+			}
 			guestMetadataHandler.HandleGetMetadata(w, req)
 		case http.MethodPut, http.MethodPost:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
 			guestMetadataHandler.HandleUpdateMetadata(w, req)
 		case http.MethodDelete:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
 			guestMetadataHandler.HandleDeleteMetadata(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
 	// Update routes
-	r.mux.HandleFunc("/api/updates/check", updateHandlers.HandleCheckUpdates)
-	r.mux.HandleFunc("/api/updates/apply", updateHandlers.HandleApplyUpdate)
-	r.mux.HandleFunc("/api/updates/status", updateHandlers.HandleUpdateStatus)
-	r.mux.HandleFunc("/api/updates/plan", updateHandlers.HandleGetUpdatePlan)
-	r.mux.HandleFunc("/api/updates/history", updateHandlers.HandleListUpdateHistory)
-	r.mux.HandleFunc("/api/updates/history/entry", updateHandlers.HandleGetUpdateHistoryEntry)
+	r.mux.HandleFunc("/api/updates/check", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleCheckUpdates)))
+	r.mux.HandleFunc("/api/updates/apply", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateHandlers.HandleApplyUpdate)))
+	r.mux.HandleFunc("/api/updates/status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleUpdateStatus)))
+	r.mux.HandleFunc("/api/updates/plan", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleGetUpdatePlan)))
+	r.mux.HandleFunc("/api/updates/history", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleListUpdateHistory)))
+	r.mux.HandleFunc("/api/updates/history/entry", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleGetUpdateHistoryEntry)))
 
 	// Config management routes
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
@@ -860,10 +869,10 @@ func (r *Router) setupRoutes() {
 	})
 
 	// Alert routes
-	r.mux.HandleFunc("/api/alerts/", r.alertHandlers.HandleAlerts)
+	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, r.alertHandlers.HandleAlerts))
 
 	// Notification routes
-	r.mux.HandleFunc("/api/notifications/", r.notificationHandlers.HandleNotifications)
+	r.mux.HandleFunc("/api/notifications/", RequireAdmin(r.config, r.notificationHandlers.HandleNotifications))
 
 	// Settings routes
 	r.mux.HandleFunc("/api/settings", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, getSettings)))

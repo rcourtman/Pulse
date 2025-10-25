@@ -39,12 +39,21 @@ const readStoredToken = (primaryKey: string, legacyKeys: readonly string[] = [])
   if (typeof window === 'undefined') {
     return null;
   }
-  const primary = window.localStorage.getItem(primaryKey);
+  let storage: Storage | undefined;
+  try {
+    storage = window.sessionStorage;
+  } catch {
+    storage = undefined;
+  }
+  if (!storage) {
+    return null;
+  }
+  const primary = storage.getItem(primaryKey);
   if (primary) {
     return primary;
   }
   for (const key of legacyKeys) {
-    const value = window.localStorage.getItem(key);
+    const value = storage.getItem(key);
     if (value) {
       return value;
     }
@@ -69,16 +78,22 @@ export const useScopedTokenManager = (options: UseScopedTokenManagerOptions): Sc
     if (typeof window === 'undefined') {
       return;
     }
+    let storage: Storage | undefined;
+    try {
+      storage = window.sessionStorage;
+    } catch {
+      storage = undefined;
+    }
     try {
       if (current) {
-        window.localStorage.setItem(storageKey, current);
+        storage?.setItem(storageKey, current);
         try {
           window.dispatchEvent(new StorageEvent('storage', { key: storageKey, newValue: current }));
         } catch (eventErr) {
           console.debug('Unable to dispatch storage event for token update', eventErr);
         }
       } else {
-        window.localStorage.removeItem(storageKey);
+        storage?.removeItem(storageKey);
         try {
           window.dispatchEvent(new StorageEvent('storage', { key: storageKey, newValue: null }));
         } catch (eventErr) {
@@ -86,7 +101,7 @@ export const useScopedTokenManager = (options: UseScopedTokenManagerOptions): Sc
         }
       }
     } catch (err) {
-      console.warn('Unable to persist API token in localStorage', err);
+      console.warn('Unable to persist API token in sessionStorage', err);
     }
   });
 

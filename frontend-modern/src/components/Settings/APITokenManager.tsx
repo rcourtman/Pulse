@@ -5,6 +5,8 @@ import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { DockerHost, Host } from '@/types/api';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
+import { setStoredAPIToken } from '@/utils/tokenStorage';
+import { setApiToken as setApiClientToken } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { ApiIcon } from '@/components/icons/ApiIcon';
@@ -261,14 +263,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       showSuccess('New API token generated. Copy it below while it is still visible.');
       props.onTokensChanged?.();
 
-      try {
-        window.localStorage.setItem('apiToken', token);
-        window.dispatchEvent(
-          new StorageEvent('storage', { key: 'apiToken', newValue: token }),
-        );
-      } catch (storageErr) {
-        console.warn('Unable to persist API token in localStorage', storageErr);
-      }
+      setStoredAPIToken(token);
+      setApiClientToken(token);
     } catch (err) {
       console.error('Failed to generate API token', err);
       showError('Failed to generate API token');

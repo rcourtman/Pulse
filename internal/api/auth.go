@@ -230,7 +230,6 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	}
 
 	// API-only mode: when only API token is configured (no password auth)
-	// Allow read-only endpoints for the UI to work
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
 		// Check if an API token was provided
 		providedToken := r.Header.Get("X-API-Token")
@@ -251,32 +250,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			return false
 		}
 
-		// No token provided - allow read-only endpoints for UI
-		if r.Method == "GET" || r.URL.Path == "/ws" {
-			// Allow these endpoints without auth for UI to function
-			allowedPaths := []string{
-				"/api/state",
-				"/api/config/nodes",
-				"/api/config/system",
-				"/api/settings",
-				"/api/discover",
-				"/api/security/status",
-				"/api/version",
-				"/api/health",
-				"/api/updates/check",
-				"/api/system/diagnostics",
-				"/api/guests/metadata",
-				"/ws", // WebSocket for real-time updates
-			}
-			for _, path := range allowedPaths {
-				if r.URL.Path == path || strings.HasPrefix(r.URL.Path, path+"/") {
-					log.Debug().Str("path", r.URL.Path).Msg("Allowing read-only access in API-only mode")
-					return true
-				}
-			}
-		}
-
-		// Require token for everything else
+		// Require a valid token for all requests in API-only mode
 		if w != nil {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="API Token Required"`)
 			http.Error(w, "API token required", http.StatusUnauthorized)
@@ -342,7 +316,15 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	// Check basic auth
 	if cfg.AuthUser != "" && cfg.AuthPass != "" {
 		auth := r.Header.Get("Authorization")
-		log.Debug().Str("auth_header", auth).Str("url", r.URL.Path).Msg("Checking auth")
+		authScheme := "none"
+		if auth != "" {
+			if idx := strings.IndexByte(auth, ' '); idx != -1 {
+				authScheme = strings.ToLower(auth[:idx])
+			} else {
+				authScheme = strings.ToLower(auth)
+			}
+		}
+		log.Debug().Str("auth_scheme", authScheme).Str("url", r.URL.Path).Msg("Checking Authorization header")
 		if auth != "" {
 			const prefix = "Basic "
 			if strings.HasPrefix(auth, prefix) {

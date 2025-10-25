@@ -1,6 +1,8 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
+import { clearStoredAPIToken } from '@/utils/tokenStorage';
+import { clearApiToken as clearApiClientToken, setApiToken as setApiClientToken } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/constants';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTokenReveal } from '@/stores/tokenReveal';
@@ -11,7 +13,6 @@ export const FirstRunSetup: Component = () => {
   const [password, setPassword] = createSignal('');
   const [confirmPassword, setConfirmPassword] = createSignal('');
   const [useCustomPassword, setUseCustomPassword] = createSignal(false);
-  const [, setApiToken] = createSignal('');
   const [isSettingUp, setIsSettingUp] = createSignal(false);
   const [showCredentials, setShowCredentials] = createSignal(false);
   const [savedUsername, setSavedUsername] = createSignal('');
@@ -98,7 +99,7 @@ export const FirstRunSetup: Component = () => {
 
     // Generate API token
     const token = generateToken();
-    setApiToken(token);
+    setApiClientToken(token);
 
     try {
       const response = await fetch('/api/security/quick-setup', {
@@ -139,7 +140,8 @@ export const FirstRunSetup: Component = () => {
       }
 
       try {
-        localStorage.removeItem('apiToken');
+        clearStoredAPIToken();
+        clearApiClientToken();
       } catch (storageError) {
         console.warn('Unable to clear cached API token', storageError);
       }
