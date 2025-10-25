@@ -137,13 +137,14 @@ See [Configuration Guide](docs/CONFIGURATION.md#automated-setup-skip-ui) for det
 2. Discovered nodes appear automatically
 3. Click "Setup Script" next to any node
 4. Click "Generate Setup Code" button (creates a 6-character code valid for 5 minutes)
-5. Copy and run the provided one-liner on your Proxmox/PBS host
+5. Copy and run the provided one-liner on your Proxmox/PBS host (the script prompts for your setup token securely)
 6. Node is configured and monitoring starts automatically
 
 **Example:**
 ```bash
-curl -sSL "http://pulse:7655/api/setup-script?type=pve&host=https://pve:8006&auth_token=ABC123" | bash
+curl -sSL "http://pulse:7655/api/setup-script?type=pve&host=https://pve:8006" | bash
 ```
+> Tip: For non-interactive installs, export `PULSE_SETUP_TOKEN` before running the script or supply `auth_token=YOUR_API_TOKEN` as shown in Method 2.
 
 #### Method 2: Automated Setup (For scripts/automation)
 Use your permanent API token directly in the URL for automation:

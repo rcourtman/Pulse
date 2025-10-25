@@ -758,8 +758,9 @@ Response:
 {
   "url": "http://pulse.local:7655/api/setup-script?type=pve&host=...",
   "command": "curl -sSL \"http://pulse.local:7655/api/setup-script?...\" | bash",
-  "setupCode": "A7K9P2",  // 6-character one-time code
-  "expires": 1755123456    // Unix timestamp when code expires (5 minutes)
+  "setupToken": "4c7f3e8c1c5f4b0da580c4477f4b1c2d",
+  "tokenHint": "4c7…c2d",
+  "expires": 1755123456    // Unix timestamp when token expires (5 minutes)
 }
 ```
 
@@ -774,8 +775,8 @@ The script will:
 1. Create a monitoring user (pulse-monitor@pam or pulse-monitor@pbs)
 2. Generate an API token for that user
 3. Set appropriate permissions
-4. Prompt for the setup code
-5. Auto-register with Pulse if a valid code is provided
+4. Prompt for the setup token (or read `PULSE_SETUP_TOKEN` if set)
+5. Auto-register with Pulse if a valid token is provided
 
 ### Auto-Register Node
 Register a node automatically (used by setup scripts). Requires either a valid setup code or API token.

@@ -74,6 +74,19 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
   const [formData, setFormData] = createSignal(getCleanFormData());
   const [quickSetupCommand, setQuickSetupCommand] = createSignal('');
+  const [quickSetupToken, setQuickSetupToken] = createSignal('');
+  const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
+  const quickSetupExpiryLabel = () => {
+    const expiry = quickSetupExpiry();
+    if (!expiry) {
+      return '';
+    }
+    try {
+      return new Date(expiry * 1000).toLocaleTimeString();
+    } catch {
+      return '';
+    }
+  };
 
   // Track previous state to detect changes
   let previousResetKey: number | undefined = undefined;
@@ -91,6 +104,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       previousResetKey = key;
       setFormData(() => getCleanFormData(props.nodeType));
       setQuickSetupCommand('');
+      setQuickSetupToken('');
+      setQuickSetupExpiry(null);
       setTestResult(null);
       return;
     }
@@ -100,6 +115,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       previousNodeType = nodeType;
       setFormData(() => getCleanFormData(props.nodeType));
       setQuickSetupCommand('');
+      setQuickSetupToken('');
+      setQuickSetupExpiry(null);
       setTestResult(null);
       return;
     }
@@ -109,6 +126,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     if (isOpen && !editingNode) {
       setFormData(() => getCleanFormData(props.nodeType));
       setQuickSetupCommand('');
+      setQuickSetupToken('');
+      setQuickSetupExpiry(null);
       setTestResult(null);
     }
   });
@@ -659,6 +678,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const data = await response.json();
                                             console.log('[Quick Setup] Setup data received:', data);
 
+                                            setQuickSetupToken(data.setupToken ?? '');
+                                            setQuickSetupExpiry(typeof data.expires === 'number' ? data.expires : null);
+
                                             // Backend returns url, command, and expires
                                             // Just copy the command - don't show the modal
                                             if (data.command) {
@@ -667,7 +689,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               const copied = await copyToClipboard(data.command);
                                               console.log('[Quick Setup] Copy result:', copied);
                                               if (copied) {
-                                                showSuccess('Command copied to clipboard!');
+                                                showSuccess('Command copied to clipboard! Paste the setup token shown below when prompted.');
                                               } else {
                                                 showError('Failed to copy to clipboard');
                                               }
@@ -675,10 +697,14 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               console.log('[Quick Setup] No command in response');
                                             }
                                           } else {
+                                            setQuickSetupToken('');
+                                            setQuickSetupExpiry(null);
                                             showError('Failed to generate setup URL');
                                           }
                                         } catch (error) {
                                           console.error('[Quick Setup] Error:', error);
+                                          setQuickSetupToken('');
+                                          setQuickSetupExpiry(null);
                                           showError('Failed to copy command');
                                         }
                                       }}
@@ -717,6 +743,19 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       <code class="block text-blue-100 whitespace-pre-wrap break-words">
                                         {quickSetupCommand()}
                                       </code>
+                                    </Show>
+                                    <Show when={quickSetupToken().length > 0}>
+                                      <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
+                                        <span class="font-semibold">Setup token:</span>
+                                        <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
+                                          {quickSetupToken()}
+                                        </code>
+                                        <Show when={quickSetupExpiry()}>
+                                          <span class="ml-2">
+                                            Expires at {quickSetupExpiryLabel()}
+                                          </span>
+                                        </Show>
+                                      </div>
                                     </Show>
                                   </div>
 
@@ -1174,6 +1213,19 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       <code class="block text-blue-100 whitespace-pre-wrap break-words">
                                         {quickSetupCommand()}
                                       </code>
+                                    </Show>
+                                    <Show when={quickSetupToken().length > 0}>
+                                      <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
+                                        <span class="font-semibold">Setup token:</span>
+                                        <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
+                                          {quickSetupToken()}
+                                        </code>
+                                        <Show when={quickSetupExpiry()}>
+                                          <span class="ml-2">
+                                            Expires at {quickSetupExpiryLabel()}
+                                          </span>
+                                        </Show>
+                                      </div>
                                     </Show>
                                   </div>
 
