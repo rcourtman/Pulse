@@ -3593,15 +3593,14 @@ else
             IFS= read -r AUTH_TOKEN
             if command -v stty >/dev/null 2>&1; then stty echo; fi
             printf "\n"
-        elif { exec 3</dev/tty; } 2>/dev/null; then
-            printf "Pulse setup token: " >&3
-            if command -v stty >/dev/null 2>&1; then stty -echo <&3 2>/dev/null || true; fi
-            IFS= read -r AUTH_TOKEN <&3 || true
-            if command -v stty >/dev/null 2>&1; then stty echo <&3 2>/dev/null || true; fi
-            printf "\n" >&3
-            exec 3<&-
-        fi
-    fi
+		elif [ -c /dev/tty ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+			printf "Pulse setup token: " >/dev/tty
+			if command -v stty >/dev/null 2>&1; then stty -echo </dev/tty 2>/dev/null || true; fi
+			IFS= read -r AUTH_TOKEN </dev/tty || true
+			if command -v stty >/dev/null 2>&1; then stty echo </dev/tty 2>/dev/null || true; fi
+			printf "\n" >/dev/tty
+		fi
+	fi
 
     # Only proceed with auto-registration if we have an auth token
     if [ -n "$AUTH_TOKEN" ]; then
@@ -4653,15 +4652,14 @@ else
             IFS= read -r AUTH_TOKEN
             if command -v stty >/dev/null 2>&1; then stty echo; fi
             printf "\n"
-        elif { exec 3</dev/tty; } 2>/dev/null; then
-            printf "Pulse setup token: " >&3
-            if command -v stty >/dev/null 2>&1; then stty -echo <&3 2>/dev/null || true; fi
-            IFS= read -r AUTH_TOKEN <&3 || true
-            if command -v stty >/dev/null 2>&1; then stty echo <&3 2>/dev/null || true; fi
-            printf "\n" >&3
-            exec 3<&-
-        fi
-    fi
+		elif [ -c /dev/tty ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+			printf "Pulse setup token: " >/dev/tty
+			if command -v stty >/dev/null 2>&1; then stty -echo </dev/tty 2>/dev/null || true; fi
+			IFS= read -r AUTH_TOKEN </dev/tty || true
+			if command -v stty >/dev/null 2>&1; then stty echo </dev/tty 2>/dev/null || true; fi
+			printf "\n" >/dev/tty
+		fi
+	fi
 
     # Only proceed with auto-registration if we have an auth token
     if [ -n "$AUTH_TOKEN" ]; then
@@ -4871,12 +4869,16 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		tokenHint = fmt.Sprintf("%s…%s", token[:3], token[len(token)-3:])
 	}
 
+	command := fmt.Sprintf(`curl -sSL "%s" | PULSE_SETUP_TOKEN=%s bash`, scriptURL, token)
+
 	response := map[string]interface{}{
-		"url":        scriptURL,
-		"command":    fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
-		"expires":    expiry.Unix(),
-		"setupToken": token,
-		"tokenHint":  tokenHint,
+		"url":               scriptURL,
+		"command":           command,
+		"expires":           expiry.Unix(),
+		"setupToken":        token,
+		"tokenHint":         tokenHint,
+		"commandWithEnv":    command,
+		"commandWithoutEnv": fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
