@@ -22,27 +22,169 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 
 const GUEST_METADATA_STORAGE_KEY = 'pulseGuestMetadata';
 
-const readGuestMetadataCache = (): Record<string, GuestMetadata> => {
-  if (typeof window === 'undefined') return {};
+type GuestMetadataRecord = Record<string, GuestMetadata>;
+type IdleCallbackHandle = number;
+type IdleCallback = (deadline?: { didTimeout: boolean; timeRemaining: () => number }) => void;
+type IdleCapableWindow = Window & {
+  requestIdleCallback?: (callback: IdleCallback, options?: { timeout?: number }) => IdleCallbackHandle;
+  cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
+};
+
+let cachedGuestMetadata: GuestMetadataRecord | null = null;
+let lastPersistedGuestMetadataJSON: string | null = null;
+let pendingPersistMetadata: GuestMetadataRecord | null = null;
+let persistHandle: number | null = null;
+let persistHandleType: 'idle' | 'timeout' | null = null;
+
+const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'undefined';
+
+const readGuestMetadataCache = (): GuestMetadataRecord => {
+  if (cachedGuestMetadata) {
+    return cachedGuestMetadata;
+  }
+
+  if (typeof window === 'undefined') {
+    cachedGuestMetadata = {};
+    return cachedGuestMetadata;
+  }
+
   try {
     const raw = window.localStorage.getItem(GUEST_METADATA_STORAGE_KEY);
-    if (!raw) return {};
+    if (!raw) {
+      cachedGuestMetadata = {};
+      lastPersistedGuestMetadataJSON = null;
+      return cachedGuestMetadata;
+    }
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
-      return parsed as Record<string, GuestMetadata>;
+      cachedGuestMetadata = parsed as GuestMetadataRecord;
+      lastPersistedGuestMetadataJSON = raw;
+      return cachedGuestMetadata;
     }
   } catch (err) {
     console.warn('Failed to parse cached guest metadata:', err);
   }
-  return {};
+
+  cachedGuestMetadata = {};
+  lastPersistedGuestMetadataJSON = null;
+  return cachedGuestMetadata;
 };
 
-const persistGuestMetadataCache = (metadata: Record<string, GuestMetadata>) => {
-  if (typeof window === 'undefined') return;
+const clearPendingPersistHandle = (idleWindow: IdleCapableWindow) => {
+  if (persistHandle === null || persistHandleType === null) {
+    return;
+  }
+
+  if (persistHandleType === 'idle' && idleWindow.cancelIdleCallback) {
+    idleWindow.cancelIdleCallback(persistHandle);
+  } else if (persistHandleType === 'timeout') {
+    window.clearTimeout(persistHandle);
+  }
+
+  persistHandle = null;
+  persistHandleType = null;
+};
+
+const runGuestMetadataPersist = () => {
+  if (typeof window === 'undefined' || !pendingPersistMetadata) {
+    pendingPersistMetadata = null;
+    return;
+  }
+
+  const metadata = pendingPersistMetadata;
+  pendingPersistMetadata = null;
+
+  const markBase = instrumentationEnabled ? `guest-metadata:persist:${Date.now()}` : null;
+  if (markBase) {
+    performance.mark(`${markBase}:start`);
+  }
+
+  let serialized: string;
   try {
-    window.localStorage.setItem(GUEST_METADATA_STORAGE_KEY, JSON.stringify(metadata));
+    serialized = JSON.stringify(metadata);
   } catch (err) {
+    if (markBase) {
+      performance.mark(`${markBase}:end`);
+      performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
+      performance.clearMarks(`${markBase}:start`);
+      performance.clearMarks(`${markBase}:end`);
+      performance.clearMeasures(markBase);
+    }
+    console.warn('Failed to serialize guest metadata cache:', err);
+    return;
+  }
+
+  if (serialized === lastPersistedGuestMetadataJSON) {
+    if (markBase) {
+      performance.mark(`${markBase}:end`);
+      performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
+      const entries = performance.getEntriesByName(markBase);
+      const entry = entries[entries.length - 1];
+      if (entry) {
+        console.debug(
+          `[guestMetadataCache] skipped persist (unchanged) in ${entry.duration.toFixed(2)}ms`,
+        );
+      }
+      performance.clearMarks(`${markBase}:start`);
+      performance.clearMarks(`${markBase}:end`);
+      performance.clearMeasures(markBase);
+    }
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(GUEST_METADATA_STORAGE_KEY, serialized);
+    lastPersistedGuestMetadataJSON = serialized;
+    if (markBase) {
+      performance.mark(`${markBase}:end`);
+      performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
+      const entries = performance.getEntriesByName(markBase);
+      const entry = entries[entries.length - 1];
+      if (entry) {
+        console.debug(
+          `[guestMetadataCache] persisted ${Object.keys(metadata).length} entries in ${entry.duration.toFixed(2)}ms`,
+        );
+      }
+      performance.clearMarks(`${markBase}:start`);
+      performance.clearMarks(`${markBase}:end`);
+      performance.clearMeasures(markBase);
+    }
+  } catch (err) {
+    if (markBase) {
+      performance.mark(`${markBase}:end`);
+      performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
+      performance.clearMarks(`${markBase}:start`);
+      performance.clearMarks(`${markBase}:end`);
+      performance.clearMeasures(markBase);
+    }
     console.warn('Failed to persist guest metadata cache:', err);
+  }
+};
+
+const queueGuestMetadataPersist = (metadata: GuestMetadataRecord) => {
+  cachedGuestMetadata = metadata;
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  pendingPersistMetadata = metadata;
+  const idleWindow = window as IdleCapableWindow;
+
+  clearPendingPersistHandle(idleWindow);
+
+  const schedule: IdleCallback = () => {
+    persistHandle = null;
+    persistHandleType = null;
+    runGuestMetadataPersist();
+  };
+
+  if (idleWindow.requestIdleCallback) {
+    persistHandleType = 'idle';
+    persistHandle = idleWindow.requestIdleCallback(schedule, { timeout: 750 });
+  } else {
+    persistHandleType = 'timeout';
+    persistHandle = window.setTimeout(schedule, 0);
   }
 };
 
@@ -65,16 +207,17 @@ export function Dashboard(props: DashboardProps) {
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
-  const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>(
+  const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(
     readGuestMetadataCache(),
   );
 
-  const updateGuestMetadataState = (
-    updater: (prev: Record<string, GuestMetadata>) => Record<string, GuestMetadata>,
-  ) =>
+  const updateGuestMetadataState = (updater: (prev: GuestMetadataRecord) => GuestMetadataRecord) =>
     setGuestMetadata((prev) => {
       const next = updater(prev);
-      persistGuestMetadataCache(next);
+      if (next === prev) {
+        return prev;
+      }
+      queueGuestMetadataPersist(next);
       return next;
     });
 
@@ -127,15 +270,52 @@ export function Dashboard(props: DashboardProps) {
 
   // Callback to update a guest's custom URL in metadata
   const handleCustomUrlUpdate = (guestId: string, url: string) => {
+    const trimmedUrl = url.trim();
+    const nextUrl = trimmedUrl === '' ? undefined : trimmedUrl;
+    const currentUrl = guestMetadata()[guestId]?.customUrl;
+    if (currentUrl === nextUrl) {
+      return;
+    }
+
     updateGuestMetadataState((prev) => {
-      const next = {
-        ...prev,
-        [guestId]: {
-          ...(prev[guestId] || { id: guestId }),
-          customUrl: url || undefined,
-        },
+      const previousEntry = prev[guestId];
+
+      if (nextUrl === undefined) {
+        if (!previousEntry || typeof previousEntry.customUrl === 'undefined') {
+          return prev;
+        }
+        const { customUrl: _removed, ...restEntry } = previousEntry;
+        const hasAdditionalMetadata = Object.entries(restEntry).some(
+          ([key, value]) => key !== 'id' && value !== undefined,
+        );
+
+        if (!hasAdditionalMetadata) {
+          const { [guestId]: _omit, ...rest } = prev;
+          return rest;
+        }
+
+        return {
+          ...prev,
+          [guestId]: {
+            ...restEntry,
+            id: restEntry.id ?? guestId,
+          },
+        };
+      }
+
+      if (previousEntry && previousEntry.customUrl === nextUrl) {
+        return prev;
+      }
+
+      const nextEntry: GuestMetadata = {
+        ...(previousEntry || { id: guestId }),
+        customUrl: nextUrl,
       };
-      return next;
+
+      return {
+        ...prev,
+        [guestId]: nextEntry,
+      };
     });
   };
 
