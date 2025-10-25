@@ -33,17 +33,33 @@ type ConfigPersistence struct {
 	crypto        *crypto.CryptoManager
 }
 
-// NewConfigPersistence creates a new config persistence manager
+// NewConfigPersistence creates a new config persistence manager.
+// The process terminates if encryption cannot be initialized to avoid
+// writing secrets to disk in plaintext.
 func NewConfigPersistence(configDir string) *ConfigPersistence {
+	cp, err := newConfigPersistence(configDir)
+	if err != nil {
+		log.Fatal().
+			Str("configDir", configDir).
+			Err(err).
+			Msg("Failed to initialize config persistence")
+	}
+	return cp
+}
+
+func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	if configDir == "" {
-		configDir = "/etc/pulse"
+		if envDir := os.Getenv("PULSE_DATA_DIR"); envDir != "" {
+			configDir = envDir
+		} else {
+			configDir = "/etc/pulse"
+		}
 	}
 
 	// Initialize crypto manager
-	cryptoMgr, err := crypto.NewCryptoManager()
+	cryptoMgr, err := crypto.NewCryptoManagerAt(configDir)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to initialize crypto manager, using unencrypted storage")
-		cryptoMgr = nil
+		return nil, err
 	}
 
 	cp := &ConfigPersistence{
@@ -66,7 +82,7 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 		Bool("encryptionEnabled", cryptoMgr != nil).
 		Msg("Config persistence initialized")
 
-	return cp
+	return cp, nil
 }
 
 // EnsureConfigDir ensures the configuration directory exists

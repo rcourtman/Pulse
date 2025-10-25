@@ -3577,9 +3577,32 @@ else
     # Try auto-registration
     echo "Registering node with Pulse..."
 
-    # Use auth token from URL parameter (much simpler!)
+    # Use auth token from URL parameter when provided (automation workflows)
     AUTH_TOKEN="%s"
-    
+
+    # Allow non-interactive override via environment variable
+    if [ -z "$AUTH_TOKEN" ] && [ -n "$PULSE_SETUP_TOKEN" ]; then
+        AUTH_TOKEN="$PULSE_SETUP_TOKEN"
+    fi
+
+    # Prompt the operator if we still don't have a token and a TTY is available
+    if [ -z "$AUTH_TOKEN" ]; then
+        if [ -t 0 ]; then
+            printf "Pulse setup token: "
+            if command -v stty >/dev/null 2>&1; then stty -echo; fi
+            IFS= read -r AUTH_TOKEN
+            if command -v stty >/dev/null 2>&1; then stty echo; fi
+            printf "\n"
+        elif { exec 3</dev/tty; } 2>/dev/null; then
+            printf "Pulse setup token: " >&3
+            if command -v stty >/dev/null 2>&1; then stty -echo <&3 2>/dev/null || true; fi
+            IFS= read -r AUTH_TOKEN <&3 || true
+            if command -v stty >/dev/null 2>&1; then stty echo <&3 2>/dev/null || true; fi
+            printf "\n" >&3
+            exec 3<&-
+        fi
+    fi
+
     # Only proceed with auto-registration if we have an auth token
     if [ -n "$AUTH_TOKEN" ]; then
         # Get the server's hostname
@@ -3618,8 +3641,7 @@ else
             -H "Content-Type: application/json" \
             -d @- 2>&1)
     else
-        echo "Warning: No authentication token provided"
-        echo "Auto-registration skipped"
+        echo "⚠️  Auto-registration skipped: no setup token provided"
         AUTO_REG_SUCCESS=false
         REGISTER_RESPONSE=""
     fi
@@ -4615,9 +4637,32 @@ else
     echo "🔄 Attempting auto-registration with Pulse..."
     echo ""
     
-    # Use auth token from URL parameter (much simpler!)
+    # Use auth token from URL parameter when provided (automation workflows)
     AUTH_TOKEN="%s"
-    
+
+    # Allow non-interactive override via environment variable
+    if [ -z "$AUTH_TOKEN" ] && [ -n "$PULSE_SETUP_TOKEN" ]; then
+        AUTH_TOKEN="$PULSE_SETUP_TOKEN"
+    fi
+
+    # Prompt the operator if we still don't have a token and a TTY is available
+    if [ -z "$AUTH_TOKEN" ]; then
+        if [ -t 0 ]; then
+            printf "Pulse setup token: "
+            if command -v stty >/dev/null 2>&1; then stty -echo; fi
+            IFS= read -r AUTH_TOKEN
+            if command -v stty >/dev/null 2>&1; then stty echo; fi
+            printf "\n"
+        elif { exec 3</dev/tty; } 2>/dev/null; then
+            printf "Pulse setup token: " >&3
+            if command -v stty >/dev/null 2>&1; then stty -echo <&3 2>/dev/null || true; fi
+            IFS= read -r AUTH_TOKEN <&3 || true
+            if command -v stty >/dev/null 2>&1; then stty echo <&3 2>/dev/null || true; fi
+            printf "\n" >&3
+            exec 3<&-
+        fi
+    fi
+
     # Only proceed with auto-registration if we have an auth token
     if [ -n "$AUTH_TOKEN" ]; then
         # Get the server's hostname
@@ -4667,7 +4712,7 @@ EOF
             -H "Content-Type: application/json" \
             -d "$REGISTER_JSON" 2>&1)
     else
-        echo "⚠️  No setup code provided - skipping auto-registration"
+        echo "⚠️  Auto-registration skipped: no setup token provided"
         AUTO_REG_SUCCESS=false
         REGISTER_RESPONSE=""
     fi
@@ -4815,16 +4860,23 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		backupPerms = "&backup_perms=true"
 	}
 
-	// Include the token directly in the URL - much simpler!
-	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s&auth_token=%s",
-		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, token)
+	// Build script URL without embedding the secret token directly
+	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s",
+		pulseURL, req.Type, encodedHost, pulseURL, backupPerms)
 
 	// Return a simple curl command - no environment variables needed
-	// Don't include setupCode since it's already embedded in the URL
+	// The setup token is returned separately so the script can prompt the user
+	tokenHint := token
+	if len(token) > 6 {
+		tokenHint = fmt.Sprintf("%s…%s", token[:3], token[len(token)-3:])
+	}
+
 	response := map[string]interface{}{
-		"url":     scriptURL,
-		"command": fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
-		"expires": expiry.Unix(),
+		"url":        scriptURL,
+		"command":    fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
+		"expires":    expiry.Unix(),
+		"setupToken": token,
+		"tokenHint":  tokenHint,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -5052,17 +5104,19 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	// If still not authenticated and auth is required, reject
-	// BUT: Always allow if a valid setup code/auth token was provided (even if expired/used)
-	// This ensures the error message is accurate
-	if !authenticated && h.config.HasAPITokens() && authCode == "" {
-		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - no authentication provided")
-		http.Error(w, "Pulse requires authentication", http.StatusUnauthorized)
-		return
-	} else if !authenticated && h.config.HasAPITokens() {
-		// Had a code but it didn't validate
-		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - invalid or expired setup code")
-		http.Error(w, "Invalid or expired setup code", http.StatusUnauthorized)
+	// Abort when no authentication succeeded. This applies even when API tokens
+	// are not configured to ensure one-time setup tokens are always required.
+	if !authenticated {
+		log.Warn().
+			Str("ip", r.RemoteAddr).
+			Bool("has_auth_code", authCode != "").
+			Msg("Unauthorized auto-register attempt rejected")
+
+		if authCode == "" && r.Header.Get("X-API-Token") == "" {
+			http.Error(w, "Pulse requires authentication", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Invalid or expired setup code", http.StatusUnauthorized)
+		}
 		return
 	}
 

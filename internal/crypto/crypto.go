@@ -19,9 +19,14 @@ type CryptoManager struct {
 	key []byte
 }
 
-// NewCryptoManager creates a new crypto manager
+// NewCryptoManager creates a new crypto manager using the default data directory.
 func NewCryptoManager() (*CryptoManager, error) {
-	key, err := getOrCreateKey()
+	return NewCryptoManagerAt(utils.GetDataDir())
+}
+
+// NewCryptoManagerAt creates a new crypto manager with an explicit data directory override.
+func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
+	key, err := getOrCreateKeyAt(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get encryption key: %w", err)
 	}
@@ -31,10 +36,12 @@ func NewCryptoManager() (*CryptoManager, error) {
 	}, nil
 }
 
-// getOrCreateKey gets the encryption key or creates one if it doesn't exist
-func getOrCreateKey() ([]byte, error) {
-	// Use data directory for key storage (for Docker persistence)
-	dataDir := utils.GetDataDir()
+// getOrCreateKeyAt gets the encryption key or creates one if it doesn't exist
+func getOrCreateKeyAt(dataDir string) ([]byte, error) {
+	if dataDir == "" {
+		dataDir = utils.GetDataDir()
+	}
+
 	keyPath := filepath.Join(dataDir, ".encryption.key")
 	oldKeyPath := "/etc/pulse/.encryption.key"
 
