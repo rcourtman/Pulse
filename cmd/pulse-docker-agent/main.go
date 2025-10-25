@@ -14,15 +14,22 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type targetFlagList []string
+type stringFlagList []string
 
-func (l *targetFlagList) String() string {
+func (l *stringFlagList) String() string {
 	return strings.Join(*l, ",")
 }
 
-func (l *targetFlagList) Set(value string) error {
+func (l *stringFlagList) Set(value string) error {
 	*l = append(*l, value)
 	return nil
+}
+
+func (l stringFlagList) Values() []string {
+	if len(l) == 0 {
+		return nil
+	}
+	return append([]string(nil), l...)
 }
 
 func main() {
@@ -58,6 +65,7 @@ func loadConfig() dockeragent.Config {
 	envInsecure := strings.TrimSpace(os.Getenv("PULSE_INSECURE_SKIP_VERIFY"))
 	envNoAutoUpdate := strings.TrimSpace(os.Getenv("PULSE_NO_AUTO_UPDATE"))
 	envTargets := strings.TrimSpace(os.Getenv("PULSE_TARGETS"))
+	envContainerStates := strings.TrimSpace(os.Getenv("PULSE_CONTAINER_STATES"))
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -73,8 +81,10 @@ func loadConfig() dockeragent.Config {
 	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
 	insecureFlag := flag.Bool("insecure", parseBool(envInsecure), "Skip TLS certificate verification")
 	noAutoUpdateFlag := flag.Bool("no-auto-update", parseBool(envNoAutoUpdate), "Disable automatic agent updates")
-	var targetFlags targetFlagList
+	var targetFlags stringFlagList
 	flag.Var(&targetFlags, "target", "Pulse target in url|token[|insecure] format. Repeat to send to multiple Pulse instances")
+	var containerStateFlags stringFlagList
+	flag.Var(&containerStateFlags, "container-state", "Only include containers whose status matches this value (repeat to allow multiple). Allowed values: created,running,restarting,removing,paused,exited,dead.")
 
 	flag.Parse()
 
@@ -86,7 +96,7 @@ func loadConfig() dockeragent.Config {
 	targets := make([]dockeragent.TargetConfig, 0)
 
 	if len(targetFlags) > 0 {
-		parsedTargets, err := parseTargetSpecs(targetFlags)
+		parsedTargets, err := parseTargetSpecs(targetFlags.Values())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -118,6 +128,14 @@ func loadConfig() dockeragent.Config {
 		interval = 30 * time.Second
 	}
 
+	containerStates := make([]string, 0)
+	if len(containerStateFlags) > 0 {
+		containerStates = append(containerStates, containerStateFlags.Values()...)
+	}
+	if envContainerStates != "" {
+		containerStates = append(containerStates, splitStringList(envContainerStates)...)
+	}
+
 	return dockeragent.Config{
 		PulseURL:           pulseURL,
 		APIToken:           token,
@@ -127,6 +145,7 @@ func loadConfig() dockeragent.Config {
 		InsecureSkipVerify: *insecureFlag,
 		DisableAutoUpdate:  *noAutoUpdateFlag,
 		Targets:            targets,
+		ContainerStates:    containerStates,
 	}
 }
 
@@ -202,5 +221,29 @@ func splitTargetSpecs(value string) []string {
 			result = append(result, trimmed)
 		}
 	}
+	return result
+}
+
+func splitStringList(value string) []string {
+	if value == "" {
+		return nil
+	}
+
+	items := strings.FieldsFunc(value, func(r rune) bool {
+		switch r {
+		case ',', ';', '\n', '\r':
+			return true
+		default:
+			return false
+		}
+	})
+
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+
 	return result
 }

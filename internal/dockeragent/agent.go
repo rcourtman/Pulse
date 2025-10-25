@@ -19,6 +19,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
@@ -41,20 +42,34 @@ type Config struct {
 	InsecureSkipVerify bool
 	DisableAutoUpdate  bool
 	Targets            []TargetConfig
+	ContainerStates    []string
 	Logger             *zerolog.Logger
+}
+
+var allowedContainerStates = map[string]string{
+	"created":    "created",
+	"restarting": "restarting",
+	"running":    "running",
+	"removing":   "removing",
+	"paused":     "paused",
+	"exited":     "exited",
+	"dead":       "dead",
+	"stopped":    "exited",
 }
 
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
-	cfg         Config
-	docker      *client.Client
-	httpClients map[bool]*http.Client
-	logger      zerolog.Logger
-	machineID   string
-	hostName    string
-	cpuCount    int
-	targets     []TargetConfig
-	hostID      string
+	cfg           Config
+	docker        *client.Client
+	httpClients   map[bool]*http.Client
+	logger        zerolog.Logger
+	machineID     string
+	hostName      string
+	cpuCount      int
+	targets       []TargetConfig
+	allowedStates map[string]struct{}
+	stateFilters  []string
+	hostID        string
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -88,6 +103,12 @@ func New(cfg Config) (*Agent, error) {
 	cfg.PulseURL = targets[0].URL
 	cfg.APIToken = targets[0].Token
 	cfg.InsecureSkipVerify = targets[0].InsecureSkipVerify
+
+	stateFilters, err := normalizeContainerStates(cfg.ContainerStates)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ContainerStates = stateFilters
 
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -130,13 +151,19 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	agent := &Agent{
-		cfg:         cfg,
-		docker:      dockerClient,
-		httpClients: httpClients,
-		logger:      *logger,
-		machineID:   machineID,
-		hostName:    hostName,
-		targets:     cfg.Targets,
+		cfg:           cfg,
+		docker:        dockerClient,
+		httpClients:   httpClients,
+		logger:        *logger,
+		machineID:     machineID,
+		hostName:      hostName,
+		targets:       cfg.Targets,
+		allowedStates: make(map[string]struct{}, len(stateFilters)),
+		stateFilters:  stateFilters,
+	}
+
+	for _, state := range stateFilters {
+		agent.allowedStates[state] = struct{}{}
 	}
 
 	return agent, nil
@@ -176,6 +203,36 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			Token:              token,
 			InsecureSkipVerify: target.InsecureSkipVerify,
 		})
+	}
+
+	return normalized, nil
+}
+
+func normalizeContainerStates(raw []string) ([]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	normalized := make([]string, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+
+	for _, value := range raw {
+		state := strings.ToLower(strings.TrimSpace(value))
+		if state == "" {
+			continue
+		}
+
+		canonical, ok := allowedContainerStates[state]
+		if !ok {
+			return nil, fmt.Errorf("unsupported container state %q", value)
+		}
+
+		if _, exists := seen[canonical]; exists {
+			continue
+		}
+
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
 	}
 
 	return normalized, nil
@@ -294,13 +351,28 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 }
 
 func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container, error) {
-	list, err := a.docker.ContainerList(ctx, containertypes.ListOptions{All: true})
+	options := containertypes.ListOptions{All: true}
+	if len(a.stateFilters) > 0 {
+		filterArgs := filters.NewArgs()
+		for _, state := range a.stateFilters {
+			filterArgs.Add("status", state)
+		}
+		options.Filters = filterArgs
+	}
+
+	list, err := a.docker.ContainerList(ctx, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
 
 	containers := make([]agentsdocker.Container, 0, len(list))
 	for _, summary := range list {
+		if len(a.allowedStates) > 0 {
+			if _, ok := a.allowedStates[strings.ToLower(summary.State)]; !ok {
+				continue
+			}
+		}
+
 		container, err := a.collectContainer(ctx, summary)
 		if err != nil {
 			a.logger.Warn().Str("container", strings.Join(summary.Names, ",")).Err(err).Msg("Failed to collect container stats")
@@ -322,19 +394,28 @@ func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (
 		return agentsdocker.Container{}, fmt.Errorf("inspect: %w", err)
 	}
 
-	statsResp, err := a.docker.ContainerStatsOneShot(containerCtx, summary.ID)
-	if err != nil {
-		return agentsdocker.Container{}, fmt.Errorf("stats: %w", err)
-	}
-	defer statsResp.Body.Close()
+	var (
+		cpuPercent float64
+		memUsage   int64
+		memLimit   int64
+		memPercent float64
+	)
 
-	var stats containertypes.StatsResponse
-	if err := json.NewDecoder(statsResp.Body).Decode(&stats); err != nil {
-		return agentsdocker.Container{}, fmt.Errorf("decode stats: %w", err)
-	}
+	if inspect.State.Running || inspect.State.Paused {
+		statsResp, err := a.docker.ContainerStatsOneShot(containerCtx, summary.ID)
+		if err != nil {
+			return agentsdocker.Container{}, fmt.Errorf("stats: %w", err)
+		}
+		defer statsResp.Body.Close()
 
-	cpuPercent := calculateCPUPercent(stats, a.cpuCount)
-	memUsage, memLimit, memPercent := calculateMemoryUsage(stats)
+		var stats containertypes.StatsResponse
+		if err := json.NewDecoder(statsResp.Body).Decode(&stats); err != nil {
+			return agentsdocker.Container{}, fmt.Errorf("decode stats: %w", err)
+		}
+
+		cpuPercent = calculateCPUPercent(stats, a.cpuCount)
+		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
+	}
 
 	createdAt := time.Unix(summary.Created, 0)
 
