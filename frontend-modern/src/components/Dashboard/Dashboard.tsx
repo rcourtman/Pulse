@@ -20,6 +20,32 @@ import { isNodeOnline } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 
+const GUEST_METADATA_STORAGE_KEY = 'pulseGuestMetadata';
+
+const readGuestMetadataCache = (): Record<string, GuestMetadata> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(GUEST_METADATA_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as Record<string, GuestMetadata>;
+    }
+  } catch (err) {
+    console.warn('Failed to parse cached guest metadata:', err);
+  }
+  return {};
+};
+
+const persistGuestMetadataCache = (metadata: Record<string, GuestMetadata>) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(GUEST_METADATA_STORAGE_KEY, JSON.stringify(metadata));
+  } catch (err) {
+    console.warn('Failed to persist guest metadata cache:', err);
+  }
+};
+
 interface DashboardProps {
   vms: VM[];
   containers: Container[];
@@ -39,7 +65,18 @@ export function Dashboard(props: DashboardProps) {
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
-  const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>({});
+  const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>(
+    readGuestMetadataCache(),
+  );
+
+  const updateGuestMetadataState = (
+    updater: (prev: Record<string, GuestMetadata>) => Record<string, GuestMetadata>,
+  ) =>
+    setGuestMetadata((prev) => {
+      const next = updater(prev);
+      persistGuestMetadataCache(next);
+      return next;
+    });
 
   // Combine VMs and containers into a single list for filtering
   const allGuests = createMemo<(VM | Container)[]>(() => [...props.vms, ...props.containers]);
@@ -81,7 +118,7 @@ export function Dashboard(props: DashboardProps) {
   onMount(async () => {
     try {
       const metadata = await GuestMetadataAPI.getAllMetadata();
-      setGuestMetadata(metadata || {});
+      updateGuestMetadataState(() => metadata || {});
     } catch (err) {
       // Silently fail - metadata is optional for display
       console.debug('Failed to load guest metadata:', err);
@@ -90,13 +127,16 @@ export function Dashboard(props: DashboardProps) {
 
   // Callback to update a guest's custom URL in metadata
   const handleCustomUrlUpdate = (guestId: string, url: string) => {
-    setGuestMetadata((prev) => ({
-      ...prev,
-      [guestId]: {
-        ...(prev[guestId] || { id: guestId }),
-        customUrl: url || undefined,
-      },
-    }));
+    updateGuestMetadataState((prev) => {
+      const next = {
+        ...prev,
+        [guestId]: {
+          ...(prev[guestId] || { id: guestId }),
+          customUrl: url || undefined,
+        },
+      };
+      return next;
+    });
   };
 
   // Create a mapping from node ID to node object
