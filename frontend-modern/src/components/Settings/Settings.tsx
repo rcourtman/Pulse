@@ -4,6 +4,12 @@ import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
+import {
+  clearStoredAPIToken,
+  getStoredAPIToken,
+  setStoredAPIToken,
+} from '@/utils/tokenStorage';
+import { clearApiToken as clearApiClientToken, setApiToken as setApiClientToken } from '@/utils/apiClient';
 import { NodeModal } from './NodeModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { DockerAgents } from './DockerAgents';
@@ -1723,7 +1729,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (
       !hasPasswordAuth &&
       securityStatus()?.apiTokenConfigured &&
-      !localStorage.getItem('apiToken')
+      !getStoredAPIToken()
     ) {
       setApiTokenModalSource('export');
       setShowApiTokenModal(true);
@@ -1747,7 +1753,7 @@ const Settings: Component<SettingsProps> = (props) => {
       }
 
       // Add API token if configured
-      const apiToken = localStorage.getItem('apiToken');
+      const apiToken = getStoredAPIToken();
       if (apiToken) {
         headers['X-API-Token'] = apiToken;
       }
@@ -1767,9 +1773,10 @@ const Settings: Component<SettingsProps> = (props) => {
           const hasPasswordAuth = securityStatus()?.hasAuthentication;
           if (!hasPasswordAuth) {
             // Clear invalid token if we had one
-            const hadToken = localStorage.getItem('apiToken');
+            const hadToken = getStoredAPIToken();
             if (hadToken) {
-              localStorage.removeItem('apiToken');
+              clearStoredAPIToken();
+              clearApiClientToken();
               showError('Invalid or expired API token. Please re-enter.');
               setApiTokenModalSource('export');
               setShowApiTokenModal(true);
@@ -1827,7 +1834,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (
       !hasPasswordAuth &&
       securityStatus()?.apiTokenConfigured &&
-      !localStorage.getItem('apiToken')
+      !getStoredAPIToken()
     ) {
       setApiTokenModalSource('import');
       setShowApiTokenModal(true);
@@ -1861,7 +1868,7 @@ const Settings: Component<SettingsProps> = (props) => {
       }
 
       // Add API token if configured
-      const apiToken = localStorage.getItem('apiToken');
+      const apiToken = getStoredAPIToken();
       if (apiToken) {
         headers['X-API-Token'] = apiToken;
       }
@@ -1884,9 +1891,10 @@ const Settings: Component<SettingsProps> = (props) => {
           const hasPasswordAuth = securityStatus()?.hasAuthentication;
           if (!hasPasswordAuth) {
             // Clear invalid token if we had one
-            const hadToken = localStorage.getItem('apiToken');
+            const hadToken = getStoredAPIToken();
             if (hadToken) {
-              localStorage.removeItem('apiToken');
+              clearStoredAPIToken();
+              clearApiClientToken();
               showError('Invalid or expired API token. Please re-enter.');
               setApiTokenModalSource('import');
               setShowApiTokenModal(true);
@@ -6437,7 +6445,9 @@ const Settings: Component<SettingsProps> = (props) => {
                 type="button"
                 onClick={() => {
                   if (apiTokenInput()) {
-                    localStorage.setItem('apiToken', apiTokenInput());
+                    const tokenValue = apiTokenInput()!;
+                    setStoredAPIToken(tokenValue);
+                    setApiClientToken(tokenValue);
                     const source = apiTokenModalSource();
                     setShowApiTokenModal(false);
                     setApiTokenInput('');

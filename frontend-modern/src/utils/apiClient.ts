@@ -87,6 +87,21 @@ class ApiClient {
     sessionStorage.removeItem('pulse_auth_user');
   }
 
+  clearApiToken() {
+    this.apiToken = null;
+    try {
+      const stored = sessionStorage.getItem('pulse_auth');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.type === 'token') {
+          sessionStorage.removeItem('pulse_auth');
+        }
+      }
+    } catch {
+      sessionStorage.removeItem('pulse_auth');
+    }
+  }
+
   // Check if we have any auth configured
   hasAuth(): boolean {
     return !!(this.authHeader || this.apiToken);
@@ -263,5 +278,6 @@ export const setBasicAuth = (username: string, password: string) =>
   apiClient.setBasicAuth(username, password);
 export const setApiToken = (token: string) => apiClient.setApiToken(token);
 export const clearAuth = () => apiClient.clearAuth();
+export const clearApiToken = () => apiClient.clearApiToken();
 export const hasAuth = () => apiClient.hasAuth();
 export const checkAuthRequired = () => apiClient.checkAuthRequired();

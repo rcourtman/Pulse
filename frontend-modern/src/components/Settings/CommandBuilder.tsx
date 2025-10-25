@@ -2,6 +2,8 @@ import { Component, createSignal, Show, createMemo, createEffect } from 'solid-j
 import { apiFetch } from '@/utils/apiClient';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
+import { setStoredAPIToken } from '@/utils/tokenStorage';
+import { setApiToken as setApiClientToken } from '@/utils/apiClient';
 
 interface CommandBuilderProps {
   command: string;
@@ -203,19 +205,13 @@ export const CommandBuilder: Component<CommandBuilderProps> = (props) => {
 
       reopenLatestTokenDialog();
       // Auto-populate the command builder
-     setTokenInput(newToken);
-     if (props.onTokenGenerated) {
-       props.onTokenGenerated(newToken, record);
-     }
-
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem('apiToken', newToken);
-          window.dispatchEvent(new StorageEvent('storage', { key: 'apiToken', newValue: newToken }));
-        } catch (storageErr) {
-          console.warn('Unable to persist API token in localStorage', storageErr);
-        }
+      setTokenInput(newToken);
+      if (props.onTokenGenerated) {
+        props.onTokenGenerated(newToken, record);
       }
+
+      setStoredAPIToken(newToken);
+      setApiClientToken(newToken);
 
       window.showToast('success', 'New API token generated. Copy it from the dialog while it is visible.');
     } catch (error) {

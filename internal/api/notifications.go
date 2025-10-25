@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -525,32 +526,85 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/notifications")
 
+	requireAnyScope := func(required string, scopes ...string) bool {
+		record := getAPITokenRecordFromRequest(r)
+		if record == nil {
+			return true
+		}
+		for _, scope := range scopes {
+			if scope != "" && record.HasScope(scope) {
+				return true
+			}
+		}
+		respondMissingScope(w, required)
+		return false
+	}
+
 	switch {
 	case path == "/email" && r.Method == http.MethodGet:
+		if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+			return
+		}
 		h.GetEmailConfig(w, r)
 	case path == "/email" && r.Method == http.MethodPut:
+		if !requireAnyScope(config.ScopeSettingsWrite, config.ScopeSettingsWrite) {
+			return
+		}
 		h.UpdateEmailConfig(w, r)
 	case path == "/apprise" && r.Method == http.MethodGet:
+		if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+			return
+		}
 		h.GetAppriseConfig(w, r)
 	case path == "/apprise" && r.Method == http.MethodPut:
+		if !requireAnyScope(config.ScopeSettingsWrite, config.ScopeSettingsWrite) {
+			return
+		}
 		h.UpdateAppriseConfig(w, r)
 	case path == "/webhooks" && r.Method == http.MethodGet:
+		if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+			return
+		}
 		h.GetWebhooks(w, r)
 	case path == "/webhooks" && r.Method == http.MethodPost:
+		if !requireAnyScope(config.ScopeSettingsWrite, config.ScopeSettingsWrite) {
+			return
+		}
 		h.CreateWebhook(w, r)
 	case path == "/webhooks/test" && r.Method == http.MethodPost:
+		if !requireAnyScope(config.ScopeSettingsWrite, config.ScopeSettingsWrite) {
+			return
+		}
 		h.TestWebhook(w, r)
 	case strings.HasPrefix(path, "/webhooks/") && r.Method == http.MethodPut:
+		if !requireAnyScope(config.ScopeSettingsWrite, config.ScopeSettingsWrite) {
+			return
+		}
 		h.UpdateWebhook(w, r)
 	case strings.HasPrefix(path, "/webhooks/") && r.Method == http.MethodDelete:
+		if !requireAnyScope(config.ScopeSettingsWrite, config.ScopeSettingsWrite) {
+			return
+		}
 		h.DeleteWebhook(w, r)
 	case path == "/webhook-templates" && r.Method == http.MethodGet:
+		if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+			return
+		}
 		h.GetWebhookTemplates(w, r)
 	case path == "/webhook-history" && r.Method == http.MethodGet:
+		if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+			return
+		}
 		h.GetWebhookHistory(w, r)
 	case path == "/email-providers" && r.Method == http.MethodGet:
+		if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+			return
+		}
 		h.GetEmailProviders(w, r)
 	case path == "/test" && r.Method == http.MethodPost:
+		if !requireAnyScope(config.ScopeSettingsWrite, config.ScopeSettingsWrite) {
+			return
+		}
 		h.TestNotification(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
