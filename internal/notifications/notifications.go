@@ -390,6 +390,9 @@ func (n *NotificationManager) GetAppriseConfig() AppriseConfig {
 func (n *NotificationManager) SetCooldown(minutes int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	if minutes < 0 {
+		minutes = 0
+	}
 	n.cooldown = time.Duration(minutes) * time.Minute
 	log.Info().Int("minutes", minutes).Msg("Updated notification cooldown")
 }
@@ -398,6 +401,9 @@ func (n *NotificationManager) SetCooldown(minutes int) {
 func (n *NotificationManager) SetGroupingWindow(seconds int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	if seconds < 0 {
+		seconds = 0
+	}
 	n.groupWindow = time.Duration(seconds) * time.Second
 	log.Info().Int("seconds", seconds).Msg("Updated notification grouping window")
 }

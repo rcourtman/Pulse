@@ -80,14 +80,13 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	h.monitor.GetAlertManager().UpdateConfig(config)
 
 	// Update notification manager with schedule settings
-	if config.Schedule.Cooldown > 0 {
-		h.monitor.GetNotificationManager().SetCooldown(config.Schedule.Cooldown)
+	h.monitor.GetNotificationManager().SetCooldown(config.Schedule.Cooldown)
+
+	groupWindow := config.Schedule.Grouping.Window
+	if groupWindow == 0 && config.Schedule.GroupingWindow != 0 {
+		groupWindow = config.Schedule.GroupingWindow
 	}
-	if config.Schedule.GroupingWindow > 0 {
-		h.monitor.GetNotificationManager().SetGroupingWindow(config.Schedule.GroupingWindow)
-	} else if config.Schedule.Grouping.Window > 0 {
-		h.monitor.GetNotificationManager().SetGroupingWindow(config.Schedule.Grouping.Window)
-	}
+	h.monitor.GetNotificationManager().SetGroupingWindow(groupWindow)
 	h.monitor.GetNotificationManager().SetGroupingOptions(
 		config.Schedule.Grouping.ByNode,
 		config.Schedule.Grouping.ByGuest,
@@ -537,7 +536,10 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.monitor.GetAlertManager().ClearAlert(alertID)
+	if !h.monitor.GetAlertManager().ClearAlert(alertID) {
+		http.Error(w, "Alert not found", http.StatusNotFound)
+		return
+	}
 	h.monitor.SyncAlertState()
 
 	// Send response immediately
@@ -643,8 +645,12 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 			"alertId": alertID,
 			"success": true,
 		}
-		h.monitor.GetAlertManager().ClearAlert(alertID)
-		anySuccess = true
+		if h.monitor.GetAlertManager().ClearAlert(alertID) {
+			anySuccess = true
+		} else {
+			result["success"] = false
+			result["error"] = "alert not found"
+		}
 		results = append(results, result)
 	}
 

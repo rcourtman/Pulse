@@ -2823,14 +2823,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if alertConfig, err := m.configPersist.LoadAlertConfig(); err == nil {
 		m.alertManager.UpdateConfig(*alertConfig)
 		// Apply schedule settings to notification manager
-		if alertConfig.Schedule.Cooldown > 0 {
-			m.notificationMgr.SetCooldown(alertConfig.Schedule.Cooldown)
+		m.notificationMgr.SetCooldown(alertConfig.Schedule.Cooldown)
+		groupWindow := alertConfig.Schedule.Grouping.Window
+		if groupWindow == 0 && alertConfig.Schedule.GroupingWindow != 0 {
+			groupWindow = alertConfig.Schedule.GroupingWindow
 		}
-		if alertConfig.Schedule.GroupingWindow > 0 {
-			m.notificationMgr.SetGroupingWindow(alertConfig.Schedule.GroupingWindow)
-		} else if alertConfig.Schedule.Grouping.Window > 0 {
-			m.notificationMgr.SetGroupingWindow(alertConfig.Schedule.Grouping.Window)
-		}
+		m.notificationMgr.SetGroupingWindow(groupWindow)
 		m.notificationMgr.SetGroupingOptions(
 			alertConfig.Schedule.Grouping.ByNode,
 			alertConfig.Schedule.Grouping.ByGuest,

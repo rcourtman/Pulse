@@ -72,6 +72,7 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 	m.mu.Lock()
 	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
+	m.config.ActivationState = ActivationActive
 	m.mu.Unlock()
 
 	var dispatched []*Alert
@@ -132,6 +133,7 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 	m.mu.Lock()
 	m.config.TimeThreshold = 0
 	m.config.TimeThresholds = map[string]int{}
+	m.config.ActivationState = ActivationActive
 	m.mu.Unlock()
 
 	// Clear dispatched slice to capture only post-disable notifications.
@@ -169,6 +171,167 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 	m.mu.RUnlock()
 	if isPending {
 		t.Fatalf("expected pending alert entry to be cleared after disabling metric")
+	}
+}
+
+func TestPulseNoAlertsSuppressesGuestAlerts(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.config.ActivationState = ActivationActive
+	m.mu.Unlock()
+
+	var dispatched int
+	m.SetAlertCallback(func(alert *Alert) {
+		dispatched++
+	})
+
+	vm := models.VM{
+		ID:       "inst/qemu/101",
+		Name:     "test-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		CPU:      1.0,
+		Memory: models.Memory{
+			Usage: 95,
+		},
+		Disk: models.Disk{
+			Usage: 95,
+		},
+		Tags: []string{"pulse-no-alerts"},
+	}
+
+	m.CheckGuest(vm, "inst")
+
+	if dispatched != 0 {
+		t.Fatalf("expected no alert dispatch, got %d", dispatched)
+	}
+
+	if alerts := m.GetActiveAlerts(); len(alerts) != 0 {
+		t.Fatalf("expected no active alerts, got %d", len(alerts))
+	}
+}
+
+func TestPulseMonitorOnlySkipsDispatchButRetainsAlert(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.config.ActivationState = ActivationActive
+	m.mu.Unlock()
+
+	var dispatched int
+	m.SetAlertCallback(func(alert *Alert) {
+		dispatched++
+	})
+
+	vm := models.VM{
+		ID:       "inst/qemu/102",
+		Name:     "monitor-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		CPU:      1.0,
+		Memory:   models.Memory{Usage: 90},
+		Disk:     models.Disk{Usage: 50},
+		Tags:     []string{"pulse-monitor-only"},
+	}
+
+	m.CheckGuest(vm, "inst")
+
+	if dispatched != 0 {
+		t.Fatalf("expected monitor-only alert to skip dispatch, got %d callbacks", dispatched)
+	}
+
+	alerts := m.GetActiveAlerts()
+	if len(alerts) == 0 {
+		t.Fatalf("expected monitor-only alert to remain active")
+	}
+
+	if alerts[0].Metadata == nil || alerts[0].Metadata["monitorOnly"] != true {
+		t.Fatalf("expected alert metadata to mark monitorOnly, got %+v", alerts[0].Metadata)
+	}
+}
+
+func TestPulseRelaxedThresholdsIncreaseCpuTrigger(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       "inst/qemu/103",
+		Name:     "relaxed-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		CPU:      0.9, // 90%
+		Memory:   models.Memory{Usage: 60},
+		Disk:     models.Disk{Usage: 40},
+		Tags:     []string{"pulse-relaxed"},
+	}
+
+	m.CheckGuest(vm, "inst")
+
+	if alerts := m.GetActiveAlerts(); len(alerts) != 0 {
+		t.Fatalf("expected no alerts at 90%% CPU with relaxed thresholds, got %d", len(alerts))
+	}
+
+	vm.CPU = 1.0
+	m.CheckGuest(vm, "inst")
+
+	if alerts := m.GetActiveAlerts(); len(alerts) == 0 {
+		t.Fatalf("expected alert once CPU exceeds relaxed threshold")
+	}
+}
+
+func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       "inst/qemu/104",
+		Name:     "clear-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		CPU:      1.0,
+		Memory:   models.Memory{Usage: 80},
+		Disk:     models.Disk{Usage: 80},
+	}
+
+	m.CheckGuest(vm, "inst")
+	alerts := m.GetActiveAlerts()
+	if len(alerts) == 0 {
+		t.Fatalf("expected alert to be active before clearing")
+	}
+
+	alertID := alerts[0].ID
+	if ok := m.ClearAlert(alertID); !ok {
+		t.Fatalf("expected manual clear to succeed")
+	}
+
+	if remaining := m.GetActiveAlerts(); len(remaining) != 0 {
+		t.Fatalf("expected no active alerts after clear, found %d", len(remaining))
+	}
+
+	resolved := m.GetRecentlyResolved()
+	if len(resolved) == 0 || resolved[0].Alert.ID != alertID {
+		t.Fatalf("expected alert %s to be tracked as recently resolved", alertID)
+	}
+
+	if ok := m.ClearAlert(alertID); ok {
+		t.Fatalf("expected second clear to report missing alert")
 	}
 }
 
