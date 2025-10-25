@@ -755,7 +755,7 @@ sudo systemctl daemon-reload`;
                       };
 
                       return (
-                        <tr class={`${rowClass} ${highlightClass}`}>
+                        <tr data-host-id={host.id} class={`${rowClass} ${highlightClass}`}>
                           <td class="py-3 px-4">
                             <div class="font-medium text-gray-900 dark:text-gray-100">
                               {host.displayName || host.hostname || host.id}

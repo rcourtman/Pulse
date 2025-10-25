@@ -28,6 +28,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	DefaultGuestMetadataMinRefresh    = 2 * time.Minute
+	DefaultGuestMetadataRefreshJitter = 45 * time.Second
+	DefaultGuestMetadataRetryBackoff  = 30 * time.Second
+	DefaultGuestMetadataMaxConcurrent = 4
+)
+
 // IsPasswordHashed checks if a string looks like a bcrypt hash
 func IsPasswordHashed(password string) bool {
 	// Bcrypt hashes start with $2a$, $2b$, or $2y$ and are 60 characters long
@@ -76,19 +83,23 @@ type Config struct {
 
 	// Monitoring settings
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
-	PBSPollingInterval          time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
-	PMGPollingInterval          time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
-	ConcurrentPolling           bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
-	ConnectionTimeout           time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
-	MetricsRetentionDays        int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
-	BackupPollingCycles         int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
-	BackupPollingInterval       time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
-	EnableBackupPolling         bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
-	WebhookBatchDelay           time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
-	AdaptivePollingEnabled      bool          `envconfig:"ADAPTIVE_POLLING_ENABLED" default:"false"`
-	AdaptivePollingBaseInterval time.Duration `envconfig:"ADAPTIVE_POLLING_BASE_INTERVAL" default:"10s"`
-	AdaptivePollingMinInterval  time.Duration `envconfig:"ADAPTIVE_POLLING_MIN_INTERVAL" default:"5s"`
-	AdaptivePollingMaxInterval  time.Duration `envconfig:"ADAPTIVE_POLLING_MAX_INTERVAL" default:"5m"`
+	PBSPollingInterval              time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
+	PMGPollingInterval              time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
+	ConcurrentPolling               bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
+	ConnectionTimeout               time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
+	MetricsRetentionDays            int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
+	BackupPollingCycles             int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
+	BackupPollingInterval           time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
+	EnableBackupPolling             bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
+	WebhookBatchDelay               time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
+	AdaptivePollingEnabled          bool          `envconfig:"ADAPTIVE_POLLING_ENABLED" default:"false"`
+	AdaptivePollingBaseInterval     time.Duration `envconfig:"ADAPTIVE_POLLING_BASE_INTERVAL" default:"10s"`
+	AdaptivePollingMinInterval      time.Duration `envconfig:"ADAPTIVE_POLLING_MIN_INTERVAL" default:"5s"`
+	AdaptivePollingMaxInterval      time.Duration `envconfig:"ADAPTIVE_POLLING_MAX_INTERVAL" default:"5m"`
+	GuestMetadataMinRefreshInterval time.Duration `envconfig:"GUEST_METADATA_MIN_REFRESH_INTERVAL" default:"2m" json:"guestMetadataMinRefreshInterval"`
+	GuestMetadataRefreshJitter      time.Duration `envconfig:"GUEST_METADATA_REFRESH_JITTER" default:"45s" json:"guestMetadataRefreshJitter"`
+	GuestMetadataRetryBackoff       time.Duration `envconfig:"GUEST_METADATA_RETRY_BACKOFF" default:"30s" json:"guestMetadataRetryBackoff"`
+	GuestMetadataMaxConcurrent      int           `envconfig:"GUEST_METADATA_MAX_CONCURRENT" default:"4" json:"guestMetadataMaxConcurrent"`
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -485,36 +496,40 @@ func Load() (*Config, error) {
 
 	// Initialize config with defaults
 	cfg := &Config{
-		BackendHost:                 "0.0.0.0",
-		BackendPort:                 3000,
-		FrontendHost:                "0.0.0.0",
-		FrontendPort:                7655,
-		ConfigPath:                  dataDir,
-		DataPath:                    dataDir,
-		ConcurrentPolling:           true,
-		ConnectionTimeout:           60 * time.Second,
-		MetricsRetentionDays:        7,
-		BackupPollingCycles:         10,
-		BackupPollingInterval:       0,
-		EnableBackupPolling:         true,
-		WebhookBatchDelay:           10 * time.Second,
-		AdaptivePollingEnabled:      false,
-		AdaptivePollingBaseInterval: 10 * time.Second,
-		AdaptivePollingMinInterval:  5 * time.Second,
-		AdaptivePollingMaxInterval:  5 * time.Minute,
-		LogLevel:                    "info",
-		LogFormat:                   "auto",
-		LogMaxSize:                  100,
-		LogMaxAge:                   30,
-		LogCompress:                 true,
-		AllowedOrigins:              "", // Empty means no CORS headers (same-origin only)
-		IframeEmbeddingAllow:        "SAMEORIGIN",
-		PBSPollingInterval:          60 * time.Second, // Default PBS polling (slower)
-		PMGPollingInterval:          60 * time.Second, // Default PMG polling (aggregated stats)
-		DiscoveryEnabled:            false,
-		DiscoverySubnet:             "auto",
-		EnvOverrides:                make(map[string]bool),
-		OIDC:                        NewOIDCConfig(),
+		BackendHost:                     "0.0.0.0",
+		BackendPort:                     3000,
+		FrontendHost:                    "0.0.0.0",
+		FrontendPort:                    7655,
+		ConfigPath:                      dataDir,
+		DataPath:                        dataDir,
+		ConcurrentPolling:               true,
+		ConnectionTimeout:               60 * time.Second,
+		MetricsRetentionDays:            7,
+		BackupPollingCycles:             10,
+		BackupPollingInterval:           0,
+		EnableBackupPolling:             true,
+		WebhookBatchDelay:               10 * time.Second,
+		AdaptivePollingEnabled:          false,
+		AdaptivePollingBaseInterval:     10 * time.Second,
+		AdaptivePollingMinInterval:      5 * time.Second,
+		AdaptivePollingMaxInterval:      5 * time.Minute,
+		GuestMetadataMinRefreshInterval: DefaultGuestMetadataMinRefresh,
+		GuestMetadataRefreshJitter:      DefaultGuestMetadataRefreshJitter,
+		GuestMetadataRetryBackoff:       DefaultGuestMetadataRetryBackoff,
+		GuestMetadataMaxConcurrent:      DefaultGuestMetadataMaxConcurrent,
+		LogLevel:                        "info",
+		LogFormat:                       "auto",
+		LogMaxSize:                      100,
+		LogMaxAge:                       30,
+		LogCompress:                     true,
+		AllowedOrigins:                  "", // Empty means no CORS headers (same-origin only)
+		IframeEmbeddingAllow:            "SAMEORIGIN",
+		PBSPollingInterval:              60 * time.Second, // Default PBS polling (slower)
+		PMGPollingInterval:              60 * time.Second, // Default PMG polling (aggregated stats)
+		DiscoveryEnabled:                false,
+		DiscoverySubnet:                 "auto",
+		EnvOverrides:                    make(map[string]bool),
+		OIDC:                            NewOIDCConfig(),
 	}
 
 	cfg.Discovery = DefaultDiscoveryConfig()
@@ -722,6 +737,62 @@ func Load() (*Config, error) {
 			log.Info().Dur("interval", dur).Msg("Adaptive polling max interval overridden by environment")
 		} else {
 			log.Warn().Str("value", maxInterval).Msg("Invalid ADAPTIVE_POLLING_MAX_INTERVAL value, expected duration string")
+		}
+	}
+
+	if minRefresh := strings.TrimSpace(os.Getenv("GUEST_METADATA_MIN_REFRESH_INTERVAL")); minRefresh != "" {
+		if dur, err := time.ParseDuration(minRefresh); err == nil {
+			if dur <= 0 {
+				log.Warn().Str("value", minRefresh).Msg("Ignoring non-positive GUEST_METADATA_MIN_REFRESH_INTERVAL from environment")
+			} else {
+				cfg.GuestMetadataMinRefreshInterval = dur
+				cfg.EnvOverrides["GUEST_METADATA_MIN_REFRESH_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Guest metadata min refresh interval overridden by environment")
+			}
+		} else {
+			log.Warn().Str("value", minRefresh).Msg("Invalid GUEST_METADATA_MIN_REFRESH_INTERVAL value, expected duration string")
+		}
+	}
+
+	if jitter := strings.TrimSpace(os.Getenv("GUEST_METADATA_REFRESH_JITTER")); jitter != "" {
+		if dur, err := time.ParseDuration(jitter); err == nil {
+			if dur < 0 {
+				log.Warn().Str("value", jitter).Msg("Ignoring negative GUEST_METADATA_REFRESH_JITTER from environment")
+			} else {
+				cfg.GuestMetadataRefreshJitter = dur
+				cfg.EnvOverrides["GUEST_METADATA_REFRESH_JITTER"] = true
+				log.Info().Dur("jitter", dur).Msg("Guest metadata refresh jitter overridden by environment")
+			}
+		} else {
+			log.Warn().Str("value", jitter).Msg("Invalid GUEST_METADATA_REFRESH_JITTER value, expected duration string")
+		}
+	}
+
+	if backoff := strings.TrimSpace(os.Getenv("GUEST_METADATA_RETRY_BACKOFF")); backoff != "" {
+		if dur, err := time.ParseDuration(backoff); err == nil {
+			if dur <= 0 {
+				log.Warn().Str("value", backoff).Msg("Ignoring non-positive GUEST_METADATA_RETRY_BACKOFF from environment")
+			} else {
+				cfg.GuestMetadataRetryBackoff = dur
+				cfg.EnvOverrides["GUEST_METADATA_RETRY_BACKOFF"] = true
+				log.Info().Dur("backoff", dur).Msg("Guest metadata retry backoff overridden by environment")
+			}
+		} else {
+			log.Warn().Str("value", backoff).Msg("Invalid GUEST_METADATA_RETRY_BACKOFF value, expected duration string")
+		}
+	}
+
+	if concurrent := strings.TrimSpace(os.Getenv("GUEST_METADATA_MAX_CONCURRENT")); concurrent != "" {
+		if val, err := strconv.Atoi(concurrent); err == nil {
+			if val <= 0 {
+				log.Warn().Str("value", concurrent).Msg("Ignoring non-positive GUEST_METADATA_MAX_CONCURRENT from environment")
+			} else {
+				cfg.GuestMetadataMaxConcurrent = val
+				cfg.EnvOverrides["GUEST_METADATA_MAX_CONCURRENT"] = true
+				log.Info().Int("maxConcurrent", val).Msg("Guest metadata max concurrency overridden by environment")
+			}
+		} else {
+			log.Warn().Str("value", concurrent).Msg("Invalid GUEST_METADATA_MAX_CONCURRENT value, expected integer")
 		}
 	}
 

@@ -213,6 +213,167 @@ func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 	}
 }
 
+func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	host := models.Host{
+		ID:          "host-1",
+		DisplayName: "Test Host",
+		Hostname:    "host-1.example",
+		Platform:    "linux",
+		OSName:      "ubuntu",
+		CPUUsage:    95,
+		CPUCount:    8,
+		Memory: models.Memory{
+			Usage: 92,
+			Total: 16384,
+			Used:  15000,
+			Free:  1384,
+		},
+		Disks: []models.Disk{
+			{
+				Mountpoint: "/",
+				Usage:      93,
+				Total:      100,
+				Used:       93,
+				Free:       7,
+			},
+		},
+		Status:          "online",
+		IntervalSeconds: 30,
+		LastSeen:        time.Now(),
+		Tags:            []string{"prod"},
+	}
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	cpuAlertID := fmt.Sprintf("%s-cpu", hostResourceID(host.ID))
+	if _, exists := m.activeAlerts[cpuAlertID]; !exists {
+		t.Fatalf("expected CPU alert %q to be active", cpuAlertID)
+	}
+
+	memAlertID := fmt.Sprintf("%s-memory", hostResourceID(host.ID))
+	if _, exists := m.activeAlerts[memAlertID]; !exists {
+		t.Fatalf("expected memory alert %q to be active", memAlertID)
+	}
+
+	diskResourceID, _ := hostDiskResourceID(host, host.Disks[0])
+	diskAlertID := fmt.Sprintf("%s-disk", diskResourceID)
+	if _, exists := m.activeAlerts[diskAlertID]; !exists {
+		t.Fatalf("expected disk alert %q to be active", diskAlertID)
+	}
+}
+
+func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+	host := models.Host{ID: "host-2", DisplayName: "Second Host", Hostname: "host-two"}
+	alertID := fmt.Sprintf("host-offline-%s", host.ID)
+	resourceKey := hostResourceID(host.ID)
+
+	m.HandleHostOffline(host)
+	m.mu.RLock()
+	if _, exists := m.activeAlerts[alertID]; exists {
+		t.Fatalf("expected no alert after first offline detection")
+	}
+	if count := m.offlineConfirmations[resourceKey]; count != 1 {
+		t.Fatalf("expected confirmation count to be 1, got %d", count)
+	}
+	m.mu.RUnlock()
+
+	m.HandleHostOffline(host)
+	m.mu.RLock()
+	if _, exists := m.activeAlerts[alertID]; exists {
+		t.Fatalf("expected no alert after second offline detection")
+	}
+	if count := m.offlineConfirmations[resourceKey]; count != 2 {
+		t.Fatalf("expected confirmation count to be 2, got %d", count)
+	}
+	m.mu.RUnlock()
+
+	m.HandleHostOffline(host)
+	m.mu.RLock()
+	if _, exists := m.activeAlerts[alertID]; !exists {
+		t.Fatalf("expected alert %q after third offline detection", alertID)
+	}
+	m.mu.RUnlock()
+
+	m.HandleHostOnline(host)
+	m.mu.RLock()
+	if _, exists := m.activeAlerts[alertID]; exists {
+		t.Fatalf("expected offline alert %q to be cleared after host online", alertID)
+	}
+	if _, exists := m.offlineConfirmations[resourceKey]; exists {
+		t.Fatalf("expected offline confirmations to be cleared when host online")
+	}
+	m.mu.RUnlock()
+}
+
+func TestCheckHostDisabledOverrideClearsAlerts(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	host := models.Host{
+		ID:          "host-3",
+		DisplayName: "Override Host",
+		Hostname:    "override.example",
+		CPUUsage:    90,
+		Memory: models.Memory{
+			Usage: 91,
+			Total: 16000,
+			Used:  14560,
+			Free:  1440,
+		},
+		Disks: []models.Disk{
+			{Mountpoint: "/data", Usage: 92, Total: 200, Used: 184, Free: 16},
+		},
+		Status:          "online",
+		IntervalSeconds: 30,
+		LastSeen:        time.Now(),
+	}
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	if len(m.activeAlerts) == 0 {
+		m.mu.RUnlock()
+		t.Fatalf("expected active alerts prior to disabling host overrides")
+	}
+	m.mu.RUnlock()
+
+	cfg := m.GetConfig()
+	cfg.Overrides = map[string]ThresholdConfig{
+		host.ID: {
+			Disabled: true,
+		},
+	}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if len(m.activeAlerts) != 0 {
+		t.Fatalf("expected all host alerts to be cleared after disabling override, got %d", len(m.activeAlerts))
+	}
+}
+
 func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 	m := NewManager()
 	m.ClearActiveAlerts()

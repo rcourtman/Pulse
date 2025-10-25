@@ -18,7 +18,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
-import type { Alert, State, VM, Container, DockerHost, DockerContainer } from '@/types/api';
+import type { Alert, State, VM, Container, DockerHost, DockerContainer, Host } from '@/types/api';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
@@ -806,6 +806,16 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         });
       }
 
+      if (config.hostDefaults) {
+        setHostDefaults({
+          cpu: getTriggerValue(config.hostDefaults.cpu) ?? 80,
+          memory: getTriggerValue(config.hostDefaults.memory) ?? 85,
+          disk: getTriggerValue(config.hostDefaults.disk) ?? 90,
+        });
+      } else {
+        setHostDefaults({ ...FACTORY_HOST_DEFAULTS });
+      }
+
       if (config.dockerDefaults) {
         setDockerDefaults({
           cpu: getTriggerValue(config.dockerDefaults.cpu) ?? 80,
@@ -913,6 +923,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
       // Load global disable flags
       setDisableAllNodes(config.disableAllNodes ?? false);
       setDisableAllGuests(config.disableAllGuests ?? false);
+      setDisableAllHosts(config.disableAllHosts ?? false);
       setDisableAllStorage(config.disableAllStorage ?? false);
       setDisableAllPBS(config.disableAllPBS ?? false);
       setDisableAllPMG(config.disableAllPMG ?? false);
@@ -922,6 +933,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
       // Load global disable offline alerts flags
       setDisableAllNodesOffline(config.disableAllNodesOffline ?? false);
       setDisableAllGuestsOffline(config.disableAllGuestsOffline ?? false);
+      setDisableAllHostsOffline(config.disableAllHostsOffline ?? false);
       setDisableAllPBSOffline(config.disableAllPBSOffline ?? false);
       setDisableAllPMGOffline(config.disableAllPMGOffline ?? false);
       setDisableAllDockerHostsOffline(config.disableAllDockerHostsOffline ?? false);
@@ -1151,6 +1163,12 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     temperature: 80,
   };
 
+  const FACTORY_HOST_DEFAULTS = {
+    cpu: 80,
+    memory: 85,
+    disk: 90,
+  };
+
   const FACTORY_DOCKER_DEFAULTS = {
     cpu: 80,
     memory: 85,
@@ -1178,6 +1196,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
   const [guestPoweredOffSeverity, setGuestPoweredOffSeverity] = createSignal<'warning' | 'critical'>('warning');
 
   const [nodeDefaults, setNodeDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_NODE_DEFAULTS });
+  const [hostDefaults, setHostDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_HOST_DEFAULTS });
 
   const [dockerDefaults, setDockerDefaults] = createSignal({ ...FACTORY_DOCKER_DEFAULTS });
   const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>([]);
@@ -1195,6 +1214,11 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
 
   const resetNodeDefaults = () => {
     setNodeDefaults({ ...FACTORY_NODE_DEFAULTS });
+    setHasUnsavedChanges(true);
+  };
+
+  const resetHostDefaults = () => {
+    setHostDefaults({ ...FACTORY_HOST_DEFAULTS });
     setHasUnsavedChanges(true);
   };
 
@@ -1255,6 +1279,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
   // Global disable flags per resource type
   const [disableAllNodes, setDisableAllNodes] = createSignal(false);
   const [disableAllGuests, setDisableAllGuests] = createSignal(false);
+  const [disableAllHosts, setDisableAllHosts] = createSignal(false);
   const [disableAllStorage, setDisableAllStorage] = createSignal(false);
   const [disableAllPBS, setDisableAllPBS] = createSignal(false);
   const [disableAllPMG, setDisableAllPMG] = createSignal(false);
@@ -1264,6 +1289,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
   // Global disable offline alerts flags
   const [disableAllNodesOffline, setDisableAllNodesOffline] = createSignal(false);
   const [disableAllGuestsOffline, setDisableAllGuestsOffline] = createSignal(false);
+  const [disableAllHostsOffline, setDisableAllHostsOffline] = createSignal(false);
   const [disableAllPBSOffline, setDisableAllPBSOffline] = createSignal(false);
   const [disableAllPMGOffline, setDisableAllPMGOffline] = createSignal(false);
   const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
@@ -1404,6 +1430,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       // Global disable flags per resource type
                       disableAllNodes: disableAllNodes(),
                       disableAllGuests: disableAllGuests(),
+                      disableAllHosts: disableAllHosts(),
                       disableAllStorage: disableAllStorage(),
                       disableAllPBS: disableAllPBS(),
                       disableAllPMG: disableAllPMG(),
@@ -1413,6 +1440,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       disableAllNodesOffline: disableAllNodesOffline(),
                       disableAllGuestsOffline: disableAllGuestsOffline(),
                       disableAllPBSOffline: disableAllPBSOffline(),
+                      disableAllHostsOffline: disableAllHostsOffline(),
                       disableAllPMGOffline: disableAllPMGOffline(),
                       disableAllDockerHostsOffline: disableAllDockerHostsOffline(),
                       guestDefaults: {
@@ -1431,6 +1459,11 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                         memory: createHysteresisThreshold(nodeDefaults().memory),
                         disk: createHysteresisThreshold(nodeDefaults().disk),
                         temperature: createHysteresisThreshold(nodeDefaults().temperature),
+                      },
+                      hostDefaults: {
+                        cpu: createHysteresisThreshold(hostDefaults().cpu),
+                        memory: createHysteresisThreshold(hostDefaults().memory),
+                        disk: createHysteresisThreshold(hostDefaults().disk),
                       },
                       dockerDefaults: {
                         cpu: createHysteresisThreshold(dockerDefaults().cpu),
@@ -1677,6 +1710,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               setRawOverridesConfig={setRawOverridesConfig}
               allGuests={allGuests}
               state={state}
+              hosts={state.hosts || []}
               guestDefaults={guestDefaults}
               guestDisableConnectivity={guestDisableConnectivity}
               setGuestDefaults={setGuestDefaults}
@@ -1685,6 +1719,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               setGuestPoweredOffSeverity={setGuestPoweredOffSeverity}
               nodeDefaults={nodeDefaults}
               setNodeDefaults={setNodeDefaults}
+              hostDefaults={hostDefaults}
+              setHostDefaults={setHostDefaults}
               dockerDefaults={dockerDefaults}
               setDockerDefaults={setDockerDefaults}
               dockerIgnoredPrefixes={dockerIgnoredPrefixes}
@@ -1693,6 +1729,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               setStorageDefault={setStorageDefault}
               resetGuestDefaults={resetGuestDefaults}
               resetNodeDefaults={resetNodeDefaults}
+              resetHostDefaults={resetHostDefaults}
               resetDockerDefaults={resetDockerDefaults}
               resetDockerIgnoredPrefixes={resetDockerIgnoredPrefixes}
               resetStorageDefault={resetStorageDefault}
@@ -1700,6 +1737,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               resetBackupDefaults={resetBackupDefaults}
               factoryGuestDefaults={FACTORY_GUEST_DEFAULTS}
               factoryNodeDefaults={FACTORY_NODE_DEFAULTS}
+              factoryHostDefaults={FACTORY_HOST_DEFAULTS}
               factoryDockerDefaults={FACTORY_DOCKER_DEFAULTS}
               factoryStorageDefault={FACTORY_STORAGE_DEFAULT}
               snapshotFactoryDefaults={FACTORY_SNAPSHOT_DEFAULTS}
@@ -1721,6 +1759,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               setDisableAllNodes={setDisableAllNodes}
               disableAllGuests={disableAllGuests}
               setDisableAllGuests={setDisableAllGuests}
+              disableAllHosts={disableAllHosts}
+              setDisableAllHosts={setDisableAllHosts}
               disableAllStorage={disableAllStorage}
               setDisableAllStorage={setDisableAllStorage}
               disableAllPBS={disableAllPBS}
@@ -1735,6 +1775,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               setDisableAllNodesOffline={setDisableAllNodesOffline}
               disableAllGuestsOffline={disableAllGuestsOffline}
               setDisableAllGuestsOffline={setDisableAllGuestsOffline}
+              disableAllHostsOffline={disableAllHostsOffline}
+              setDisableAllHostsOffline={setDisableAllHostsOffline}
               disableAllPBSOffline={disableAllPBSOffline}
               setDisableAllPBSOffline={setDisableAllPBSOffline}
               disableAllPMGOffline={disableAllPMGOffline}
@@ -2192,8 +2234,10 @@ function OverviewTab(props: {
 interface ThresholdsTabProps {
   allGuests: () => (VM | Container)[];
   state: State;
+  hosts: Host[];
   guestDefaults: () => Record<string, number | undefined>;
   nodeDefaults: () => Record<string, number | undefined>;
+  hostDefaults: () => Record<string, number | undefined>;
   dockerDefaults: () => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
   dockerIgnoredPrefixes: () => string[];
   storageDefault: () => number;
@@ -2217,6 +2261,11 @@ interface ThresholdsTabProps {
   guestPoweredOffSeverity: () => 'warning' | 'critical';
   setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   setNodeDefaults: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
+  setHostDefaults: (
     value:
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -2258,6 +2307,8 @@ interface ThresholdsTabProps {
   setDisableAllNodes: (value: boolean) => void;
   disableAllGuests: () => boolean;
   setDisableAllGuests: (value: boolean) => void;
+  disableAllHosts: () => boolean;
+  setDisableAllHosts: (value: boolean) => void;
   disableAllStorage: () => boolean;
   setDisableAllStorage: (value: boolean) => void;
   disableAllPBS: () => boolean;
@@ -2273,6 +2324,8 @@ interface ThresholdsTabProps {
   setDisableAllNodesOffline: (value: boolean) => void;
   disableAllGuestsOffline: () => boolean;
   setDisableAllGuestsOffline: (value: boolean) => void;
+  disableAllHostsOffline: () => boolean;
+  setDisableAllHostsOffline: (value: boolean) => void;
   disableAllPBSOffline: () => boolean;
   setDisableAllPBSOffline: (value: boolean) => void;
   disableAllPMGOffline: () => boolean;
@@ -2282,11 +2335,13 @@ interface ThresholdsTabProps {
   // Reset functions and factory defaults
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
+  resetHostDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
+  factoryHostDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
 }
@@ -2300,6 +2355,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setRawOverridesConfig={props.setRawOverridesConfig}
       allGuests={props.allGuests}
       nodes={props.state.nodes || []}
+      hosts={props.hosts}
       storage={props.state.storage || []}
       dockerHosts={props.state.dockerHosts || []}
       pbsInstances={props.state.pbs || []}
@@ -2317,7 +2373,9 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       guestPoweredOffSeverity={props.guestPoweredOffSeverity}
       setGuestPoweredOffSeverity={props.setGuestPoweredOffSeverity}
       nodeDefaults={props.nodeDefaults()}
+      hostDefaults={props.hostDefaults()}
       setNodeDefaults={props.setNodeDefaults}
+      setHostDefaults={props.setHostDefaults}
       dockerDefaults={props.dockerDefaults()}
       setDockerDefaults={props.setDockerDefaults}
       dockerIgnoredPrefixes={props.dockerIgnoredPrefixes}
@@ -2342,6 +2400,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllNodes={props.setDisableAllNodes}
       disableAllGuests={props.disableAllGuests}
       setDisableAllGuests={props.setDisableAllGuests}
+      disableAllHosts={props.disableAllHosts}
+      setDisableAllHosts={props.setDisableAllHosts}
       disableAllStorage={props.disableAllStorage}
       setDisableAllStorage={props.setDisableAllStorage}
       disableAllPBS={props.disableAllPBS}
@@ -2356,6 +2416,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllNodesOffline={props.setDisableAllNodesOffline}
       disableAllGuestsOffline={props.disableAllGuestsOffline}
       setDisableAllGuestsOffline={props.setDisableAllGuestsOffline}
+      disableAllHostsOffline={props.disableAllHostsOffline}
+      setDisableAllHostsOffline={props.setDisableAllHostsOffline}
       disableAllPBSOffline={props.disableAllPBSOffline}
       setDisableAllPBSOffline={props.setDisableAllPBSOffline}
       disableAllPMGOffline={props.disableAllPMGOffline}
@@ -2364,11 +2426,13 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllDockerHostsOffline={props.setDisableAllDockerHostsOffline}
       resetGuestDefaults={props.resetGuestDefaults}
       resetNodeDefaults={props.resetNodeDefaults}
+      resetHostDefaults={props.resetHostDefaults}
       resetDockerDefaults={props.resetDockerDefaults}
       resetDockerIgnoredPrefixes={props.resetDockerIgnoredPrefixes}
       resetStorageDefault={props.resetStorageDefault}
       factoryGuestDefaults={props.factoryGuestDefaults}
       factoryNodeDefaults={props.factoryNodeDefaults}
+      factoryHostDefaults={props.factoryHostDefaults}
       factoryDockerDefaults={props.factoryDockerDefaults}
       factoryStorageDefault={props.factoryStorageDefault}
     />

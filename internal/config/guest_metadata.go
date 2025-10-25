@@ -150,7 +150,7 @@ func (s *GuestMetadataStore) save() error {
 
 	log.Debug().Str("path", filePath).Msg("Saving guest metadata to disk")
 
-	data, err := json.MarshalIndent(s.metadata, "", "  ")
+	data, err := json.Marshal(s.metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}

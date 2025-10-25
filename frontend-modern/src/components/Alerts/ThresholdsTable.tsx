@@ -8,6 +8,7 @@ import type {
   VM,
   Container,
   Node,
+  Host,
   Alert,
   Storage,
   PBSInstance,
@@ -27,7 +28,15 @@ import type {
 } from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-type OverrideType = 'guest' | 'node' | 'storage' | 'pbs' | 'pmg' | 'dockerHost' | 'dockerContainer';
+type OverrideType =
+  | 'guest'
+  | 'node'
+  | 'hostAgent'
+  | 'storage'
+  | 'pbs'
+  | 'pmg'
+  | 'dockerHost'
+  | 'dockerContainer';
 
 type OfflineState = 'off' | 'warning' | 'critical';
 
@@ -133,6 +142,7 @@ interface ThresholdsTableProps {
   setRawOverridesConfig: (config: Record<string, RawOverrideConfig>) => void;
   allGuests: () => (VM | Container)[];
   nodes: Node[];
+  hosts: Host[];
   storage: Storage[];
   dockerHosts: DockerHost[];
   pbsInstances?: PBSInstance[]; // PBS instances from state
@@ -156,7 +166,13 @@ interface ThresholdsTableProps {
   guestPoweredOffSeverity: () => 'warning' | 'critical';
   setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   nodeDefaults: SimpleThresholds;
+  hostDefaults: SimpleThresholds;
   setNodeDefaults: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
+  setHostDefaults: (
     value:
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -201,11 +217,13 @@ interface ThresholdsTableProps {
   setStorageDefault: (value: number) => void;
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
+  resetHostDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetDockerIgnoredPrefixes?: () => void;
   resetStorageDefault?: () => void;
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
+  factoryHostDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
@@ -235,6 +253,8 @@ interface ThresholdsTableProps {
   setDisableAllNodes: (value: boolean) => void;
   disableAllGuests: () => boolean;
   setDisableAllGuests: (value: boolean) => void;
+  disableAllHosts: () => boolean;
+  setDisableAllHosts: (value: boolean) => void;
   disableAllStorage: () => boolean;
   setDisableAllStorage: (value: boolean) => void;
   disableAllPBS: () => boolean;
@@ -250,6 +270,8 @@ interface ThresholdsTableProps {
   setDisableAllNodesOffline: (value: boolean) => void;
   disableAllGuestsOffline: () => boolean;
   setDisableAllGuestsOffline: (value: boolean) => void;
+  disableAllHostsOffline: () => boolean;
+  setDisableAllHostsOffline: (value: boolean) => void;
   disableAllPBSOffline: () => boolean;
   setDisableAllPBSOffline: (value: boolean) => void;
   disableAllPMGOffline: () => boolean;
@@ -568,7 +590,79 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     if (search) {
       return nodes.filter((n) => n.name.toLowerCase().includes(search));
     }
-    return nodes;
+  return nodes;
+  }, []);
+
+  const hostAgentsWithOverrides = createMemo<Resource[]>((prev = []) => {
+    if (editingId()) {
+      return prev;
+    }
+
+    const search = searchTerm().toLowerCase();
+    const overridesMap = new Map((props.overrides() ?? []).map((o) => [o.id, o]));
+    const seen = new Set<string>();
+
+    const hosts = (props.hosts ?? []).map((host) => {
+      const override = overridesMap.get(host.id);
+      const hasCustomThresholds =
+        override?.thresholds &&
+        Object.keys(override.thresholds).some((key) => {
+          const k = key as keyof typeof override.thresholds;
+          return (
+            override.thresholds[k] !== undefined &&
+            override.thresholds[k] !== (props.hostDefaults as any)[k]
+          );
+        });
+
+      const displayName = host.displayName?.trim() || host.hostname || host.id;
+      const status = host.status || (host.lastSeen ? 'online' : 'offline');
+
+      seen.add(host.id);
+
+      return {
+        id: host.id,
+        name: displayName,
+        displayName,
+        rawName: host.hostname || host.id,
+        type: 'hostAgent' as const,
+        resourceType: 'Host Agent',
+        node: host.hostname,
+        instance: host.platform || host.osName || '',
+        status,
+        hasOverride:
+          hasCustomThresholds ||
+          Boolean(override?.disabled) ||
+          Boolean(override?.disableConnectivity),
+        disableConnectivity: override?.disableConnectivity || false,
+        thresholds: override?.thresholds || {},
+        defaults: props.hostDefaults,
+      } satisfies Resource;
+    });
+
+    (props.overrides() ?? [])
+      .filter((override) => override.type === 'hostAgent' && !seen.has(override.id))
+      .forEach((override) => {
+        const name = override.name?.trim() || override.id;
+        hosts.push({
+          id: override.id,
+          name,
+          displayName: name,
+          rawName: name,
+          type: 'hostAgent',
+          resourceType: 'Host Agent',
+          status: 'unknown',
+          hasOverride: true,
+          disableConnectivity: override.disableConnectivity || false,
+          thresholds: override.thresholds || {},
+          defaults: props.hostDefaults,
+        } satisfies Resource);
+      });
+
+    if (search) {
+      return hosts.filter((host) => host.name.toLowerCase().includes(search));
+    }
+
+    return hosts;
   }, []);
 
   // Process Docker hosts with their overrides (primarily for connectivity toggles)
@@ -1319,6 +1413,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           tab: 'docker' as const,
         },
         {
+          key: 'hostAgents' as const,
+          label: 'Host Agents',
+          total: props.hosts?.length ?? 0,
+          overrides: countOverrides(hostAgentsWithOverrides()),
+          tab: 'docker' as const,
+        },
+        {
           key: 'storage' as const,
           label: 'Storage',
           total: props.storage?.length ?? 0,
@@ -1396,6 +1497,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const allDockerContainers = dockerContainersFlat();
     const allResources = [
       ...nodesWithOverrides(),
+      ...hostAgentsWithOverrides(),
       ...dockerHostsWithOverrides(),
       ...allGuests,
       ...allDockerContainers,
@@ -1753,8 +1855,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const nodes = nodesWithOverrides();
     const pbsServers = pbsServersWithOverrides();
     const guests = guestsFlat();
+    const hostAgents = hostAgentsWithOverrides();
     const dockerHosts = dockerHostsWithOverrides();
-    const resource = [...nodes, ...pbsServers, ...guests, ...dockerHosts].find(
+    const resource = [...nodes, ...pbsServers, ...guests, ...hostAgents, ...dockerHosts].find(
       (r) => r.id === resourceId,
     );
     if (
@@ -1762,6 +1865,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       (resource.type !== 'node' &&
         resource.type !== 'pbs' &&
         resource.type !== 'guest' &&
+        resource.type !== 'hostAgent' &&
         resource.type !== 'dockerHost')
     )
       return;
@@ -2507,6 +2611,42 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </Show>
 
         <Show when={activeTab() === 'docker'}>
+          <Show when={hasSection('hostAgents')}>
+            <div ref={registerSection('hostAgents')} class="scroll-mt-24">
+              <ResourceTable
+                title="Host Agents"
+                resources={hostAgentsWithOverrides()}
+                columns={['CPU %', 'Memory %', 'Disk %']}
+                activeAlerts={props.activeAlerts}
+                emptyMessage="No host agents match the current filters."
+                onEdit={startEditing}
+                onSaveEdit={saveEdit}
+                onCancelEdit={cancelEdit}
+                onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
+                onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
+                editingId={editingId}
+                editingThresholds={editingThresholds}
+                setEditingThresholds={setEditingThresholds}
+                formatMetricValue={formatMetricValue}
+                hasActiveAlert={hasActiveAlert}
+                globalDefaults={props.hostDefaults}
+                setGlobalDefaults={props.setHostDefaults}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllHosts}
+                onToggleGlobalDisable={() =>
+                  props.setDisableAllHosts(!props.disableAllHosts())
+                }
+                globalDisableOfflineFlag={props.disableAllHostsOffline}
+                onToggleGlobalDisableOffline={() =>
+                  props.setDisableAllHostsOffline(!props.disableAllHostsOffline())
+                }
+                factoryDefaults={props.factoryHostDefaults}
+                onResetDefaults={props.resetHostDefaults}
+              />
+            </div>
+          </Show>
           <div class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>

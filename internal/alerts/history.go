@@ -174,7 +174,7 @@ func (hm *HistoryManager) saveHistory() error {
 	copy(snapshot, hm.history)
 	hm.mu.RUnlock()
 
-	data, err := json.MarshalIndent(snapshot, "", "  ")
+	data, err := json.Marshal(snapshot)
 
 	if err != nil {
 		return fmt.Errorf("failed to marshal history: %w", err)

@@ -325,6 +325,7 @@ type AlertConfig struct {
 	ActivationTime                 *time.Time                 `json:"activationTime,omitempty"`
 	GuestDefaults                  ThresholdConfig            `json:"guestDefaults"`
 	NodeDefaults                   ThresholdConfig            `json:"nodeDefaults"`
+	HostDefaults                   ThresholdConfig            `json:"hostDefaults"`
 	StorageDefault                 HysteresisThreshold        `json:"storageDefault"`
 	DockerDefaults                 DockerThresholdConfig      `json:"dockerDefaults"`
 	DockerIgnoredContainerPrefixes []string                   `json:"dockerIgnoredContainerPrefixes,omitempty"`
@@ -337,6 +338,7 @@ type AlertConfig struct {
 	// Global disable flags per resource type
 	DisableAllNodes              bool `json:"disableAllNodes"`              // Disable all alerts for Proxmox nodes
 	DisableAllGuests             bool `json:"disableAllGuests"`             // Disable all alerts for VMs/containers
+	DisableAllHosts              bool `json:"disableAllHosts"`              // Disable all alerts for Pulse host agents
 	DisableAllStorage            bool `json:"disableAllStorage"`            // Disable all alerts for storage
 	DisableAllPBS                bool `json:"disableAllPBS"`                // Disable all alerts for PBS servers
 	DisableAllPMG                bool `json:"disableAllPMG"`                // Disable all alerts for PMG instances
@@ -344,6 +346,7 @@ type AlertConfig struct {
 	DisableAllDockerContainers   bool `json:"disableAllDockerContainers"`   // Disable all alerts for Docker containers
 	DisableAllNodesOffline       bool `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
 	DisableAllGuestsOffline      bool `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
+	DisableAllHostsOffline       bool `json:"disableAllHostsOffline"`       // Disable host agent offline alerts globally
 	DisableAllPBSOffline         bool `json:"disableAllPBSOffline"`         // Disable PBS offline alerts globally
 	DisableAllPMGOffline         bool `json:"disableAllPMGOffline"`         // Disable PMG offline alerts globally
 	DisableAllDockerHostsOffline bool `json:"disableAllDockerHostsOffline"` // Disable Docker host offline alerts globally
@@ -487,6 +490,11 @@ func NewManager() *Manager {
 				Memory:      &HysteresisThreshold{Trigger: 85, Clear: 80},
 				Disk:        &HysteresisThreshold{Trigger: 90, Clear: 85},
 				Temperature: &HysteresisThreshold{Trigger: 80, Clear: 75}, // Warning at 80°C, clear at 75°C
+			},
+			HostDefaults: ThresholdConfig{
+				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+				Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
 			},
 			DockerDefaults: DockerThresholdConfig{
 				CPU:               HysteresisThreshold{Trigger: 80, Clear: 75},
@@ -883,6 +891,32 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		config.NodeDefaults.Temperature.Clear = config.NodeDefaults.Temperature.Trigger - 5
 		if config.NodeDefaults.Temperature.Clear <= 0 {
 			config.NodeDefaults.Temperature.Clear = 75
+		}
+	}
+
+	// Ensure host agent defaults exist
+	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger <= 0 {
+		config.HostDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.HostDefaults.CPU.Clear <= 0 {
+		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
+		if config.HostDefaults.CPU.Clear <= 0 {
+			config.HostDefaults.CPU.Clear = 75
+		}
+	}
+	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger <= 0 {
+		config.HostDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	} else if config.HostDefaults.Memory.Clear <= 0 {
+		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
+		if config.HostDefaults.Memory.Clear <= 0 {
+			config.HostDefaults.Memory.Clear = 80
+		}
+	}
+	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger <= 0 {
+		config.HostDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+	} else if config.HostDefaults.Disk.Clear <= 0 {
+		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
+		if config.HostDefaults.Disk.Clear <= 0 {
+			config.HostDefaults.Disk.Clear = 85
 		}
 	}
 
@@ -1876,6 +1910,373 @@ func (m *Manager) CheckNode(node models.Node) {
 			}
 			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "temperature", temp, thresholds.Temperature, nil)
 		}
+	}
+}
+
+func hostResourceID(hostID string) string {
+	trimmed := strings.TrimSpace(hostID)
+	if trimmed == "" {
+		return "host:unknown"
+	}
+	return fmt.Sprintf("host:%s", trimmed)
+}
+
+func hostDisplayName(host models.Host) string {
+	if name := strings.TrimSpace(host.DisplayName); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(host.Hostname); name != "" {
+		return name
+	}
+	if host.ID != "" {
+		return host.ID
+	}
+	return "Host"
+}
+
+func hostInstanceName(host models.Host) string {
+	if platform := strings.TrimSpace(host.Platform); platform != "" {
+		return platform
+	}
+	if osName := strings.TrimSpace(host.OSName); osName != "" {
+		return osName
+	}
+	return "Host Agent"
+}
+
+func sanitizeHostComponent(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return "unknown"
+	}
+
+	var builder strings.Builder
+	lastHyphen := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			builder.WriteRune(r)
+			lastHyphen = false
+		case r >= '0' && r <= '9':
+			builder.WriteRune(r)
+			lastHyphen = false
+		default:
+			if !lastHyphen {
+				builder.WriteRune('-')
+				lastHyphen = true
+			}
+		}
+	}
+
+	sanitized := strings.Trim(builder.String(), "-")
+	if sanitized == "" {
+		return "unknown"
+	}
+	return sanitized
+}
+
+func hostDiskResourceID(host models.Host, disk models.Disk) (string, string) {
+	label := strings.TrimSpace(disk.Mountpoint)
+	if label == "" {
+		label = strings.TrimSpace(disk.Device)
+	}
+	if label == "" {
+		label = "disk"
+	}
+	resourceID := fmt.Sprintf("%s/disk:%s", hostResourceID(host.ID), sanitizeHostComponent(label))
+	resourceName := fmt.Sprintf("%s (%s)", hostDisplayName(host), label)
+	return resourceID, resourceName
+}
+
+// CheckHost evaluates host agent telemetry for alerts.
+func (m *Manager) CheckHost(host models.Host) {
+	if host.ID == "" {
+		return
+	}
+
+	// Fresh telemetry marks the host as online and clears offline tracking.
+	m.HandleHostOnline(host)
+
+	m.mu.RLock()
+	alertsEnabled := m.config.Enabled
+	disableAllHosts := m.config.DisableAllHosts
+	thresholds := m.config.HostDefaults
+	override, hasOverride := m.config.Overrides[host.ID]
+	m.mu.RUnlock()
+
+	if !alertsEnabled || disableAllHosts {
+		return
+	}
+
+	if hasOverride {
+		thresholds = m.applyThresholdOverride(thresholds, override)
+		if thresholds.Disabled {
+			m.clearHostMetricAlerts(host.ID)
+			m.clearHostDiskAlerts(host.ID)
+			return
+		}
+	}
+
+	resourceID := hostResourceID(host.ID)
+	resourceName := hostDisplayName(host)
+	nodeName := strings.TrimSpace(host.Hostname)
+	instanceName := hostInstanceName(host)
+
+	baseMetadata := map[string]interface{}{
+		"resourceType": "Host",
+		"hostId":       host.ID,
+		"hostname":     host.Hostname,
+		"displayName":  host.DisplayName,
+		"platform":     host.Platform,
+		"osName":       host.OSName,
+		"osVersion":    host.OSVersion,
+		"agentVersion": host.AgentVersion,
+		"architecture": host.Architecture,
+	}
+	if len(host.Tags) > 0 {
+		baseMetadata["tags"] = append([]string(nil), host.Tags...)
+	}
+
+	if thresholds.CPU != nil {
+		cpuMetadata := cloneMetadata(baseMetadata)
+		cpuMetadata["metric"] = "cpu"
+		cpuMetadata["cpuUsagePercent"] = host.CPUUsage
+		if host.CPUCount > 0 {
+			cpuMetadata["cpuCount"] = host.CPUCount
+		}
+		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Host", "cpu", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+	} else {
+		m.clearHostMetricAlerts(host.ID, "cpu")
+	}
+
+	if thresholds.Memory != nil {
+		memMetadata := cloneMetadata(baseMetadata)
+		memMetadata["metric"] = "memory"
+		memMetadata["memoryUsagePercent"] = host.Memory.Usage
+		if host.Memory.Total > 0 {
+			memMetadata["memoryTotalBytes"] = host.Memory.Total
+			memMetadata["memoryUsedBytes"] = host.Memory.Used
+			memMetadata["memoryFreeBytes"] = host.Memory.Free
+		}
+		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Host", "memory", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+	} else {
+		m.clearHostMetricAlerts(host.ID, "memory")
+	}
+
+	seenDisks := make(map[string]struct{}, len(host.Disks))
+	if thresholds.Disk != nil && thresholds.Disk.Trigger > 0 {
+		for _, disk := range host.Disks {
+			diskResourceID, diskName := hostDiskResourceID(host, disk)
+			seenDisks[diskResourceID] = struct{}{}
+
+			diskMetadata := cloneMetadata(baseMetadata)
+			diskMetadata["metric"] = "disk"
+			diskMetadata["mountpoint"] = disk.Mountpoint
+			diskMetadata["device"] = disk.Device
+			diskMetadata["diskType"] = disk.Type
+			diskMetadata["diskUsagePercent"] = disk.Usage
+			if disk.Total > 0 {
+				diskMetadata["diskTotalBytes"] = disk.Total
+				diskMetadata["diskUsedBytes"] = disk.Used
+				diskMetadata["diskFreeBytes"] = disk.Free
+			}
+
+			m.checkMetric(diskResourceID, diskName, nodeName, instanceName, "Host Disk", "disk", disk.Usage, thresholds.Disk, &metricOptions{Metadata: diskMetadata})
+		}
+	} else {
+		m.clearHostDiskAlerts(host.ID)
+	}
+
+	m.cleanupHostDiskAlerts(host, seenDisks)
+}
+
+// HandleHostOnline clears offline tracking and alerts for a host agent.
+func (m *Manager) HandleHostOnline(host models.Host) {
+	if host.ID == "" {
+		return
+	}
+
+	alertID := fmt.Sprintf("host-offline-%s", host.ID)
+	resourceKey := hostResourceID(host.ID)
+
+	m.mu.Lock()
+	delete(m.offlineConfirmations, resourceKey)
+	_, exists := m.activeAlerts[alertID]
+	m.mu.Unlock()
+
+	if exists {
+		m.clearAlert(alertID)
+	}
+}
+
+// HandleHostRemoved clears alerts and tracking when a host agent is deleted.
+func (m *Manager) HandleHostRemoved(host models.Host) {
+	if host.ID == "" {
+		return
+	}
+
+	m.HandleHostOnline(host)
+	m.clearHostMetricAlerts(host.ID)
+	m.clearHostDiskAlerts(host.ID)
+}
+
+// HandleHostOffline raises an alert when a host agent stops reporting.
+func (m *Manager) HandleHostOffline(host models.Host) {
+	if host.ID == "" {
+		return
+	}
+
+	m.mu.RLock()
+	if !m.config.Enabled {
+		m.mu.RUnlock()
+		return
+	}
+	disableHostsOffline := m.config.DisableAllHostsOffline
+	m.mu.RUnlock()
+
+	alertID := fmt.Sprintf("host-offline-%s", host.ID)
+	resourceKey := hostResourceID(host.ID)
+	resourceName := hostDisplayName(host)
+	nodeName := strings.TrimSpace(host.Hostname)
+	instanceName := hostInstanceName(host)
+
+	if disableHostsOffline {
+		m.mu.Lock()
+		delete(m.offlineConfirmations, resourceKey)
+		m.mu.Unlock()
+		m.clearAlert(alertID)
+		return
+	}
+
+	var disableConnectivity bool
+	m.mu.RLock()
+	if override, exists := m.config.Overrides[host.ID]; exists {
+		disableConnectivity = override.DisableConnectivity || override.Disabled
+	}
+	m.mu.RUnlock()
+
+	if disableConnectivity {
+		m.clearAlert(alertID)
+		m.mu.Lock()
+		delete(m.offlineConfirmations, resourceKey)
+		m.mu.Unlock()
+		return
+	}
+
+	m.mu.Lock()
+	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
+		alert.LastSeen = time.Now()
+		m.activeAlerts[alertID] = alert
+		m.mu.Unlock()
+		return
+	}
+
+	m.offlineConfirmations[resourceKey]++
+	const requiredConfirmations = 3
+	if confirmations := m.offlineConfirmations[resourceKey]; confirmations < requiredConfirmations {
+		m.mu.Unlock()
+		log.Debug().
+			Str("host", resourceName).
+			Str("hostID", host.ID).
+			Int("confirmations", confirmations).
+			Int("required", requiredConfirmations).
+			Msg("Host agent appears offline, awaiting confirmation")
+		return
+	}
+
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "host-offline",
+		Level:        AlertLevelCritical,
+		ResourceID:   resourceKey,
+		ResourceName: resourceName,
+		Node:         nodeName,
+		Instance:     instanceName,
+		Message:      fmt.Sprintf("Host '%s' is offline", resourceName),
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+		Metadata: map[string]interface{}{
+			"resourceType": "Host",
+			"hostId":       host.ID,
+			"hostname":     host.Hostname,
+			"displayName":  host.DisplayName,
+			"platform":     host.Platform,
+			"osName":       host.OSName,
+			"osVersion":    host.OSVersion,
+		},
+	}
+
+	m.preserveAlertState(alertID, alert)
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+	m.historyManager.AddAlert(*alert)
+	m.dispatchAlert(alert, false)
+	m.mu.Unlock()
+
+	log.Error().
+		Str("host", resourceName).
+		Str("hostID", host.ID).
+		Str("hostname", host.Hostname).
+		Msg("CRITICAL: Host agent is offline")
+}
+
+func (m *Manager) clearHostMetricAlerts(hostID string, metrics ...string) {
+	if hostID == "" {
+		return
+	}
+	resourceID := hostResourceID(hostID)
+	if len(metrics) == 0 {
+		metrics = []string{"cpu", "memory"}
+	}
+	for _, metric := range metrics {
+		m.clearAlert(fmt.Sprintf("%s-%s", resourceID, metric))
+	}
+}
+
+func (m *Manager) clearHostDiskAlerts(hostID string) {
+	if hostID == "" {
+		return
+	}
+
+	prefix := fmt.Sprintf("%s/disk:", hostResourceID(hostID))
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		if !strings.HasPrefix(alert.ResourceID, prefix) {
+			continue
+		}
+		m.clearAlertNoLock(alertID)
+	}
+}
+
+func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct{}) {
+	if host.ID == "" {
+		return
+	}
+
+	prefix := fmt.Sprintf("%s/disk:", hostResourceID(host.ID))
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		if !strings.HasPrefix(alert.ResourceID, prefix) {
+			continue
+		}
+		if _, exists := seen[alert.ResourceID]; exists {
+			continue
+		}
+		m.clearAlertNoLock(alertID)
 	}
 }
 
@@ -6728,7 +7129,7 @@ func (m *Manager) SaveActiveAlerts() error {
 		alerts = append(alerts, alert)
 	}
 
-	data, err := json.MarshalIndent(alerts, "", "  ")
+	data, err := json.Marshal(alerts)
 	if err != nil {
 		return fmt.Errorf("failed to marshal active alerts: %w", err)
 	}

@@ -421,60 +421,67 @@ func timePtr(t time.Time) *time.Time {
 
 // Monitor handles all monitoring operations
 type Monitor struct {
-	config                *config.Config
-	state                 *models.State
-	pveClients            map[string]PVEClientInterface
-	pbsClients            map[string]*pbs.Client
-	pmgClients            map[string]*pmg.Client
-	pollMetrics           *PollMetrics
-	scheduler             *AdaptiveScheduler
-	stalenessTracker      *StalenessTracker
-	taskQueue             *TaskQueue
-	circuitBreakers       map[string]*circuitBreaker
-	deadLetterQueue       *TaskQueue
-	failureCounts         map[string]int
-	lastOutcome           map[string]taskOutcome
-	backoffCfg            backoffConfig
-	rng                   *rand.Rand
-	maxRetryAttempts      int
-	tempCollector         *TemperatureCollector // SSH-based temperature collector
-	mu                    sync.RWMutex
-	startTime             time.Time
-	rateTracker           *RateTracker
-	metricsHistory        *MetricsHistory
-	alertManager          *alerts.Manager
-	notificationMgr       *notifications.NotificationManager
-	configPersist         *config.ConfigPersistence
-	discoveryService      *discovery.Service        // Background discovery service
-	activePollCount       int32                     // Number of active polling operations
-	pollCounter           int64                     // Counter for polling cycles
-	authFailures          map[string]int            // Track consecutive auth failures per node
-	lastAuthAttempt       map[string]time.Time      // Track last auth attempt time
-	lastClusterCheck      map[string]time.Time      // Track last cluster check for standalone nodes
-	lastPhysicalDiskPoll  map[string]time.Time      // Track last physical disk poll time per instance
-	lastPVEBackupPoll     map[string]time.Time      // Track last PVE backup poll per instance
-	lastPBSBackupPoll     map[string]time.Time      // Track last PBS backup poll per instance
-	persistence           *config.ConfigPersistence // Add persistence for saving updated configs
-	pbsBackupPollers      map[string]bool           // Track PBS backup polling goroutines per instance
-	runtimeCtx            context.Context           // Context used while monitor is running
-	wsHub                 *websocket.Hub            // Hub used for broadcasting state
-	diagMu                sync.RWMutex              // Protects diagnostic snapshot maps
-	nodeSnapshots         map[string]NodeMemorySnapshot
-	guestSnapshots        map[string]GuestMemorySnapshot
-	rrdCacheMu            sync.RWMutex // Protects RRD memavailable cache
-	nodeRRDMemCache       map[string]rrdMemCacheEntry
-	removedDockerHosts    map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
-	dockerCommands        map[string]*dockerHostCommand
-	dockerCommandIndex    map[string]string
-	guestMetadataMu       sync.RWMutex
-	guestMetadataCache    map[string]guestMetadataCacheEntry
-	executor              PollExecutor
-	breakerBaseRetry      time.Duration
-	breakerMaxDelay       time.Duration
-	breakerHalfOpenWindow time.Duration
-	instanceInfoCache     map[string]*instanceInfo
-	pollStatusMap         map[string]*pollStatus
-	dlqInsightMap         map[string]*dlqInsight
+	config                     *config.Config
+	state                      *models.State
+	pveClients                 map[string]PVEClientInterface
+	pbsClients                 map[string]*pbs.Client
+	pmgClients                 map[string]*pmg.Client
+	pollMetrics                *PollMetrics
+	scheduler                  *AdaptiveScheduler
+	stalenessTracker           *StalenessTracker
+	taskQueue                  *TaskQueue
+	circuitBreakers            map[string]*circuitBreaker
+	deadLetterQueue            *TaskQueue
+	failureCounts              map[string]int
+	lastOutcome                map[string]taskOutcome
+	backoffCfg                 backoffConfig
+	rng                        *rand.Rand
+	maxRetryAttempts           int
+	tempCollector              *TemperatureCollector // SSH-based temperature collector
+	mu                         sync.RWMutex
+	startTime                  time.Time
+	rateTracker                *RateTracker
+	metricsHistory             *MetricsHistory
+	alertManager               *alerts.Manager
+	notificationMgr            *notifications.NotificationManager
+	configPersist              *config.ConfigPersistence
+	discoveryService           *discovery.Service        // Background discovery service
+	activePollCount            int32                     // Number of active polling operations
+	pollCounter                int64                     // Counter for polling cycles
+	authFailures               map[string]int            // Track consecutive auth failures per node
+	lastAuthAttempt            map[string]time.Time      // Track last auth attempt time
+	lastClusterCheck           map[string]time.Time      // Track last cluster check for standalone nodes
+	lastPhysicalDiskPoll       map[string]time.Time      // Track last physical disk poll time per instance
+	lastPVEBackupPoll          map[string]time.Time      // Track last PVE backup poll per instance
+	lastPBSBackupPoll          map[string]time.Time      // Track last PBS backup poll per instance
+	persistence                *config.ConfigPersistence // Add persistence for saving updated configs
+	pbsBackupPollers           map[string]bool           // Track PBS backup polling goroutines per instance
+	runtimeCtx                 context.Context           // Context used while monitor is running
+	wsHub                      *websocket.Hub            // Hub used for broadcasting state
+	diagMu                     sync.RWMutex              // Protects diagnostic snapshot maps
+	nodeSnapshots              map[string]NodeMemorySnapshot
+	guestSnapshots             map[string]GuestMemorySnapshot
+	rrdCacheMu                 sync.RWMutex // Protects RRD memavailable cache
+	nodeRRDMemCache            map[string]rrdMemCacheEntry
+	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
+	dockerCommands             map[string]*dockerHostCommand
+	dockerCommandIndex         map[string]string
+	guestMetadataMu            sync.RWMutex
+	guestMetadataCache         map[string]guestMetadataCacheEntry
+	guestMetadataLimiterMu     sync.Mutex
+	guestMetadataLimiter       map[string]time.Time
+	guestMetadataSlots         chan struct{}
+	guestMetadataMinRefresh    time.Duration
+	guestMetadataRefreshJitter time.Duration
+	guestMetadataRetryBackoff  time.Duration
+	guestMetadataHoldDuration  time.Duration
+	executor                   PollExecutor
+	breakerBaseRetry           time.Duration
+	breakerMaxDelay            time.Duration
+	breakerHalfOpenWindow      time.Duration
+	instanceInfoCache          map[string]*instanceInfo
+	pollStatusMap              map[string]*pollStatus
+	dlqInsightMap              map[string]*dlqInsight
 }
 
 type rrdMemCacheEntry struct {
@@ -565,9 +572,13 @@ const (
 	dockerOfflineGraceMultiplier = 4
 	dockerMinimumHealthWindow    = 30 * time.Second
 	dockerMaximumHealthWindow    = 10 * time.Minute
+	hostOfflineGraceMultiplier   = 4
+	hostMinimumHealthWindow      = 30 * time.Second
+	hostMaximumHealthWindow      = 10 * time.Minute
 	nodeRRDCacheTTL              = 30 * time.Second
 	nodeRRDRequestTimeout        = 2 * time.Second
 	guestMetadataCacheTTL        = 5 * time.Minute
+	defaultGuestMetadataHold     = 15 * time.Second
 )
 
 type guestMetadataCacheEntry struct {
@@ -727,6 +738,10 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		Str("hostID", hostID).
 		Bool("removed", removed).
 		Msg("Host agent removed from monitoring")
+
+	if m.alertManager != nil {
+		m.alertManager.HandleHostRemoved(host)
+	}
 
 	return host, nil
 }
@@ -1471,6 +1486,10 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	m.state.UpsertHost(host)
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
 
+	if m.alertManager != nil {
+		m.alertManager.CheckHost(host)
+	}
+
 	return host, nil
 }
 
@@ -1530,6 +1549,43 @@ func (m *Monitor) evaluateDockerAgents(now time.Time) {
 	}
 }
 
+// evaluateHostAgents updates health for host agents based on last report time.
+func (m *Monitor) evaluateHostAgents(now time.Time) {
+	hosts := m.state.GetHosts()
+	for _, host := range hosts {
+		interval := host.IntervalSeconds
+		if interval <= 0 {
+			interval = int(hostMinimumHealthWindow / time.Second)
+		}
+
+		window := time.Duration(interval) * time.Second * hostOfflineGraceMultiplier
+		if window < hostMinimumHealthWindow {
+			window = hostMinimumHealthWindow
+		} else if window > hostMaximumHealthWindow {
+			window = hostMaximumHealthWindow
+		}
+
+		healthy := !host.LastSeen.IsZero() && now.Sub(host.LastSeen) <= window
+		key := hostConnectionPrefix + host.ID
+		m.state.SetConnectionHealth(key, healthy)
+
+		hostCopy := host
+		if healthy {
+			hostCopy.Status = "online"
+			m.state.SetHostStatus(host.ID, "online")
+			if m.alertManager != nil {
+				m.alertManager.HandleHostOnline(hostCopy)
+			}
+		} else {
+			hostCopy.Status = "offline"
+			m.state.SetHostStatus(host.ID, "offline")
+			if m.alertManager != nil {
+				m.alertManager.HandleHostOffline(hostCopy)
+			}
+		}
+	}
+}
+
 // sortContent sorts comma-separated content values for consistent display
 func sortContent(content string) string {
 	if content == "" {
@@ -1538,6 +1594,76 @@ func sortContent(content string) string {
 	parts := strings.Split(content, ",")
 	sort.Strings(parts)
 	return strings.Join(parts, ",")
+}
+
+func (m *Monitor) tryReserveGuestMetadataFetch(key string, now time.Time) bool {
+	if m == nil {
+		return false
+	}
+	m.guestMetadataLimiterMu.Lock()
+	defer m.guestMetadataLimiterMu.Unlock()
+
+	if next, ok := m.guestMetadataLimiter[key]; ok && now.Before(next) {
+		return false
+	}
+	hold := m.guestMetadataHoldDuration
+	if hold <= 0 {
+		hold = defaultGuestMetadataHold
+	}
+	m.guestMetadataLimiter[key] = now.Add(hold)
+	return true
+}
+
+func (m *Monitor) scheduleNextGuestMetadataFetch(key string, now time.Time) {
+	if m == nil {
+		return
+	}
+	interval := m.guestMetadataMinRefresh
+	if interval <= 0 {
+		interval = config.DefaultGuestMetadataMinRefresh
+	}
+	jitter := m.guestMetadataRefreshJitter
+	if jitter > 0 && m.rng != nil {
+		interval += time.Duration(m.rng.Int63n(int64(jitter)))
+	}
+	m.guestMetadataLimiterMu.Lock()
+	m.guestMetadataLimiter[key] = now.Add(interval)
+	m.guestMetadataLimiterMu.Unlock()
+}
+
+func (m *Monitor) deferGuestMetadataRetry(key string, now time.Time) {
+	if m == nil {
+		return
+	}
+	backoff := m.guestMetadataRetryBackoff
+	if backoff <= 0 {
+		backoff = config.DefaultGuestMetadataRetryBackoff
+	}
+	m.guestMetadataLimiterMu.Lock()
+	m.guestMetadataLimiter[key] = now.Add(backoff)
+	m.guestMetadataLimiterMu.Unlock()
+}
+
+func (m *Monitor) acquireGuestMetadataSlot(ctx context.Context) bool {
+	if m == nil || m.guestMetadataSlots == nil {
+		return true
+	}
+	select {
+	case m.guestMetadataSlots <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (m *Monitor) releaseGuestMetadataSlot() {
+	if m == nil || m.guestMetadataSlots == nil {
+		return
+	}
+	select {
+	case <-m.guestMetadataSlots:
+	default:
+	}
 }
 
 func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus) ([]string, []models.GuestNetworkInterface, string, string, string) {
@@ -1562,12 +1688,36 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
 	}
 
+	needsFetch := !ok || now.Sub(cached.fetchedAt) >= guestMetadataCacheTTL
+	if !needsFetch {
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+	}
+
+	reserved := m.tryReserveGuestMetadataFetch(key, now)
+	if !reserved && ok {
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+	}
+	if !reserved && !ok {
+		reserved = true
+	}
+
 	// Start with cached values as fallback in case new calls fail
 	ipAddresses := cloneStringSlice(cached.ipAddresses)
 	networkIfaces := cloneGuestNetworkInterfaces(cached.networkInterfaces)
 	osName := cached.osName
 	osVersion := cached.osVersion
 	agentVersion := cached.agentVersion
+
+	if reserved {
+		if !m.acquireGuestMetadataSlot(ctx) {
+			m.deferGuestMetadataRetry(key, time.Now())
+			return ipAddresses, networkIfaces, osName, osVersion, agentVersion
+		}
+		defer m.releaseGuestMetadataSlot()
+		defer func() {
+			m.scheduleNextGuestMetadataFetch(key, time.Now())
+		}()
+	}
 
 	ifaceCtx, cancelIface := context.WithTimeout(ctx, 5*time.Second)
 	interfaces, err := client.GetVMNetworkInterfaces(ifaceCtx, nodeName, vmid)
@@ -2584,49 +2734,72 @@ func New(cfg *config.Config) (*Monitor, error) {
 		}, stalenessTracker, nil, nil)
 	}
 
+	minRefresh := cfg.GuestMetadataMinRefreshInterval
+	if minRefresh <= 0 {
+		minRefresh = config.DefaultGuestMetadataMinRefresh
+	}
+	jitter := cfg.GuestMetadataRefreshJitter
+	if jitter < 0 {
+		jitter = 0
+	}
+	retryBackoff := cfg.GuestMetadataRetryBackoff
+	if retryBackoff <= 0 {
+		retryBackoff = config.DefaultGuestMetadataRetryBackoff
+	}
+	concurrency := cfg.GuestMetadataMaxConcurrent
+	if concurrency <= 0 {
+		concurrency = config.DefaultGuestMetadataMaxConcurrent
+	}
+	holdDuration := defaultGuestMetadataHold
+
 	m := &Monitor{
-		config:               cfg,
-		state:                models.NewState(),
-		pveClients:           make(map[string]PVEClientInterface),
-		pbsClients:           make(map[string]*pbs.Client),
-		pmgClients:           make(map[string]*pmg.Client),
-		pollMetrics:          getPollMetrics(),
-		scheduler:            scheduler,
-		stalenessTracker:     stalenessTracker,
-		taskQueue:            taskQueue,
-		deadLetterQueue:      deadLetterQueue,
-		circuitBreakers:      breakers,
-		failureCounts:        failureCounts,
-		lastOutcome:          lastOutcome,
-		backoffCfg:           backoff,
-		rng:                  rand.New(rand.NewSource(time.Now().UnixNano())),
-		maxRetryAttempts:     5,
-		tempCollector:        tempCollector,
-		startTime:            time.Now(),
-		rateTracker:          NewRateTracker(),
-		metricsHistory:       NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
-		alertManager:         alerts.NewManager(),
-		notificationMgr:      notifications.NewNotificationManager(cfg.PublicURL),
-		configPersist:        config.NewConfigPersistence(cfg.DataPath),
-		discoveryService:     nil, // Will be initialized in Start()
-		authFailures:         make(map[string]int),
-		lastAuthAttempt:      make(map[string]time.Time),
-		lastClusterCheck:     make(map[string]time.Time),
-		lastPhysicalDiskPoll: make(map[string]time.Time),
-		lastPVEBackupPoll:    make(map[string]time.Time),
-		lastPBSBackupPoll:    make(map[string]time.Time),
-		persistence:          config.NewConfigPersistence(cfg.DataPath),
-		pbsBackupPollers:     make(map[string]bool),
-		nodeSnapshots:        make(map[string]NodeMemorySnapshot),
-		guestSnapshots:       make(map[string]GuestMemorySnapshot),
-		nodeRRDMemCache:      make(map[string]rrdMemCacheEntry),
-		removedDockerHosts:   make(map[string]time.Time),
-		dockerCommands:       make(map[string]*dockerHostCommand),
-		dockerCommandIndex:   make(map[string]string),
-		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
-		instanceInfoCache:    make(map[string]*instanceInfo),
-		pollStatusMap:        make(map[string]*pollStatus),
-		dlqInsightMap:        make(map[string]*dlqInsight),
+		config:                     cfg,
+		state:                      models.NewState(),
+		pveClients:                 make(map[string]PVEClientInterface),
+		pbsClients:                 make(map[string]*pbs.Client),
+		pmgClients:                 make(map[string]*pmg.Client),
+		pollMetrics:                getPollMetrics(),
+		scheduler:                  scheduler,
+		stalenessTracker:           stalenessTracker,
+		taskQueue:                  taskQueue,
+		deadLetterQueue:            deadLetterQueue,
+		circuitBreakers:            breakers,
+		failureCounts:              failureCounts,
+		lastOutcome:                lastOutcome,
+		backoffCfg:                 backoff,
+		rng:                        rand.New(rand.NewSource(time.Now().UnixNano())),
+		maxRetryAttempts:           5,
+		tempCollector:              tempCollector,
+		startTime:                  time.Now(),
+		rateTracker:                NewRateTracker(),
+		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
+		alertManager:               alerts.NewManager(),
+		notificationMgr:            notifications.NewNotificationManager(cfg.PublicURL),
+		configPersist:              config.NewConfigPersistence(cfg.DataPath),
+		discoveryService:           nil, // Will be initialized in Start()
+		authFailures:               make(map[string]int),
+		lastAuthAttempt:            make(map[string]time.Time),
+		lastClusterCheck:           make(map[string]time.Time),
+		lastPhysicalDiskPoll:       make(map[string]time.Time),
+		lastPVEBackupPoll:          make(map[string]time.Time),
+		lastPBSBackupPoll:          make(map[string]time.Time),
+		persistence:                config.NewConfigPersistence(cfg.DataPath),
+		pbsBackupPollers:           make(map[string]bool),
+		nodeSnapshots:              make(map[string]NodeMemorySnapshot),
+		guestSnapshots:             make(map[string]GuestMemorySnapshot),
+		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
+		removedDockerHosts:         make(map[string]time.Time),
+		dockerCommands:             make(map[string]*dockerHostCommand),
+		dockerCommandIndex:         make(map[string]string),
+		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:       make(map[string]time.Time),
+		guestMetadataMinRefresh:    minRefresh,
+		guestMetadataRefreshJitter: jitter,
+		guestMetadataRetryBackoff:  retryBackoff,
+		guestMetadataHoldDuration:  holdDuration,
+		instanceInfoCache:          make(map[string]*instanceInfo),
+		pollStatusMap:              make(map[string]*pollStatus),
+		dlqInsightMap:              make(map[string]*dlqInsight),
 	}
 
 	m.breakerBaseRetry = 5 * time.Second
@@ -2670,6 +2843,10 @@ func New(cfg *config.Config) (*Monitor, error) {
 		m.notificationMgr.SetEmailConfig(*emailConfig)
 	} else {
 		log.Warn().Err(err).Msg("Failed to load email configuration")
+	}
+
+	if concurrency > 0 {
+		m.guestMetadataSlots = make(chan struct{}, concurrency)
 	}
 
 	if appriseConfig, err := m.configPersist.LoadAppriseConfig(); err == nil {
@@ -3103,6 +3280,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		case <-pollTicker.C:
 			now := time.Now()
 			m.evaluateDockerAgents(now)
+			m.evaluateHostAgents(now)
 			m.cleanupRemovedDockerHosts(now)
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh

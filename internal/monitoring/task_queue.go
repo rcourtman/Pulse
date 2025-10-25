@@ -104,6 +104,39 @@ func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
 
 // WaitNext blocks until a task is due or context is cancelled.
 func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
+	var (
+		timer      *time.Timer
+		resetTimer = func(d time.Duration) <-chan time.Time {
+			if d <= 0 {
+				d = time.Millisecond
+			}
+			if timer == nil {
+				timer = time.NewTimer(d)
+				return timer.C
+			}
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(d)
+			return timer.C
+		}
+		stopTimer = func() {
+			if timer == nil {
+				return
+			}
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+		}
+	)
+	defer stopTimer()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -114,10 +147,11 @@ func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
 		q.mu.Lock()
 		if len(q.heap) == 0 {
 			q.mu.Unlock()
+			timerCh := resetTimer(100 * time.Millisecond)
 			select {
 			case <-ctx.Done():
 				return ScheduledTask{}, false
-			case <-time.After(100 * time.Millisecond):
+			case <-timerCh:
 				continue
 			}
 		}
@@ -136,12 +170,11 @@ func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
 		if delay > 250*time.Millisecond {
 			delay = 250 * time.Millisecond
 		}
-		timer := time.NewTimer(delay)
+		timerCh := resetTimer(delay)
 		select {
 		case <-ctx.Done():
-			timer.Stop()
 			return ScheduledTask{}, false
-		case <-timer.C:
+		case <-timerCh:
 		}
 	}
 }
