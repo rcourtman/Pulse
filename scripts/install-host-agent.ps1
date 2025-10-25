@@ -34,6 +34,63 @@ function Write-Error { param([string]$msg) Write-Color $Red "✗ $msg" }
 function Write-Info { param([string]$msg) Write-Color $Blue "ℹ $msg" }
 function Write-Warning { param([string]$msg) Write-Color $Yellow "⚠ $msg" }
 
+function Write-InstallerEvent {
+    param(
+        [string]$SourceName,
+        [string]$Message,
+        [ValidateSet('Information', 'Warning', 'Error')] [string]$EntryType = 'Information',
+        [int]$EventId = 1000
+    )
+
+    if (-not $SourceName) { return }
+
+    try {
+        Write-EventLog -LogName Application -Source $SourceName -EventId $EventId -EntryType $EntryType -Message $Message
+    } catch {
+        Write-Warning "Unable to write installer event log entry: $_"
+    }
+}
+
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+} catch {
+    # Ignore if platform does not expose TLS 1.3
+}
+
+function Get-RecentAgentEvents {
+    param(
+        [string]$ProviderName,
+        [int]$Max = 5
+    )
+    try {
+        return Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = $ProviderName } -MaxEvents $Max -ErrorAction Stop
+    } catch {
+        return Get-EventLog -LogName Application -Source $ProviderName -Newest $Max -ErrorAction SilentlyContinue
+    }
+}
+
+function Test-AgentRegistration {
+    param(
+        [string]$PulseUrl,
+        [string]$Hostname,
+        [string]$Token
+    )
+
+    if (-not $Token) {
+        return $null
+    }
+
+    try {
+        $encodedHostname = [System.Uri]::EscapeDataString($Hostname)
+        $lookupUri = "$PulseUrl/api/agents/host/lookup?hostname=$encodedHostname"
+        $headers = @{ Authorization = "Bearer $Token" }
+        $response = Invoke-RestMethod -Uri $lookupUri -Headers $headers -Method Get -ErrorAction Stop
+        return $response.host
+    } catch {
+        return $null
+    }
+}
+
 Write-Host ""
 Write-Color $Blue "═══════════════════════════════════════════════════════════"
 Write-Color $Blue "  Pulse Host Agent - Windows Installation"
@@ -89,6 +146,13 @@ try {
     # Download binary
     Invoke-WebRequest -Uri $downloadUrl -OutFile $agentPath -UseBasicParsing
     Write-Success "Downloaded agent to $agentPath"
+
+    $agentArgs = @("--url", "`"$PulseUrl`"", "--interval", $Interval)
+    if ($Token) {
+        $agentArgs += @("--token", "`"$Token`"")
+    }
+    $serviceBinaryPath = "`"$agentPath`" $($agentArgs -join ' ')"
+    $manualCommand = "& `"$agentPath`" $($agentArgs -join ' ')"
 } catch {
     Write-Error "Failed to download agent: $_"
     exit 1
@@ -119,17 +183,6 @@ if ($existingService) {
 if (-not $NoService) {
     Write-Info "Installing native Windows service with built-in service support..."
 
-    # Build service arguments
-    $serviceArgs = @(
-        "--url", $PulseUrl,
-        "--interval", $Interval
-    )
-    if ($Token) {
-        $serviceArgs += "--token", $Token
-    }
-
-    $serviceBinaryPath = "`"$agentPath`" $($serviceArgs -join ' ')"
-
     try {
         if ($existingService) {
             Write-Info "Removing existing service..."
@@ -156,6 +209,8 @@ if (-not $NoService) {
             Write-Warning "Could not register Event Log source (not critical): $_"
         }
 
+        Write-InstallerEvent -SourceName $serviceName -Message "Pulse Host Agent installer registered service version $(Get-Item $agentPath).VersionInfo.FileVersion" -EventId 1000
+
         # Configure service recovery options (restart on failure)
         sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
         Write-Success "Configured automatic restart on failure"
@@ -169,30 +224,62 @@ if (-not $NoService) {
         if ($status -eq 'Running') {
             Write-Success "Service started successfully!"
 
-            # Optional: Validate that agent is reporting
             Write-Info "Waiting 10 seconds to validate agent reporting..."
             Start-Sleep -Seconds 10
 
-            # Check Event Log for successful startup
-            $recentLogs = Get-EventLog -LogName Application -Source $serviceName -Newest 5 -ErrorAction SilentlyContinue
-            $hasStarted = $recentLogs | Where-Object { $_.Message -like "*started successfully*" }
-
-            if ($hasStarted) {
-                Write-Success "Agent is reporting successfully!"
+            $hostname = $env:COMPUTERNAME
+            $lookupHost = Test-AgentRegistration -PulseUrl $PulseUrl -Hostname $hostname -Token $Token
+            if ($lookupHost) {
+                Write-Success "Agent successfully registered with Pulse (host '$hostname')."
+                if ($lookupHost.status) {
+                    $lastSeen = $lookupHost.lastSeen
+                    if ($lastSeen -is [DateTime]) {
+                        $lastSeen = $lastSeen.ToString("u")
+                    }
+                    Write-Info ("Pulse reports status: {0} (last seen {1})" -f $lookupHost.status, $lastSeen)
+                }
                 Write-Info "Check your Pulse dashboard - this host should appear shortly."
+                $statusForLog = if ($lookupHost.status) { $lookupHost.status } else { 'unknown' }
+                Write-InstallerEvent -SourceName $serviceName -Message "Installer verified host '$hostname' reporting to Pulse (status: $statusForLog)." -EventId 1010
+            } elseif ($Token) {
+                Write-Warning "Agent is running but the lookup endpoint has not confirmed registration yet."
+                Write-Info "It may take another moment for metrics to appear in the dashboard."
+                Write-InstallerEvent -SourceName $serviceName -Message "Installer could not yet confirm host '$hostname' registration with Pulse." -EntryType Warning -EventId 1011
             } else {
-                Write-Warning "Agent started but validation incomplete. Check Event Viewer if issues occur."
+                Write-Info "Registration check skipped (no API token available)."
+                Write-InstallerEvent -SourceName $serviceName -Message "Installer skipped registration lookup (no API token provided)." -EventId 1012
+            }
+
+            $recentLogs = Get-RecentAgentEvents -ProviderName $serviceName -Max 5
+            if ($recentLogs) {
+                Write-Info "Recent service events:"
+                $recentLogs | Select-Object -First 3 | ForEach-Object {
+                    $time = $_.TimeCreated
+                    if (-not $time) { $time = $_.TimeGenerated }
+                    Write-Host ("    [{0}] {1}" -f $time.ToString("u"), $_.Message)
+                }
+            } else {
+                Write-Warning "No recent Application log entries were found for $serviceName."
             }
         } else {
             Write-Warning "Service status: $status"
             Write-Info "Checking service logs..."
-            Get-EventLog -LogName Application -Source $serviceName -Newest 5 -ErrorAction SilentlyContinue | Format-List TimeGenerated, Message
+            $recentLogs = Get-RecentAgentEvents -ProviderName $serviceName -Max 5
+            if ($recentLogs) {
+                $recentLogs | ForEach-Object {
+                    $time = $_.TimeCreated
+                    if (-not $time) { $time = $_.TimeGenerated }
+                    Write-Host ("    [{0}] {1}" -f $time.ToString("u"), $_.Message)
+                }
+            } else {
+                Write-Warning "No Application log entries were found for $serviceName."
+            }
         }
 
     } catch {
         Write-Error "Failed to create/start service: $_"
         Write-Info "You can start the agent manually with:"
-        Write-Host "  & `"$agentPath`" --url $PulseUrl --interval $Interval $(if ($Token) { '--token ***' })"
+        Write-Host "  $manualCommand"
         Write-Host ""
         Write-Info "Or check Windows Event Viewer (Application log) for error details."
         exit 1
@@ -201,7 +288,7 @@ if (-not $NoService) {
     Write-Info "Skipping service installation (--NoService flag)"
     Write-Host ""
     Write-Info "To start the agent manually:"
-    Write-Host "  & `"$agentPath`" --url $PulseUrl --interval $Interval $(if ($Token) { '--token ***' })"
+    Write-Host "  $manualCommand"
 }
 
 Write-Host ""
@@ -216,7 +303,7 @@ Write-Host "  Stop:    Stop-Service -Name PulseHostAgent"
 Write-Host "  Restart: Restart-Service -Name PulseHostAgent"
 Write-Host "  Status:  Get-Service -Name PulseHostAgent | Select Status, StartType"
 Write-Host "  Remove:  sc.exe delete PulseHostAgent"
-Write-Host "  Logs:    Get-EventLog -LogName Application -Source PulseHostAgent -Newest 50"
+Write-Host "  Logs:    Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='PulseHostAgent'} -MaxEvents 50"
 Write-Host ""
 
 Write-Info "Files installed:"

@@ -241,6 +241,19 @@ export interface HostSensorSummary {
   additional?: Record<string, number>;
 }
 
+export interface HostLookupResponse {
+  success: boolean;
+  host: {
+    id: string;
+    hostname: string;
+    displayName?: string;
+    status: string;
+    connected: boolean;
+    lastSeen: number;
+    agentVersion?: string;
+  };
+}
+
 export interface ReplicationJob {
   id: string;
   instance: string;

@@ -112,8 +112,10 @@ LINUX_LOG_FILE="$LINUX_LOG_DIR/host-agent.log"
 SERVICE_MODE="manual"
 MANUAL_START_CMD=""
 MANUAL_START_WRAPPED=""
+LAUNCH_IDENTIFIER=""
 UNRAID=false
-if [[ -f /etc/unraid-version ]]; then
+UNRAID_GO_FILE="/boot/config/go"
+if [[ -f "$UNRAID_GO_FILE" ]] || [[ -f /etc/unraid-version ]]; then
     UNRAID=true
 fi
 
@@ -365,6 +367,15 @@ sudo mv "$TEMP_BINARY" "$AGENT_PATH"
 sudo chmod +x "$AGENT_PATH"
 log_success "Agent binary installed to $AGENT_PATH"
 
+# Build reusable agent command strings
+AGENT_CMD="$AGENT_PATH --url $PULSE_URL"
+if [[ -n "$PULSE_TOKEN" ]]; then
+    AGENT_CMD="$AGENT_CMD --token $PULSE_TOKEN"
+fi
+AGENT_CMD="$AGENT_CMD --interval $INTERVAL"
+MANUAL_START_CMD="$AGENT_CMD"
+MANUAL_START_WRAPPED="nohup $MANUAL_START_CMD >$LINUX_LOG_FILE 2>&1 &"
+
 # Set up service based on platform
 if [[ "$PLATFORM" == "linux" ]] && command -v systemctl &> /dev/null; then
     log_info "Setting up systemd service..."
@@ -379,7 +390,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$AGENT_PATH --url $PULSE_URL --token $PULSE_TOKEN --interval $INTERVAL
+ExecStart=$AGENT_CMD
 Restart=always
 RestartSec=5s
 User=root
@@ -558,6 +569,7 @@ EOF
     chmod 600 "$LAUNCHD_PLIST"
 
     LAUNCH_TARGET="gui/$(id -u)"
+    LAUNCH_IDENTIFIER="$LAUNCH_TARGET/com.pulse.host-agent"
 
     # Attempt to unload any existing service instance
     if launchctl bootout "$LAUNCH_TARGET" "$LAUNCHD_PLIST" 2>/dev/null; then
@@ -576,23 +588,128 @@ EOF
     fi
     SERVICE_MODE="launchd"
 else
-    log_warn "Automatic service setup not available for this platform"
     sudo mkdir -p "$LINUX_LOG_DIR"
-    log_info "To run the agent manually:"
-    MANUAL_START_CMD="$AGENT_PATH --url $PULSE_URL --token $PULSE_TOKEN --interval $INTERVAL"
-    MANUAL_START_WRAPPED="nohup $MANUAL_START_CMD >$LINUX_LOG_FILE 2>&1 &"
-    log_info "  $MANUAL_START_CMD"
-    log_info ""
-    log_info "To keep the agent running persistently:"
-    log_info "  $MANUAL_START_WRAPPED"
     if [[ "$UNRAID" == true ]]; then
-        log_info ""
-        log_info "On Unraid, add the wrapped command to /boot/config/go so it starts on boot."
+        log_info "Detected Unraid (no systemd). Configuring persistent background service..."
+
+        if pgrep -f "$AGENT_PATH" >/dev/null 2>&1; then
+            log_warn "Existing pulse-host-agent process detected; restarting with new binary"
+            sudo pkill -f "$AGENT_PATH" 2>/dev/null || true
+            sleep 1
+        fi
+
+        log_info "Starting host agent with nohup (logs: $LINUX_LOG_FILE)"
+        if sudo bash -c "$MANUAL_START_WRAPPED"; then
+            log_success "Agent started in the background"
+        else
+            log_error "Failed to start agent automatically. Run manually:"
+            log_info "  $MANUAL_START_WRAPPED"
+        fi
+
+        if [[ -f "$UNRAID_GO_FILE" ]]; then
+            if sudo grep -qF -- "$MANUAL_START_WRAPPED" "$UNRAID_GO_FILE"; then
+                log_info "Auto-start entry already present in $UNRAID_GO_FILE"
+            else
+                APPEND_STARTUP=true
+                if [[ "$FORCE" == false ]]; then
+                    read -p "Add agent auto-start to $UNRAID_GO_FILE? (Y/n): " ADD_STARTUP_CHOICE
+                    if [[ "$ADD_STARTUP_CHOICE" == "n" || "$ADD_STARTUP_CHOICE" == "N" ]]; then
+                        APPEND_STARTUP=false
+                    fi
+                fi
+
+                if [[ "$APPEND_STARTUP" == true ]]; then
+                    if sudo grep -qF "# Pulse Host Agent auto-start" "$UNRAID_GO_FILE"; then
+                        log_info "Updating existing auto-start entry in $UNRAID_GO_FILE"
+                        sudo sed -i '/# Pulse Host Agent auto-start/,+1d' "$UNRAID_GO_FILE" 2>/dev/null || true
+                    fi
+                    sudo tee -a "$UNRAID_GO_FILE" > /dev/null <<EOF
+# Pulse Host Agent auto-start
+$MANUAL_START_WRAPPED
+EOF
+                    log_success "Added auto-start command to $UNRAID_GO_FILE"
+                else
+                    log_info "Skipped modifying $UNRAID_GO_FILE"
+                fi
+            fi
+        else
+            log_warn "Could not find $UNRAID_GO_FILE; skipping persistence step."
+        fi
+
+        log_info "To rerun manually: $MANUAL_START_CMD"
+        SERVICE_MODE="unraid"
     else
-        log_info ""
-        log_info "On systems without systemd, add the wrapped command to /etc/rc.local (or similar) to start on boot."
+        log_warn "Systemd not available; configuring rc.local-based startup"
+
+        RC_LOCAL_PATH=""
+        for candidate in /etc/rc.local /etc/rc.d/rc.local; do
+            if [[ -f "$candidate" ]]; then
+                RC_LOCAL_PATH="$candidate"
+                break
+            fi
+        done
+
+        CREATE_RC_LOCAL=false
+        if [[ -z "$RC_LOCAL_PATH" ]]; then
+            RC_LOCAL_PATH="/etc/rc.local"
+            CREATE_RC_LOCAL=true
+        fi
+
+        if [[ "$CREATE_RC_LOCAL" == true ]]; then
+            log_info "Creating $RC_LOCAL_PATH"
+            sudo tee "$RC_LOCAL_PATH" > /dev/null <<'EOF'
+#!/bin/sh
+# /etc/rc.local - generated by Pulse host agent installer
+# This script is executed at the end of each multi-user runlevel.
+exit 0
+EOF
+        fi
+
+        if [[ -f "$RC_LOCAL_PATH" ]]; then
+            RC_COMMENT="# Pulse Host Agent auto-start"
+            if sudo grep -qF "$MANUAL_START_WRAPPED" "$RC_LOCAL_PATH"; then
+                log_info "Auto-start entry already present in $RC_LOCAL_PATH"
+            else
+                APPEND_RC_LOCAL=true
+                if [[ "$FORCE" == false ]]; then
+                    read -p "Add agent auto-start to $RC_LOCAL_PATH? (Y/n): " ADD_RC_CHOICE
+                    if [[ "$ADD_RC_CHOICE" == "n" || "$ADD_RC_CHOICE" == "N" ]]; then
+                        APPEND_RC_LOCAL=false
+                    fi
+                fi
+
+                if [[ "$APPEND_RC_LOCAL" == true ]]; then
+                    sudo RC_APPEND_CMD="$MANUAL_START_WRAPPED" RC_COMMENT="$RC_COMMENT" RC_LOCAL_PATH="$RC_LOCAL_PATH" sh -c '
+                        tmpfile=$(mktemp)
+                        cp "$RC_LOCAL_PATH" "$tmpfile" 2>/dev/null || touch "$tmpfile"
+                        sed -i "/$RC_COMMENT/,+1d" "$tmpfile" 2>/dev/null || true
+                        sed -i "/^exit 0$/d" "$tmpfile" 2>/dev/null || true
+                        printf "\n%s\n%s\n" "$RC_COMMENT" "$RC_APPEND_CMD" >>"$tmpfile"
+                        echo "exit 0" >>"$tmpfile"
+                        mv "$tmpfile" "$RC_LOCAL_PATH"
+                        chmod +x "$RC_LOCAL_PATH"
+                    '
+                    log_success "Added auto-start command to $RC_LOCAL_PATH"
+                else
+                    log_info "Skipped modifying $RC_LOCAL_PATH"
+                fi
+            fi
+        else
+            log_warn "Could not access $RC_LOCAL_PATH; skipping persistence step."
+        fi
+
+        log_info "Starting host agent with nohup (logs: $LINUX_LOG_FILE)"
+        if sudo bash -c "$MANUAL_START_WRAPPED"; then
+            log_success "Agent started in the background"
+        else
+            log_error "Failed to start agent automatically. Run manually:"
+            log_info "  $MANUAL_START_WRAPPED"
+        fi
+
+        log_info "To manage manually, edit $RC_LOCAL_PATH or run:"
+        log_info "  $MANUAL_START_CMD"
+        SERVICE_MODE="rc_local"
     fi
-    SERVICE_MODE="manual"
 fi
 
 # Validate installation
@@ -613,43 +730,72 @@ if [[ "$SERVICE_MODE" == "systemd" ]]; then
         log_info "Check logs with: sudo journalctl -u pulse-host-agent -n 50"
     fi
 elif [[ "$SERVICE_MODE" == "launchd" ]]; then
-    if launchctl list | grep -q "com.pulse.host-agent"; then
+    IDENTIFIER=${LAUNCH_IDENTIFIER:-"gui/$(id -u)/com.pulse.host-agent"}
+    for _ in 1 2 3 4 5; do
+        if launchctl print "$IDENTIFIER" >/dev/null 2>&1; then
+            SERVICE_RUNNING=true
+            break
+        fi
+        sleep 2
+    done
+    if [[ "$SERVICE_RUNNING" == true ]]; then
+        log_success "Service is running successfully!"
+    elif launchctl list | grep -q "com.pulse.host-agent"; then
         SERVICE_RUNNING=true
         log_success "Service is running successfully!"
     else
         log_warn "Service may not be running properly"
         log_info "Check logs with: tail -20 $MACOS_LOG_FILE"
     fi
+elif [[ "$SERVICE_MODE" == "unraid" ]]; then
+    if pgrep -f "$AGENT_PATH" >/dev/null 2>&1; then
+        SERVICE_RUNNING=true
+        log_success "Agent process is running (nohup background task)"
+    else
+        log_warn "Agent process not detected; check $LINUX_LOG_FILE for errors"
+    fi
+elif [[ "$SERVICE_MODE" == "rc_local" ]]; then
+    if pgrep -f "$AGENT_PATH" >/dev/null 2>&1; then
+        SERVICE_RUNNING=true
+        log_success "Agent process is running (rc.local background task)"
+    else
+        log_warn "Agent process not detected; check $LINUX_LOG_FILE for errors"
+    fi
 else
     log_info "Skipping automated service validation – start the agent manually using the commands above."
 fi
 
+if [[ "$SERVICE_RUNNING" == true ]]; then
+    VALIDATION_SUCCESS=true
+fi
+
 # Try to verify with API endpoint that agent is reporting
 if [[ "$SERVICE_MODE" != "manual" && "$SERVICE_RUNNING" == true ]]; then
-    log_info "Verifying agent registration with Pulse server..."
-
-    # Get hostname for verification
     HOSTNAME=$(hostname)
 
-    # Try to query the API for this host
-    if command -v curl &> /dev/null; then
-        API_CHECK=$(curl -fsSL "$PULSE_URL/api/hosts" 2>/dev/null || echo "")
-    elif command -v wget &> /dev/null; then
-        API_CHECK=$(wget -qO- "$PULSE_URL/api/hosts" 2>/dev/null || echo "")
-    fi
+    if [[ -z "$PULSE_TOKEN" ]]; then
+        log_info "Registration check skipped (no API token available for lookup)."
+    elif command -v curl &> /dev/null; then
+        log_info "Verifying agent registration with Pulse server..."
+        LOOKUP_RESPONSE=$(curl -fsSL \
+            -H "Authorization: Bearer $PULSE_TOKEN" \
+            --get \
+            --data-urlencode "hostname=$HOSTNAME" \
+            "$PULSE_URL/api/agents/host/lookup" 2>/dev/null || true)
 
-    if [[ -n "$API_CHECK" ]] && echo "$API_CHECK" | grep -q "$HOSTNAME"; then
-        VALIDATION_SUCCESS=true
-        log_success "Agent successfully registered with Pulse server!"
-        log_success "Your host '$HOSTNAME' is now reporting metrics!"
-    elif [[ -n "$API_CHECK" ]]; then
-        log_warn "Agent is running but host not found in API yet (may take a few moments)"
-        log_info "Service appears healthy, metrics should appear shortly."
-        VALIDATION_SUCCESS=true  # Service is running, so count as success
+        if [[ "$LOOKUP_RESPONSE" == *'"success":true'* ]]; then
+            host_status=$(printf '%s' "$LOOKUP_RESPONSE" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
+            last_seen=$(printf '%s' "$LOOKUP_RESPONSE" | sed -n 's/.*"lastSeen":"\([^"]*\)".*/\1/p')
+            log_success "Agent successfully registered with Pulse server!"
+            if [[ -n "$host_status" ]]; then
+                log_info "Pulse reports status: $host_status (last seen $last_seen)"
+            fi
+        else
+            log_warn "Agent lookup did not confirm registration yet (response: ${LOOKUP_RESPONSE:-no data})."
+            log_info "Service is running; metrics should appear shortly."
+        fi
     else
-        log_warn "Could not verify registration via API (endpoint may not be accessible)"
-        log_info "Service is running, check your Pulse dashboard manually."
-        VALIDATION_SUCCESS=true  # Service is running, so count as success
+        log_info "Registration check skipped (curl is required for API validation)."
     fi
 fi
 
@@ -657,11 +803,7 @@ if [[ "$SERVICE_MODE" == "manual" ]]; then
     log_warn "Service validation requires starting the agent manually."
     log_info "Run the following to launch the agent in the background:"
     log_info "  $MANUAL_START_WRAPPED"
-    if [[ "$UNRAID" == true ]]; then
-        log_info "Add the same line to /boot/config/go to auto-start on boot."
-    else
-        log_info "Add the same line to /etc/rc.local (or equivalent) to auto-start on boot."
-    fi
+    log_info "Add the same line to /etc/rc.local (or equivalent) to auto-start on boot."
 elif [[ "$VALIDATION_SUCCESS" == true ]]; then
     log_info "Check your Pulse dashboard at: $PULSE_URL"
 else
@@ -677,13 +819,17 @@ else
         echo "  View logs:    tail -f $MACOS_LOG_FILE"
         echo "  Check status: launchctl list | grep pulse"
         echo "  Restart:      launchctl unload $LAUNCHD_PLIST && launchctl load $LAUNCHD_PLIST"
+    elif [[ "$SERVICE_MODE" == "unraid" ]]; then
+        echo "  Logs:         tail -f $LINUX_LOG_FILE"
+        echo "  Restart:      sudo pkill -f $AGENT_PATH && $MANUAL_START_WRAPPED"
+        echo "  Persist:      Ensure the startup line exists in $UNRAID_GO_FILE"
+    elif [[ "$SERVICE_MODE" == "rc_local" ]]; then
+        echo "  Logs:         tail -f $LINUX_LOG_FILE"
+        echo "  Restart:      sudo pkill -f $AGENT_PATH && $MANUAL_START_WRAPPED"
+        echo "  Persist:      Ensure the startup block exists in $RC_LOCAL_PATH"
     else
         echo "  Start agent:  $MANUAL_START_WRAPPED"
-        if [[ "$UNRAID" == true ]]; then
-            echo "  Persist:      Add the wrapped command to /boot/config/go"
-        else
-            echo "  Persist:      Add the wrapped command to /etc/rc.local (or equivalent)"
-        fi
+        echo "  Persist:      Add the wrapped command to /etc/rc.local (or equivalent)"
     fi
     echo ""
     echo "  Manual run:   $MANUAL_START_CMD"
@@ -705,13 +851,21 @@ elif [[ "$SERVICE_MODE" == "launchd" ]]; then
     echo "  Restart: launchctl unload $LAUNCHD_PLIST && launchctl load $LAUNCHD_PLIST"
     echo "  Status:  launchctl list | grep pulse"
     echo "  Logs:    tail -f $MACOS_LOG_FILE"
+elif [[ "$SERVICE_MODE" == "unraid" ]]; then
+    echo "  Start:   $MANUAL_START_WRAPPED"
+    echo "  Stop:    sudo pkill -f $AGENT_PATH"
+    echo "  Restart: sudo pkill -f $AGENT_PATH && $MANUAL_START_WRAPPED"
+    echo "  Logs:    tail -f $LINUX_LOG_FILE"
+    echo "  Persist: Stored in $UNRAID_GO_FILE"
+elif [[ "$SERVICE_MODE" == "rc_local" ]]; then
+    echo "  Start:   $MANUAL_START_WRAPPED"
+    echo "  Stop:    sudo pkill -f $AGENT_PATH"
+    echo "  Restart: sudo pkill -f $AGENT_PATH && $MANUAL_START_WRAPPED"
+    echo "  Logs:    tail -f $LINUX_LOG_FILE"
+    echo "  Persist: Stored in $RC_LOCAL_PATH"
 else
     echo "  Start:   $MANUAL_START_WRAPPED"
-    if [[ "$UNRAID" == true ]]; then
-        echo "  Persist: Add the wrapped command to /boot/config/go so it starts on boot"
-    else
-        echo "  Persist: Add the wrapped command to /etc/rc.local (or similar) to start on boot"
-    fi
+    echo "  Persist: Add the wrapped command to /etc/rc.local (or similar) to start on boot"
 fi
 echo ""
 
