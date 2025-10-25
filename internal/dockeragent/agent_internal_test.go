@@ -1,6 +1,9 @@
 package dockeragent
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestNormalizeTargets(t *testing.T) {
 	targets, err := normalizeTargets([]TargetConfig{
@@ -31,5 +34,23 @@ func TestNormalizeTargetsInvalid(t *testing.T) {
 	}
 	if _, err := normalizeTargets([]TargetConfig{{URL: "https://pulse.example.com", Token: ""}}); err == nil {
 		t.Fatalf("expected error for missing token")
+	}
+}
+
+func TestNormalizeContainerStates(t *testing.T) {
+	states, err := normalizeContainerStates([]string{"running", "Exited", "running", "stopped"})
+	if err != nil {
+		t.Fatalf("normalizeContainerStates returned error: %v", err)
+	}
+
+	expected := []string{"running", "exited"}
+	if !reflect.DeepEqual(states, expected) {
+		t.Fatalf("expected %v, got %v", expected, states)
+	}
+}
+
+func TestNormalizeContainerStatesInvalid(t *testing.T) {
+	if _, err := normalizeContainerStates([]string{"unknown"}); err == nil {
+		t.Fatalf("expected error for invalid container state")
 	}
 }
