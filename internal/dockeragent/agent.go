@@ -43,6 +43,10 @@ type Config struct {
 	DisableAutoUpdate  bool
 	Targets            []TargetConfig
 	ContainerStates    []string
+	SwarmScope         string
+	IncludeServices    bool
+	IncludeTasks       bool
+	IncludeContainers  bool
 	Logger             *zerolog.Logger
 }
 
@@ -109,6 +113,18 @@ func New(cfg Config) (*Agent, error) {
 		return nil, err
 	}
 	cfg.ContainerStates = stateFilters
+
+	scope, err := normalizeSwarmScope(cfg.SwarmScope)
+	if err != nil {
+		return nil, err
+	}
+	cfg.SwarmScope = scope
+
+	if !cfg.IncludeContainers && !cfg.IncludeServices && !cfg.IncludeTasks {
+		cfg.IncludeContainers = true
+		cfg.IncludeServices = true
+		cfg.IncludeTasks = true
+	}
 
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -316,10 +332,21 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 
 	uptime := readSystemUptime()
 
-	containers, err := a.collectContainers(ctx)
-	if err != nil {
-		return agentsdocker.Report{}, err
+	collectContainers := a.cfg.IncludeContainers
+	if !collectContainers && (a.cfg.IncludeServices || a.cfg.IncludeTasks) && !info.Swarm.ControlAvailable {
+		collectContainers = true
 	}
+
+	var containers []agentsdocker.Container
+	if collectContainers {
+		var err error
+		containers, err = a.collectContainers(ctx)
+		if err != nil {
+			return agentsdocker.Report{}, err
+		}
+	}
+
+	services, tasks, swarmInfo := a.collectSwarmData(ctx, info, containers)
 
 	report := agentsdocker.Report{
 		Agent: agentsdocker.AgentInfo{
@@ -339,8 +366,21 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			TotalMemoryBytes: info.MemTotal,
 			UptimeSeconds:    uptime,
 		},
-		Containers: containers,
-		Timestamp:  time.Now().UTC(),
+		Timestamp: time.Now().UTC(),
+	}
+
+	if swarmInfo != nil {
+		report.Host.Swarm = swarmInfo
+	}
+
+	if a.cfg.IncludeContainers {
+		report.Containers = containers
+	}
+	if a.cfg.IncludeServices && len(services) > 0 {
+		report.Services = services
+	}
+	if a.cfg.IncludeTasks && len(tasks) > 0 {
+		report.Tasks = tasks
 	}
 
 	if report.Agent.IntervalSeconds <= 0 {

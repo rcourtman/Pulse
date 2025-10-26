@@ -88,6 +88,20 @@ The binary reads standard Docker environment variables. If you already use TLS-s
 
 High churn environments can flood Pulse with noise from short-lived tasks. Restrict the agent to the container states you care about by repeating `--container-state` (for example, `--container-state running --container-state paused`) or by exporting `PULSE_CONTAINER_STATES=running,paused`. Allowed values match Docker’s status filter: `created`, `running`, `restarting`, `removing`, `paused`, `exited`, and `dead`. If no values are provided the agent reports every container, mirroring the previous behaviour.
 
+### Swarm-aware reporting
+
+The agent now recognises Docker Swarm roles. Managers query the Swarm control plane for service and task metadata, while workers fall back to the labels present on local containers. The **Settings → Docker Agents** view surfaces role, scope, service counts, and updates per host so you can spot noisy stacks or unhealthy rollouts at a glance.
+
+Use the new flags to tune the payload:
+
+- `--swarm-scope` / `PULSE_SWARM_SCOPE` chooses between node-only and cluster-wide aggregation (`auto` switches based on the node’s role).
+- `--swarm-services` and `--swarm-tasks` disable service or task blocks if you only need a subset of data.
+- `--include-containers` removes per-container metrics when service-level reporting is sufficient (note that workers need container data to derive task info).
+
+If a manager cannot reach the Swarm API the agent automatically falls back to node scope so updates keep flowing.
+
+Adjust warning and critical replica gaps (or disable service alerts entirely) under **Alerts → Thresholds → Docker** in the Pulse UI.
+
 ### Multiple Pulse instances
 
 A single `pulse-docker-agent` process can now serve any number of Pulse backends. Each target entry keeps its own API token and TLS preference, and Pulse de-duplicates reports using the shared agent ID / machine ID. This avoids running duplicate agents on busy Docker hosts.
@@ -139,6 +153,10 @@ docker run -d \
 | `--target`, `PULSE_TARGETS` | One or more `url|token[|insecure]` entries to fan-out reports to multiple Pulse servers. Separate entries with `;` or repeat the flag. | — |
 | `--interval`, `PULSE_INTERVAL` | Reporting cadence (supports `30s`, `1m`, etc.).     | `30s`           |
 | `--container-state`, `PULSE_CONTAINER_STATES` | Limit reports to specific Docker statuses (`created`, `running`, `restarting`, `removing`, `paused`, `exited`, `dead`). Separate multiple values with commas/semicolons or repeat the flag. | — |
+| `--swarm-scope`, `PULSE_SWARM_SCOPE` | Swarm data scope: `node`, `cluster`, or `auto` (auto picks cluster on managers, node on workers). | `node` |
+| `--swarm-services`, `PULSE_SWARM_SERVICES` | Include Swarm service summaries in reports. | `true` |
+| `--swarm-tasks`, `PULSE_SWARM_TASKS` | Include individual Swarm tasks in reports. | `true` |
+| `--include-containers`, `PULSE_INCLUDE_CONTAINERS` | Include per-container metrics (disable when only Swarm data is needed). | `true` |
 | `--hostname`, `PULSE_HOSTNAME` | Override host name reported to Pulse.              | Docker info / OS hostname |
 | `--agent-id`, `PULSE_AGENT_ID` | Stable ID for the agent (useful for clustering).   | Docker engine ID / machine-id |
 | `--insecure`, `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS cert validation (unsafe).     | `false`         |

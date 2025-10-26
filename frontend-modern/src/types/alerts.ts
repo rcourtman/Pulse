@@ -64,6 +64,8 @@ export interface DockerThresholdConfig {
   restartWindow?: number;
   memoryWarnPct?: number;
   memoryCriticalPct?: number;
+  serviceWarnGapPercent?: number;
+  serviceCriticalGapPercent?: number;
 }
 
 export interface PMGThresholdDefaults {
@@ -198,6 +200,7 @@ export interface AlertConfig {
   disableAllHosts?: boolean;
   disableAllDockerHosts?: boolean;
   disableAllDockerContainers?: boolean;
+  disableAllDockerServices?: boolean;
   disableAllNodesOffline?: boolean;
   disableAllGuestsOffline?: boolean;
   disableAllPBSOffline?: boolean;

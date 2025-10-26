@@ -54,3 +54,29 @@ func TestNormalizeContainerStatesInvalid(t *testing.T) {
 		t.Fatalf("expected error for invalid container state")
 	}
 }
+
+func TestNormalizeSwarmScope(t *testing.T) {
+	tests := map[string]string{
+		"":        "node",
+		"node":    "node",
+		"NODE":    "node",
+		"cluster": "cluster",
+		"AUTO":    "auto",
+	}
+
+	for input, expected := range tests {
+		scope, err := normalizeSwarmScope(input)
+		if err != nil {
+			t.Fatalf("normalizeSwarmScope(%q) returned error: %v", input, err)
+		}
+		if scope != expected {
+			t.Fatalf("normalizeSwarmScope(%q)=%q, expected %q", input, scope, expected)
+		}
+	}
+}
+
+func TestNormalizeSwarmScopeInvalid(t *testing.T) {
+	if _, err := normalizeSwarmScope("invalid"); err == nil {
+		t.Fatalf("expected error for invalid swarm scope")
+	}
+}

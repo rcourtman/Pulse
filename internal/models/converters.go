@@ -235,6 +235,25 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		h.Containers[i] = ct.ToFrontend()
 	}
 
+	if len(d.Services) > 0 {
+		h.Services = make([]DockerServiceFrontend, len(d.Services))
+		for i, svc := range d.Services {
+			h.Services[i] = svc.ToFrontend()
+		}
+	}
+
+	if len(d.Tasks) > 0 {
+		h.Tasks = make([]DockerTaskFrontend, len(d.Tasks))
+		for i, task := range d.Tasks {
+			h.Tasks[i] = task.ToFrontend()
+		}
+	}
+
+	if d.Swarm != nil {
+		sw := d.Swarm.ToFrontend()
+		h.Swarm = &sw
+	}
+
 	if d.Command != nil {
 		h.Command = toDockerHostCommandFrontend(*d.Command)
 	}
@@ -360,6 +379,126 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 	}
 
 	return container
+}
+
+// ToFrontend converts a DockerService to DockerServiceFrontend.
+func (s DockerService) ToFrontend() DockerServiceFrontend {
+	service := DockerServiceFrontend{
+		ID:             s.ID,
+		Name:           s.Name,
+		Stack:          s.Stack,
+		Image:          s.Image,
+		Mode:           s.Mode,
+		DesiredTasks:   s.DesiredTasks,
+		RunningTasks:   s.RunningTasks,
+		CompletedTasks: s.CompletedTasks,
+		Labels:         nil,
+	}
+
+	if len(s.Labels) > 0 {
+		service.Labels = make(map[string]string, len(s.Labels))
+		for k, v := range s.Labels {
+			service.Labels[k] = v
+		}
+	}
+
+	if len(s.EndpointPorts) > 0 {
+		service.EndpointPorts = make([]DockerServicePortFrontend, len(s.EndpointPorts))
+		for i, port := range s.EndpointPorts {
+			service.EndpointPorts[i] = port.ToFrontend()
+		}
+	}
+
+	if s.UpdateStatus != nil {
+		update := s.UpdateStatus.ToFrontend()
+		service.UpdateStatus = &update
+	}
+
+	if s.CreatedAt != nil && !s.CreatedAt.IsZero() {
+		ts := s.CreatedAt.Unix() * 1000
+		service.CreatedAt = &ts
+	}
+	if s.UpdatedAt != nil && !s.UpdatedAt.IsZero() {
+		ts := s.UpdatedAt.Unix() * 1000
+		service.UpdatedAt = &ts
+	}
+
+	return service
+}
+
+// ToFrontend converts a DockerServicePort to DockerServicePortFrontend.
+func (p DockerServicePort) ToFrontend() DockerServicePortFrontend {
+	return DockerServicePortFrontend{
+		Name:          p.Name,
+		Protocol:      p.Protocol,
+		TargetPort:    p.TargetPort,
+		PublishedPort: p.PublishedPort,
+		PublishMode:   p.PublishMode,
+	}
+}
+
+// ToFrontend converts a DockerServiceUpdate to DockerServiceUpdateFrontend.
+func (u DockerServiceUpdate) ToFrontend() DockerServiceUpdateFrontend {
+	update := DockerServiceUpdateFrontend{
+		State:   u.State,
+		Message: u.Message,
+	}
+	if u.CompletedAt != nil && !u.CompletedAt.IsZero() {
+		ts := u.CompletedAt.Unix() * 1000
+		update.CompletedAt = &ts
+	}
+	return update
+}
+
+// ToFrontend converts a DockerTask to DockerTaskFrontend.
+func (t DockerTask) ToFrontend() DockerTaskFrontend {
+	task := DockerTaskFrontend{
+		ID:            t.ID,
+		ServiceID:     t.ServiceID,
+		ServiceName:   t.ServiceName,
+		Slot:          t.Slot,
+		NodeID:        t.NodeID,
+		NodeName:      t.NodeName,
+		DesiredState:  t.DesiredState,
+		CurrentState:  t.CurrentState,
+		Error:         t.Error,
+		Message:       t.Message,
+		ContainerID:   t.ContainerID,
+		ContainerName: t.ContainerName,
+	}
+
+	if !t.CreatedAt.IsZero() {
+		ts := t.CreatedAt.Unix() * 1000
+		task.CreatedAt = &ts
+	}
+	if t.UpdatedAt != nil && !t.UpdatedAt.IsZero() {
+		ts := t.UpdatedAt.Unix() * 1000
+		task.UpdatedAt = &ts
+	}
+	if t.StartedAt != nil && !t.StartedAt.IsZero() {
+		ts := t.StartedAt.Unix() * 1000
+		task.StartedAt = &ts
+	}
+	if t.CompletedAt != nil && !t.CompletedAt.IsZero() {
+		ts := t.CompletedAt.Unix() * 1000
+		task.CompletedAt = &ts
+	}
+
+	return task
+}
+
+// ToFrontend converts DockerSwarmInfo to DockerSwarmFrontend.
+func (s DockerSwarmInfo) ToFrontend() DockerSwarmFrontend {
+	return DockerSwarmFrontend{
+		NodeID:           s.NodeID,
+		NodeRole:         s.NodeRole,
+		LocalState:       s.LocalState,
+		ControlAvailable: s.ControlAvailable,
+		ClusterID:        s.ClusterID,
+		ClusterName:      s.ClusterName,
+		Scope:            s.Scope,
+		Error:            s.Error,
+	}
 }
 
 func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFrontend {

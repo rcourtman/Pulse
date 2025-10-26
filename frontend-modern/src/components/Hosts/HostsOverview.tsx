@@ -38,6 +38,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const navigate = useNavigate();
   const wsContext = useWebSocket();
   const [search, setSearch] = createSignal('');
+  const [statusFilter, setStatusFilter] = createSignal<'all' | 'online' | 'degraded' | 'offline'>('all');
 
   // Keyboard listener to auto-focus search
   let searchInputRef: HTMLInputElement | undefined;
@@ -102,8 +103,15 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
     );
   };
 
+  const matchesStatus = (host: Host) => {
+    const filter = statusFilter();
+    if (filter === 'all') return true;
+    const normalized = (host.status || '').toLowerCase();
+    return normalized === filter;
+  };
+
   const filteredHosts = createMemo(() => {
-    return sortedHosts().filter(matchesSearch);
+    return sortedHosts().filter((host) => matchesSearch(host) && matchesStatus(host));
   });
 
   return (
@@ -154,6 +162,8 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
               <HostsFilter
                 search={search}
                 setSearch={setSearch}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
                 onReset={() => setSearch('')}
                 searchInputRef={(el) => (searchInputRef = el)}
               />

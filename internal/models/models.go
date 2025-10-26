@@ -207,6 +207,9 @@ type DockerHost struct {
 	IntervalSeconds  int                      `json:"intervalSeconds"`
 	AgentVersion     string                   `json:"agentVersion,omitempty"`
 	Containers       []DockerContainer        `json:"containers"`
+	Services         []DockerService          `json:"services,omitempty"`
+	Tasks            []DockerTask             `json:"tasks,omitempty"`
+	Swarm            *DockerSwarmInfo         `json:"swarm,omitempty"`
 	TokenID          string                   `json:"tokenId,omitempty"`
 	TokenName        string                   `json:"tokenName,omitempty"`
 	TokenHint        string                   `json:"tokenHint,omitempty"`
@@ -252,6 +255,71 @@ type DockerContainerNetworkLink struct {
 	Name string `json:"name"`
 	IPv4 string `json:"ipv4,omitempty"`
 	IPv6 string `json:"ipv6,omitempty"`
+}
+
+// DockerService summarises a Docker Swarm service.
+type DockerService struct {
+	ID             string               `json:"id"`
+	Name           string               `json:"name"`
+	Stack          string               `json:"stack,omitempty"`
+	Image          string               `json:"image,omitempty"`
+	Mode           string               `json:"mode,omitempty"`
+	DesiredTasks   int                  `json:"desiredTasks,omitempty"`
+	RunningTasks   int                  `json:"runningTasks,omitempty"`
+	CompletedTasks int                  `json:"completedTasks,omitempty"`
+	UpdateStatus   *DockerServiceUpdate `json:"updateStatus,omitempty"`
+	Labels         map[string]string    `json:"labels,omitempty"`
+	EndpointPorts  []DockerServicePort  `json:"endpointPorts,omitempty"`
+	CreatedAt      *time.Time           `json:"createdAt,omitempty"`
+	UpdatedAt      *time.Time           `json:"updatedAt,omitempty"`
+}
+
+// DockerServicePort describes a published service port.
+type DockerServicePort struct {
+	Name          string `json:"name,omitempty"`
+	Protocol      string `json:"protocol,omitempty"`
+	TargetPort    uint32 `json:"targetPort,omitempty"`
+	PublishedPort uint32 `json:"publishedPort,omitempty"`
+	PublishMode   string `json:"publishMode,omitempty"`
+}
+
+// DockerServiceUpdate captures service update progress.
+type DockerServiceUpdate struct {
+	State       string     `json:"state,omitempty"`
+	Message     string     `json:"message,omitempty"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+}
+
+// DockerTask summarises a Swarm task.
+type DockerTask struct {
+	ID            string     `json:"id"`
+	ServiceID     string     `json:"serviceId,omitempty"`
+	ServiceName   string     `json:"serviceName,omitempty"`
+	Slot          int        `json:"slot,omitempty"`
+	NodeID        string     `json:"nodeId,omitempty"`
+	NodeName      string     `json:"nodeName,omitempty"`
+	DesiredState  string     `json:"desiredState,omitempty"`
+	CurrentState  string     `json:"currentState,omitempty"`
+	Error         string     `json:"error,omitempty"`
+	Message       string     `json:"message,omitempty"`
+	ContainerID   string     `json:"containerId,omitempty"`
+	ContainerName string     `json:"containerName,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt,omitempty"`
+	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
+	StartedAt     *time.Time `json:"startedAt,omitempty"`
+	CompletedAt   *time.Time `json:"completedAt,omitempty"`
+}
+
+// DockerSwarmInfo captures node-level swarm metadata.
+type DockerSwarmInfo struct {
+	NodeID           string `json:"nodeId,omitempty"`
+	NodeRole         string `json:"nodeRole,omitempty"`
+	LocalState       string `json:"localState,omitempty"`
+	ControlAvailable bool   `json:"controlAvailable,omitempty"`
+	ClusterID        string `json:"clusterId,omitempty"`
+	ClusterName      string `json:"clusterName,omitempty"`
+	Scope            string `json:"scope,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 // DockerHostCommandStatus tracks the lifecycle of a control command issued to a Docker host.

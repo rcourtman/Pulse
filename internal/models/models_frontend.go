@@ -114,6 +114,9 @@ type DockerHostFrontend struct {
 	IntervalSeconds  int                        `json:"intervalSeconds"`
 	AgentVersion     string                     `json:"agentVersion,omitempty"`
 	Containers       []DockerContainerFrontend  `json:"containers"`
+	Services         []DockerServiceFrontend    `json:"services,omitempty"`
+	Tasks            []DockerTaskFrontend       `json:"tasks,omitempty"`
+	Swarm            *DockerSwarmFrontend       `json:"swarm,omitempty"`
 	TokenID          string                     `json:"tokenId,omitempty"`
 	TokenName        string                     `json:"tokenName,omitempty"`
 	TokenHint        string                     `json:"tokenHint,omitempty"`
@@ -158,6 +161,71 @@ type DockerContainerNetworkFrontend struct {
 	Name string `json:"name"`
 	IPv4 string `json:"ipv4,omitempty"`
 	IPv6 string `json:"ipv6,omitempty"`
+}
+
+// DockerServiceFrontend represents a Swarm service for the frontend.
+type DockerServiceFrontend struct {
+	ID             string                       `json:"id"`
+	Name           string                       `json:"name"`
+	Stack          string                       `json:"stack,omitempty"`
+	Image          string                       `json:"image,omitempty"`
+	Mode           string                       `json:"mode,omitempty"`
+	DesiredTasks   int                          `json:"desiredTasks,omitempty"`
+	RunningTasks   int                          `json:"runningTasks,omitempty"`
+	CompletedTasks int                          `json:"completedTasks,omitempty"`
+	Labels         map[string]string            `json:"labels,omitempty"`
+	EndpointPorts  []DockerServicePortFrontend  `json:"endpointPorts,omitempty"`
+	UpdateStatus   *DockerServiceUpdateFrontend `json:"updateStatus,omitempty"`
+	CreatedAt      *int64                       `json:"createdAt,omitempty"`
+	UpdatedAt      *int64                       `json:"updatedAt,omitempty"`
+}
+
+// DockerServicePortFrontend represents a published service port.
+type DockerServicePortFrontend struct {
+	Name          string `json:"name,omitempty"`
+	Protocol      string `json:"protocol,omitempty"`
+	TargetPort    uint32 `json:"targetPort,omitempty"`
+	PublishedPort uint32 `json:"publishedPort,omitempty"`
+	PublishMode   string `json:"publishMode,omitempty"`
+}
+
+// DockerServiceUpdateFrontend exposes service update status to the UI.
+type DockerServiceUpdateFrontend struct {
+	State       string `json:"state,omitempty"`
+	Message     string `json:"message,omitempty"`
+	CompletedAt *int64 `json:"completedAt,omitempty"`
+}
+
+// DockerTaskFrontend represents a Swarm task replica.
+type DockerTaskFrontend struct {
+	ID            string `json:"id"`
+	ServiceID     string `json:"serviceId,omitempty"`
+	ServiceName   string `json:"serviceName,omitempty"`
+	Slot          int    `json:"slot,omitempty"`
+	NodeID        string `json:"nodeId,omitempty"`
+	NodeName      string `json:"nodeName,omitempty"`
+	DesiredState  string `json:"desiredState,omitempty"`
+	CurrentState  string `json:"currentState,omitempty"`
+	Error         string `json:"error,omitempty"`
+	Message       string `json:"message,omitempty"`
+	ContainerID   string `json:"containerId,omitempty"`
+	ContainerName string `json:"containerName,omitempty"`
+	CreatedAt     *int64 `json:"createdAt,omitempty"`
+	UpdatedAt     *int64 `json:"updatedAt,omitempty"`
+	StartedAt     *int64 `json:"startedAt,omitempty"`
+	CompletedAt   *int64 `json:"completedAt,omitempty"`
+}
+
+// DockerSwarmFrontend summarises node-level swarm details.
+type DockerSwarmFrontend struct {
+	NodeID           string `json:"nodeId,omitempty"`
+	NodeRole         string `json:"nodeRole,omitempty"`
+	LocalState       string `json:"localState,omitempty"`
+	ControlAvailable bool   `json:"controlAvailable,omitempty"`
+	ClusterID        string `json:"clusterId,omitempty"`
+	ClusterName      string `json:"clusterName,omitempty"`
+	Scope            string `json:"scope,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 // DockerHostCommandFrontend exposes docker host command state to the UI.

@@ -1,5 +1,6 @@
 import { createSignal, createMemo, Show, For, onMount, onCleanup, createEffect } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
+import Toggle from '@/components/shared/Toggle';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
@@ -184,6 +185,8 @@ interface ThresholdsTableProps {
     restartWindow: number;
     memoryWarnPct: number;
     memoryCriticalPct: number;
+    serviceWarnGapPercent: number;
+    serviceCriticalGapPercent: number;
   };
   setDockerDefaults: (
     value:
@@ -194,6 +197,8 @@ interface ThresholdsTableProps {
           restartWindow: number;
           memoryWarnPct: number;
           memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
         }
       | ((prev: {
           cpu: number;
@@ -202,6 +207,8 @@ interface ThresholdsTableProps {
           restartWindow: number;
           memoryWarnPct: number;
           memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
         }) => {
           cpu: number;
           memory: number;
@@ -209,6 +216,8 @@ interface ThresholdsTableProps {
           restartWindow: number;
           memoryWarnPct: number;
           memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
         }),
   ) => void;
   dockerIgnoredPrefixes: () => string[];
@@ -263,6 +272,8 @@ interface ThresholdsTableProps {
   setDisableAllPMG: (value: boolean) => void;
   disableAllDockerHosts: () => boolean;
   setDisableAllDockerHosts: (value: boolean) => void;
+  disableAllDockerServices: () => boolean;
+  setDisableAllDockerServices: (value: boolean) => void;
   disableAllDockerContainers: () => boolean;
   setDisableAllDockerContainers: (value: boolean) => void;
   // Global disable offline alerts flags
@@ -291,20 +302,32 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const [editingThresholds, setEditingThresholds] = createSignal<
     Record<string, number | undefined>
   >({});
-  const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'docker'>('proxmox');
+  const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'hosts' | 'docker'>('proxmox');
   let searchInputRef: HTMLInputElement | undefined;
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
     props.dockerIgnoredPrefixes().join('\n'),
   );
+  const serviceWarnInputId = 'docker-service-warn-gap';
+  const serviceCriticalInputId = 'docker-service-critical-gap';
 
   createEffect(() => {
     setDockerIgnoredInput(props.dockerIgnoredPrefixes().join('\n'));
   });
 
+  const serviceGapValidationMessage = createMemo(() => {
+    const warn = Number(props.dockerDefaults.serviceWarnGapPercent ?? 0);
+    const crit = Number(props.dockerDefaults.serviceCriticalGapPercent ?? 0);
+    if (crit > 0 && warn > crit) {
+      return 'Critical gap must be greater than or equal to the warning gap when enabled.';
+    }
+    return '';
+  });
+
   // Determine active tab from URL
-  const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'docker' => {
+  const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'hosts' | 'docker' => {
     const path = location.pathname;
     if (path.includes('/thresholds/docker')) return 'docker';
+    if (path.includes('/thresholds/hosts')) return 'hosts';
     if (path.includes('/thresholds/mail-gateway')) return 'pmg';
     return 'proxmox'; // default
   };
@@ -324,10 +347,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
   });
 
-  const handleTabClick = (tab: 'proxmox' | 'pmg' | 'docker') => {
+  const handleTabClick = (tab: 'proxmox' | 'pmg' | 'hosts' | 'docker') => {
     const tabRoutes = {
       proxmox: '/alerts/thresholds/proxmox',
       pmg: '/alerts/thresholds/mail-gateway',
+      hosts: '/alerts/thresholds/hosts',
       docker: '/alerts/thresholds/docker',
     };
     navigate(tabRoutes[tab]);
@@ -648,8 +672,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           name,
           displayName: name,
           rawName: name,
-          type: 'hostAgent',
+          type: 'hostAgent' as const,
           resourceType: 'Host Agent',
+          node: '',
+          instance: '',
           status: 'unknown',
           hasOverride: true,
           disableConnectivity: override.disableConnectivity || false,
@@ -1417,7 +1443,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           label: 'Host Agents',
           total: props.hosts?.length ?? 0,
           overrides: countOverrides(hostAgentsWithOverrides()),
-          tab: 'docker' as const,
+          tab: 'hosts' as const,
         },
         {
           key: 'storage' as const,
@@ -2168,6 +2194,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </button>
           <button
             type="button"
+            onClick={() => handleTabClick('hosts')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
+              activeTab() === 'hosts'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Host Agents
+          </button>
+          <button
+            type="button"
             onClick={() => handleTabClick('docker')}
             class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
               activeTab() === 'docker'
@@ -2610,7 +2647,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </Show>
         </Show>
 
-        <Show when={activeTab() === 'docker'}>
+        <Show when={activeTab() === 'hosts'}>
           <Show when={hasSection('hostAgents')}>
             <div ref={registerSection('hostAgents')} class="scroll-mt-24">
               <ResourceTable
@@ -2635,9 +2672,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 setGlobalDefaults={props.setHostDefaults}
                 setHasUnsavedChanges={props.setHasUnsavedChanges}
                 globalDisableFlag={props.disableAllHosts}
-                onToggleGlobalDisable={() =>
-                  props.setDisableAllHosts(!props.disableAllHosts())
-                }
+                onToggleGlobalDisable={() => props.setDisableAllHosts(!props.disableAllHosts())}
                 globalDisableOfflineFlag={props.disableAllHostsOffline}
                 onToggleGlobalDisableOffline={() =>
                   props.setDisableAllHostsOffline(!props.disableAllHostsOffline())
@@ -2647,6 +2682,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               />
             </div>
           </Show>
+        </Show>
+
+        <Show when={activeTab() === 'docker'}>
           <div class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -2665,16 +2703,101 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   onClick={handleResetDockerIgnored}
                 >
                   Reset
-                </button>
-              </Show>
+        </button>
+      </Show>
+    </div>
+    <textarea
+      value={dockerIgnoredInput()}
+      onInput={(event) => handleDockerIgnoredChange(event.currentTarget.value)}
+      placeholder="runner-"
+      rows={4}
+      class="mt-4 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+    />
+  </div>
+
+          <div class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Swarm service alerts</h3>
+                <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  Pulse raises alerts when running replicas fall behind the desired count or a rollout gets stuck. Adjust the gap thresholds below or disable service alerts entirely.
+                </p>
+              </div>
+              <Toggle
+                checked={!props.disableAllDockerServices()}
+                onToggle={() => {
+                  props.setDisableAllDockerServices(!props.disableAllDockerServices());
+                  props.setHasUnsavedChanges(true);
+                }}
+                label={<span class="text-sm font-medium text-gray-900 dark:text-gray-100">Alerts</span>}
+                description={<span class="text-xs text-gray-500 dark:text-gray-400">Toggle Swarm service replica monitoring</span>}
+                size="sm"
+              />
             </div>
-            <textarea
-              value={dockerIgnoredInput()}
-              onInput={(event) => handleDockerIgnoredChange(event.currentTarget.value)}
-              placeholder="runner-"
-              rows={4}
-              class="mt-4 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
-            />
+
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  for={serviceWarnInputId}
+                  class="text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                >
+                  Warning gap %
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  id={serviceWarnInputId}
+                  value={props.dockerDefaults.serviceWarnGapPercent}
+                  onInput={(event) => {
+                    const value = Number(event.currentTarget.value);
+                    const normalized = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+                    props.setDockerDefaults((prev) => ({
+                      ...prev,
+                      serviceWarnGapPercent: normalized,
+                    }));
+                    props.setHasUnsavedChanges(true);
+                  }}
+                  class="mt-1 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Convert to warning when at least this percentage of replicas are missing.
+                </p>
+              </div>
+              <div>
+                <label
+                  for={serviceCriticalInputId}
+                  class="text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                >
+                  Critical gap %
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  id={serviceCriticalInputId}
+                  value={props.dockerDefaults.serviceCriticalGapPercent}
+                  onInput={(event) => {
+                    const value = Number(event.currentTarget.value);
+                    const normalized = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+                    props.setDockerDefaults((prev) => ({
+                      ...prev,
+                      serviceCriticalGapPercent: normalized,
+                    }));
+                    props.setHasUnsavedChanges(true);
+                  }}
+                  class="mt-1 w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Raise a critical alert when the missing replica gap meets or exceeds this value.
+                </p>
+              </div>
+            </div>
+            {serviceGapValidationMessage() && (
+              <p class="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+                {serviceGapValidationMessage()}
+              </p>
+            )}
           </div>
 
           <Show when={hasSection('dockerHosts')}>

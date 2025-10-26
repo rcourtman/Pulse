@@ -66,12 +66,36 @@ func loadConfig() dockeragent.Config {
 	envNoAutoUpdate := strings.TrimSpace(os.Getenv("PULSE_NO_AUTO_UPDATE"))
 	envTargets := strings.TrimSpace(os.Getenv("PULSE_TARGETS"))
 	envContainerStates := strings.TrimSpace(os.Getenv("PULSE_CONTAINER_STATES"))
+	envSwarmScope := strings.TrimSpace(os.Getenv("PULSE_SWARM_SCOPE"))
+	envSwarmServices := strings.TrimSpace(os.Getenv("PULSE_SWARM_SERVICES"))
+	envSwarmTasks := strings.TrimSpace(os.Getenv("PULSE_SWARM_TASKS"))
+	envIncludeContainers := strings.TrimSpace(os.Getenv("PULSE_INCLUDE_CONTAINERS"))
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
 		if parsed, err := time.ParseDuration(envInterval); err == nil {
 			defaultInterval = parsed
 		}
+	}
+
+	swarmScopeDefault := envSwarmScope
+	if swarmScopeDefault == "" {
+		swarmScopeDefault = "node"
+	}
+
+	includeServicesDefault := true
+	if envSwarmServices != "" {
+		includeServicesDefault = parseBool(envSwarmServices)
+	}
+
+	includeTasksDefault := true
+	if envSwarmTasks != "" {
+		includeTasksDefault = parseBool(envSwarmTasks)
+	}
+
+	includeContainersDefault := true
+	if envIncludeContainers != "" {
+		includeContainersDefault = parseBool(envIncludeContainers)
 	}
 
 	urlFlag := flag.String("url", envURL, "Pulse server URL (e.g. http://pulse:7655)")
@@ -85,6 +109,10 @@ func loadConfig() dockeragent.Config {
 	flag.Var(&targetFlags, "target", "Pulse target in url|token[|insecure] format. Repeat to send to multiple Pulse instances")
 	var containerStateFlags stringFlagList
 	flag.Var(&containerStateFlags, "container-state", "Only include containers whose status matches this value (repeat to allow multiple). Allowed values: created,running,restarting,removing,paused,exited,dead.")
+	swarmScopeFlag := flag.String("swarm-scope", strings.ToLower(strings.TrimSpace(swarmScopeDefault)), "Swarm data scope to collect: node, cluster, or auto")
+	includeServicesFlag := flag.Bool("swarm-services", includeServicesDefault, "Include Swarm service summaries in reports")
+	includeTasksFlag := flag.Bool("swarm-tasks", includeTasksDefault, "Include Swarm tasks in reports")
+	includeContainersFlag := flag.Bool("include-containers", includeContainersDefault, "Include per-container metrics in reports")
 
 	flag.Parse()
 
@@ -146,6 +174,10 @@ func loadConfig() dockeragent.Config {
 		DisableAutoUpdate:  *noAutoUpdateFlag,
 		Targets:            targets,
 		ContainerStates:    containerStates,
+		SwarmScope:         strings.ToLower(strings.TrimSpace(*swarmScopeFlag)),
+		IncludeServices:    *includeServicesFlag,
+		IncludeTasks:       *includeTasksFlag,
+		IncludeContainers:  *includeContainersFlag,
 	}
 }
 
