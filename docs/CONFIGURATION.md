@@ -224,7 +224,11 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
   "dockerDefaults": {
     "cpu": { "trigger": 75, "clear": 60 },
     "restartCount": 3,
-    "restartWindow": 300
+    "restartWindow": 300,
+    "memoryWarnPct": 90,
+    "memoryCriticalPct": 95,
+    "serviceWarnGapPercent": 10,
+    "serviceCriticalGapPercent": 50
   },
   "dockerIgnoredContainerPrefixes": [
     "runner-",
@@ -239,7 +243,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
     "guest": { "disk": 120, "networkOut": 240 }
   },
   "overrides": {
-    "delly.lan/qemu/101": {
+    "example.lan/qemu/101": {
       "memory": { "trigger": 92, "clear": 80 },
       "networkOut": -1,
       "poweredOffSeverity": "warning"
@@ -280,6 +284,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - `timeThresholds` apply a grace period before an alert fires; `metricTimeThresholds` allow per-metric overrides (e.g., delay network alerts longer than CPU).
 - `overrides` are indexed by the stable resource ID returned from `/api/state` (VMs: `instance/qemu/vmid`, containers: `instance/lxc/ctid`, nodes: `instance/node`).
 - `dockerIgnoredContainerPrefixes` lets you silence state/metric/restart alerts for ephemeral containers whose names or IDs share a common, case-insensitive prefix. The Docker tab in the UI keeps this list in sync.
+- Swarm service alerts track missing replicas: `serviceWarnGapPercent` defines when a warning fires, and `serviceCriticalGapPercent` must be greater than or equal to the warning gap (Pulse automatically clamps the critical value upward if an older client submits something smaller).
 - Quiet hours, escalation, deduplication, and restart loop detection are all managed here, and the UI keeps the JSON in sync automatically.
 
 > Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.

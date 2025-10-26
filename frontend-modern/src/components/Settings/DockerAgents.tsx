@@ -43,6 +43,20 @@ export const DockerAgents: Component = () => {
   const [latestRecord, setLatestRecord] = createSignal<APITokenRecord | null>(null);
   const [tokenName, setTokenName] = createSignal('');
 
+  const [expandedHosts, setExpandedHosts] = createSignal<Set<string>>(new Set());
+  const isHostExpanded = (id: string) => expandedHosts().has(id);
+  const toggleHostExpanded = (id: string) => {
+    setExpandedHosts((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   const pulseUrl = () => {
     if (typeof window !== 'undefined') {
       const protocol = window.location.protocol;
@@ -865,6 +879,24 @@ WantedBy=multi-user.target`;
                       const commandInProgress = commandStatus === 'queued' || commandStatus === 'dispatched' || commandStatus === 'acknowledged';
                       const commandFailed = commandStatus === 'failed';
                       const commandCompleted = commandStatus === 'completed';
+                      const services = host.services ?? [];
+                      const serviceCount = services.length;
+                      const taskCount = host.tasks?.length ?? 0;
+                      const swarm = host.swarm;
+                      const expanded = isHostExpanded(host.id);
+                      const unhealthyServiceCount = services.filter(service => {
+                        const desired = service.desiredTasks ?? 0;
+                        const running = service.runningTasks ?? 0;
+                        return desired > 0 && running < desired;
+                      }).length;
+                      const missingReplicaCount = services.reduce((total, service) => {
+                        const desired = service.desiredTasks ?? 0;
+                        const running = service.runningTasks ?? 0;
+                        if (desired <= 0 || running >= desired) {
+                          return total;
+                        }
+                        return total + (desired - running);
+                      }, 0);
                       const offlineActionLabel = commandFailed
                         ? 'Force remove host'
                         : host.pendingUninstall
@@ -872,20 +904,66 @@ WantedBy=multi-user.target`;
                           : 'Remove offline host';
 
                       return (
-                        <tr class={`${isOnline ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                          <td class="py-3 px-4">
-                            <div class="font-medium text-gray-900 dark:text-gray-100">{host.displayName}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{host.hostname}</div>
-                            <Show when={host.os || host.architecture}>
-                              <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                {host.os}
-                                <Show when={host.os && host.architecture}>
-                                  <span class="mx-1">•</span>
-                                </Show>
-                                {host.architecture}
-                              </div>
-                            </Show>
-                          </td>
+                        <>
+                          <tr class={`${isOnline ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+                            <td class="py-3 px-4">
+                              <div class="font-medium text-gray-900 dark:text-gray-100">{host.displayName}</div>
+                              <div class="text-xs text-gray-500 dark:text-gray-400">{host.hostname}</div>
+                              <Show when={host.os || host.architecture}>
+                                <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                  {host.os}
+                                  <Show when={host.os && host.architecture}>
+                                    <span class="mx-1">•</span>
+                                  </Show>
+                                  {host.architecture}
+                                </div>
+                              </Show>
+                              <Show when={swarm || serviceCount > 0}>
+                                <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                  <Show when={swarm}>
+                                    <span
+                                      class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+                                        swarm?.nodeRole === 'manager'
+                                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
+                                          : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+                                      }`}
+                                    >
+                                      {swarm?.nodeRole ?? 'unknown'}
+                                    </span>
+                                    <span>scope: {swarm?.scope ?? 'node'}</span>
+                                  </Show>
+                                  <span>services: {serviceCount}</span>
+                                  <span>tasks: {taskCount}</span>
+                                  <Show when={serviceCount > 0}>
+                                    <span
+                                      class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                        unhealthyServiceCount > 0
+                                          ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                                      }`}
+                                      title={
+                                        unhealthyServiceCount > 0
+                                          ? `${unhealthyServiceCount} service(s) missing ${missingReplicaCount} replica(s)`
+                                          : 'All reported services are meeting their desired replica count'
+                                      }
+                                    >
+                                      {unhealthyServiceCount > 0
+                                        ? `${unhealthyServiceCount} degraded`
+                                        : 'All healthy'}
+                                    </span>
+                                  </Show>
+                                </div>
+                              </Show>
+                              <Show when={swarm || serviceCount > 0 || taskCount > 0}>
+                                <button
+                                  type="button"
+                                  class="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none disabled:opacity-50"
+                                  onClick={() => toggleHostExpanded(host.id)}
+                                >
+                                  {expanded ? 'Hide details' : 'Show details'}
+                                </button>
+                              </Show>
+                            </td>
                           <td class="py-3 px-4">
                             <div class="flex items-center gap-2">
                               <span
@@ -1007,8 +1085,173 @@ WantedBy=multi-user.target`;
                             </Show>
                           </td>
                         </tr>
-                      );
-                    }}
+                        <Show when={expanded}>
+                          <tr class="bg-gray-50 dark:bg-gray-800/40">
+                            <td colSpan={7} class="px-4 py-4">
+                              <div class="space-y-4 text-sm">
+                                <Show when={swarm}>
+                                  <div class="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-900/40 dark:text-sky-100">
+                                    <div class="flex flex-wrap gap-3">
+                                      <div><span class="font-semibold">Role:</span> {swarm?.nodeRole ?? 'unknown'}</div>
+                                      <div><span class="font-semibold">Scope:</span> {swarm?.scope ?? 'node'}</div>
+                                      <Show when={swarm?.clusterName || swarm?.clusterId}>
+                                        <div><span class="font-semibold">Cluster:</span> {swarm?.clusterName || swarm?.clusterId}</div>
+                                      </Show>
+                                      <Show when={swarm?.error}>
+                                        <div class="text-red-600 dark:text-red-300"><span class="font-semibold">Error:</span> {swarm?.error}</div>
+                                      </Show>
+                                    </div>
+                                  </div>
+                                </Show>
+
+                                <Show when={serviceCount > 0}>
+                                  <div class="space-y-2">
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Services ({serviceCount})</h4>
+                                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                      <For each={host.services}>
+                                        {(service) => {
+                                          const desired = service.desiredTasks ?? 0;
+                                          const running = service.runningTasks ?? 0;
+                                          const completed = service.completedTasks;
+                                          const missing = desired > running ? desired - running : 0;
+                                          const statusLabel =
+                                            desired <= 0
+                                              ? 'Idle'
+                                              : missing === 0
+                                                ? 'Healthy'
+                                                : missing >= desired
+                                                  ? 'Down'
+                                                  : 'Degraded';
+                                          const statusColor =
+                                            missing === 0
+                                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                                              : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+
+                                          return (
+                                            <div class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                                              <div class="flex items-center justify-between gap-2">
+                                                <div class="font-semibold text-gray-900 dark:text-gray-100 truncate">{service.name || service.id}</div>
+                                                <div class="flex items-center gap-2">
+                                                  <Show when={service.mode}>
+                                                    <span class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                                      {service.mode}
+                                                    </span>
+                                                  </Show>
+                                                  <span
+                                                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusColor}`}
+                                                  >
+                                                    {statusLabel}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                              <div class="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                                                <div>
+                                                  Tasks: {running} / {desired}
+                                                  <Show when={missing > 0}>
+                                                    <span class="ml-1 text-red-600 dark:text-red-300">(-{missing})</span>
+                                                  </Show>
+                                                </div>
+                                                <Show when={completed !== undefined}>
+                                                  <div>Completed: {completed}</div>
+                                                </Show>
+                                                <Show when={service.stack}>
+                                                  <div>Stack: {service.stack}</div>
+                                                </Show>
+                                              </div>
+                                              <Show when={service.image}>
+                                                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400 truncate">{service.image}</div>
+                                              </Show>
+                                              <Show when={(service.endpointPorts?.length ?? 0) > 0}>
+                                                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                                  Ports:{' '}
+                                                  <For each={service.endpointPorts}>
+                                                    {(port, index) => (
+                                                      <span>
+                                                        {index() > 0 && ', '}
+                                                        {port.publishedPort ?? '—'} → {port.targetPort ?? '—'} {port.protocol ? port.protocol.toUpperCase() : ''}
+                                                      </span>
+                                                    )}
+                                                  </For>
+                                                </div>
+                                              </Show>
+                                              <Show when={service.updateStatus?.state || service.updateStatus?.message}>
+                                                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                                  Update: {service.updateStatus?.state || 'pending'}
+                                                  <Show when={service.updateStatus?.message}>
+                                                    <span class="ml-1">({service.updateStatus?.message})</span>
+                                                  </Show>
+                                                </div>
+                                              </Show>
+                                            </div>
+                                          );
+                                        }}
+                                      </For>
+                                    </div>
+                                  </div>
+                                </Show>
+
+                                <Show when={taskCount > 0}>
+                                  <div class="space-y-2">
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Tasks ({taskCount})</h4>
+                                    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                      <table class="min-w-full text-xs">
+                                        <thead class="bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                          <tr>
+                                            <th class="px-3 py-2 text-left font-semibold">Service</th>
+                                            <th class="px-3 py-2 text-left font-semibold">Slot</th>
+                                            <th class="px-3 py-2 text-left font-semibold">State</th>
+                                            <th class="px-3 py-2 text-left font-semibold">Container</th>
+                                            <th class="px-3 py-2 text-left font-semibold">Updated</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                          <For each={host.tasks}>
+                                            {(task) => (
+                                              <tr class="bg-white dark:bg-gray-900">
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{task.serviceName || task.serviceId || '—'}</td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{task.slot ?? '—'}</td>
+                                                <td class="px-3 py-2">
+                                                  <span
+                                                    class={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                                      task.currentState?.toLowerCase() === 'running'
+                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                                        : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+                                                    }`}
+                                                  >
+                                                    {task.currentState ?? 'unknown'}
+                                                  </span>
+                                                </td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300">
+                                                  {task.containerName || task.containerId?.slice(0, 12) || '—'}
+                                                </td>
+                                                <td class="px-3 py-2 text-gray-500 dark:text-gray-400">
+                                                  {task.updatedAt
+                                                    ? formatRelativeTime(task.updatedAt)
+                                                    : task.startedAt
+                                                      ? formatRelativeTime(task.startedAt)
+                                                      : '—'}
+                                                </td>
+                                              </tr>
+                                            )}
+                                          </For>
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                </Show>
+
+                                <Show when={serviceCount === 0 && taskCount === 0}>
+                                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    No Swarm services or tasks reported yet.
+                                  </div>
+                                </Show>
+                              </div>
+                            </td>
+                          </tr>
+                        </Show>
+                      </>
+                    );
+                  }}
                   </For>
                 </tbody>
               </table>

@@ -700,7 +700,6 @@ sudo systemctl daemon-reload`;
                       const [isDeleting, setIsDeleting] = createSignal(false);
                       const tokenRevokedAt = host.tokenRevokedAt;
                       const tokenRevoked = typeof tokenRevokedAt === 'number';
-                      const tokenRevokedRelative = tokenRevokedAt ? formatRelativeTime(tokenRevokedAt) : '';
                       const lastSeenMs = host.lastSeen ? new Date(host.lastSeen).getTime() : null;
                       const expectedIntervalMs =
                         (host.intervalSeconds && host.intervalSeconds > 0 ? host.intervalSeconds : 30) * 1000;

@@ -1,13 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, fireEvent, screen, cleanup } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 
 import { ThresholdsTable, normalizeDockerIgnoredInput } from '../ThresholdsTable';
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
+import type { Host } from '@/types/api';
+
+let mockPathname = '/alerts/thresholds/docker';
 
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => vi.fn(),
-  useLocation: () => ({ pathname: '/alerts/thresholds/docker' }),
+  useLocation: () => ({ pathname: mockPathname }),
 }));
 
 vi.mock('../ResourceTable', () => ({
@@ -20,6 +23,10 @@ vi.mock('../ResourceTable', () => ({
 
 afterEach(() => {
   cleanup();
+});
+
+beforeEach(() => {
+  mockPathname = '/alerts/thresholds/docker';
 });
 
 const DEFAULT_PMG_THRESHOLDS: PMGThresholdDefaults = {
@@ -48,6 +55,8 @@ const DEFAULT_DOCKER_DEFAULTS = {
   restartWindow: 300,
   memoryWarnPct: 90,
   memoryCriticalPct: 95,
+  serviceWarnGapPercent: 10,
+  serviceCriticalGapPercent: 50,
 };
 
 const baseProps = () => ({
@@ -87,7 +96,7 @@ const baseProps = () => ({
   factoryGuestDefaults: {},
   factoryNodeDefaults: {},
   factoryHostDefaults: { cpu: 80, memory: 85, disk: 90 },
-  factoryDockerDefaults: {},
+  factoryDockerDefaults: DEFAULT_DOCKER_DEFAULTS,
   factoryStorageDefault: 85,
   backupDefaults: () => ({ enabled: false, warningDays: 7, criticalDays: 14 }),
   setBackupDefaults: vi.fn(),
@@ -128,6 +137,8 @@ const baseProps = () => ({
   setDisableAllPMG: vi.fn(),
   disableAllDockerHosts: () => false,
   setDisableAllDockerHosts: vi.fn(),
+  disableAllDockerServices: () => false,
+  setDisableAllDockerServices: vi.fn(),
   disableAllDockerContainers: () => false,
   setDisableAllDockerContainers: vi.fn(),
   disableAllNodesOffline: () => false,
@@ -147,6 +158,7 @@ const baseProps = () => ({
 const renderThresholdsTable = (options?: {
   initialPrefixes?: string[];
   includeReset?: boolean;
+  hosts?: Host[];
 }) => {
   let setDockerIgnoredPrefixesMock!: ReturnType<typeof vi.fn>;
   let resetDockerIgnoredPrefixesMock: ReturnType<typeof vi.fn> | undefined;
@@ -156,6 +168,7 @@ const renderThresholdsTable = (options?: {
   const result = render(() => {
     const [prefixes, setPrefixes] = createSignal(options?.initialPrefixes ?? []);
     getPrefixes = prefixes;
+    const [dockerDefaults, setDockerDefaultsState] = createSignal({ ...DEFAULT_DOCKER_DEFAULTS });
 
     setHasUnsavedChangesMock = vi.fn();
 
@@ -170,13 +183,32 @@ const renderThresholdsTable = (options?: {
             setPrefixes([]);
           });
 
+    const base = baseProps();
+
     const props = {
-      ...baseProps(),
+      ...base,
+      hosts: options?.hosts ?? base.hosts,
       dockerIgnoredPrefixes: () => prefixes(),
       setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => {
         const next = typeof value === 'function' ? value(prefixes()) : value;
         setDockerIgnoredPrefixesMock(next);
         setPrefixes(next);
+      },
+      get dockerDefaults() {
+        return dockerDefaults();
+      },
+      setDockerDefaults: (
+        value:
+          | typeof DEFAULT_DOCKER_DEFAULTS
+          | ((
+              prev: typeof DEFAULT_DOCKER_DEFAULTS,
+            ) => typeof DEFAULT_DOCKER_DEFAULTS),
+      ) => {
+        const next =
+          typeof value === 'function'
+            ? value(dockerDefaults())
+            : { ...value };
+        setDockerDefaultsState(next);
       },
       setHasUnsavedChanges: (value: boolean) => {
         setHasUnsavedChangesMock(value);
@@ -207,6 +239,29 @@ describe('normalizeDockerIgnoredInput', () => {
 
   it('returns empty array for blank input', () => {
     expect(normalizeDockerIgnoredInput('   \n ')).toEqual([]);
+  });
+});
+
+describe('ThresholdsTable hosts tab', () => {
+  it('renders host agents table when hosts tab is active', () => {
+    mockPathname = '/alerts/thresholds/hosts';
+    const host: Host = {
+      id: 'host-1',
+      hostname: 'host-1.local',
+      displayName: 'Host 1',
+      memory: {
+        total: 1024,
+        used: 512,
+        free: 512,
+        usage: 50,
+      },
+      status: 'online',
+      lastSeen: 1,
+    };
+
+    renderThresholdsTable({ includeReset: false, hosts: [host] });
+
+    expect(screen.getByTestId('resource-table-Host Agents')).toBeInTheDocument();
   });
 });
 
@@ -243,5 +298,21 @@ describe('ThresholdsTable docker ignored prefixes', () => {
     expect(getPrefixes()).toEqual([]);
     expect(textarea).toHaveValue('');
     expect(setHasUnsavedChangesMock).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('ThresholdsTable service gap validation', () => {
+  it('shows a validation message when the critical gap falls below the warning gap', () => {
+    renderThresholdsTable({ includeReset: false });
+
+    const warnInput = screen.getByLabelText('Warning gap %') as HTMLInputElement;
+    const critInput = screen.getByLabelText('Critical gap %') as HTMLInputElement;
+
+    fireEvent.input(warnInput, { target: { value: '40' } });
+    fireEvent.input(critInput, { target: { value: '20' } });
+
+    expect(
+      screen.getByText(/critical gap must be greater than or equal to the warning gap/i),
+    ).toBeInTheDocument();
   });
 });

@@ -530,6 +530,139 @@ func cloneStringFloatMap(src map[string]float64) map[string]float64 {
 	return out
 }
 
+func cloneStringMap(src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+func convertDockerServices(services []agentsdocker.Service) []models.DockerService {
+	if len(services) == 0 {
+		return nil
+	}
+
+	result := make([]models.DockerService, 0, len(services))
+	for _, svc := range services {
+		service := models.DockerService{
+			ID:             svc.ID,
+			Name:           svc.Name,
+			Stack:          svc.Stack,
+			Image:          svc.Image,
+			Mode:           svc.Mode,
+			DesiredTasks:   svc.DesiredTasks,
+			RunningTasks:   svc.RunningTasks,
+			CompletedTasks: svc.CompletedTasks,
+		}
+
+		if len(svc.Labels) > 0 {
+			service.Labels = cloneStringMap(svc.Labels)
+		}
+
+		if len(svc.EndpointPorts) > 0 {
+			ports := make([]models.DockerServicePort, len(svc.EndpointPorts))
+			for i, port := range svc.EndpointPorts {
+				ports[i] = models.DockerServicePort{
+					Name:          port.Name,
+					Protocol:      port.Protocol,
+					TargetPort:    port.TargetPort,
+					PublishedPort: port.PublishedPort,
+					PublishMode:   port.PublishMode,
+				}
+			}
+			service.EndpointPorts = ports
+		}
+
+		if svc.UpdateStatus != nil {
+			update := &models.DockerServiceUpdate{
+				State:   svc.UpdateStatus.State,
+				Message: svc.UpdateStatus.Message,
+			}
+			if svc.UpdateStatus.CompletedAt != nil && !svc.UpdateStatus.CompletedAt.IsZero() {
+				completed := *svc.UpdateStatus.CompletedAt
+				update.CompletedAt = &completed
+			}
+			service.UpdateStatus = update
+		}
+
+		if svc.CreatedAt != nil && !svc.CreatedAt.IsZero() {
+			created := *svc.CreatedAt
+			service.CreatedAt = &created
+		}
+		if svc.UpdatedAt != nil && !svc.UpdatedAt.IsZero() {
+			updated := *svc.UpdatedAt
+			service.UpdatedAt = &updated
+		}
+
+		result = append(result, service)
+	}
+
+	return result
+}
+
+func convertDockerTasks(tasks []agentsdocker.Task) []models.DockerTask {
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	result := make([]models.DockerTask, 0, len(tasks))
+	for _, task := range tasks {
+		modelTask := models.DockerTask{
+			ID:            task.ID,
+			ServiceID:     task.ServiceID,
+			ServiceName:   task.ServiceName,
+			Slot:          task.Slot,
+			NodeID:        task.NodeID,
+			NodeName:      task.NodeName,
+			DesiredState:  task.DesiredState,
+			CurrentState:  task.CurrentState,
+			Error:         task.Error,
+			Message:       task.Message,
+			ContainerID:   task.ContainerID,
+			ContainerName: task.ContainerName,
+			CreatedAt:     task.CreatedAt,
+		}
+
+		if task.UpdatedAt != nil && !task.UpdatedAt.IsZero() {
+			updated := *task.UpdatedAt
+			modelTask.UpdatedAt = &updated
+		}
+		if task.StartedAt != nil && !task.StartedAt.IsZero() {
+			started := *task.StartedAt
+			modelTask.StartedAt = &started
+		}
+		if task.CompletedAt != nil && !task.CompletedAt.IsZero() {
+			completed := *task.CompletedAt
+			modelTask.CompletedAt = &completed
+		}
+
+		result = append(result, modelTask)
+	}
+
+	return result
+}
+
+func convertDockerSwarmInfo(info *agentsdocker.SwarmInfo) *models.DockerSwarmInfo {
+	if info == nil {
+		return nil
+	}
+
+	return &models.DockerSwarmInfo{
+		NodeID:           info.NodeID,
+		NodeRole:         info.NodeRole,
+		LocalState:       info.LocalState,
+		ControlAvailable: info.ControlAvailable,
+		ClusterID:        info.ClusterID,
+		ClusterName:      info.ClusterName,
+		Scope:            info.Scope,
+		Error:            info.Error,
+	}
+}
+
 // shouldRunBackupPoll determines whether a backup polling cycle should execute.
 // Returns whether polling should run, a human-readable skip reason, and the timestamp to record.
 func (m *Monitor) shouldRunBackupPoll(last time.Time, now time.Time) (bool, string, time.Time) {
@@ -1253,6 +1386,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		containers = append(containers, container)
 	}
 
+	services := convertDockerServices(report.Services)
+	tasks := convertDockerTasks(report.Tasks)
+	swarmInfo := convertDockerSwarmInfo(report.Host.Swarm)
+
 	host := models.DockerHost{
 		ID:               identifier,
 		AgentID:          agentID,
@@ -1271,6 +1408,9 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		IntervalSeconds:  report.Agent.IntervalSeconds,
 		AgentVersion:     report.Agent.Version,
 		Containers:       containers,
+		Services:         services,
+		Tasks:            tasks,
+		Swarm:            swarmInfo,
 	}
 
 	if tokenRecord != nil {

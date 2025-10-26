@@ -85,6 +85,15 @@ var dockerAgentVersions = []string{
 	"0.1.0-dev",
 }
 
+var dockerImageTags = []string{
+	"1.0.0",
+	"1.1.2",
+	"2025.09.1",
+	"2025.10.4",
+	"latest",
+	"stable",
+}
+
 var genericHostProfiles = []struct {
 	Platform     string
 	OSName       string
@@ -1079,6 +1088,28 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			}
 		}
 
+		swarmInfo := &models.DockerSwarmInfo{
+			NodeID:           fmt.Sprintf("%s-node", hostID),
+			NodeRole:         "worker",
+			LocalState:       "active",
+			ControlAvailable: false,
+			Scope:            "node",
+		}
+
+		var services []models.DockerService
+		var tasks []models.DockerTask
+		if i%2 == 0 {
+			swarmInfo.NodeRole = "manager"
+			swarmInfo.ControlAvailable = true
+			swarmInfo.Scope = "cluster"
+			services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
+			if len(services) == 0 {
+				swarmInfo.Scope = "node"
+			}
+		} else if i%3 == 0 {
+			services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
+		}
+
 		host := models.DockerHost{
 			ID:               hostID,
 			AgentID:          fmt.Sprintf("agent-%s", randomHexString(6)),
@@ -1097,6 +1128,9 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			IntervalSeconds:  interval,
 			AgentVersion:     agentVersion,
 			Containers:       containers,
+			Services:         services,
+			Tasks:            tasks,
+			Swarm:            swarmInfo,
 		}
 
 		hosts = append(hosts, host)
@@ -1258,6 +1292,23 @@ func generateHosts(config MockConfig) []models.Host {
 			}
 		}
 
+		var tokenID, tokenName, tokenHint string
+		var tokenLastUsed *time.Time
+		if rand.Float64() < 0.8 {
+			tokenID = fmt.Sprintf("hst_%s", randomHexString(8))
+			tokenName = fmt.Sprintf("%s agent", displayName)
+			tokenHint = fmt.Sprintf("%s…%s", tokenID[:3], tokenID[len(tokenID)-2:])
+			lastUsed := now.Add(-time.Duration(rand.Intn(720)) * time.Minute)
+			tokenLastUsed = &lastUsed
+		}
+
+		if rand.Float64() < 0.1 {
+			// Simulate a revoked token that hasn't been rotated yet
+			tokenID = ""
+			tokenHint = fmt.Sprintf("%s…%s", randomHexString(3), randomHexString(2))
+			tokenLastUsed = nil
+		}
+
 		host := models.Host{
 			ID:                fmt.Sprintf("host-%s-%d", profile.Platform, i+1),
 			Hostname:          hostname,
@@ -1280,6 +1331,10 @@ func generateHosts(config MockConfig) []models.Host {
 			LastSeen:          lastSeen,
 			AgentVersion:      hostAgentVersions[rand.Intn(len(hostAgentVersions))],
 			Tags:              tags,
+			TokenID:           tokenID,
+			TokenName:         tokenName,
+			TokenHint:         tokenHint,
+			TokenLastUsedAt:   tokenLastUsed,
 		}
 
 		hosts = append(hosts, host)
@@ -3213,6 +3268,11 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 			data.ConnectionHealth[dockerConnectionPrefix+host.ID] = host.Status != "offline"
 		}
 
+		if len(host.Services) > 0 || len(host.Tasks) > 0 {
+			recalculateDockerServiceHealth(host, now)
+		}
+		ensureDockerSwarmInfo(host)
+
 		if host.Status == "offline" {
 			continue
 		}
@@ -3241,6 +3301,151 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 		} else {
 			host.Status = "online"
 		}
+	}
+}
+
+func serviceKey(id, name string) string {
+	if id != "" {
+		return id
+	}
+	return name
+}
+
+func recalculateDockerServiceHealth(host *models.DockerHost, now time.Time) {
+	if host == nil {
+		return
+	}
+
+	containerByID := make(map[string]models.DockerContainer, len(host.Containers))
+	for _, container := range host.Containers {
+		containerByID[container.ID] = container
+		if len(container.ID) >= 12 {
+			containerByID[container.ID[:12]] = container
+		}
+	}
+
+	tasksByService := make(map[string][]int, len(host.Services))
+	for idx := range host.Tasks {
+		task := &host.Tasks[idx]
+		key := serviceKey(task.ServiceID, task.ServiceName)
+		tasksByService[key] = append(tasksByService[key], idx)
+
+		container, ok := containerByID[task.ContainerID]
+		if !ok {
+			if host.Status == "offline" {
+				task.CurrentState = "shutdown"
+				if task.CompletedAt == nil {
+					completed := now.Add(-time.Minute)
+					task.CompletedAt = &completed
+				}
+			}
+			continue
+		}
+
+		state := strings.ToLower(container.State)
+		switch state {
+		case "running":
+			task.CurrentState = "running"
+			if container.StartedAt != nil {
+				started := *container.StartedAt
+				task.StartedAt = &started
+			}
+			task.CompletedAt = nil
+		case "paused":
+			task.CurrentState = "paused"
+			if container.StartedAt != nil {
+				started := *container.StartedAt
+				task.StartedAt = &started
+			}
+		default:
+			task.CurrentState = state
+			if container.FinishedAt != nil {
+				finished := *container.FinishedAt
+				task.CompletedAt = &finished
+			} else if host.Status == "offline" {
+				if task.CompletedAt == nil {
+					finished := now.Add(-2 * time.Minute)
+					task.CompletedAt = &finished
+				}
+			}
+		}
+	}
+
+	for idx := range host.Services {
+		service := &host.Services[idx]
+		key := serviceKey(service.ID, service.Name)
+		taskIdxs := tasksByService[key]
+
+		if service.DesiredTasks <= 0 {
+			service.DesiredTasks = len(taskIdxs)
+		}
+
+		running := 0
+		completed := 0
+		for _, taskIndex := range taskIdxs {
+			task := host.Tasks[taskIndex]
+			state := strings.ToLower(task.CurrentState)
+			if state == "running" {
+				running++
+			}
+			if task.CompletedAt != nil || state == "shutdown" || state == "failed" {
+				completed++
+			}
+		}
+
+		service.RunningTasks = running
+		service.CompletedTasks = completed
+
+		if service.DesiredTasks > 0 && running < service.DesiredTasks {
+			if service.UpdateStatus == nil {
+				service.UpdateStatus = &models.DockerServiceUpdate{}
+			}
+			service.UpdateStatus.State = "rollback_started"
+			service.UpdateStatus.Message = "Service replicas below desired threshold"
+			service.UpdateStatus.CompletedAt = nil
+		} else if service.UpdateStatus != nil && running >= service.DesiredTasks {
+			service.UpdateStatus = nil
+		}
+	}
+}
+
+func ensureDockerSwarmInfo(host *models.DockerHost) {
+	if host == nil {
+		return
+	}
+
+	if host.Swarm == nil {
+		host.Swarm = &models.DockerSwarmInfo{
+			NodeID:           fmt.Sprintf("%s-node", host.ID),
+			NodeRole:         "worker",
+			LocalState:       "active",
+			ControlAvailable: false,
+			Scope:            "node",
+		}
+	}
+
+	if host.Swarm.NodeID == "" {
+		host.Swarm.NodeID = fmt.Sprintf("%s-node", host.ID)
+	}
+	if host.Swarm.NodeRole == "" {
+		host.Swarm.NodeRole = "worker"
+	}
+
+	if host.Status == "offline" {
+		host.Swarm.LocalState = "inactive"
+	} else {
+		host.Swarm.LocalState = "active"
+	}
+
+	if host.Swarm.NodeRole == "manager" {
+		if host.Swarm.ControlAvailable && len(host.Services) > 0 {
+			host.Swarm.Scope = "cluster"
+		} else {
+			host.Swarm.Scope = "node"
+		}
+	} else {
+		host.Swarm.Scope = "node"
+		host.Swarm.ControlAvailable = false
 	}
 }
 
@@ -3411,4 +3616,148 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 	}
 
 	return disks
+}
+
+func generateDockerServicesAndTasks(hostname string, containers []models.DockerContainer, now time.Time) ([]models.DockerService, []models.DockerTask) {
+	if len(containers) == 0 {
+		return nil, nil
+	}
+
+	type svcAgg struct {
+		service models.DockerService
+		tasks   []models.DockerTask
+	}
+
+	aggregates := make(map[string]*svcAgg)
+	stackNames := []string{"frontend", "backend", "ops", "infra"}
+
+	for idx, container := range containers {
+		baseName := strings.Split(container.Name, "-")[0]
+		stack := stackNames[idx%len(stackNames)]
+		serviceName := fmt.Sprintf("%s-%s", stack, baseName)
+		serviceID := fmt.Sprintf("svc-%s-%d", stack, idx)
+
+		agg, exists := aggregates[serviceID]
+		if !exists {
+			agg = &svcAgg{
+				service: models.DockerService{
+					ID:   serviceID,
+					Name: serviceName,
+					Mode: []string{"replicated", "global"}[rand.Intn(2)],
+					Labels: map[string]string{
+						"com.docker.stack.namespace": stack,
+					},
+					EndpointPorts: []models.DockerServicePort{
+						{
+							Protocol:      "tcp",
+							TargetPort:    uint32(8000 + idx%10),
+							PublishedPort: uint32(18000 + idx%10),
+							PublishMode:   "ingress",
+						},
+					},
+				},
+			}
+			if rand.Float64() < 0.5 {
+				agg.service.Image = fmt.Sprintf("registry.example.com/%s:%s", serviceName, dockerImageTags[rand.Intn(len(dockerImageTags))])
+			}
+			aggregates[serviceID] = agg
+		}
+
+		desired := 1 + rand.Intn(4)
+		agg.service.DesiredTasks += desired
+
+		slots := desired
+		if agg.service.Mode == "global" {
+			slots = 1
+		}
+
+		for slot := 0; slot < slots; slot++ {
+			currentState := "running"
+			if rand.Float64() < 0.15 {
+				currentState = []string{"failed", "shutdown", "pending", "starting"}[rand.Intn(4)]
+			}
+
+			taskID := fmt.Sprintf("%s-task-%d", serviceID, slot)
+			task := models.DockerTask{
+				ID:            taskID,
+				ServiceID:     serviceID,
+				ServiceName:   serviceName,
+				Slot:          slot + 1,
+				NodeID:        fmt.Sprintf("node-%s", hostname),
+				NodeName:      hostname,
+				DesiredState:  "running",
+				CurrentState:  currentState,
+				ContainerID:   container.ID,
+				ContainerName: container.Name,
+				CreatedAt:     now.Add(-time.Duration(rand.Intn(48)) * time.Hour),
+			}
+
+			if container.StartedAt != nil {
+				started := *container.StartedAt
+				task.StartedAt = &started
+			}
+			if container.FinishedAt != nil {
+				finished := *container.FinishedAt
+				task.CompletedAt = &finished
+			}
+			if currentState == "running" {
+				task.StartedAt = ptrTime(now.Add(-time.Duration(30+rand.Intn(3600)) * time.Second))
+			}
+
+			if currentState == "failed" || currentState == "shutdown" {
+				task.Error = "container exit"
+				task.Message = "Replica exited unexpectedly"
+			}
+
+			agg.tasks = append(agg.tasks, task)
+		}
+	}
+
+	services := make([]models.DockerService, 0, len(aggregates))
+	tasks := make([]models.DockerTask, 0, len(containers))
+
+	for _, agg := range aggregates {
+		running := 0
+		completed := 0
+		for _, task := range agg.tasks {
+			if strings.EqualFold(task.CurrentState, "running") {
+				running++
+			}
+			if task.CompletedAt != nil && strings.EqualFold(task.CurrentState, "shutdown") {
+				completed++
+			}
+		}
+		agg.service.RunningTasks = running
+		agg.service.CompletedTasks = completed
+
+		if running < agg.service.DesiredTasks {
+			agg.service.UpdateStatus = &models.DockerServiceUpdate{
+				State:       "rollback_started",
+				Message:     "Service replicas below desired",
+				CompletedAt: nil,
+			}
+		}
+
+		services = append(services, agg.service)
+		tasks = append(tasks, agg.tasks...)
+	}
+
+	sort.Slice(services, func(i, j int) bool {
+		if services[i].Name == services[j].Name {
+			return services[i].ID < services[j].ID
+		}
+		return services[i].Name < services[j].Name
+	})
+
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].ServiceName == tasks[j].ServiceName {
+			if tasks[i].Slot == tasks[j].Slot {
+				return tasks[i].ID < tasks[j].ID
+			}
+			return tasks[i].Slot < tasks[j].Slot
+		}
+		return tasks[i].ServiceName < tasks[j].ServiceName
+	})
+
+	return services, tasks
 }

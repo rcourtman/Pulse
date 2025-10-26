@@ -93,6 +93,7 @@ func enableMockMode(fromInit bool) {
 		Int("nodes", config.NodeCount).
 		Int("vms_per_node", config.VMsPerNode).
 		Int("lxcs_per_node", config.LXCsPerNode).
+		Int("host_agents", config.GenericHostCount).
 		Int("docker_hosts", config.DockerHostCount).
 		Int("docker_containers_per_host", config.DockerContainersPerHost).
 		Bool("random_metrics", config.RandomMetrics).
@@ -207,6 +208,12 @@ func LoadMockConfig() MockConfig {
 		}
 	}
 
+	if val := os.Getenv("PULSE_MOCK_GENERIC_HOSTS"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+			config.GenericHostCount = n
+		}
+	}
+
 	if val := os.Getenv("PULSE_MOCK_RANDOM_METRICS"); val != "" {
 		config.RandomMetrics = val == "true"
 	}
@@ -304,6 +311,7 @@ func cloneState(state models.StateSnapshot) models.StateSnapshot {
 		VMs:              append([]models.VM(nil), state.VMs...),
 		Containers:       append([]models.Container(nil), state.Containers...),
 		DockerHosts:      append([]models.DockerHost(nil), state.DockerHosts...),
+		Hosts:            append([]models.Host(nil), state.Hosts...),
 		PMGInstances:     append([]models.PMGInstance(nil), state.PMGInstances...),
 		Storage:          append([]models.Storage(nil), state.Storage...),
 		CephClusters:     append([]models.CephCluster(nil), state.CephClusters...),

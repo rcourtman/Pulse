@@ -124,3 +124,26 @@ func TestUpdateConfigClearsDockerContainerAlertsWhenDisabled(t *testing.T) {
 		t.Fatalf("expected dockerLastExitCode map to be cleared when DisableAllDockerContainers is enabled")
 	}
 }
+
+func TestUpdateConfigClearsDockerServiceAlertsWhenDisabled(t *testing.T) {
+	manager := NewManager()
+
+	serviceResourceID := "docker:host-2/service/frontend"
+	serviceAlertID := "docker-service-health-" + serviceResourceID
+
+	manager.mu.Lock()
+	manager.activeAlerts[serviceAlertID] = &Alert{ID: serviceAlertID, ResourceID: serviceResourceID}
+	manager.mu.Unlock()
+
+	config := manager.GetConfig()
+	config.DisableAllDockerServices = true
+	manager.UpdateConfig(config)
+
+	time.Sleep(10 * time.Millisecond)
+
+	manager.mu.RLock()
+	defer manager.mu.RUnlock()
+	if _, exists := manager.activeAlerts[serviceAlertID]; exists {
+		t.Fatalf("expected docker service alert to be cleared when DisableAllDockerServices is enabled")
+	}
+}

@@ -108,9 +108,10 @@ show_status() {
     source "$MOCK_ENV_FILE"
 	if [ "$PULSE_MOCK_MODE" = "true" ]; then
 		echo -e "${GREEN}Mock Mode: ENABLED${NC}"
-		echo "  Nodes: $PULSE_MOCK_NODES"
-		echo "  VMs per node: $PULSE_MOCK_VMS_PER_NODE"
-		echo "  LXCs per node: $PULSE_MOCK_LXCS_PER_NODE"
+		echo "  Nodes: ${PULSE_MOCK_NODES:-0}"
+		echo "  VMs per node: ${PULSE_MOCK_VMS_PER_NODE:-0}"
+		echo "  LXCs per node: ${PULSE_MOCK_LXCS_PER_NODE:-0}"
+		echo "  Host agents: ${PULSE_MOCK_GENERIC_HOSTS:-0}"
 		echo "  Docker hosts: ${PULSE_MOCK_DOCKER_HOSTS:-0}"
 		echo "  Docker containers/host: ${PULSE_MOCK_DOCKER_CONTAINERS:-0}"
 		echo "  Data dir: ${PULSE_DATA_DIR:-/opt/pulse/tmp/mock-data}"

@@ -285,7 +285,7 @@ pulse_proxy_rpc_requests_total{method="get_temperature",result="success"}
 pulse_proxy_rpc_requests_total{method="ensure_cluster_keys",result="unauthorized"}
 
 # SSH request latency
-pulse_proxy_ssh_latency_seconds{node="delly"}
+pulse_proxy_ssh_latency_seconds{node="example-node"}
 
 # Active connections
 pulse_proxy_queue_depth
@@ -417,7 +417,7 @@ curl -s --unix-socket /run/pulse-sensor-proxy/pulse-sensor-proxy.sock \
   -X POST -d '{"method":"get_status"}' | jq
 
 # 5. Check SSH connectivity
-ssh root@delly "sensors -j"
+ssh root@example-node "sensors -j"
 
 # 6. Inspect adaptive polling for temperature pollers
 curl -s http://localhost:7655/api/monitoring/scheduler/health \

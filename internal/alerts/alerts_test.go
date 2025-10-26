@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -937,6 +938,144 @@ func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 	}
 	if _, exists := m.dockerStateConfirm[resourceID]; exists {
 		t.Fatalf("expected no state confirmation tracking for ignored container")
+	}
+}
+
+func TestDockerServiceReplicaAlerts(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	m.mu.RLock()
+	cfg := m.config
+	m.mu.RUnlock()
+	cfg.Enabled = true
+	m.UpdateConfig(cfg)
+
+	host := models.DockerHost{
+		ID:          "host-1",
+		DisplayName: "Prod Swarm",
+		Hostname:    "swarm-prod",
+		Services: []models.DockerService{
+			{
+				ID:           "svc-1",
+				Name:         "web",
+				DesiredTasks: 4,
+				RunningTasks: 2,
+				Mode:         "replicated",
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	resourceID := dockerServiceResourceID(host.ID, "svc-1", "web")
+	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		t.Fatalf("expected service alert %s to be raised", alertID)
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical severity, got %s", alert.Level)
+	}
+	if missing, ok := alert.Metadata["missingTasks"].(int); !ok || missing != 2 {
+		t.Fatalf("expected missingTasks metadata to be 2, got %v", alert.Metadata["missingTasks"])
+	}
+
+	// Resolve by restoring replicas
+	host.Services[0].RunningTasks = 4
+	m.CheckDockerHost(host)
+
+	if _, exists := m.activeAlerts[alertID]; exists {
+		t.Fatalf("expected service alert %s to be cleared when replicas restored", alertID)
+	}
+}
+
+func TestUpdateConfigClampsDockerServiceCriticalGap(t *testing.T) {
+	t.Parallel()
+
+	m := NewManager()
+
+	cfg := AlertConfig{
+		Enabled:        true,
+		GuestDefaults:  ThresholdConfig{},
+		NodeDefaults:   ThresholdConfig{},
+		HostDefaults:   ThresholdConfig{},
+		StorageDefault: HysteresisThreshold{},
+		DockerDefaults: DockerThresholdConfig{
+			ServiceWarnGapPct: 35,
+			ServiceCritGapPct: 20,
+		},
+		PMGDefaults:      PMGThresholdConfig{},
+		SnapshotDefaults: SnapshotAlertConfig{},
+		BackupDefaults:   BackupAlertConfig{},
+		Overrides:        make(map[string]ThresholdConfig),
+		Schedule:         ScheduleConfig{},
+	}
+
+	m.UpdateConfig(cfg)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.config.DockerDefaults.ServiceWarnGapPct != 35 {
+		t.Fatalf("expected warning gap to remain 35, got %d", m.config.DockerDefaults.ServiceWarnGapPct)
+	}
+	if m.config.DockerDefaults.ServiceCritGapPct != 35 {
+		t.Fatalf("expected critical gap to be clamped to 35, got %d", m.config.DockerDefaults.ServiceCritGapPct)
+	}
+}
+
+func TestDockerServiceAlertUsesClampedCriticalGap(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	cfg := AlertConfig{
+		Enabled:        true,
+		GuestDefaults:  ThresholdConfig{},
+		NodeDefaults:   ThresholdConfig{},
+		HostDefaults:   ThresholdConfig{},
+		StorageDefault: HysteresisThreshold{},
+		DockerDefaults: DockerThresholdConfig{
+			ServiceWarnGapPct: 20,
+			ServiceCritGapPct: 5,
+		},
+		PMGDefaults:      PMGThresholdConfig{},
+		SnapshotDefaults: SnapshotAlertConfig{},
+		BackupDefaults:   BackupAlertConfig{},
+		Overrides:        make(map[string]ThresholdConfig),
+		Schedule:         ScheduleConfig{},
+	}
+
+	m.UpdateConfig(cfg)
+
+	host := models.DockerHost{
+		ID:          "docker-host-1",
+		DisplayName: "Docker Host",
+		Hostname:    "docker-host.local",
+		Services: []models.DockerService{
+			{
+				ID:           "svc-123",
+				Name:         "api",
+				DesiredTasks: 10,
+				RunningTasks: 7,
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	resourceID := dockerServiceResourceID(host.ID, "svc-123", "api")
+	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
+
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		t.Fatalf("expected docker service alert %s to be raised", alertID)
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical severity when replicas 7/10, got %s", alert.Level)
+	}
+	if pct, ok := alert.Metadata["percentMissing"].(float64); !ok || math.Abs(pct-30.0) > 0.01 {
+		t.Fatalf("expected percentMissing metadata ~30, got %v", alert.Metadata["percentMissing"])
 	}
 }
 

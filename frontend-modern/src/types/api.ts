@@ -135,6 +135,9 @@ export interface DockerHost {
   intervalSeconds: number;
   agentVersion?: string;
   containers: DockerContainer[];
+  services?: DockerService[];
+  tasks?: DockerTask[];
+  swarm?: DockerSwarmInfo;
   tokenId?: string;
   tokenName?: string;
   tokenHint?: string;
@@ -159,6 +162,66 @@ export interface DockerHostCommand {
   failedAt?: number;
   failureReason?: string;
   expiresAt?: number;
+}
+
+export interface DockerService {
+  id: string;
+  name: string;
+  stack?: string;
+  image?: string;
+  mode?: string;
+  desiredTasks?: number;
+  runningTasks?: number;
+  completedTasks?: number;
+  labels?: Record<string, string>;
+  endpointPorts?: DockerServicePort[];
+  updateStatus?: DockerServiceUpdate;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface DockerServicePort {
+  name?: string;
+  protocol?: string;
+  targetPort?: number;
+  publishedPort?: number;
+  publishMode?: string;
+}
+
+export interface DockerServiceUpdate {
+  state?: string;
+  message?: string;
+  completedAt?: number;
+}
+
+export interface DockerTask {
+  id: string;
+  serviceId?: string;
+  serviceName?: string;
+  slot?: number;
+  nodeId?: string;
+  nodeName?: string;
+  desiredState?: string;
+  currentState?: string;
+  error?: string;
+  message?: string;
+  containerId?: string;
+  containerName?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+export interface DockerSwarmInfo {
+  nodeId?: string;
+  nodeRole?: string;
+  localState?: string;
+  controlAvailable?: boolean;
+  clusterId?: string;
+  clusterName?: string;
+  scope?: string;
+  error?: string;
 }
 
 export interface DockerContainer {

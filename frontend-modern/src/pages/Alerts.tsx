@@ -108,6 +108,7 @@ interface DestinationsRef {
 type OverrideType =
   | 'guest'
   | 'node'
+  | 'hostAgent'
   | 'storage'
   | 'pbs'
   | 'pmg'
@@ -123,7 +124,7 @@ interface Override {
   node?: string; // Node name (for guests and storage), undefined for nodes themselves
   instance?: string;
   disabled?: boolean; // Completely disable alerts for this guest/storage
-  disableConnectivity?: boolean; // For nodes - disable offline/connectivity alerts
+  disableConnectivity?: boolean; // For nodes/hosts - disable offline/connectivity alerts
   poweredOffSeverity?: 'warning' | 'critical';
   thresholds: {
     cpu?: number;
@@ -134,6 +135,7 @@ interface Override {
     networkIn?: number;
     networkOut?: number;
     usage?: number; // For storage devices
+    temperature?: number;
   };
 }
 
@@ -817,6 +819,26 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
       }
 
       if (config.dockerDefaults) {
+        const normalizeGap = (value: unknown, fallback: number) => {
+          const numeric = Number(value);
+          if (!Number.isFinite(numeric)) {
+            return fallback;
+          }
+          return Math.max(0, Math.min(100, numeric));
+        };
+
+        const serviceWarnGap = normalizeGap(
+          config.dockerDefaults.serviceWarnGapPercent,
+          FACTORY_DOCKER_DEFAULTS.serviceWarnGapPercent,
+        );
+        let serviceCriticalGap = normalizeGap(
+          config.dockerDefaults.serviceCriticalGapPercent,
+          FACTORY_DOCKER_DEFAULTS.serviceCriticalGapPercent,
+        );
+        if (serviceCriticalGap > 0 && serviceWarnGap > serviceCriticalGap) {
+          serviceCriticalGap = serviceWarnGap;
+        }
+
         setDockerDefaults({
           cpu: getTriggerValue(config.dockerDefaults.cpu) ?? 80,
           memory: getTriggerValue(config.dockerDefaults.memory) ?? 85,
@@ -824,7 +846,11 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           restartWindow: config.dockerDefaults.restartWindow ?? 300,
           memoryWarnPct: config.dockerDefaults.memoryWarnPct ?? 90,
           memoryCriticalPct: config.dockerDefaults.memoryCriticalPct ?? 95,
+          serviceWarnGapPercent: serviceWarnGap,
+          serviceCriticalGapPercent: serviceCriticalGap,
         });
+      } else {
+        setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
       }
       setDockerIgnoredPrefixes(config.dockerIgnoredContainerPrefixes ?? []);
 
@@ -928,6 +954,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
       setDisableAllPBS(config.disableAllPBS ?? false);
       setDisableAllPMG(config.disableAllPMG ?? false);
       setDisableAllDockerHosts(config.disableAllDockerHosts ?? false);
+      setDisableAllDockerServices(config.disableAllDockerServices ?? false);
       setDisableAllDockerContainers(config.disableAllDockerContainers ?? false);
 
       // Load global disable offline alerts flags
@@ -1176,6 +1203,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     restartWindow: 300,
     memoryWarnPct: 90,
     memoryCriticalPct: 95,
+    serviceWarnGapPercent: 10,
+    serviceCriticalGapPercent: 50,
   };
 
   const FACTORY_STORAGE_DEFAULT = 85;
@@ -1284,6 +1313,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
   const [disableAllPBS, setDisableAllPBS] = createSignal(false);
   const [disableAllPMG, setDisableAllPMG] = createSignal(false);
   const [disableAllDockerHosts, setDisableAllDockerHosts] = createSignal(false);
+  const [disableAllDockerServices, setDisableAllDockerServices] = createSignal(false);
   const [disableAllDockerContainers, setDisableAllDockerContainers] = createSignal(false);
 
   // Global disable offline alerts flags
@@ -1425,6 +1455,17 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                         ? Math.max(normalizedBackupCritical, normalizedBackupWarning)
                         : normalizedBackupWarning;
 
+                    const dockerDefaultsValue = dockerDefaults();
+                    if (
+                      dockerDefaultsValue.serviceCriticalGapPercent > 0 &&
+                      dockerDefaultsValue.serviceWarnGapPercent > dockerDefaultsValue.serviceCriticalGapPercent
+                    ) {
+                      showError(
+                        'Swarm service critical gap must be greater than or equal to the warning gap when enabled.',
+                      );
+                      return;
+                    }
+
                     const alertConfig = {
                       enabled: true,
                       // Global disable flags per resource type
@@ -1436,6 +1477,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       disableAllPMG: disableAllPMG(),
                       disableAllDockerHosts: disableAllDockerHosts(),
                       disableAllDockerContainers: disableAllDockerContainers(),
+                      disableAllDockerServices: disableAllDockerServices(),
                       // Global disable offline alerts flags
                       disableAllNodesOffline: disableAllNodesOffline(),
                       disableAllGuestsOffline: disableAllGuestsOffline(),
@@ -1466,12 +1508,14 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                         disk: createHysteresisThreshold(hostDefaults().disk),
                       },
                       dockerDefaults: {
-                        cpu: createHysteresisThreshold(dockerDefaults().cpu),
-                        memory: createHysteresisThreshold(dockerDefaults().memory),
-                        restartCount: dockerDefaults().restartCount,
-                        restartWindow: dockerDefaults().restartWindow,
-                        memoryWarnPct: dockerDefaults().memoryWarnPct,
-                        memoryCriticalPct: dockerDefaults().memoryCriticalPct,
+                        cpu: createHysteresisThreshold(dockerDefaultsValue.cpu),
+                        memory: createHysteresisThreshold(dockerDefaultsValue.memory),
+                        restartCount: dockerDefaultsValue.restartCount,
+                        restartWindow: dockerDefaultsValue.restartWindow,
+                        memoryWarnPct: dockerDefaultsValue.memoryWarnPct,
+                        memoryCriticalPct: dockerDefaultsValue.memoryCriticalPct,
+                        serviceWarnGapPercent: dockerDefaultsValue.serviceWarnGapPercent,
+                        serviceCriticalGapPercent: dockerDefaultsValue.serviceCriticalGapPercent,
                       },
                       dockerIgnoredContainerPrefixes: dockerIgnoredPrefixes()
                         .map((prefix) => prefix.trim())
@@ -1767,10 +1811,12 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               setDisableAllPBS={setDisableAllPBS}
               disableAllPMG={disableAllPMG}
               setDisableAllPMG={setDisableAllPMG}
-              disableAllDockerHosts={disableAllDockerHosts}
-              setDisableAllDockerHosts={setDisableAllDockerHosts}
-              disableAllDockerContainers={disableAllDockerContainers}
-              setDisableAllDockerContainers={setDisableAllDockerContainers}
+  disableAllDockerHosts={disableAllDockerHosts}
+  setDisableAllDockerHosts={setDisableAllDockerHosts}
+  disableAllDockerServices={disableAllDockerServices}
+  setDisableAllDockerServices={setDisableAllDockerServices}
+  disableAllDockerContainers={disableAllDockerContainers}
+  setDisableAllDockerContainers={setDisableAllDockerContainers}
               disableAllNodesOffline={disableAllNodesOffline}
               setDisableAllNodesOffline={setDisableAllNodesOffline}
               disableAllGuestsOffline={disableAllGuestsOffline}
@@ -2238,7 +2284,16 @@ interface ThresholdsTabProps {
   guestDefaults: () => Record<string, number | undefined>;
   nodeDefaults: () => Record<string, number | undefined>;
   hostDefaults: () => Record<string, number | undefined>;
-  dockerDefaults: () => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
+  dockerDefaults: () => {
+    cpu: number;
+    memory: number;
+    restartCount: number;
+    restartWindow: number;
+    memoryWarnPct: number;
+    memoryCriticalPct: number;
+    serviceWarnGapPercent: number;
+    serviceCriticalGapPercent: number;
+  };
   dockerIgnoredPrefixes: () => string[];
   storageDefault: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
@@ -2271,7 +2326,36 @@ interface ThresholdsTabProps {
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
   setDockerDefaults: (
-    value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),
+    value:
+      | {
+          cpu: number;
+          memory: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }
+      | ((prev: {
+          cpu: number;
+          memory: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }) => {
+          cpu: number;
+          memory: number;
+          restartCount: number;
+          restartWindow: number;
+          memoryWarnPct: number;
+          memoryCriticalPct: number;
+          serviceWarnGapPercent: number;
+          serviceCriticalGapPercent: number;
+        }),
   ) => void;
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   setStorageDefault: (value: number) => void;
@@ -2317,6 +2401,8 @@ interface ThresholdsTabProps {
   setDisableAllPMG: (value: boolean) => void;
   disableAllDockerHosts: () => boolean;
   setDisableAllDockerHosts: (value: boolean) => void;
+  disableAllDockerServices: () => boolean;
+  setDisableAllDockerServices: (value: boolean) => void;
   disableAllDockerContainers: () => boolean;
   setDisableAllDockerContainers: (value: boolean) => void;
   // Global disable offline alerts flags
@@ -2410,6 +2496,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setDisableAllPMG={props.setDisableAllPMG}
       disableAllDockerHosts={props.disableAllDockerHosts}
       setDisableAllDockerHosts={props.setDisableAllDockerHosts}
+      disableAllDockerServices={props.disableAllDockerServices}
+      setDisableAllDockerServices={props.setDisableAllDockerServices}
       disableAllDockerContainers={props.disableAllDockerContainers}
       setDisableAllDockerContainers={props.setDisableAllDockerContainers}
       disableAllNodesOffline={props.disableAllNodesOffline}

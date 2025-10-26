@@ -264,12 +264,14 @@ type CustomAlertRule struct {
 
 // DockerThresholdConfig represents Docker-specific alert thresholds
 type DockerThresholdConfig struct {
-	CPU               HysteresisThreshold `json:"cpu"`               // CPU usage % threshold (default: 80%)
-	Memory            HysteresisThreshold `json:"memory"`            // Memory usage % threshold (default: 85%)
-	RestartCount      int                 `json:"restartCount"`      // Number of restarts to trigger alert (default: 3)
-	RestartWindow     int                 `json:"restartWindow"`     // Time window in seconds for restart loop detection (default: 300 = 5min)
-	MemoryWarnPct     int                 `json:"memoryWarnPct"`     // Memory limit % to trigger warning (default: 90)
-	MemoryCriticalPct int                 `json:"memoryCriticalPct"` // Memory limit % to trigger critical (default: 95)
+	CPU               HysteresisThreshold `json:"cpu"`                       // CPU usage % threshold (default: 80%)
+	Memory            HysteresisThreshold `json:"memory"`                    // Memory usage % threshold (default: 85%)
+	RestartCount      int                 `json:"restartCount"`              // Number of restarts to trigger alert (default: 3)
+	RestartWindow     int                 `json:"restartWindow"`             // Time window in seconds for restart loop detection (default: 300 = 5min)
+	MemoryWarnPct     int                 `json:"memoryWarnPct"`             // Memory limit % to trigger warning (default: 90)
+	MemoryCriticalPct int                 `json:"memoryCriticalPct"`         // Memory limit % to trigger critical (default: 95)
+	ServiceWarnGapPct int                 `json:"serviceWarnGapPercent"`     // % of desired tasks missing to trigger warning (default: 10)
+	ServiceCritGapPct int                 `json:"serviceCriticalGapPercent"` // % of desired tasks missing to trigger critical (default: 50)
 }
 
 // PMGThresholdConfig represents Proxmox Mail Gateway-specific alert thresholds
@@ -344,6 +346,7 @@ type AlertConfig struct {
 	DisableAllPMG                bool `json:"disableAllPMG"`                // Disable all alerts for PMG instances
 	DisableAllDockerHosts        bool `json:"disableAllDockerHosts"`        // Disable all alerts for Docker hosts
 	DisableAllDockerContainers   bool `json:"disableAllDockerContainers"`   // Disable all alerts for Docker containers
+	DisableAllDockerServices     bool `json:"disableAllDockerServices"`     // Disable all alerts for Docker services
 	DisableAllNodesOffline       bool `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
 	DisableAllGuestsOffline      bool `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
 	DisableAllHostsOffline       bool `json:"disableAllHostsOffline"`       // Disable host agent offline alerts globally
@@ -813,6 +816,20 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if config.DockerDefaults.MemoryCriticalPct <= 0 {
 		config.DockerDefaults.MemoryCriticalPct = 95
 	}
+	if config.DockerDefaults.ServiceWarnGapPct <= 0 {
+		config.DockerDefaults.ServiceWarnGapPct = 10
+	}
+	if config.DockerDefaults.ServiceCritGapPct <= 0 {
+		config.DockerDefaults.ServiceCritGapPct = 50
+	}
+	if config.DockerDefaults.ServiceCritGapPct > 0 &&
+		config.DockerDefaults.ServiceCritGapPct < config.DockerDefaults.ServiceWarnGapPct {
+		log.Warn().
+			Int("warnGapPercent", config.DockerDefaults.ServiceWarnGapPct).
+			Int("criticalGapPercent", config.DockerDefaults.ServiceCritGapPct).
+			Msg("Adjusting Docker service critical gap to match warning gap")
+		config.DockerDefaults.ServiceCritGapPct = config.DockerDefaults.ServiceWarnGapPct
+	}
 
 	// Initialize PMG defaults if missing/zero
 	if config.PMGDefaults.QueueTotalWarning <= 0 {
@@ -1181,6 +1198,17 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		m.dockerStateConfirm = make(map[string]int)
 		m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 		m.dockerLastExitCode = make(map[string]int)
+	}
+	if m.config.DisableAllDockerServices {
+		var serviceAlerts []string
+		for alertID := range m.activeAlerts {
+			if strings.HasPrefix(alertID, "docker-service-") {
+				serviceAlerts = append(serviceAlerts, alertID)
+			}
+		}
+		for _, alertID := range serviceAlerts {
+			m.clearAlertNoLock(alertID)
+		}
 	}
 }
 
@@ -2582,6 +2610,57 @@ func dockerResourceID(hostID, containerID string) string {
 	return fmt.Sprintf("docker:%s/%s", hostID, containerID)
 }
 
+// dockerServiceDisplayName normalizes the service name for alert readability.
+func dockerServiceDisplayName(service models.DockerService) string {
+	name := strings.TrimSpace(service.Name)
+	if name != "" {
+		return name
+	}
+	id := strings.TrimSpace(service.ID)
+	if len(id) > 12 {
+		id = id[:12]
+	}
+	if id == "" {
+		return "service"
+	}
+	return id
+}
+
+func dockerServiceResourceID(hostID, serviceID, serviceName string) string {
+	hostID = strings.TrimSpace(hostID)
+	id := strings.TrimSpace(serviceID)
+	if id == "" {
+		name := strings.TrimSpace(serviceName)
+		if name == "" {
+			name = "service"
+		}
+		builder := strings.Builder{}
+		for _, r := range strings.ToLower(name) {
+			switch {
+			case r >= 'a' && r <= 'z':
+				builder.WriteRune(r)
+			case r >= '0' && r <= '9':
+				builder.WriteRune(r)
+			case r == '-', r == '_':
+				builder.WriteRune(r)
+			case r == ' ' || r == '/' || r == '\\' || r == ':' || r == '.':
+				builder.WriteRune('-')
+			}
+		}
+		id = strings.Trim(builder.String(), "-_")
+		if id == "" {
+			id = "service"
+		}
+		if len(id) > 32 {
+			id = id[:32]
+		}
+	}
+	if hostID == "" {
+		return fmt.Sprintf("docker-service:%s", id)
+	}
+	return fmt.Sprintf("docker:%s/service/%s", hostID, id)
+}
+
 func matchesDockerIgnoredPrefix(name, id string, prefixes []string) bool {
 	if len(prefixes) == 0 {
 		return false
@@ -2627,7 +2706,7 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 		return
 	}
 
-	seen := make(map[string]struct{}, len(host.Containers))
+	seen := make(map[string]struct{}, len(host.Containers)+len(host.Services))
 	for _, container := range host.Containers {
 		containerName := dockerContainerDisplayName(container)
 		resourceID := dockerResourceID(host.ID, container.ID)
@@ -2652,6 +2731,12 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 
 		seen[resourceID] = struct{}{}
 		m.evaluateDockerContainer(host, container, resourceID)
+	}
+
+	for _, service := range host.Services {
+		resourceID := dockerServiceResourceID(host.ID, service.ID, service.Name)
+		seen[resourceID] = struct{}{}
+		m.evaluateDockerService(host, service, resourceID)
 	}
 
 	m.cleanupDockerContainerAlerts(host, seen)
@@ -2748,6 +2833,151 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	m.checkDockerContainerRestartLoop(host, container, resourceID, containerName, instanceName, nodeName)
 	m.checkDockerContainerOOMKill(host, container, resourceID, containerName, instanceName, nodeName)
 	m.checkDockerContainerMemoryLimit(host, container, resourceID, containerName, instanceName, nodeName)
+}
+
+func (m *Manager) evaluateDockerService(host models.DockerHost, service models.DockerService, resourceID string) {
+	m.mu.RLock()
+	disableAllServices := m.config.DisableAllDockerServices
+	warnPct := m.config.DockerDefaults.ServiceWarnGapPct
+	critPct := m.config.DockerDefaults.ServiceCritGapPct
+	overrideConfig, hasOverride := m.config.Overrides[resourceID]
+	m.mu.RUnlock()
+
+	if disableAllServices {
+		m.clearDockerServiceAlert(resourceID)
+		return
+	}
+	if hasOverride && overrideConfig.Disabled {
+		m.clearDockerServiceAlert(resourceID)
+		return
+	}
+
+	desired := service.DesiredTasks
+	running := service.RunningTasks
+	if desired <= 0 {
+		m.clearDockerServiceAlert(resourceID)
+		return
+	}
+
+	missing := desired - running
+	if missing < 0 {
+		missing = 0
+	}
+
+	percentMissing := 0.0
+	if desired > 0 {
+		percentMissing = (float64(missing) / float64(desired)) * 100.0
+	}
+
+	severity := AlertLevel("")
+	thresholdValue := 0.0
+	if critPct > 0 && percentMissing >= float64(critPct) {
+		severity = AlertLevelCritical
+		thresholdValue = float64(critPct)
+	} else if warnPct > 0 && percentMissing >= float64(warnPct) {
+		severity = AlertLevelWarning
+		thresholdValue = float64(warnPct)
+	}
+
+	updateState := ""
+	updateMessage := ""
+	if service.UpdateStatus != nil {
+		updateState = strings.ToLower(strings.TrimSpace(service.UpdateStatus.State))
+		updateMessage = strings.TrimSpace(service.UpdateStatus.Message)
+		if severity == "" {
+			switch updateState {
+			case "paused", "rollback_started", "rollback_paused":
+				severity = AlertLevelWarning
+			case "rollback_failed":
+				severity = AlertLevelCritical
+			}
+		}
+	}
+
+	if severity == "" {
+		m.clearDockerServiceAlert(resourceID)
+		return
+	}
+
+	serviceName := dockerServiceDisplayName(service)
+	instanceName := dockerInstanceName(host)
+	nodeName := strings.TrimSpace(host.Hostname)
+
+	message := ""
+	if missing > 0 {
+		message = fmt.Sprintf("Docker service '%s' is running %d of %d desired tasks", serviceName, service.RunningTasks, service.DesiredTasks)
+	} else if updateState != "" {
+		message = fmt.Sprintf("Docker service '%s' update state: %s", serviceName, service.UpdateStatus.State)
+	} else {
+		message = fmt.Sprintf("Docker service '%s' triggered a Swarm alert", serviceName)
+	}
+	if updateMessage != "" {
+		message = fmt.Sprintf("%s (%s)", message, updateMessage)
+	}
+
+	metadata := map[string]interface{}{
+		"resourceType":   "Docker Service",
+		"hostId":         host.ID,
+		"hostName":       host.DisplayName,
+		"hostHostname":   host.Hostname,
+		"serviceId":      service.ID,
+		"serviceName":    service.Name,
+		"stack":          service.Stack,
+		"mode":           service.Mode,
+		"desiredTasks":   service.DesiredTasks,
+		"runningTasks":   service.RunningTasks,
+		"completedTasks": service.CompletedTasks,
+		"missingTasks":   missing,
+		"percentMissing": percentMissing,
+	}
+	if updateState != "" {
+		metadata["updateState"] = service.UpdateStatus.State
+	}
+	if updateMessage != "" {
+		metadata["updateMessage"] = updateMessage
+	}
+	if service.UpdateStatus != nil && service.UpdateStatus.CompletedAt != nil && !service.UpdateStatus.CompletedAt.IsZero() {
+		metadata["updateCompletedAt"] = service.UpdateStatus.CompletedAt.UTC()
+	}
+
+	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "docker-service-health",
+		Level:        severity,
+		ResourceID:   resourceID,
+		ResourceName: serviceName,
+		Node:         nodeName,
+		Instance:     instanceName,
+		Message:      message,
+		Value:        percentMissing,
+		Threshold:    thresholdValue,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+		Metadata:     metadata,
+	}
+
+	m.mu.Lock()
+	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+		alert.StartTime = existing.StartTime
+	}
+	m.preserveAlertState(alertID, alert)
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+	m.historyManager.AddAlert(*alert)
+	m.dispatchAlert(alert, severity == AlertLevelCritical)
+	m.mu.Unlock()
+
+	log.Warn().
+		Str("service", serviceName).
+		Str("host", host.DisplayName).
+		Float64("percentMissing", percentMissing).
+		Msg("Docker service alert raised")
+}
+
+func (m *Manager) clearDockerServiceAlert(resourceID string) {
+	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
+	m.clearAlert(alertID)
 }
 
 // HandleDockerHostOnline clears offline tracking and alerts for a Docker host.
