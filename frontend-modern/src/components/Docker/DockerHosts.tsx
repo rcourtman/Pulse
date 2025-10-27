@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -17,6 +18,7 @@ interface DockerHostsProps {
 type StatsFilter = { type: 'host-status' | 'container-state' | 'service-health'; value: string } | null;
 
 export const DockerHosts: Component<DockerHostsProps> = (props) => {
+  const navigate = useNavigate();
   const { initialDataReceived, reconnecting, connected } = useWebSocket();
 
   const sortedHosts = createMemo(() => {
@@ -162,6 +164,18 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
               }
               title="No Docker hosts configured"
               description="Deploy the Pulse Docker agent on at least one Docker host to light up this tab. As soon as an agent reports in, container metrics appear automatically."
+              actions={
+                <button
+                  type="button"
+                  onClick={() => navigate('/settings/docker')}
+                  class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                >
+                  <span>Set up Docker agent</span>
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              }
             />
           </Card>
         </Show>
