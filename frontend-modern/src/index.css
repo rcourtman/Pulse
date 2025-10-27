@@ -355,10 +355,9 @@ body,
   white-space: nowrap;
 }
 
-/* Keep name column slightly flexible while maintaining stability */
+/* Keep name column single line to avoid wrapping while giving it more space */
 .table-fixed td:first-child {
-  white-space: normal;
-  word-break: break-word;
+  white-space: nowrap;
 }
 
 /* Hide scrollbars but keep functionality */
