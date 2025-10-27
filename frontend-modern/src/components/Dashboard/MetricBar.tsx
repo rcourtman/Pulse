@@ -1,4 +1,4 @@
-import { createMemo } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 
 interface MetricBarProps {
   value: number;
@@ -44,14 +44,6 @@ export function MetricBar(props: MetricBarProps) {
     return colorMap[getColor()] || 'bg-gray-500/60 dark:bg-gray-500/50';
   });
 
-  // Combine label and sublabel for display text
-  const displayText = createMemo(() => {
-    if (props.sublabel) {
-      return `${props.label} (${props.sublabel})`;
-    }
-    return props.label;
-  });
-
   return (
     <div class="metric-text">
       <div class="relative min-w-[96px] w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
@@ -60,7 +52,16 @@ export function MetricBar(props: MetricBarProps) {
           style={{ width: `${width()}%` }}
         />
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-          <span class="whitespace-nowrap px-0.5">{displayText()}</span>
+          <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
+            <span>{props.label}</span>
+            <Show when={props.sublabel}>
+              {(sublabel) => (
+                <span class="metric-sublabel hidden xl:inline font-normal">
+                  ({sublabel()})
+                </span>
+              )}
+            </Show>
+          </span>
         </span>
       </div>
     </div>
