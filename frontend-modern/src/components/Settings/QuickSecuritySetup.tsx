@@ -96,6 +96,11 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       });
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(
+            'Pulse detected a legacy DISABLE_AUTH flag. Remove that environment flag and restart Pulse before enabling security here.',
+          );
+        }
         const error = await response.text();
         throw new Error(error || 'Failed to setup security');
       }

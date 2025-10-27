@@ -118,6 +118,31 @@ function App() {
   };
   const alertsActivation = useAlertsActivation();
 
+  let hasPreloadedRoutes = false;
+  let hasFetchedVersionInfo = false;
+  const preloadLazyRoutes = () => {
+    if (hasPreloadedRoutes || typeof window === 'undefined') {
+      return;
+    }
+    hasPreloadedRoutes = true;
+    const loaders: Array<() => Promise<unknown>> = [
+      () => import('./components/Storage/Storage'),
+      () => import('./components/Backups/Backups'),
+      () => import('./components/Replication/Replication'),
+      () => import('./components/PMG/MailGateway'),
+      () => import('./components/Hosts/HostsOverview'),
+      () => import('./pages/Alerts'),
+      () => import('./components/Settings/Settings'),
+      () => import('./components/Docker/DockerHosts'),
+    ];
+
+    loaders.forEach((load) => {
+      void load().catch((error) => {
+        console.warn('[App] Failed to preload route module', error);
+      });
+    });
+  };
+
   const fallbackState: State = {
     nodes: [],
     vms: [],
@@ -214,9 +239,46 @@ function App() {
     }
   });
 
-  onMount(() => {
-    void alertsActivation.refreshConfig();
-    void alertsActivation.refreshActiveAlerts();
+  createEffect(() => {
+    if (!isLoading() && !needsAuth()) {
+      if (typeof window === 'undefined') {
+        return;
+      }
+      if (!hasPreloadedRoutes) {
+        // Defer to the next tick so we don't contend with initial render
+        window.setTimeout(preloadLazyRoutes, 0);
+      }
+    }
+  });
+
+  createEffect(() => {
+    if (isLoading() || needsAuth() || hasFetchedVersionInfo) {
+      return;
+    }
+    hasFetchedVersionInfo = true;
+
+    UpdatesAPI.getVersion()
+      .then((version) => {
+        setVersionInfo(version);
+        // Check for updates after loading version info (non-blocking)
+        updateStore.checkForUpdates();
+      })
+      .catch((error) => {
+        console.error('Failed to load version:', error);
+      });
+  });
+
+  let alertsInitialized = false;
+  createEffect(() => {
+    const ready = !isLoading() && !needsAuth();
+    if (ready && !alertsInitialized) {
+      alertsInitialized = true;
+      void alertsActivation.refreshConfig();
+      void alertsActivation.refreshActiveAlerts();
+    }
+    if (!ready) {
+      alertsInitialized = false;
+    }
   });
 
   // No longer need tab state management - using router now
@@ -316,49 +378,34 @@ function App() {
     // First check security status to see if auth is configured
     try {
       const securityRes = await apiFetch('/api/security/status');
+
+      if (securityRes.status === 401) {
+        console.warn(
+          '[App] Security status request returned 401. Clearing stored credentials and showing login.',
+        );
+        try {
+          const { clearAuth } = await import('./utils/apiClient');
+          clearAuth();
+        } catch (clearError) {
+          console.warn('[App] Failed to clear stored auth after 401:', clearError);
+        }
+        setHasAuth(false);
+        setNeedsAuth(true);
+        return;
+      }
+
+      if (!securityRes.ok) {
+        throw new Error(`Security status request failed with status ${securityRes.status}`);
+      }
+
       const securityData = await securityRes.json();
       console.log('[App] Security status:', securityData);
 
-      // Check if auth is disabled via DISABLE_AUTH
-      if (securityData.disabled === true) {
-        console.log('[App] Auth is disabled via DISABLE_AUTH, skipping authentication');
-        setHasAuth(false);
-        setNeedsAuth(false);
-        // Initialize WebSocket immediately since no auth needed
-        setWsStore(acquireWsStore());
-
-        // Load theme preference from server for cross-device sync
-        // Only use server preference if no local preference exists
-        if (!hasLocalPreference) {
-          try {
-            const systemSettings = await SettingsAPI.getSystemSettings();
-            if (systemSettings.theme && systemSettings.theme !== '') {
-              const prefersDark = systemSettings.theme === 'dark';
-              setDarkMode(prefersDark);
-              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
-              if (prefersDark) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
-            }
-            setHasLoadedServerTheme(true);
-          } catch (error) {
-            console.error('Failed to load theme from server:', error);
-          }
-        }
-
-        // Load version info even when auth is disabled
-        UpdatesAPI.getVersion()
-          .then((version) => {
-            setVersionInfo(version);
-            // Check for updates after loading version info (non-blocking)
-            updateStore.checkForUpdates();
-          })
-          .catch((error) => console.error('Failed to load version:', error));
-
-        setIsLoading(false);
-        return;
+      // Detect legacy DISABLE_AUTH flag (now ignored) so we can surface a warning
+      if (securityData.deprecatedDisableAuth === true) {
+        console.warn(
+          '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
+        );
       }
 
       const authConfigured = securityData.hasAuthentication || false;
@@ -504,23 +551,17 @@ function App() {
       }
     } catch (error) {
       console.error('Auth check error:', error);
-      // On error, try to proceed without auth
-      setNeedsAuth(false);
-      setWsStore(acquireWsStore());
-
-      // Theme is already applied on initialization, no need to reapply
+      try {
+        const { clearAuth } = await import('./utils/apiClient');
+        clearAuth();
+      } catch (clearError) {
+        console.warn('[App] Failed to clear stored auth after auth check error:', clearError);
+      }
+      setHasAuth(false);
+      setNeedsAuth(true);
     } finally {
       setIsLoading(false);
     }
-
-    // Load version info
-    UpdatesAPI.getVersion()
-      .then((version) => {
-        setVersionInfo(version);
-        // Check for updates after loading version info (non-blocking)
-        updateStore.checkForUpdates();
-      })
-      .catch((error) => console.error('Failed to load version:', error));
   });
 
   const handleLogin = () => {
@@ -652,6 +693,61 @@ function App() {
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/settings/*" component={SettingsRoute} />
     </Router>
+  );
+}
+
+function ConnectionStatusBadge(props: {
+  connected: () => boolean;
+  reconnecting: () => boolean;
+  class?: string;
+}) {
+  return (
+    <div
+      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
+        props.connected()
+          ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
+          : props.reconnecting()
+            ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
+            : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-6 h-6 group-hover:px-3'
+      } ${props.class ?? ''}`}
+    >
+      <Show when={props.reconnecting()}>
+        <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+          <circle
+            class="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            stroke-width="4"
+          ></circle>
+          <path
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          ></path>
+        </svg>
+      </Show>
+      <Show when={props.connected()}>
+        <span class="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-400 flex-shrink-0"></span>
+      </Show>
+      <Show when={!props.connected() && !props.reconnecting()}>
+        <span class="h-2.5 w-2.5 rounded-full bg-gray-600 dark:bg-gray-400 flex-shrink-0"></span>
+      </Show>
+      <span
+        class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${
+          props.connected() || (!props.connected() && !props.reconnecting())
+            ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
+            : 'max-w-[100px] ml-1 opacity-100'
+        }`}
+      >
+        {props.connected()
+          ? 'Connected'
+          : props.reconnecting()
+            ? 'Reconnecting...'
+            : 'Disconnected'}
+      </span>
+    </div>
   );
 }
 
@@ -844,85 +940,47 @@ function AppLayout(props: {
   return (
     <div class="pulse-shell">
       {/* Header */}
-      <div class="header mb-3 flex flex-col gap-3 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0">
-        <div class="flex items-center gap-2 sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 256 256"
-            xmlns="http://www.w3.org/2000/svg"
-            class={`pulse-logo ${props.connected() && props.dataUpdated() ? 'animate-pulse-logo' : ''}`}
-          >
-            <title>Pulse Logo</title>
-            <circle
-              class="pulse-bg fill-blue-600 dark:fill-blue-500"
-              cx="128"
-              cy="128"
-              r="122"
-            />
-            <circle
-              class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
-              cx="128"
-              cy="128"
-              r="84"
-            />
-            <circle
-              class="pulse-center fill-white dark:fill-[#dbeafe]"
-              cx="128"
-              cy="128"
-              r="26"
-            />
-          </svg>
-          <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
-          <Show when={props.versionInfo()?.channel === 'rc'}>
-            <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
-              RC
-            </span>
-          </Show>
-        </div>
-        <div class="header-controls flex w-full flex-wrap items-center gap-3 justify-start sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end">
-          <div class="flex w-full flex-wrap items-center gap-2 justify-start sm:w-auto sm:justify-end">
-            <div
-              class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
-                props.connected()
-                  ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
-                  : props.reconnecting()
-                    ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
-                    : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-6 h-6 group-hover:px-3'
-              }`}
+      <div class="header mb-3 flex flex-wrap items-center gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0">
+        <div class="flex flex-1 items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
+          <div class="flex items-center gap-2">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 256 256"
+              xmlns="http://www.w3.org/2000/svg"
+              class={`pulse-logo ${props.connected() && props.dataUpdated() ? 'animate-pulse-logo' : ''}`}
             >
-              <Show when={props.reconnecting()}>
-                <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  ></circle>
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              </Show>
-              <Show when={props.connected()}>
-                <span class="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-400 flex-shrink-0"></span>
-              </Show>
-              <Show when={!props.connected() && !props.reconnecting()}>
-                <span class="h-2.5 w-2.5 rounded-full bg-gray-600 dark:bg-gray-400 flex-shrink-0"></span>
-              </Show>
-              <span class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${props.connected() || (!props.connected() && !props.reconnecting()) ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100' : 'max-w-[100px] ml-1 opacity-100'}`}>
-                {props.connected()
-                  ? 'Connected'
-                  : props.reconnecting()
-                    ? 'Reconnecting...'
-                    : 'Disconnected'}
+              <title>Pulse Logo</title>
+              <circle
+                class="pulse-bg fill-blue-600 dark:fill-blue-500"
+                cx="128"
+                cy="128"
+                r="122"
+              />
+              <circle
+                class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
+                cx="128"
+                cy="128"
+                r="84"
+              />
+              <circle
+                class="pulse-center fill-white dark:fill-[#dbeafe]"
+                cx="128"
+                cy="128"
+                r="26"
+              />
+            </svg>
+            <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
+            <Show when={props.versionInfo()?.channel === 'rc'}>
+              <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
+                RC
               </span>
-            </div>
-            <Show when={props.hasAuth() && !props.needsAuth()}>
+            </Show>
+          </div>
+        </div>
+        <div class="header-controls flex w-full flex-wrap items-center gap-2 justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end">
+          <Show when={props.hasAuth() && !props.needsAuth()}>
+            <div class="flex items-center gap-2">
               <Show when={props.proxyAuthInfo()?.username}>
                 <span class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400">
                   {props.proxyAuthInfo()?.username}
@@ -955,8 +1013,13 @@ function AppLayout(props: {
                   Logout
                 </span>
               </button>
-            </Show>
-          </div>
+            </div>
+          </Show>
+          <ConnectionStatusBadge
+            connected={props.connected}
+            reconnecting={props.reconnecting}
+            class="flex-shrink-0"
+          />
         </div>
       </div>
 

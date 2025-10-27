@@ -186,7 +186,7 @@ func min(a, b int) int {
 
 // CheckAuth checks both basic auth and API token
 func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool {
-	// Check proxy auth first if configured (even if DISABLE_AUTH is true)
+	// Check proxy auth first if configured
 	if cfg.ProxyAuthSecret != "" {
 		if valid, username, _ := CheckProxyAuth(cfg, r); valid {
 			// Set username in response header for frontend
@@ -198,7 +198,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 	}
 
-	// Check for OIDC session cookie (even if DISABLE_AUTH is true)
+	// Check for OIDC session cookie
 	if cfg.OIDC != nil && cfg.OIDC.Enabled {
 		if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 			if ValidateSession(cookie.Value) {
@@ -210,13 +210,6 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				}
 			}
 		}
-	}
-
-	// If auth is explicitly disabled, allow all access
-	// (but only after checking proxy and OIDC auth above)
-	if cfg.DisableAuth {
-		w.Header().Set("X-Auth-Disabled", "true")
-		return true
 	}
 
 	// If no auth is configured at all, allow access unless OIDC is enabled

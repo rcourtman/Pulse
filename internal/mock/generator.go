@@ -1036,13 +1036,17 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			containers[idx].CPUPercent = clampFloat(containers[idx].CPUPercent+35, 5, 190)
 		}
 
+		// Determine initial status - only mark last host as offline for testing
 		status := "online"
+		explicitlyOffline := false
 		if hostCount > 2 && i == hostCount-1 {
 			status = "offline"
+			explicitlyOffline = true
 		}
 
 		lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
-		if status == "offline" {
+		if explicitlyOffline {
+			// If host is explicitly offline, stop all containers and update metrics
 			lastSeen = now.Add(-time.Duration(5+rand.Intn(20)) * time.Minute)
 			for idx := range containers {
 				exitCode := containers[idx].ExitCode
@@ -1060,9 +1064,8 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 				containers[idx].FinishedAt = &finished
 				containers[idx].Status = fmt.Sprintf("Exited (%d) %s ago", exitCode, formatDurationForStatus(now.Sub(finished)))
 			}
-		}
-
-		if status != "offline" {
+		} else {
+			// For hosts not explicitly offline, calculate status based on container health
 			running := 0
 			unhealthy := 0
 			for _, ct := range containers {
@@ -1075,15 +1078,17 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 				}
 			}
 
-			if running == 0 {
+			// Only mark as offline if there are containers but none are running
+			// (Swarm-only hosts with no standalone containers should stay online)
+			if len(containers) > 0 && running == 0 {
 				status = "offline"
 				lastSeen = now.Add(-time.Duration(3+rand.Intn(5)) * time.Minute)
-			} else if unhealthy > 0 || float64(len(containers)-running)/float64(len(containers)) > 0.35 {
+			} else if unhealthy > 0 || (len(containers) > 0 && float64(len(containers)-running)/float64(len(containers)) > 0.35) {
 				status = "degraded"
 				if lastSeen.After(now.Add(-30 * time.Second)) {
 					lastSeen = now.Add(-35 * time.Second)
 				}
-			} else if status != "offline" {
+			} else {
 				status = "online"
 			}
 		}
@@ -3677,6 +3682,12 @@ func generateDockerServicesAndTasks(hostname string, containers []models.DockerC
 				currentState = []string{"failed", "shutdown", "pending", "starting"}[rand.Intn(4)]
 			}
 
+			// Create a unique container name for each task
+			taskContainerName := container.Name
+			if slots > 1 {
+				taskContainerName = fmt.Sprintf("%s.%d", container.Name, slot+1)
+			}
+
 			taskID := fmt.Sprintf("%s-task-%d", serviceID, slot)
 			task := models.DockerTask{
 				ID:            taskID,
@@ -3687,26 +3698,30 @@ func generateDockerServicesAndTasks(hostname string, containers []models.DockerC
 				NodeName:      hostname,
 				DesiredState:  "running",
 				CurrentState:  currentState,
-				ContainerID:   container.ID,
-				ContainerName: container.Name,
+				ContainerID:   fmt.Sprintf("%s-%d", container.ID, slot),
+				ContainerName: taskContainerName,
 				CreatedAt:     now.Add(-time.Duration(rand.Intn(48)) * time.Hour),
 			}
 
-			if container.StartedAt != nil {
+			// Set varied start times for each task (not all identical)
+			if currentState == "running" {
+				startTime := now.Add(-time.Duration(30+rand.Intn(3600*24)) * time.Second)
+				task.StartedAt = &startTime
+			} else if container.StartedAt != nil && (currentState == "failed" || currentState == "shutdown") {
 				started := *container.StartedAt
 				task.StartedAt = &started
-			}
-			if container.FinishedAt != nil {
-				finished := *container.FinishedAt
-				task.CompletedAt = &finished
-			}
-			if currentState == "running" {
-				task.StartedAt = ptrTime(now.Add(-time.Duration(30+rand.Intn(3600)) * time.Second))
 			}
 
 			if currentState == "failed" || currentState == "shutdown" {
 				task.Error = "container exit"
 				task.Message = "Replica exited unexpectedly"
+				if container.FinishedAt != nil {
+					finished := *container.FinishedAt
+					task.CompletedAt = &finished
+				} else {
+					completedTime := now.Add(-time.Duration(rand.Intn(3600)) * time.Second)
+					task.CompletedAt = &completedTime
+				}
 			}
 
 			agg.tasks = append(agg.tasks, task)

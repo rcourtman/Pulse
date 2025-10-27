@@ -42,7 +42,6 @@ API_TOKEN=abc123...                  # Optional: seed a primary API token (auto-
 API_TOKENS=token-one,token-two       # Optional: comma-separated list of API tokens
 
 # Security settings
-DISABLE_AUTH=true                    # Disable authentication entirely
 PULSE_AUDIT_LOG=true                # Enable security audit logging
 
 # Proxy/SSO Authentication (see docs/PROXY_AUTH.md for full details)
@@ -63,6 +62,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - Changes to this file are applied immediately without restart (v4.3.9+)
 - **DO NOT** put port configuration here - use system.json or systemd overrides
 - Copy `.env.example` from the repository for a ready-to-edit template
+- Locked out? Create `<data-path>/.auth_recovery`, restart Pulse, and sign in from localhost to reset credentials. Remove the file afterwards.
 
 ---
 
@@ -397,7 +397,8 @@ These should be set in the .env file for security:
 - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS` - Basic authentication
 - `API_TOKEN` - Primary API token (auto-hashed if you supply the raw value)
 - `API_TOKENS` - Comma-separated list of additional API tokens (plain or SHA3-256 hashed)
-- `DISABLE_AUTH` - Set to `true` to disable authentication entirely
+
+> Locked out? Create `<data-path>/.auth_recovery`, restart Pulse, and sign in from localhost. Delete the flag file and restart again to restore normal authentication.
 
 #### OIDC Variables (optional overrides)
 Set these environment variables to manage single sign-on without using the UI. When present, the OIDC form is locked read-only.

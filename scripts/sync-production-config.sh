@@ -18,8 +18,10 @@ echo "  Source: $PROD_DIR"
 echo "  Target: $DEV_DIR"
 echo ""
 
-# CRITICAL: Always sync production encryption key to dev
-# This ensures dev can decrypt production's encrypted config files
+# Track whether we have the production encryption key available
+HAVE_PROD_KEY=false
+
+# CRITICAL: Always sync production encryption key to dev when it exists
 if [ -f "$PROD_DIR/.encryption.key" ]; then
     if [ ! -f "$DEV_DIR/.encryption.key" ]; then
         cp -f "$PROD_DIR/.encryption.key" "$DEV_DIR/.encryption.key"
@@ -37,10 +39,25 @@ if [ -f "$PROD_DIR/.encryption.key" ]; then
             echo "✓ Dev encryption key matches production"
         fi
     fi
+    HAVE_PROD_KEY=true
+else
+    echo "⚠ Production encryption key not found. Using dev-only key."
+    if [ ! -f "$DEV_DIR/.encryption.key" ]; then
+        # Generate a dev-only encryption key so backend can start
+        openssl rand -hex 32 > "$DEV_DIR/.encryption.key"
+        chmod 600 "$DEV_DIR/.encryption.key"
+        echo "✓ Generated dev encryption key at $DEV_DIR/.encryption.key"
+    else
+        echo "✓ Reusing existing dev encryption key"
+    fi
+    # Remove encrypted artifacts that rely on the missing production key
+    find "$DEV_DIR" -maxdepth 1 -type f -name 'nodes.enc*' -exec rm -f {} \;
+    rm -f "$DEV_DIR/email.enc" "$DEV_DIR/webhooks.enc"
+    echo "✓ Cleared encrypted production artifacts from dev config"
 fi
 
 # Copy nodes configuration - WITH VALIDATION
-if [ -f "$PROD_DIR/nodes.enc" ]; then
+if [ "$HAVE_PROD_KEY" = true ] && [ -f "$PROD_DIR/nodes.enc" ]; then
     # Check if production nodes.enc is valid (not corrupted)
     # Only sync if destination doesn't exist OR production file is newer OR dev copy is corrupted
     SHOULD_SYNC=false
@@ -84,6 +101,11 @@ elif [ -f "$PROD_DIR/nodes.json" ]; then
     echo "✓ Synced nodes configuration (unencrypted)"
 fi
 
+# If we had to clear encrypted nodes, ensure we start from a clean slate
+if [ "$HAVE_PROD_KEY" = false ]; then
+    rm -f "$DEV_DIR/nodes.json"
+fi
+
 # Copy system settings (but keep dev-specific log level)
 if [ -f "$PROD_DIR/system.json" ]; then
     cp -f "$PROD_DIR/system.json" "$DEV_DIR/system.json"
@@ -96,15 +118,15 @@ if [ -f "$PROD_DIR/guest_metadata.json" ]; then
     echo "✓ Synced guest metadata"
 fi
 
-# Copy email config if it exists
-if [ -f "$PROD_DIR/email.enc" ]; then
+# Copy email config if it exists and we have the key
+if [ "$HAVE_PROD_KEY" = true ] && [ -f "$PROD_DIR/email.enc" ]; then
     cp -f "$PROD_DIR/email.enc" "$DEV_DIR/email.enc"
     chmod 600 "$DEV_DIR/email.enc"
     echo "✓ Synced email configuration"
 fi
 
-# Copy webhook config if it exists
-if [ -f "$PROD_DIR/webhooks.enc" ]; then
+# Copy webhook config if it exists and we have the key
+if [ "$HAVE_PROD_KEY" = true ] && [ -f "$PROD_DIR/webhooks.enc" ]; then
     cp -f "$PROD_DIR/webhooks.enc" "$DEV_DIR/webhooks.enc"
     chmod 600 "$DEV_DIR/webhooks.enc"
     echo "✓ Synced webhook configuration"

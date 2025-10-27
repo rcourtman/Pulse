@@ -115,7 +115,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
 
   return (
     <Card padding="none" class="mb-4 overflow-hidden">
-      <ScrollableTable minWidth="720px">
+      <ScrollableTable minWidth="720px" persistKey="docker-host-summary">
         <table class="w-full border-collapse">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">

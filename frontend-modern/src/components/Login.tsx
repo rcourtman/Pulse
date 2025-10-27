@@ -17,6 +17,10 @@ interface SecurityStatus {
   oidcIssuer?: string;
   oidcClientId?: string;
   oidcEnvOverrides?: Record<string, boolean>;
+  disabled?: boolean;
+  deprecatedDisableAuth?: boolean;
+  message?: string;
+  apiTokenConfigured?: boolean;
 }
 
 export const Login: Component<LoginProps> = (props) => {
@@ -261,6 +265,10 @@ export const Login: Component<LoginProps> = (props) => {
   // Debug logging
   console.log('[Login] Render - loadingAuth:', loadingAuth(), 'authStatus:', authStatus());
 
+  const legacyDisableAuth = () => authStatus()?.deprecatedDisableAuth === true;
+  const showFirstRunSetup = () =>
+    authStatus()?.hasAuthentication === false || legacyDisableAuth();
+
   return (
     <Show
       when={!loadingAuth()}
@@ -274,7 +282,7 @@ export const Login: Component<LoginProps> = (props) => {
       }
     >
       <Show
-        when={authStatus()?.hasAuthentication === false}
+        when={showFirstRunSetup()}
         fallback={
           <LoginForm
             {...{
@@ -304,7 +312,10 @@ export const Login: Component<LoginProps> = (props) => {
             </div>
           }
         >
-          <FirstRunSetup />
+          <FirstRunSetup
+            force={legacyDisableAuth()}
+            showLegacyBanner={legacyDisableAuth()}
+          />
         </Suspense>
       </Show>
     </Show>

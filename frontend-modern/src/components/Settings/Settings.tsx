@@ -687,6 +687,7 @@ const Settings: Component<SettingsProps> = (props) => {
     null,
   );
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
+  const authDisabledByEnv = createMemo(() => Boolean(securityStatus()?.deprecatedDisableAuth));
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
 
   const formatRelativeTime = (timestamp?: number) => {
@@ -972,6 +973,12 @@ const Settings: Component<SettingsProps> = (props) => {
       setSecurityStatusLoading(false);
     }
   };
+
+  createEffect(() => {
+    if (authDisabledByEnv() && showQuickSecuritySetup()) {
+      setShowQuickSecuritySetup(false);
+    }
+  });
 
   const updateDiscoveredNodesFromServers = (
     servers: RawDiscoveredServer[] | undefined | null,
@@ -4228,23 +4235,45 @@ const Settings: Component<SettingsProps> = (props) => {
                           </svg>
                         </div>
                         <SectionHeader title="Authentication disabled" size="sm" class="flex-1" />
-                        <button
-                          type="button"
-                          onClick={() => setShowQuickSecuritySetup(!showQuickSecuritySetup())}
-                          class="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
+                        <Show
+                          when={!authDisabledByEnv()}
+                          fallback={
+                            <span class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 text-amber-800 bg-amber-100/60 dark:border-amber-700 dark:text-amber-100 dark:bg-amber-900/40 whitespace-nowrap">
+                              Controlled by DISABLE_AUTH
+                            </span>
+                          }
                         >
-                          Setup
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickSecuritySetup(!showQuickSecuritySetup())}
+                            class="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
+                          >
+                            Setup
+                          </button>
+                        </Show>
                       </div>
                     </div>
 
                     {/* Content */}
                     <div class="p-6">
                       <p class="text-sm text-amber-700 dark:text-amber-300 mb-4">
-                        DISABLE_AUTH is set, or auth isn't configured yet. Set up password authentication to protect your Pulse instance.
+                        <Show
+                          when={authDisabledByEnv()}
+                          fallback={
+                            <>
+                              Authentication is currently disabled. Set up password authentication to protect your Pulse instance.
+                            </>
+                          }
+                        >
+                          Authentication settings are locked by the legacy{' '}
+                          <code class="font-mono text-xs text-amber-800 dark:text-amber-200">
+                            DISABLE_AUTH
+                          </code>{' '}
+                          environment variable. Remove it from your deployment and restart Pulse before enabling security from this page.
+                        </Show>
                       </p>
 
-                      <Show when={showQuickSecuritySetup()}>
+                      <Show when={showQuickSecuritySetup() && !authDisabledByEnv()}>
                         <QuickSecuritySetup
                           onConfigured={() => {
                             setShowQuickSecuritySetup(false);
@@ -4297,13 +4326,22 @@ const Settings: Component<SettingsProps> = (props) => {
                         >
                           Change password
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowQuickSecurityWizard(!showQuickSecurityWizard())}
-                          class="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        <Show
+                          when={!authDisabledByEnv()}
+                          fallback={
+                            <span class="px-4 py-2 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 rounded-lg">
+                              Remove DISABLE_AUTH to rotate credentials
+                            </span>
+                          }
                         >
-                          Rotate credentials
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickSecurityWizard(!showQuickSecurityWizard())}
+                            class="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            Rotate credentials
+                          </button>
+                        </Show>
                         <div class="flex-1"></div>
                         <div class="text-xs text-gray-600 dark:text-gray-400">
                           <span class="font-medium text-gray-800 dark:text-gray-200">User:</span>{' '}
@@ -4311,7 +4349,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         </div>
                       </div>
 
-                      <Show when={showQuickSecurityWizard()}>
+                      <Show when={!authDisabledByEnv() && showQuickSecurityWizard()}>
                         <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                           <QuickSecuritySetup
                             mode="rotate"

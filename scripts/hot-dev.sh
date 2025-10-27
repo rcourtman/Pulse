@@ -182,8 +182,23 @@ if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
     mkdir -p "$PULSE_DATA_DIR"
     echo "[hot-dev] Mock mode: Using isolated data directory: ${PULSE_DATA_DIR}"
 else
-    export PULSE_DATA_DIR=/etc/pulse
-    echo "[hot-dev] Production mode: Using production config: ${PULSE_DATA_DIR}"
+    DEV_CONFIG_DIR="${ROOT_DIR}/tmp/dev-config"
+    mkdir -p "$DEV_CONFIG_DIR"
+    export PULSE_DATA_DIR="${DEV_CONFIG_DIR}"
+
+    DEV_KEY_FILE="${DEV_CONFIG_DIR}/.encryption.key"
+    if [[ ! -f "${DEV_KEY_FILE}" ]]; then
+        openssl rand -hex 32 > "${DEV_KEY_FILE}"
+        chmod 600 "${DEV_KEY_FILE}"
+        echo "[hot-dev] Generated dev encryption key at ${DEV_KEY_FILE}"
+    fi
+
+    # Only set the encryption key if the user hasn't provided one explicitly
+    if [[ -z ${PULSE_ENCRYPTION_KEY:-} ]]; then
+        export PULSE_ENCRYPTION_KEY="$(<"${DEV_KEY_FILE}")"
+    fi
+
+    echo "[hot-dev] Production mode: Using dev config directory: ${PULSE_DATA_DIR}"
 fi
 
 ./pulse &

@@ -207,10 +207,10 @@ export interface DockerTask {
   message?: string;
   containerId?: string;
   containerName?: string;
-  createdAt?: number;
-  updatedAt?: number;
-  startedAt?: number;
-  completedAt?: number;
+  createdAt?: number | string; // Unix timestamp or ISO string
+  updatedAt?: number | string; // Unix timestamp or ISO string
+  startedAt?: number | string; // Unix timestamp or ISO string
+  completedAt?: number | string; // Unix timestamp or ISO string
 }
 
 export interface DockerSwarmInfo {
