@@ -940,8 +940,8 @@ function AppLayout(props: {
   return (
     <div class="pulse-shell">
       {/* Header */}
-      <div class="header mb-3 flex flex-wrap items-center gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0">
-        <div class="flex flex-1 items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
+      <div class="header mb-3 flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0">
+        <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
           <div class="flex items-center gap-2">
             <svg
               width="20"
@@ -978,7 +978,7 @@ function AppLayout(props: {
             </Show>
           </div>
         </div>
-        <div class="header-controls flex w-full flex-wrap items-center gap-2 justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end">
+        <div class="header-controls flex items-center gap-2 justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end">
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
               <Show when={props.proxyAuthInfo()?.username}>
