@@ -83,6 +83,10 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 
+		if r.config.DisableAuthEnvDetected {
+			setupRequest.Force = true
+		}
+
 		if r.config.AuthUser != "" && r.config.AuthPass != "" && !setupRequest.Force {
 			log.Info().Msg("Security setup skipped - password auth already configured")
 			response := map[string]interface{}{
@@ -367,10 +371,8 @@ PULSE_AUDIT_LOG=true
 
 // HandleRegenerateAPIToken generates a new API token and updates the .env file
 func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Request) {
-	// Only require authentication if auth is already configured AND not disabled
-	// This allows users to set up API-only access without password auth
-	// When auth is disabled, allow API token generation for API-only access
-	if !r.config.DisableAuth && (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
+	// Require authentication when password auth is configured
+	if (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
 		return
 	}
 
@@ -522,7 +524,7 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 
 	// Require authentication to prevent unauthenticated token guessing oracle
 	// Use same auth logic as regenerate-token endpoint
-	if !r.config.DisableAuth && (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
+	if (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
 		return
 	}
 

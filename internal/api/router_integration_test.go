@@ -48,7 +48,6 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		BackendPort:       7655,
 		ConfigPath:        tmpDir,
 		DataPath:          tmpDir,
-		DisableAuth:       true,
 		DemoMode:          false,
 		AllowedOrigins:    "*",
 		ConcurrentPolling: true,
@@ -205,7 +204,6 @@ func TestProtectedEndpointsRequireAuthentication(t *testing.T) {
 	}
 
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
-		cfg.DisableAuth = false
 		cfg.AuthUser = "admin"
 		cfg.AuthPass = passwordHash
 	})
@@ -252,7 +250,6 @@ func TestAPIOnlyModeRequiresToken(t *testing.T) {
 	}
 
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
-		cfg.DisableAuth = false
 		cfg.AuthUser = ""
 		cfg.AuthPass = ""
 		cfg.APITokenEnabled = true
@@ -352,33 +349,6 @@ func TestConfigNodesUsesMockTopology(t *testing.T) {
 	}
 }
 
-func TestSecurityStatusReflectsDisableAuth(t *testing.T) {
-	srv := newIntegrationServer(t)
-
-	res, err := http.Get(srv.server.URL + "/api/security/status")
-	if err != nil {
-		t.Fatalf("security status request failed: %v", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected status: got %d want %d", res.StatusCode, http.StatusOK)
-	}
-
-	var payload map[string]any
-	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode security status response: %v", err)
-	}
-
-	disabled, ok := payload["disabled"].(bool)
-	if !ok {
-		t.Fatalf("security status response missing disabled flag")
-	}
-	if !disabled {
-		t.Fatalf("expected authentication disabled flag to be true")
-	}
-}
-
 func TestMockModeToggleEndpoint(t *testing.T) {
 	srv := newIntegrationServer(t)
 
@@ -432,7 +402,6 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 	const apiToken = "test-token"
 
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
-		cfg.DisableAuth = false
 		cfg.APITokenEnabled = true
 		record, err := config.NewAPITokenRecord(apiToken, "Integration test token", nil)
 		if err != nil {
@@ -606,7 +575,6 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 
 func TestSessionCookieAllowsAuthenticatedAccess(t *testing.T) {
 	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
-		cfg.DisableAuth = false
 		cfg.APITokenEnabled = false
 		hashedPass, err := internalauth.HashPassword("super-secure-pass")
 		if err != nil {

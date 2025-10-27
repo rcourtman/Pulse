@@ -110,15 +110,15 @@ type Config struct {
 	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
-	APIToken             string           `envconfig:"API_TOKEN"`
-	APITokenEnabled      bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
-	APITokens            []APITokenRecord `json:"-"`
-	AuthUser             string           `envconfig:"PULSE_AUTH_USER"`
-	AuthPass             string           `envconfig:"PULSE_AUTH_PASS"`
-	DisableAuth          bool             `envconfig:"DISABLE_AUTH" default:"false"`
-	DemoMode             bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
-	AllowedOrigins       string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
-	IframeEmbeddingAllow string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
+	APIToken               string           `envconfig:"API_TOKEN"`
+	APITokenEnabled        bool             `envconfig:"API_TOKEN_ENABLED" default:"false"`
+	APITokens              []APITokenRecord `json:"-"`
+	AuthUser               string           `envconfig:"PULSE_AUTH_USER"`
+	AuthPass               string           `envconfig:"PULSE_AUTH_PASS"`
+	DisableAuthEnvDetected bool             `json:"-"`
+	DemoMode               bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
+	AllowedOrigins         string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
+	IframeEmbeddingAllow   string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -878,17 +878,20 @@ func Load() (*Config, error) {
 			log.Info().Msg("Migrated legacy API token into token record store")
 		}
 	}
-	// Check if auth is disabled
-	disableAuthEnv := os.Getenv("DISABLE_AUTH")
-	log.Debug().Str("DISABLE_AUTH_ENV", disableAuthEnv).Msg("Checking DISABLE_AUTH environment variable")
-	if disableAuthEnv != "" {
-		cfg.DisableAuth = disableAuthEnv == "true" || disableAuthEnv == "1"
-		log.Debug().Bool("DisableAuth", cfg.DisableAuth).Msg("DisableAuth set from environment")
-		if cfg.DisableAuth {
-			log.Warn().Msg("⚠️  AUTHENTICATION DISABLED - Pulse is running without authentication!")
+	// Detect deprecated DISABLE_AUTH flag and strip it from the runtime env so downstream
+	// components behave as if it were never set.
+	if disableAuthEnv := os.Getenv("DISABLE_AUTH"); disableAuthEnv != "" {
+		cfg.DisableAuthEnvDetected = true
+		if err := os.Unsetenv("DISABLE_AUTH"); err != nil {
+			log.Warn().
+				Str("DISABLE_AUTH", disableAuthEnv).
+				Err(err).
+				Msg("Failed to remove legacy DISABLE_AUTH environment variable; continuing with authentication enabled")
+		} else {
+			log.Warn().
+				Str("DISABLE_AUTH", disableAuthEnv).
+				Msg("Removed legacy DISABLE_AUTH environment variable. Authentication remains enabled.")
 		}
-	} else {
-		log.Debug().Bool("DisableAuth", cfg.DisableAuth).Msg("DISABLE_AUTH not set, DisableAuth remains")
 	}
 
 	// Check if demo mode is enabled

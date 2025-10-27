@@ -113,6 +113,9 @@ export interface SecurityStatus {
   proxyAuthLogoutURL?: string;
   authUsername?: string;
   authLastModified?: string;
+  disabled?: boolean; // legacy field (removed backend support)
+  deprecatedDisableAuth?: boolean;
+  message?: string;
 }
 
 /**

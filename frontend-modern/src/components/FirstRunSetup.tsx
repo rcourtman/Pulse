@@ -8,7 +8,9 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTokenReveal } from '@/stores/tokenReveal';
 import type { APITokenRecord } from '@/api/security';
 
-export const FirstRunSetup: Component = () => {
+export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: boolean }> = (
+  props,
+) => {
   const [username, setUsername] = createSignal('admin');
   const [password, setPassword] = createSignal('');
   const [confirmPassword, setConfirmPassword] = createSignal('');
@@ -110,6 +112,7 @@ export const FirstRunSetup: Component = () => {
           username: username(),
           password: finalPassword,
           apiToken: token,
+          force: props.force ?? false,
         }),
       });
 
@@ -214,6 +217,20 @@ IMPORTANT: Keep these credentials secure!
   return (
     <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div class="w-full max-w-2xl">
+        <Show when={props.showLegacyBanner}>
+          <div class="mb-6 rounded-xl border border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-900/40 p-4 text-amber-900 dark:text-amber-100">
+            <h2 class="text-lg font-semibold mb-2">Authentication forced off via environment</h2>
+            <p class="text-sm mb-3">
+              Pulse detected the legacy <code class="font-mono text-xs">DISABLE_AUTH</code> flag. Complete the
+              setup below to rotate credentials, then remove the environment variable and restart Pulse.
+            </p>
+            <p class="text-xs text-amber-700 dark:text-amber-200">
+              If you still need a temporary bypass after rotating, create <code class="font-mono text-xs">.auth_recovery</code>
+              in the Pulse data directory and restart. Remove the file and restart again once you regain access.
+            </p>
+          </div>
+        </Show>
+
         {/* Logo/Header */}
         <div class="text-center mb-8">
           <div class="flex items-center justify-center gap-2 mb-4">

@@ -13,20 +13,9 @@ Pulse uses WebSockets for real-time updates. Your reverse proxy **MUST** support
 
 ## Authentication with Reverse Proxy
 
-If you're using authentication at the reverse proxy level (Authentik, Authelia, etc.), you can disable Pulse's built-in authentication to avoid double login prompts:
+Pulse always enforces its own authentication. If you want to delegate sign-in to your reverse proxy (Authentik, Authelia, etc.), configure Pulse's **Proxy Authentication** integration under *Settings → Security*. That lets Pulse trust the authenticated user provided by the proxy while keeping per-user roles, API tokens, and audit logging intact.
 
-```bash
-# In your .env file or environment
-DISABLE_AUTH=true
-```
-
-When `DISABLE_AUTH=true` is set:
-- Pulse's built-in authentication is completely bypassed
-- All endpoints become accessible without authentication
-- The reverse proxy handles all authentication and authorization
-- A warning is logged on startup to confirm auth is disabled
-
-⚠️ **Warning**: Only use `DISABLE_AUTH=true` if your reverse proxy provides authentication. Never expose Pulse directly to the internet with authentication disabled.
+> **Note:** The legacy `DISABLE_AUTH` environment variable has been removed. If it still exists in your deployment, Pulse will log a warning at startup and ignore it. Remove the variable and restart Pulse to silence the warning.
 
 ## Nginx
 

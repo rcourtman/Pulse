@@ -45,7 +45,7 @@ OIDC is optional. Pulse continues to ship with the familiar username/password fl
 
 - First-run setup still prompts you to create an admin credential or you can pre-seed it via `PULSE_AUTH_USER` / `PULSE_AUTH_PASS`.
 - If OIDC is **enabled**, the login page shows both the password form and the **Continue with Single Sign-On** button. Either path issues the same session cookie (`pulse_session`).
-- To run **password-only**, leave OIDC disabled (the default). To go **OIDC-only**, set `DISABLE_AUTH=true` after you confirm SSO works.
+- To run **password-only**, leave OIDC disabled (the default). For an **OIDC-first** experience, enable OIDC and rotate the local admin password to a randomly generated value; Pulse always keeps the password form available for emergency access.
 - The `allowedGroups`, `allowedDomains`, and `allowedEmails` settings only affect OIDC logins; password authentication continues to honour the account you created locally.
 
 ## Provider Cheat-Sheet

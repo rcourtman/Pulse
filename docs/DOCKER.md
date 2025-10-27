@@ -317,8 +317,9 @@ docker run -d --name pulse \
 | `PULSE_AUTH_PASS` | Admin password (plain text auto-hashed or bcrypt hash) | `super-secret-password` or `$2a$12$...` |
 | `API_TOKEN` | Legacy single API token (optional fallback) | `openssl rand -hex 24` |
 | `API_TOKENS` | Comma-separated list of API tokens (plain or SHA3-256 hashed) | `ansible-token,docker-agent-token` |
-| `DISABLE_AUTH` | Disable authentication entirely | `false` |
 | `PULSE_AUDIT_LOG` | Enable security audit logging | `false` |
+
+> Locked out while testing a container? Create `/data/.auth_recovery`, restart the container, and connect from localhost to reset credentials. Remove the flag file and restart again to restore normal authentication.
 
 ### Network
 | Variable | Description | Default |

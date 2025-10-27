@@ -5,33 +5,51 @@ interface ScrollableTableProps {
   children: JSX.Element;
   class?: string;
   minWidth?: string;
+  persistKey?: string;
 }
+
+const scrollPositions = new Map<string, number>();
 
 export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
   const [showLeftFade, setShowLeftFade] = createSignal(false);
   const [showRightFade, setShowRightFade] = createSignal(false);
   let scrollContainer: HTMLDivElement | undefined;
 
-  const checkScroll = () => {
+  const checkScroll = (scrollLeftValue?: number) => {
     if (!scrollContainer) return;
 
-    const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
+    const scrollLeft = scrollLeftValue ?? scrollContainer.scrollLeft;
+    const { scrollWidth, clientWidth } = scrollContainer;
     setShowLeftFade(scrollLeft > 0);
     setShowRightFade(scrollLeft < scrollWidth - clientWidth - 1);
   };
 
   onMount(() => {
-    checkScroll();
-    window.addEventListener('resize', checkScroll);
+    const initialLeft = props.persistKey ? scrollPositions.get(props.persistKey) ?? 0 : 0;
+    if (scrollContainer) {
+      scrollContainer.scrollLeft = initialLeft;
+    }
+    checkScroll(initialLeft);
+
+    const resizeHandler = () => checkScroll();
+    window.addEventListener('resize', resizeHandler);
     onCleanup(() => {
-      window.removeEventListener('resize', checkScroll);
+      window.removeEventListener('resize', resizeHandler);
     });
   });
 
   createEffect(() => {
     if (scrollContainer) {
-      scrollContainer.addEventListener('scroll', checkScroll);
-      return () => scrollContainer?.removeEventListener('scroll', checkScroll);
+      const handler = () => {
+        if (!scrollContainer) return;
+        const left = scrollContainer.scrollLeft;
+        if (props.persistKey) {
+          scrollPositions.set(props.persistKey, left);
+        }
+        checkScroll(left);
+      };
+      scrollContainer.addEventListener('scroll', handler, { passive: true });
+      return () => scrollContainer?.removeEventListener('scroll', handler);
     }
   });
 
@@ -51,7 +69,9 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
         <style>{`
           .overflow-x-auto::-webkit-scrollbar { display: none; }
         `}</style>
-        <div style={{ 'min-width': props.minWidth || 'auto' }}>{props.children}</div>
+        <div style={{ 'min-width': props.minWidth || 'auto' }}>
+          {props.children}
+        </div>
       </div>
 
       {/* Right fade */}

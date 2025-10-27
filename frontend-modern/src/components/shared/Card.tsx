@@ -33,7 +33,7 @@ export function Card(props: CardProps) {
   );
   const [local, rest] = splitProps(merged, ['tone', 'padding', 'hoverable', 'border', 'class']);
 
-  const baseClass = 'rounded-lg shadow-sm transition-shadow duration-200';
+  const baseClass = 'rounded-lg shadow-sm transition-shadow duration-200 max-w-full';
   const toneClass = toneClassMap[local.tone];
   const paddingClass = paddingClassMap[local.padding];
   const borderClass = local.border ? 'border border-gray-200 dark:border-gray-700' : '';

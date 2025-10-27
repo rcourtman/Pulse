@@ -12,6 +12,8 @@ NC='\033[0m' # No Color
 MOCK_ENV_FILE="/opt/pulse/mock.env"
 ROOT_DIR="/opt/pulse"
 BACKEND_PORT=7656
+DEV_DATA_DIR="${ROOT_DIR}/tmp/dev-config"
+DEV_KEY_FILE="${DEV_DATA_DIR}/.encryption.key"
 
 # Create default mock.env if it doesn't exist
 if [ ! -f "$MOCK_ENV_FILE" ]; then
@@ -85,7 +87,15 @@ restart_backend() {
     if [ "$PULSE_MOCK_MODE" = "true" ]; then
         export PULSE_DATA_DIR=/opt/pulse/tmp/mock-data
     else
-        export PULSE_DATA_DIR=/etc/pulse
+        mkdir -p "$DEV_DATA_DIR"
+        export PULSE_DATA_DIR="$DEV_DATA_DIR"
+        if [ ! -f "$DEV_KEY_FILE" ]; then
+            openssl rand -hex 32 > "$DEV_KEY_FILE"
+            chmod 600 "$DEV_KEY_FILE"
+        fi
+        if [ -z "${PULSE_ENCRYPTION_KEY:-}" ]; then
+            export PULSE_ENCRYPTION_KEY="$(<"$DEV_KEY_FILE")"
+        fi
     fi
 
     export PORT=$BACKEND_PORT
@@ -116,8 +126,8 @@ show_status() {
 		echo "  Docker containers/host: ${PULSE_MOCK_DOCKER_CONTAINERS:-0}"
 		echo "  Data dir: ${PULSE_DATA_DIR:-/opt/pulse/tmp/mock-data}"
     else
-        echo -e "${BLUE}Mock Mode: DISABLED${NC} (using real Proxmox nodes)"
-		echo "  Data dir: /etc/pulse"
+        echo -e "${BLUE}Mock Mode: DISABLED${NC}"
+		echo "  Data dir: ${DEV_DATA_DIR}"
     fi
 }
 
@@ -152,7 +162,7 @@ disable_mock() {
     sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=false/' "$MOCK_ENV_FILE"
     touch "$MOCK_ENV_FILE"
     echo -e "${GREEN}✓ Mock mode disabled!${NC}"
-    echo "Using real Proxmox nodes"
+    echo "Using local dev configuration"
     echo ""
     restart_backend
 }

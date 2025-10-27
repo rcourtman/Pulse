@@ -294,47 +294,6 @@ func (r *Router) setupRoutes() {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
 
-			// Check if auth is globally disabled
-			if r.config.DisableAuth {
-				// Even with auth disabled, check for OIDC sessions
-				oidcCfg := r.ensureOIDCConfig()
-				oidcUsername := ""
-				if oidcCfg != nil && oidcCfg.Enabled {
-					if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
-						if ValidateSession(cookie.Value) {
-							oidcUsername = GetSessionUsername(cookie.Value)
-						}
-					}
-				}
-
-				// Even with auth disabled, report API token status for API access
-				apiTokenHint := r.config.PrimaryAPITokenHint()
-
-				response := map[string]interface{}{
-					"configured":         false,
-					"disabled":           true,
-					"message":            "Authentication is disabled via DISABLE_AUTH environment variable",
-					"apiTokenConfigured": r.config.HasAPITokens(),
-					"apiTokenHint":       apiTokenHint,
-					"hasAuthentication":  false,
-				}
-
-				// Add OIDC info if available
-				if oidcCfg != nil {
-					response["oidcEnabled"] = oidcCfg.Enabled
-					response["oidcIssuer"] = oidcCfg.IssuerURL
-					response["oidcClientId"] = oidcCfg.ClientID
-					response["oidcUsername"] = oidcUsername
-					response["oidcLogoutURL"] = oidcCfg.LogoutURL
-					if len(oidcCfg.EnvOverrides) > 0 {
-						response["oidcEnvOverrides"] = oidcCfg.EnvOverrides
-					}
-				}
-
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
 			// Check for basic auth configuration
 			// Check both environment variables and loaded config
 			oidcCfg := r.ensureOIDCConfig()
@@ -444,6 +403,11 @@ func (r *Router) setupRoutes() {
 				if len(oidcCfg.EnvOverrides) > 0 {
 					status["oidcEnvOverrides"] = oidcCfg.EnvOverrides
 				}
+			}
+
+			if r.config.DisableAuthEnvDetected {
+				status["deprecatedDisableAuth"] = true
+				status["message"] = "DISABLE_AUTH is deprecated and no longer disables authentication. Remove the environment variable and restart Pulse to manage authentication from the UI."
 			}
 
 			json.NewEncoder(w).Encode(status)
@@ -1172,31 +1136,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// Check if we need authentication
 		needsAuth := true
 
-		// Check if auth is globally disabled
-		// BUT still check for API tokens if provided (for API access when auth is disabled)
-		if r.config.DisableAuth {
-			// Check if an API token was provided
-			providedToken := req.Header.Get("X-API-Token")
-			if providedToken == "" {
-				providedToken = req.URL.Query().Get("token")
-			}
-
-			// If a valid API token is provided, allow access even with DisableAuth
-			if providedToken != "" && r.config.HasAPITokens() {
-				if _, ok := r.config.ValidateAPIToken(providedToken); ok {
-					needsAuth = false
-					w.Header().Set("X-Auth-Method", "api-token")
-				} else {
-					http.Error(w, "Invalid API token", http.StatusUnauthorized)
-					return
-				}
-			} else {
-				// No API token provided with DisableAuth - allow open access
-				needsAuth = false
-				w.Header().Set("X-Auth-Disabled", "true")
-			}
-		}
-
 		// Recovery mechanism: Check if recovery mode is enabled
 		recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
 		if _, err := os.Stat(recoveryFile); err == nil {
@@ -1336,10 +1275,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// CSRF is only needed when using session-based auth
 		// Only skip CSRF for initial setup when no auth is configured
 		skipCSRF := false
-		if (req.URL.Path == "/api/security/quick-setup" || req.URL.Path == "/api/security/apply-restart") &&
-			r.config.AuthUser == "" && r.config.AuthPass == "" {
-			// Only skip CSRF for initial setup and restart when no auth exists
-			skipCSRF = true
+		if req.URL.Path == "/api/security/quick-setup" || req.URL.Path == "/api/security/apply-restart" {
+			if (r.config.AuthUser == "" && r.config.AuthPass == "") || r.config.DisableAuthEnvDetected {
+				// Allow bootstrap or legacy recovery runs without CSRF token
+				skipCSRF = true
+			}
 		}
 		// Skip CSRF for setup-script-url endpoint (generates temporary tokens, not a state change)
 		if req.URL.Path == "/api/setup-script-url" {
@@ -2272,7 +2212,7 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 
 	log.Debug().Msg("[DEBUG] handleState: Before auth check")
 	// Use standard auth check (supports both basic auth and API tokens) unless auth is disabled
-	if !r.config.DisableAuth && !CheckAuth(r.config, w, req) {
+	if !CheckAuth(r.config, w, req) {
 		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 			"Authentication required", nil)
 		return

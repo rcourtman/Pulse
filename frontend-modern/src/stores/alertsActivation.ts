@@ -136,7 +136,3 @@ export const useAlertsActivation = () => ({
   deactivate,
   snooze,
 });
-
-// Initialize on module load
-refreshConfig();
-refreshActiveAlerts();
