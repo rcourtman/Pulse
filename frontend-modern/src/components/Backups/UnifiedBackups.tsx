@@ -1493,7 +1493,7 @@ const UnifiedBackups: Component = () => {
                 </div>
               </div>
             </div>
-            <div class="relative min-h-[14rem] sm:min-h-[12rem] bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
+            <div class="relative min-h-[8rem] sm:min-h-[12rem] bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
               <Show
                 when={chartData().data.length > 0}
                 fallback={
@@ -1541,7 +1541,7 @@ const UnifiedBackups: Component = () => {
                         if (rect.width === 0 || rect.height === 0) return;
 
                         const margin = { top: 10, right: 10, bottom: 30, left: 30 };
-                        const width = rect.width - margin.left - margin.right;
+                        const width = Math.max(rect.width - margin.left - margin.right, 1);
                         const height = 128 - margin.top - margin.bottom;
 
                         el.setAttribute('viewBox', `0 0 ${rect.width} 128`);
