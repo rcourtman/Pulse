@@ -459,22 +459,21 @@ const DockerContainerRow: Component<{
     // If URL hasn't changed, don't save
     if (newUrl === (customUrl() || '')) return;
 
+    // Animate if transitioning from no URL to having a URL
+    const hadUrl = !!customUrl();
+    if (!hadUrl && newUrl) {
+      setShouldAnimateIcon(true);
+      setTimeout(() => setShouldAnimateIcon(false), 200);
+    }
+
+    // Optimistically update local and parent state immediately
+    setCustomUrl(newUrl || undefined);
+    if (props.onCustomUrlUpdate) {
+      props.onCustomUrlUpdate(resourceId(), newUrl);
+    }
+
     try {
       await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: newUrl });
-
-      // Animate if transitioning from no URL to having a URL
-      const hadUrl = !!customUrl();
-      if (!hadUrl && newUrl) {
-        setShouldAnimateIcon(true);
-        setTimeout(() => setShouldAnimateIcon(false), 200);
-      }
-
-      setCustomUrl(newUrl || undefined);
-
-      // Notify parent to update metadata
-      if (props.onCustomUrlUpdate) {
-        props.onCustomUrlUpdate(resourceId(), newUrl);
-      }
 
       if (newUrl) {
         showSuccess('Container URL saved');
@@ -484,6 +483,11 @@ const DockerContainerRow: Component<{
     } catch (err: any) {
       console.error('Failed to save container URL:', err);
       showError(err.message || 'Failed to save container URL');
+      // Revert on error
+      setCustomUrl(hadUrl ? customUrl() : undefined);
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(resourceId(), hadUrl ? customUrl() || '' : '');
+      }
     }
   };
 
@@ -576,7 +580,7 @@ const DockerContainerRow: Component<{
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class="pl-4 pr-2 py-0.5">
+        <td class="pl-5 sm:pl-6 lg:pl-8 pr-2 py-0.5">
           <div class="flex items-center gap-1.5 min-w-0">
             {/* Name - show input when editing, otherwise show name with optional link */}
             <Show
@@ -917,22 +921,21 @@ const DockerServiceRow: Component<{
     // If URL hasn't changed, don't save
     if (newUrl === (customUrl() || '')) return;
 
+    // Animate if transitioning from no URL to having a URL
+    const hadUrl = !!customUrl();
+    if (!hadUrl && newUrl) {
+      setShouldAnimateIcon(true);
+      setTimeout(() => setShouldAnimateIcon(false), 200);
+    }
+
+    // Optimistically update local and parent state immediately
+    setCustomUrl(newUrl || undefined);
+    if (props.onCustomUrlUpdate) {
+      props.onCustomUrlUpdate(resourceId(), newUrl);
+    }
+
     try {
       await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: newUrl });
-
-      // Animate if transitioning from no URL to having a URL
-      const hadUrl = !!customUrl();
-      if (!hadUrl && newUrl) {
-        setShouldAnimateIcon(true);
-        setTimeout(() => setShouldAnimateIcon(false), 200);
-      }
-
-      setCustomUrl(newUrl || undefined);
-
-      // Notify parent to update metadata
-      if (props.onCustomUrlUpdate) {
-        props.onCustomUrlUpdate(resourceId(), newUrl);
-      }
 
       if (newUrl) {
         showSuccess('Service URL saved');
@@ -942,6 +945,11 @@ const DockerServiceRow: Component<{
     } catch (err: any) {
       console.error('Failed to save service URL:', err);
       showError(err.message || 'Failed to save service URL');
+      // Revert on error
+      setCustomUrl(hadUrl ? customUrl() : undefined);
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(resourceId(), hadUrl ? customUrl() || '' : '');
+      }
     }
   };
 
@@ -1008,7 +1016,7 @@ const DockerServiceRow: Component<{
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class="pl-4 pr-2 py-0.5">
+        <td class="pl-5 sm:pl-6 lg:pl-8 pr-2 py-0.5">
           <div class="flex items-center gap-1.5 min-w-0">
             {/* Name - show input when editing, otherwise show name with optional link */}
             <Show
