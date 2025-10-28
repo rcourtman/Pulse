@@ -303,7 +303,7 @@ const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = 
 
   return (
     <tr class="bg-gray-50 dark:bg-gray-900/40">
-      <td colSpan={props.colspan} class="py-1 pr-2 pl-4">
+      <td colSpan={props.colspan} class="py-0.5 pr-2 pl-4">
         <div class="flex flex-nowrap items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700 dark:text-slate-100">
           <span>{displayName}</span>
           <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
@@ -393,7 +393,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class="pl-4 pr-2 py-1">
+        <td class="pl-4 pr-2 py-0.5">
           <div class="flex items-center gap-1.5 min-w-0">
             <div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
               <span class="truncate font-semibold" title={containerTitle()}>
@@ -402,7 +402,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
             </div>
           </div>
         </td>
-        <td class="px-2 py-1">
+        <td class="px-2 py-0.5">
           <span
             class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
               'container',
@@ -411,17 +411,17 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
             Container
           </span>
         </td>
-        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
+        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <span class="truncate" title={container.image}>
             {container.image || '—'}
           </span>
         </td>
-        <td class="px-2 py-1 text-xs">
+        <td class="px-2 py-0.5 text-xs">
           <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${statusBadgeClass()}`}>
             {statusLabel()}
           </span>
         </td>
-        <td class="px-2 py-1">
+        <td class="px-2 py-0.5">
           <Show
             when={isRunning() && container.cpuPercent && container.cpuPercent > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -429,7 +429,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
             <MetricBar value={cpuPercent()} label={formatPercent(cpuPercent())} type="cpu" />
           </Show>
         </td>
-        <td class="px-2 py-1">
+        <td class="px-2 py-0.5">
           <Show
             when={isRunning() && container.memoryUsageBytes && container.memoryUsageBytes > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -442,13 +442,13 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
             />
           </Show>
         </td>
-        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
+        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
             {restarts()}
             <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
           </Show>
         </td>
-        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
+        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
             {uptime()}
           </Show>
@@ -567,7 +567,7 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class="pl-4 pr-2 py-1">
+        <td class="pl-4 pr-2 py-0.5">
           <div class="flex items-center gap-1.5 min-w-0">
             <div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
               <span class="truncate font-semibold" title={serviceTitle()}>
@@ -581,30 +581,30 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
             </Show>
           </div>
         </td>
-        <td class="px-2 py-1">
+        <td class="px-2 py-0.5">
           <span class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass('service')}`}>
             Service
           </span>
         </td>
-        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
+        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <span class="truncate" title={service.image}>
             {service.image || '—'}
           </span>
         </td>
-        <td class="px-2 py-1 text-xs">
+        <td class="px-2 py-0.5 text-xs">
           <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${badge.class}`}>
             {badge.label}
           </span>
         </td>
-        <td class="px-2 py-1 text-xs text-gray-400 dark:text-gray-500">—</td>
-        <td class="px-2 py-1 text-xs text-gray-400 dark:text-gray-500">—</td>
-        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <span class="font-semibold text-gray-900 dark:text-gray-100">
             {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
           </span>
           <span class="ml-1 text-gray-500 dark:text-gray-400">tasks</span>
         </td>
-        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <Show when={updatedAt} fallback="—">
             {(timestamp) => (
               <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
