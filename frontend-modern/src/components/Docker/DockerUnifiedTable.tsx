@@ -372,6 +372,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
 
   const state = () => toLower(container.state);
   const health = () => toLower(container.health);
+  const isRunning = () => state() === 'running';
 
   const statusBadgeClass = () => {
     if (state() === 'running' && (!health() || health() === 'healthy')) {
@@ -404,7 +405,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
       <tr
         class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${
           hasDrawerContent() ? 'cursor-pointer' : ''
-        } ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+        } ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
@@ -439,7 +440,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
         </td>
         <td class="px-2 py-1">
           <Show
-            when={container.cpuPercent && container.cpuPercent > 0}
+            when={isRunning() && container.cpuPercent && container.cpuPercent > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
           >
             <MetricBar value={cpuPercent()} label={formatPercent(cpuPercent())} type="cpu" />
@@ -447,7 +448,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
         </td>
         <td class="px-2 py-1">
           <Show
-            when={container.memoryUsageBytes && container.memoryUsageBytes > 0}
+            when={isRunning() && container.memoryUsageBytes && container.memoryUsageBytes > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
           >
             <MetricBar
@@ -459,10 +460,16 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
           </Show>
         </td>
         <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
-          {restarts()}
-          <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
+          <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
+            {restarts()}
+            <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
+          </Show>
         </td>
-        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">{uptime()}</td>
+        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
+          <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
+            {uptime()}
+          </Show>
+        </td>
       </tr>
 
       <Show when={expanded() && hasDrawerContent()}>
@@ -552,6 +559,11 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
 
   const badge = serviceHealthBadge(service);
   const updatedAt = ensureMs(service.updatedAt ?? service.createdAt);
+  const isHealthy = () => {
+    const desired = service.desiredTasks ?? 0;
+    const running = service.runningTasks ?? 0;
+    return desired > 0 && running >= desired;
+  };
 
   const serviceTitle = () => {
     const primary = service.name || service.id || 'Service';
@@ -568,7 +580,7 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
           expanded()
             ? 'bg-gray-50 dark:bg-gray-800/40'
             : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
-        }`}
+        } ${!isHealthy() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
