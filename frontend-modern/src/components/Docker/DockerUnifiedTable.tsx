@@ -591,11 +591,7 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
           </div>
         </td>
         <td class="px-2 py-1">
-          <span
-            class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
-              'service',
-            )}`}
-          >
+          <span class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass('service')}`}>
             Service
           </span>
         </td>
@@ -932,28 +928,28 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
             <table class="w-full min-w-[900px] table-fixed border-collapse whitespace-nowrap">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                  <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[26%]">
+                  <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[24%]">
                     Resource
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[11%]">
                     Type
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[17%]">
                     Image / Stack
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
                     Status
                   </th>
                   <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     CPU
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[12%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[11%]">
                     Memory
                   </th>
                   <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Tasks / Restarts
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[12%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Updated / Uptime
                   </th>
                 </tr>
