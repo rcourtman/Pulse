@@ -270,22 +270,6 @@ const serviceMatchesToken = (token: SearchToken, host: DockerHost, service: Dock
   return fields.some((field) => field.includes(token.value));
 };
 
-const statusDotClass = (state: string) => {
-  switch (state) {
-    case 'running':
-    case 'healthy':
-      return 'bg-green-500';
-    case 'paused':
-    case 'created':
-      return 'bg-amber-500';
-    case 'stopped':
-    case 'exited':
-      return 'bg-gray-400';
-    default:
-      return ERROR_CONTAINER_STATES.has(state) ? 'bg-red-500' : 'bg-amber-500';
-  }
-};
-
 const serviceHealthBadge = (service: DockerService) => {
   const desired = service.desiredTasks ?? 0;
   const running = service.runningTasks ?? 0;
@@ -411,7 +395,6 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
       >
         <td class="pl-4 pr-2 py-1">
           <div class="flex items-center gap-1.5 min-w-0">
-            <span class={`h-2 w-2 rounded-full ${statusDotClass(state())}`} aria-hidden="true" />
             <div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
               <span class="truncate font-semibold" title={containerTitle()}>
                 {container.name || container.id}
@@ -586,10 +569,6 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
       >
         <td class="pl-4 pr-2 py-1">
           <div class="flex items-center gap-1.5 min-w-0">
-            <span
-              class={`h-2 w-2 rounded-full ${statusDotClass(badge.label.toLowerCase())}`}
-              aria-hidden="true"
-            />
             <div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
               <span class="truncate font-semibold" title={serviceTitle()}>
                 {service.name || service.id || 'Service'}
