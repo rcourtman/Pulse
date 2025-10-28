@@ -1,20 +1,102 @@
-import { Component, For, Show, batch, createSignal, createMemo, createEffect, onCleanup } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import type { DockerHost, DockerContainer, DockerService, DockerTask } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
-import {
-  DockerTree,
-  type DockerTreeHostEntry,
-  type DockerTreeSelection,
-  type DockerTreeServiceEntry,
-} from './DockerTree';
+import { formatBytes, formatPercent, formatUptime, formatRelativeTime } from '@/utils/format';
+
+const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
+const DEGRADED_HOST_STATUSES = new Set([
+  'degraded',
+  'warning',
+  'maintenance',
+  'partial',
+  'initializing',
+  'unknown',
+]);
+
+const STOPPED_CONTAINER_STATES = new Set(['exited', 'stopped', 'created', 'paused']);
+const ERROR_CONTAINER_STATES = new Set([
+  'restarting',
+  'dead',
+  'removing',
+  'failed',
+  'error',
+  'oomkilled',
+  'unhealthy',
+]);
+
+const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
+  switch (type) {
+    case 'container':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200';
+    case 'service':
+      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200';
+    case 'task':
+      return 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200';
+    default:
+      return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+  }
+};
+
+type StatsFilter =
+  | { type: 'host-status'; value: string }
+  | { type: 'container-state'; value: string }
+  | { type: 'service-health'; value: string }
+  | null;
+
+type SearchToken = { key?: string; value: string };
+
+type DockerRow =
+  | {
+      kind: 'container';
+      id: string;
+      host: DockerHost;
+      container: DockerContainer;
+    }
+  | {
+      kind: 'service';
+      id: string;
+      host: DockerHost;
+      service: DockerService;
+      tasks: DockerTask[];
+    };
 
 interface DockerUnifiedTableProps {
   hosts: DockerHost[];
   searchTerm?: string;
-  statsFilter?: { type: 'host-status' | 'container-state' | 'service-health'; value: string } | null;
+  statsFilter?: StatsFilter;
+  selectedHostId?: () => string | null;
 }
+
+const rowExpandState = new Map<string, boolean>();
+
+const toLower = (value?: string | null) => value?.toLowerCase() ?? '';
+
+const ensureMs = (value?: number | string | null): number | null => {
+  if (!value) return null;
+  if (typeof value === 'number') {
+    return value > 1e12 ? value : value * 1000;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const parseSearchTerm = (term?: string): SearchToken[] => {
+  if (!term) return [];
+  return term
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => {
+      const [rawKey, ...rest] = token.split(':');
+      if (rest.length === 0) {
+        return { value: token.toLowerCase() };
+      }
+      return { key: rawKey.toLowerCase(), value: rest.join(':').toLowerCase() };
+    });
+};
 
 const findContainerForTask = (containers: DockerContainer[], task: DockerTask) => {
   if (!containers.length) return undefined;
@@ -27,10 +109,7 @@ const findContainerForTask = (containers: DockerContainer[], task: DockerTask) =
     const id = container.id?.toLowerCase() ?? '';
     const name = container.name?.toLowerCase() ?? '';
 
-    const idMatch =
-      !!taskId &&
-      (id === taskId || id.includes(taskId) || taskId.includes(id));
-
+    const idMatch = !!taskId && (id === taskId || id.includes(taskId) || taskId.includes(id));
     const nameMatch =
       !!taskName &&
       (name === taskName ||
@@ -42,317 +121,632 @@ const findContainerForTask = (containers: DockerContainer[], task: DockerTask) =
   });
 };
 
-const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
-const DEGRADED_HOST_STATUSES = new Set(['degraded', 'warning', 'maintenance', 'partial', 'initializing', 'unknown']);
-
-const STOPPED_CONTAINER_STATES = new Set(['exited', 'stopped', 'created', 'paused']);
-const ERROR_CONTAINER_STATES = new Set(['restarting', 'dead', 'removing', 'failed', 'error', 'oomkilled', 'unhealthy']);
-
-// Persistent state for expanded hosts and services
-const hostExpandState = new Map<string, boolean>();
-const hostExpandSignals = new Map<string, ReturnType<typeof createSignal<boolean>>>();
-const serviceExpandState = new Map<string, boolean>();
-const serviceExpandSignals = new Map<string, ReturnType<typeof createSignal<boolean>>>();
-
-const getTaskNodeId = (serviceKey: string, task: DockerTask, index: number) => {
-  if (task.id) {
-    return `${serviceKey}:task:${task.id}`;
+const hostMatchesFilter = (filter: StatsFilter, host: DockerHost) => {
+  if (!filter || filter.type !== 'host-status') return true;
+  const status = toLower(host.status);
+  if (filter.value === 'offline') {
+    return OFFLINE_HOST_STATUSES.has(status);
   }
-  if (task.containerId) {
-    return `${serviceKey}:task:${task.containerId}`;
+  if (filter.value === 'degraded') {
+    return DEGRADED_HOST_STATUSES.has(status) || status === 'degraded';
   }
-  if (task.containerName) {
-    return `${serviceKey}:task:${task.containerName}`;
+  if (filter.value === 'online') {
+    return status === 'online';
   }
-  if (task.slot !== undefined && task.slot !== null) {
-    return `${serviceKey}:task:slot-${task.slot}`;
-  }
-  return `${serviceKey}:task:${index}`;
+  return true;
 };
 
-// Docker Host Group Header Component (matches NodeGroupHeader style)
-interface DockerHostHeaderProps {
-  host: DockerHost;
-  colspan: number;
-  isExpanded: boolean;
-  onToggle: () => void;
-  isActive?: boolean;
-}
+const containerMatchesStateFilter = (filter: StatsFilter, container: DockerContainer) => {
+  if (!filter || filter.type !== 'container-state') return true;
+  const state = toLower(container.state);
+  if (filter.value === 'running') return state === 'running';
+  if (filter.value === 'stopped') return STOPPED_CONTAINER_STATES.has(state);
+  if (filter.value === 'error') {
+    return ERROR_CONTAINER_STATES.has(state) || toLower(container.health) === 'unhealthy';
+  }
+  return true;
+};
 
-const DockerHostHeader: Component<DockerHostHeaderProps> = (props) => {
-  const status = () => props.host.status?.toLowerCase() ?? 'unknown';
-  const isOnline = () => status() === 'online';
-  const isOffline = () => OFFLINE_HOST_STATUSES.has(status());
-  const displayName = () => props.host.displayName || props.host.hostname || props.host.id;
+const serviceMatchesHealthFilter = (filter: StatsFilter, service: DockerService) => {
+  if (!filter || filter.type !== 'service-health') return true;
+  const desired = service.desiredTasks ?? 0;
+  const running = service.runningTasks ?? 0;
+  if (filter.value === 'degraded') {
+    return desired > 0 && running < desired;
+  }
+  if (filter.value === 'healthy') {
+    return desired > 0 && running >= desired;
+  }
+  return true;
+};
 
-  const totalContainers = () => (props.host.containers?.length || 0);
-  const runningContainers = () =>
-    (props.host.containers?.filter((c) => c.state?.toLowerCase() === 'running').length || 0);
-  const totalServices = () => (props.host.services?.length || 0);
+const containerMatchesToken = (
+  token: SearchToken,
+  host: DockerHost,
+  container: DockerContainer,
+) => {
+  const state = toLower(container.state);
+  const health = toLower(container.health);
+  const hostName = toLower(host.displayName ?? host.hostname ?? host.id);
+
+  if (token.key === 'name') {
+    return (
+      toLower(container.name).includes(token.value) ||
+      toLower(container.id).includes(token.value)
+    );
+  }
+
+  if (token.key === 'image') {
+    return toLower(container.image).includes(token.value);
+  }
+
+  if (token.key === 'host') {
+    return hostName.includes(token.value);
+  }
+
+  if (token.key === 'state') {
+    return state.includes(token.value) || health.includes(token.value);
+  }
+
+  const fields: string[] = [
+    container.name,
+    container.id,
+    container.image,
+    container.status,
+    container.state,
+    container.health,
+    host.displayName,
+    host.hostname,
+    host.id,
+  ]
+    .filter(Boolean)
+    .map((value) => value!.toLowerCase());
+
+  if (container.labels) {
+    Object.entries(container.labels).forEach(([key, value]) => {
+      fields.push(key.toLowerCase());
+      if (value) fields.push(value.toLowerCase());
+    });
+  }
+
+  if (container.ports) {
+    container.ports.forEach((port) => {
+      const parts = [port.privatePort, port.publicPort, port.protocol, port.ip]
+        .filter(Boolean)
+        .map(String)
+        .join(':')
+        .toLowerCase();
+      if (parts) fields.push(parts);
+    });
+  }
+
+  return fields.some((field) => field.includes(token.value));
+};
+
+const serviceMatchesToken = (token: SearchToken, host: DockerHost, service: DockerService) => {
+  const hostName = toLower(host.displayName ?? host.hostname ?? host.id);
+  const serviceName = toLower(service.name ?? service.id);
+  const image = toLower(service.image);
+
+  if (token.key === 'name') {
+    return serviceName.includes(token.value);
+  }
+
+  if (token.key === 'image') {
+    return image.includes(token.value);
+  }
+
+  if (token.key === 'host') {
+    return hostName.includes(token.value);
+  }
+
+  if (token.key === 'state') {
+    const desired = service.desiredTasks ?? 0;
+    const running = service.runningTasks ?? 0;
+    const status = desired > 0 && running >= desired ? 'healthy' : 'degraded';
+    return status.includes(token.value);
+  }
+
+  const fields: string[] = [
+    service.name,
+    service.id,
+    service.image,
+    service.stack,
+    service.mode,
+    host.displayName,
+    host.hostname,
+    host.id,
+  ]
+    .filter(Boolean)
+    .map((value) => value!.toLowerCase());
+
+  if (service.labels) {
+    Object.entries(service.labels).forEach(([key, value]) => {
+      fields.push(key.toLowerCase());
+      if (value) fields.push(value.toLowerCase());
+    });
+  }
+
+  return fields.some((field) => field.includes(token.value));
+};
+
+const statusDotClass = (state: string) => {
+  switch (state) {
+    case 'running':
+    case 'healthy':
+      return 'bg-green-500';
+    case 'paused':
+    case 'created':
+      return 'bg-amber-500';
+    case 'stopped':
+    case 'exited':
+      return 'bg-gray-400';
+    default:
+      return ERROR_CONTAINER_STATES.has(state) ? 'bg-red-500' : 'bg-amber-500';
+  }
+};
+
+const hostStatusBadge = (host: DockerHost) => {
+  const status = toLower(host.status);
+  if (status === 'online') {
+    return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+  }
+  if (OFFLINE_HOST_STATUSES.has(status)) {
+    return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+  }
+  return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+};
+
+const serviceHealthBadge = (service: DockerService) => {
+  const desired = service.desiredTasks ?? 0;
+  const running = service.runningTasks ?? 0;
+  if (desired === 0) {
+    return {
+      label: 'No tasks',
+      class: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    };
+  }
+  if (running >= desired) {
+    return {
+      label: 'Healthy',
+      class: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    };
+  }
+  return {
+    label: `Degraded (${running}/${desired})`,
+    class: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  };
+};
+
+const buildRowId = (host: DockerHost, row: DockerRow) => {
+  if (row.kind === 'container') {
+    return `container:${host.id}:${row.container.id ?? row.container.name}`;
+  }
+  return `service:${host.id}:${row.service.id ?? row.service.name}`;
+};
+
+const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = (props) => {
+  const status = toLower(props.host.status);
+  const lastSeen = ensureMs(props.host.lastSeen);
+  const uptime = props.host.uptimeSeconds ?? props.host.intervalSeconds;
+  const displayName = props.host.displayName || props.host.hostname || props.host.id;
 
   return (
     <tr class="bg-gray-50 dark:bg-gray-900/40">
-      <td
-        colspan={props.colspan}
-        class={`py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100 ${
-          props.isActive ? 'bg-sky-50 dark:bg-sky-900/30' : ''
-        }`}
-      >
-        <button
-          type="button"
-          onClick={props.onToggle}
-          class={`flex flex-wrap items-center gap-3 w-full text-left transition-colors duration-150 hover:text-sky-600 dark:hover:text-sky-400 ${
-            isOffline() ? 'opacity-60' : ''
-          } ${props.isActive ? 'text-sky-700 dark:text-sky-300' : ''}`}
-          title={isOnline() ? 'Online' : isOffline() ? 'Offline' : 'Degraded'}
-        >
-          {/* Expand/collapse arrow */}
-          <svg
-            class={`h-4 w-4 transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-
-          <span>{displayName()}</span>
-
-          {/* Status badge */}
-          {(() => {
-            if (isOnline()) {
-              return (
-                <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                  Online
-                </span>
-              );
-            }
-            if (isOffline()) {
-              return (
-                <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                  Offline
-                </span>
-              );
-            }
-            return (
-              <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
-                Degraded
-              </span>
-            );
-          })()}
-
-          {/* Container count */}
-          <Show when={totalContainers() > 0}>
-            <span class="text-[10px] text-slate-500 dark:text-slate-400">
-              {runningContainers()}/{totalContainers()} containers running
+      <td colSpan={props.colspan} class="py-1 pr-2 pl-4">
+        <div class="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-100">
+          <span>{displayName}</span>
+          <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
+            <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+              ({props.host.hostname})
             </span>
           </Show>
-
-          {/* Service count */}
-          <Show when={totalServices() > 0}>
+          <span class={`rounded px-2 py-0.5 text-[10px] font-medium ${hostStatusBadge(props.host)}`}>
+            {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown'}
+          </span>
+          <Show when={props.host.dockerVersion}>
             <span class="text-[10px] text-slate-500 dark:text-slate-400">
-              {totalServices()} services
+              Docker {props.host.dockerVersion}
             </span>
           </Show>
-        </button>
+          <Show when={uptime}>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">
+              Uptime {formatUptime(uptime!)}
+            </span>
+          </Show>
+          <Show when={lastSeen}>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">
+              Last seen {formatRelativeTime(lastSeen!)}
+            </span>
+          </Show>
+        </div>
       </td>
     </tr>
   );
 };
 
-// Service Row Component (expandable for task containers)
-interface ServiceRowProps {
-  service: DockerService;
-  hostId: string;
-  tasks: DockerTreeServiceEntry['tasks'];
-  containers: DockerContainer[];
-  isExpanded: boolean;
-  onToggle: () => void;
-  isSelected?: boolean;
-  rowRef?: (row: HTMLTableRowElement | null) => void;
-  selectedTaskId?: string | null;
-  onTaskMount?: (taskNodeId: string, row: HTMLTableRowElement) => void;
-  onTaskUnmount?: (taskNodeId: string) => void;
-}
-
-const ServiceRow: Component<ServiceRowProps> = (props) => {
-  const desiredTasks = () => props.service.desiredTasks ?? 0;
-  const runningTasks = () => props.service.runningTasks ?? 0;
-  const isHealthy = () => desiredTasks() > 0 && runningTasks() >= desiredTasks();
-  const hasTasks = () => props.tasks.length > 0;
-
-  onCleanup(() => {
-    props.rowRef?.(null);
+const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container' }>; columns: number }> = (props) => {
+  const { host, container } = props.row;
+  const rowId = buildRowId(host, props.row);
+  const [expanded, setExpanded] = createSignal(rowExpandState.get(rowId) ?? false);
+  const hasDrawerContent = createMemo(() => {
+    return (
+      (container.ports && container.ports.length > 0) ||
+      (container.labels && Object.keys(container.labels).length > 0) ||
+      (container.networks && container.networks.length > 0)
+    );
   });
 
-  const healthBadge = () => {
-    if (desiredTasks() === 0) {
-      return (
-        <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-          No tasks
-        </span>
-      );
+  const toggle = (event: MouseEvent) => {
+    if (!hasDrawerContent()) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('a, button, [data-prevent-toggle]')) return;
+    setExpanded((prev) => {
+      const next = !prev;
+      rowExpandState.set(rowId, next);
+      return next;
+    });
+  };
+
+  const cpuPercent = () => Math.max(0, Math.min(100, container.cpuPercent ?? 0));
+  const memPercent = () => Math.max(0, Math.min(100, container.memoryPercent ?? 0));
+  const memUsageLabel = () => {
+    if (!container.memoryUsageBytes) return undefined;
+    const used = formatBytes(container.memoryUsageBytes);
+    const limit = container.memoryLimitBytes
+      ? formatBytes(container.memoryLimitBytes)
+      : undefined;
+    return limit ? `${used} / ${limit}` : used;
+  };
+
+  const uptime = () => (container.uptimeSeconds ? formatUptime(container.uptimeSeconds) : '—');
+  const restarts = () => container.restartCount ?? 0;
+
+  const state = () => toLower(container.state);
+  const health = () => toLower(container.health);
+
+  const statusBadgeClass = () => {
+    if (state() === 'running' && (!health() || health() === 'healthy')) {
+      return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
     }
-    if (isHealthy()) {
-      return (
-        <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-          Healthy
-        </span>
-      );
+    if (ERROR_CONTAINER_STATES.has(state()) || health() === 'unhealthy') {
+      return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
     }
-    return (
-      <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
-        Degraded ({runningTasks()}/{desiredTasks()})
-      </span>
-    );
+    if (STOPPED_CONTAINER_STATES.has(state())) {
+      return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    }
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+  };
+
+  const statusLabel = () => {
+    if (health()) {
+      return `${container.state ?? 'Unknown'} (${container.health})`;
+    }
+    return container.status || container.state || 'Unknown';
   };
 
   return (
     <>
       <tr
-        ref={(row) => row && props.rowRef?.(row)}
-        class={`border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
-          props.isSelected ? 'bg-sky-50 dark:bg-sky-900/30' : ''
-        }`}
+        class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${
+          hasDrawerContent() ? 'cursor-pointer' : ''
+        } ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+        onClick={toggle}
+        aria-expanded={expanded()}
       >
-        <td class="pl-8 pr-2 py-2 text-sm text-gray-900 dark:text-gray-100">
-          <button
-            type="button"
-            onClick={props.onToggle}
-            class={`flex items-center gap-2 w-full text-left ${
-              props.isSelected ? 'text-sky-700 dark:text-sky-300' : ''
-            }`}
-            disabled={!hasTasks()}
-          >
-            {/* Expand arrow - only show if there are tasks */}
-            <Show when={hasTasks()}>
-              <svg
-                class={`h-3 w-3 transition-transform duration-200 flex-shrink-0 ${props.isExpanded ? 'rotate-90' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </Show>
-            <span class="font-medium truncate">{props.service.name || props.service.id}</span>
-          </button>
-        </td>
-        <td class="px-2 py-2 text-xs text-gray-600 dark:text-gray-400">
-          <div class="truncate" title={props.service.image || undefined}>
-            {props.service.image || 'Image not specified'}
-          </div>
-          <Show when={props.service.mode}>
-            <div class="mt-1 text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-              {props.service.mode}
+        <td class="pl-4 pr-2 py-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class={`h-2 w-2 rounded-full ${statusDotClass(state())}`} aria-hidden="true" />
+            <div class="min-w-0 flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
+              <span class="truncate font-semibold" title={container.name || container.id}>
+                {container.name || container.id}
+              </span>
+              <Show when={container.id && container.name && container.id !== container.name}>
+                <span class="hidden sm:inline text-[10px] text-gray-500 dark:text-gray-400 truncate" title={container.id}>
+                  ({container.id})
+                </span>
+              </Show>
             </div>
+          </div>
+        </td>
+        <td class="px-2 py-2">
+          <span
+            class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+              'container',
+            )}`}
+          >
+            Container
+          </span>
+        </td>
+        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300">
+          <span class="truncate" title={container.image}>
+            {container.image || '—'}
+          </span>
+        </td>
+        <td class="px-2 py-2 text-xs">
+          <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${statusBadgeClass()}`}>
+            {statusLabel()}
+          </span>
+        </td>
+        <td class="px-2 py-2">
+          <Show
+            when={container.cpuPercent && container.cpuPercent > 0}
+            fallback={<span class="text-xs text-gray-400">—</span>}
+          >
+            <MetricBar value={cpuPercent()} label={formatPercent(cpuPercent())} type="cpu" />
           </Show>
         </td>
-        <td class="px-2 py-2 text-xs">{healthBadge()}</td>
+        <td class="px-2 py-2">
+          <Show
+            when={container.memoryUsageBytes && container.memoryUsageBytes > 0}
+            fallback={<span class="text-xs text-gray-400">—</span>}
+          >
+            <MetricBar
+              value={memPercent()}
+              label={formatPercent(memPercent())}
+              type="memory"
+              sublabel={memUsageLabel()}
+            />
+          </Show>
+        </td>
+        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300">
+          {restarts()}
+          <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
+        </td>
+        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300">{uptime()}</td>
       </tr>
 
-      {/* Task Containers Drawer */}
-      <Show when={props.isExpanded && hasTasks()}>
+      <Show when={expanded() && hasDrawerContent()}>
+        <tr class="bg-gray-50 dark:bg-gray-900/50">
+          <td colSpan={props.columns} class="px-4 py-3">
+            <div class="grid gap-3 md:grid-cols-2">
+              <Show when={container.ports && container.ports.length > 0}>
+                <div>
+                  <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                    Ports
+                  </div>
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    {container.ports!.map((port) => {
+                      const label = port.publicPort
+                        ? `${port.publicPort}:${port.privatePort}/${port.protocol}`
+                        : `${port.privatePort}/${port.protocol}`;
+                      return (
+                        <span class="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                          {label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={container.networks && container.networks.length > 0}>
+                <div>
+                  <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                    Networks
+                  </div>
+                  <div class="mt-1 space-y-1 text-xs text-gray-700 dark:text-gray-300">
+                    {container.networks!.map((network) => (
+                      <div>
+                        <span class="font-medium">{network.name}</span>
+                        <Show when={network.ipv4}>
+                          <span class="ml-2 text-gray-500 dark:text-gray-400">IPv4: {network.ipv4}</span>
+                        </Show>
+                        <Show when={network.ipv6}>
+                          <span class="ml-2 text-gray-500 dark:text-gray-400">IPv6: {network.ipv6}</span>
+                        </Show>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={container.labels && Object.keys(container.labels).length > 0}>
+                <div class="md:col-span-2">
+                  <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                    Labels
+                  </div>
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    {Object.entries(container.labels!).map(([key, value]) => (
+                      <span class="rounded bg-gray-200 px-1.5 py-0.5 text-[11px] text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
+                        {key}
+                        <Show when={value}>: {value}</Show>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </Show>
+            </div>
+          </td>
+        </tr>
+      </Show>
+    </>
+  );
+};
+
+const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>; columns: number }> = (props) => {
+  const { host, service, tasks } = props.row;
+  const rowId = buildRowId(host, props.row);
+  const [expanded, setExpanded] = createSignal(rowExpandState.get(rowId) ?? false);
+  const hasTasks = () => tasks.length > 0;
+
+  const toggle = (event: MouseEvent) => {
+    if (!hasTasks()) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('a, button, [data-prevent-toggle]')) return;
+    setExpanded((prev) => {
+      const next = !prev;
+      rowExpandState.set(rowId, next);
+      return next;
+    });
+  };
+
+  const badge = serviceHealthBadge(service);
+  const updatedAt = ensureMs(service.updatedAt ?? service.createdAt);
+
+  return (
+    <>
+      <tr
+        class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${
+          hasTasks() ? 'cursor-pointer' : ''
+        } ${
+          expanded()
+            ? 'bg-purple-50/90 dark:bg-purple-900/25'
+            : 'bg-purple-50/50 dark:bg-purple-900/10 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+        }`}
+        onClick={toggle}
+        aria-expanded={expanded()}
+      >
+        <td class="pl-4 pr-2 py-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span
+              class={`h-2 w-2 rounded-full ${statusDotClass(badge.label.toLowerCase())}`}
+              aria-hidden="true"
+            />
+            <div class="min-w-0 flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
+              <span class="truncate font-semibold" title={service.name || service.id || 'Service'}>
+                {service.name || service.id || 'Service'}
+              </span>
+              <span
+                class={`hidden sm:inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+                  'service',
+                )}`}
+              >
+                Service
+              </span>
+            </div>
+            <Show when={service.stack}>
+              <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400 truncate hidden md:inline" title={`Stack: ${service.stack}`}>
+                Stack: {service.stack}
+              </span>
+            </Show>
+          </div>
+        </td>
+        <td class="px-2 py-2">
+          <span
+            class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+              'service',
+            )}`}
+          >
+            Service
+          </span>
+        </td>
+        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300">
+          <span class="truncate" title={service.image}>
+            {service.image || '—'}
+          </span>
+        </td>
+        <td class="px-2 py-2 text-xs">
+          <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${badge.class}`}>
+            {badge.label}
+          </span>
+        </td>
+        <td class="px-2 py-2 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="px-2 py-2 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <span class="font-semibold text-gray-900 dark:text-gray-100">
+            {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
+          </span>
+          <span class="ml-1 text-gray-500 dark:text-gray-400">tasks</span>
+        </td>
+        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <Show when={updatedAt} fallback="—">
+            {(timestamp) => (
+              <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
+                {formatRelativeTime(timestamp())}
+              </span>
+            )}
+          </Show>
+        </td>
+      </tr>
+
+      <Show when={expanded() && hasTasks()}>
         <tr class="bg-gray-50 dark:bg-gray-900/60">
-          <td colSpan={3} class="px-4 py-3 pl-12">
-            <div class="space-y-2">
-              <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                Task Containers ({props.tasks.length})
-              </h4>
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-xs">
-                  <thead>
-                    <tr class="text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                      <th class="text-left py-1 pr-2 font-medium">Task/Container</th>
-                      <th class="text-left py-1 px-2 font-medium">Node</th>
-                      <th class="text-left py-1 px-2 font-medium">State</th>
-                      <th class="text-left py-1 px-2 font-medium">CPU</th>
-                      <th class="text-left py-1 px-2 font-medium">Memory</th>
-                      <th class="text-left py-1 px-2 font-medium">Started</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                    <For each={props.tasks}>
-                      {(taskEntry) => {
-                        const task = taskEntry.task;
-                        const currentState = task.currentState?.toLowerCase() || 'unknown';
-                        const stateBadge = () => {
-                          if (currentState === 'running') {
+          <td colSpan={props.columns} class="px-4 py-3">
+            <div class="space-y-2 border-l-4 border-purple-200 dark:border-purple-800 pl-3">
+              <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                <span>Tasks</span>
+                <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
+                  {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
+                </span>
+              </div>
+              <div class="overflow-x-auto border border-purple-200 dark:border-purple-800/60 rounded-lg bg-white dark:bg-gray-900/60">
+                <table class="min-w-full divide-y divide-purple-100 dark:divide-purple-900/40 text-xs">
+                  <thead class="bg-purple-50 dark:bg-purple-900/30 text-[10px] uppercase tracking-wide text-purple-700 dark:text-purple-200">
+                    <tr>
+                    <th class="py-1 pr-2 text-left font-medium">Task</th>
+                    <th class="py-1 px-2 text-left font-medium">Node</th>
+                    <th class="py-1 px-2 text-left font-medium">State</th>
+                    <th class="py-1 px-2 text-left font-medium">CPU</th>
+                    <th class="py-1 px-2 text-left font-medium">Memory</th>
+                    <th class="py-1 px-2 text-left font-medium">Updated</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-purple-100/60 dark:divide-purple-900/40">
+                    <For each={tasks}>
+                      {(task) => {
+                        const container = findContainerForTask(host.containers || [], task);
+                        const cpu = container?.cpuPercent ?? 0;
+                        const mem = container?.memoryPercent ?? 0;
+                        const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
+                        const taskLabel = () => {
+                          if (task.containerName) return task.containerName;
+                          if (task.containerId) return task.containerId.slice(0, 12);
+                          if (task.slot !== undefined) return `slot-${task.slot}`;
+                          return task.id ?? 'Task';
+                        };
+                        const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
+                        const stateClass = () => {
+                          if (state === 'running') {
                             return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
                           }
-                          if (currentState === 'failed') {
+                          if (state === 'failed' || state === 'error') {
                             return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
                           }
-                          return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+                          return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
                         };
-
-                        // Find the corresponding container for this task
-                        const container = findContainerForTask(props.containers, task);
-
-                        const hasCpuData = () =>
-                          typeof container?.cpuPercent === 'number' && !Number.isNaN(container.cpuPercent);
-                        const hasMemData = () =>
-                          typeof container?.memoryPercent === 'number' && !Number.isNaN(container.memoryPercent);
-                        const cpuPercent = () => (hasCpuData() ? container!.cpuPercent : 0);
-                        const memPercent = () => (hasMemData() ? container!.memoryPercent : 0);
-
-                        const taskLabel = () => {
-                          const name = task.containerName || task.containerId?.slice(0, 12) || '—';
-                          if (task.slot !== undefined && task.slot !== null) {
-                            return `${name}.${task.slot}`;
-                          }
-                          return name;
-                        };
-
-                        onCleanup(() => {
-                          props.onTaskUnmount?.(taskEntry.nodeId);
-                        });
-
                         return (
-                          <tr
-                            ref={(row) => row && props.onTaskMount?.(taskEntry.nodeId, row)}
-                            class={`hover:bg-gray-100 dark:hover:bg-gray-800/70 ${
-                              props.selectedTaskId === taskEntry.nodeId ? 'bg-sky-50 dark:bg-sky-900/30' : ''
-                            }`}
-                          >
-                            <td class="py-0.5 pr-2 text-gray-900 dark:text-gray-100" title={task.id}>
-                              {taskLabel()}
+                          <tr class="hover:bg-purple-50/60 dark:hover:bg-purple-900/20">
+                            <td class="py-1 pr-2">
+                              <div class="flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
+                                <span class="truncate font-medium" title={taskLabel()}>
+                                  {taskLabel()}
+                                </span>
+                                <span
+                                  class={`hidden sm:inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+                                    'task',
+                                  )}`}
+                                >
+                                  Task
+                                </span>
+                              </div>
                             </td>
-                            <td class="py-0.5 px-2 text-gray-600 dark:text-gray-400">
+                            <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
                               {task.nodeName || task.nodeId || '—'}
                             </td>
-                            <td class="py-0.5 px-2">
-                              <span
-                                class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateBadge()}`}
-                              >
-                                {task.currentState || 'Unknown'}
+                            <td class="py-1 px-2">
+                              <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
+                                {task.currentState || task.desiredState || 'Unknown'}
                               </span>
                             </td>
-                            <td class="py-0.5 px-2">
-                              <Show when={hasCpuData()} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                <MetricBar value={cpuPercent()} label={`${cpuPercent().toFixed(1)}%`} />
+                            <td class="py-1 px-2">
+                              <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
+                                <MetricBar value={Math.min(100, cpu)} label={formatPercent(cpu)} type="cpu" />
                               </Show>
                             </td>
-                            <td class="py-0.5 px-2">
-                              <Show when={hasMemData()} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                <MetricBar value={memPercent()} label={`${memPercent().toFixed(1)}%`} type="memory" />
+                            <td class="py-1 px-2">
+                              <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
+                                <MetricBar value={Math.min(100, mem)} label={formatPercent(mem)} type="memory" />
                               </Show>
                             </td>
-                            <td class="py-0.5 px-2 text-gray-600 dark:text-gray-400 text-[10px]">
-                              {(() => {
-                                const timestamp = task.startedAt || task.createdAt;
-                                if (!timestamp) return '—';
-                                // Handle both Unix timestamps (number) and ISO strings (from backend time.Time)
-                                const date = typeof timestamp === 'number'
-                                  ? new Date(timestamp * 1000)
-                                  : new Date(timestamp);
-                                return date.toLocaleString();
-                              })()}
+                            <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                              <Show when={updated} fallback="—">
+                                {(timestamp) => (
+                                  <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
+                                    {formatRelativeTime(timestamp())}
+                                  </span>
+                                )}
+                              </Show>
                             </td>
                           </tr>
                         );
@@ -369,872 +763,213 @@ const ServiceRow: Component<ServiceRowProps> = (props) => {
   );
 };
 
-// Container Row Component
-interface ContainerRowProps {
-  container: DockerContainer;
-  indent?: boolean;
-  isSelected?: boolean;
-  rowRef?: (row: HTMLTableRowElement | null) => void;
-}
+const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
+  const tokens = createMemo(() => parseSearchTerm(props.searchTerm));
 
-const ContainerRow: Component<ContainerRowProps> = (props) => {
-  const formatPorts = () => {
-    if (!props.container.ports || props.container.ports.length === 0) return '—';
-    return props.container.ports
-      .map((p) => {
-        if (p.publicPort) {
-          return `${p.publicPort}:${p.privatePort}/${p.protocol}`;
-        }
-        return `${p.privatePort}/${p.protocol}`;
-      })
-      .join(', ');
-  };
-
-  const stateBadge = () => {
-    const state = props.container.state?.toLowerCase() || 'unknown';
-    if (state === 'running') {
-      return (
-        <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-          Running
-        </span>
-      );
-    }
-    if (state === 'exited' || state === 'stopped') {
-      return (
-        <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-          Stopped
-        </span>
-      );
-    }
-    return (
-      <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
-        {state}
-      </span>
-    );
-  };
-
-  const hasCpuData = () =>
-    typeof props.container.cpuPercent === 'number' && !Number.isNaN(props.container.cpuPercent);
-  const hasMemData = () =>
-    typeof props.container.memoryPercent === 'number' && !Number.isNaN(props.container.memoryPercent);
-  const cpuPercent = () => (hasCpuData() ? props.container.cpuPercent! : 0);
-  const memPercent = () => (hasMemData() ? props.container.memoryPercent! : 0);
-
-  onCleanup(() => {
-    props.rowRef?.(null);
-  });
-
-  return (
-    <tr
-      ref={(row) => row && props.rowRef?.(row)}
-      class={`border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
-        props.isSelected ? 'bg-sky-50 dark:bg-sky-900/30' : ''
-      }`}
-    >
-      <td
-        class={`${props.indent ? 'pl-8' : 'pl-4'} pr-2 py-0.5 text-sm text-gray-900 dark:text-gray-100 truncate`}
-        title={props.container.name || props.container.id}
-      >
-        {props.container.name || props.container.id?.slice(0, 12)}
-      </td>
-      <td class="px-2 py-0.5 text-xs text-gray-600 dark:text-gray-400">
-        <span class="truncate max-w-[10rem]" title={props.container.image || undefined}>
-          {props.container.image || 'Image not specified'}
-        </span>
-      </td>
-      <td class="px-2 py-0.5 text-xs">{stateBadge()}</td>
-      <td class="px-2 py-0.5">
-        <Show when={hasCpuData()} fallback={<span class="text-xs text-gray-400">—</span>}>
-          <MetricBar value={cpuPercent()} label={`${cpuPercent().toFixed(1)}%`} />
-        </Show>
-      </td>
-      <td class="px-2 py-0.5 w-[100px]">
-        <Show when={hasMemData()} fallback={<span class="text-xs text-gray-400">—</span>}>
-          <MetricBar value={memPercent()} label={`${memPercent().toFixed(1)}%`} type="memory" />
-        </Show>
-      </td>
-      <td class="px-2 py-0.5 text-xs text-gray-600 dark:text-gray-400 truncate max-w-[10rem]" title={formatPorts()}>
-        <span class="truncate">{formatPorts()}</span>
-      </td>
-    </tr>
-  );
-};
-
-export const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
-  // Track expanded state for each host
-  const getHostExpandState = (hostId: string) => {
-    if (!hostExpandState.has(hostId)) {
-      hostExpandState.set(hostId, true);
-    }
-    if (!hostExpandSignals.has(hostId)) {
-      hostExpandSignals.set(
-        hostId,
-        createSignal(hostExpandState.get(hostId) ?? true),
-      );
-    }
-
-    const [isExpanded, setIsExpanded] = hostExpandSignals.get(hostId)!;
-
-    const setExpanded = (value: boolean) =>
-      setIsExpanded(() => {
-        hostExpandState.set(hostId, value);
-        return value;
-      });
-
-    return {
-      isExpanded,
-      toggle: () =>
-        setIsExpanded((prev) => {
-          const next = !prev;
-          hostExpandState.set(hostId, next);
-          return next;
-        }),
-      setExpanded,
-    };
-  };
-
-  // Track expanded state for each service
-  const getServiceExpandState = (serviceKey: string) => {
-    if (!serviceExpandSignals.has(serviceKey)) {
-      serviceExpandSignals.set(
-        serviceKey,
-        createSignal(serviceExpandState.get(serviceKey) ?? false),
-      );
-    }
-
-    const [isExpanded, setIsExpanded] = serviceExpandSignals.get(serviceKey)!;
-
-    const setExpanded = (value: boolean) =>
-      setIsExpanded(() => {
-        serviceExpandState.set(serviceKey, value);
-        return value;
-      });
-
-    return {
-      isExpanded,
-      toggle: () =>
-        setIsExpanded((prev) => {
-          const next = !prev;
-          serviceExpandState.set(serviceKey, next);
-          return next;
-        }),
-      setExpanded,
-    };
-  };
-
-  const normalizeContainerState = (state?: string | null, status?: string | null) => {
-    const lowerState = state?.toLowerCase().trim();
-    if (lowerState) return lowerState;
-    const lowerStatus = status?.toLowerCase().trim();
-    if (!lowerStatus) return '';
-    if (lowerStatus.startsWith('up')) return 'running';
-    if (lowerStatus.startsWith('exited')) return 'exited';
-    if (lowerStatus.startsWith('created')) return 'created';
-    if (lowerStatus.startsWith('paused')) return 'paused';
-    if (lowerStatus.includes('restarting')) return 'restarting';
-    if (lowerStatus.includes('unhealthy')) return 'unhealthy';
-    if (lowerStatus.includes('dead')) return 'dead';
-    if (lowerStatus.includes('removing')) return 'removing';
-    return lowerStatus;
-  };
-
-  const matchesContainerStateFilter = (filterValue: string, container?: DockerContainer | null) => {
-    if (!container) return false;
-    const state = normalizeContainerState(container.state, container.status);
-    if (filterValue === 'running') {
-      return state === 'running';
-    }
-    if (filterValue === 'stopped') {
-      return STOPPED_CONTAINER_STATES.has(state);
-    }
-    if (filterValue === 'error') {
-      return ERROR_CONTAINER_STATES.has(state);
-    }
-    return true;
-  };
-
-  const matchesTaskStateFilter = (filterValue: string, task: DockerTask, container?: DockerContainer | null) => {
-    if (!filterValue) return true;
-    if (container && matchesContainerStateFilter(filterValue, container)) {
-      return true;
-    }
-
-    const current = task.currentState?.toLowerCase() ?? '';
-    if (filterValue === 'running') {
-      return current === 'running';
-    }
-    if (filterValue === 'stopped') {
-      return current === 'complete' || current === 'shutdown' || current === 'stopped';
-    }
-    if (filterValue === 'error') {
-      return current === 'failed' || current === 'error';
-    }
-    return true;
-  };
-
-  const hostMatchesFilter = (host: DockerHost) => {
-    const filter = props.statsFilter;
-    if (!filter || filter.type !== 'host-status') {
-      return true;
-    }
-    const status = host.status?.toLowerCase() ?? 'unknown';
-    switch (filter.value) {
-      case 'offline':
-        return OFFLINE_HOST_STATUSES.has(status);
-      case 'degraded':
-        return DEGRADED_HOST_STATUSES.has(status);
-      case 'online':
-        return status === 'online';
-      default:
-        return true;
-    }
-  };
-
-  // Parse search terms
-  const searchTerms = createMemo(() => {
-    const term = props.searchTerm || '';
-    return term
-      .toLowerCase()
-      .split(/[\s,]+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
-  });
-
-  // Check if a container matches search terms
-  const containerMatchesSearch = (host: DockerHost, container: DockerContainer) => {
-    const terms = searchTerms();
-    if (terms.length === 0) return true;
-
-    return terms.every((term) => {
-      const [prefix, value] = term.includes(':') ? term.split(/:(.+)/) : [null, term];
-      const target = value || term;
-
-      const tokens = [
-        container.name,
-        container.image,
-        container.id,
-        container.state,
-        container.status,
-        host.displayName,
-        host.hostname,
-      ];
-
-      const hasToken = (list: (string | undefined)[]) =>
-        list
-          .filter(Boolean)
-          .some((entry) => entry!.toLowerCase().includes(target));
-
-      if (prefix) {
-        switch (prefix) {
-          case 'host':
-            return hasToken([host.displayName, host.hostname]);
-          case 'name':
-            return hasToken([container.name]);
-          case 'image':
-            return hasToken([container.image]);
-          case 'state':
-            return hasToken([container.state, container.status]);
-          case 'id':
-            return hasToken([container.id]);
-          default:
-            return hasToken(tokens);
-        }
-      }
-
-      return hasToken(tokens);
-    });
-  };
-
-  // Check if a service matches search terms
-  const serviceMatchesSearch = (host: DockerHost, service: DockerService) => {
-    const terms = searchTerms();
-    if (terms.length === 0) return true;
-
-    return terms.every((term) => {
-      const [prefix, value] = term.includes(':') ? term.split(/:(.+)/) : [null, term];
-      const target = value || term;
-
-      const tokens = [
-        service.name,
-        service.id,
-        service.image,
-        host.displayName,
-        host.hostname,
-      ];
-
-      const hasToken = (list: (string | undefined)[]) =>
-        list
-          .filter(Boolean)
-          .some((entry) => entry!.toLowerCase().includes(target));
-
-      if (prefix) {
-        switch (prefix) {
-          case 'host':
-            return hasToken([host.displayName, host.hostname]);
-          case 'name':
-          case 'service':
-            return hasToken([service.name, service.id]);
-          case 'image':
-            return hasToken([service.image]);
-          default:
-            return hasToken(tokens);
-        }
-      }
-
-      return hasToken(tokens);
-    });
-  };
-
-  // Sort hosts alphabetically
   const sortedHosts = createMemo(() => {
     const hosts = props.hosts || [];
     return [...hosts].sort((a, b) => {
-      const aName = a.displayName || a.hostname || a.id || '';
-      const bName = b.displayName || b.hostname || b.id || '';
+      const aName = a.displayName || a.hostname || a.id;
+      const bName = b.displayName || b.hostname || b.id;
       return aName.localeCompare(bName);
     });
   });
 
-  const containerFilterValue = () =>
-    props.statsFilter?.type === 'container-state' ? props.statsFilter.value : null;
+  const groupedRows = createMemo(() => {
+    const groups: Array<{ host: DockerHost; rows: DockerRow[] }> = [];
+    const filter = props.statsFilter ?? null;
+    const searchTokens = tokens();
+    const selectedHostId = props.selectedHostId ? props.selectedHostId() : null;
 
-const visibleHosts = createMemo<DockerTreeHostEntry[]>(() => {
-    const results: DockerTreeHostEntry[] = [];
-    const hosts = sortedHosts();
-    const filterValue = containerFilterValue();
-
-    hosts.forEach((host, index) => {
-      if (!hostMatchesFilter(host)) {
+    sortedHosts().forEach((host) => {
+      if (!hostMatchesFilter(filter, host)) {
         return;
       }
 
-      const hostId =
-        host.id ||
-        host.hostname ||
-        host.displayName ||
-        `host-${index}`;
+       if (selectedHostId && host.id !== selectedHostId) {
+        return;
+      }
 
-      const hostContainers = host.containers || [];
-      const hostTasks = host.tasks || [];
+      const hostRows: DockerRow[] = [];
+      const containers = host.containers || [];
+      const services = host.services || [];
+      const tasks = host.tasks || [];
 
-      const referencedContainers = new Set<string>();
-      hostTasks.forEach((task) => {
-        if (task.containerId) referencedContainers.add(task.containerId);
-        if (task.containerName) referencedContainers.add(task.containerName);
-      });
+      containers.forEach((container) => {
+        if (!containerMatchesStateFilter(filter, container)) return;
+        const matchesSearch = searchTokens.every((token) => containerMatchesToken(token, host, container));
+        if (!matchesSearch) return;
 
-      const standalone = hostContainers
-        .filter((container) => {
-          const id = container.id || '';
-          const name = container.name || '';
-
-          if (referencedContainers.has(id) || referencedContainers.has(name)) {
-            return false;
-          }
-
-          if (!containerMatchesSearch(host, container)) {
-            return false;
-          }
-
-          if (filterValue && !matchesContainerStateFilter(filterValue, container)) {
-            return false;
-          }
-
-          return true;
-        })
-        .map((container, idx) => ({
+        hostRows.push({
+          kind: 'container',
+          id: container.id || `${host.id}-container-${container.name}`,
+          host,
           container,
-          nodeId: container.id
-            ? `${hostId}:container:${container.id}`
-            : container.name
-            ? `${hostId}:container:${container.name}`
-            : `${hostId}:container:${idx}`,
-        }));
+        });
+      });
 
-      const services = (host.services || []).reduce<DockerTreeServiceEntry[]>((rows, service) => {
-        if (!serviceMatchesSearch(host, service)) {
-          return rows;
-        }
+      services.forEach((service) => {
+        if (!serviceMatchesHealthFilter(filter, service)) return;
+        const matchesSearch = searchTokens.every((token) => serviceMatchesToken(token, host, service));
+        if (!matchesSearch) return;
 
-        const filteredTasks = hostTasks.filter((task) => {
-          const matchesService =
-            (task.serviceId && task.serviceId === service.id) ||
-            (!task.serviceId && task.serviceName && task.serviceName === service.name);
-          if (!matchesService) return false;
-
-          if (!filterValue) return true;
-          const container = findContainerForTask(hostContainers, task);
-          return matchesTaskStateFilter(filterValue, task, container);
+        const associatedTasks = tasks.filter((task) => {
+          if (service.id && task.serviceId) {
+            return task.serviceId === service.id;
+          }
+          if (service.name && task.serviceName) {
+            return task.serviceName === service.name;
+          }
+          return false;
         });
 
-        if (filterValue && filteredTasks.length === 0) {
-          return rows;
-        }
-
-        const identifier = service.id || service.name || 'service';
-        const serviceKey = `${hostId}:${identifier}`;
-
-        const tasks = filteredTasks.map((task, idx) => ({
-          task,
-          nodeId: getTaskNodeId(serviceKey, task, idx),
-        }));
-
-        rows.push({
-          key: serviceKey,
+        hostRows.push({
+          kind: 'service',
+          id: service.id || `${host.id}-service-${service.name}`,
+          host,
           service,
-          tasks,
+          tasks: associatedTasks,
         });
-
-        return rows;
-      }, []);
-
-      if (services.length === 0 && standalone.length === 0) {
-        return;
-      }
-
-      results.push({
-        host,
-        hostId,
-        containers: hostContainers,
-        services,
-        standaloneContainers: standalone,
       });
+
+      if (hostRows.length > 0) {
+        hostRows.sort((a, b) => {
+          const nameA =
+            a.kind === 'container'
+              ? a.container.name || a.container.id || ''
+              : a.service.name || a.service.id || '';
+          const nameB =
+            b.kind === 'container'
+              ? b.container.name || b.container.id || ''
+              : b.service.name || b.service.id || '';
+          return nameA.localeCompare(nameB);
+        });
+        groups.push({ host, rows: hostRows });
+      }
     });
 
-    return results;
-});
-
-  const [selectedNode, setSelectedNode] = createSignal<DockerTreeSelection | null>(null);
-  const [isMobileTreeOpen, setIsMobileTreeOpen] = createSignal(false);
-
-  const displayedHosts = createMemo(() => {
-    const hosts = visibleHosts();
-    const selection = selectedNode();
-    if (!selection) return hosts;
-    if (selection.type === 'host') {
-      const match = hosts.find((host) => host.hostId === selection.hostId);
-      return match ? [match] : hosts;
-    }
-    return hosts.filter((host) => host.hostId === selection.hostId);
+    return groups;
   });
 
-  const hostRefs = new Map<string, HTMLElement>();
-  const serviceRefs = new Map<string, HTMLTableRowElement>();
-  const taskRefs = new Map<string, HTMLTableRowElement>();
-  const containerRefs = new Map<string, HTMLTableRowElement>();
+  const totalRows = createMemo(() =>
+    groupedRows().reduce((acc, group) => acc + group.rows.length, 0),
+  );
 
-  const assignHostRef = (hostId: string, el: HTMLElement | null | undefined) => {
-    if (el) {
-      hostRefs.set(hostId, el);
-    } else {
-      hostRefs.delete(hostId);
-    }
-  };
+  const totalContainers = createMemo(() =>
+    (props.hosts || []).reduce((acc, host) => acc + (host.containers?.length ?? 0), 0),
+  );
+  const totalServices = createMemo(() =>
+    (props.hosts || []).reduce((acc, host) => acc + (host.services?.length ?? 0), 0),
+  );
 
-  const assignServiceRef = (serviceKey: string, el: HTMLTableRowElement | null | undefined) => {
-    if (el) {
-      serviceRefs.set(serviceKey, el);
-    } else {
-      serviceRefs.delete(serviceKey);
-    }
-  };
-
-  const registerTaskRef = (nodeId: string, row: HTMLTableRowElement) => {
-    taskRefs.set(nodeId, row);
-  };
-
-  const unregisterTaskRef = (nodeId: string) => {
-    taskRefs.delete(nodeId);
-  };
-
-  const assignContainerRef = (nodeId: string, el: HTMLTableRowElement | null | undefined) => {
-    if (el) {
-      containerRefs.set(nodeId, el);
-    } else {
-      containerRefs.delete(nodeId);
-    }
-  };
-
-  const scrollToSelection = (selection: DockerTreeSelection, smooth = true) => {
-    if (typeof window === 'undefined') return false;
-
-    const verticalScroll = (
-      element?: Element | null,
-      block: ScrollLogicalPosition = 'nearest',
-    ) => {
-      if (!element) return false;
-      const rect = element.getBoundingClientRect();
-      const topAllowance = 96;
-      const bottomAllowance = window.innerHeight - 32;
-
-      if (rect.top >= topAllowance && rect.bottom <= bottomAllowance) {
-        return true;
-      }
-
-      element.scrollIntoView({
-        behavior: smooth ? 'smooth' : 'auto',
-        block,
-        inline: 'nearest',
-      });
-      return true;
-    };
-
-    if (selection.type === 'host') {
-      return verticalScroll(hostRefs.get(selection.hostId), 'start');
-    }
-
-    if (selection.type === 'service') {
-      return verticalScroll(serviceRefs.get(selection.id), 'nearest');
-    }
-
-    if (selection.type === 'task') {
-      return verticalScroll(taskRefs.get(selection.id), 'center');
-    }
-
-    if (selection.type === 'container') {
-      return verticalScroll(containerRefs.get(selection.id), 'nearest');
-    }
-
-    return false;
-  };
-
-  const handleTreeSelect = (selection: DockerTreeSelection) => {
-    batch(() => {
-      setSelectedNode(selection);
-
-      const hostState = getHostExpandState(selection.hostId);
-      hostState.setExpanded(true);
-
-      if (selection.type === 'task') {
-        const serviceState = getServiceExpandState(selection.serviceKey);
-        serviceState.setExpanded(true);
-      }
-    });
-
-    setIsMobileTreeOpen(false);
-  };
-
-  const buildSelectionFingerprint = (selection: DockerTreeSelection) => {
-    switch (selection.type) {
-      case 'host':
-        return `host:${selection.hostId}`;
-      case 'service':
-        return `service:${selection.hostId}:${selection.id}`;
-      case 'task':
-        return `task:${selection.hostId}:${selection.serviceKey}:${selection.id}`;
-      case 'container':
-        return `container:${selection.hostId}:${selection.id}`;
-      default:
-        return '';
-    }
-  };
-
-  let lastScrollFingerprint = '';
-
-  const attemptScrollToSelection = (
-    selection: DockerTreeSelection,
-    fingerprint: string,
-    remainingAttempts = 8,
-  ) => {
-    if (remainingAttempts <= 0) return;
-    const didScroll = scrollToSelection(selection, remainingAttempts === 8);
-    if (didScroll) {
-      lastScrollFingerprint = fingerprint;
-    } else if (typeof window !== 'undefined') {
-      requestAnimationFrame(() =>
-        attemptScrollToSelection(selection, fingerprint, remainingAttempts - 1),
+  const runningContainers = createMemo(() =>
+    groupedRows().reduce((acc, group) => {
+      return (
+        acc +
+        group.rows
+          .filter((row): row is Extract<typeof row, { kind: 'container' }> => row.kind === 'container')
+          .filter((row) => toLower(row.container.state) === 'running').length
       );
-    }
-  };
+    }, 0),
+  );
 
-  createEffect(() => {
-    const selection = selectedNode();
-    if (!selection) return;
-    const hosts = visibleHosts();
-    const hostEntry = hosts.find((entry) => entry.hostId === selection.hostId);
-    if (!hostEntry) {
-      setSelectedNode(null);
-      return;
-    }
-
-    if (selection.type === 'service') {
-      const exists = hostEntry.services.some((service) => service.key === selection.id);
-      if (!exists) {
-        setSelectedNode({ type: 'host', hostId: hostEntry.hostId, id: hostEntry.hostId });
-        return;
-      }
-    } else if (selection.type === 'task') {
-      const serviceEntry = hostEntry.services.find((service) => service.key === selection.serviceKey);
-      if (!serviceEntry) {
-        setSelectedNode({ type: 'host', hostId: hostEntry.hostId, id: hostEntry.hostId });
-        return;
-      }
-      const taskExists = serviceEntry.tasks.some((task) => task.nodeId === selection.id);
-      if (!taskExists) {
-        setSelectedNode({ type: 'service', hostId: hostEntry.hostId, id: serviceEntry.key });
-        return;
-      }
-    } else if (selection.type === 'container') {
-      const exists = hostEntry.standaloneContainers.some((container) => container.nodeId === selection.id);
-      if (!exists) {
-        setSelectedNode({ type: 'host', hostId: hostEntry.hostId, id: hostEntry.hostId });
-        return;
-      }
-    }
-
-    const fingerprint = buildSelectionFingerprint(selection);
-    if (!fingerprint || fingerprint === lastScrollFingerprint) return;
-
-    attemptScrollToSelection(selection, fingerprint);
-  });
-
-  const hasVisibleHosts = createMemo(() => visibleHosts().length > 0);
+  const stoppedContainers = createMemo(() =>
+    groupedRows().reduce((acc, group) => {
+      return (
+        acc +
+        group.rows
+          .filter((row): row is Extract<typeof row, { kind: 'container' }> => row.kind === 'container')
+          .filter((row) => STOPPED_CONTAINER_STATES.has(toLower(row.container.state))).length
+      );
+    }, 0),
+  );
 
   return (
-    <div class="flex flex-col gap-4 lg:flex-row">
-      <Show when={hasVisibleHosts()}>
-        <div class="flex justify-end lg:hidden">
-          <button
-            type="button"
-            onClick={() => setIsMobileTreeOpen(true)}
-            class="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-500"
-            aria-label="Browse Docker hosts"
-          >
-            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path d="M4 4h12v2H4V4zm0 5h12v2H4V9zm0 5h12v2H4v-2z" />
-            </svg>
-            Browse Hosts
-          </button>
+    <div class="space-y-4">
+      <Show
+        when={totalRows() > 0}
+        fallback={
+          <Card padding="lg">
+            <EmptyState
+              title="No Docker workloads found"
+              description={
+                totalContainers() === 0 && totalServices() === 0
+                  ? 'Add a Docker agent in Settings to start gathering container and service metrics.'
+                  : props.searchTerm || props.statsFilter
+                    ? 'No Docker containers or services match your current filters.'
+                    : 'Docker data is currently unavailable.'
+              }
+            />
+          </Card>
+        }
+      >
+        <Card padding="none" class="overflow-hidden">
+          <ScrollableTable minWidth="900px">
+            <table class="w-full min-w-[900px] table-fixed border-collapse">
+              <thead>
+                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                  <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
+                    Resource
+                  </th>
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                    Type
+                  </th>
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
+                    Image / Stack
+                  </th>
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%]">
+                    Status
+                  </th>
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                    CPU
+                  </th>
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[12%]">
+                    Memory
+                  </th>
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                    Tasks / Restarts
+                  </th>
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[12%]">
+                    Updated / Uptime
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={groupedRows()}>
+                  {(group) => (
+                    <>
+                      <DockerHostGroupHeader host={group.host} colspan={8} />
+                      <For each={group.rows}>
+                        {(row) =>
+                          row.kind === 'container' ? (
+                            <DockerContainerRow row={row} columns={8} />
+                          ) : (
+                            <DockerServiceRow row={row} columns={8} />
+                          )
+                        }
+                      </For>
+                    </>
+                  )}
+                </For>
+              </tbody>
+            </table>
+          </ScrollableTable>
+        </Card>
+
+        <div class="flex items-center gap-2 rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+          <span class="flex items-center gap-1">
+            <span class="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
+            {runningContainers()} running
+          </span>
+          <span class="text-gray-400">|</span>
+          <span class="flex items-center gap-1">
+            <span class="h-2 w-2 rounded-full bg-gray-400" aria-hidden="true" />
+            {stoppedContainers()} stopped
+          </span>
         </div>
       </Show>
-
-      <Show when={hasVisibleHosts()}>
-        <aside class="hidden lg:block lg:w-72 lg:flex-shrink-0 lg:sticky lg:top-20 lg:self-start">
-          <DockerTree
-            hosts={visibleHosts()}
-            selected={selectedNode()}
-            onSelect={handleTreeSelect}
-            getHostState={getHostExpandState}
-            getServiceState={getServiceExpandState}
-          />
-        </aside>
-      </Show>
-
-      <Show when={hasVisibleHosts() && isMobileTreeOpen()}>
-        <div class="lg:hidden">
-          <div
-            class="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm"
-            onClick={() => setIsMobileTreeOpen(false)}
-          />
-          <aside class="fixed inset-y-0 left-0 z-50 flex w-72 max-w-full flex-col bg-white shadow-xl dark:bg-slate-900">
-            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-              <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Docker Hosts</h2>
-              <button
-                type="button"
-                class="rounded-md p-1 text-slate-500 transition hover:text-slate-700 dark:text-slate-300 dark:hover:text-slate-100"
-                onClick={() => setIsMobileTreeOpen(false)}
-                aria-label="Close host navigation"
-              >
-                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fill-rule="evenodd"
-                    d="M10 8.586l4.95-4.95 1.414 1.414L11.414 10l4.95 4.95-1.414 1.414L10 11.414l-4.95 4.95-1.414-1.414L8.586 10l-4.95-4.95L5.05 3.636 10 8.586z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div class="flex-1 overflow-y-auto px-2 pb-6">
-              <DockerTree
-                hosts={visibleHosts()}
-                selected={selectedNode()}
-                onSelect={handleTreeSelect}
-                getHostState={getHostExpandState}
-                getServiceState={getServiceExpandState}
-              />
-            </div>
-          </aside>
-        </div>
-      </Show>
-
-      <div class="flex-1 min-w-0 space-y-6">
-        <For each={displayedHosts()}>
-          {(entry) => {
-            const hostState = getHostExpandState(entry.hostId);
-            const currentSelection = () => selectedNode();
-            const isHostActive = () => currentSelection()?.hostId === entry.hostId;
-
-            const displayedServices = createMemo(() => {
-              const selection = currentSelection();
-              if (!selection || selection.type === 'host') return entry.services;
-              if (selection.type === 'service') {
-                return entry.services.filter((service) => service.key === selection.id);
-              }
-              if (selection.type === 'task') {
-                return entry.services.filter((service) => service.key === selection.serviceKey);
-              }
-              return [];
-            });
-
-            const displayedStandaloneContainers = createMemo(() => {
-              const selection = currentSelection();
-              if (!selection || selection.type === 'host') return entry.standaloneContainers;
-              if (selection.type === 'container') {
-                return entry.standaloneContainers.filter((container) => container.nodeId === selection.id);
-              }
-              return [];
-            });
-
-            const shouldShowServices = createMemo(() => displayedServices().length > 0);
-            const shouldShowContainers = createMemo(() => displayedStandaloneContainers().length > 0);
-
-            return (
-              <section
-                id={`host-${entry.hostId}`}
-                ref={(el) => assignHostRef(entry.hostId, el)}
-                class="space-y-4 scroll-mt-28 min-w-0"
-              >
-                <Card
-                  padding="none"
-                  class={`overflow-hidden ${isHostActive() ? 'ring-1 ring-sky-400' : ''}`}
-                >
-                  <table class="w-full border-collapse">
-                    <tbody>
-                      <DockerHostHeader
-                        host={entry.host}
-                        colspan={6}
-                        isExpanded={hostState.isExpanded()}
-                        onToggle={hostState.toggle}
-                        isActive={isHostActive()}
-                      />
-                    </tbody>
-                  </table>
-                </Card>
-
-                <Show when={hostState.isExpanded()}>
-                  <div class="space-y-4">
-                    <Show when={shouldShowServices()}>
-                      <Card padding="none" class="overflow-hidden">
-                        <ScrollableTable persistKey={`services-${entry.hostId}`} minWidth="680px">
-                          <table class="w-full border-collapse">
-                            <thead>
-                              <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                                <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Service
-                                </th>
-                                <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Image
-                                </th>
-                                <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Status
-                                </th>
-                              </tr>
-                            </thead>
-                          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                              <For each={displayedServices()}>
-                                {(serviceEntry) => {
-                                  const serviceState = getServiceExpandState(serviceEntry.key);
-                                  const serviceSelected = () => {
-                                    const selection = selectedNode();
-                                    if (!selection) return false;
-                                    if (selection.type === 'service') {
-                                      return selection.id === serviceEntry.key;
-                                    }
-                                    if (selection.type === 'task') {
-                                      return selection.serviceKey === serviceEntry.key;
-                                    }
-                                    return false;
-                                  };
-                              const selectedTaskId = () => {
-                                const selection = selectedNode();
-                                if (selection?.type === 'task' && selection.serviceKey === serviceEntry.key) {
-                                  return selection.id;
-                                }
-                                return null;
-                              };
-
-                              onCleanup(() => {
-                                serviceRefs.delete(serviceEntry.key);
-                              });
-
-                              return (
-                                <ServiceRow
-                                  service={serviceEntry.service}
-                                  hostId={entry.hostId}
-                                  tasks={serviceEntry.tasks}
-                                  containers={entry.containers}
-                                  isExpanded={serviceState.isExpanded()}
-                                  onToggle={serviceState.toggle}
-                                  isSelected={serviceSelected()}
-                                  rowRef={(row) => assignServiceRef(serviceEntry.key, row)}
-                                  selectedTaskId={selectedTaskId()}
-                                  onTaskMount={registerTaskRef}
-                                  onTaskUnmount={unregisterTaskRef}
-                                />
-                              );
-                            }}
-                          </For>
-                            </tbody>
-                          </table>
-                        </ScrollableTable>
-                      </Card>
-                    </Show>
-
-                    <Show when={shouldShowContainers()}>
-                      <Card padding="none" class="overflow-hidden">
-                        <ScrollableTable persistKey={`containers-${entry.hostId}`}>
-                          <table class="w-full border-collapse">
-                            <thead>
-                              <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                                <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Container
-                                </th>
-                                <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Image
-                                </th>
-                                <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Status
-                                </th>
-                                <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  CPU
-                                </th>
-                                <th class="px-2 py-1 text-left text-[11px] sm:text-xs.font-medium uppercase tracking-wider">
-                                  Memory
-                                </th>
-                                <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                                  Ports
-                                </th>
-                              </tr>
-                            </thead>
-                          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                              <For each={displayedStandaloneContainers()}>
-                                {(containerEntry) => {
-                                  const isContainerSelected = () =>
-                                    selectedNode()?.type === 'container' &&
-                                    selectedNode()?.id === containerEntry.nodeId;
-
-                                  return (
-                                    <ContainerRow
-                                      container={containerEntry.container}
-                                      indent={false}
-                                      isSelected={isContainerSelected()}
-                                      rowRef={(row) => assignContainerRef(containerEntry.nodeId, row)}
-                                    />
-                                  );
-                                }}
-                              </For>
-                            </tbody>
-                          </table>
-                        </ScrollableTable>
-                      </Card>
-                    </Show>
-                  </div>
-                </Show>
-              </section>
-            );
-          }}
-        </For>
-      </div>
     </div>
   );
 };
+
+export { DockerUnifiedTable };

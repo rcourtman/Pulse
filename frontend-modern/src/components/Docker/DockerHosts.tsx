@@ -1,21 +1,20 @@
 import type { Component } from 'solid-js';
-import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
+import { Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { DockerFilter } from './DockerFilter';
-import { DockerSummaryStatsBar } from './DockerSummaryStats';
+import { DockerHostSummaryTable, type DockerHostSummary } from './DockerHostSummaryTable';
 import { DockerUnifiedTable } from './DockerUnifiedTable';
 import { useWebSocket } from '@/App';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { formatBytes, formatRelativeTime } from '@/utils/format';
 
 interface DockerHostsProps {
   hosts: DockerHost[];
   activeAlerts?: Record<string, unknown> | any;
 }
-
-type StatsFilter = { type: 'host-status' | 'container-state' | 'service-health'; value: string } | null;
 
 export const DockerHosts: Component<DockerHostsProps> = (props) => {
   const navigate = useNavigate();
@@ -40,8 +39,72 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
 
   const [search, setSearch] = createSignal('');
   const debouncedSearch = useDebouncedValue(search, 250);
+  const [selectedHostId, setSelectedHostId] = createSignal<string | null>(null);
 
-  const [statsFilter, setStatsFilter] = createSignal<StatsFilter>(null);
+  const clampPercent = (value: number | undefined | null) => {
+    if (value === undefined || value === null || Number.isNaN(value)) return 0;
+    if (!Number.isFinite(value)) return 0;
+    if (value < 0) return 0;
+    if (value > 100) return 100;
+    return value;
+  };
+
+  const hostSummaries = createMemo<DockerHostSummary[]>(() => {
+    return sortedHosts().map((host) => {
+      const totalContainers = host.containers?.length ?? 0;
+      const runningContainers =
+        host.containers?.filter((container) => container.state?.toLowerCase() === 'running').length ?? 0;
+      const runningPercent = totalContainers > 0 ? clampPercent((runningContainers / totalContainers) * 100) : 0;
+
+      const cpuPercent = clampPercent(host.cpuUsagePercent ?? 0);
+
+      const memoryUsed = host.memory?.used ?? 0;
+      const memoryTotal = host.memory?.total ?? host.totalMemoryBytes ?? 0;
+      const memoryPercent = host.memory?.usage
+        ? clampPercent(host.memory.usage)
+        : memoryTotal > 0
+          ? clampPercent((memoryUsed / memoryTotal) * 100)
+          : 0;
+      const memoryLabel =
+        memoryTotal > 0 ? `${formatBytes(memoryUsed)} / ${formatBytes(memoryTotal)}` : undefined;
+
+      let diskPercent = 0;
+      let diskLabel: string | undefined;
+      if (host.disks && host.disks.length > 0) {
+        const totals = host.disks.reduce(
+          (acc, disk) => {
+            acc.used += disk.used ?? 0;
+            acc.total += disk.total ?? 0;
+            return acc;
+          },
+          { used: 0, total: 0 },
+        );
+        if (totals.total > 0) {
+          diskPercent = clampPercent((totals.used / totals.total) * 100);
+          diskLabel = `${formatBytes(totals.used)} / ${formatBytes(totals.total)}`;
+        }
+      }
+
+      const uptimeSeconds = host.uptimeSeconds ?? 0;
+      const lastSeenRelative = host.lastSeen ? formatRelativeTime(host.lastSeen) : '—';
+      const lastSeenAbsolute = host.lastSeen ? new Date(host.lastSeen).toLocaleString() : '';
+
+      return {
+        host,
+        cpuPercent,
+        memoryPercent,
+        memoryLabel,
+        diskPercent,
+        diskLabel,
+        runningPercent,
+        runningCount: runningContainers,
+        totalCount: totalContainers,
+        uptimeSeconds,
+        lastSeenRelative,
+        lastSeenAbsolute,
+      };
+    });
+  });
 
   let searchInputRef: HTMLInputElement | undefined;
 
@@ -51,12 +114,6 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
 
   const handleKeyDown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement;
-
-    if (event.key === 'Escape' && statsFilter()) {
-      event.preventDefault();
-      setStatsFilter(null);
-      return;
-    }
 
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
       return;
@@ -76,18 +133,18 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
   onMount(() => document.addEventListener('keydown', handleKeyDown));
   onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
 
-  const handleStatsFilterChange = (filter: StatsFilter) => {
-    if (!filter) {
-      setStatsFilter(null);
+  createEffect(() => {
+    const hostId = selectedHostId();
+    if (!hostId) {
       return;
     }
+    if (!sortedHosts().some((host) => host.id === hostId)) {
+      setSelectedHostId(null);
+    }
+  });
 
-    setStatsFilter((current) => {
-      if (current && current.type === filter.type && current.value === filter.value) {
-        return null;
-      }
-      return filter;
-    });
+  const handleHostSelect = (hostId: string) => {
+    setSelectedHostId((current) => (current === hostId ? null : hostId));
   };
 
   return (
@@ -127,25 +184,25 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                 setSearch={setSearch}
                 onReset={() => {
                   setSearch('');
-                  setStatsFilter(null);
+                  setSelectedHostId(null);
                 }}
                 searchInputRef={(el) => {
                   searchInputRef = el;
                 }}
               />
 
-              <Card padding="lg">
-                <DockerSummaryStatsBar
-                  hosts={sortedHosts()}
-                  onFilterChange={handleStatsFilterChange}
-                  activeFilter={statsFilter()}
+              <Show when={hostSummaries().length > 0}>
+                <DockerHostSummaryTable
+                  summaries={hostSummaries}
+                  selectedHostId={selectedHostId}
+                  onSelect={handleHostSelect}
                 />
-              </Card>
+              </Show>
 
               <DockerUnifiedTable
                 hosts={sortedHosts()}
                 searchTerm={debouncedSearch()}
-                statsFilter={statsFilter()}
+                selectedHostId={selectedHostId}
               />
             </>
           }

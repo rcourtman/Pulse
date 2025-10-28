@@ -1115,27 +1115,94 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
 		}
 
+		cpuUsage := clampFloat(10+rand.Float64()*70, 4, 98)
+		loadAverage := []float64{
+			clampFloat(rand.Float64()*float64(cpus), 0, float64(cpus)+1),
+			clampFloat(rand.Float64()*float64(cpus), 0, float64(cpus)+1),
+			clampFloat(rand.Float64()*float64(cpus), 0, float64(cpus)+1),
+		}
+
+		memUsageRatio := clampFloat(0.3+rand.Float64()*0.55, 0.05, 0.98)
+		usedMemoryBytes := int64(float64(totalMemoryBytes) * memUsageRatio)
+		if usedMemoryBytes > totalMemoryBytes {
+			usedMemoryBytes = totalMemoryBytes
+		}
+		freeMemoryBytes := totalMemoryBytes - usedMemoryBytes
+		memory := models.Memory{
+			Total: totalMemoryBytes,
+			Used:  usedMemoryBytes,
+			Free:  freeMemoryBytes,
+		}
+		if totalMemoryBytes > 0 {
+			memory.Usage = clampFloat((float64(usedMemoryBytes)/float64(totalMemoryBytes))*100, 0, 100)
+		}
+
+		diskTotal := int64((250 + rand.Intn(750)) * 1024 * 1024 * 1024) // 250-999 GB
+		diskUsed := int64(float64(diskTotal) * clampFloat(0.35+rand.Float64()*0.5, 0.1, 0.97))
+		if diskUsed > diskTotal {
+			diskUsed = diskTotal
+		}
+		diskFree := diskTotal - diskUsed
+		diskUsage := 0.0
+		if diskTotal > 0 {
+			diskUsage = clampFloat((float64(diskUsed)/float64(diskTotal))*100, 0, 100)
+		}
+
+		disks := []models.Disk{
+			{
+				Total:      diskTotal,
+				Used:       diskUsed,
+				Free:       diskFree,
+				Usage:      diskUsage,
+				Mountpoint: "/",
+				Type:       "ext4",
+				Device:     "/dev/sda1",
+			},
+		}
+
+		networkInterfaces := []models.HostNetworkInterface{
+			{
+				Name:      "eth0",
+				Addresses: []string{fmt.Sprintf("10.10.%d.%d/24", i%20, rand.Intn(200)+10)},
+				RXBytes:   uint64(rand.Int63n(5_000_000_000) + 500_000_000),
+				TXBytes:   uint64(rand.Int63n(4_000_000_000) + 400_000_000),
+			},
+		}
+		if rand.Intn(4) == 0 {
+			networkInterfaces = append(networkInterfaces, models.HostNetworkInterface{
+				Name:      "eth1",
+				Addresses: []string{fmt.Sprintf("172.16.%d.%d/24", i%16, rand.Intn(200)+20)},
+				RXBytes:   uint64(rand.Int63n(2_000_000_000) + 200_000_000),
+				TXBytes:   uint64(rand.Int63n(1_500_000_000) + 150_000_000),
+			})
+		}
+
 		host := models.DockerHost{
-			ID:               hostID,
-			AgentID:          fmt.Sprintf("agent-%s", randomHexString(6)),
-			Hostname:         hostname,
-			DisplayName:      humanizeHostDisplayName(hostname),
-			MachineID:        randomHexString(32),
-			OS:               dockerOperatingSystems[rand.Intn(len(dockerOperatingSystems))],
-			KernelVersion:    dockerKernelVersions[rand.Intn(len(dockerKernelVersions))],
-			Architecture:     dockerArchitectures[rand.Intn(len(dockerArchitectures))],
-			DockerVersion:    dockerVersions[rand.Intn(len(dockerVersions))],
-			CPUs:             cpus,
-			TotalMemoryBytes: totalMemoryBytes,
-			UptimeSeconds:    uptime,
-			Status:           status,
-			LastSeen:         lastSeen,
-			IntervalSeconds:  interval,
-			AgentVersion:     agentVersion,
-			Containers:       containers,
-			Services:         services,
-			Tasks:            tasks,
-			Swarm:            swarmInfo,
+			ID:                hostID,
+			AgentID:           fmt.Sprintf("agent-%s", randomHexString(6)),
+			Hostname:          hostname,
+			DisplayName:       humanizeHostDisplayName(hostname),
+			MachineID:         randomHexString(32),
+			OS:                dockerOperatingSystems[rand.Intn(len(dockerOperatingSystems))],
+			KernelVersion:     dockerKernelVersions[rand.Intn(len(dockerKernelVersions))],
+			Architecture:      dockerArchitectures[rand.Intn(len(dockerArchitectures))],
+			DockerVersion:     dockerVersions[rand.Intn(len(dockerVersions))],
+			CPUs:              cpus,
+			TotalMemoryBytes:  totalMemoryBytes,
+			UptimeSeconds:     uptime,
+			CPUUsage:          cpuUsage,
+			LoadAverage:       loadAverage,
+			Memory:            memory,
+			Disks:             disks,
+			NetworkInterfaces: networkInterfaces,
+			Status:            status,
+			LastSeen:          lastSeen,
+			IntervalSeconds:   interval,
+			AgentVersion:      agentVersion,
+			Containers:        containers,
+			Services:          services,
+			Tasks:             tasks,
+			Swarm:             swarmInfo,
 		}
 
 		hosts = append(hosts, host)

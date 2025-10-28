@@ -877,6 +877,12 @@ if [[ "$UNINSTALL" != true ]]; then
                 systemctl stop pulse-docker-agent
             fi
         fi
+    else
+        if pgrep -f pulse-docker-agent > /dev/null 2>&1; then
+            log_info "Stopping running agent process"
+            pkill -f pulse-docker-agent 2>/dev/null || true
+            sleep 1
+        fi
     fi
 fi
 

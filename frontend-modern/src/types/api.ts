@@ -130,6 +130,11 @@ export interface DockerHost {
   cpus: number;
   totalMemoryBytes: number;
   uptimeSeconds: number;
+  cpuUsagePercent?: number;
+  loadAverage?: number[];
+  memory?: Memory;
+  disks?: Disk[];
+  networkInterfaces?: HostNetworkInterface[];
   status: string;
   lastSeen: number;
   intervalSeconds: number;

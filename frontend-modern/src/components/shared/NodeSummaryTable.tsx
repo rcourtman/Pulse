@@ -1,6 +1,6 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import type { Node, VM, Container, Storage, PBSInstance } from '@/types/api';
-import { formatBytes, formatUptime } from '@/utils/format';
+import { formatBytes, formatPercent, formatUptime } from '@/utils/format';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -563,7 +563,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       >
                         <MetricBar
                           value={cpuPercentValue ?? 0}
-                          label={`${cpuPercentValue}%`}
+                          label={formatPercent(cpuPercentValue ?? 0)}
                           sublabel={
                             isPVE && node!.cpuInfo?.cores
                               ? `${node!.cpuInfo.cores} cores`
@@ -580,7 +580,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       >
                         <MetricBar
                           value={memoryPercentValue ?? 0}
-                          label={`${memoryPercentValue}%`}
+                          label={formatPercent(memoryPercentValue ?? 0)}
                           sublabel={
                             isPVE && node!.memory
                               ? `${formatBytes(node!.memory.used)}/${formatBytes(node!.memory.total)}`
@@ -599,7 +599,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       >
                         <MetricBar
                           value={diskPercentValue ?? 0}
-                          label={`${diskPercentValue}%`}
+                          label={formatPercent(diskPercentValue ?? 0)}
                           sublabel={diskSublabel}
                           type="disk"
                         />

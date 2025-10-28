@@ -45,12 +45,9 @@ export function MetricBar(props: MetricBarProps) {
   });
 
   return (
-    <div class="metric-text">
-      <div class="relative min-w-[96px] w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
-        <div
-          class={`absolute top-0 left-0 h-full ${progressColorClass()}`}
-          style={{ width: `${width()}%` }}
-        />
+    <div class="metric-text w-full">
+      <div class="relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+        <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
           <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
             <span>{props.label}</span>

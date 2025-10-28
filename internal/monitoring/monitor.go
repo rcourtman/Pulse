@@ -646,6 +646,18 @@ func convertDockerTasks(tasks []agentsdocker.Task) []models.DockerTask {
 	return result
 }
 
+func normalizeAgentVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return ""
+	}
+	version = strings.TrimLeft(version, "vV")
+	if version == "" {
+		return ""
+	}
+	return "v" + version
+}
+
 func convertDockerSwarmInfo(info *agentsdocker.SwarmInfo) *models.DockerSwarmInfo {
 	if info == nil {
 		return nil
@@ -1390,27 +1402,80 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	tasks := convertDockerTasks(report.Tasks)
 	swarmInfo := convertDockerSwarmInfo(report.Host.Swarm)
 
+	loadAverage := make([]float64, 0, len(report.Host.LoadAverage))
+	if len(report.Host.LoadAverage) > 0 {
+		loadAverage = append(loadAverage, report.Host.LoadAverage...)
+	}
+
+	var memory models.Memory
+	if report.Host.Memory.TotalBytes > 0 || report.Host.Memory.UsedBytes > 0 {
+		memory = models.Memory{
+			Total:     report.Host.Memory.TotalBytes,
+			Used:      report.Host.Memory.UsedBytes,
+			Free:      report.Host.Memory.FreeBytes,
+			Usage:     safeFloat(report.Host.Memory.Usage),
+			SwapTotal: report.Host.Memory.SwapTotal,
+			SwapUsed:  report.Host.Memory.SwapUsed,
+		}
+	}
+
+	disks := make([]models.Disk, 0, len(report.Host.Disks))
+	for _, disk := range report.Host.Disks {
+		disks = append(disks, models.Disk{
+			Total:      disk.TotalBytes,
+			Used:       disk.UsedBytes,
+			Free:       disk.FreeBytes,
+			Usage:      safeFloat(disk.Usage),
+			Mountpoint: disk.Mountpoint,
+			Type:       disk.Type,
+			Device:     disk.Device,
+		})
+	}
+
+	networkIfaces := make([]models.HostNetworkInterface, 0, len(report.Host.Network))
+	for _, iface := range report.Host.Network {
+		addresses := append([]string(nil), iface.Addresses...)
+		networkIfaces = append(networkIfaces, models.HostNetworkInterface{
+			Name:      iface.Name,
+			MAC:       iface.MAC,
+			Addresses: addresses,
+			RXBytes:   iface.RXBytes,
+			TXBytes:   iface.TXBytes,
+			SpeedMbps: iface.SpeedMbps,
+		})
+	}
+
+	agentVersion := normalizeAgentVersion(report.Agent.Version)
+	if agentVersion == "" && hasPrevious {
+		agentVersion = normalizeAgentVersion(previous.AgentVersion)
+	}
+
 	host := models.DockerHost{
-		ID:               identifier,
-		AgentID:          agentID,
-		Hostname:         hostname,
-		DisplayName:      displayName,
-		MachineID:        strings.TrimSpace(report.Host.MachineID),
-		OS:               report.Host.OS,
-		KernelVersion:    report.Host.KernelVersion,
-		Architecture:     report.Host.Architecture,
-		DockerVersion:    report.Host.DockerVersion,
-		CPUs:             report.Host.TotalCPU,
-		TotalMemoryBytes: report.Host.TotalMemoryBytes,
-		UptimeSeconds:    report.Host.UptimeSeconds,
-		Status:           "online",
-		LastSeen:         timestamp,
-		IntervalSeconds:  report.Agent.IntervalSeconds,
-		AgentVersion:     report.Agent.Version,
-		Containers:       containers,
-		Services:         services,
-		Tasks:            tasks,
-		Swarm:            swarmInfo,
+		ID:                identifier,
+		AgentID:           agentID,
+		Hostname:          hostname,
+		DisplayName:       displayName,
+		MachineID:         strings.TrimSpace(report.Host.MachineID),
+		OS:                report.Host.OS,
+		KernelVersion:     report.Host.KernelVersion,
+		Architecture:      report.Host.Architecture,
+		DockerVersion:     report.Host.DockerVersion,
+		CPUs:              report.Host.TotalCPU,
+		TotalMemoryBytes:  report.Host.TotalMemoryBytes,
+		UptimeSeconds:     report.Host.UptimeSeconds,
+		CPUUsage:          safeFloat(report.Host.CPUUsagePercent),
+		LoadAverage:       loadAverage,
+		Memory:            memory,
+		Disks:             disks,
+		NetworkInterfaces: networkIfaces,
+		Status:            "online",
+		LastSeen:          timestamp,
+		IntervalSeconds:   report.Agent.IntervalSeconds,
+		AgentVersion:      agentVersion,
+		Containers:        containers,
+		Services:          services,
+		Tasks:             tasks,
+		Swarm:             swarmInfo,
 	}
 
 	if tokenRecord != nil {

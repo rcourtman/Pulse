@@ -3,7 +3,7 @@ import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
-import { formatUptime } from '@/utils/format';
+import { formatPercent, formatUptime } from '@/utils/format';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 
 export interface DockerHostSummary {
@@ -11,6 +11,8 @@ export interface DockerHostSummary {
   cpuPercent: number;
   memoryPercent: number;
   memoryLabel?: string;
+  diskPercent: number;
+  diskLabel?: string;
   runningPercent: number;
   runningCount: number;
   totalCount: number;
@@ -25,7 +27,7 @@ interface DockerHostSummaryTableProps {
   onSelect: (hostId: string) => void;
 }
 
-type SortKey = 'name' | 'uptime' | 'cpu' | 'memory' | 'running' | 'lastSeen' | 'agent';
+type SortKey = 'name' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'running' | 'lastSeen' | 'agent';
 
 type SortDirection = 'asc' | 'desc';
 
@@ -52,6 +54,19 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
     return lastSeen;
   };
 
+  const runningStatusClass = (summary: DockerHostSummary) => {
+    if (!summary.totalCount || summary.totalCount <= 0) {
+      return 'text-gray-400 dark:text-gray-500';
+    }
+    if (summary.runningPercent >= 99) {
+      return 'text-green-600 dark:text-green-400';
+    }
+    if (summary.runningPercent >= 70) {
+      return 'text-yellow-600 dark:text-yellow-400';
+    }
+    return 'text-red-600 dark:text-red-400';
+  };
+
   const sortedSummaries = createMemo(() => {
     const list = [...props.summaries()];
     const key = sortKey();
@@ -74,6 +89,9 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
           break;
         case 'memory':
           value = a.memoryPercent - b.memoryPercent;
+          break;
+        case 'disk':
+          value = a.diskPercent - b.diskPercent;
           break;
         case 'running':
           value = a.runningPercent - b.runningPercent;
@@ -129,20 +147,26 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
               >
                 Host {renderSortIndicator('name')}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+              <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider">
                 Status
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                 onClick={() => handleSort('cpu')}
               >
                 CPU {renderSortIndicator('cpu')}
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                 onClick={() => handleSort('memory')}
               >
                 Memory {renderSortIndicator('memory')}
+              </th>
+              <th
+                class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                onClick={() => handleSort('disk')}
+              >
+                Disk {renderSortIndicator('disk')}
               </th>
               <th
                 class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -151,19 +175,19 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 Containers {renderSortIndicator('running')}
               </th>
               <th
-                class="hidden px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
+                class="hidden px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
                 onClick={() => handleSort('uptime')}
               >
                 Uptime {renderSortIndicator('uptime')}
               </th>
               <th
-                class="hidden px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
+                class="hidden px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
                 onClick={() => handleSort('lastSeen')}
               >
                 Last Update {renderSortIndicator('lastSeen')}
               </th>
               <th
-                class="hidden px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
+                class="hidden px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 sm:table-cell"
                 onClick={() => handleSort('agent')}
               >
                 Agent {renderSortIndicator('agent')}
@@ -176,7 +200,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 const selected = props.selectedHostId() === summary.host.id;
                 const online = isHostOnline(summary.host);
                 const uptimeLabel = summary.uptimeSeconds ? formatUptime(summary.uptimeSeconds) : '—';
-                const agentLabel = summary.host.agentVersion ? `v${summary.host.agentVersion}` : '—';
+                const agentLabel = summary.host.agentVersion ? summary.host.agentVersion : '—';
 
                 const rowStyle = () => {
                   const styles: Record<string, string> = {};
@@ -217,7 +241,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                     style={rowStyle()}
                     onClick={() => props.onSelect(summary.host.id)}
                   >
-                    <td class="pr-2 py-1 pl-3 align-top">
+                    <td class="pr-2 py-1 pl-3 align-middle">
                       <div class="flex flex-wrap items-center gap-1">
                         <span class="font-medium text-[11px] text-gray-900 dark:text-gray-100">
                           {summary.host.displayName}
@@ -274,80 +298,107 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                         </Show>
                       </div>
                     </td>
-                    <td class="px-2 py-1 align-top">
-                      {renderDockerStatusBadge(summary.host.status)}
-                    </td>
-                    <td class="px-2 py-1 align-top">
-                      <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                        <MetricBar
-                          value={summary.cpuPercent}
-                          label={`${summary.cpuPercent.toFixed(1)}%`}
-                          type="cpu"
-                        />
-                      </Show>
-                    </td>
-                    <td class="px-2 py-1 align-top">
-                      <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                        <MetricBar
-                          value={summary.memoryPercent}
-                          label={`${summary.memoryPercent.toFixed(1)}%`}
-                          sublabel={summary.memoryLabel}
-                          type="memory"
-                        />
-                      </Show>
-                    </td>
-                    <td class="px-2 py-1 align-top">
-                      <div class="flex justify-start sm:justify-center">
-                        <MetricBar
-                          value={summary.runningPercent}
-                          label={`${summary.runningCount}/${summary.totalCount}`}
-                          type="generic"
-                        />
+                    <td class="px-2 py-1 align-middle">
+                      <div class="flex justify-center items-center h-full w-full max-w-[180px]">
+                        {renderDockerStatusBadge(summary.host.status)}
                       </div>
                     </td>
-                    <td class="hidden px-2 py-1 align-top whitespace-nowrap sm:table-cell">
-                      <span class="text-xs text-gray-600 dark:text-gray-400">
-                        {uptimeLabel}
-                      </span>
-                    </td>
-                    <td class="hidden px-2 py-1 align-top sm:table-cell">
-                      <div class="text-sm text-gray-900 dark:text-gray-100">
-                        {summary.lastSeenRelative}
+                    <td class="px-2 py-1 align-middle">
+                      <div class="flex justify-center items-center h-full w-full max-w-[180px]">
+                        <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
+                          <MetricBar value={summary.cpuPercent} label={formatPercent(summary.cpuPercent)} type="cpu" />
+                        </Show>
                       </div>
-                      <Show when={summary.lastSeenAbsolute}>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">
-                          {summary.lastSeenAbsolute}
-                        </div>
-                      </Show>
                     </td>
-                    <td class="hidden px-2 py-1 align-top sm:table-cell">
-                      <div class="flex flex-col gap-0.5">
-                        <Show when={summary.host.agentVersion}>
-                          <div class="flex flex-col gap-0.5">
+                    <td class="px-2 py-1 align-middle">
+                      <div class="flex justify-center items-center h-full w-full max-w-[180px]">
+                        <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
+                          <MetricBar
+                            value={summary.memoryPercent}
+                            label={formatPercent(summary.memoryPercent)}
+                            sublabel={summary.memoryLabel}
+                            type="memory"
+                          />
+                        </Show>
+                      </div>
+                    </td>
+                    <td class="px-2 py-1 align-middle">
+                      <div class="flex justify-center items-center h-full">
+                        <Show when={summary.diskLabel} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
+                          <MetricBar
+                            value={summary.diskPercent}
+                            label={formatPercent(summary.diskPercent)}
+                            sublabel={summary.diskLabel}
+                            type="disk"
+                          />
+                        </Show>
+                      </div>
+                    </td>
+                    <td class="px-2 py-1 align-middle">
+                      <div class="flex justify-center items-center h-full">
+                        <Show
+                          when={summary.totalCount > 0}
+                          fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}
+                        >
+                          <span
+                            class={`text-xs font-medium whitespace-nowrap ${runningStatusClass(summary)}`}
+                            title={`${formatPercent(summary.runningPercent)} running`}
+                          >
+                            {summary.runningCount}/{summary.totalCount}
+                          </span>
+                        </Show>
+                      </div>
+                    </td>
+                    <td class="hidden px-2 py-1 align-middle whitespace-nowrap sm:table-cell">
+                      <div class="flex justify-center items-center h-full">
+                        <span class="text-xs text-gray-600 dark:text-gray-400">
+                          {uptimeLabel}
+                        </span>
+                      </div>
+                    </td>
+                    <td class="hidden px-2 py-1 align-middle sm:table-cell">
+                      <div class="flex justify-center items-center h-full">
+                        <Show
+                          when={summary.lastSeenRelative}
+                          fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}
+                        >
+                          {(relative) => (
+                            <span
+                              class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap"
+                              title={summary.lastSeenAbsolute || undefined}
+                            >
+                              {relative()}
+                            </span>
+                          )}
+                        </Show>
+                      </div>
+                    </td>
+                    <td class="hidden px-2 py-1 align-middle sm:table-cell">
+                      <div class="flex items-center justify-center gap-2 whitespace-nowrap text-[10px] h-full">
+                        <Show
+                          when={summary.host.agentVersion}
+                          fallback={<span class="text-gray-400 dark:text-gray-500 text-xs">—</span>}
+                        >
+                          {(version) => (
                             <span
                               class={
                                 agentOutdated
-                                  ? 'text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-medium inline-block w-fit'
-                                  : 'text-[10px] px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium inline-block w-fit'
+                                  ? 'px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-medium'
+                                  : 'px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium'
                               }
-                              title={
+                              title={`${
                                 agentOutdated
-                                  ? 'Outdated - Update recommended'
-                                  : 'Up to date - Auto-update enabled'
-                              }
+                                  ? 'Agent is outdated on this host'
+                                  : 'Agent is up to date'
+                              }${summary.host.intervalSeconds ? `\nReporting interval: ${summary.host.intervalSeconds}s` : ''}`}
                             >
-                              v{summary.host.agentVersion}
+                              v{version()}
                             </span>
-                            <Show when={agentOutdated}>
-                              <span class="text-[9px] text-yellow-600 dark:text-yellow-500 font-medium">
-                                ⚠ Update available
-                              </span>
-                            </Show>
-                          </div>
+                          )}
                         </Show>
-                        <Show when={summary.host.intervalSeconds}>
-                          <span class="text-[10px] text-gray-500 dark:text-gray-400">
-                            {summary.host.intervalSeconds}s
+                        <Show when={agentOutdated}>
+                          <span class="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium" title="Update recommended">
+                            ⚠
                           </span>
                         </Show>
                       </div>

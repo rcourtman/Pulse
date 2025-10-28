@@ -9,18 +9,13 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
-	gocpu "github.com/shirou/gopsutil/v4/cpu"
-	godisk "github.com/shirou/gopsutil/v4/disk"
 	gohost "github.com/shirou/gopsutil/v4/host"
-	goload "github.com/shirou/gopsutil/v4/load"
-	gomem "github.com/shirou/gopsutil/v4/mem"
-	gonet "github.com/shirou/gopsutil/v4/net"
 )
 
 // Config controls the behaviour of the host agent.
@@ -220,29 +215,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	defer cancel()
 
 	uptime, _ := gohost.UptimeWithContext(collectCtx)
-	loadAvg, _ := goload.AvgWithContext(collectCtx)
-	cpuCount, _ := gocpu.CountsWithContext(collectCtx, true)
-	cpuUsage, err := a.calculateCPUUsage(collectCtx)
+	snapshot, err := hostmetrics.Collect(collectCtx)
 	if err != nil {
-		a.logger.Debug().Err(err).Msg("failed to compute cpu usage")
-	}
-
-	memStats, err := gomem.VirtualMemoryWithContext(collectCtx)
-	if err != nil {
-		return agentshost.Report{}, fmt.Errorf("memory stats: %w", err)
-	}
-
-	disks := a.collectDisks(collectCtx)
-	network := a.collectNetwork(collectCtx)
-
-	var loadValues []float64
-	if loadAvg != nil {
-		loadValues = []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
-	}
-
-	swapUsed := int64(0)
-	if memStats.SwapTotal > memStats.SwapFree {
-		swapUsed = int64(memStats.SwapTotal - memStats.SwapFree)
+		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
 	}
 
 	report := agentshost.Report{
@@ -263,146 +238,22 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			KernelVersion: a.kernelVersion,
 			Architecture:  a.architecture,
 			CPUModel:      "",
-			CPUCount:      cpuCount,
+			CPUCount:      snapshot.CPUCount,
 			UptimeSeconds: int64(uptime),
-			LoadAverage:   loadValues,
+			LoadAverage:   append([]float64(nil), snapshot.LoadAverage...),
 		},
 		Metrics: agentshost.Metrics{
-			CPUUsagePercent: cpuUsage,
-			Memory: agentshost.MemoryMetric{
-				TotalBytes: int64(memStats.Total),
-				UsedBytes:  int64(memStats.Used),
-				FreeBytes:  int64(memStats.Free),
-				Usage:      memStats.UsedPercent,
-				SwapTotal:  int64(memStats.SwapTotal),
-				SwapUsed:   swapUsed,
-			},
+			CPUUsagePercent: snapshot.CPUUsagePercent,
+			Memory:          snapshot.Memory,
 		},
-		Disks:     disks,
-		Network:   network,
+		Disks:     append([]agentshost.Disk(nil), snapshot.Disks...),
+		Network:   append([]agentshost.NetworkInterface(nil), snapshot.Network...),
 		Sensors:   agentshost.Sensors{},
 		Tags:      append([]string(nil), a.cfg.Tags...),
 		Timestamp: time.Now().UTC(),
 	}
 
 	return report, nil
-}
-
-func (a *Agent) calculateCPUUsage(ctx context.Context) (float64, error) {
-	// Use Percent() with a 1 second measurement interval for cross-platform compatibility
-	// This works reliably on macOS ARM64 where Times() is not implemented
-	percentages, err := gocpu.PercentWithContext(ctx, time.Second, false)
-	if err != nil {
-		return 0, err
-	}
-	if len(percentages) == 0 {
-		return 0, nil
-	}
-
-	usage := percentages[0]
-	if usage < 0 {
-		usage = 0
-	}
-	if usage > 100 {
-		usage = 100
-	}
-
-	return usage, nil
-}
-
-func (a *Agent) collectDisks(ctx context.Context) []agentshost.Disk {
-	partitions, err := godisk.PartitionsWithContext(ctx, true)
-	if err != nil {
-		a.logger.Debug().Err(err).Msg("failed to fetch disk partitions")
-		return nil
-	}
-
-	disks := make([]agentshost.Disk, 0, len(partitions))
-	seen := make(map[string]struct{}, len(partitions))
-
-	for _, part := range partitions {
-		if part.Mountpoint == "" {
-			continue
-		}
-		if _, ok := seen[part.Mountpoint]; ok {
-			continue
-		}
-		seen[part.Mountpoint] = struct{}{}
-
-		usage, err := godisk.UsageWithContext(ctx, part.Mountpoint)
-		if err != nil {
-			continue
-		}
-		if usage.Total == 0 {
-			continue
-		}
-
-		disks = append(disks, agentshost.Disk{
-			Device:     part.Device,
-			Mountpoint: part.Mountpoint,
-			Filesystem: part.Fstype,
-			Type:       part.Fstype,
-			TotalBytes: int64(usage.Total),
-			UsedBytes:  int64(usage.Used),
-			FreeBytes:  int64(usage.Free),
-			Usage:      usage.UsedPercent,
-		})
-	}
-
-	sort.Slice(disks, func(i, j int) bool { return disks[i].Mountpoint < disks[j].Mountpoint })
-	return disks
-}
-
-func (a *Agent) collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
-	ifaces, err := gonet.InterfacesWithContext(ctx)
-	if err != nil {
-		a.logger.Debug().Err(err).Msg("failed to fetch network interfaces")
-		return nil
-	}
-
-	ioCounters, err := gonet.IOCountersWithContext(ctx, true)
-	if err != nil {
-		a.logger.Debug().Err(err).Msg("failed to fetch network counters")
-	}
-	ioMap := make(map[string]gonet.IOCountersStat, len(ioCounters))
-	for _, stat := range ioCounters {
-		ioMap[stat.Name] = stat
-	}
-
-	interfaces := make([]agentshost.NetworkInterface, 0, len(ifaces))
-
-	for _, iface := range ifaces {
-		if len(iface.Addrs) == 0 {
-			continue
-		}
-		if isLoopback(iface.Flags) {
-			continue
-		}
-
-		addresses := make([]string, 0, len(iface.Addrs))
-		for _, addr := range iface.Addrs {
-			if addr.Addr != "" {
-				addresses = append(addresses, addr.Addr)
-			}
-		}
-		if len(addresses) == 0 {
-			continue
-		}
-
-		counter := ioMap[iface.Name]
-		ifaceEntry := agentshost.NetworkInterface{
-			Name:      iface.Name,
-			MAC:       iface.HardwareAddr,
-			Addresses: addresses,
-			RXBytes:   counter.BytesRecv,
-			TXBytes:   counter.BytesSent,
-		}
-
-		interfaces = append(interfaces, ifaceEntry)
-	}
-
-	sort.Slice(interfaces, func(i, j int) bool { return interfaces[i].Name < interfaces[j].Name })
-	return interfaces
 }
 
 func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error {
