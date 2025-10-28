@@ -315,15 +315,12 @@ const buildRowId = (host: DockerHost, row: DockerRow) => {
 };
 
 const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = (props) => {
-  const status = toLower(props.host.status);
-  const lastSeen = ensureMs(props.host.lastSeen);
-  const uptime = props.host.uptimeSeconds ?? props.host.intervalSeconds;
   const displayName = props.host.displayName || props.host.hostname || props.host.id;
 
   return (
     <tr class="bg-gray-50 dark:bg-gray-900/40">
       <td colSpan={props.colspan} class="py-1 pr-2 pl-4">
-        <div class="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-100">
+        <div class="flex flex-nowrap items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700 dark:text-slate-100">
           <span>{displayName}</span>
           <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
             <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
@@ -414,7 +411,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
         <td class="pl-4 pr-2 py-1">
           <div class="flex items-center gap-1.5 min-w-0">
             <span class={`h-2 w-2 rounded-full ${statusDotClass(state())}`} aria-hidden="true" />
-            <div class="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 min-w-0 text-sm text-gray-900 dark:text-gray-100">
+            <div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
               <span class="truncate font-semibold" title={containerTitle()}>
                 {container.name || container.id}
               </span>
@@ -581,7 +578,7 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
               class={`h-2 w-2 rounded-full ${statusDotClass(badge.label.toLowerCase())}`}
               aria-hidden="true"
             />
-            <div class="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 min-w-0 text-sm text-gray-900 dark:text-gray-100">
+            <div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
               <span class="truncate font-semibold" title={serviceTitle()}>
                 {service.name || service.id || 'Service'}
               </span>
@@ -932,7 +929,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
       >
         <Card padding="none" class="overflow-hidden">
           <ScrollableTable minWidth="900px">
-            <table class="w-full min-w-[900px] table-fixed border-collapse">
+            <table class="w-full min-w-[900px] table-fixed border-collapse whitespace-nowrap">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                   <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[26%]">
