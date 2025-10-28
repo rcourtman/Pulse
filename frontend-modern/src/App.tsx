@@ -874,7 +874,7 @@ function AppLayout(props: {
         id: 'hosts' as const,
         label: 'Hosts',
         route: '/hosts',
-        settingsRoute: '/settings',
+        settingsRoute: '/settings/host-agents',
         tooltip: 'Monitor hosts with the host agent',
         enabled: hasHosts() || !!seenPlatforms()['hosts'],
         live: hasHosts(),

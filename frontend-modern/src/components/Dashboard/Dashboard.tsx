@@ -926,13 +926,13 @@ export function Dashboard(props: DashboardProps) {
                       Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[64px] lg:w-[72px] xl:w-[80px] 2xl:w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[44px] sm:w-[52px] lg:w-[60px] xl:w-[68px] 2xl:w-[80px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('vmid')}
                     >
                       VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[76px] sm:w-[86px] lg:w-[96px] xl:w-[108px] 2xl:w-[128px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[60px] sm:w-[70px] lg:w-[80px] xl:w-[92px] 2xl:w-[112px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('uptime')}
                     >
                       Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
