@@ -21,6 +21,7 @@ import (
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
 )
@@ -332,6 +333,13 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 
 	uptime := readSystemUptime()
 
+	metricsCtx, metricsCancel := context.WithTimeout(ctx, 10*time.Second)
+	snapshot, err := hostmetrics.Collect(metricsCtx)
+	metricsCancel()
+	if err != nil {
+		return agentsdocker.Report{}, fmt.Errorf("collect host metrics: %w", err)
+	}
+
 	collectContainers := a.cfg.IncludeContainers
 	if !collectContainers && (a.cfg.IncludeServices || a.cfg.IncludeTasks) && !info.Swarm.ControlAvailable {
 		collectContainers = true
@@ -365,6 +373,11 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			TotalCPU:         info.NCPU,
 			TotalMemoryBytes: info.MemTotal,
 			UptimeSeconds:    uptime,
+			CPUUsagePercent:  safeFloat(snapshot.CPUUsagePercent),
+			LoadAverage:      append([]float64(nil), snapshot.LoadAverage...),
+			Memory:           snapshot.Memory,
+			Disks:            append([]agentsdocker.Disk(nil), snapshot.Disks...),
+			Network:          append([]agentsdocker.NetworkInterface(nil), snapshot.Network...),
 		},
 		Timestamp: time.Now().UTC(),
 	}

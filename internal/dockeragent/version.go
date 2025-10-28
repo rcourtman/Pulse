@@ -4,4 +4,4 @@ package dockeragent
 // overridden at build time via -ldflags for release artifacts. When building
 // from source without ldflags, it defaults to this development value.
 // Set to match deployed agents to prevent update loops in development.
-var Version = "v4.22.0-rc.6"
+var Version = "v4.30.0"

@@ -190,33 +190,38 @@ type HostSensorSummary struct {
 
 // DockerHost represents a Docker host reporting metrics via the external agent.
 type DockerHost struct {
-	ID               string                   `json:"id"`
-	AgentID          string                   `json:"agentId"`
-	Hostname         string                   `json:"hostname"`
-	DisplayName      string                   `json:"displayName"`
-	MachineID        string                   `json:"machineId,omitempty"`
-	OS               string                   `json:"os,omitempty"`
-	KernelVersion    string                   `json:"kernelVersion,omitempty"`
-	Architecture     string                   `json:"architecture,omitempty"`
-	DockerVersion    string                   `json:"dockerVersion,omitempty"`
-	CPUs             int                      `json:"cpus"`
-	TotalMemoryBytes int64                    `json:"totalMemoryBytes"`
-	UptimeSeconds    int64                    `json:"uptimeSeconds"`
-	Status           string                   `json:"status"`
-	LastSeen         time.Time                `json:"lastSeen"`
-	IntervalSeconds  int                      `json:"intervalSeconds"`
-	AgentVersion     string                   `json:"agentVersion,omitempty"`
-	Containers       []DockerContainer        `json:"containers"`
-	Services         []DockerService          `json:"services,omitempty"`
-	Tasks            []DockerTask             `json:"tasks,omitempty"`
-	Swarm            *DockerSwarmInfo         `json:"swarm,omitempty"`
-	TokenID          string                   `json:"tokenId,omitempty"`
-	TokenName        string                   `json:"tokenName,omitempty"`
-	TokenHint        string                   `json:"tokenHint,omitempty"`
-	TokenLastUsedAt  *time.Time               `json:"tokenLastUsedAt,omitempty"`
-	Hidden           bool                     `json:"hidden"`
-	PendingUninstall bool                     `json:"pendingUninstall"`
-	Command          *DockerHostCommandStatus `json:"command,omitempty"`
+	ID                string                   `json:"id"`
+	AgentID           string                   `json:"agentId"`
+	Hostname          string                   `json:"hostname"`
+	DisplayName       string                   `json:"displayName"`
+	MachineID         string                   `json:"machineId,omitempty"`
+	OS                string                   `json:"os,omitempty"`
+	KernelVersion     string                   `json:"kernelVersion,omitempty"`
+	Architecture      string                   `json:"architecture,omitempty"`
+	DockerVersion     string                   `json:"dockerVersion,omitempty"`
+	CPUs              int                      `json:"cpus"`
+	TotalMemoryBytes  int64                    `json:"totalMemoryBytes"`
+	UptimeSeconds     int64                    `json:"uptimeSeconds"`
+	CPUUsage          float64                  `json:"cpuUsagePercent"`
+	LoadAverage       []float64                `json:"loadAverage,omitempty"`
+	Memory            Memory                   `json:"memory"`
+	Disks             []Disk                   `json:"disks,omitempty"`
+	NetworkInterfaces []HostNetworkInterface   `json:"networkInterfaces,omitempty"`
+	Status            string                   `json:"status"`
+	LastSeen          time.Time                `json:"lastSeen"`
+	IntervalSeconds   int                      `json:"intervalSeconds"`
+	AgentVersion      string                   `json:"agentVersion,omitempty"`
+	Containers        []DockerContainer        `json:"containers"`
+	Services          []DockerService          `json:"services,omitempty"`
+	Tasks             []DockerTask             `json:"tasks,omitempty"`
+	Swarm             *DockerSwarmInfo         `json:"swarm,omitempty"`
+	TokenID           string                   `json:"tokenId,omitempty"`
+	TokenName         string                   `json:"tokenName,omitempty"`
+	TokenHint         string                   `json:"tokenHint,omitempty"`
+	TokenLastUsedAt   *time.Time               `json:"tokenLastUsedAt,omitempty"`
+	Hidden            bool                     `json:"hidden"`
+	PendingUninstall  bool                     `json:"pendingUninstall"`
+	Command           *DockerHostCommandStatus `json:"command,omitempty"`
 }
 
 // DockerContainer represents the state of a Docker container on a monitored host.

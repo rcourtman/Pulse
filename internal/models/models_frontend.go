@@ -97,32 +97,37 @@ type ContainerFrontend struct {
 
 // DockerHostFrontend represents a Docker host with frontend-friendly fields
 type DockerHostFrontend struct {
-	ID               string                     `json:"id"`
-	AgentID          string                     `json:"agentId"`
-	Hostname         string                     `json:"hostname"`
-	DisplayName      string                     `json:"displayName"`
-	MachineID        string                     `json:"machineId,omitempty"`
-	OS               string                     `json:"os,omitempty"`
-	KernelVersion    string                     `json:"kernelVersion,omitempty"`
-	Architecture     string                     `json:"architecture,omitempty"`
-	DockerVersion    string                     `json:"dockerVersion,omitempty"`
-	CPUs             int                        `json:"cpus"`
-	TotalMemoryBytes int64                      `json:"totalMemoryBytes"`
-	UptimeSeconds    int64                      `json:"uptimeSeconds"`
-	Status           string                     `json:"status"`
-	LastSeen         int64                      `json:"lastSeen"`
-	IntervalSeconds  int                        `json:"intervalSeconds"`
-	AgentVersion     string                     `json:"agentVersion,omitempty"`
-	Containers       []DockerContainerFrontend  `json:"containers"`
-	Services         []DockerServiceFrontend    `json:"services,omitempty"`
-	Tasks            []DockerTaskFrontend       `json:"tasks,omitempty"`
-	Swarm            *DockerSwarmFrontend       `json:"swarm,omitempty"`
-	TokenID          string                     `json:"tokenId,omitempty"`
-	TokenName        string                     `json:"tokenName,omitempty"`
-	TokenHint        string                     `json:"tokenHint,omitempty"`
-	TokenLastUsedAt  *int64                     `json:"tokenLastUsedAt,omitempty"`
-	PendingUninstall bool                       `json:"pendingUninstall"`
-	Command          *DockerHostCommandFrontend `json:"command,omitempty"`
+	ID                string                     `json:"id"`
+	AgentID           string                     `json:"agentId"`
+	Hostname          string                     `json:"hostname"`
+	DisplayName       string                     `json:"displayName"`
+	MachineID         string                     `json:"machineId,omitempty"`
+	OS                string                     `json:"os,omitempty"`
+	KernelVersion     string                     `json:"kernelVersion,omitempty"`
+	Architecture      string                     `json:"architecture,omitempty"`
+	DockerVersion     string                     `json:"dockerVersion,omitempty"`
+	CPUs              int                        `json:"cpus"`
+	TotalMemoryBytes  int64                      `json:"totalMemoryBytes"`
+	UptimeSeconds     int64                      `json:"uptimeSeconds"`
+	CPUUsagePercent   float64                    `json:"cpuUsagePercent"`
+	LoadAverage       []float64                  `json:"loadAverage,omitempty"`
+	Memory            *Memory                    `json:"memory,omitempty"`
+	Disks             []Disk                     `json:"disks,omitempty"`
+	NetworkInterfaces []HostNetworkInterface     `json:"networkInterfaces,omitempty"`
+	Status            string                     `json:"status"`
+	LastSeen          int64                      `json:"lastSeen"`
+	IntervalSeconds   int                        `json:"intervalSeconds"`
+	AgentVersion      string                     `json:"agentVersion,omitempty"`
+	Containers        []DockerContainerFrontend  `json:"containers"`
+	Services          []DockerServiceFrontend    `json:"services,omitempty"`
+	Tasks             []DockerTaskFrontend       `json:"tasks,omitempty"`
+	Swarm             *DockerSwarmFrontend       `json:"swarm,omitempty"`
+	TokenID           string                     `json:"tokenId,omitempty"`
+	TokenName         string                     `json:"tokenName,omitempty"`
+	TokenHint         string                     `json:"tokenHint,omitempty"`
+	TokenLastUsedAt   *int64                     `json:"tokenLastUsedAt,omitempty"`
+	PendingUninstall  bool                       `json:"pendingUninstall"`
+	Command           *DockerHostCommandFrontend `json:"command,omitempty"`
 }
 
 // DockerContainerFrontend represents a Docker container for the frontend

@@ -208,6 +208,7 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		CPUs:             d.CPUs,
 		TotalMemoryBytes: d.TotalMemoryBytes,
 		UptimeSeconds:    d.UptimeSeconds,
+		CPUUsagePercent:  d.CPUUsage,
 		Status:           d.Status,
 		LastSeen:         d.LastSeen.Unix() * 1000,
 		IntervalSeconds:  d.IntervalSeconds,
@@ -252,6 +253,24 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 	if d.Swarm != nil {
 		sw := d.Swarm.ToFrontend()
 		h.Swarm = &sw
+	}
+
+	if len(d.LoadAverage) > 0 {
+		h.LoadAverage = append([]float64(nil), d.LoadAverage...)
+	}
+
+	if (d.Memory != Memory{}) {
+		mem := d.Memory
+		h.Memory = &mem
+	}
+
+	if len(d.Disks) > 0 {
+		h.Disks = append([]Disk(nil), d.Disks...)
+	}
+
+	if len(d.NetworkInterfaces) > 0 {
+		h.NetworkInterfaces = make([]HostNetworkInterface, len(d.NetworkInterfaces))
+		copy(h.NetworkInterfaces, d.NetworkInterfaces)
 	}
 
 	if d.Command != nil {

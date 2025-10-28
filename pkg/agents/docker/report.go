@@ -1,6 +1,14 @@
 package dockeragent
 
-import "time"
+import (
+	"time"
+
+	hostagent "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+)
+
+type MemoryMetric = hostagent.MemoryMetric
+type Disk = hostagent.Disk
+type NetworkInterface = hostagent.NetworkInterface
 
 // Report represents a single heartbeat from the Docker agent to Pulse.
 type Report struct {
@@ -21,17 +29,22 @@ type AgentInfo struct {
 
 // HostInfo contains metadata about the Docker host where the agent runs.
 type HostInfo struct {
-	Hostname         string     `json:"hostname"`
-	Name             string     `json:"name,omitempty"`
-	MachineID        string     `json:"machineId,omitempty"`
-	OS               string     `json:"os,omitempty"`
-	KernelVersion    string     `json:"kernelVersion,omitempty"`
-	Architecture     string     `json:"architecture,omitempty"`
-	DockerVersion    string     `json:"dockerVersion,omitempty"`
-	TotalCPU         int        `json:"totalCpu,omitempty"`
-	TotalMemoryBytes int64      `json:"totalMemoryBytes,omitempty"`
-	UptimeSeconds    int64      `json:"uptimeSeconds,omitempty"`
-	Swarm            *SwarmInfo `json:"swarm,omitempty"`
+	Hostname         string             `json:"hostname"`
+	Name             string             `json:"name,omitempty"`
+	MachineID        string             `json:"machineId,omitempty"`
+	OS               string             `json:"os,omitempty"`
+	KernelVersion    string             `json:"kernelVersion,omitempty"`
+	Architecture     string             `json:"architecture,omitempty"`
+	DockerVersion    string             `json:"dockerVersion,omitempty"`
+	TotalCPU         int                `json:"totalCpu,omitempty"`
+	TotalMemoryBytes int64              `json:"totalMemoryBytes,omitempty"`
+	UptimeSeconds    int64              `json:"uptimeSeconds,omitempty"`
+	Swarm            *SwarmInfo         `json:"swarm,omitempty"`
+	CPUUsagePercent  float64            `json:"cpuUsagePercent,omitempty"`
+	LoadAverage      []float64          `json:"loadAverage,omitempty"`
+	Memory           MemoryMetric       `json:"memory,omitempty"`
+	Disks            []Disk             `json:"disks,omitempty"`
+	Network          []NetworkInterface `json:"network,omitempty"`
 }
 
 // Container captures the runtime state for a Docker container at report time.
