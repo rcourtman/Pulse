@@ -849,8 +849,14 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           serviceWarnGapPercent: serviceWarnGap,
           serviceCriticalGapPercent: serviceCriticalGap,
         });
+        setDockerDisableConnectivity(Boolean(config.dockerDefaults.stateDisableConnectivity));
+        setDockerPoweredOffSeverity(
+          config.dockerDefaults.statePoweredOffSeverity === 'critical' ? 'critical' : 'warning',
+        );
       } else {
         setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
+        setDockerDisableConnectivity(FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY);
+        setDockerPoweredOffSeverity(FACTORY_DOCKER_STATE_SEVERITY);
       }
       setDockerIgnoredPrefixes(config.dockerIgnoredContainerPrefixes ?? []);
 
@@ -1206,6 +1212,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
     serviceWarnGapPercent: 10,
     serviceCriticalGapPercent: 50,
   };
+  const FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY = false;
+  const FACTORY_DOCKER_STATE_SEVERITY: 'warning' | 'critical' = 'warning';
 
   const FACTORY_STORAGE_DEFAULT = 85;
   const FACTORY_SNAPSHOT_DEFAULTS: SnapshotAlertConfig = {
@@ -1228,6 +1236,12 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
   const [hostDefaults, setHostDefaults] = createSignal<Record<string, number | undefined>>({ ...FACTORY_HOST_DEFAULTS });
 
   const [dockerDefaults, setDockerDefaults] = createSignal({ ...FACTORY_DOCKER_DEFAULTS });
+  const [dockerDisableConnectivity, setDockerDisableConnectivity] = createSignal(
+    FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
+  );
+  const [dockerPoweredOffSeverity, setDockerPoweredOffSeverity] = createSignal<'warning' | 'critical'>(
+    FACTORY_DOCKER_STATE_SEVERITY,
+  );
   const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>([]);
 
   const [storageDefault, setStorageDefault] = createSignal(FACTORY_STORAGE_DEFAULT);
@@ -1253,6 +1267,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
 
   const resetDockerDefaults = () => {
     setDockerDefaults({ ...FACTORY_DOCKER_DEFAULTS });
+    setDockerDisableConnectivity(FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY);
+    setDockerPoweredOffSeverity(FACTORY_DOCKER_STATE_SEVERITY);
     setHasUnsavedChanges(true);
   };
 
@@ -1516,6 +1532,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                         memoryCriticalPct: dockerDefaultsValue.memoryCriticalPct,
                         serviceWarnGapPercent: dockerDefaultsValue.serviceWarnGapPercent,
                         serviceCriticalGapPercent: dockerDefaultsValue.serviceCriticalGapPercent,
+                        stateDisableConnectivity: dockerDisableConnectivity(),
+                        statePoweredOffSeverity: dockerPoweredOffSeverity(),
                       },
                       dockerIgnoredContainerPrefixes: dockerIgnoredPrefixes()
                         .map((prefix) => prefix.trim())
@@ -1766,6 +1784,10 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               hostDefaults={hostDefaults}
               setHostDefaults={setHostDefaults}
               dockerDefaults={dockerDefaults}
+              dockerDisableConnectivity={dockerDisableConnectivity}
+              setDockerDisableConnectivity={setDockerDisableConnectivity}
+              dockerPoweredOffSeverity={dockerPoweredOffSeverity}
+              setDockerPoweredOffSeverity={setDockerPoweredOffSeverity}
               setDockerDefaults={setDockerDefaults}
               dockerIgnoredPrefixes={dockerIgnoredPrefixes}
               setDockerIgnoredPrefixes={setDockerIgnoredPrefixes}
@@ -2294,6 +2316,8 @@ interface ThresholdsTabProps {
     serviceWarnGapPercent: number;
     serviceCriticalGapPercent: number;
   };
+  dockerDisableConnectivity: () => boolean;
+  dockerPoweredOffSeverity: () => 'warning' | 'critical';
   dockerIgnoredPrefixes: () => string[];
   storageDefault: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
@@ -2357,6 +2381,8 @@ interface ThresholdsTabProps {
           serviceCriticalGapPercent: number;
         }),
   ) => void;
+  setDockerDisableConnectivity: (value: boolean) => void;
+  setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   setStorageDefault: (value: number) => void;
   setMetricTimeThresholds: (
@@ -2463,7 +2489,11 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setNodeDefaults={props.setNodeDefaults}
       setHostDefaults={props.setHostDefaults}
       dockerDefaults={props.dockerDefaults()}
+      dockerDisableConnectivity={props.dockerDisableConnectivity}
+      dockerPoweredOffSeverity={props.dockerPoweredOffSeverity}
       setDockerDefaults={props.setDockerDefaults}
+      setDockerDisableConnectivity={props.setDockerDisableConnectivity}
+      setDockerPoweredOffSeverity={props.setDockerPoweredOffSeverity}
       dockerIgnoredPrefixes={props.dockerIgnoredPrefixes}
       setDockerIgnoredPrefixes={props.setDockerIgnoredPrefixes}
       storageDefault={props.storageDefault}

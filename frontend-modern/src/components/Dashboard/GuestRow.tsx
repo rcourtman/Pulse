@@ -53,6 +53,7 @@ interface GuestRowProps {
   activeSearch?: string;
   parentNodeOnline?: boolean;
   onCustomUrlUpdate?: (guestId: string, url: string) => void;
+  isGroupedView?: boolean;
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -410,7 +411,9 @@ export function GuestRow(props: GuestRowProps) {
   const firstCellClass = createMemo(() => {
     const base =
       'py-0.5 pr-2 whitespace-nowrap relative w-[160px] sm:w-[200px] lg:w-[240px] xl:w-[280px] 2xl:w-[340px]';
-    const indent = 'pl-4';
+    const indent = props.isGroupedView
+      ? 'pl-5 sm:pl-6 lg:pl-8'
+      : 'pl-4';
     return `${base} ${indent}`;
   });
 

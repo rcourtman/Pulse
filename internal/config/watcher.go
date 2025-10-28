@@ -162,8 +162,9 @@ func (cw *ConfigWatcher) watchForChanges() {
 			}
 
 			if cw.apiTokensPath != "" && (filepath.Base(event.Name) == filepath.Base(cw.apiTokensPath) || event.Name == cw.apiTokensPath) {
-				// Debounce
-				time.Sleep(100 * time.Millisecond)
+				// Debounce - wait longer for atomic file operations to complete
+				// (write to .tmp, rename to final file)
+				time.Sleep(250 * time.Millisecond)
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Info().Str("event", event.Op.String()).Msg("Detected API token file change")
@@ -399,12 +400,44 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		return
 	}
 
-	tokens, err := globalPersistence.LoadAPITokens()
+	// Preserve existing tokens in case reload fails
+	existingTokens := cw.config.APITokens
+	existingCount := len(existingTokens)
+
+	// Retry logic to handle temporary file system issues
+	var tokens []APITokenRecord
+	var err error
+	maxRetries := 3
+	retryDelay := 50 * time.Millisecond
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		tokens, err = globalPersistence.LoadAPITokens()
+		if err == nil {
+			break
+		}
+
+		if attempt < maxRetries {
+			log.Warn().
+				Err(err).
+				Int("attempt", attempt).
+				Int("maxRetries", maxRetries).
+				Dur("retryDelay", retryDelay).
+				Msg("Failed to reload API tokens, retrying...")
+			time.Sleep(retryDelay)
+			retryDelay *= 2 // Exponential backoff
+		}
+	}
+
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to reload API tokens")
+		log.Error().
+			Err(err).
+			Int("existingTokens", existingCount).
+			Msg("Failed to reload API tokens after retries - preserving existing tokens")
+		// CRITICAL: Keep existing tokens rather than clearing them
 		return
 	}
 
+	// Only update if we successfully loaded tokens
 	cw.config.APITokens = tokens
 	cw.config.SortAPITokens()
 	cw.config.APITokenEnabled = len(tokens) > 0
@@ -415,7 +448,10 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		}
 	}
 
-	log.Info().Int("count", len(tokens)).Msg("Reloaded API tokens from disk")
+	log.Info().
+		Int("count", len(tokens)).
+		Int("previousCount", existingCount).
+		Msg("Reloaded API tokens from disk")
 }
 
 // reloadMockConfig handles mock.env file changes

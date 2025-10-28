@@ -1030,6 +1030,7 @@ export function Dashboard(props: DashboardProps) {
                                   activeSearch={search()}
                                   parentNodeOnline={parentNodeOnline}
                                   onCustomUrlUpdate={handleCustomUrlUpdate}
+                                  isGroupedView={groupingMode() === 'grouped'}
                                 />
                               </ComponentErrorBoundary>
                             );

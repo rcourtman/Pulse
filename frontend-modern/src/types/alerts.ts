@@ -66,6 +66,8 @@ export interface DockerThresholdConfig {
   memoryCriticalPct?: number;
   serviceWarnGapPercent?: number;
   serviceCriticalGapPercent?: number;
+  stateDisableConnectivity?: boolean;
+  statePoweredOffSeverity?: 'warning' | 'critical';
 }
 
 export interface PMGThresholdDefaults {

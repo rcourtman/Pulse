@@ -264,14 +264,16 @@ type CustomAlertRule struct {
 
 // DockerThresholdConfig represents Docker-specific alert thresholds
 type DockerThresholdConfig struct {
-	CPU               HysteresisThreshold `json:"cpu"`                       // CPU usage % threshold (default: 80%)
-	Memory            HysteresisThreshold `json:"memory"`                    // Memory usage % threshold (default: 85%)
-	RestartCount      int                 `json:"restartCount"`              // Number of restarts to trigger alert (default: 3)
-	RestartWindow     int                 `json:"restartWindow"`             // Time window in seconds for restart loop detection (default: 300 = 5min)
-	MemoryWarnPct     int                 `json:"memoryWarnPct"`             // Memory limit % to trigger warning (default: 90)
-	MemoryCriticalPct int                 `json:"memoryCriticalPct"`         // Memory limit % to trigger critical (default: 95)
-	ServiceWarnGapPct int                 `json:"serviceWarnGapPercent"`     // % of desired tasks missing to trigger warning (default: 10)
-	ServiceCritGapPct int                 `json:"serviceCriticalGapPercent"` // % of desired tasks missing to trigger critical (default: 50)
+	CPU                      HysteresisThreshold `json:"cpu"`                                // CPU usage % threshold (default: 80%)
+	Memory                   HysteresisThreshold `json:"memory"`                             // Memory usage % threshold (default: 85%)
+	RestartCount             int                 `json:"restartCount"`                       // Number of restarts to trigger alert (default: 3)
+	RestartWindow            int                 `json:"restartWindow"`                      // Time window in seconds for restart loop detection (default: 300 = 5min)
+	MemoryWarnPct            int                 `json:"memoryWarnPct"`                      // Memory limit % to trigger warning (default: 90)
+	MemoryCriticalPct        int                 `json:"memoryCriticalPct"`                  // Memory limit % to trigger critical (default: 95)
+	ServiceWarnGapPct        int                 `json:"serviceWarnGapPercent"`              // % of desired tasks missing to trigger warning (default: 10)
+	ServiceCritGapPct        int                 `json:"serviceCriticalGapPercent"`          // % of desired tasks missing to trigger critical (default: 50)
+	StateDisableConnectivity bool                `json:"stateDisableConnectivity,omitempty"` // Disable container offline/state alerts globally
+	StatePoweredOffSeverity  AlertLevel          `json:"statePoweredOffSeverity,omitempty"`  // Default severity for container state/offline alerts
 }
 
 // PMGThresholdConfig represents Proxmox Mail Gateway-specific alert thresholds
@@ -500,12 +502,13 @@ func NewManager() *Manager {
 				Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
 			},
 			DockerDefaults: DockerThresholdConfig{
-				CPU:               HysteresisThreshold{Trigger: 80, Clear: 75},
-				Memory:            HysteresisThreshold{Trigger: 85, Clear: 80},
-				RestartCount:      3,
-				RestartWindow:     300, // 5 minutes
-				MemoryWarnPct:     90,
-				MemoryCriticalPct: 95,
+				CPU:                     HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory:                  HysteresisThreshold{Trigger: 85, Clear: 80},
+				RestartCount:            3,
+				RestartWindow:           300, // 5 minutes
+				MemoryWarnPct:           90,
+				MemoryCriticalPct:       95,
+				StatePoweredOffSeverity: AlertLevelWarning,
 			},
 			PMGDefaults: PMGThresholdConfig{
 				QueueTotalWarning:       500,  // Warning at 500 total queued messages
@@ -830,6 +833,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 			Msg("Adjusting Docker service critical gap to match warning gap")
 		config.DockerDefaults.ServiceCritGapPct = config.DockerDefaults.ServiceWarnGapPct
 	}
+	if config.DockerDefaults.StatePoweredOffSeverity == "" {
+		config.DockerDefaults.StatePoweredOffSeverity = AlertLevelWarning
+	}
+	config.DockerDefaults.StatePoweredOffSeverity = normalizePoweredOffSeverity(config.DockerDefaults.StatePoweredOffSeverity)
 
 	// Initialize PMG defaults if missing/zero
 	if config.PMGDefaults.QueueTotalWarning <= 0 {
@@ -3117,13 +3124,24 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 	stateKey := resourceID
 
 	m.mu.RLock()
-	thresholds, exists := m.config.Overrides[resourceID]
-	if !exists {
-		thresholds = m.config.GuestDefaults
-	}
-	disableConnectivity := thresholds.DisableConnectivity
-	severity := normalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
+	override, hasOverride := m.config.Overrides[resourceID]
+	defaultDisable := m.config.DockerDefaults.StateDisableConnectivity
+	defaultSeverity := normalizePoweredOffSeverity(m.config.DockerDefaults.StatePoweredOffSeverity)
 	m.mu.RUnlock()
+
+	disableConnectivity := defaultDisable
+	severity := defaultSeverity
+	if hasOverride {
+		if defaultDisable && !override.DisableConnectivity {
+			disableConnectivity = false
+		} else if override.DisableConnectivity {
+			disableConnectivity = true
+		}
+
+		if override.PoweredOffSeverity != "" {
+			severity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
+		}
+	}
 
 	if disableConnectivity {
 		m.clearDockerContainerStateAlert(resourceID)

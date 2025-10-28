@@ -228,7 +228,9 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
     "memoryWarnPct": 90,
     "memoryCriticalPct": 95,
     "serviceWarnGapPercent": 10,
-    "serviceCriticalGapPercent": 50
+    "serviceCriticalGapPercent": 50,
+    "stateDisableConnectivity": false,
+    "statePoweredOffSeverity": "warning"
   },
   "dockerIgnoredContainerPrefixes": [
     "runner-",
@@ -285,6 +287,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - `overrides` are indexed by the stable resource ID returned from `/api/state` (VMs: `instance/qemu/vmid`, containers: `instance/lxc/ctid`, nodes: `instance/node`).
 - `dockerIgnoredContainerPrefixes` lets you silence state/metric/restart alerts for ephemeral containers whose names or IDs share a common, case-insensitive prefix. The Docker tab in the UI keeps this list in sync.
 - Swarm service alerts track missing replicas: `serviceWarnGapPercent` defines when a warning fires, and `serviceCriticalGapPercent` must be greater than or equal to the warning gap (Pulse automatically clamps the critical value upward if an older client submits something smaller).
+- Docker container state controls live in `dockerDefaults`: flip `stateDisableConnectivity` to silence exit/offline alerts globally, or change `statePoweredOffSeverity` to `critical` when you want exiting containers to page immediately. Per-container overrides still take precedence.
 - Quiet hours, escalation, deduplication, and restart loop detection are all managed here, and the UI keeps the JSON in sync automatically.
 
 > Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.
