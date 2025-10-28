@@ -229,13 +229,14 @@ printf "[hot-dev] Starting backend file watcher...\n"
     while true; do
         # Watch for changes to .go files (excluding vendor and node_modules)
         inotifywait -r -e modify,create,delete,move \
-            --exclude '(vendor/|node_modules/|\.git/)' \
-            --format '%w%f' \
+            --exclude '(vendor/|node_modules/|\.git/|\.swp$|\.tmp$|~$)' \
+            --format '%e %w%f' \
             "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
-        while read -r changed_file; do
-            if [[ "$changed_file" == *.go ]]; then
+        while read -r event changed_file; do
+            # Rebuild on any .go file change OR any create/delete event (catches new files)
+            if [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED ]]; then
                 echo ""
-                echo "[hot-dev] 🔄 Go file changed: $(basename "$changed_file")"
+                echo "[hot-dev] 🔄 Change detected: $event $(basename "$changed_file")"
                 echo "[hot-dev] Rebuilding backend..."
 
                 # Rebuild the binary
