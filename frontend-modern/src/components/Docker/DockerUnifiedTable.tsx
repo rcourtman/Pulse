@@ -1,10 +1,13 @@
-import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, createEffect } from 'solid-js';
 import type { DockerHost, DockerContainer, DockerService, DockerTask } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { formatBytes, formatPercent, formatUptime, formatRelativeTime } from '@/utils/format';
+import type { DockerMetadata } from '@/api/dockerMetadata';
+import { DockerMetadataAPI } from '@/api/dockerMetadata';
+import { showSuccess, showError } from '@/utils/toast';
 
 const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
 const DEGRADED_HOST_STATUSES = new Set([
@@ -68,9 +71,16 @@ interface DockerUnifiedTableProps {
   searchTerm?: string;
   statsFilter?: StatsFilter;
   selectedHostId?: () => string | null;
+  dockerMetadata?: Record<string, DockerMetadata>;
+  onCustomUrlUpdate?: (resourceId: string, url: string) => void;
 }
 
 const rowExpandState = new Map<string, boolean>();
+
+// Global editing state for Docker resource URLs
+const [currentlyEditingDockerResourceId, setCurrentlyEditingDockerResourceId] = createSignal<string | null>(null);
+const dockerEditingValues = new Map<string, string>();
+const [dockerEditingValuesVersion, setDockerEditingValuesVersion] = createSignal(0);
 
 const toLower = (value?: string | null) => value?.toLowerCase() ?? '';
 
@@ -317,10 +327,26 @@ const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = 
   );
 };
 
-const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container' }>; columns: number }> = (props) => {
+const DockerContainerRow: Component<{
+  row: Extract<DockerRow, { kind: 'container' }>;
+  columns: number;
+  customUrl?: string;
+  onCustomUrlUpdate?: (resourceId: string, url: string) => void;
+}> = (props) => {
   const { host, container } = props.row;
   const rowId = buildRowId(host, props.row);
+  const resourceId = () => `${host.id}:container:${container.id || container.name}`;
+  const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
+
+  const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
+  const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
   const [expanded, setExpanded] = createSignal(rowExpandState.get(rowId) ?? false);
+  const editingUrlValue = createMemo(() => {
+    dockerEditingValuesVersion(); // Subscribe to changes
+    return dockerEditingValues.get(resourceId()) || '';
+  });
+  let urlInputRef: HTMLInputElement | undefined;
+
   const hasDrawerContent = createMemo(() => {
     return (
       (container.ports && container.ports.length > 0) ||
@@ -329,15 +355,172 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
     );
   });
 
+  // Update custom URL when prop changes, but only if we're not currently editing
+  createEffect(() => {
+    if (currentlyEditingDockerResourceId() !== resourceId()) {
+      const prevUrl = customUrl();
+      const newUrl = props.customUrl;
+
+      // Only animate when URL transitions from empty to having a value
+      if (!prevUrl && newUrl) {
+        setShouldAnimateIcon(true);
+        setTimeout(() => setShouldAnimateIcon(false), 200);
+      }
+
+      setCustomUrl(newUrl);
+    }
+  });
+
+  // Auto-focus the input when editing starts
+  createEffect(() => {
+    if (isEditingUrl() && urlInputRef) {
+      urlInputRef.focus();
+      urlInputRef.select();
+    }
+  });
+
   const toggle = (event: MouseEvent) => {
     if (!hasDrawerContent()) return;
     const target = event.target as HTMLElement;
-    if (target.closest('a, button, [data-prevent-toggle]')) return;
+    if (target.closest('a, button, input, [data-prevent-toggle]')) return;
     setExpanded((prev) => {
       const next = !prev;
       rowExpandState.set(rowId, next);
       return next;
     });
+  };
+
+  const startEditingUrl = (event: MouseEvent) => {
+    event.stopPropagation();
+
+    // If another resource is being edited, save it first
+    const currentEditing = currentlyEditingDockerResourceId();
+    if (currentEditing !== null && currentEditing !== resourceId()) {
+      const currentInput = document.querySelector(`input[data-resource-id="${currentEditing}"]`) as HTMLInputElement;
+      if (currentInput) {
+        currentInput.blur();
+      }
+    }
+
+    dockerEditingValues.set(resourceId(), customUrl() || '');
+    setDockerEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingDockerResourceId(resourceId());
+  };
+
+  // Add global click handler to close editor
+  createEffect(() => {
+    if (isEditingUrl()) {
+      const handleGlobalClick = (e: MouseEvent) => {
+        if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+        const target = e.target as HTMLElement;
+        const isClickingResourceName = target.closest('[data-resource-name-editable]');
+
+        if (!target.closest('[data-url-editor]') && !isClickingResourceName) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          cancelEditingUrl();
+        }
+      };
+
+      const handleGlobalMouseDown = (e: MouseEvent) => {
+        if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+        const target = e.target as HTMLElement;
+        const isClickingResourceName = target.closest('[data-resource-name-editable]');
+
+        if (!target.closest('[data-url-editor]') && !isClickingResourceName) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+      };
+
+      document.addEventListener('mousedown', handleGlobalMouseDown, true);
+      document.addEventListener('click', handleGlobalClick, true);
+      return () => {
+        document.removeEventListener('mousedown', handleGlobalMouseDown, true);
+        document.removeEventListener('click', handleGlobalClick, true);
+      };
+    }
+  });
+
+  const saveUrl = async () => {
+    if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+    const newUrl = (dockerEditingValues.get(resourceId()) || '').trim();
+
+    // Clear global editing state
+    dockerEditingValues.delete(resourceId());
+    setDockerEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingDockerResourceId(null);
+
+    // If URL hasn't changed, don't save
+    if (newUrl === (customUrl() || '')) return;
+
+    try {
+      await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: newUrl });
+
+      // Animate if transitioning from no URL to having a URL
+      const hadUrl = !!customUrl();
+      if (!hadUrl && newUrl) {
+        setShouldAnimateIcon(true);
+        setTimeout(() => setShouldAnimateIcon(false), 200);
+      }
+
+      setCustomUrl(newUrl || undefined);
+
+      // Notify parent to update metadata
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(resourceId(), newUrl);
+      }
+
+      if (newUrl) {
+        showSuccess('Container URL saved');
+      } else {
+        showSuccess('Container URL cleared');
+      }
+    } catch (err: any) {
+      console.error('Failed to save container URL:', err);
+      showError(err.message || 'Failed to save container URL');
+    }
+  };
+
+  const deleteUrl = async () => {
+    if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+    // Clear global editing state
+    dockerEditingValues.delete(resourceId());
+    setDockerEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingDockerResourceId(null);
+
+    // If there was a URL set, delete it
+    if (customUrl()) {
+      try {
+        await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: '' });
+        setCustomUrl(undefined);
+
+        // Notify parent to update metadata
+        if (props.onCustomUrlUpdate) {
+          props.onCustomUrlUpdate(resourceId(), '');
+        }
+
+        showSuccess('Container URL removed');
+      } catch (err: any) {
+        console.error('Failed to remove container URL:', err);
+        showError(err.message || 'Failed to remove container URL');
+      }
+    }
+  };
+
+  const cancelEditingUrl = () => {
+    if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+    // Just close without saving
+    dockerEditingValues.delete(resourceId());
+    setDockerEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingDockerResourceId(null);
   };
 
   const cpuPercent = () => Math.max(0, Math.min(100, container.cpuPercent ?? 0));
@@ -395,11 +578,96 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
       >
         <td class="pl-4 pr-2 py-0.5">
           <div class="flex items-center gap-1.5 min-w-0">
-            <div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-              <span class="truncate font-semibold" title={containerTitle()}>
-                {container.name || container.id}
-              </span>
-            </div>
+            {/* Name - show input when editing, otherwise show name with optional link */}
+            <Show
+              when={isEditingUrl()}
+              fallback={
+                <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                  <span
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate cursor-text select-none"
+                    style="cursor: text;"
+                    title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                    onClick={startEditingUrl}
+                    data-resource-name-editable
+                  >
+                    {container.name || container.id}
+                  </span>
+                  <Show when={customUrl()}>
+                    <a
+                      href={customUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                      title="Open in new tab"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <svg
+                        class="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        />
+                      </svg>
+                    </a>
+                  </Show>
+                </div>
+              }
+            >
+              <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                <input
+                  ref={urlInputRef}
+                  type="text"
+                  value={editingUrlValue()}
+                  data-resource-id={resourceId()}
+                  onInput={(e) => {
+                    dockerEditingValues.set(resourceId(), e.currentTarget.value);
+                    setDockerEditingValuesVersion(v => v + 1);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      saveUrl();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      cancelEditingUrl();
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="https://example.com:8080"
+                  class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  data-url-editor-button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    saveUrl();
+                  }}
+                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  title="Save (or press Enter)"
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  data-url-editor-button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteUrl();
+                  }}
+                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                  title="Delete URL"
+                >
+                  ✕
+                </button>
+              </div>
+            </Show>
           </div>
         </td>
         <td class="px-2 py-0.5">
@@ -523,21 +791,194 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
   );
 };
 
-const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>; columns: number }> = (props) => {
+const DockerServiceRow: Component<{
+  row: Extract<DockerRow, { kind: 'service' }>;
+  columns: number;
+  customUrl?: string;
+  onCustomUrlUpdate?: (resourceId: string, url: string) => void;
+}> = (props) => {
   const { host, service, tasks } = props.row;
   const rowId = buildRowId(host, props.row);
+  const resourceId = () => `${host.id}:service:${service.id || service.name}`;
+  const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
+
+  const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
+  const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
   const [expanded, setExpanded] = createSignal(rowExpandState.get(rowId) ?? false);
+  const editingUrlValue = createMemo(() => {
+    dockerEditingValuesVersion(); // Subscribe to changes
+    return dockerEditingValues.get(resourceId()) || '';
+  });
+  let urlInputRef: HTMLInputElement | undefined;
+
   const hasTasks = () => tasks.length > 0;
+
+  // Update custom URL when prop changes, but only if we're not currently editing
+  createEffect(() => {
+    if (currentlyEditingDockerResourceId() !== resourceId()) {
+      const prevUrl = customUrl();
+      const newUrl = props.customUrl;
+
+      // Only animate when URL transitions from empty to having a value
+      if (!prevUrl && newUrl) {
+        setShouldAnimateIcon(true);
+        setTimeout(() => setShouldAnimateIcon(false), 200);
+      }
+
+      setCustomUrl(newUrl);
+    }
+  });
+
+  // Auto-focus the input when editing starts
+  createEffect(() => {
+    if (isEditingUrl() && urlInputRef) {
+      urlInputRef.focus();
+      urlInputRef.select();
+    }
+  });
 
   const toggle = (event: MouseEvent) => {
     if (!hasTasks()) return;
     const target = event.target as HTMLElement;
-    if (target.closest('a, button, [data-prevent-toggle]')) return;
+    if (target.closest('a, button, input, [data-prevent-toggle]')) return;
     setExpanded((prev) => {
       const next = !prev;
       rowExpandState.set(rowId, next);
       return next;
     });
+  };
+
+  const startEditingUrl = (event: MouseEvent) => {
+    event.stopPropagation();
+
+    // If another resource is being edited, save it first
+    const currentEditing = currentlyEditingDockerResourceId();
+    if (currentEditing !== null && currentEditing !== resourceId()) {
+      const currentInput = document.querySelector(`input[data-resource-id="${currentEditing}"]`) as HTMLInputElement;
+      if (currentInput) {
+        currentInput.blur();
+      }
+    }
+
+    dockerEditingValues.set(resourceId(), customUrl() || '');
+    setDockerEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingDockerResourceId(resourceId());
+  };
+
+  // Add global click handler to close editor
+  createEffect(() => {
+    if (isEditingUrl()) {
+      const handleGlobalClick = (e: MouseEvent) => {
+        if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+        const target = e.target as HTMLElement;
+        const isClickingResourceName = target.closest('[data-resource-name-editable]');
+
+        if (!target.closest('[data-url-editor]') && !isClickingResourceName) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          cancelEditingUrl();
+        }
+      };
+
+      const handleGlobalMouseDown = (e: MouseEvent) => {
+        if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+        const target = e.target as HTMLElement;
+        const isClickingResourceName = target.closest('[data-resource-name-editable]');
+
+        if (!target.closest('[data-url-editor]') && !isClickingResourceName) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+      };
+
+      document.addEventListener('mousedown', handleGlobalMouseDown, true);
+      document.addEventListener('click', handleGlobalClick, true);
+      return () => {
+        document.removeEventListener('mousedown', handleGlobalMouseDown, true);
+        document.removeEventListener('click', handleGlobalClick, true);
+      };
+    }
+  });
+
+  const saveUrl = async () => {
+    if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+    const newUrl = (dockerEditingValues.get(resourceId()) || '').trim();
+
+    // Clear global editing state
+    dockerEditingValues.delete(resourceId());
+    setDockerEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingDockerResourceId(null);
+
+    // If URL hasn't changed, don't save
+    if (newUrl === (customUrl() || '')) return;
+
+    try {
+      await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: newUrl });
+
+      // Animate if transitioning from no URL to having a URL
+      const hadUrl = !!customUrl();
+      if (!hadUrl && newUrl) {
+        setShouldAnimateIcon(true);
+        setTimeout(() => setShouldAnimateIcon(false), 200);
+      }
+
+      setCustomUrl(newUrl || undefined);
+
+      // Notify parent to update metadata
+      if (props.onCustomUrlUpdate) {
+        props.onCustomUrlUpdate(resourceId(), newUrl);
+      }
+
+      if (newUrl) {
+        showSuccess('Service URL saved');
+      } else {
+        showSuccess('Service URL cleared');
+      }
+    } catch (err: any) {
+      console.error('Failed to save service URL:', err);
+      showError(err.message || 'Failed to save service URL');
+    }
+  };
+
+  const deleteUrl = async () => {
+    if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+    // Clear global editing state
+    dockerEditingValues.delete(resourceId());
+    setDockerEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingDockerResourceId(null);
+
+    // If there was a URL set, delete it
+    if (customUrl()) {
+      try {
+        await DockerMetadataAPI.updateMetadata(resourceId(), { customUrl: '' });
+        setCustomUrl(undefined);
+
+        // Notify parent to update metadata
+        if (props.onCustomUrlUpdate) {
+          props.onCustomUrlUpdate(resourceId(), '');
+        }
+
+        showSuccess('Service URL removed');
+      } catch (err: any) {
+        console.error('Failed to remove service URL:', err);
+        showError(err.message || 'Failed to remove service URL');
+      }
+    }
+  };
+
+  const cancelEditingUrl = () => {
+    if (currentlyEditingDockerResourceId() !== resourceId()) return;
+
+    // Just close without saving
+    dockerEditingValues.delete(resourceId());
+    setDockerEditingValuesVersion(v => v + 1);
+    setCurrentlyEditingDockerResourceId(null);
   };
 
   const badge = serviceHealthBadge(service);
@@ -569,15 +1010,100 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
       >
         <td class="pl-4 pr-2 py-0.5">
           <div class="flex items-center gap-1.5 min-w-0">
-            <div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-              <span class="truncate font-semibold" title={serviceTitle()}>
-                {service.name || service.id || 'Service'}
-              </span>
-            </div>
-            <Show when={service.stack}>
-              <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
-                Stack: {service.stack}
-              </span>
+            {/* Name - show input when editing, otherwise show name with optional link */}
+            <Show
+              when={isEditingUrl()}
+              fallback={
+                <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                  <span
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate cursor-text select-none"
+                    style="cursor: text;"
+                    title={`${serviceTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                    onClick={startEditingUrl}
+                    data-resource-name-editable
+                  >
+                    {service.name || service.id || 'Service'}
+                  </span>
+                  <Show when={customUrl()}>
+                    <a
+                      href={customUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                      title="Open in new tab"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <svg
+                        class="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        />
+                      </svg>
+                    </a>
+                  </Show>
+                  <Show when={service.stack && !isEditingUrl()}>
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
+                      Stack: {service.stack}
+                    </span>
+                  </Show>
+                </div>
+              }
+            >
+              <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                <input
+                  ref={urlInputRef}
+                  type="text"
+                  value={editingUrlValue()}
+                  data-resource-id={resourceId()}
+                  onInput={(e) => {
+                    dockerEditingValues.set(resourceId(), e.currentTarget.value);
+                    setDockerEditingValuesVersion(v => v + 1);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      saveUrl();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      cancelEditingUrl();
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="https://example.com:8080"
+                  class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  data-url-editor-button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    saveUrl();
+                  }}
+                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  title="Save (or press Enter)"
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  data-url-editor-button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteUrl();
+                  }}
+                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                  title="Delete URL"
+                >
+                  ✕
+                </button>
+              </div>
             </Show>
           </div>
         </td>
@@ -951,13 +1477,29 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                     <>
                       <DockerHostGroupHeader host={group.host} colspan={8} />
                       <For each={group.rows}>
-                        {(row) =>
-                          row.kind === 'container' ? (
-                            <DockerContainerRow row={row} columns={8} />
+                        {(row) => {
+                          // Build resource ID for metadata lookup
+                          const resourceId = row.kind === 'container'
+                            ? `${row.host.id}:container:${row.container.id || row.container.name}`
+                            : `${row.host.id}:service:${row.service.id || row.service.name}`;
+                          const metadata = props.dockerMetadata?.[resourceId];
+
+                          return row.kind === 'container' ? (
+                            <DockerContainerRow
+                              row={row}
+                              columns={8}
+                              customUrl={metadata?.customUrl}
+                              onCustomUrlUpdate={props.onCustomUrlUpdate}
+                            />
                           ) : (
-                            <DockerServiceRow row={row} columns={8} />
-                          )
-                        }
+                            <DockerServiceRow
+                              row={row}
+                              columns={8}
+                              customUrl={metadata?.customUrl}
+                              onCustomUrlUpdate={props.onCustomUrlUpdate}
+                            />
+                          );
+                        }}
                       </For>
                     </>
                   )}
