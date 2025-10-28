@@ -121,6 +121,7 @@ func (r *Router) setupRoutes() {
 	r.alertHandlers = NewAlertHandlers(r.monitor, r.wsHub)
 	r.notificationHandlers = NewNotificationHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
+	dockerMetadataHandler := NewDockerMetadataHandler(r.config.DataPath)
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.config.DataPath)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
@@ -134,7 +135,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleDeleteHost)))
-	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleCommandAck)))
+	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorage)))
@@ -173,6 +174,30 @@ func (r *Router) setupRoutes() {
 				return
 			}
 			guestMetadataHandler.HandleDeleteMetadata(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// Docker metadata routes
+	r.mux.HandleFunc("/api/docker/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, dockerMetadataHandler.HandleGetMetadata)))
+	r.mux.HandleFunc("/api/docker/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			if !ensureScope(w, req, config.ScopeMonitoringRead) {
+				return
+			}
+			dockerMetadataHandler.HandleGetMetadata(w, req)
+		case http.MethodPut, http.MethodPost:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			dockerMetadataHandler.HandleUpdateMetadata(w, req)
+		case http.MethodDelete:
+			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
+				return
+			}
+			dockerMetadataHandler.HandleDeleteMetadata(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
