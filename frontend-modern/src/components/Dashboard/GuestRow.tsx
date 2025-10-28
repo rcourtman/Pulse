@@ -560,13 +560,13 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* VMID */}
-      <td class="py-0.5 px-2 whitespace-nowrap w-[56px] sm:w-[64px] lg:w-[72px] xl:w-[80px] 2xl:w-[90px] text-sm text-gray-600 dark:text-gray-400 align-middle">
+      <td class="py-0.5 px-1.5 whitespace-nowrap w-[44px] sm:w-[52px] lg:w-[60px] xl:w-[68px] 2xl:w-[80px] text-sm text-gray-600 dark:text-gray-400 align-middle">
         {props.guest.vmid}
       </td>
 
       {/* Uptime */}
       <td
-        class={`py-0.5 px-2 w-[76px] sm:w-[86px] lg:w-[96px] xl:w-[108px] 2xl:w-[128px] text-sm whitespace-nowrap align-middle ${
+        class={`py-0.5 px-1.5 w-[60px] sm:w-[70px] lg:w-[80px] xl:w-[92px] 2xl:w-[112px] text-sm whitespace-nowrap align-middle ${
           props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
         }`}
       >

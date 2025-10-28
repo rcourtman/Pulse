@@ -32,7 +32,7 @@ const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
     case 'container':
       return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200';
     case 'service':
-      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200';
+      return 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-200';
     case 'task':
       return 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200';
     default:
@@ -286,17 +286,6 @@ const statusDotClass = (state: string) => {
   }
 };
 
-const hostStatusBadge = (host: DockerHost) => {
-  const status = toLower(host.status);
-  if (status === 'online') {
-    return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-  }
-  if (OFFLINE_HOST_STATUSES.has(status)) {
-    return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-  }
-  return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
-};
-
 const serviceHealthBadge = (service: DockerService) => {
   const desired = service.desiredTasks ?? 0;
   const running = service.runningTasks ?? 0;
@@ -339,24 +328,6 @@ const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = 
           <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
             <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
               ({props.host.hostname})
-            </span>
-          </Show>
-          <span class={`rounded px-2 py-0.5 text-[10px] font-medium ${hostStatusBadge(props.host)}`}>
-            {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown'}
-          </span>
-          <Show when={props.host.dockerVersion}>
-            <span class="text-[10px] text-slate-500 dark:text-slate-400">
-              Docker {props.host.dockerVersion}
-            </span>
-          </Show>
-          <Show when={uptime}>
-            <span class="text-[10px] text-slate-500 dark:text-slate-400">
-              Uptime {formatUptime(uptime!)}
-            </span>
-          </Show>
-          <Show when={lastSeen}>
-            <span class="text-[10px] text-slate-500 dark:text-slate-400">
-              Last seen {formatRelativeTime(lastSeen!)}
             </span>
           </Show>
         </div>
@@ -425,6 +396,12 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
     return container.status || container.state || 'Unknown';
   };
 
+  const containerTitle = () => {
+    const primary = container.name || container.id || 'Container';
+    const identifier = container.id && container.name && container.id !== container.name ? container.id : '';
+    return identifier ? `${primary} \u2014 ${identifier}` : primary;
+  };
+
   return (
     <>
       <tr
@@ -434,22 +411,17 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class="pl-4 pr-2 py-2">
-          <div class="flex items-center gap-2 min-w-0">
+        <td class="pl-4 pr-2 py-1">
+          <div class="flex items-center gap-1.5 min-w-0">
             <span class={`h-2 w-2 rounded-full ${statusDotClass(state())}`} aria-hidden="true" />
-            <div class="min-w-0 flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
-              <span class="truncate font-semibold" title={container.name || container.id}>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 min-w-0 text-sm text-gray-900 dark:text-gray-100">
+              <span class="truncate font-semibold" title={containerTitle()}>
                 {container.name || container.id}
               </span>
-              <Show when={container.id && container.name && container.id !== container.name}>
-                <span class="hidden sm:inline text-[10px] text-gray-500 dark:text-gray-400 truncate" title={container.id}>
-                  ({container.id})
-                </span>
-              </Show>
             </div>
           </div>
         </td>
-        <td class="px-2 py-2">
+        <td class="px-2 py-1">
           <span
             class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
               'container',
@@ -458,17 +430,17 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
             Container
           </span>
         </td>
-        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300">
+        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
           <span class="truncate" title={container.image}>
             {container.image || '—'}
           </span>
         </td>
-        <td class="px-2 py-2 text-xs">
+        <td class="px-2 py-1 text-xs">
           <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${statusBadgeClass()}`}>
             {statusLabel()}
           </span>
         </td>
-        <td class="px-2 py-2">
+        <td class="px-2 py-1">
           <Show
             when={container.cpuPercent && container.cpuPercent > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -476,7 +448,7 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
             <MetricBar value={cpuPercent()} label={formatPercent(cpuPercent())} type="cpu" />
           </Show>
         </td>
-        <td class="px-2 py-2">
+        <td class="px-2 py-1">
           <Show
             when={container.memoryUsageBytes && container.memoryUsageBytes > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -489,11 +461,11 @@ const DockerContainerRow: Component<{ row: Extract<DockerRow, { kind: 'container
             />
           </Show>
         </td>
-        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300">
+        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
           {restarts()}
           <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
         </td>
-        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300">{uptime()}</td>
+        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">{uptime()}</td>
       </tr>
 
       <Show when={expanded() && hasDrawerContent()}>
@@ -584,6 +556,12 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
   const badge = serviceHealthBadge(service);
   const updatedAt = ensureMs(service.updatedAt ?? service.createdAt);
 
+  const serviceTitle = () => {
+    const primary = service.name || service.id || 'Service';
+    const identifier = service.id && service.name && service.id !== service.name ? service.id : '';
+    return identifier ? `${primary} \u2014 ${identifier}` : primary;
+  };
+
   return (
     <>
       <tr
@@ -591,38 +569,31 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
           hasTasks() ? 'cursor-pointer' : ''
         } ${
           expanded()
-            ? 'bg-purple-50/90 dark:bg-purple-900/25'
-            : 'bg-purple-50/50 dark:bg-purple-900/10 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+            ? 'bg-gray-50 dark:bg-gray-800/40'
+            : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
         }`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class="pl-4 pr-2 py-2">
-          <div class="flex items-center gap-2 min-w-0">
+        <td class="pl-4 pr-2 py-1">
+          <div class="flex items-center gap-1.5 min-w-0">
             <span
               class={`h-2 w-2 rounded-full ${statusDotClass(badge.label.toLowerCase())}`}
               aria-hidden="true"
             />
-            <div class="min-w-0 flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
-              <span class="truncate font-semibold" title={service.name || service.id || 'Service'}>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 min-w-0 text-sm text-gray-900 dark:text-gray-100">
+              <span class="truncate font-semibold" title={serviceTitle()}>
                 {service.name || service.id || 'Service'}
-              </span>
-              <span
-                class={`hidden sm:inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
-                  'service',
-                )}`}
-              >
-                Service
               </span>
             </div>
             <Show when={service.stack}>
-              <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400 truncate hidden md:inline" title={`Stack: ${service.stack}`}>
+              <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
                 Stack: {service.stack}
               </span>
             </Show>
           </div>
         </td>
-        <td class="px-2 py-2">
+        <td class="px-2 py-1">
           <span
             class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
               'service',
@@ -631,25 +602,25 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
             Service
           </span>
         </td>
-        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300">
+        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
           <span class="truncate" title={service.image}>
             {service.image || '—'}
           </span>
         </td>
-        <td class="px-2 py-2 text-xs">
+        <td class="px-2 py-1 text-xs">
           <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${badge.class}`}>
             {badge.label}
           </span>
         </td>
-        <td class="px-2 py-2 text-xs text-gray-400 dark:text-gray-500">—</td>
-        <td class="px-2 py-2 text-xs text-gray-400 dark:text-gray-500">—</td>
-        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+        <td class="px-2 py-1 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="px-2 py-1 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <span class="font-semibold text-gray-900 dark:text-gray-100">
             {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
           </span>
           <span class="ml-1 text-gray-500 dark:text-gray-400">tasks</span>
         </td>
-        <td class="px-2 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+        <td class="px-2 py-1 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <Show when={updatedAt} fallback="—">
             {(timestamp) => (
               <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
@@ -663,26 +634,26 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
       <Show when={expanded() && hasTasks()}>
         <tr class="bg-gray-50 dark:bg-gray-900/60">
           <td colSpan={props.columns} class="px-4 py-3">
-            <div class="space-y-2 border-l-4 border-purple-200 dark:border-purple-800 pl-3">
+            <div class="space-y-2 border-l-4 border-gray-200 dark:border-gray-700 pl-3">
               <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
                 <span>Tasks</span>
                 <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
                   {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
                 </span>
               </div>
-              <div class="overflow-x-auto border border-purple-200 dark:border-purple-800/60 rounded-lg bg-white dark:bg-gray-900/60">
-                <table class="min-w-full divide-y divide-purple-100 dark:divide-purple-900/40 text-xs">
-                  <thead class="bg-purple-50 dark:bg-purple-900/30 text-[10px] uppercase tracking-wide text-purple-700 dark:text-purple-200">
+              <div class="overflow-x-auto border border-gray-200 dark:border-gray-700/60 rounded-lg bg-white dark:bg-gray-900/60">
+                <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
+                  <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
                     <tr>
-                    <th class="py-1 pr-2 text-left font-medium">Task</th>
-                    <th class="py-1 px-2 text-left font-medium">Node</th>
-                    <th class="py-1 px-2 text-left font-medium">State</th>
-                    <th class="py-1 px-2 text-left font-medium">CPU</th>
-                    <th class="py-1 px-2 text-left font-medium">Memory</th>
-                    <th class="py-1 px-2 text-left font-medium">Updated</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-purple-100/60 dark:divide-purple-900/40">
+                      <th class="py-1 pr-2 text-left font-medium">Task</th>
+                      <th class="py-1 px-2 text-left font-medium">Node</th>
+                      <th class="py-1 px-2 text-left font-medium">State</th>
+                      <th class="py-1 px-2 text-left font-medium">CPU</th>
+                      <th class="py-1 px-2 text-left font-medium">Memory</th>
+                      <th class="py-1 px-2 text-left font-medium">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
                     <For each={tasks}>
                       {(task) => {
                         const container = findContainerForTask(host.containers || [], task);
@@ -695,6 +666,16 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
                           if (task.slot !== undefined) return `slot-${task.slot}`;
                           return task.id ?? 'Task';
                         };
+                        const taskTitle = () => {
+                          const label = taskLabel();
+                          if (task.containerId && task.containerId !== label) {
+                            return `${label} \u2014 ${task.containerId}`;
+                          }
+                          if (task.id && task.id !== label) {
+                            return `${label} \u2014 ${task.id}`;
+                          }
+                          return label;
+                        };
                         const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
                         const stateClass = () => {
                           if (state === 'running') {
@@ -706,10 +687,10 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
                           return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
                         };
                         return (
-                          <tr class="hover:bg-purple-50/60 dark:hover:bg-purple-900/20">
+                          <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
                             <td class="py-1 pr-2">
                               <div class="flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
-                                <span class="truncate font-medium" title={taskLabel()}>
+                                <span class="truncate font-medium" title={taskTitle()}>
                                   {taskLabel()}
                                 </span>
                                 <span
@@ -786,21 +767,32 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         return;
       }
 
-       if (selectedHostId && host.id !== selectedHostId) {
+      if (selectedHostId && host.id !== selectedHostId) {
         return;
       }
 
-      const hostRows: DockerRow[] = [];
+      const containerRows: Array<Extract<DockerRow, { kind: 'container' }>> = [];
+      const serviceRows: Array<Extract<DockerRow, { kind: 'service' }>> = [];
+
       const containers = host.containers || [];
       const services = host.services || [];
       const tasks = host.tasks || [];
+
+      const serviceNames = new Set<string>();
+      const serviceIds = new Set<string>();
+      services.forEach((service) => {
+        if (service.name) serviceNames.add(service.name.toLowerCase());
+        if (service.id) serviceIds.add(service.id.toLowerCase());
+      });
+
+      const serviceOwnedContainers = new Set<string>();
 
       containers.forEach((container) => {
         if (!containerMatchesStateFilter(filter, container)) return;
         const matchesSearch = searchTokens.every((token) => containerMatchesToken(token, host, container));
         if (!matchesSearch) return;
 
-        hostRows.push({
+        containerRows.push({
           kind: 'container',
           id: container.id || `${host.id}-container-${container.name}`,
           host,
@@ -823,7 +815,12 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
           return false;
         });
 
-        hostRows.push({
+        associatedTasks.forEach((task) => {
+          if (task.containerId) serviceOwnedContainers.add(task.containerId.toLowerCase());
+          if (task.containerName) serviceOwnedContainers.add(task.containerName.toLowerCase());
+        });
+
+        serviceRows.push({
           kind: 'service',
           id: service.id || `${host.id}-service-${service.name}`,
           host,
@@ -832,18 +829,48 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         });
       });
 
-      if (hostRows.length > 0) {
-        hostRows.sort((a, b) => {
-          const nameA =
-            a.kind === 'container'
-              ? a.container.name || a.container.id || ''
-              : a.service.name || a.service.id || '';
-          const nameB =
-            b.kind === 'container'
-              ? b.container.name || b.container.id || ''
-              : b.service.name || b.service.id || '';
+      if (serviceRows.length > 0) {
+        serviceRows.sort((a, b) => {
+          const nameA = a.service.name || a.service.id || '';
+          const nameB = b.service.name || b.service.id || '';
           return nameA.localeCompare(nameB);
         });
+      }
+
+      if (containerRows.length > 0) {
+        containerRows.sort((a, b) => {
+          const nameA = a.container.name || a.container.id || '';
+          const nameB = b.container.name || b.container.id || '';
+          return nameA.localeCompare(nameB);
+        });
+        const filtered = containerRows.filter((row) => {
+          const idKey = (row.container.id || '').toLowerCase();
+          const nameKey = (row.container.name || '').toLowerCase();
+          const shortNameKey = nameKey.split('.')[0];
+
+          const labelServiceName =
+            row.container.labels?.['com.docker.swarm.service.name']?.toLowerCase() ?? '';
+          const labelServiceID =
+            row.container.labels?.['com.docker.swarm.service.id']?.toLowerCase() ?? '';
+
+          const belongsToService =
+            (idKey && serviceOwnedContainers.has(idKey)) ||
+            (nameKey && serviceOwnedContainers.has(nameKey)) ||
+            (shortNameKey && serviceOwnedContainers.has(shortNameKey)) ||
+            (labelServiceName && serviceNames.has(labelServiceName)) ||
+            (labelServiceID && serviceIds.has(labelServiceID)) ||
+            (serviceNames.size > 0 && nameKey && [...serviceNames].some((svc) => nameKey.startsWith(`${svc}.`)));
+
+          return !belongsToService;
+        });
+
+        containerRows.length = 0;
+        containerRows.push(...filtered);
+      }
+
+      const hostRows = [...serviceRows, ...containerRows];
+
+      if (hostRows.length > 0) {
         groups.push({ host, rows: hostRows });
       }
     });
@@ -908,13 +935,13 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
             <table class="w-full min-w-[900px] table-fixed border-collapse">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                  <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
+                  <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[26%]">
                     Resource
                   </th>
                   <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     Type
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%]">
                     Image / Stack
                   </th>
                   <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%]">
