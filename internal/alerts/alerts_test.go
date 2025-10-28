@@ -990,6 +990,162 @@ func TestDockerServiceReplicaAlerts(t *testing.T) {
 	}
 }
 
+func TestDockerServiceUpdateStateAlert(t *testing.T) {
+	m := NewManager()
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	m.UpdateConfig(cfg)
+
+	now := time.Now()
+	host := models.DockerHost{
+		ID:          "host-update",
+		DisplayName: "Swarm",
+		Hostname:    "swarm.local",
+		Services: []models.DockerService{
+			{
+				ID:           "svc-update",
+				Name:         "api",
+				DesiredTasks: 1,
+				RunningTasks: 1,
+				UpdateStatus: &models.DockerServiceUpdate{
+					State:       "rollback_failed",
+					Message:     "Rollback failed",
+					CompletedAt: &now,
+				},
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	resourceID := dockerServiceResourceID(host.ID, "svc-update", "api")
+	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		t.Fatalf("expected docker service alert %s to be raised", alertID)
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical severity for rollback failure, got %s", alert.Level)
+	}
+	if state, ok := alert.Metadata["updateState"].(string); !ok || state != "rollback_failed" {
+		t.Fatalf("expected updateState metadata to be rollback_failed, got %v", alert.Metadata["updateState"])
+	}
+}
+
+func TestDockerContainerStateUsesDockerDefaults(t *testing.T) {
+	m := NewManager()
+	cfg := m.GetConfig()
+	cfg.DockerDefaults.StatePoweredOffSeverity = AlertLevelCritical
+	m.UpdateConfig(cfg)
+
+	container := models.DockerContainer{
+		ID:     "container-1",
+		Name:   "web",
+		State:  "exited",
+		Status: "Exited (1) seconds ago",
+	}
+	host := models.DockerHost{
+		ID:          "host-1",
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+		Containers:  []models.DockerContainer{container},
+	}
+
+	m.CheckDockerHost(host)
+	m.CheckDockerHost(host)
+
+	resourceID := dockerResourceID(host.ID, container.ID)
+	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		t.Fatalf("expected docker container state alert %s to be raised", alertID)
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("expected critical severity from docker defaults, got %s", alert.Level)
+	}
+}
+
+func TestDockerContainerStateRespectsDisableDefault(t *testing.T) {
+	m := NewManager()
+	cfg := m.GetConfig()
+	cfg.DockerDefaults.StateDisableConnectivity = true
+	m.UpdateConfig(cfg)
+
+	container := models.DockerContainer{
+		ID:     "container-2",
+		Name:   "batch",
+		State:  "exited",
+		Status: "Exited (0) seconds ago",
+	}
+	host := models.DockerHost{
+		ID:          "host-2",
+		DisplayName: "Docker Host",
+		Hostname:    "docker.example",
+		Containers:  []models.DockerContainer{container},
+	}
+
+	m.CheckDockerHost(host)
+	m.CheckDockerHost(host)
+
+	resourceID := dockerResourceID(host.ID, container.ID)
+	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
+	if _, exists := m.activeAlerts[alertID]; exists {
+		t.Fatalf("did not expect docker container state alert when defaults disable connectivity")
+	}
+}
+
+func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
+	m := NewManager()
+
+	hostID := "host-mem"
+	containerID := "container-mem"
+	hostHigh := models.DockerHost{
+		ID:          hostID,
+		DisplayName: "Docker Host",
+		Hostname:    "docker.mem",
+		Containers: []models.DockerContainer{
+			{
+				ID:          containerID,
+				Name:        "memory-hog",
+				State:       "running",
+				Status:      "Up 10 minutes",
+				MemoryUsage: 96 * 1024 * 1024,
+				MemoryLimit: 100 * 1024 * 1024,
+			},
+		},
+	}
+
+	m.CheckDockerHost(hostHigh)
+
+	resourceID := dockerResourceID(hostID, containerID)
+	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
+	if _, exists := m.activeAlerts[alertID]; !exists {
+		t.Fatalf("expected memory limit alert to be raised")
+	}
+
+	hostLow := models.DockerHost{
+		ID:          hostID,
+		DisplayName: "Docker Host",
+		Hostname:    "docker.mem",
+		Containers: []models.DockerContainer{
+			{
+				ID:          containerID,
+				Name:        "memory-hog",
+				State:       "running",
+				Status:      "Up 12 minutes",
+				MemoryUsage: 80 * 1024 * 1024,
+				MemoryLimit: 100 * 1024 * 1024,
+			},
+		},
+	}
+
+	m.CheckDockerHost(hostLow)
+
+	if _, exists := m.activeAlerts[alertID]; exists {
+		t.Fatalf("expected memory limit alert to clear after usage dropped below hysteresis threshold")
+	}
+}
+
 func TestUpdateConfigClampsDockerServiceCriticalGap(t *testing.T) {
 	t.Parallel()
 

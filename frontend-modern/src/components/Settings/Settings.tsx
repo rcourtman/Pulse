@@ -36,7 +36,6 @@ import Lock from 'lucide-solid/icons/lock';
 import Key from 'lucide-solid/icons/key';
 import Activity from 'lucide-solid/icons/activity';
 import Loader from 'lucide-solid/icons/loader';
-import Boxes from 'lucide-solid/icons/boxes';
 import Network from 'lucide-solid/icons/network';
 import Monitor from 'lucide-solid/icons/monitor';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
@@ -237,8 +236,6 @@ type SettingsTab =
   | 'proxmox'
   | 'docker'
   | 'hosts'
-  | 'podman'
-  | 'kubernetes'
   | 'system-general'
   | 'system-network'
   | 'system-updates'
@@ -250,7 +247,7 @@ type SettingsTab =
   | 'diagnostics'
   | 'updates';
 
-type AgentKey = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host' | 'podman' | 'kubernetes';
+type AgentKey = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host';
 
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
   proxmox: {
@@ -264,14 +261,6 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   hosts: {
     title: 'Hosts',
     description: 'Monitor Linux, macOS, and Windows machines—servers, desktops, and laptops.',
-  },
-  podman: {
-    title: 'Podman',
-    description: 'Container monitoring for Podman hosts is coming soon.',
-  },
-  kubernetes: {
-    title: 'Kubernetes',
-    description: 'Cluster-wide monitoring via Pulse is coming soon. Watch this space for Helm charts and operators.',
   },
   'system-general': {
     title: 'General Settings',
@@ -349,8 +338,6 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/agent-hub')) return 'proxmox';
     if (path.includes('/settings/docker')) return 'docker';
     if (path.includes('/settings/hosts') || path.includes('/settings/host-agents') || path.includes('/settings/servers')) return 'hosts';
-    if (path.includes('/settings/podman')) return 'podman';
-    if (path.includes('/settings/kubernetes')) return 'kubernetes';
     if (path.includes('/settings/system-general')) return 'system-general';
     if (path.includes('/settings/system-network')) return 'system-network';
     if (path.includes('/settings/system-updates')) return 'system-updates';
@@ -392,8 +379,6 @@ const Settings: Component<SettingsProps> = (props) => {
     ) {
       return 'host';
     }
-    if (path.includes('/settings/podman')) return 'podman';
-    if (path.includes('/settings/kubernetes')) return 'kubernetes';
     return null;
   };
 
@@ -408,9 +393,7 @@ const Settings: Component<SettingsProps> = (props) => {
     pmg: '/settings/pmg',
     docker: '/settings/docker',
     host: '/settings/host-agents',
-    podman: '/settings/podman',
-    kubernetes: '/settings/kubernetes',
-  } as Record<AgentKey, string>;
+  };
 
   const handleSelectAgent = (agent: AgentKey) => {
     setSelectedAgent(agent);
@@ -424,20 +407,8 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   const setActiveTab = (tab: SettingsTab) => {
-    if (tab === 'proxmox' && selectedAgent() === 'podman') {
-      setSelectedAgent('pve');
-    } else if (tab === 'proxmox' && selectedAgent() === 'kubernetes') {
-      setSelectedAgent('pve');
-    }
-
     if (tab === 'proxmox' && !['pve', 'pbs', 'pmg', 'docker', 'host'].includes(selectedAgent())) {
       setSelectedAgent('pve');
-    }
-
-    if (tab === 'podman') {
-      setSelectedAgent('podman');
-    } else if (tab === 'kubernetes') {
-      setSelectedAgent('kubernetes');
     }
 
     const targetPath = `/settings/${tab}`;
@@ -500,10 +471,6 @@ const Settings: Component<SettingsProps> = (props) => {
           } else if (!['pve', 'pbs', 'pmg', 'docker', 'host'].includes(selectedAgent())) {
             setSelectedAgent('pve');
           }
-        } else if (resolved === 'podman') {
-          setSelectedAgent('podman');
-        } else if (resolved === 'kubernetes') {
-          setSelectedAgent('kubernetes');
         }
       },
     ),
@@ -868,8 +835,6 @@ const Settings: Component<SettingsProps> = (props) => {
         { id: 'proxmox', label: 'Proxmox', icon: <ProxmoxIcon class="w-4 h-4" /> },
         { id: 'docker', label: 'Docker', icon: <DockerIcon class="w-4 h-4" /> },
         { id: 'hosts', label: 'Hosts', icon: <Monitor class="w-4 h-4" strokeWidth={2} /> },
-        { id: 'podman', label: 'Podman', icon: <Boxes class="w-4 h-4" strokeWidth={2} />, disabled: true },
-        { id: 'kubernetes', label: 'Kubernetes', icon: <Network class="w-4 h-4" strokeWidth={2} />, disabled: true },
       ],
     },
     {
@@ -2952,22 +2917,6 @@ const Settings: Component<SettingsProps> = (props) => {
             {/* Servers Platform Tab */}
             <Show when={activeTab() === 'hosts'}>
               <HostAgents />
-            </Show>
-
-            {/* Podman Tab */}
-            <Show when={activeTab() === 'podman'}>
-              <PlatformComingSoon
-                name="Podman"
-                description="Pulse will support Podman hosts via the same lightweight agent workflow as Docker. Keep an eye on the release notes for availability."
-              />
-            </Show>
-
-            {/* Kubernetes Tab */}
-            <Show when={activeTab() === 'kubernetes'}>
-              <PlatformComingSoon
-                name="Kubernetes"
-                description="Native Kubernetes monitoring (agents, Helm chart, RBAC templates) is in design. Join the GitHub discussions to weigh in."
-              />
             </Show>
 
             {/* Host Agents */}
@@ -6586,24 +6535,6 @@ const Settings: Component<SettingsProps> = (props) => {
         }}
       />
     </>
-  );
-};
-
-const PlatformComingSoon: Component<{ name: string; description?: string }> = (props) => {
-  const description =
-    props.description ??
-    `Support for ${props.name} is on the roadmap. Track progress on GitHub or join our community discussions to weigh in on requirements.`;
-
-  return (
-    <div class="space-y-6">
-      <SectionHeader title={`${props.name} integration`} description={description} />
-      <Card padding="lg">
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          We’re collecting feedback and prioritising the engineering work for this platform. If you’d like to influence
-          the roadmap or volunteer for early testing, please open a discussion on GitHub or reach out via Discord.
-        </p>
-      </Card>
-    </div>
   );
 };
 

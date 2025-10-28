@@ -167,6 +167,8 @@ The agent automatically discovers the Docker socket via the usual environment va
 
 CI runners and short-lived build containers can generate noisy state alerts when they exit on schedule. In Pulse v4.24.0 and later you can provide a list of prefixes to ignore under **Alerts → Thresholds → Docker → Ignored container prefixes**. Any container whose name *or* ID begins with a configured prefix is skipped for state, health, metric, restart-loop, and OOM alerts. Matching is case-insensitive and the list is saved as `dockerIgnoredContainerPrefixes` inside `alerts.json`. Use one entry per family of ephemeral containers (for example, `runner-` or `gitlab-job-`).
 
+Need the alerts but at a different tone? The same Docker tab exposes global controls for the container state detector. Flip **Disable container state alerts** (`stateDisableConnectivity`) to mute powered-off/offline warnings across the fleet, or change **Default severity** (`statePoweredOffSeverity`) to `critical` so unexpected exits page immediately. Individual host/container overrides still win when you need exceptions.
+
 ## Testing and troubleshooting
 
 - Run with `--interval 15s --insecure` in a terminal to see log output while testing.

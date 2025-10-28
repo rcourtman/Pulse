@@ -188,6 +188,10 @@ interface ThresholdsTableProps {
     serviceWarnGapPercent: number;
     serviceCriticalGapPercent: number;
   };
+  dockerDisableConnectivity: () => boolean;
+  setDockerDisableConnectivity: (value: boolean) => void;
+  dockerPoweredOffSeverity: () => 'warning' | 'critical';
+  setDockerPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   setDockerDefaults: (
     value:
       | {
@@ -1982,8 +1986,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const resource = [...guests, ...dockerContainers].find((r) => r.id === resourceId);
     if (!resource) return;
 
-    const defaultDisabled = props.guestDisableConnectivity();
-    const defaultSeverity = props.guestPoweredOffSeverity();
+    const isDockerContainer = resource.type === 'dockerContainer';
+    const defaultDisabled = isDockerContainer
+      ? props.dockerDisableConnectivity()
+      : props.guestDisableConnectivity();
+    const defaultSeverity = isDockerContainer
+      ? props.dockerPoweredOffSeverity()
+      : props.guestPoweredOffSeverity();
 
     const existingOverride = props.overrides().find((o) => o.id === resourceId);
     const cleanThresholds: Record<string, number> = { ...(existingOverride?.thresholds || {}) };
@@ -2407,7 +2416,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
-                showOfflineAlertsColumn={false}
+                showOfflineAlertsColumn={true}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
@@ -2479,7 +2488,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
-                showOfflineAlertsColumn={false}
+                showOfflineAlertsColumn={true}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
@@ -2894,15 +2903,24 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 onToggleGlobalDisable={() =>
                   props.setDisableAllDockerContainers(!props.disableAllDockerContainers())
                 }
-                globalDisableOfflineFlag={() => props.guestDisableConnectivity()}
+                globalDisableOfflineFlag={() => props.dockerDisableConnectivity()}
                 onToggleGlobalDisableOffline={() =>
-                  props.setGuestDisableConnectivity(!props.guestDisableConnectivity())
+                  props.setDockerDisableConnectivity(!props.dockerDisableConnectivity())
                 }
                 showDelayColumn={true}
                 globalDelaySeconds={props.timeThresholds().guest}
                 metricDelaySeconds={props.metricTimeThresholds().guest ?? {}}
                 onMetricDelayChange={(metric, value) => updateMetricDelay('guest', metric, value)}
-                globalOfflineSeverity={props.guestPoweredOffSeverity()}
+                globalOfflineSeverity={props.dockerPoweredOffSeverity()}
+                onSetGlobalOfflineState={(state) => {
+                  if (state === 'off') {
+                    props.setDockerDisableConnectivity(true);
+                  } else {
+                    props.setDockerDisableConnectivity(false);
+                    props.setDockerPoweredOffSeverity(state === 'critical' ? 'critical' : 'warning');
+                  }
+                  props.setHasUnsavedChanges(true);
+                }}
                 onSetOfflineState={setOfflineState}
                 factoryDefaults={props.factoryDockerDefaults}
                 onResetDefaults={props.resetDockerDefaults}

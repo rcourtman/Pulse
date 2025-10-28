@@ -159,3 +159,4 @@ func (h *DockerMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *h
 
 	w.WriteHeader(http.StatusNoContent)
 }
+// test comment
