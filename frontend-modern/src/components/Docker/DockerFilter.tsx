@@ -9,6 +9,8 @@ interface DockerFilterProps {
   setSearch: (value: string) => void;
   groupingMode?: () => 'grouped' | 'flat';
   setGroupingMode?: (mode: 'grouped' | 'flat') => void;
+  statusFilter?: () => 'all' | 'online' | 'degraded' | 'offline';
+  setStatusFilter?: (value: 'all' | 'online' | 'degraded' | 'offline') => void;
   searchInputRef?: (el: HTMLInputElement) => void;
   onReset?: () => void;
   activeHostName?: string;
@@ -88,12 +90,14 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
     () =>
       props.search().trim() !== '' ||
       (!!props.groupingMode && props.groupingMode() === 'flat') ||
+      (!!props.statusFilter && props.statusFilter() !== 'all') ||
       Boolean(props.activeHostName),
   );
 
   const handleReset = () => {
     props.setSearch('');
     props.setGroupingMode?.('grouped');
+    props.setStatusFilter?.('all');
     props.onClearHost?.();
     props.onReset?.();
     closeHistory();
@@ -296,6 +300,73 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+          <Show when={props.statusFilter && props.setStatusFilter}>
+            <div class="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-700">
+              <button
+                type="button"
+                aria-pressed={props.statusFilter?.() === 'all'}
+                onClick={() => props.setStatusFilter?.('all')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  props.statusFilter?.() === 'all'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+                title="Show all hosts"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                aria-pressed={props.statusFilter?.() === 'online'}
+                onClick={() =>
+                  props.setStatusFilter?.(props.statusFilter?.() === 'online' ? 'all' : 'online')
+                }
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  props.statusFilter?.() === 'online'
+                    ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+                title="Show online hosts only"
+              >
+                Online
+              </button>
+              <button
+                type="button"
+                aria-pressed={props.statusFilter?.() === 'degraded'}
+                onClick={() =>
+                  props.setStatusFilter?.(
+                    props.statusFilter?.() === 'degraded' ? 'all' : 'degraded',
+                  )
+                }
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  props.statusFilter?.() === 'degraded'
+                    ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+                title="Show degraded hosts only"
+              >
+                Degraded
+              </button>
+              <button
+                type="button"
+                aria-pressed={props.statusFilter?.() === 'offline'}
+                onClick={() =>
+                  props.setStatusFilter?.(
+                    props.statusFilter?.() === 'offline' ? 'all' : 'offline',
+                  )
+                }
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  props.statusFilter?.() === 'offline'
+                    ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+                title="Show offline hosts only"
+              >
+                Offline
+              </button>
+            </div>
+          </Show>
+
           <Show when={props.groupingMode && props.setGroupingMode}>
             <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <button

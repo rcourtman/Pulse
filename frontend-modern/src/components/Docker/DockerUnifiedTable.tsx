@@ -648,8 +648,8 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
                       <th class="py-1 pr-2 text-left font-medium">Task</th>
                       <th class="py-1 px-2 text-left font-medium">Node</th>
                       <th class="py-1 px-2 text-left font-medium">State</th>
-                      <th class="py-1 px-2 text-left font-medium">CPU</th>
-                      <th class="py-1 px-2 text-left font-medium">Memory</th>
+                      <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
+                      <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
                       <th class="py-1 px-2 text-left font-medium">Updated</th>
                     </tr>
                   </thead>
@@ -710,12 +710,12 @@ const DockerServiceRow: Component<{ row: Extract<DockerRow, { kind: 'service' }>
                                 {task.currentState || task.desiredState || 'Unknown'}
                               </span>
                             </td>
-                            <td class="py-1 px-2">
+                            <td class="py-1 px-2 w-[120px]">
                               <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
                                 <MetricBar value={Math.min(100, cpu)} label={formatPercent(cpu)} type="cpu" />
                               </Show>
                             </td>
-                            <td class="py-1 px-2">
+                            <td class="py-1 px-2 w-[140px]">
                               <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
                                 <MetricBar value={Math.min(100, mem)} label={formatPercent(mem)} type="memory" />
                               </Show>

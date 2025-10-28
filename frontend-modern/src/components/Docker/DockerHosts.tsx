@@ -11,6 +11,16 @@ import { useWebSocket } from '@/App';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 
+const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
+const DEGRADED_HOST_STATUSES = new Set([
+  'degraded',
+  'warning',
+  'maintenance',
+  'partial',
+  'initializing',
+  'unknown',
+]);
+
 interface DockerHostsProps {
   hosts: DockerHost[];
   activeAlerts?: Record<string, unknown> | any;
@@ -40,6 +50,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
   const [search, setSearch] = createSignal('');
   const debouncedSearch = useDebouncedValue(search, 250);
   const [selectedHostId, setSelectedHostId] = createSignal<string | null>(null);
+  const [statusFilter, setStatusFilter] = createSignal<'all' | 'online' | 'degraded' | 'offline'>('all');
 
   const clampPercent = (value: number | undefined | null) => {
     if (value === undefined || value === null || Number.isNaN(value)) return 0;
@@ -143,9 +154,58 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
     }
   });
 
+  const hostMatchesStatus = (host: DockerHost) => {
+    const status = statusFilter();
+    if (status === 'all') return true;
+    const normalized = host.status?.toLowerCase() ?? '';
+    if (status === 'online') return normalized === 'online';
+    if (status === 'offline') return OFFLINE_HOST_STATUSES.has(normalized);
+    if (status === 'degraded') {
+      return DEGRADED_HOST_STATUSES.has(normalized) || normalized === 'degraded';
+    }
+    return true;
+  };
+
+  const filteredHostSummaries = createMemo(() => {
+    const summaries = hostSummaries();
+    if (statusFilter() === 'all') return summaries;
+    return summaries.filter((summary) => hostMatchesStatus(summary.host));
+  });
+
+  createEffect(() => {
+    const hostId = selectedHostId();
+    if (!hostId) return;
+    if (!filteredHostSummaries().some((summary) => summary.host.id === hostId)) {
+      setSelectedHostId(null);
+    }
+  });
+
+  const statsFilter = createMemo(() => {
+    const status = statusFilter();
+    if (status === 'all') return null;
+    return { type: 'host-status', value: status };
+  });
+
   const handleHostSelect = (hostId: string) => {
     setSelectedHostId((current) => (current === hostId ? null : hostId));
   };
+
+  const renderFilter = () => (
+    <DockerFilter
+      search={search}
+      setSearch={setSearch}
+      statusFilter={statusFilter}
+      setStatusFilter={setStatusFilter}
+      onReset={() => {
+        setSearch('');
+        setSelectedHostId(null);
+        setStatusFilter('all');
+      }}
+      searchInputRef={(el) => {
+        searchInputRef = el;
+      }}
+    />
+  );
 
   return (
     <div class="space-y-0">
@@ -176,65 +236,57 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
 
       <Show when={!isLoading()}>
         <Show
-          when={sortedHosts().length === 0}
+          when={sortedHosts().length > 0}
           fallback={
             <>
-              <DockerFilter
-                search={search}
-                setSearch={setSearch}
-                onReset={() => {
-                  setSearch('');
-                  setSelectedHostId(null);
-                }}
-                searchInputRef={(el) => {
-                  searchInputRef = el;
-                }}
-              />
-
-              <Show when={hostSummaries().length > 0}>
-                <DockerHostSummaryTable
-                  summaries={hostSummaries}
-                  selectedHostId={selectedHostId}
-                  onSelect={handleHostSelect}
+              {renderFilter()}
+              <Card padding="lg">
+                <EmptyState
+                  icon={
+                    <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  }
+                  title="No Docker hosts configured"
+                  description="Deploy the Pulse Docker agent on at least one Docker host to light up this tab. As soon as an agent reports in, container metrics appear automatically."
+                  actions={
+                    <button
+                      type="button"
+                      onClick={() => navigate('/settings/docker')}
+                      class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                    >
+                      <span>Set up Docker agent</span>
+                      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  }
                 />
-              </Show>
-
-              <DockerUnifiedTable
-                hosts={sortedHosts()}
-                searchTerm={debouncedSearch()}
-                selectedHostId={selectedHostId}
-              />
+              </Card>
             </>
           }
         >
-          <Card padding="lg">
-            <EmptyState
-              icon={
-                <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-              }
-              title="No Docker hosts configured"
-              description="Deploy the Pulse Docker agent on at least one Docker host to light up this tab. As soon as an agent reports in, container metrics appear automatically."
-              actions={
-                <button
-                  type="button"
-                  onClick={() => navigate('/settings/docker')}
-                  class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                >
-                  <span>Set up Docker agent</span>
-                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              }
+          <Show when={hostSummaries().length > 0}>
+            <DockerHostSummaryTable
+              summaries={filteredHostSummaries}
+              selectedHostId={selectedHostId}
+              onSelect={handleHostSelect}
             />
-          </Card>
+          </Show>
+
+          {renderFilter()}
+
+          <DockerUnifiedTable
+            hosts={sortedHosts()}
+            searchTerm={debouncedSearch()}
+            statsFilter={statsFilter()}
+            selectedHostId={selectedHostId}
+          />
         </Show>
       </Show>
     </div>
