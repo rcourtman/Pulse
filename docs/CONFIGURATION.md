@@ -223,6 +223,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
   "storageDefault": { "trigger": 85, "clear": 75 },
   "dockerDefaults": {
     "cpu": { "trigger": 75, "clear": 60 },
+    "disk": { "trigger": 85, "clear": 75 },
     "restartCount": 3,
     "restartWindow": 300,
     "memoryWarnPct": 90,
@@ -288,6 +289,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - `dockerIgnoredContainerPrefixes` lets you silence state/metric/restart alerts for ephemeral containers whose names or IDs share a common, case-insensitive prefix. The Docker tab in the UI keeps this list in sync.
 - Swarm service alerts track missing replicas: `serviceWarnGapPercent` defines when a warning fires, and `serviceCriticalGapPercent` must be greater than or equal to the warning gap (Pulse automatically clamps the critical value upward if an older client submits something smaller).
 - Docker container state controls live in `dockerDefaults`: flip `stateDisableConnectivity` to silence exit/offline alerts globally, or change `statePoweredOffSeverity` to `critical` when you want exiting containers to page immediately. Per-container overrides still take precedence.
+- `dockerDefaults.disk` defines the writable-layer usage threshold (% of the container's upper filesystem compared to its base image). Defaults trigger at 85% and clear at 80%, and can be overridden per container or host when noisy workloads need a different window.
 - Quiet hours, escalation, deduplication, and restart loop detection are all managed here, and the UI keeps the JSON in sync automatically.
 
 > Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.

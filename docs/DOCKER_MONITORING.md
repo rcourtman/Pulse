@@ -165,6 +165,10 @@ docker run -d \
 
 The agent automatically discovers the Docker socket via the usual environment variables. To use SSH tunnels or TCP sockets, export `DOCKER_HOST` as you would for the Docker CLI.
 
+### Disk usage monitoring & alerts
+
+When `--collect-disk` is enabled (the default), Pulse records each container’s writable layer and root filesystem sizes. The Alerts engine treats the proportion of writable data to total filesystem as the disk usage percentage for that container. A fleet-wide threshold lives under **Alerts → Thresholds → Docker Containers** and defaults to 85% trigger / 80% clear; adjust or disable it per host/container when your workload makes heavy use of copy-on-write layers. Containers that stop reporting disk metrics (for example when size queries are disabled) automatically skip the disk alert evaluation.
+
 ### Suppressing ephemeral containers
 
 CI runners and short-lived build containers can generate noisy state alerts when they exit on schedule. In Pulse v4.24.0 and later you can provide a list of prefixes to ignore under **Alerts → Thresholds → Docker → Ignored container prefixes**. Any container whose name *or* ID begins with a configured prefix is skipped for state, health, metric, restart-loop, and OOM alerts. Matching is case-insensitive and the list is saved as `dockerIgnoredContainerPrefixes` inside `alerts.json`. Use one entry per family of ephemeral containers (for example, `runner-` or `gitlab-job-`).

@@ -51,6 +51,7 @@ const DEFAULT_PMG_THRESHOLDS: PMGThresholdDefaults = {
 const DEFAULT_DOCKER_DEFAULTS = {
   cpu: 80,
   memory: 85,
+  disk: 85,
   restartCount: 3,
   restartWindow: 300,
   memoryWarnPct: 90,

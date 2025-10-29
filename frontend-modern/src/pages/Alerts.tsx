@@ -842,6 +842,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         setDockerDefaults({
           cpu: getTriggerValue(config.dockerDefaults.cpu) ?? 80,
           memory: getTriggerValue(config.dockerDefaults.memory) ?? 85,
+          disk: getTriggerValue(config.dockerDefaults.disk) ?? FACTORY_DOCKER_DEFAULTS.disk,
           restartCount: config.dockerDefaults.restartCount ?? 3,
           restartWindow: config.dockerDefaults.restartWindow ?? 300,
           memoryWarnPct: config.dockerDefaults.memoryWarnPct ?? 90,
@@ -1205,6 +1206,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
   const FACTORY_DOCKER_DEFAULTS = {
     cpu: 80,
     memory: 85,
+    disk: 85,
     restartCount: 3,
     restartWindow: 300,
     memoryWarnPct: 90,
@@ -1526,6 +1528,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       dockerDefaults: {
                         cpu: createHysteresisThreshold(dockerDefaultsValue.cpu),
                         memory: createHysteresisThreshold(dockerDefaultsValue.memory),
+                        disk: createHysteresisThreshold(dockerDefaultsValue.disk),
                         restartCount: dockerDefaultsValue.restartCount,
                         restartWindow: dockerDefaultsValue.restartWindow,
                         memoryWarnPct: dockerDefaultsValue.memoryWarnPct,

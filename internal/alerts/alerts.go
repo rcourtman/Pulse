@@ -266,6 +266,7 @@ type CustomAlertRule struct {
 type DockerThresholdConfig struct {
 	CPU                      HysteresisThreshold `json:"cpu"`                                // CPU usage % threshold (default: 80%)
 	Memory                   HysteresisThreshold `json:"memory"`                             // Memory usage % threshold (default: 85%)
+	Disk                     HysteresisThreshold `json:"disk"`                               // Writable layer usage % threshold (default: 85%)
 	RestartCount             int                 `json:"restartCount"`                       // Number of restarts to trigger alert (default: 3)
 	RestartWindow            int                 `json:"restartWindow"`                      // Time window in seconds for restart loop detection (default: 300 = 5min)
 	MemoryWarnPct            int                 `json:"memoryWarnPct"`                      // Memory limit % to trigger warning (default: 90)
@@ -504,6 +505,7 @@ func NewManager() *Manager {
 			DockerDefaults: DockerThresholdConfig{
 				CPU:                     HysteresisThreshold{Trigger: 80, Clear: 75},
 				Memory:                  HysteresisThreshold{Trigger: 85, Clear: 80},
+				Disk:                    HysteresisThreshold{Trigger: 85, Clear: 80},
 				RestartCount:            3,
 				RestartWindow:           300, // 5 minutes
 				MemoryWarnPct:           90,
@@ -806,6 +808,9 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	}
 	if config.DockerDefaults.Memory.Trigger <= 0 {
 		config.DockerDefaults.Memory = HysteresisThreshold{Trigger: 85, Clear: 80}
+	}
+	if config.DockerDefaults.Disk.Trigger <= 0 {
+		config.DockerDefaults.Disk = HysteresisThreshold{Trigger: 85, Clear: 80}
 	}
 	if config.DockerDefaults.RestartCount <= 0 {
 		config.DockerDefaults.RestartCount = 3
@@ -2780,7 +2785,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 
 	if state != "running" {
 		m.checkDockerContainerState(host, container, resourceID, containerName, instanceName, nodeName)
-		m.clearDockerContainerMetricAlerts(resourceID, "cpu", "memory")
+		m.clearDockerContainerMetricAlerts(resourceID, "cpu", "memory", "disk")
 	} else {
 		m.clearDockerContainerStateAlert(resourceID)
 
@@ -2788,6 +2793,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 		thresholds := ThresholdConfig{
 			CPU:    &m.config.DockerDefaults.CPU,
 			Memory: &m.config.DockerDefaults.Memory,
+			Disk:   &m.config.DockerDefaults.Disk,
 		}
 		if hasOverride {
 			thresholds = m.applyThresholdOverride(thresholds, overrideConfig)
@@ -2831,6 +2837,38 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 				memMetadata["memoryLimitBytes"] = container.MemoryLimit
 			}
 			m.checkMetric(resourceID, containerName, nodeName, instanceName, resourceType, "memory", container.MemoryPercent, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+		}
+
+		if thresholds.Disk != nil {
+			totalBytes := container.RootFilesystemBytes
+			usedBytes := container.WritableLayerBytes
+			if totalBytes > 0 && usedBytes >= 0 {
+				diskPercent := (float64(usedBytes) / float64(totalBytes)) * 100
+				diskMetadata := map[string]interface{}{
+					"resourceType":        resourceType,
+					"hostId":              host.ID,
+					"hostName":            host.DisplayName,
+					"hostHostname":        host.Hostname,
+					"containerId":         container.ID,
+					"containerName":       containerName,
+					"image":               container.Image,
+					"state":               container.State,
+					"status":              container.Status,
+					"restartCount":        container.RestartCount,
+					"metric":              "disk",
+					"diskPercent":         diskPercent,
+					"writableLayerBytes":  usedBytes,
+					"rootFilesystemBytes": totalBytes,
+					"mountCount":          len(container.Mounts),
+				}
+				if container.BlockIO != nil {
+					diskMetadata["blockIoReadBytes"] = container.BlockIO.ReadBytes
+					diskMetadata["blockIoWriteBytes"] = container.BlockIO.WriteBytes
+				}
+				m.checkMetric(resourceID, containerName, nodeName, instanceName, resourceType, "disk", diskPercent, thresholds.Disk, &metricOptions{Metadata: diskMetadata})
+			} else {
+				m.clearDockerContainerMetricAlerts(resourceID, "disk")
+			}
 		}
 	}
 
@@ -3552,7 +3590,7 @@ func (m *Manager) checkDockerContainerMemoryLimit(host models.DockerHost, contai
 
 func (m *Manager) clearDockerContainerMetricAlerts(resourceID string, metrics ...string) {
 	if len(metrics) == 0 {
-		metrics = []string{"cpu", "memory"}
+		metrics = []string{"cpu", "memory", "disk"}
 	}
 	for _, metric := range metrics {
 		alertID := fmt.Sprintf("%s-%s", resourceID, metric)
