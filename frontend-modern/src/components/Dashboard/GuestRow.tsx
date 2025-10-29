@@ -1,6 +1,6 @@
 import { createMemo, createSignal, createEffect, on, Show, For } from 'solid-js';
 import type { VM, Container } from '@/types/api';
-import { formatBytes, formatUptime } from '@/utils/format';
+import { formatBytes, formatPercent, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { TagBadges } from './TagBadges';
@@ -113,7 +113,7 @@ export function GuestRow(props: GuestRowProps) {
     if (!props.guest.memory) return undefined;
     const used = props.guest.memory.used ?? 0;
     const total = props.guest.memory.total ?? 0;
-    return `${formatBytes(used)}/${formatBytes(total)}`;
+    return `${formatBytes(used, 0)}/${formatBytes(total, 0)}`;
   });
   const memoryExtraLines = createMemo(() => {
     if (!props.guest.memory) return undefined;
@@ -124,11 +124,11 @@ export function GuestRow(props: GuestRowProps) {
       props.guest.memory.balloon > 0 &&
       props.guest.memory.balloon !== total
     ) {
-      lines.push(`Balloon: ${formatBytes(props.guest.memory.balloon)}`);
+      lines.push(`Balloon: ${formatBytes(props.guest.memory.balloon, 0)}`);
     }
     if (props.guest.memory.swapTotal && props.guest.memory.swapTotal > 0) {
       const swapUsed = props.guest.memory.swapUsed ?? 0;
-      lines.push(`Swap: ${formatBytes(swapUsed)} / ${formatBytes(props.guest.memory.swapTotal)}`);
+      lines.push(`Swap: ${formatBytes(swapUsed, 0)} / ${formatBytes(props.guest.memory.swapTotal, 0)}`);
     }
     return lines.length > 0 ? lines : undefined;
   });
@@ -584,10 +584,10 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={showGuestMetrics()} fallback={<span class="text-sm text-gray-400">-</span>}>
           <MetricBar
             value={cpuPercent()}
-            label={`${cpuPercent().toFixed(0)}%`}
+            label={formatPercent(cpuPercent())}
             sublabel={
               props.guest.cpus
-                ? `${((props.guest.cpu || 0) * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores`
+                ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
                 : undefined
             }
             type="cpu"
@@ -601,7 +601,7 @@ export function GuestRow(props: GuestRowProps) {
           <Show when={showGuestMetrics()} fallback={<span class="text-sm text-gray-400">-</span>}>
             <MetricBar
               value={memPercent()}
-              label={`${memPercent().toFixed(0)}%`}
+              label={formatPercent(memPercent())}
               sublabel={memoryUsageLabel()}
               type="memory"
             />
@@ -621,10 +621,10 @@ export function GuestRow(props: GuestRowProps) {
         >
           <MetricBar
             value={diskPercent()}
-            label={`${diskPercent().toFixed(0)}%`}
+            label={formatPercent(diskPercent())}
             sublabel={
               props.guest.disk
-                ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}`
+                ? `${formatBytes(props.guest.disk.used, 0)}/${formatBytes(props.guest.disk.total, 0)}`
                 : undefined
             }
             type="disk"

@@ -17,19 +17,12 @@ export function formatSpeed(bytesPerSecond: number, decimals = 0): string {
 
 export function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return '0%';
-
   const abs = Math.abs(value);
-
-  if (abs >= 10) {
-    return `${Math.round(value)}%`;
+  if (abs === 0) return '0%';
+  if (abs < 0.5) {
+    return '0%';
   }
-
-  if (abs >= 1) {
-    return `${value.toFixed(1)}%`;
-  }
-
-  // Preserve tiny signals without overly long labels
-  return `${value.toFixed(2)}%`;
+  return `${Math.round(value)}%`;
 }
 
 export function formatUptime(seconds: number): string {
