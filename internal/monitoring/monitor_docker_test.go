@@ -108,3 +108,75 @@ func TestApplyDockerReportGeneratesUniqueIDsForCollidingHosts(t *testing.T) {
 		t.Fatalf("expected host2 to have 2 containers after update, got %d", len(found.Containers))
 	}
 }
+
+func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
+	timestamp := time.Now().UTC()
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-1",
+			Version:         "1.2.3",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "disk-host",
+		},
+		Containers: []agentsdocker.Container{
+			{
+				ID:                  "ctr-1",
+				Name:                "app",
+				WritableLayerBytes:  512 * 1024 * 1024,
+				RootFilesystemBytes: 2 * 1024 * 1024 * 1024,
+				BlockIO: &agentsdocker.ContainerBlockIO{
+					ReadBytes:  123456,
+					WriteBytes: 654321,
+				},
+				Mounts: []agentsdocker.ContainerMount{
+					{
+						Type:        "bind",
+						Source:      "/srv/app/config",
+						Destination: "/config",
+						Mode:        "rw",
+						RW:          true,
+						Propagation: "rprivate",
+						Name:        "",
+						Driver:      "",
+					},
+				},
+			},
+		},
+		Timestamp: timestamp,
+	}
+
+	monitor := newTestMonitor(t)
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport returned error: %v", err)
+	}
+
+	if len(host.Containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(host.Containers))
+	}
+
+	container := host.Containers[0]
+	if container.WritableLayerBytes != 512*1024*1024 {
+		t.Fatalf("expected writable layer bytes to match, got %d", container.WritableLayerBytes)
+	}
+	if container.RootFilesystemBytes != 2*1024*1024*1024 {
+		t.Fatalf("expected root filesystem bytes to match, got %d", container.RootFilesystemBytes)
+	}
+
+	if container.BlockIO == nil {
+		t.Fatalf("expected block IO stats to be populated")
+	}
+	if container.BlockIO.ReadBytes != 123456 || container.BlockIO.WriteBytes != 654321 {
+		t.Fatalf("unexpected block IO values: %+v", container.BlockIO)
+	}
+
+	if len(container.Mounts) != 1 {
+		t.Fatalf("expected mounts to be preserved, got %d", len(container.Mounts))
+	}
+	mount := container.Mounts[0]
+	if mount.Source != "/srv/app/config" || mount.Destination != "/config" || !mount.RW {
+		t.Fatalf("unexpected mount payload: %+v", mount)
+	}
+}

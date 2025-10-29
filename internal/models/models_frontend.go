@@ -132,25 +132,29 @@ type DockerHostFrontend struct {
 
 // DockerContainerFrontend represents a Docker container for the frontend
 type DockerContainerFrontend struct {
-	ID            string                           `json:"id"`
-	Name          string                           `json:"name"`
-	Image         string                           `json:"image"`
-	State         string                           `json:"state"`
-	Status        string                           `json:"status"`
-	Health        string                           `json:"health,omitempty"`
-	CPUPercent    float64                          `json:"cpuPercent"`
-	MemoryUsage   int64                            `json:"memoryUsageBytes"`
-	MemoryLimit   int64                            `json:"memoryLimitBytes"`
-	MemoryPercent float64                          `json:"memoryPercent"`
-	UptimeSeconds int64                            `json:"uptimeSeconds"`
-	RestartCount  int                              `json:"restartCount"`
-	ExitCode      int                              `json:"exitCode"`
-	CreatedAt     int64                            `json:"createdAt"`
-	StartedAt     *int64                           `json:"startedAt,omitempty"`
-	FinishedAt    *int64                           `json:"finishedAt,omitempty"`
-	Ports         []DockerContainerPortFrontend    `json:"ports,omitempty"`
-	Labels        map[string]string                `json:"labels,omitempty"`
-	Networks      []DockerContainerNetworkFrontend `json:"networks,omitempty"`
+	ID                  string                           `json:"id"`
+	Name                string                           `json:"name"`
+	Image               string                           `json:"image"`
+	State               string                           `json:"state"`
+	Status              string                           `json:"status"`
+	Health              string                           `json:"health,omitempty"`
+	CPUPercent          float64                          `json:"cpuPercent"`
+	MemoryUsage         int64                            `json:"memoryUsageBytes"`
+	MemoryLimit         int64                            `json:"memoryLimitBytes"`
+	MemoryPercent       float64                          `json:"memoryPercent"`
+	UptimeSeconds       int64                            `json:"uptimeSeconds"`
+	RestartCount        int                              `json:"restartCount"`
+	ExitCode            int                              `json:"exitCode"`
+	CreatedAt           int64                            `json:"createdAt"`
+	StartedAt           *int64                           `json:"startedAt,omitempty"`
+	FinishedAt          *int64                           `json:"finishedAt,omitempty"`
+	Ports               []DockerContainerPortFrontend    `json:"ports,omitempty"`
+	Labels              map[string]string                `json:"labels,omitempty"`
+	Networks            []DockerContainerNetworkFrontend `json:"networks,omitempty"`
+	WritableLayerBytes  int64                            `json:"writableLayerBytes,omitempty"`
+	RootFilesystemBytes int64                            `json:"rootFilesystemBytes,omitempty"`
+	BlockIO             *DockerContainerBlockIOFrontend  `json:"blockIo,omitempty"`
+	Mounts              []DockerContainerMountFrontend   `json:"mounts,omitempty"`
 }
 
 // DockerContainerPortFrontend represents a container port mapping
@@ -166,6 +170,24 @@ type DockerContainerNetworkFrontend struct {
 	Name string `json:"name"`
 	IPv4 string `json:"ipv4,omitempty"`
 	IPv6 string `json:"ipv6,omitempty"`
+}
+
+// DockerContainerBlockIOFrontend exposes aggregate block IO counters.
+type DockerContainerBlockIOFrontend struct {
+	ReadBytes  uint64 `json:"readBytes,omitempty"`
+	WriteBytes uint64 `json:"writeBytes,omitempty"`
+}
+
+// DockerContainerMountFrontend represents a container mount for the UI.
+type DockerContainerMountFrontend struct {
+	Type        string `json:"type,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Destination string `json:"destination,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+	RW          bool   `json:"rw"`
+	Propagation string `json:"propagation,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Driver      string `json:"driver,omitempty"`
 }
 
 // DockerServiceFrontend represents a Swarm service for the frontend.

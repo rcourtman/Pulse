@@ -1395,6 +1395,33 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			container.Networks = networks
 		}
 
+		container.WritableLayerBytes = payload.WritableLayerBytes
+		container.RootFilesystemBytes = payload.RootFilesystemBytes
+
+		if payload.BlockIO != nil {
+			container.BlockIO = &models.DockerContainerBlockIO{
+				ReadBytes:  payload.BlockIO.ReadBytes,
+				WriteBytes: payload.BlockIO.WriteBytes,
+			}
+		}
+
+		if len(payload.Mounts) > 0 {
+			mounts := make([]models.DockerContainerMount, len(payload.Mounts))
+			for i, mount := range payload.Mounts {
+				mounts[i] = models.DockerContainerMount{
+					Type:        mount.Type,
+					Source:      mount.Source,
+					Destination: mount.Destination,
+					Mode:        mount.Mode,
+					RW:          mount.RW,
+					Propagation: mount.Propagation,
+					Name:        mount.Name,
+					Driver:      mount.Driver,
+				}
+			}
+			container.Mounts = mounts
+		}
+
 		containers = append(containers, container)
 	}
 

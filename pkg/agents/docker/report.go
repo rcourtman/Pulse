@@ -49,25 +49,29 @@ type HostInfo struct {
 
 // Container captures the runtime state for a Docker container at report time.
 type Container struct {
-	ID               string             `json:"id"`
-	Name             string             `json:"name"`
-	Image            string             `json:"image"`
-	CreatedAt        time.Time          `json:"createdAt"`
-	State            string             `json:"state"`
-	Status           string             `json:"status"`
-	Health           string             `json:"health,omitempty"`
-	CPUPercent       float64            `json:"cpuPercent"`
-	MemoryUsageBytes int64              `json:"memoryUsageBytes"`
-	MemoryLimitBytes int64              `json:"memoryLimitBytes"`
-	MemoryPercent    float64            `json:"memoryPercent"`
-	UptimeSeconds    int64              `json:"uptimeSeconds"`
-	RestartCount     int                `json:"restartCount"`
-	ExitCode         int                `json:"exitCode"`
-	StartedAt        *time.Time         `json:"startedAt,omitempty"`
-	FinishedAt       *time.Time         `json:"finishedAt,omitempty"`
-	Ports            []ContainerPort    `json:"ports,omitempty"`
-	Labels           map[string]string  `json:"labels,omitempty"`
-	Networks         []ContainerNetwork `json:"networks,omitempty"`
+	ID                  string             `json:"id"`
+	Name                string             `json:"name"`
+	Image               string             `json:"image"`
+	CreatedAt           time.Time          `json:"createdAt"`
+	State               string             `json:"state"`
+	Status              string             `json:"status"`
+	Health              string             `json:"health,omitempty"`
+	CPUPercent          float64            `json:"cpuPercent"`
+	MemoryUsageBytes    int64              `json:"memoryUsageBytes"`
+	MemoryLimitBytes    int64              `json:"memoryLimitBytes"`
+	MemoryPercent       float64            `json:"memoryPercent"`
+	UptimeSeconds       int64              `json:"uptimeSeconds"`
+	RestartCount        int                `json:"restartCount"`
+	ExitCode            int                `json:"exitCode"`
+	StartedAt           *time.Time         `json:"startedAt,omitempty"`
+	FinishedAt          *time.Time         `json:"finishedAt,omitempty"`
+	Ports               []ContainerPort    `json:"ports,omitempty"`
+	Labels              map[string]string  `json:"labels,omitempty"`
+	Networks            []ContainerNetwork `json:"networks,omitempty"`
+	WritableLayerBytes  int64              `json:"writableLayerBytes,omitempty"`
+	RootFilesystemBytes int64              `json:"rootFilesystemBytes,omitempty"`
+	BlockIO             *ContainerBlockIO  `json:"blockIo,omitempty"`
+	Mounts              []ContainerMount   `json:"mounts,omitempty"`
 }
 
 // ContainerPort tracks an exposed container port mapping.
@@ -83,6 +87,24 @@ type ContainerNetwork struct {
 	Name string `json:"name"`
 	IPv4 string `json:"ipv4,omitempty"`
 	IPv6 string `json:"ipv6,omitempty"`
+}
+
+// ContainerBlockIO summarises high-level block I/O metrics for a container.
+type ContainerBlockIO struct {
+	ReadBytes  uint64 `json:"readBytes,omitempty"`
+	WriteBytes uint64 `json:"writeBytes,omitempty"`
+}
+
+// ContainerMount describes a mount point exposed inside a container.
+type ContainerMount struct {
+	Type        string `json:"type,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Destination string `json:"destination,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+	RW          bool   `json:"rw"`
+	Propagation string `json:"propagation,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Driver      string `json:"driver,omitempty"`
 }
 
 // AgentKey returns the stable identifier for a reporting agent.

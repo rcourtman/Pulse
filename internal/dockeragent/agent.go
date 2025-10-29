@@ -48,6 +48,7 @@ type Config struct {
 	IncludeServices    bool
 	IncludeTasks       bool
 	IncludeContainers  bool
+	CollectDiskMetrics bool
 	Logger             *zerolog.Logger
 }
 
@@ -437,12 +438,13 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 }
 
 func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (agentsdocker.Container, error) {
-	const perContainerTimeout = 5 * time.Second
+	const perContainerTimeout = 15 * time.Second
 
 	containerCtx, cancel := context.WithTimeout(ctx, perContainerTimeout)
 	defer cancel()
 
-	inspect, err := a.docker.ContainerInspect(containerCtx, summary.ID)
+	requestSize := a.cfg.CollectDiskMetrics
+	inspect, _, err := a.docker.ContainerInspectWithRaw(containerCtx, summary.ID, requestSize)
 	if err != nil {
 		return agentsdocker.Container{}, fmt.Errorf("inspect: %w", err)
 	}
@@ -452,6 +454,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (
 		memUsage   int64
 		memLimit   int64
 		memPercent float64
+		blockIO    *agentsdocker.ContainerBlockIO
 	)
 
 	if inspect.State.Running || inspect.State.Paused {
@@ -468,6 +471,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (
 
 		cpuPercent = calculateCPUPercent(stats, a.cpuCount)
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
+		blockIO = summarizeBlockIO(stats)
 	}
 
 	createdAt := time.Unix(summary.Created, 0)
@@ -524,26 +528,66 @@ func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (
 		finishedPtr = &finished
 	}
 
+	var writableLayerBytes int64
+	if inspect.SizeRw != nil {
+		writableLayerBytes = *inspect.SizeRw
+	}
+
+	var rootFsBytes int64
+	if inspect.SizeRootFs != nil {
+		rootFsBytes = *inspect.SizeRootFs
+	}
+
+	var mounts []agentsdocker.ContainerMount
+	if len(inspect.Mounts) > 0 {
+		mounts = make([]agentsdocker.ContainerMount, 0, len(inspect.Mounts))
+		for _, mount := range inspect.Mounts {
+			mounts = append(mounts, agentsdocker.ContainerMount{
+				Type:        string(mount.Type),
+				Source:      mount.Source,
+				Destination: mount.Destination,
+				Mode:        mount.Mode,
+				RW:          mount.RW,
+				Propagation: string(mount.Propagation),
+				Name:        mount.Name,
+				Driver:      mount.Driver,
+			})
+		}
+	}
+
 	container := agentsdocker.Container{
-		ID:               summary.ID,
-		Name:             trimLeadingSlash(summary.Names),
-		Image:            summary.Image,
-		CreatedAt:        createdAt,
-		State:            summary.State,
-		Status:           summary.Status,
-		Health:           health,
-		CPUPercent:       cpuPercent,
-		MemoryUsageBytes: memUsage,
-		MemoryLimitBytes: memLimit,
-		MemoryPercent:    memPercent,
-		UptimeSeconds:    uptimeSeconds,
-		RestartCount:     inspect.RestartCount,
-		ExitCode:         inspect.State.ExitCode,
-		StartedAt:        startedPtr,
-		FinishedAt:       finishedPtr,
-		Ports:            ports,
-		Labels:           labels,
-		Networks:         networks,
+		ID:                  summary.ID,
+		Name:                trimLeadingSlash(summary.Names),
+		Image:               summary.Image,
+		CreatedAt:           createdAt,
+		State:               summary.State,
+		Status:              summary.Status,
+		Health:              health,
+		CPUPercent:          cpuPercent,
+		MemoryUsageBytes:    memUsage,
+		MemoryLimitBytes:    memLimit,
+		MemoryPercent:       memPercent,
+		UptimeSeconds:       uptimeSeconds,
+		RestartCount:        inspect.RestartCount,
+		ExitCode:            inspect.State.ExitCode,
+		StartedAt:           startedPtr,
+		FinishedAt:          finishedPtr,
+		Ports:               ports,
+		Labels:              labels,
+		Networks:            networks,
+		WritableLayerBytes:  writableLayerBytes,
+		RootFilesystemBytes: rootFsBytes,
+		BlockIO:             blockIO,
+		Mounts:              mounts,
+	}
+
+	if requestSize {
+		a.logger.Debug().
+			Str("container", container.Name).
+			Int64("writableLayerBytes", writableLayerBytes).
+			Int64("rootFilesystemBytes", rootFsBytes).
+			Int("mountCount", len(mounts)).
+			Msg("Collected container disk metrics")
 	}
 
 	return container, nil
@@ -779,6 +823,28 @@ func newHTTPClient(insecure bool) *http.Client {
 	return &http.Client{
 		Timeout:   15 * time.Second,
 		Transport: transport,
+	}
+}
+
+func summarizeBlockIO(stats containertypes.StatsResponse) *agentsdocker.ContainerBlockIO {
+	var readBytes, writeBytes uint64
+
+	for _, entry := range stats.BlkioStats.IoServiceBytesRecursive {
+		switch strings.ToLower(entry.Op) {
+		case "read":
+			readBytes += entry.Value
+		case "write":
+			writeBytes += entry.Value
+		}
+	}
+
+	if readBytes == 0 && writeBytes == 0 {
+		return nil
+	}
+
+	return &agentsdocker.ContainerBlockIO{
+		ReadBytes:  readBytes,
+		WriteBytes: writeBytes,
 	}
 }
 
