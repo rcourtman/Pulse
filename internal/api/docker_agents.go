@@ -170,6 +170,12 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 	if shouldRemove {
 		if _, removeErr := h.monitor.RemoveDockerHost(hostID); removeErr != nil {
 			log.Error().Err(removeErr).Str("dockerHostID", hostID).Str("commandID", commandID).Msg("Failed to remove docker host after command completion")
+		} else {
+			// Clear the removal block since the agent has confirmed it stopped successfully.
+			// This allows immediate re-enrollment without waiting for the 24-hour TTL.
+			if reenrollErr := h.monitor.AllowDockerHostReenroll(hostID); reenrollErr != nil {
+				log.Warn().Err(reenrollErr).Str("dockerHostID", hostID).Msg("Failed to clear removal block after successful stop")
+			}
 		}
 	}
 
