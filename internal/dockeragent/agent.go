@@ -702,6 +702,19 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 	}
 
 	a.logger.Info().Msg("Stop command acknowledged; terminating agent")
+
+	// After sending the acknowledgement, stop the systemd service to prevent restart.
+	// This is done after the ack to ensure the acknowledgement is sent before the
+	// process is terminated by systemctl stop.
+	go func() {
+		// Small delay to ensure the ack response completes
+		time.Sleep(1 * time.Second)
+		stopServiceCtx := context.Background()
+		if err := stopSystemdService(stopServiceCtx, "pulse-docker-agent"); err != nil {
+			a.logger.Warn().Err(err).Msg("Failed to stop systemd service, agent will exit normally")
+		}
+	}()
+
 	return ErrStopRequested
 }
 
@@ -738,6 +751,32 @@ func disableSystemdService(ctx context.Context, service string) error {
 			}
 		}
 		return fmt.Errorf("systemctl disable %s: %w (%s)", service, err, strings.TrimSpace(string(output)))
+	}
+
+	return nil
+}
+
+func stopSystemdService(ctx context.Context, service string) error {
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		// Not a systemd environment; nothing to do.
+		return nil
+	}
+
+	// Stop the service to terminate the current running instance.
+	// This prevents systemd from restarting the service (services stopped via
+	// systemctl stop are not restarted even with Restart=always).
+	cmd := exec.CommandContext(ctx, "systemctl", "stop", service)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode := exitErr.ExitCode()
+			lowerOutput := strings.ToLower(string(output))
+			// Ignore "not found" errors since the service might already be stopped
+			if exitCode == 5 || strings.Contains(lowerOutput, "could not be found") || strings.Contains(lowerOutput, "not-found") {
+				return nil
+			}
+		}
+		return fmt.Errorf("systemctl stop %s: %w (%s)", service, err, strings.TrimSpace(string(output)))
 	}
 
 	return nil
