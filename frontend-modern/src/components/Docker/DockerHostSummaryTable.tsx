@@ -251,9 +251,12 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                             ({summary.host.hostname})
                           </span>
                         </Show>
+                        <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 whitespace-nowrap">
+                          Docker
+                        </span>
                         <Show when={summary.host.dockerVersion}>
-                          <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 whitespace-nowrap">
-                            Docker {summary.host.dockerVersion}
+                          <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            v{summary.host.dockerVersion}
                           </span>
                         </Show>
                       </div>
