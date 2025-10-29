@@ -732,19 +732,19 @@ const DockerContainerRow: Component<{
       <Show when={expanded() && hasDrawerContent()}>
         <tr class="bg-gray-50 dark:bg-gray-900/50">
           <td colSpan={props.columns} class="px-4 py-3">
-            <div class="grid gap-3 md:grid-cols-2">
+            <div class="flex flex-wrap justify-start gap-3">
               <Show when={container.ports && container.ports.length > 0}>
-                <div>
-                  <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     Ports
                   </div>
-                  <div class="mt-1 flex flex-wrap gap-1">
+                  <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
                     {container.ports!.map((port) => {
                       const label = port.publicPort
                         ? `${port.publicPort}:${port.privatePort}/${port.protocol}`
                         : `${port.privatePort}/${port.protocol}`;
                       return (
-                        <span class="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                        <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
                           {label}
                         </span>
                       );
@@ -754,20 +754,26 @@ const DockerContainerRow: Component<{
               </Show>
 
               <Show when={container.networks && container.networks.length > 0}>
-                <div>
-                  <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     Networks
                   </div>
-                  <div class="mt-1 space-y-1 text-xs text-gray-700 dark:text-gray-300">
+                  <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
                     {container.networks!.map((network) => (
-                      <div>
-                        <span class="font-medium">{network.name}</span>
-                        <Show when={network.ipv4}>
-                          <span class="ml-2 text-gray-500 dark:text-gray-400">IPv4: {network.ipv4}</span>
-                        </Show>
-                        <Show when={network.ipv6}>
-                          <span class="ml-2 text-gray-500 dark:text-gray-400">IPv6: {network.ipv6}</span>
-                        </Show>
+                      <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
+                        <div class="font-medium text-gray-700 dark:text-gray-200">{network.name}</div>
+                        <div class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                          <Show when={network.ipv4}>
+                            <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                              {network.ipv4}
+                            </span>
+                          </Show>
+                          <Show when={network.ipv6}>
+                            <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                              {network.ipv6}
+                            </span>
+                          </Show>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -775,13 +781,13 @@ const DockerContainerRow: Component<{
               </Show>
 
               <Show when={container.labels && Object.keys(container.labels).length > 0}>
-                <div class="md:col-span-2">
-                  <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     Labels
                   </div>
-                  <div class="mt-1 flex flex-wrap gap-1">
+                  <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
                     {Object.entries(container.labels!).map(([key, value]) => (
-                      <span class="rounded bg-gray-200 px-1.5 py-0.5 text-[11px] text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
+                      <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
                         {key}
                         <Show when={value}>: {value}</Show>
                       </span>
@@ -1154,110 +1160,112 @@ const DockerServiceRow: Component<{
       <Show when={expanded() && hasTasks()}>
         <tr class="bg-gray-50 dark:bg-gray-900/60">
           <td colSpan={props.columns} class="px-4 py-3">
-            <div class="space-y-2 border-l-4 border-gray-200 dark:border-gray-700 pl-3">
-              <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
-                <span>Tasks</span>
-                <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
-                  {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
-                </span>
-              </div>
-              <div class="overflow-x-auto border border-gray-200 dark:border-gray-700/60 rounded-lg bg-white dark:bg-gray-900/60">
-                <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
-                  <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
-                    <tr>
-                      <th class="py-1 pr-2 text-left font-medium">Task</th>
-                      <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
-                      <th class="py-1 px-2 text-left font-medium">Node</th>
-                      <th class="py-1 px-2 text-left font-medium">State</th>
-                      <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
-                      <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
-                      <th class="py-1 px-2 text-left font-medium">Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
-                    <For each={tasks}>
-                      {(task) => {
-                        const container = findContainerForTask(host.containers || [], task);
-                        const cpu = container?.cpuPercent ?? 0;
-                        const mem = container?.memoryPercent ?? 0;
-                        const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
-                        const taskLabel = () => {
-                          if (task.containerName) return task.containerName;
-                          if (task.containerId) return task.containerId.slice(0, 12);
-                          if (task.slot !== undefined) return `slot-${task.slot}`;
-                          return task.id ?? 'Task';
-                        };
-                        const taskTitle = () => {
-                          const label = taskLabel();
-                          if (task.containerId && task.containerId !== label) {
-                            return `${label} \u2014 ${task.containerId}`;
-                          }
-                          if (task.id && task.id !== label) {
-                            return `${label} \u2014 ${task.id}`;
-                          }
-                          return label;
-                        };
-                        const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
-                        const stateClass = () => {
-                          if (state === 'running') {
-                            return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-                          }
-                          if (state === 'failed' || state === 'error') {
-                            return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-                          }
-                          return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
-                        };
-                        return (
-                          <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
-                            <td class="py-1 pr-2">
-                              <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
-                                <span class="truncate font-medium" title={taskTitle()}>
-                                  {taskLabel()}
-                                </span>
-                              </div>
-                            </td>
-                            <td class="py-1 px-2">
-                              <span
-                                class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
-                                  'task',
-                                )}`}
-                              >
-                                Task
-                              </span>
-                            </td>
-                            <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
-                              {task.nodeName || task.nodeId || '—'}
-                            </td>
-                            <td class="py-1 px-2">
-                              <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
-                                {task.currentState || task.desiredState || 'Unknown'}
-                              </span>
-                            </td>
-                            <td class="py-1 px-2 w-[120px]">
-                              <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
-                                <MetricBar value={Math.min(100, cpu)} label={formatPercent(cpu)} type="cpu" />
-                              </Show>
-                            </td>
-                            <td class="py-1 px-2 w-[140px]">
-                              <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
-                                <MetricBar value={Math.min(100, mem)} label={formatPercent(mem)} type="memory" />
-                              </Show>
-                            </td>
-                            <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                              <Show when={updated} fallback="—">
-                                {(timestamp) => (
-                                  <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
-                                    {formatRelativeTime(timestamp())}
+            <div class="flex flex-wrap justify-start gap-3">
+              <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                  <span>Tasks</span>
+                  <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
+                    {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
+                  </span>
+                </div>
+                <div class="mt-2 overflow-x-auto">
+                  <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
+                    <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
+                      <tr>
+                        <th class="py-1 pr-2 text-left font-medium">Task</th>
+                        <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
+                        <th class="py-1 px-2 text-left font-medium">Node</th>
+                        <th class="py-1 px-2 text-left font-medium">State</th>
+                        <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
+                        <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
+                        <th class="py-1 px-2 text-left font-medium">Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
+                      <For each={tasks}>
+                        {(task) => {
+                          const container = findContainerForTask(host.containers || [], task);
+                          const cpu = container?.cpuPercent ?? 0;
+                          const mem = container?.memoryPercent ?? 0;
+                          const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
+                          const taskLabel = () => {
+                            if (task.containerName) return task.containerName;
+                            if (task.containerId) return task.containerId.slice(0, 12);
+                            if (task.slot !== undefined) return `slot-${task.slot}`;
+                            return task.id ?? 'Task';
+                          };
+                          const taskTitle = () => {
+                            const label = taskLabel();
+                            if (task.containerId && task.containerId !== label) {
+                              return `${label} \u2014 ${task.containerId}`;
+                            }
+                            if (task.id && task.id !== label) {
+                              return `${label} \u2014 ${task.id}`;
+                            }
+                            return label;
+                          };
+                          const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
+                          const stateClass = () => {
+                            if (state === 'running') {
+                              return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+                            }
+                            if (state === 'failed' || state === 'error') {
+                              return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+                            }
+                            return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+                          };
+                          return (
+                            <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
+                              <td class="py-1 pr-2">
+                                <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
+                                  <span class="truncate font-medium" title={taskTitle()}>
+                                    {taskLabel()}
                                   </span>
-                                )}
-                              </Show>
-                            </td>
-                          </tr>
-                        );
-                      }}
-                    </For>
-                  </tbody>
-                </table>
+                                </div>
+                              </td>
+                              <td class="py-1 px-2">
+                                <span
+                                  class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+                                    'task',
+                                  )}`}
+                                >
+                                  Task
+                                </span>
+                              </td>
+                              <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
+                                {task.nodeName || task.nodeId || '—'}
+                              </td>
+                              <td class="py-1 px-2">
+                                <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
+                                  {task.currentState || task.desiredState || 'Unknown'}
+                                </span>
+                              </td>
+                              <td class="py-1 px-2 w-[120px]">
+                                <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
+                                  <MetricBar value={Math.min(100, cpu)} label={formatPercent(cpu)} type="cpu" />
+                                </Show>
+                              </td>
+                              <td class="py-1 px-2 w-[140px]">
+                                <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
+                                  <MetricBar value={Math.min(100, mem)} label={formatPercent(mem)} type="memory" />
+                                </Show>
+                              </td>
+                              <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                <Show when={updated} fallback="—">
+                                  {(timestamp) => (
+                                    <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
+                                      {formatRelativeTime(timestamp())}
+                                    </span>
+                                  )}
+                                </Show>
+                              </td>
+                            </tr>
+                          );
+                        }}
+                      </For>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </td>
