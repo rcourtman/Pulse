@@ -1166,6 +1166,7 @@ const DockerServiceRow: Component<{
                   <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
                     <tr>
                       <th class="py-1 pr-2 text-left font-medium">Task</th>
+                      <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
                       <th class="py-1 px-2 text-left font-medium">Node</th>
                       <th class="py-1 px-2 text-left font-medium">State</th>
                       <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
@@ -1209,18 +1210,20 @@ const DockerServiceRow: Component<{
                         return (
                           <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
                             <td class="py-1 pr-2">
-                              <div class="flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
+                              <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
                                 <span class="truncate font-medium" title={taskTitle()}>
                                   {taskLabel()}
                                 </span>
-                                <span
-                                  class={`hidden sm:inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
-                                    'task',
-                                  )}`}
-                                >
-                                  Task
-                                </span>
                               </div>
+                            </td>
+                            <td class="py-1 px-2">
+                              <span
+                                class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+                                  'task',
+                                )}`}
+                              >
+                                Task
+                              </span>
                             </td>
                             <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
                               {task.nodeName || task.nodeId || '—'}
