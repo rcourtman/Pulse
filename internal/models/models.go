@@ -226,25 +226,29 @@ type DockerHost struct {
 
 // DockerContainer represents the state of a Docker container on a monitored host.
 type DockerContainer struct {
-	ID            string                       `json:"id"`
-	Name          string                       `json:"name"`
-	Image         string                       `json:"image"`
-	State         string                       `json:"state"`
-	Status        string                       `json:"status"`
-	Health        string                       `json:"health,omitempty"`
-	CPUPercent    float64                      `json:"cpuPercent"`
-	MemoryUsage   int64                        `json:"memoryUsageBytes"`
-	MemoryLimit   int64                        `json:"memoryLimitBytes"`
-	MemoryPercent float64                      `json:"memoryPercent"`
-	UptimeSeconds int64                        `json:"uptimeSeconds"`
-	RestartCount  int                          `json:"restartCount"`
-	ExitCode      int                          `json:"exitCode"`
-	CreatedAt     time.Time                    `json:"createdAt"`
-	StartedAt     *time.Time                   `json:"startedAt,omitempty"`
-	FinishedAt    *time.Time                   `json:"finishedAt,omitempty"`
-	Ports         []DockerContainerPort        `json:"ports,omitempty"`
-	Labels        map[string]string            `json:"labels,omitempty"`
-	Networks      []DockerContainerNetworkLink `json:"networks,omitempty"`
+	ID                  string                       `json:"id"`
+	Name                string                       `json:"name"`
+	Image               string                       `json:"image"`
+	State               string                       `json:"state"`
+	Status              string                       `json:"status"`
+	Health              string                       `json:"health,omitempty"`
+	CPUPercent          float64                      `json:"cpuPercent"`
+	MemoryUsage         int64                        `json:"memoryUsageBytes"`
+	MemoryLimit         int64                        `json:"memoryLimitBytes"`
+	MemoryPercent       float64                      `json:"memoryPercent"`
+	UptimeSeconds       int64                        `json:"uptimeSeconds"`
+	RestartCount        int                          `json:"restartCount"`
+	ExitCode            int                          `json:"exitCode"`
+	CreatedAt           time.Time                    `json:"createdAt"`
+	StartedAt           *time.Time                   `json:"startedAt,omitempty"`
+	FinishedAt          *time.Time                   `json:"finishedAt,omitempty"`
+	Ports               []DockerContainerPort        `json:"ports,omitempty"`
+	Labels              map[string]string            `json:"labels,omitempty"`
+	Networks            []DockerContainerNetworkLink `json:"networks,omitempty"`
+	WritableLayerBytes  int64                        `json:"writableLayerBytes,omitempty"`
+	RootFilesystemBytes int64                        `json:"rootFilesystemBytes,omitempty"`
+	BlockIO             *DockerContainerBlockIO      `json:"blockIo,omitempty"`
+	Mounts              []DockerContainerMount       `json:"mounts,omitempty"`
 }
 
 // DockerContainerPort describes an exposed container port mapping.
@@ -260,6 +264,24 @@ type DockerContainerNetworkLink struct {
 	Name string `json:"name"`
 	IPv4 string `json:"ipv4,omitempty"`
 	IPv6 string `json:"ipv6,omitempty"`
+}
+
+// DockerContainerBlockIO captures aggregate block IO usage for a container.
+type DockerContainerBlockIO struct {
+	ReadBytes  uint64 `json:"readBytes,omitempty"`
+	WriteBytes uint64 `json:"writeBytes,omitempty"`
+}
+
+// DockerContainerMount describes a mount exposed to a container.
+type DockerContainerMount struct {
+	Type        string `json:"type,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Destination string `json:"destination,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+	RW          bool   `json:"rw"`
+	Propagation string `json:"propagation,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Driver      string `json:"driver,omitempty"`
 }
 
 // DockerService summarises a Docker Swarm service.

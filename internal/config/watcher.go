@@ -32,16 +32,60 @@ type ConfigWatcher struct {
 
 // NewConfigWatcher creates a new config watcher
 func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
-	// Determine env file path
-	envPath := filepath.Join(config.ConfigPath, ".env")
-	if config.ConfigPath == "" {
-		envPath = "/etc/pulse/.env"
+	// CRITICAL FIX: Config watcher must ALWAYS watch the persistent production config,
+	// NOT the mock data directory. Mock mode should only affect Proxmox data, not auth.
+	//
+	// Strategy:
+	// 1. Check PULSE_AUTH_CONFIG_DIR (dedicated env var for auth config)
+	// 2. If PULSE_DATA_DIR looks like production (/etc/pulse or /data), use it
+	// 3. Otherwise, always prefer /etc/pulse if it exists (production auth)
+	// 4. Fall back to /data for Docker environments
+	// 5. Last resort: use PULSE_DATA_DIR (may be mock/dev)
+
+	persistentDataDir := ""
+	dataDir := os.Getenv("PULSE_DATA_DIR")
+
+	// Option 1: Explicit auth config directory override
+	if authDir := os.Getenv("PULSE_AUTH_CONFIG_DIR"); authDir != "" {
+		persistentDataDir = authDir
+		log.Info().Str("authConfigDir", authDir).Msg("Using PULSE_AUTH_CONFIG_DIR for auth config")
+	} else if dataDir == "/etc/pulse" || dataDir == "/data" {
+		// Option 2: PULSE_DATA_DIR is already production, use it
+		persistentDataDir = dataDir
+	} else if _, err := os.Stat("/etc/pulse/.env"); err == nil {
+		// Option 3: /etc/pulse exists, use it (production)
+		persistentDataDir = "/etc/pulse"
+		if dataDir != "" && dataDir != persistentDataDir {
+			log.Warn().
+				Str("dataDir", dataDir).
+				Str("authConfigDir", persistentDataDir).
+				Msg("PULSE_DATA_DIR points to non-production directory - using /etc/pulse for auth config instead")
+		}
+	} else if _, err := os.Stat("/data/.env"); err == nil {
+		// Option 4: Docker environment
+		persistentDataDir = "/data"
+	} else if dataDir != "" {
+		// Option 5: Use PULSE_DATA_DIR as fallback
+		persistentDataDir = dataDir
+		if strings.Contains(persistentDataDir, "/mock-data") || strings.Contains(persistentDataDir, "/tmp/") {
+			log.Warn().
+				Str("authConfigDir", persistentDataDir).
+				Msg("WARNING: Auth config watcher is using temporary/mock directory - auth may be unstable")
+		}
+	} else {
+		// Option 6: Last resort default
+		persistentDataDir = "/etc/pulse"
 	}
 
-	// Check for Docker environment
-	if _, err := os.Stat("/data/.env"); err == nil {
-		envPath = "/data/.env"
-	}
+	envPath := filepath.Join(persistentDataDir, ".env")
+
+	// Log what we're watching for debugging
+	log.Info().
+		Str("watchingPath", envPath).
+		Str("authConfigDir", persistentDataDir).
+		Str("pulseDataDir", dataDir).
+		Str("configPathFromConfig", config.ConfigPath).
+		Msg("Config watcher initialized - watching production auth config")
 
 	// Determine mock.env path - skip in Docker or if directory doesn't exist
 	mockEnvPath := ""

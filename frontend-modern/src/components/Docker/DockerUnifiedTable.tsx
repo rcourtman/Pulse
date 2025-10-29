@@ -349,11 +349,46 @@ const DockerContainerRow: Component<{
   });
   let urlInputRef: HTMLInputElement | undefined;
 
+  const writableLayerBytes = createMemo(() => container.writableLayerBytes ?? 0);
+  const rootFilesystemBytes = createMemo(() => container.rootFilesystemBytes ?? 0);
+  const hasDiskStats = createMemo(() => writableLayerBytes() > 0 || rootFilesystemBytes() > 0);
+  const diskPercent = createMemo<number | null>(() => {
+    const total = rootFilesystemBytes();
+    if (!total || total <= 0) return null;
+    const used = writableLayerBytes();
+    if (used <= 0) return 0;
+    return Math.min(100, (used / total) * 100);
+  });
+  const diskUsageLabel = createMemo(() => {
+    const used = writableLayerBytes();
+    if (used <= 0) return '0 B';
+    return formatBytes(used, 0);
+  });
+  const diskSublabel = createMemo<string | undefined>(() => {
+    const total = rootFilesystemBytes();
+    if (!total || total <= 0) return undefined;
+    return `${diskUsageLabel()} / ${formatBytes(total, 0)}`;
+  });
+  const mounts = createMemo(() => container.mounts || []);
+  const hasMounts = createMemo(() => mounts().length > 0);
+  const blockIo = createMemo(() => container.blockIo);
+  const blockIoReadBytes = createMemo(() => blockIo()?.readBytes ?? 0);
+  const blockIoWriteBytes = createMemo(() => blockIo()?.writeBytes ?? 0);
+  const hasBlockIo = createMemo(() => {
+    const stats = blockIo();
+    if (!stats) return false;
+    const read = stats.readBytes ?? 0;
+    const write = stats.writeBytes ?? 0;
+    return read > 0 || write > 0;
+  });
+
   const hasDrawerContent = createMemo(() => {
     return (
       (container.ports && container.ports.length > 0) ||
       (container.labels && Object.keys(container.labels).length > 0) ||
-      (container.networks && container.networks.length > 0)
+      (container.networks && container.networks.length > 0) ||
+      hasMounts() ||
+      hasBlockIo()
     );
   });
 
@@ -716,6 +751,21 @@ const DockerContainerRow: Component<{
             />
           </Show>
         </td>
+        <td class="px-2 py-0.5 min-w-[180px]">
+          <Show when={hasDiskStats()} fallback={<span class="text-xs text-gray-400">—</span>}>
+            <Show
+              when={diskPercent() !== null}
+              fallback={<span class="text-xs text-gray-700 dark:text-gray-300">{diskUsageLabel()}</span>}
+            >
+              <MetricBar
+                value={diskPercent() ?? 0}
+                label={formatPercent(diskPercent() ?? 0)}
+                type="disk"
+                sublabel={diskSublabel() ?? diskUsageLabel()}
+              />
+            </Show>
+          </Show>
+        </td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
             {restarts()}
@@ -776,6 +826,94 @@ const DockerContainerRow: Component<{
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={hasBlockIo()}>
+                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                    Block I/O
+                  </div>
+                  <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                    <div class="flex items-center justify-between">
+                      <span>Read</span>
+                      <span class="font-semibold text-gray-900 dark:text-gray-100">
+                        {formatBytes(blockIoReadBytes())}
+                      </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span>Write</span>
+                      <span class="font-semibold text-gray-900 dark:text-gray-100">
+                        {formatBytes(blockIoWriteBytes())}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={hasMounts()}>
+                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                    Mounts
+                  </div>
+                  <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                    <For each={mounts()}>
+                      {(mount) => {
+                        const destination = mount.destination || mount.source || mount.name || 'mount';
+                        const rw = mount.rw === false ? 'read-only' : 'read-write';
+                        return (
+                          <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="truncate font-medium text-gray-700 dark:text-gray-200" title={destination}>
+                                {destination}
+                              </span>
+                              <Show when={mount.type}>
+                                <span class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                  {mount.type}
+                                </span>
+                              </Show>
+                            </div>
+                            <Show when={mount.source}>
+                              <div class="mt-1 truncate text-[11px] text-gray-600 dark:text-gray-300" title={mount.source}>
+                                {mount.source}
+                              </div>
+                            </Show>
+                            <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                              <span
+                                class={`rounded px-1.5 py-0.5 ${
+                                  mount.rw === false
+                                    ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                }`}
+                              >
+                                {rw}
+                              </span>
+                              <Show when={mount.mode}>
+                                <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
+                                  mode: {mount.mode}
+                                </span>
+                              </Show>
+                              <Show when={mount.driver}>
+                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                  {mount.driver}
+                                </span>
+                              </Show>
+                              <Show when={mount.name}>
+                                <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                                  {mount.name}
+                                </span>
+                              </Show>
+                              <Show when={mount.propagation}>
+                                <span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
+                                  {mount.propagation}
+                                </span>
+                              </Show>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    </For>
                   </div>
                 </div>
               </Show>
@@ -1140,6 +1278,7 @@ const DockerServiceRow: Component<{
         </td>
         <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[150px]">—</td>
         <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[210px]">—</td>
+        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[180px]">—</td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <span class="font-semibold text-gray-900 dark:text-gray-100">
             {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
@@ -1481,13 +1620,16 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                   <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%] min-w-[150px]">
                     CPU
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[17%] min-w-[210px]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] min-w-[210px]">
                     Memory
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] min-w-[180px]">
+                    Disk
+                  </th>
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
                     Tasks / Restarts
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
                     Updated / Uptime
                   </th>
                 </tr>
@@ -1496,7 +1638,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                 <For each={groupedRows()}>
                   {(group) => (
                     <>
-                      <DockerHostGroupHeader host={group.host} colspan={8} />
+                      <DockerHostGroupHeader host={group.host} colspan={9} />
                       <For each={group.rows}>
                         {(row) => {
                           // Build resource ID for metadata lookup
@@ -1508,14 +1650,14 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                           return row.kind === 'container' ? (
                             <DockerContainerRow
                               row={row}
-                              columns={8}
+                              columns={9}
                               customUrl={metadata?.customUrl}
                               onCustomUrlUpdate={props.onCustomUrlUpdate}
                             />
                           ) : (
                             <DockerServiceRow
                               row={row}
-                              columns={8}
+                              columns={9}
                               customUrl={metadata?.customUrl}
                               onCustomUrlUpdate={props.onCustomUrlUpdate}
                             />

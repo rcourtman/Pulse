@@ -11,6 +11,7 @@ Every check interval (30s by default) the agent collects:
 - Restart counters and exit codes
 - CPU usage, memory consumption and limits
 - Images, port mappings, network addresses, and start times
+- Writable layer size, root filesystem size, block I/O totals, and mount metadata (shown in the Docker table drawer)
 - Health-check failures, restart-loop windows, and recent exit codes (displayed in the UI under each container drawer)
 
 Data is pushed to Pulse over HTTPS using your existing API token – no inbound firewall rules required.
@@ -157,6 +158,7 @@ docker run -d \
 | `--swarm-services`, `PULSE_SWARM_SERVICES` | Include Swarm service summaries in reports. | `true` |
 | `--swarm-tasks`, `PULSE_SWARM_TASKS` | Include individual Swarm tasks in reports. | `true` |
 | `--include-containers`, `PULSE_INCLUDE_CONTAINERS` | Include per-container metrics (disable when only Swarm data is needed). | `true` |
+| `--collect-disk`, `PULSE_COLLECT_DISK` | Collect per-container disk usage, block I/O, and mount metadata. Disable to skip Docker size queries on extremely large fleets. | `true` |
 | `--hostname`, `PULSE_HOSTNAME` | Override host name reported to Pulse.              | Docker info / OS hostname |
 | `--agent-id`, `PULSE_AGENT_ID` | Stable ID for the agent (useful for clustering).   | Docker engine ID / machine-id |
 | `--insecure`, `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS cert validation (unsafe).     | `false`         |

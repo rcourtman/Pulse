@@ -345,21 +345,23 @@ func (h Host) ToFrontend() HostFrontend {
 // ToFrontend converts a DockerContainer to DockerContainerFrontend
 func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 	container := DockerContainerFrontend{
-		ID:            c.ID,
-		Name:          c.Name,
-		Image:         c.Image,
-		State:         c.State,
-		Status:        c.Status,
-		Health:        c.Health,
-		CPUPercent:    c.CPUPercent,
-		MemoryUsage:   c.MemoryUsage,
-		MemoryLimit:   c.MemoryLimit,
-		MemoryPercent: c.MemoryPercent,
-		UptimeSeconds: c.UptimeSeconds,
-		RestartCount:  c.RestartCount,
-		ExitCode:      c.ExitCode,
-		CreatedAt:     c.CreatedAt.Unix() * 1000,
-		Labels:        c.Labels,
+		ID:                  c.ID,
+		Name:                c.Name,
+		Image:               c.Image,
+		State:               c.State,
+		Status:              c.Status,
+		Health:              c.Health,
+		CPUPercent:          c.CPUPercent,
+		MemoryUsage:         c.MemoryUsage,
+		MemoryLimit:         c.MemoryLimit,
+		MemoryPercent:       c.MemoryPercent,
+		UptimeSeconds:       c.UptimeSeconds,
+		RestartCount:        c.RestartCount,
+		ExitCode:            c.ExitCode,
+		CreatedAt:           c.CreatedAt.Unix() * 1000,
+		Labels:              c.Labels,
+		WritableLayerBytes:  c.WritableLayerBytes,
+		RootFilesystemBytes: c.RootFilesystemBytes,
 	}
 
 	if c.StartedAt != nil {
@@ -395,6 +397,30 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 			}
 		}
 		container.Networks = networks
+	}
+
+	if c.BlockIO != nil {
+		container.BlockIO = &DockerContainerBlockIOFrontend{
+			ReadBytes:  c.BlockIO.ReadBytes,
+			WriteBytes: c.BlockIO.WriteBytes,
+		}
+	}
+
+	if len(c.Mounts) > 0 {
+		mounts := make([]DockerContainerMountFrontend, len(c.Mounts))
+		for i, mount := range c.Mounts {
+			mounts[i] = DockerContainerMountFrontend{
+				Type:        mount.Type,
+				Source:      mount.Source,
+				Destination: mount.Destination,
+				Mode:        mount.Mode,
+				RW:          mount.RW,
+				Propagation: mount.Propagation,
+				Name:        mount.Name,
+				Driver:      mount.Driver,
+			}
+		}
+		container.Mounts = mounts
 	}
 
 	return container

@@ -249,6 +249,10 @@ export interface DockerContainer {
   ports?: DockerContainerPort[];
   labels?: Record<string, string>;
   networks?: DockerContainerNetwork[];
+  writableLayerBytes?: number;
+  rootFilesystemBytes?: number;
+  blockIo?: DockerContainerBlockIO;
+  mounts?: DockerContainerMount[];
 }
 
 export interface DockerContainerPort {
@@ -262,6 +266,22 @@ export interface DockerContainerNetwork {
   name: string;
   ipv4?: string;
   ipv6?: string;
+}
+
+export interface DockerContainerBlockIO {
+  readBytes?: number;
+  writeBytes?: number;
+}
+
+export interface DockerContainerMount {
+  type?: string;
+  source?: string;
+  destination?: string;
+  mode?: string;
+  rw?: boolean;
+  propagation?: string;
+  name?: string;
+  driver?: string;
 }
 
 export interface Host {

@@ -70,6 +70,7 @@ func loadConfig() dockeragent.Config {
 	envSwarmServices := strings.TrimSpace(os.Getenv("PULSE_SWARM_SERVICES"))
 	envSwarmTasks := strings.TrimSpace(os.Getenv("PULSE_SWARM_TASKS"))
 	envIncludeContainers := strings.TrimSpace(os.Getenv("PULSE_INCLUDE_CONTAINERS"))
+	envCollectDisk := strings.TrimSpace(os.Getenv("PULSE_COLLECT_DISK"))
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -98,6 +99,11 @@ func loadConfig() dockeragent.Config {
 		includeContainersDefault = parseBool(envIncludeContainers)
 	}
 
+	collectDiskDefault := true
+	if envCollectDisk != "" {
+		collectDiskDefault = parseBool(envCollectDisk)
+	}
+
 	urlFlag := flag.String("url", envURL, "Pulse server URL (e.g. http://pulse:7655)")
 	tokenFlag := flag.String("token", envToken, "Pulse API token (required)")
 	intervalFlag := flag.Duration("interval", defaultInterval, "Reporting interval (e.g. 30s)")
@@ -113,6 +119,7 @@ func loadConfig() dockeragent.Config {
 	includeServicesFlag := flag.Bool("swarm-services", includeServicesDefault, "Include Swarm service summaries in reports")
 	includeTasksFlag := flag.Bool("swarm-tasks", includeTasksDefault, "Include Swarm tasks in reports")
 	includeContainersFlag := flag.Bool("include-containers", includeContainersDefault, "Include per-container metrics in reports")
+	collectDiskFlag := flag.Bool("collect-disk", collectDiskDefault, "Collect per-container disk usage, block IO, and mount details in reports")
 
 	flag.Parse()
 
@@ -178,6 +185,7 @@ func loadConfig() dockeragent.Config {
 		IncludeServices:    *includeServicesFlag,
 		IncludeTasks:       *includeTasksFlag,
 		IncludeContainers:  *includeContainersFlag,
+		CollectDiskMetrics: *collectDiskFlag,
 	}
 }
 
