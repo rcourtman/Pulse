@@ -308,6 +308,8 @@ const buildRowId = (host: DockerHost, row: DockerRow) => {
   return `service:${host.id}:${row.service.id ?? row.service.name}`;
 };
 
+const GROUPED_RESOURCE_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
+
 const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = (props) => {
   const displayName = props.host.displayName || props.host.hostname || props.host.id;
 
@@ -580,7 +582,7 @@ const DockerContainerRow: Component<{
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class="pl-5 sm:pl-6 lg:pl-8 pr-2 py-0.5">
+        <td class={`${GROUPED_RESOURCE_INDENT} pr-2 py-0.5`}>
           <div class="flex items-center gap-1.5 min-w-0">
             {/* Name - show input when editing, otherwise show name with optional link */}
             <Show
@@ -1016,7 +1018,7 @@ const DockerServiceRow: Component<{
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class="pl-5 sm:pl-6 lg:pl-8 pr-2 py-0.5">
+        <td class={`${GROUPED_RESOURCE_INDENT} pr-2 py-0.5`}>
           <div class="flex items-center gap-1.5 min-w-0">
             {/* Name - show input when editing, otherwise show name with optional link */}
             <Show

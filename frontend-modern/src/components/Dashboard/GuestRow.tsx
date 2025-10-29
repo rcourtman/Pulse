@@ -19,6 +19,9 @@ const editingValues = new Map<string, string>();
 // Signal to trigger reactivity when editing values change
 const [editingValuesVersion, setEditingValuesVersion] = createSignal(0);
 
+const GROUPED_FIRST_CELL_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
+const DEFAULT_FIRST_CELL_INDENT = 'pl-4';
+
 const buildGuestId = (guest: Guest) => {
   if (guest.id) return guest.id;
   if (guest.instance === guest.node) {
@@ -411,9 +414,7 @@ export function GuestRow(props: GuestRowProps) {
   const firstCellClass = createMemo(() => {
     const base =
       'py-0.5 pr-2 whitespace-nowrap relative w-[160px] sm:w-[200px] lg:w-[240px] xl:w-[280px] 2xl:w-[340px]';
-    const indent = props.isGroupedView
-      ? 'pl-5 sm:pl-6 lg:pl-8'
-      : 'pl-4';
+    const indent = props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT;
     return `${base} ${indent}`;
   });
 
