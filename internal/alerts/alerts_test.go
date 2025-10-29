@@ -1146,6 +1146,68 @@ func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
 	}
 }
 
+func TestDockerContainerDiskUsageAlert(t *testing.T) {
+	m := NewManager()
+
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.TimeThreshold = 0
+	if cfg.TimeThresholds == nil {
+		cfg.TimeThresholds = make(map[string]int)
+	}
+	cfg.TimeThresholds["docker"] = 0
+	cfg.TimeThresholds["guest"] = 0
+	cfg.DockerDefaults.Disk = HysteresisThreshold{Trigger: 75, Clear: 65}
+	m.UpdateConfig(cfg)
+
+	const gib = 1024 * 1024 * 1024
+
+	host := models.DockerHost{
+		ID:          "host-disk",
+		DisplayName: "Docker Host",
+		Hostname:    "docker.disk",
+		Containers: []models.DockerContainer{
+			{
+				ID:                  "container-disk",
+				Name:                "disk-hog",
+				State:               "running",
+				Status:              "Up 5 minutes",
+				WritableLayerBytes:  int64(8 * gib),
+				RootFilesystemBytes: int64(10 * gib),
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+	alertID := fmt.Sprintf("%s-%s", resourceID, "disk")
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		t.Fatalf("expected docker container disk alert %s to be raised", alertID)
+	}
+	if alert.Level != AlertLevelWarning {
+		t.Fatalf("expected warning severity for disk usage alert, got %s", alert.Level)
+	}
+	if alert.Metadata == nil {
+		t.Fatalf("expected disk alert metadata to be populated")
+	}
+	if percent, ok := alert.Metadata["diskPercent"].(float64); !ok || percent < 79.5 || percent > 80.5 {
+		t.Fatalf("expected diskPercent metadata to be ~80%%, got %v", alert.Metadata["diskPercent"])
+	}
+	if used, ok := alert.Metadata["writableLayerBytes"].(int64); !ok || used != int64(8*gib) {
+		t.Fatalf("expected writableLayerBytes metadata to be %d, got %v", int64(8*gib), alert.Metadata["writableLayerBytes"])
+	}
+
+	// Drop usage below the clear threshold and ensure the alert resolves.
+	host.Containers[0].WritableLayerBytes = int64(4 * gib)
+	m.CheckDockerHost(host)
+
+	if _, stillActive := m.activeAlerts[alertID]; stillActive {
+		t.Fatalf("expected docker container disk alert %s to clear after usage dropped", alertID)
+	}
+}
+
 func TestUpdateConfigClampsDockerServiceCriticalGap(t *testing.T) {
 	t.Parallel()
 

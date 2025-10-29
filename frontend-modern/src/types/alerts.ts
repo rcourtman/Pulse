@@ -60,6 +60,7 @@ export interface CustomAlertRule {
 export interface DockerThresholdConfig {
   cpu?: HysteresisThreshold;
   memory?: HysteresisThreshold;
+  disk?: HysteresisThreshold;
   restartCount?: number;
   restartWindow?: number;
   memoryWarnPct?: number;

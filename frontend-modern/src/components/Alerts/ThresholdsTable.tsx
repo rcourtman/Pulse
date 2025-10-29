@@ -181,6 +181,7 @@ interface ThresholdsTableProps {
   dockerDefaults: {
     cpu: number;
     memory: number;
+    disk: number;
     restartCount: number;
     restartWindow: number;
     memoryWarnPct: number;
@@ -197,6 +198,7 @@ interface ThresholdsTableProps {
       | {
           cpu: number;
           memory: number;
+          disk: number;
           restartCount: number;
           restartWindow: number;
           memoryWarnPct: number;
@@ -207,6 +209,7 @@ interface ThresholdsTableProps {
       | ((prev: {
           cpu: number;
           memory: number;
+          disk: number;
           restartCount: number;
           restartWindow: number;
           memoryWarnPct: number;
@@ -216,6 +219,7 @@ interface ThresholdsTableProps {
         }) => {
           cpu: number;
           memory: number;
+          disk: number;
           restartCount: number;
           restartWindow: number;
           memoryWarnPct: number;
@@ -2850,6 +2854,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 columns={[
                   'CPU %',
                   'Memory %',
+                  'Disk %',
                   'Restart Count',
                   'Restart Window (s)',
                   'Memory Warn %',
@@ -2871,6 +2876,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 globalDefaults={{
                   cpu: props.dockerDefaults.cpu,
                   memory: props.dockerDefaults.memory,
+                  disk: props.dockerDefaults.disk,
                   restartCount: props.dockerDefaults.restartCount,
                   restartWindow: props.dockerDefaults.restartWindow,
                   memoryWarnPct: props.dockerDefaults.memoryWarnPct,
@@ -2880,6 +2886,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   const current = {
                     cpu: props.dockerDefaults.cpu,
                     memory: props.dockerDefaults.memory,
+                    disk: props.dockerDefaults.disk,
                     restartCount: props.dockerDefaults.restartCount,
                     restartWindow: props.dockerDefaults.restartWindow,
                     memoryWarnPct: props.dockerDefaults.memoryWarnPct,
@@ -2892,6 +2899,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     ...prev,
                     cpu: next.cpu ?? prev.cpu,
                     memory: next.memory ?? prev.memory,
+                    disk: next.disk ?? prev.disk,
                     restartCount: next.restartCount ?? prev.restartCount,
                     restartWindow: next.restartWindow ?? prev.restartWindow,
                     memoryWarnPct: next.memoryWarnPct ?? prev.memoryWarnPct,
