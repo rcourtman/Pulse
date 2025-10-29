@@ -42,6 +42,8 @@ export const DockerAgents: Component = () => {
   const [currentToken, setCurrentToken] = createSignal<string | null>(null);
   const [latestRecord, setLatestRecord] = createSignal<APITokenRecord | null>(null);
   const [tokenName, setTokenName] = createSignal('');
+  const [commandQueuedTime, setCommandQueuedTime] = createSignal<Date | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = createSignal(0);
 
   const pulseUrl = () => {
     if (typeof window !== 'undefined') {
@@ -120,12 +122,59 @@ const modalCommandProgress = createMemo(() => {
   });
 });
 
+const modalCommandTimedOut = createMemo(() => {
+  return modalCommandInProgress() && elapsedSeconds() > 120; // 2 minutes
+});
+
+const modalLastHeartbeat = createMemo(() => {
+  const host = hostToRemove();
+  return host?.lastReportTime ? formatRelativeTime(new Date(host.lastReportTime)) : null;
+});
+
+const formatElapsedTime = (seconds: number) => {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}m ${secs}s`;
+};
+
   createEffect(() => {
     if (!showRemoveModal()) return;
     const id = hostToRemoveId();
     const host = hostToRemove();
     if (id && !host) {
       closeRemoveModal();
+    }
+  });
+
+  // Track elapsed time for command execution
+  createEffect(() => {
+    const cmd = modalCommand();
+    if (!cmd) {
+      setCommandQueuedTime(null);
+      setElapsedSeconds(0);
+      return;
+    }
+
+    // Set queued time when command first appears
+    if (cmd.createdAt && !commandQueuedTime()) {
+      setCommandQueuedTime(new Date(cmd.createdAt));
+    }
+
+    // Update elapsed time every second while command is in progress
+    if (modalCommandInProgress()) {
+      const interval = setInterval(() => {
+        const queuedTime = commandQueuedTime();
+        if (queuedTime) {
+          const now = new Date();
+          const elapsed = Math.floor((now.getTime() - queuedTime.getTime()) / 1000);
+          setElapsedSeconds(elapsed);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
     }
   });
 
@@ -598,7 +647,69 @@ WantedBy=multi-user.target`;
                       })()}
                     </button>
                     <Show when={modalCommandInProgress()}>
-                      <p class="text-xs text-blue-700 dark:text-blue-300">Hang tight—Pulse is waiting for the agent to acknowledge the stop command.</p>
+                      <div class="space-y-3">
+                        {/* Progress steps */}
+                        <div class="rounded border border-blue-200 bg-white p-3 dark:border-blue-700 dark:bg-blue-800/20">
+                          <div class="mb-2 flex items-center justify-between">
+                            <span class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Progress</span>
+                            <span class="text-xs text-blue-600 dark:text-blue-400">{formatElapsedTime(elapsedSeconds())} elapsed</span>
+                          </div>
+                          <ul class="space-y-1.5">
+                            <For each={modalCommandProgress()}>
+                              {(step) => (
+                                <li
+                                  class={`${step.done || step.active ? 'text-blue-700 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'} flex items-center gap-2 text-xs`}
+                                >
+                                  <span
+                                    class={`h-2 w-2 flex-shrink-0 rounded-full ${
+                                      step.done
+                                        ? 'bg-blue-500'
+                                        : step.active
+                                          ? 'bg-blue-400 animate-pulse'
+                                          : 'bg-gray-300 dark:bg-gray-600'
+                                    }`}
+                                  />
+                                  {step.label}
+                                </li>
+                              )}
+                            </For>
+                          </ul>
+                        </div>
+
+                        {/* Expected time and last heartbeat */}
+                        <div class="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-300">
+                          <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div>
+                            <p>
+                              <Show when={!modalCommandTimedOut()} fallback="This is taking longer than expected.">
+                                This usually takes 30-60 seconds.
+                              </Show>
+                              <Show when={modalLastHeartbeat()}>
+                                {' '}Last heartbeat: {modalLastHeartbeat()}.
+                              </Show>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Timeout warning */}
+                        <Show when={modalCommandTimedOut()}>
+                          <div class="rounded border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-700 dark:bg-yellow-900/20">
+                            <div class="flex items-start gap-2">
+                              <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                              <div class="flex-1 text-xs">
+                                <p class="font-semibold text-yellow-900 dark:text-yellow-100">Command taking longer than expected</p>
+                                <p class="mt-1 text-yellow-800 dark:text-yellow-200">
+                                  The agent may be offline or experiencing issues. Consider using "Force remove now" below to skip the agent stop and remove the host immediately.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </Show>
+                      </div>
                     </Show>
                     <Show when={modalCommandCompleted()}>
                       <div class="rounded border border-emerald-200 bg-white p-3 text-xs text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
@@ -660,6 +771,33 @@ WantedBy=multi-user.target`;
                   </div>
                 </div>
               </div>
+
+              {/* Force remove option when command times out */}
+              <Show when={modalCommandTimedOut()}>
+                <div class="rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-900/20">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="flex items-start gap-3">
+                      <svg class="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <div>
+                        <h4 class="text-sm font-semibold text-orange-900 dark:text-orange-100">Skip waiting and remove now</h4>
+                        <p class="text-sm text-orange-800 dark:text-orange-200">
+                          Still waiting after {formatElapsedTime(elapsedSeconds())}. Remove the host entry immediately without waiting for the agent.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveHostNow}
+                      disabled={removeActionLoading() !== null}
+                      class="self-start rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-orange-500 dark:hover:bg-orange-400 whitespace-nowrap"
+                    >
+                      {removeActionLoading() === 'force' ? 'Removing…' : 'Force remove now'}
+                    </button>
+                  </div>
+                </div>
+              </Show>
 
               <Show when={!modalHostIsOnline()}>
                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/20">

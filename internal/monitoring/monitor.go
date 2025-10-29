@@ -834,6 +834,23 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		}
 	}
 
+	// Revoke the API token associated with this Docker host
+	if host.TokenID != "" {
+		tokenRemoved := m.config.RemoveAPIToken(host.TokenID)
+		if tokenRemoved {
+			m.config.SortAPITokens()
+			m.config.APITokenEnabled = m.config.HasAPITokens()
+
+			if m.persistence != nil {
+				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
+					log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("Failed to persist API token revocation after Docker host removal")
+				} else {
+					log.Info().Str("tokenID", host.TokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed Docker host")
+				}
+			}
+		}
+	}
+
 	// Track removal to prevent resurrection from cached reports
 	m.mu.Lock()
 	m.removedDockerHosts[hostID] = time.Now()
@@ -873,6 +890,23 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		host = models.Host{
 			ID:       hostID,
 			Hostname: hostID,
+		}
+	}
+
+	// Revoke the API token associated with this host agent
+	if host.TokenID != "" {
+		tokenRemoved := m.config.RemoveAPIToken(host.TokenID)
+		if tokenRemoved {
+			m.config.SortAPITokens()
+			m.config.APITokenEnabled = m.config.HasAPITokens()
+
+			if m.persistence != nil {
+				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
+					log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("Failed to persist API token revocation after host agent removal")
+				} else {
+					log.Info().Str("tokenID", host.TokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
+				}
+			}
 		}
 	}
 
