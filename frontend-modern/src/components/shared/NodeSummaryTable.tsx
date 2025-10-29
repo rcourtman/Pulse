@@ -195,12 +195,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     if (item.type === 'pve') {
       const node = item.data as Node;
       if (!node.disk) return undefined;
-      return `${formatBytes(node.disk.used)}/${formatBytes(node.disk.total)}`;
+      return `${formatBytes(node.disk.used, 0)}/${formatBytes(node.disk.total, 0)}`;
     }
     const pbs = item.data as PBSInstance;
     if (!pbs.datastores || pbs.datastores.length === 0) return undefined;
     const totals = getPbsTotals(pbs);
-    return `${formatBytes(totals.used)}/${formatBytes(totals.total)}`;
+    return `${formatBytes(totals.used, 0)}/${formatBytes(totals.total, 0)}`;
   };
 
   const getTemperatureValue = (item: SortableItem) => {
@@ -583,9 +583,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           label={formatPercent(memoryPercentValue ?? 0)}
                           sublabel={
                             isPVE && node!.memory
-                              ? `${formatBytes(node!.memory.used)}/${formatBytes(node!.memory.total)}`
+                              ? `${formatBytes(node!.memory.used, 0)}/${formatBytes(node!.memory.total, 0)}`
                               : isPBS && pbs!.memoryTotal
-                                ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}`
+                                ? `${formatBytes(pbs!.memoryUsed, 0)}/${formatBytes(pbs!.memoryTotal, 0)}`
                                 : undefined
                           }
                           type="memory"

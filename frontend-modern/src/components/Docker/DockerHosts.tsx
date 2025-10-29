@@ -95,7 +95,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
           ? clampPercent((memoryUsed / memoryTotal) * 100)
           : 0;
       const memoryLabel =
-        memoryTotal > 0 ? `${formatBytes(memoryUsed)} / ${formatBytes(memoryTotal)}` : undefined;
+        memoryTotal > 0 ? `${formatBytes(memoryUsed, 0)} / ${formatBytes(memoryTotal, 0)}` : undefined;
 
       let diskPercent = 0;
       let diskLabel: string | undefined;
@@ -110,7 +110,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
         );
         if (totals.total > 0) {
           diskPercent = clampPercent((totals.used / totals.total) * 100);
-          diskLabel = `${formatBytes(totals.used)} / ${formatBytes(totals.total)}`;
+          diskLabel = `${formatBytes(totals.used, 0)} / ${formatBytes(totals.total, 0)}`;
         }
       }
 

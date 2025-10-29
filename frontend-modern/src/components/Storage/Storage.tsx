@@ -2,7 +2,7 @@ import { Component, For, Show, createSignal, createMemo, createEffect } from 'so
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
-import { formatBytes } from '@/utils/format';
+import { formatBytes, formatPercent } from '@/utils/format';
 import type { Storage as StorageType, CephCluster } from '@/types/api';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
@@ -858,7 +858,7 @@ const Storage: Component = () => {
                                   const used = Math.max(0, cluster.usedBytes || 0);
                                   const percent = total > 0 ? (used / total) * 100 : 0;
                                   parts.push(
-                                    `${formatBytes(used)} / ${formatBytes(total)} (${percent.toFixed(1)}%)`,
+                                    `${formatBytes(used, 0)} / ${formatBytes(total, 0)} (${formatPercent(percent)})`,
                                   );
                                   if (
                                     Number.isFinite(cluster.numOsds) &&
@@ -883,7 +883,7 @@ const Storage: Component = () => {
                                     if (totals.total > 0) {
                                       const percent = (totals.used / totals.total) * 100;
                                       parts.push(
-                                        `${formatBytes(totals.used)} / ${formatBytes(totals.total)} (${percent.toFixed(1)}%)`,
+                                        `${formatBytes(totals.used, 0)} / ${formatBytes(totals.total, 0)} (${formatPercent(percent)})`,
                                       );
                                     }
                                   }
@@ -900,7 +900,7 @@ const Storage: Component = () => {
                                       if (!pool) return '';
                                       const total = Math.max(1, pool.storedBytes + pool.availableBytes);
                                       const percent = total > 0 ? (pool.storedBytes / total) * 100 : 0;
-                                      return `${pool.name}: ${percent.toFixed(1)}%`;
+                                      return `${pool.name}: ${formatPercent(percent)}`;
                                     })
                                     .filter(Boolean)
                                     .join(', ');
@@ -917,7 +917,7 @@ const Storage: Component = () => {
                                     const total = Math.max(1, item.total || 0);
                                     const used = Math.max(0, item.used || 0);
                                     const percent = total > 0 ? (used / total) * 100 : 0;
-                                    return `${item.name}: ${percent.toFixed(1)}%`;
+                                    return `${item.name}: ${formatPercent(percent)}`;
                                   })
                                   .filter(Boolean)
                                   .join(', ');
@@ -1124,18 +1124,18 @@ const Storage: Component = () => {
                                         />
                                         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
                                           <span class="whitespace-nowrap px-0.5">
-                                            {usagePercent.toFixed(0)}% (
-                                            {formatBytes(storage.used || 0)}/
-                                            {formatBytes(storage.total || 0)})
+                                            {formatPercent(usagePercent)} (
+                                            {formatBytes(storage.used || 0, 0)}/
+                                            {formatBytes(storage.total || 0, 0)})
                                           </span>
                                         </span>
                                       </div>
                                     </td>
                                     <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
-                                      {formatBytes(storage.free || 0)}
+                                      {formatBytes(storage.free || 0, 0)}
                                     </td>
                                     <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
-                                      {formatBytes(storage.total || 0)}
+                                      {formatBytes(storage.total || 0, 0)}
                                     </td>
                                     <td class="p-0.5 px-1.5"></td>
                                   </tr>

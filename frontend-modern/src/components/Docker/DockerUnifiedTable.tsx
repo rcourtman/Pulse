@@ -533,9 +533,9 @@ const DockerContainerRow: Component<{
   const memPercent = () => Math.max(0, Math.min(100, container.memoryPercent ?? 0));
   const memUsageLabel = () => {
     if (!container.memoryUsageBytes) return undefined;
-    const used = formatBytes(container.memoryUsageBytes);
+    const used = formatBytes(container.memoryUsageBytes, 0);
     const limit = container.memoryLimitBytes
-      ? formatBytes(container.memoryLimitBytes)
+      ? formatBytes(container.memoryLimitBytes, 0)
       : undefined;
     return limit ? `${used} / ${limit}` : used;
   };
@@ -695,7 +695,7 @@ const DockerContainerRow: Component<{
             {statusLabel()}
           </span>
         </td>
-        <td class="px-2 py-0.5">
+        <td class="px-2 py-0.5 min-w-[160px]">
           <Show
             when={isRunning() && container.cpuPercent && container.cpuPercent > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -703,7 +703,7 @@ const DockerContainerRow: Component<{
             <MetricBar value={cpuPercent()} label={formatPercent(cpuPercent())} type="cpu" />
           </Show>
         </td>
-        <td class="px-2 py-0.5">
+        <td class="px-2 py-0.5 min-w-[220px]">
           <Show
             when={isRunning() && container.memoryUsageBytes && container.memoryUsageBytes > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -1132,8 +1132,8 @@ const DockerServiceRow: Component<{
             {badge.label}
           </span>
         </td>
-        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
-        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[150px]">—</td>
+        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[210px]">—</td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <span class="font-semibold text-gray-900 dark:text-gray-100">
             {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
@@ -1451,8 +1451,8 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         }
       >
         <Card padding="none" class="overflow-hidden">
-          <ScrollableTable minWidth="900px">
-            <table class="w-full min-w-[900px] table-fixed border-collapse whitespace-nowrap">
+          <ScrollableTable minWidth="1024px">
+            <table class="w-full min-w-[1024px] table-fixed border-collapse whitespace-nowrap">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                   <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[24%]">
@@ -1467,10 +1467,10 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                   <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
                     Status
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%] min-w-[150px]">
                     CPU
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[11%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[17%] min-w-[210px]">
                     Memory
                   </th>
                   <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">

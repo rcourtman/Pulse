@@ -1,7 +1,7 @@
 import { Component, createSignal, Show, For, createMemo, createEffect } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
-import { formatBytes, formatAbsoluteTime, formatRelativeTime, formatUptime } from '@/utils/format';
+import { formatBytes, formatAbsoluteTime, formatRelativeTime, formatUptime, formatPercent } from '@/utils/format';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
@@ -1302,15 +1302,15 @@ const UnifiedBackups: Component = () => {
                           </div>
                         </td>
                         <td class="p-0.5 px-1.5 min-w-[180px]">
-                          <MetricBar value={cpuPercent()} label={`${cpuPercent()}%`} type="cpu" />
+                          <MetricBar value={cpuPercent()} label={formatPercent(cpuPercent())} type="cpu" />
                         </td>
                         <td class="p-0.5 px-1.5 min-w-[180px]">
                           <MetricBar
                             value={memPercent()}
-                            label={`${memPercent()}%`}
+                            label={formatPercent(memPercent())}
                             sublabel={
                               pbs.memoryTotal
-                                ? `${formatBytes(pbs.memoryUsed)}/${formatBytes(pbs.memoryTotal)}`
+                                ? `${formatBytes(pbs.memoryUsed, 0)}/${formatBytes(pbs.memoryTotal, 0)}`
                                 : undefined
                             }
                             type="memory"
@@ -1319,8 +1319,8 @@ const UnifiedBackups: Component = () => {
                         <td class="p-0.5 px-1.5 min-w-[180px]">
                           <MetricBar
                             value={storage.percent}
-                            label={`${storage.percent}%`}
-                            sublabel={`${formatBytes(storage.used)}/${formatBytes(storage.total)}`}
+                            label={formatPercent(storage.percent)}
+                            sublabel={`${formatBytes(storage.used, 0)}/${formatBytes(storage.total, 0)}`}
                             type="disk"
                           />
                         </td>

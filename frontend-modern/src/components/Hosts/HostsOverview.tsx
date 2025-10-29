@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { Host } from '@/types/api';
-import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import { formatBytes, formatPercent, formatRelativeTime, formatUptime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -211,8 +211,8 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                               {(host) => {
                                 const cpuPercent = () => host.cpuUsage ?? 0;
                                 const memPercent = () => host.memory?.usage ?? 0;
-                                const memUsed = () => formatBytes(host.memory?.used ?? 0);
-                                const memTotal = () => formatBytes(host.memory?.total ?? 0);
+                                const memUsed = () => formatBytes(host.memory?.used ?? 0, 0);
+                                const memTotal = () => formatBytes(host.memory?.total ?? 0, 0);
 
                                 // Drawer state
                                 const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(host.id) ?? false);
@@ -301,7 +301,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                           fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}
                                         >
                                           <MetricBar
-                                            label={`${cpuPercent().toFixed(1)}%`}
+                                            label={formatPercent(cpuPercent())}
                                             value={cpuPercent()}
                                             type="cpu"
                                           />
@@ -413,14 +413,14 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                                           <div class="flex items-center justify-between">
                                                             <span class="font-medium truncate">{disk.mountpoint || disk.device}</span>
                                                             <span class="text-[10px] text-gray-500 dark:text-gray-400">
-                                                              {formatBytes(disk.used ?? 0)} / {formatBytes(disk.total ?? 0)}
+                                                              {formatBytes(disk.used ?? 0, 0)} / {formatBytes(disk.total ?? 0, 0)}
                                                             </span>
                                                           </div>
                                                           <Show when={diskPercent() > 0}>
                                                             <div class="mt-0.5">
                                                               <MetricBar
                                                                 value={diskPercent()}
-                                                                label={`${diskPercent().toFixed(1)}%`}
+                                                                label={formatPercent(diskPercent())}
                                                                 type="disk"
                                                               />
                                                             </div>
