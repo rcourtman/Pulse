@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -519,6 +520,13 @@ func safeFloat(val float64) float64 {
 	return val
 }
 
+func clampUint64ToInt64(val uint64) int64 {
+	if val > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(val)
+}
+
 func cloneStringFloatMap(src map[string]float64) map[string]float64 {
 	if len(src) == 0 {
 		return nil
@@ -852,13 +860,22 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 	}
 
 	// Track removal to prevent resurrection from cached reports
+	removedAt := time.Now()
+
 	m.mu.Lock()
-	m.removedDockerHosts[hostID] = time.Now()
+	m.removedDockerHosts[hostID] = removedAt
 	if cmd, ok := m.dockerCommands[hostID]; ok {
 		delete(m.dockerCommandIndex, cmd.status.ID)
 	}
 	delete(m.dockerCommands, hostID)
 	m.mu.Unlock()
+
+	m.state.AddRemovedDockerHost(models.RemovedDockerHost{
+		ID:          hostID,
+		Hostname:    host.Hostname,
+		DisplayName: host.DisplayName,
+		RemovedAt:   removedAt,
+	})
 
 	m.state.RemoveConnectionHealth(dockerConnectionPrefix + hostID)
 	if m.alertManager != nil {
@@ -1003,9 +1020,13 @@ func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
 	defer m.mu.Unlock()
 
 	if _, exists := m.removedDockerHosts[hostID]; !exists {
-		log.Debug().
-			Str("dockerHostID", hostID).
-			Msg("Allow re-enroll requested for docker host that was not blocked")
+		host, found := m.GetDockerHost(hostID)
+		event := log.Info().
+			Str("dockerHostID", hostID)
+		if found {
+			event = event.Str("dockerHost", host.Hostname)
+		}
+		event.Msg("Allow re-enroll requested but host was not blocked; ignoring")
 		return nil
 	}
 
@@ -1015,6 +1036,7 @@ func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
 		delete(m.dockerCommands, hostID)
 	}
 	m.state.SetDockerHostCommand(hostID, nil)
+	m.state.RemoveRemovedDockerHost(hostID)
 
 	log.Info().
 		Str("dockerHostID", hostID).
@@ -1437,6 +1459,27 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 				ReadBytes:  payload.BlockIO.ReadBytes,
 				WriteBytes: payload.BlockIO.WriteBytes,
 			}
+
+			containerIdentifier := payload.ID
+			if strings.TrimSpace(containerIdentifier) == "" {
+				containerIdentifier = payload.Name
+			}
+			if strings.TrimSpace(containerIdentifier) != "" {
+				metrics := types.IOMetrics{
+					DiskRead:  clampUint64ToInt64(payload.BlockIO.ReadBytes),
+					DiskWrite: clampUint64ToInt64(payload.BlockIO.WriteBytes),
+					Timestamp: timestamp,
+				}
+				readRate, writeRate, _, _ := m.rateTracker.CalculateRates(fmt.Sprintf("docker:%s:%s", identifier, containerIdentifier), metrics)
+				if readRate >= 0 {
+					value := readRate
+					container.BlockIO.ReadRateBytesPerSecond = &value
+				}
+				if writeRate >= 0 {
+					value := writeRate
+					container.BlockIO.WriteRateBytesPerSecond = &value
+				}
+			}
 		}
 
 		if len(payload.Mounts) > 0 {
@@ -1771,6 +1814,7 @@ func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
 	for hostID, removedAt := range m.removedDockerHosts {
 		if now.Sub(removedAt) > removedDockerHostsTTL {
 			delete(m.removedDockerHosts, hostID)
+			m.state.RemoveRemovedDockerHost(hostID)
 			log.Debug().
 				Str("dockerHostID", hostID).
 				Time("removedAt", removedAt).

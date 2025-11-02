@@ -374,13 +374,26 @@ const DockerContainerRow: Component<{
   const blockIo = createMemo(() => container.blockIo);
   const blockIoReadBytes = createMemo(() => blockIo()?.readBytes ?? 0);
   const blockIoWriteBytes = createMemo(() => blockIo()?.writeBytes ?? 0);
+  const blockIoReadRate = createMemo(() => blockIo()?.readRateBytesPerSecond ?? null);
+  const blockIoWriteRate = createMemo(() => blockIo()?.writeRateBytesPerSecond ?? null);
+  const formatIoRate = (value?: number | null) => {
+    if (value === undefined || value === null) return undefined;
+    if (value <= 0) return undefined;
+    const decimals = value >= 1024 * 1024 ? 1 : value >= 1024 ? 1 : 0;
+    return `${formatBytes(value, decimals)}/s`;
+  };
+  const blockIoReadRateLabel = createMemo(() => formatIoRate(blockIoReadRate()));
+  const blockIoWriteRateLabel = createMemo(() => formatIoRate(blockIoWriteRate()));
   const hasBlockIo = createMemo(() => {
     const stats = blockIo();
     if (!stats) return false;
     const read = stats.readBytes ?? 0;
     const write = stats.writeBytes ?? 0;
-    return read > 0 || write > 0;
+    const readRate = stats.readRateBytesPerSecond ?? 0;
+    const writeRate = stats.writeRateBytesPerSecond ?? 0;
+    return read > 0 || write > 0 || readRate > 0 || writeRate > 0;
   });
+  const hasBlockIoRates = createMemo(() => !!blockIoReadRateLabel() || !!blockIoWriteRateLabel());
 
   const hasDrawerContent = createMemo(() => {
     return (
@@ -765,6 +778,19 @@ const DockerContainerRow: Component<{
               />
             </Show>
           </Show>
+          <Show when={hasBlockIoRates()}>
+            <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+              <Show when={blockIoReadRateLabel()}>
+                <span>R {blockIoReadRateLabel()}</span>
+              </Show>
+              <Show when={blockIoReadRateLabel() && blockIoWriteRateLabel()}>
+                <span class="mx-1 text-gray-300 dark:text-gray-600">•</span>
+              </Show>
+              <Show when={blockIoWriteRateLabel()}>
+                <span>W {blockIoWriteRateLabel()}</span>
+              </Show>
+            </div>
+          </Show>
         </td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
@@ -838,15 +864,29 @@ const DockerContainerRow: Component<{
                   <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
                     <div class="flex items-center justify-between">
                       <span>Read</span>
-                      <span class="font-semibold text-gray-900 dark:text-gray-100">
-                        {formatBytes(blockIoReadBytes())}
-                      </span>
+                      <div class="text-right">
+                        <div class="font-semibold text-gray-900 dark:text-gray-100">
+                          {formatBytes(blockIoReadBytes())}
+                        </div>
+                        <Show when={blockIoReadRateLabel()}>
+                          <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                            {blockIoReadRateLabel()}
+                          </div>
+                        </Show>
+                      </div>
                     </div>
                     <div class="flex items-center justify-between">
                       <span>Write</span>
-                      <span class="font-semibold text-gray-900 dark:text-gray-100">
-                        {formatBytes(blockIoWriteBytes())}
-                      </span>
+                      <div class="text-right">
+                        <div class="font-semibold text-gray-900 dark:text-gray-100">
+                          {formatBytes(blockIoWriteBytes())}
+                        </div>
+                        <Show when={blockIoWriteRateLabel()}>
+                          <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                            {blockIoWriteRateLabel()}
+                          </div>
+                        </Show>
+                      </div>
                     </div>
                   </div>
                 </div>

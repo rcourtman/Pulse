@@ -52,6 +52,7 @@ interface Override {
   disabled?: boolean;
   disableConnectivity?: boolean; // For nodes only - disable offline alerts
   poweredOffSeverity?: 'warning' | 'critical';
+  note?: string;
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -307,9 +308,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
   const [searchTerm, setSearchTerm] = createSignal('');
   const [editingId, setEditingId] = createSignal<string | null>(null);
-  const [editingThresholds, setEditingThresholds] = createSignal<
-    Record<string, number | undefined>
-  >({});
+const [editingThresholds, setEditingThresholds] = createSignal<
+  Record<string, number | undefined>
+>({});
+  const [editingNote, setEditingNote] = createSignal('');
   const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'hosts' | 'docker'>('proxmox');
   let searchInputRef: HTMLInputElement | undefined;
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
@@ -585,6 +587,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           );
         });
 
+      const note = typeof override?.note === 'string' ? override.note : undefined;
+      const hasNote = Boolean(note && note.trim().length > 0);
+
       const originalDisplayName = node.displayName?.trim() || node.name;
       const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
       const rawName = node.name;
@@ -608,7 +613,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         uptime: node.uptime,
         cpu: node.cpu,
         memory: node.memory?.usage,
-        hasOverride: hasCustomThresholds || false,
+        hasOverride:
+          hasCustomThresholds || hasNote || Boolean(override?.disableConnectivity) || false,
         disabled: false,
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
@@ -616,6 +622,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         clusterName: node.isClusterMember ? node.clusterName?.trim() : undefined,
         isClusterMember: node.isClusterMember ?? false,
         instance: node.instance,
+        note,
       } satisfies Resource;
     });
 
@@ -1518,11 +1525,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     resourceId: string,
     currentThresholds: Record<string, number | undefined>,
     defaults: Record<string, number | undefined>,
+    note?: string,
   ) => {
     setEditingId(resourceId);
     // Merge defaults with overrides for editing
     const mergedThresholds = { ...defaults, ...currentThresholds };
     setEditingThresholds(mergedThresholds);
+    setEditingNote(note ?? '');
   };
 
   const saveEdit = (resourceId: string) => {
@@ -1542,6 +1551,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     if (!resource) return;
 
     const editedThresholds = editingThresholds();
+    const trimmedNote = editingNote().trim();
+    const noteForOverride = trimmedNote.length > 0 ? trimmedNote : undefined;
 
     if (resource.editScope === 'backup') {
       const currentBackupDefaults = props.backupDefaults();
@@ -1610,7 +1621,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const hasStateOnlyOverride = Boolean(
       resource.disabled ||
         resource.disableConnectivity ||
-        resource.poweredOffSeverity !== undefined,
+        resource.poweredOffSeverity !== undefined ||
+        noteForOverride !== undefined,
     );
 
     // If no threshold overrides or state flags remain, remove the override entirely
@@ -1642,6 +1654,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       disabled: resource.disabled,
       disableConnectivity: resource.disableConnectivity,
       poweredOffSeverity: resource.poweredOffSeverity,
+      note: noteForOverride,
       thresholds: overrideThresholds,
     };
 
@@ -1701,18 +1714,25 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         delete hysteresisThresholds.poweredOffSeverity;
       }
     }
+    if (noteForOverride) {
+      hysteresisThresholds.note = noteForOverride;
+    } else {
+      delete hysteresisThresholds.note;
+    }
     newRawConfig[resourceId] = hysteresisThresholds;
     props.setRawOverridesConfig(newRawConfig);
 
     props.setHasUnsavedChanges(true);
     setEditingId(null);
     setEditingThresholds({});
+    setEditingNote('');
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditingThresholds({});
-  };
+const cancelEdit = () => {
+  setEditingId(null);
+  setEditingThresholds({});
+  setEditingNote('');
+};
 
   const updateMetricDelay = (
     typeKey: 'guest' | 'node' | 'storage' | 'pbs',

@@ -148,6 +148,76 @@ export class MonitoringAPI {
     }
   }
 
+  static async allowDockerHostReenroll(hostId: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/allow-reenroll`;
+
+    const response = await apiFetch(url, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_err) {
+            // ignore parse error, use raw text
+          }
+        }
+      } catch (_err) {
+        // ignore read error
+      }
+
+      throw new Error(message);
+    }
+  }
+
+  static async deleteHostAgent(hostId: string): Promise<void> {
+    if (!hostId) {
+      throw new Error('Host ID is required to remove a host agent.');
+    }
+
+    const url = `${this.baseUrl}/agents/host/${encodeURIComponent(hostId)}`;
+    const response = await apiFetch(url, { method: 'DELETE' });
+
+    if (!response.ok) {
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            } else if (typeof parsed?.message === 'string' && parsed.message.trim()) {
+              message = parsed.message.trim();
+            }
+          } catch (_err) {
+            // Ignore JSON parse errors, fallback to raw text.
+          }
+        }
+      } catch (_err) {
+        // Ignore body read errors, keep default message.
+      }
+
+      throw new Error(message);
+    }
+
+    // Consume and ignore the body so the fetch can be reused by the connection pool.
+    try {
+      await response.text();
+    } catch (_err) {
+      // Swallow body read errors; the deletion already succeeded.
+    }
+  }
+
   static async lookupHost(params: { id?: string; hostname?: string }): Promise<HostLookupResponse | null> {
     const search = new URLSearchParams();
     if (params.id) search.set('id', params.id);

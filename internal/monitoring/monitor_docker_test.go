@@ -17,6 +17,7 @@ func newTestMonitor(t *testing.T) *Monitor {
 		state:              models.NewState(),
 		alertManager:       alerts.NewManager(),
 		removedDockerHosts: make(map[string]time.Time),
+		rateTracker:        NewRateTracker(),
 	}
 }
 
@@ -170,6 +171,9 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 	}
 	if container.BlockIO.ReadBytes != 123456 || container.BlockIO.WriteBytes != 654321 {
 		t.Fatalf("unexpected block IO values: %+v", container.BlockIO)
+	}
+	if container.BlockIO.ReadRateBytesPerSecond != nil || container.BlockIO.WriteRateBytesPerSecond != nil {
+		t.Fatalf("expected block IO rates to be unset on first sample: %+v", container.BlockIO)
 	}
 
 	if len(container.Mounts) != 1 {

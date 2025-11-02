@@ -5,6 +5,7 @@ export interface State {
   vms: VM[];
   containers: Container[];
   dockerHosts: DockerHost[];
+  removedDockerHosts?: RemovedDockerHost[];
   hosts: Host[];
   replicationJobs: ReplicationJob[];
   storage: Storage[];
@@ -23,6 +24,13 @@ export interface State {
   activeAlerts: Alert[];
   recentlyResolved: ResolvedAlert[];
   lastUpdate: string;
+}
+
+export interface RemovedDockerHost {
+  id: string;
+  hostname?: string;
+  displayName?: string;
+  removedAt: number;
 }
 
 export interface Node {
@@ -271,6 +279,8 @@ export interface DockerContainerNetwork {
 export interface DockerContainerBlockIO {
   readBytes?: number;
   writeBytes?: number;
+  readRateBytesPerSecond?: number;
+  writeRateBytesPerSecond?: number;
 }
 
 export interface DockerContainerMount {

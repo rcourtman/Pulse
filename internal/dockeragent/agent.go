@@ -3,12 +3,16 @@ package dockeragent
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
@@ -267,12 +271,22 @@ func (a *Agent) Run(ctx context.Context) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Check for updates on startup
-	go a.checkForUpdates(ctx)
+	const (
+		updateInterval        = 24 * time.Hour
+		startupJitterWindow   = 2 * time.Minute
+		recurringJitterWindow = 5 * time.Minute
+	)
 
-	// Check for updates daily
-	updateTicker := time.NewTicker(24 * time.Hour)
-	defer updateTicker.Stop()
+	initialDelay := 5*time.Second + randomDuration(startupJitterWindow)
+	updateTimer := time.NewTimer(initialDelay)
+	defer func() {
+		if !updateTimer.Stop() {
+			select {
+			case <-updateTimer.C:
+			default:
+			}
+		}
+	}()
 
 	if err := a.collectOnce(ctx); err != nil {
 		if errors.Is(err, ErrStopRequested) {
@@ -284,6 +298,12 @@ func (a *Agent) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			if !updateTimer.Stop() {
+				select {
+				case <-updateTimer.C:
+				default:
+				}
+			}
 			return ctx.Err()
 		case <-ticker.C:
 			if err := a.collectOnce(ctx); err != nil {
@@ -292,8 +312,13 @@ func (a *Agent) Run(ctx context.Context) error {
 				}
 				a.logger.Error().Err(err).Msg("Failed to send docker report")
 			}
-		case <-updateTicker.C:
+		case <-updateTimer.C:
 			go a.checkForUpdates(ctx)
+			nextDelay := updateInterval + randomDuration(recurringJitterWindow)
+			if nextDelay <= 0 {
+				nextDelay = updateInterval
+			}
+			updateTimer.Reset(nextDelay)
 		}
 	}
 }
@@ -644,7 +669,20 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("target %s: pulse responded with status %s", target.URL, resp.Status)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		if hostRemoved := detectHostRemovedError(bodyBytes); hostRemoved != "" {
+			a.logger.Warn().
+				Str("hostID", a.hostID).
+				Str("pulseURL", target.URL).
+				Str("detail", hostRemoved).
+				Msg("Pulse rejected docker report because this host was previously removed. Allow the host to re-enroll from the Pulse UI or rerun the installer with a docker:manage token.")
+			return ErrStopRequested
+		}
+		errMsg := strings.TrimSpace(string(bodyBytes))
+		if errMsg == "" {
+			errMsg = resp.Status
+		}
+		return fmt.Errorf("target %s: pulse responded %s: %s", target.URL, resp.Status, errMsg)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -745,9 +783,13 @@ func disableSystemdService(ctx context.Context, service string) error {
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode := exitErr.ExitCode()
-			lowerOutput := strings.ToLower(string(output))
+			trimmedOutput := strings.TrimSpace(string(output))
+			lowerOutput := strings.ToLower(trimmedOutput)
 			if exitCode == 5 || strings.Contains(lowerOutput, "could not be found") || strings.Contains(lowerOutput, "not-found") {
 				return nil
+			}
+			if strings.Contains(lowerOutput, "access denied") || strings.Contains(lowerOutput, "permission denied") {
+				return fmt.Errorf("systemctl disable %s: access denied. Run 'sudo systemctl disable --now %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", service, service, trimmedOutput)
 			}
 		}
 		return fmt.Errorf("systemctl disable %s: %w (%s)", service, err, strings.TrimSpace(string(output)))
@@ -770,10 +812,14 @@ func stopSystemdService(ctx context.Context, service string) error {
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode := exitErr.ExitCode()
-			lowerOutput := strings.ToLower(string(output))
+			trimmedOutput := strings.TrimSpace(string(output))
+			lowerOutput := strings.ToLower(trimmedOutput)
 			// Ignore "not found" errors since the service might already be stopped
 			if exitCode == 5 || strings.Contains(lowerOutput, "could not be found") || strings.Contains(lowerOutput, "not-found") {
 				return nil
+			}
+			if strings.Contains(lowerOutput, "access denied") || strings.Contains(lowerOutput, "permission denied") {
+				return fmt.Errorf("systemctl stop %s: access denied. Run 'sudo systemctl stop %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", service, service, trimmedOutput)
 			}
 		}
 		return fmt.Errorf("systemctl stop %s: %w (%s)", service, err, strings.TrimSpace(string(output)))
@@ -982,6 +1028,40 @@ func readSystemUptime() int64 {
 	return int64(seconds)
 }
 
+func randomDuration(max time.Duration) time.Duration {
+	if max <= 0 {
+		return 0
+	}
+
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return 0
+	}
+
+	return time.Duration(n.Int64())
+}
+
+func detectHostRemovedError(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	if strings.ToLower(payload.Code) != "invalid_report" {
+		return ""
+	}
+	if !strings.Contains(strings.ToLower(payload.Error), "was removed") {
+		return ""
+	}
+	return payload.Error
+}
+
 // checkForUpdates checks if a newer version is available and performs self-update if needed
 func (a *Agent) checkForUpdates(ctx context.Context) {
 	// Skip updates if disabled via config
@@ -1170,6 +1250,8 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	}
 	defer resp.Body.Close()
 
+	checksumHeader := strings.TrimSpace(resp.Header.Get("X-Checksum-Sha256"))
+
 	// Create temporary file
 	tmpFile, err := os.CreateTemp("", "pulse-docker-agent-*.tmp")
 	if err != nil {
@@ -1179,11 +1261,26 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	defer os.Remove(tmpPath) // Clean up if something goes wrong
 
 	// Write downloaded binary to temp file
-	if _, err := tmpFile.ReadFrom(resp.Body); err != nil {
+	hasher := sha256.New()
+	if _, err := io.Copy(tmpFile, io.TeeReader(resp.Body, hasher)); err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("failed to write downloaded binary: %w", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	downloadChecksum := hex.EncodeToString(hasher.Sum(nil))
+	if checksumHeader != "" {
+		expected := strings.ToLower(strings.TrimSpace(checksumHeader))
+		actual := strings.ToLower(downloadChecksum)
+		if expected != actual {
+			return fmt.Errorf("checksum verification failed: expected %s, got %s", expected, actual)
+		}
+		a.logger.Debug().Str("checksum", downloadChecksum).Msg("Self-update: checksum verified")
+	} else {
+		a.logger.Warn().Msg("Self-update: checksum header missing; skipping verification")
+	}
 
 	// Make temp file executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {

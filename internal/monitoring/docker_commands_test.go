@@ -205,3 +205,30 @@ func TestCleanupRemovedDockerHosts(t *testing.T) {
 		t.Fatalf("expected fresh host removal entry to remain")
 	}
 }
+
+func TestAllowDockerHostReenrollNoopWhenHostNotBlocked(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+
+	host := models.DockerHost{
+		ID:          "host-not-blocked",
+		Hostname:    "not-blocked",
+		DisplayName: "Not Blocked",
+		Status:      "online",
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	if err := monitor.AllowDockerHostReenroll(host.ID); err != nil {
+		t.Fatalf("allow reenroll for non-blocked host returned error: %v", err)
+	}
+
+	if _, exists := monitor.removedDockerHosts[host.ID]; exists {
+		t.Fatalf("non-blocked host should not be added to removal map")
+	}
+
+	stateHost := findDockerHost(t, monitor, host.ID)
+	if stateHost.ID != host.ID {
+		t.Fatalf("expected host to remain in state; got %+v", stateHost)
+	}
+}

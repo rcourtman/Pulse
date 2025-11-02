@@ -1,6 +1,6 @@
 # Docker Monitoring Agent
 
-Pulse is focused on Proxmox VE and PBS, but many homelabs also run application stacks in Docker. The optional Pulse Docker agent turns container health and resource usage into first-class metrics that show up alongside your hypervisor data.
+Pulse is focused on Proxmox VE and PBS, but many homelabs also run application stacks in Docker. The optional Pulse Docker agent turns container health and resource usage into first-class metrics that show up alongside your hypervisor data. The recommended deployment is the bundled, least-privilege systemd service that runs the static `pulse-docker-agent` binary directly on the host. That path lets the installer lock down permissions, manage upgrades automatically, and integrate with the native init system. Containerising the agent is still available for orchestrated environments, but it trades away some of those controls (and still needs the Docker socket) so treat that option as advanced.
 
 ## What the agent reports
 
@@ -12,6 +12,7 @@ Every check interval (30s by default) the agent collects:
 - CPU usage, memory consumption and limits
 - Images, port mappings, network addresses, and start times
 - Writable layer size, root filesystem size, block I/O totals, and mount metadata (shown in the Docker table drawer)
+- Read/write throughput derived from Docker block I/O counters so you can spot noisy workloads at a glance
 - Health-check failures, restart-loop windows, and recent exit codes (displayed in the UI under each container drawer)
 
 Data is pushed to Pulse over HTTPS using your existing API token – no inbound firewall rules required.
@@ -38,7 +39,7 @@ Copy the binary to your Docker host (e.g. `/usr/local/bin/pulse-docker-agent`) a
 
 > **Why `CGO_ENABLED=0`?** Building a fully static binary ensures the agent runs on hosts still using older glibc releases (for example Debian 11 with glibc 2.31).
 
-### Quick install from your Pulse server
+### Quick install from your Pulse server (recommended)
 
 Use the bundled installation script (ships with Pulse v4.22.0+) to deploy and manage the agent. Replace the token placeholder with an API token generated in **Settings → Security**. Create a dedicated token for each Docker host so you can revoke individual credentials without touching others—sharing one token across many hosts makes incident response much harder. Tokens used here should include the `docker:report` scope so the agent can submit telemetry (add `docker:manage` only if you plan to issue lifecycle commands remotely).
 
@@ -48,6 +49,10 @@ curl -fsSL http://pulse.example.com/install-docker-agent.sh \
 ```
 
 > **Why sudo?** The installer needs to drop binaries under `/usr/local/bin`, create a systemd service, and start it—actions that require root privileges. Piping to `sudo bash …` saves you from retrying if you run the command as an unprivileged user.
+
+The script stores credentials in `/etc/pulse/pulse-docker-agent.env` (mode `600`) and creates a locked-down `pulse-docker` service account that only needs access to the Docker socket. Rotate tokens by editing that env file and running `sudo systemctl restart pulse-docker-agent`.
+
+To keep remote stop/remove commands working from Pulse, the installer also drops a small polkit rule that lets the `pulse-docker` service account run `systemctl stop/disable pulse-docker-agent` without password prompts. If you remove that rule, expect to acknowledge stop requests manually with `sudo systemctl disable --now pulse-docker-agent`.
 
 Running the one-liner again from another Pulse server (with its own URL/token) will merge that server into the same agent automatically—no extra flags required.
 
@@ -112,38 +117,66 @@ A single `pulse-docker-agent` process can now serve any number of Pulse backends
 ```ini
 [Unit]
 Description=Pulse Docker Agent
-After=network.target docker.service
-Requires=docker.service
+After=network-online.target docker.socket docker.service
+Wants=network-online.target docker.socket
 
 [Service]
 Type=simple
-Environment=PULSE_URL=https://pulse.example.com
-Environment=PULSE_TOKEN=replace-me
-Environment=PULSE_TARGETS=https://pulse.example.com|replace-me;https://pulse-dr.example.com|replace-me-dr
+EnvironmentFile=-/etc/pulse/pulse-docker-agent.env
 ExecStart=/usr/local/bin/pulse-docker-agent --interval 30s
-Restart=always
-RestartSec=5
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=120
+StartLimitBurst=5
+User=pulse-docker
+Group=pulse-docker
+SupplementaryGroups=docker
+UMask=0077
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/run/docker.sock
+ProtectHostname=yes
+ProtectClock=yes
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### Containerised agent (advanced)
+Rotate credentials or add additional Pulse targets by editing `/etc/pulse/pulse-docker-agent.env` and reloading the service with `sudo systemctl restart pulse-docker-agent`.
+
+### Containerised agent (advanced / optional)
 
 If you prefer to run the agent inside a container, mount the Docker socket and supply the same environment variables:
 
 ```bash
 docker run -d \
   --name pulse-docker-agent \
+  --pid=host \
+  --uts=host \
   -e PULSE_URL="https://pulse.example.com" \
   -e PULSE_TOKEN="<token>" \
   -e PULSE_TARGETS="https://pulse.example.com|<token>;https://pulse-dr.example.com|<token-dr>" \
+  -e PULSE_NO_AUTO_UPDATE=true \
+  -v /etc/machine-id:/etc/machine-id:ro \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --restart unless-stopped \
   ghcr.io/rcourtman/pulse-docker-agent:latest
 ```
 
 > **Note**: Official images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/rcourtman/pulse-docker-agent`. To test local changes, run `docker build --target agent_runtime -t pulse-docker-agent:test .` from the repository root.
+
+`--pid=host`, `--uts=host`, and the `/etc/machine-id` bind keep host metadata stable so Pulse doesn’t think the container itself is the Docker host. Auto-update is disabled in the image by default; rebuild or override `PULSE_NO_AUTO_UPDATE=false` only if you manage upgrades outside of your orchestrator. Expect to grant the container the same level of Docker socket access as the systemd service—running inside Docker doesn’t sandbox the agent from the host.
 
 ## Configuration reference
 

@@ -13,6 +13,11 @@ let mockWsStore: {
 
 const lookupMock = vi.fn();
 const createTokenMock = vi.fn();
+const deleteHostAgentMock = vi.fn();
+const notificationSuccessMock = vi.fn();
+const notificationErrorMock = vi.fn();
+const notificationInfoMock = vi.fn();
+const clipboardSpy = vi.fn();
 
 vi.mock('@/App', () => ({
   useWebSocket: () => mockWsStore,
@@ -21,12 +26,21 @@ vi.mock('@/App', () => ({
 vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
     lookupHost: (...args: unknown[]) => lookupMock(...args),
+    deleteHostAgent: (...args: unknown[]) => deleteHostAgentMock(...args),
   },
 }));
 
 vi.mock('@/api/security', () => ({
   SecurityAPI: {
     createToken: (...args: unknown[]) => createTokenMock(...args),
+  },
+}));
+
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: {
+    success: (...args: unknown[]) => notificationSuccessMock(...args),
+    error: (...args: unknown[]) => notificationErrorMock(...args),
+    info: (...args: unknown[]) => notificationInfoMock(...args),
   },
 }));
 
@@ -69,9 +83,29 @@ const createHost = (overrides?: Partial<Host>): Host => ({
 
 const stubFetchSuccess = vi.fn();
 
+const setupComponent = (hosts: Host[]) => {
+  const [state] = createStore({
+    hosts,
+    connectionHealth: {},
+  });
+
+  mockWsStore = {
+    state,
+    connected: () => true,
+    reconnecting: () => false,
+    activeAlerts: [],
+  };
+
+  return render(() => <HostAgents />);
+};
+
 beforeEach(() => {
   lookupMock.mockReset();
   createTokenMock.mockReset();
+  deleteHostAgentMock.mockReset();
+  notificationSuccessMock.mockReset();
+  notificationErrorMock.mockReset();
+  notificationInfoMock.mockReset();
   stubFetchSuccess.mockImplementation(
     async () =>
       new Response(JSON.stringify({ requiresAuth: true, apiTokenConfigured: false }), {
@@ -80,6 +114,8 @@ beforeEach(() => {
       }),
   );
   vi.stubGlobal('fetch', stubFetchSuccess);
+  clipboardSpy.mockReset();
+  vi.stubGlobal('navigator', { clipboard: { writeText: clipboardSpy } } as unknown as Navigator);
 });
 
 afterEach(() => {
@@ -88,22 +124,6 @@ afterEach(() => {
 });
 
 describe('HostAgents lookup flow', () => {
-  const setupComponent = (hosts: Host[]) => {
-    const [state] = createStore({
-      hosts,
-      connectionHealth: {},
-    });
-
-    mockWsStore = {
-      state,
-      connected: () => true,
-      reconnecting: () => false,
-      activeAlerts: [],
-    };
-
-    return render(() => <HostAgents />);
-  };
-
   it('highlights a host after a successful lookup and clears highlight after timeout', async () => {
     const host = createHost();
     setupComponent([host]);
@@ -202,5 +222,95 @@ describe('HostAgents lookup flow', () => {
 
     const row = container.querySelector(`tr[data-host-id="${host.id}"]`) as HTMLTableRowElement;
     expect(row.classList.contains('ring-2')).toBe(false);
+  });
+});
+
+describe('Host removal modal', () => {
+  it('removes a host while it is still reporting and explains the impact', async () => {
+    deleteHostAgentMock.mockResolvedValue(undefined);
+    const host = createHost({
+      lastSeen: Date.now(),
+      status: 'online',
+    });
+
+    setupComponent([host]);
+
+    const removeButton = screen.getByRole('button', { name: 'Remove' });
+    fireEvent.click(removeButton);
+
+    await screen.findByText('Remove host "Host One"');
+
+    const copyButton = screen.getByRole('button', { name: 'Copy command' });
+    fireEvent.click(copyButton);
+    await waitFor(() => expect(clipboardSpy).toHaveBeenCalled(), { interval: 0 });
+
+    const confirmButton = await screen.findByRole('button', { name: 'I ran this command' });
+    fireEvent.click(confirmButton);
+
+    expect(
+      screen.getByText("Pulse revokes the host's API token", {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+
+    const removeHostButton = screen.getByRole('button', { name: 'Remove host' });
+    expect(removeHostButton).toBeEnabled();
+    fireEvent.click(removeHostButton);
+
+    await waitFor(() => expect(deleteHostAgentMock).toHaveBeenCalledWith('host-1'), { interval: 0 });
+    await waitFor(() => expect(notificationSuccessMock).toHaveBeenCalledWith('Host "Host One" removed', 4000), {
+      interval: 0,
+    });
+    await waitFor(() => expect(screen.queryByText('Remove host "Host One"')).not.toBeInTheDocument(), {
+      interval: 0,
+    });
+  });
+
+  it('removes a stale host without forcing', async () => {
+    deleteHostAgentMock.mockResolvedValue(undefined);
+    const host = createHost({
+      lastSeen: Date.now() - 5 * 60_000,
+      status: 'offline',
+    });
+
+    setupComponent([host]);
+
+    const removeButton = screen.getByRole('button', { name: 'Remove' });
+    fireEvent.click(removeButton);
+
+    await screen.findByText('Remove host "Host One"');
+
+    const copyButton = screen.getByRole('button', { name: 'Copy command' });
+    fireEvent.click(copyButton);
+    await waitFor(() => expect(clipboardSpy).toHaveBeenCalled(), { interval: 0 });
+
+    const confirmButton = await screen.findByRole('button', { name: 'I ran this command' });
+    fireEvent.click(confirmButton);
+
+    const removeHostButton = screen.getByRole('button', { name: 'Remove host' });
+    fireEvent.click(removeHostButton);
+
+    await waitFor(() => expect(deleteHostAgentMock).toHaveBeenCalledWith('host-1'), { interval: 0 });
+    await waitFor(() => expect(notificationSuccessMock).toHaveBeenCalledWith('Host "Host One" removed', 4000), {
+      interval: 0,
+    });
+    await waitFor(() => expect(screen.queryByText('Remove host "Host One"')).not.toBeInTheDocument(), {
+      interval: 0,
+    });
+  });
+
+  it('shows macOS-specific uninstall guidance', async () => {
+    const host = createHost({
+      platform: 'macos',
+    });
+
+    setupComponent([host]);
+
+    const removeButton = screen.getByRole('button', { name: 'Remove' });
+    fireEvent.click(removeButton);
+
+    await screen.findByText('Remove host "Host One"');
+    expect(screen.getByText('launchctl unload', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Unloads the launch agent, removes the plist, deletes the binary, and clears the local log.')).toBeInTheDocument();
   });
 });

@@ -67,6 +67,10 @@ INTERVAL="30s"
 UNINSTALL="false"
 PLATFORM=""
 FORCE=false
+KEYCHAIN_ENABLED=true
+KEYCHAIN_OPT_OUT=false
+KEYCHAIN_OPT_OUT_REASON=""
+USE_KEYCHAIN=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -92,6 +96,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --force|-f)
             FORCE=true
+            shift
+            ;;
+        --no-keychain)
+            KEYCHAIN_ENABLED=false
+            KEYCHAIN_OPT_OUT=true
+            KEYCHAIN_OPT_OUT_REASON="flag"
             shift
             ;;
         *)
@@ -136,6 +146,10 @@ fi
 
 print_header
 
+if [[ "$FORCE" == true ]]; then
+    log_warn "--force enabled: skipping interactive confirmations and accepting secure defaults."
+fi
+
 # Interactive prompts if parameters not provided (unless --force is used)
 if [[ -z "$PULSE_URL" ]]; then
     if [[ "$FORCE" == false ]]; then
@@ -148,7 +162,10 @@ fi
 
 if [[ -z "$PULSE_URL" ]]; then
     log_error "Pulse URL is required"
-    echo "Usage: $0 --url <pulse-url> --token <api-token> [--interval 30s] [--platform linux|darwin|windows] [--force]"
+    echo "Usage: $0 --url <pulse-url> --token <api-token> [--interval 30s] [--platform linux|darwin|windows] [--force] [--no-keychain]"
+    echo ""
+    echo "  --force       Skip interactive prompts and accept secure defaults (including Keychain storage)."
+    echo "  --no-keychain Disable Keychain storage and embed the token in the launch agent plist instead."
     exit 1
 fi
 
@@ -416,8 +433,32 @@ elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
     mkdir -p "$MACOS_LOG_DIR"
     mkdir -p "$HOME/Library/LaunchAgents"
 
+    if [[ -n "$PULSE_TOKEN" && "$KEYCHAIN_ENABLED" == true && "$FORCE" == false ]]; then
+        echo ""
+        log_info "It is recommended to store the token in your Keychain so it never lands on disk."
+        KEYCHAIN_PROMPTED=false
+        if [[ -t 0 ]]; then
+            read -r -p "Store the token in the macOS Keychain? [Y/n]: " KEYCHAIN_RESPONSE
+            KEYCHAIN_PROMPTED=true
+        elif [[ -r /dev/tty ]]; then
+            read -r -p "Store the token in the macOS Keychain? [Y/n]: " KEYCHAIN_RESPONSE </dev/tty
+            KEYCHAIN_PROMPTED=true
+        else
+            log_warn "No interactive terminal detected; defaulting to Keychain storage. Use --no-keychain to opt out."
+        fi
+        if [[ "$KEYCHAIN_PROMPTED" == true && "$KEYCHAIN_RESPONSE" =~ ^[Nn] ]]; then
+            KEYCHAIN_ENABLED=false
+            KEYCHAIN_OPT_OUT=true
+            KEYCHAIN_OPT_OUT_REASON="prompt"
+        fi
+        echo ""
+    fi
+
     # Store token in macOS Keychain for better security
-    if [[ -n "$PULSE_TOKEN" ]]; then
+    if [[ -n "$PULSE_TOKEN" && "$KEYCHAIN_ENABLED" == true ]]; then
+        log_info "For security, the token is stored in your macOS Keychain so it never lands on disk."
+        log_info "macOS may ask to allow access the first time the agent runs."
+        log_info "Use --no-keychain to opt out (the token will be embedded in the launchd plist instead)."
         log_info "Storing token in macOS Keychain..."
 
         # Delete existing keychain entry if it exists
@@ -429,12 +470,13 @@ elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
 
         KEYCHAIN_APPS=(
             "/usr/local/bin/pulse-host-agent"
-            "/usr/local/bin/pulse-host-agent-wrapper.sh"
             "/usr/bin/security"
         )
         KEYCHAIN_ARGS=()
         for app in "${KEYCHAIN_APPS[@]}"; do
-            KEYCHAIN_ARGS+=(-T "$app")
+            if [[ -e "$app" ]]; then
+                KEYCHAIN_ARGS+=(-T "$app")
+            fi
         done
 
         if security add-generic-password \
@@ -456,6 +498,17 @@ elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
             log_info "You may need to grant Keychain access permissions"
             USE_KEYCHAIN=false
         fi
+    elif [[ -n "$PULSE_TOKEN" ]]; then
+        if [[ "$KEYCHAIN_OPT_OUT" == true ]]; then
+            if [[ "$KEYCHAIN_OPT_OUT_REASON" == "flag" ]]; then
+                log_warn "Keychain storage disabled via --no-keychain; token will be embedded in the launchd plist."
+            elif [[ "$KEYCHAIN_OPT_OUT_REASON" == "prompt" ]]; then
+                log_warn "Keychain storage skipped at user prompt; token will be embedded in the launchd plist."
+            fi
+        else
+            log_warn "Keychain storage disabled; token will be embedded in the launchd plist."
+        fi
+        USE_KEYCHAIN=false
     else
         USE_KEYCHAIN=false
     fi

@@ -17,25 +17,46 @@ export const DockerAgents: Component = () => {
 
   const [showHidden, setShowHidden] = createSignal(false);
 
-  const dockerHosts = () => {
-    const all = state.dockerHosts || [];
-    return showHidden() ? all : all.filter(host => !host.hidden);
-  };
+  const allDockerHosts = () => state.dockerHosts || [];
 
-  const hiddenCount = () => (state.dockerHosts || []).filter(host => host.hidden).length;
+  const dockerHosts = createMemo(() => {
+    const all = allDockerHosts();
+    const includeHidden = showHidden();
+    let filtered = includeHidden ? all : all.filter(host => !host.hidden);
 
-  const pendingHosts = () =>
-    dockerHosts().filter(host => {
+    if (!includeHidden) {
+      filtered = filtered.filter(host => {
+        if (!host.pendingUninstall) {
+          return true;
+        }
+        const status = host.command?.status;
+        return status === 'failed' || status === 'expired';
+      });
+    }
+
+    return filtered;
+  });
+
+  const hiddenCount = () => allDockerHosts().filter(host => host.hidden).length;
+
+  const pendingHosts = createMemo(() =>
+    allDockerHosts().filter(host => {
+      if (host.pendingUninstall) return true;
       const status = host.command?.status;
-      if (status === 'queued' || status === 'dispatched' || status === 'acknowledged') return true;
-      return Boolean(host.pendingUninstall);
-    });
+      return status === 'queued' || status === 'dispatched' || status === 'acknowledged' || status === 'completed';
+    }),
+  );
+
+  const removedHosts = () => state.removedDockerHosts ?? [];
+  const hasRemovedHosts = () => removedHosts().length > 0;
 
   const [removingHostId, setRemovingHostId] = createSignal<string | null>(null);
   const [showRemoveModal, setShowRemoveModal] = createSignal(false);
   const [hostToRemoveId, setHostToRemoveId] = createSignal<string | null>(null);
   const [uninstallCommandCopied, setUninstallCommandCopied] = createSignal(false);
-  const [removeActionLoading, setRemoveActionLoading] = createSignal<'queue' | 'force' | 'hide' | null>(null);
+  const [removeActionLoading, setRemoveActionLoading] = createSignal<
+    'queue' | 'force' | 'hide' | 'awaitingCommand' | null
+  >(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
   const [isGeneratingToken, setIsGeneratingToken] = createSignal(false);
@@ -131,6 +152,10 @@ const modalLastHeartbeat = createMemo(() => {
   return host?.lastReportTime ? formatRelativeTime(new Date(host.lastReportTime)) : null;
 });
 
+const modalHostPendingUninstall = createMemo(() => Boolean(hostToRemove()?.pendingUninstall));
+const modalHasCommand = createMemo(() => Boolean(modalCommand()));
+const [hasShownCommandCompletion, setHasShownCommandCompletion] = createSignal(false);
+
 const formatElapsedTime = (seconds: number) => {
   if (seconds < 60) {
     return `${seconds}s`;
@@ -140,12 +165,72 @@ const formatElapsedTime = (seconds: number) => {
   return `${mins}m ${secs}s`;
 };
 
+type RemovalStatusTone = 'info' | 'success' | 'danger';
+
+const removalBadgeClassMap: Record<RemovalStatusTone, string> = {
+  info: 'inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
+  success:
+    'inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
+  danger:
+    'inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/40 dark:text-red-200',
+};
+
+const removalTextClassMap: Record<RemovalStatusTone, string> = {
+  info: 'text-blue-700 dark:text-blue-300',
+  success: 'text-emerald-700 dark:text-emerald-300',
+  danger: 'text-red-600 dark:text-red-300',
+};
+
+const getRemovalStatusInfo = (host: DockerHost): { label: string; tone: RemovalStatusTone } | null => {
+  const status = host.command?.status ?? null;
+
+  switch (status) {
+    case 'failed':
+      return {
+        label: host.command?.failureReason || 'Pulse could not stop the agent automatically.',
+        tone: 'danger',
+      };
+    case 'expired':
+      return {
+        label: 'Stop command expired before the agent responded.',
+        tone: 'danger',
+      };
+    case 'completed':
+      return {
+        label: 'Agent stopped. Pulse will hide this host after the next missed heartbeat.',
+        tone: 'success',
+      };
+    case 'acknowledged':
+      return { label: 'Agent acknowledged the stop command—waiting for shutdown.', tone: 'info' };
+    case 'dispatched':
+      return { label: 'Instruction delivered to the agent.', tone: 'info' };
+    case 'queued':
+      return { label: 'Stop command queued; waiting to reach the agent.', tone: 'info' };
+    default:
+      if (host.pendingUninstall) {
+        return { label: 'Marked for uninstall; waiting for agent confirmation.', tone: 'info' };
+      }
+      return null;
+  }
+};
+
   createEffect(() => {
     if (!showRemoveModal()) return;
     const id = hostToRemoveId();
     const host = hostToRemove();
     if (id && !host) {
       closeRemoveModal();
+    }
+  });
+
+  createEffect(() => {
+    if (!showRemoveModal()) {
+      return;
+    }
+    if (removeActionLoading() === 'awaitingCommand') {
+      if (modalHasCommand() || modalHostPendingUninstall() || modalCommandFailed()) {
+        setRemoveActionLoading(null);
+      }
     }
   });
 
@@ -175,6 +260,23 @@ const formatElapsedTime = (seconds: number) => {
       }, 1000);
 
       return () => clearInterval(interval);
+    }
+  });
+
+  createEffect(() => {
+    if (!showRemoveModal()) {
+      return;
+    }
+    if (modalCommandCompleted() && !hasShownCommandCompletion()) {
+      setHasShownCommandCompletion(true);
+      notificationStore.success('Agent stopped. Pulse will hide this host after the next heartbeat.', 5000);
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          closeRemoveModal();
+        }, 1200);
+      } else {
+        closeRemoveModal();
+      }
     }
   });
 
@@ -293,6 +395,32 @@ User=root
 WantedBy=multi-user.target`;
   };
 
+  const getAllowReenrollCommand = (hostId: string) => {
+    const url = pulseUrl();
+    return `curl -X POST -H "X-API-Token: <token-with-docker:manage>" ${url}/api/agents/docker/hosts/${hostId}/allow-reenroll`;
+  };
+
+  const handleAllowReenroll = async (hostId: string, label: string) => {
+    try {
+      await MonitoringAPI.allowDockerHostReenroll(hostId);
+      notificationStore.success(`Allowed ${label} to report again`, 4000);
+    } catch (error) {
+      console.error('Failed to allow Docker host re-enroll', error);
+      const message = error instanceof Error ? error.message : 'Failed to clear the removal block. Confirm your account has docker:manage access.';
+      notificationStore.error(message, 8000);
+    }
+  };
+
+  const handleCopyAllowCommand = async (hostId: string, label: string) => {
+    const command = getAllowReenrollCommand(hostId);
+    const copied = await copyToClipboard(command);
+    if (copied) {
+      notificationStore.success(`Command copied for ${label}`, 3500);
+    } else {
+      notificationStore.error('Copy failed. You can still manually copy the snippet.', 4000);
+    }
+  };
+
   const isRemovingHost = (hostId: string) => removingHostId() === hostId;
 
   const openRemoveModal = (host: DockerHost) => {
@@ -301,6 +429,7 @@ WantedBy=multi-user.target`;
     setRemoveActionLoading(null);
     setShowAdvancedOptions(false);
     setShowRemoveModal(true);
+    setHasShownCommandCompletion(false);
   };
 
   const closeRemoveModal = () => {
@@ -309,6 +438,7 @@ WantedBy=multi-user.target`;
     setUninstallCommandCopied(false);
     setRemoveActionLoading(null);
     setShowAdvancedOptions(false);
+    setHasShownCommandCompletion(false);
   };
 
   const handleQueueStopCommand = async () => {
@@ -322,19 +452,20 @@ WantedBy=multi-user.target`;
     try {
       await MonitoringAPI.deleteDockerHost(host.id);
       notificationStore.success(`Stop command sent to ${displayName}`, 3500);
+      setRemoveActionLoading('awaitingCommand');
     } catch (error) {
       console.error('Failed to queue Docker host stop command', error);
       const message = error instanceof Error ? error.message : 'Failed to send stop command';
       notificationStore.error(message, 8000);
+      setRemoveActionLoading(null);
     } finally {
       setRemovingHostId(null);
-      setRemoveActionLoading(null);
     }
   };
 
   const handleHideHostFromModal = async () => {
     const host = hostToRemove();
-    if (!host || removeActionLoading()) return;
+    if (!host || (removeActionLoading() && removeActionLoading() !== 'awaitingCommand')) return;
 
     const displayName = getDisplayName(host);
     setRemovingHostId(host.id);
@@ -356,7 +487,7 @@ WantedBy=multi-user.target`;
 
   const handleRemoveHostNow = async () => {
     const host = hostToRemove();
-    if (!host || removeActionLoading()) return;
+    if (!host || (removeActionLoading() && removeActionLoading() !== 'awaitingCommand')) return;
 
     const displayName = getDisplayName(host);
     setRemovingHostId(host.id);
@@ -415,6 +546,62 @@ WantedBy=multi-user.target`;
 
   return (
     <div class="space-y-6">
+      <Show when={hasRemovedHosts()}>
+        <Card
+          padding="lg"
+          class="space-y-4 border border-amber-300 bg-amber-50 text-amber-900 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+        >
+          <div class="space-y-1">
+            <h3 class="text-sm font-semibold">Recently removed Docker hosts</h3>
+            <p class="text-sm text-amber-800 dark:text-amber-200">
+              Pulse is currently blocking these hosts because they were explicitly removed. Allow them to re-enroll or
+              copy the command below and run it with a token that includes the <code>docker:manage</code> scope.
+            </p>
+          </div>
+
+          <div class="space-y-3">
+            <For each={removedHosts()}>
+              {(entry) => {
+                const label = entry.displayName || entry.hostname || entry.id;
+                return (
+                  <div class="rounded-lg border border-amber-200 bg-white/80 p-4 shadow-sm dark:border-amber-500/40 dark:bg-amber-950/20">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{label}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Host ID: {entry.id}</p>
+                      </div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400">
+                        Removed {formatRelativeTime(entry.removedAt)}
+                      </div>
+                    </div>
+
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAllowReenroll(entry.id, label)}
+                        class="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 dark:focus:ring-offset-gray-900"
+                      >
+                        Allow re-enroll
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyAllowCommand(entry.id, label)}
+                        class="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-600/50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 dark:border-emerald-400/60 dark:text-emerald-200 dark:hover:bg-emerald-500/20 dark:focus:ring-offset-gray-900"
+                      >
+                        Copy curl command
+                      </button>
+                    </div>
+                  </div>
+                );
+              }}
+            </For>
+            <p class="text-xs text-amber-800 dark:text-amber-200">
+              If you removed a host intentionally, you can simply ignore it—entries expire automatically after 24 hours.
+            </p>
+          </div>
+        </Card>
+      </Show>
+
         <Card padding="lg" class="space-y-5">
           <div class="space-y-1">
             <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Add a Docker host</h3>
@@ -631,7 +818,12 @@ WantedBy=multi-user.target`;
                     <button
                       type="button"
                       onClick={handleQueueStopCommand}
-                      disabled={removeActionLoading() !== null || modalCommandInProgress() || modalCommandStatus() === 'completed'}
+                      disabled={
+                        removeActionLoading() !== null ||
+                        modalCommandInProgress() ||
+                        modalCommandStatus() === 'completed' ||
+                        (modalHostPendingUninstall() && !modalHasCommand())
+                      }
                       class={`inline-flex items-center justify-center rounded px-4 py-2 text-sm font-medium text-white transition-colors ${
                         modalCommandStatus() === 'completed'
                           ? 'bg-emerald-600 dark:bg-emerald-500'
@@ -640,61 +832,110 @@ WantedBy=multi-user.target`;
                     >
                       {(() => {
                         if (removeActionLoading() === 'queue') return 'Sending…';
+                        if (removeActionLoading() === 'awaitingCommand') return 'Waiting for agent…';
                         if (modalCommandInProgress()) return 'Waiting for agent…';
                         if (modalCommandStatus() === 'completed') return 'Agent stopped';
+                        if (!modalHasCommand() && modalHostPendingUninstall()) return 'Waiting for host…';
                         if (modalCommandFailed()) return 'Retry stop command';
                         return 'Stop agent now';
                       })()}
                     </button>
-                    <Show when={modalCommandInProgress()}>
-                      <div class="space-y-3">
-                        {/* Progress steps */}
-                        <div class="rounded border border-blue-200 bg-white p-3 dark:border-blue-700 dark:bg-blue-800/20">
-                          <div class="mb-2 flex items-center justify-between">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Progress</span>
-                            <span class="text-xs text-blue-600 dark:text-blue-400">{formatElapsedTime(elapsedSeconds())} elapsed</span>
-                          </div>
-                          <ul class="space-y-1.5">
-                            <For each={modalCommandProgress()}>
-                              {(step) => (
-                                <li
-                                  class={`${step.done || step.active ? 'text-blue-700 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'} flex items-center gap-2 text-xs`}
-                                >
-                                  <span
-                                    class={`h-2 w-2 flex-shrink-0 rounded-full ${
-                                      step.done
-                                        ? 'bg-blue-500'
-                                        : step.active
-                                          ? 'bg-blue-400 animate-pulse'
-                                          : 'bg-gray-300 dark:bg-gray-600'
-                                    }`}
-                                  />
-                                  {step.label}
-                                </li>
-                              )}
-                            </For>
-                          </ul>
-                        </div>
-
-                        {/* Expected time and last heartbeat */}
-                        <div class="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-300">
-                          <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <Show
+                      when={
+                        removeActionLoading() === 'awaitingCommand' &&
+                        !modalHasCommand() &&
+                        !modalHostPendingUninstall()
+                      }
+                    >
+                      <div class="rounded border border-blue-200 bg-white p-3 dark:border-blue-700 dark:bg-blue-800/20">
+                        <div class="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-200">
+                          <svg class="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <div>
-                            <p>
-                              <Show when={!modalCommandTimedOut()} fallback="This is taking longer than expected.">
-                                This usually takes 30-60 seconds.
-                              </Show>
-                              <Show when={modalLastHeartbeat()}>
-                                {' '}Last heartbeat: {modalLastHeartbeat()}.
-                              </Show>
+                            <p class="font-semibold">Stop command sent.</p>
+                            <p class="mt-1 leading-snug">
+                              Pulse is waiting for <span class="font-medium">{modalHostname()}</span> to pick up the shutdown instruction. This usually finishes within 30-60 seconds.
                             </p>
                           </div>
                         </div>
+                      </div>
+                    </Show>
+                    <Show
+                      when={
+                        modalCommandInProgress() ||
+                        modalCommandCompleted() ||
+                        (!modalHasCommand() && modalHostPendingUninstall())
+                      }
+                    >
+                      <div class="space-y-3">
+                        <Show when={modalHasCommand()}>
+                          <div class="rounded border border-blue-200 bg-white p-3 dark:border-blue-700 dark:bg-blue-800/20">
+                            <div class="mb-2 flex items-center justify-between">
+                              <span class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Progress</span>
+                              <Show
+                                when={!modalCommandCompleted()}
+                                fallback={<span class="text-xs font-semibold text-emerald-600 dark:text-emerald-300">Completed</span>}
+                              >
+                                <span class="text-xs text-blue-600 dark:text-blue-400">{formatElapsedTime(elapsedSeconds())} elapsed</span>
+                              </Show>
+                            </div>
+                            <ul class="space-y-1.5">
+                              <For each={modalCommandProgress()}>
+                                {(step) => (
+                                  <li
+                                    class={`${step.done || step.active ? 'text-blue-700 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'} flex items-center gap-2 text-xs`}
+                                  >
+                                    <span
+                                      class={`relative h-2 w-2 flex-shrink-0 rounded-full ${
+                                        step.done
+                                          ? 'bg-blue-500'
+                                          : step.active
+                                            ? 'bg-blue-400 animate-pulse'
+                                            : 'bg-gray-300 dark:bg-gray-600'
+                                      } ${modalCommandCompleted() && step.done ? 'after:absolute after:-inset-1 after:rounded-full after:border after:border-emerald-400/40 after:animate-pulse' : ''}`}
+                                    />
+                                    {step.label}
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </div>
+                        </Show>
 
-                        {/* Timeout warning */}
-                        <Show when={modalCommandTimedOut()}>
+                        <Show when={!modalHasCommand() && modalHostPendingUninstall()}>
+                          <div class="rounded border border-blue-200 bg-white p-3 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-800/20 dark:text-blue-200">
+                            <p class="font-semibold">Agent already stopped.</p>
+                            <p class="mt-1 leading-snug">
+                              Pulse is waiting for <span class="font-medium">{modalHostname()}</span> to miss its next heartbeat so the host can be removed automatically. No further action is required—this usually finishes within 60 seconds.
+                            </p>
+                            <Show when={modalLastHeartbeat()}>
+                              <p class="mt-2 text-[11px]">
+                                Last heartbeat: {modalLastHeartbeat()}. Pulse will clear the entry after the next missed report.
+                              </p>
+                            </Show>
+                          </div>
+                        </Show>
+
+                        <Show when={modalHasCommand() && !modalCommandCompleted()}>
+                          <div class="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-300">
+                            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                              <p>
+                                <Show when={!modalCommandTimedOut()} fallback="This is taking longer than expected.">
+                                  This usually takes 30-60 seconds.
+                                </Show>
+                                <Show when={modalLastHeartbeat()}>
+                                  {' '}Last heartbeat: {modalLastHeartbeat()}.
+                                </Show>
+                              </p>
+                            </div>
+                          </div>
+                        </Show>
+
+                        <Show when={modalHasCommand() && modalCommandTimedOut() && !modalCommandCompleted()}>
                           <div class="rounded border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-700 dark:bg-yellow-900/20">
                             <div class="flex items-start gap-2">
                               <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -747,13 +988,13 @@ WantedBy=multi-user.target`;
                                   class={`${step.done || step.active ? 'text-blue-700 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'} flex items-center gap-2`}
                                 >
                                   <span
-                                    class={`h-2 w-2 rounded-full ${
+                                    class={`relative h-2 w-2 rounded-full ${
                                       step.done
                                         ? 'bg-blue-500'
                                         : step.active
                                           ? 'bg-blue-400 animate-pulse'
                                           : 'bg-gray-300 dark:bg-gray-600'
-                                    }`}
+                                    } ${modalCommandCompleted() && step.done ? 'after:absolute after:-inset-1 after:rounded-full after:border after:border-emerald-400/40 after:animate-pulse' : ''}`}
                                   />
                                   {step.label}
                                 </li>
@@ -790,7 +1031,7 @@ WantedBy=multi-user.target`;
                     <button
                       type="button"
                       onClick={handleRemoveHostNow}
-                      disabled={removeActionLoading() !== null}
+                      disabled={removeActionLoading() !== null && removeActionLoading() !== 'awaitingCommand'}
                       class="self-start rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-orange-500 dark:hover:bg-orange-400 whitespace-nowrap"
                     >
                       {removeActionLoading() === 'force' ? 'Removing…' : 'Force remove now'}
@@ -811,7 +1052,7 @@ WantedBy=multi-user.target`;
                     <button
                       type="button"
                       onClick={handleRemoveHostNow}
-                      disabled={removeActionLoading() !== null}
+                      disabled={removeActionLoading() !== null && removeActionLoading() !== 'awaitingCommand'}
                       class="self-start rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:hover:bg-emerald-400"
                     >
                       {removeActionLoading() === 'force' ? 'Removing…' : 'Remove host'}
@@ -877,7 +1118,7 @@ WantedBy=multi-user.target`;
                       <button
                         type="button"
                         onClick={handleRemoveHostNow}
-                        disabled={removeActionLoading() !== null}
+                        disabled={removeActionLoading() !== null && removeActionLoading() !== 'awaitingCommand'}
                         class="self-start rounded bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
                       >
                         {removeActionLoading() === 'force' ? 'Removing…' : 'Force remove now'}
@@ -896,7 +1137,7 @@ WantedBy=multi-user.target`;
                       <button
                         type="button"
                         onClick={handleHideHostFromModal}
-                        disabled={removeActionLoading() !== null || modalHostHidden()}
+                        disabled={(removeActionLoading() !== null && removeActionLoading() !== 'awaitingCommand') || modalHostHidden()}
                         class="self-start rounded bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-800 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                       >
                         {removeActionLoading() === 'hide' ? 'Hiding...' : modalHostHidden() ? 'Already hidden' : 'Hide host'}
@@ -930,13 +1171,75 @@ WantedBy=multi-user.target`;
                 <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <div class="flex-1">
-                  <h4 class="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
-                    Stopping {pendingHosts().length} host{pendingHosts().length !== 1 ? 's' : ''}
-                  </h4>
-                  <p class="mt-1 text-sm text-yellow-800 dark:text-yellow-200">
-                    Pulse has sent the stop command. Once an agent acknowledges (or goes offline), the entry will disappear automatically.
-                  </p>
+                <div class="flex-1 space-y-3">
+                  <div>
+                    <h4 class="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
+                      Stopping {pendingHosts().length} host{pendingHosts().length !== 1 ? 's' : ''}
+                    </h4>
+                    <p class="mt-1 text-sm text-yellow-800 dark:text-yellow-200">
+                      Pulse has the stop command in flight. You can keep working—these hosts will disappear automatically once the agent shuts down or misses its next heartbeat.
+                    </p>
+                  </div>
+
+                  <div class="space-y-2">
+                    <For each={pendingHosts()}>
+                      {(host) => {
+                        const label = getDisplayName(host);
+                        const statusInfo = getRemovalStatusInfo(host) ?? {
+                          label: 'Marked for uninstall; waiting for agent confirmation.',
+                          tone: 'info' as RemovalStatusTone,
+                        };
+                        const status = host.command?.status ?? (host.pendingUninstall ? 'pending' : 'unknown');
+                        const isOnline = host.status?.toLowerCase() === 'online';
+                        const lastSeenLabel = host.lastSeen ? formatRelativeTime(host.lastSeen) : 'Awaiting first report';
+                        const badgeText =
+                          status === 'completed'
+                            ? 'Agent stopped'
+                            : status === 'acknowledged'
+                              ? 'Acknowledged'
+                              : status === 'dispatched'
+                                ? 'Dispatched'
+                                : status === 'queued'
+                                  ? 'Queued'
+                                  : 'Pending';
+
+                        return (
+                          <div class="rounded-lg border border-yellow-200 bg-white/80 p-3 shadow-sm dark:border-yellow-700/40 dark:bg-yellow-900/20">
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{label}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{host.hostname || host.id}</p>
+                                <span class={removalBadgeClassMap[statusInfo.tone]}>{badgeText}</span>
+                              </div>
+                              <div class="text-[11px] text-gray-500 dark:text-gray-400 sm:text-right">
+                                Last seen {lastSeenLabel}
+                              </div>
+                            </div>
+                            <p class={`mt-2 text-xs ${removalTextClassMap[statusInfo.tone]}`}>{statusInfo.label}</p>
+                            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                              <button
+                                type="button"
+                                class="inline-flex items-center justify-center gap-2 rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
+                                onClick={() => openRemoveModal(host)}
+                              >
+                                View progress
+                              </button>
+                              <Show when={!isOnline || status === 'failed' || status === 'expired'}>
+                                <button
+                                  type="button"
+                                  class="inline-flex items-center justify-center gap-2 rounded border border-blue-500/40 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:border-blue-400/40 dark:text-blue-200 dark:hover:bg-blue-500/20"
+                                  onClick={() => handleCleanupOfflineHost(host.id, label)}
+                                  disabled={isRemovingHost(host.id)}
+                                >
+                                  {isRemovingHost(host.id) ? 'Cleaning up…' : 'Force remove now'}
+                                </button>
+                              </Show>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    </For>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1013,17 +1316,21 @@ WantedBy=multi-user.target`;
                       const isOnline = host.status?.toLowerCase() === 'online';
                       const displayName = getDisplayName(host);
                       const commandStatus = host.command?.status ?? null;
+                      const removalStatusInfo = getRemovalStatusInfo(host);
                       const commandInProgress =
                         commandStatus === 'queued' ||
                         commandStatus === 'dispatched' ||
                         commandStatus === 'acknowledged';
                       const commandFailed = commandStatus === 'failed';
                       const commandCompleted = commandStatus === 'completed';
-                      const offlineActionLabel = commandFailed
-                        ? 'Force remove host'
-                        : host.pendingUninstall
-                          ? 'Clean up pending host'
-                          : 'Remove offline host';
+                      const offlineActionLabel =
+                        commandFailed || commandStatus === 'expired'
+                          ? 'Force remove host'
+                          : removalStatusInfo?.tone === 'success'
+                            ? 'Remove host'
+                            : host.pendingUninstall
+                              ? 'Skip wait and remove now'
+                              : 'Remove offline host';
                       const tokenRevoked = typeof host.tokenRevokedAt === 'number';
                       const tokenRevokedRelative = tokenRevoked ? formatRelativeTime(host.tokenRevokedAt!) : '';
 
@@ -1088,12 +1395,14 @@ WantedBy=multi-user.target`;
                                 </span>
                               </Show>
                             </div>
-                            <Show when={host.pendingUninstall}>
-                              <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                Stop command queued; waiting for acknowledgement.
-                              </div>
+                            <Show when={removalStatusInfo}>
+                              {(info) => (
+                                <div class={`mt-2 text-xs ${removalTextClassMap[info.tone]}`}>
+                                  {info.label}
+                                </div>
+                              )}
                             </Show>
-                          </td>
+                         </td>
                           <td class="py-3 px-4 align-top">
                             <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {host.dockerVersion ? `Docker ${host.dockerVersion}` : 'Docker version unavailable'}

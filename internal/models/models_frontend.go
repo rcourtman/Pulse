@@ -130,6 +130,14 @@ type DockerHostFrontend struct {
 	Command           *DockerHostCommandFrontend `json:"command,omitempty"`
 }
 
+// RemovedDockerHostFrontend represents a blocked docker host entry for the frontend.
+type RemovedDockerHostFrontend struct {
+	ID          string `json:"id"`
+	Hostname    string `json:"hostname,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
+	RemovedAt   int64  `json:"removedAt"`
+}
+
 // DockerContainerFrontend represents a Docker container for the frontend
 type DockerContainerFrontend struct {
 	ID                  string                           `json:"id"`
@@ -174,8 +182,10 @@ type DockerContainerNetworkFrontend struct {
 
 // DockerContainerBlockIOFrontend exposes aggregate block IO counters.
 type DockerContainerBlockIOFrontend struct {
-	ReadBytes  uint64 `json:"readBytes,omitempty"`
-	WriteBytes uint64 `json:"writeBytes,omitempty"`
+	ReadBytes               uint64   `json:"readBytes,omitempty"`
+	WriteBytes              uint64   `json:"writeBytes,omitempty"`
+	ReadRateBytesPerSecond  *float64 `json:"readRateBytesPerSecond,omitempty"`
+	WriteRateBytesPerSecond *float64 `json:"writeRateBytesPerSecond,omitempty"`
 }
 
 // DockerContainerMountFrontend represents a container mount for the UI.
@@ -392,25 +402,26 @@ type ReplicationJobFrontend struct {
 
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	Nodes            []NodeFrontend           `json:"nodes"`
-	VMs              []VMFrontend             `json:"vms"`
-	Containers       []ContainerFrontend      `json:"containers"`
-	DockerHosts      []DockerHostFrontend     `json:"dockerHosts"`
-	Hosts            []HostFrontend           `json:"hosts"`
-	Storage          []StorageFrontend        `json:"storage"`
-	CephClusters     []CephClusterFrontend    `json:"cephClusters"`
-	PhysicalDisks    []PhysicalDisk           `json:"physicalDisks"`
-	PBS              []PBSInstance            `json:"pbs"` // Keep as is
-	PMG              []PMGInstance            `json:"pmg"`
-	PBSBackups       []PBSBackup              `json:"pbsBackups"`
-	PMGBackups       []PMGBackup              `json:"pmgBackups"`
-	Backups          Backups                  `json:"backups"`
-	ReplicationJobs  []ReplicationJobFrontend `json:"replicationJobs"`
-	ActiveAlerts     []Alert                  `json:"activeAlerts"`     // Active alerts
-	Metrics          map[string]any           `json:"metrics"`          // Empty object for now
-	PVEBackups       PVEBackups               `json:"pveBackups"`       // Keep as is
-	Performance      map[string]any           `json:"performance"`      // Empty object for now
-	ConnectionHealth map[string]bool          `json:"connectionHealth"` // Keep as is
-	Stats            map[string]any           `json:"stats"`            // Empty object for now
-	LastUpdate       int64                    `json:"lastUpdate"`       // Unix timestamp
+	Nodes              []NodeFrontend              `json:"nodes"`
+	VMs                []VMFrontend                `json:"vms"`
+	Containers         []ContainerFrontend         `json:"containers"`
+	DockerHosts        []DockerHostFrontend        `json:"dockerHosts"`
+	RemovedDockerHosts []RemovedDockerHostFrontend `json:"removedDockerHosts"`
+	Hosts              []HostFrontend              `json:"hosts"`
+	Storage            []StorageFrontend           `json:"storage"`
+	CephClusters       []CephClusterFrontend       `json:"cephClusters"`
+	PhysicalDisks      []PhysicalDisk              `json:"physicalDisks"`
+	PBS                []PBSInstance               `json:"pbs"` // Keep as is
+	PMG                []PMGInstance               `json:"pmg"`
+	PBSBackups         []PBSBackup                 `json:"pbsBackups"`
+	PMGBackups         []PMGBackup                 `json:"pmgBackups"`
+	Backups            Backups                     `json:"backups"`
+	ReplicationJobs    []ReplicationJobFrontend    `json:"replicationJobs"`
+	ActiveAlerts       []Alert                     `json:"activeAlerts"`     // Active alerts
+	Metrics            map[string]any              `json:"metrics"`          // Empty object for now
+	PVEBackups         PVEBackups                  `json:"pveBackups"`       // Keep as is
+	Performance        map[string]any              `json:"performance"`      // Empty object for now
+	ConnectionHealth   map[string]bool             `json:"connectionHealth"` // Keep as is
+	Stats              map[string]any              `json:"stats"`            // Empty object for now
+	LastUpdate         int64                       `json:"lastUpdate"`       // Unix timestamp
 }

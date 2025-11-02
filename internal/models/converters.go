@@ -280,6 +280,16 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 	return h
 }
 
+// ToFrontend converts a RemovedDockerHost to its frontend representation.
+func (r RemovedDockerHost) ToFrontend() RemovedDockerHostFrontend {
+	return RemovedDockerHostFrontend{
+		ID:          r.ID,
+		Hostname:    r.Hostname,
+		DisplayName: r.DisplayName,
+		RemovedAt:   r.RemovedAt.Unix() * 1000,
+	}
+}
+
 // ToFrontend converts a Host to HostFrontend.
 func (h Host) ToFrontend() HostFrontend {
 	host := HostFrontend{
@@ -401,8 +411,10 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 
 	if c.BlockIO != nil {
 		container.BlockIO = &DockerContainerBlockIOFrontend{
-			ReadBytes:  c.BlockIO.ReadBytes,
-			WriteBytes: c.BlockIO.WriteBytes,
+			ReadBytes:               c.BlockIO.ReadBytes,
+			WriteBytes:              c.BlockIO.WriteBytes,
+			ReadRateBytesPerSecond:  c.BlockIO.ReadRateBytesPerSecond,
+			WriteRateBytesPerSecond: c.BlockIO.WriteRateBytesPerSecond,
 		}
 	}
 

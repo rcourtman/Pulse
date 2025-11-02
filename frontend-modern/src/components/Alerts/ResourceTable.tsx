@@ -4,6 +4,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
 
 const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'cpu %': 'Percent CPU utilization allowed before an alert fires.',
@@ -48,6 +49,8 @@ const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
 const OFFLINE_ALERTS_TOOLTIP =
   'Toggle default behavior for powered-off or connectivity alerts for this resource type.';
 
+const SLIDER_METRICS = new Set(['cpu', 'memory', 'disk', 'temperature']);
+
 export interface Resource {
   id: string;
   name: string;
@@ -79,6 +82,7 @@ export interface Resource {
   toggleTitleEnabled?: string;
   toggleTitleDisabled?: string;
   editable?: boolean;
+  note?: string;
   [key: string]: unknown;
 }
 
@@ -103,6 +107,7 @@ interface ResourceTableProps {
     resourceId: string,
     thresholds: Record<string, number | undefined>,
     defaults: Record<string, number | undefined>,
+    note: string | undefined,
   ) => void;
   onSaveEdit: (resourceId: string) => void;
   onCancelEdit: () => void;
@@ -136,6 +141,8 @@ interface ResourceTableProps {
   groupHeaderMeta?: Record<string, GroupHeaderMeta>;
   factoryDefaults?: Record<string, number | undefined>;
   onResetDefaults?: () => void;
+  editingNote: () => string;
+  setEditingNote: (value: string) => void;
 }
 
 type OfflineState = 'off' | 'warning' | 'critical';
@@ -513,7 +520,7 @@ export function ResourceTable(props: ResourceTableProps) {
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             {/* Global Defaults Row */}
-            <Show
+              <Show
               when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
             >
               <tr
@@ -961,6 +968,26 @@ export function ResourceTable(props: ResourceTableProps) {
                                       Custom
                                     </span>
                                   </Show>
+                                  <Show when={isEditing()}>
+                                    <div class="mt-2 w-full">
+                                      <label class="sr-only" for={`note-${resource.id}`}>
+                                        Override note
+                                      </label>
+                                      <textarea
+                                        id={`note-${resource.id}`}
+                                        class="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                                        rows={2}
+                                        placeholder="Add a note about this override (optional)"
+                                        value={props.editingNote()}
+                                        onInput={(e) => props.setEditingNote(e.currentTarget.value)}
+                                      />
+                                    </div>
+                                  </Show>
+                                  <Show when={!isEditing() && resource.note}>
+                                    <p class="mt-2 text-xs italic text-gray-500 dark:text-gray-400 break-words">
+                                      {resource.note as string}
+                                    </p>
+                                  </Show>
                                 </div>
                               </td>
                               {/* Metric columns - dynamically rendered based on resource type */}
@@ -979,6 +1006,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       resource.id,
                                       resource.thresholds ? { ...resource.thresholds } : {},
                                       resource.defaults ? { ...resource.defaults } : {},
+                                      typeof resource.note === 'string' ? resource.note : undefined,
                                     );
                                   };
 
@@ -1011,56 +1039,121 @@ export function ResourceTable(props: ResourceTableProps) {
                                             </div>
                                           }
                                         >
-                                          <div class="flex items-center justify-center">
-                                            <input
-                                              type="number"
-                                              min={bounds.min}
-                                              max={bounds.max}
-                                              step={metricStep(metric)}
-                                              value={thresholds()?.[metric] ?? ''}
-                                              placeholder={isDisabled() ? 'Off' : ''}
-                                              title="Set to -1 to disable alerts for this metric"
-                                              ref={(el) => {
-                                                if (
-                                                  isEditing() &&
-                                                  activeMetricInput()?.resourceId === resource.id &&
-                                                  activeMetricInput()?.metric === metric
-                                                ) {
-                                                  queueMicrotask(() => {
-                                                    el.focus();
-                                                    el.select();
-                                                  });
-                                                }
-                                              }}
-                                              onInput={(e) => {
-                                                const raw = e.currentTarget.value;
-                                                if (raw === '') {
-                                                  props.setEditingThresholds({
-                                                    ...props.editingThresholds(),
-                                                    [metric]: undefined,
-                                                  });
-                                                  return;
-                                                }
-                                                const val = parseFloat(raw);
-                                                if (!Number.isNaN(val)) {
-                                                  props.setEditingThresholds({
-                                                    ...props.editingThresholds(),
-                                                    [metric]: val,
-                                                  });
-                                                }
-                                              }}
-                                              onBlur={() => {
-                                                if (props.editingId() === resource.id) {
-                                                  props.onSaveEdit(resource.id);
-                                                }
-                                                setActiveMetricInput(null);
-                                              }}
-                                              class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                                                isDisabled()
-                                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
-                                                  : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
-                                              }`}
-                                            />
+                                          <div class="flex w-full items-center gap-3">
+                                            <Show when={SLIDER_METRICS.has(metric)}>
+                                              {(() => {
+                                                const sliderMin =
+                                                  metric === 'temperature'
+                                                    ? Math.max(0, bounds.min)
+                                                    : Math.max(0, bounds.min);
+                                                const sliderMax =
+                                                  metric === 'temperature'
+                                                    ? Math.max(
+                                                        sliderMin,
+                                                        bounds.max > 0 ? bounds.max : 120,
+                                                      )
+                                                    : bounds.max;
+                                                const defaultSliderValue = () => {
+                                                  if (metric === 'disk') return 90;
+                                                  if (metric === 'memory') return 85;
+                                                  if (metric === 'temperature') return 80;
+                                                  return 80;
+                                                };
+                                                const currentSliderValue = () => {
+                                                  const editingVal =
+                                                    props.editingThresholds()?.[metric];
+                                                  if (
+                                                    typeof editingVal === 'number' &&
+                                                    editingVal >= 0
+                                                  ) {
+                                                    return Math.round(editingVal);
+                                                  }
+                                                  const displayVal = displayValue(metric);
+                                                  if (
+                                                    typeof displayVal === 'number' &&
+                                                    displayVal >= 0
+                                                  ) {
+                                                    return Math.round(displayVal);
+                                                  }
+                                                  return defaultSliderValue();
+                                                };
+                                                return (
+                                                  <div class="w-36">
+                                                    <ThresholdSlider
+                                                      value={Math.max(
+                                                        sliderMin,
+                                                        Math.min(sliderMax, currentSliderValue()),
+                                                      )}
+                                                      onChange={(val) => {
+                                                        props.setEditingThresholds({
+                                                          ...props.editingThresholds(),
+                                                          [metric]: val,
+                                                        });
+                                                      }}
+                                                      type={
+                                                        metric === 'temperature'
+                                                          ? 'temperature'
+                                                          : (metric as 'cpu' | 'memory' | 'disk')
+                                                      }
+                                                      min={sliderMin}
+                                                      max={sliderMax}
+                                                    />
+                                                  </div>
+                                                );
+                                              })()}
+                                            </Show>
+                                            <div class="flex items-center justify-center">
+                                              <input
+                                                type="number"
+                                                min={bounds.min}
+                                                max={bounds.max}
+                                                step={metricStep(metric)}
+                                                value={thresholds()?.[metric] ?? ''}
+                                                placeholder={isDisabled() ? 'Off' : ''}
+                                                title="Set to -1 to disable alerts for this metric"
+                                                ref={(el) => {
+                                                  if (
+                                                    isEditing() &&
+                                                    activeMetricInput()?.resourceId ===
+                                                      resource.id &&
+                                                    activeMetricInput()?.metric === metric
+                                                  ) {
+                                                    queueMicrotask(() => {
+                                                      el.focus();
+                                                      el.select();
+                                                    });
+                                                  }
+                                                }}
+                                                onInput={(e) => {
+                                                  const raw = e.currentTarget.value;
+                                                  if (raw === '') {
+                                                    props.setEditingThresholds({
+                                                      ...props.editingThresholds(),
+                                                      [metric]: undefined,
+                                                    });
+                                                    return;
+                                                  }
+                                                  const val = parseFloat(raw);
+                                                  if (!Number.isNaN(val)) {
+                                                    props.setEditingThresholds({
+                                                      ...props.editingThresholds(),
+                                                      [metric]: val,
+                                                    });
+                                                  }
+                                                }}
+                                                onBlur={() => {
+                                                  if (props.editingId() === resource.id) {
+                                                    props.onSaveEdit(resource.id);
+                                                  }
+                                                  setActiveMetricInput(null);
+                                                }}
+                                                class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
+                                                  isDisabled()
+                                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
+                                                    : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+                                                }`}
+                                              />
+                                            </div>
                                           </div>
                                         </Show>
                                       </Show>
@@ -1171,6 +1264,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                             resource.id,
                                             resource.thresholds ? { ...resource.thresholds } : {},
                                             resource.defaults ? { ...resource.defaults } : {},
+                                            typeof resource.note === 'string' ? resource.note : undefined,
                                           )
                                         }
                                         class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
@@ -1421,11 +1515,12 @@ export function ResourceTable(props: ResourceTableProps) {
                                   return;
                                 }
                                 setActiveMetricInput({ resourceId: resource.id, metric });
-                                props.onEdit(
-                                  resource.id,
-                                  resource.thresholds ? { ...resource.thresholds } : {},
-                                  resource.defaults ? { ...resource.defaults } : {},
-                                );
+        props.onEdit(
+          resource.id,
+          resource.thresholds ? { ...resource.thresholds } : {},
+          resource.defaults ? { ...resource.defaults } : {},
+          typeof resource.note === 'string' ? resource.note : undefined,
+        );
                               };
 
                               return (
@@ -1597,11 +1692,12 @@ export function ResourceTable(props: ResourceTableProps) {
                                   <div class="flex items-center gap-1">
                                     <button
                                       type="button"
-                                      onClick={() =>
+                                onClick={() =>
                                         props.onEdit(
                                           resource.id,
                                           resource.thresholds ? { ...resource.thresholds } : {},
                                           resource.defaults ? { ...resource.defaults } : {},
+                                          typeof resource.note === 'string' ? resource.note : undefined,
                                         )
                                       }
                                       class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"

@@ -173,6 +173,13 @@ The auto-setup script (Settings → Nodes → Setup Script) will prompt you to c
 
 If the node is part of a Proxmox cluster, the script will now detect the other members and offer to configure the same SSH/lm-sensors setup on each of them automatically—confirm when prompted to roll it out cluster-wide.
 
+### Host-side responsibilities
+
+- Run the host installer (`install-sensor-proxy.sh`) on the Proxmox machine that hosts Pulse to install and maintain the `pulse-sensor-proxy` service. The node setup script does not create this service.
+- Re-run the host installer if the service or socket disappears after a host upgrade or configuration cleanup; the installer is idempotent.
+- The installer now ships a self-heal timer (`pulse-sensor-proxy-selfheal.timer`) that restarts or reinstalls the proxy if it ever goes missing; leave it enabled for automatic recovery.
+- Hot dev builds now warn when only a container-local proxy socket is present, signalling that the host proxy needs to be reinstalled before temperatures will flow back into Pulse.
+
 ### Turnkey Setup for Standalone Nodes (v4.25.0+)
 
 **For standalone nodes** (not in a Proxmox cluster) running **containerized Pulse**, the setup script now automatically configures temperature monitoring with zero manual steps:

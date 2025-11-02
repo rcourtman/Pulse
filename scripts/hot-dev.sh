@@ -48,10 +48,25 @@ export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
 export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
 
 # Auto-detect pulse-sensor-proxy socket if available
+HOST_PROXY_SOCKET="/mnt/pulse-proxy/pulse-sensor-proxy.sock"
+CONTAINER_PROXY_SOCKET="/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+
 if [[ -z ${PULSE_SENSOR_PROXY_SOCKET:-} ]]; then
-    if [[ -S /mnt/pulse-proxy/pulse-sensor-proxy.sock ]]; then
-        export PULSE_SENSOR_PROXY_SOCKET=/mnt/pulse-proxy/pulse-sensor-proxy.sock
+    if [[ -S "${HOST_PROXY_SOCKET}" ]]; then
+        export PULSE_SENSOR_PROXY_SOCKET="${HOST_PROXY_SOCKET}"
         printf "[hot-dev] Detected pulse-sensor-proxy socket at %s\n" "${PULSE_SENSOR_PROXY_SOCKET}"
+    elif [[ -S "${CONTAINER_PROXY_SOCKET}" ]]; then
+        export PULSE_SENSOR_PROXY_SOCKET="${CONTAINER_PROXY_SOCKET}"
+        printf "[hot-dev] WARNING: Using container-local pulse-sensor-proxy socket at %s\n" "${PULSE_SENSOR_PROXY_SOCKET}"
+        printf "[hot-dev] WARNING: Host proxy is missing; temperatures will not reach Pulse until it is reinstalled.\n"
+    else
+        printf "[hot-dev] WARNING: No pulse-sensor-proxy socket detected. Temperatures will be unavailable.\n"
+    fi
+else
+    if [[ ! -S "${PULSE_SENSOR_PROXY_SOCKET}" ]]; then
+        printf "[hot-dev] WARNING: Configured pulse-sensor-proxy socket not found at %s\n" "${PULSE_SENSOR_PROXY_SOCKET}"
+    elif [[ "${PULSE_SENSOR_PROXY_SOCKET}" == "${CONTAINER_PROXY_SOCKET}" && ! -S "${HOST_PROXY_SOCKET}" ]]; then
+        printf "[hot-dev] WARNING: Using container-local proxy socket; reinstall host pulse-sensor-proxy for real telemetry.\n"
     fi
 fi
 

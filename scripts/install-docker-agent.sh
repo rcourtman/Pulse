@@ -343,6 +343,193 @@ resolve_agent_path_for_uninstall() {
     printf '%s' "$DEFAULT_AGENT_PATH"
 }
 
+ensure_service_user() {
+    SERVICE_USER_ACTUAL="$SERVICE_USER"
+    SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
+    SERVICE_USER_AVAILABLE="true"
+
+    if [[ "$SERVICE_USER" == "root" ]]; then
+        SERVICE_GROUP_ACTUAL="root"
+        SERVICE_USER_AVAILABLE="false"
+        return
+    fi
+
+    if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+        if getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+            SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
+        else
+            SERVICE_GROUP_ACTUAL="$(id -gn "$SERVICE_USER")"
+        fi
+        return
+    fi
+
+    if command -v useradd >/dev/null 2>&1; then
+        if useradd --system --home-dir "$SERVICE_HOME" --shell /usr/sbin/nologin "$SERVICE_USER" >/dev/null 2>&1; then
+            SERVICE_USER_CREATED="true"
+        fi
+    elif command -v adduser >/dev/null 2>&1; then
+        if adduser --system --home "$SERVICE_HOME" --shell /usr/sbin/nologin "$SERVICE_USER" >/dev/null 2>&1; then
+            SERVICE_USER_CREATED="true"
+        fi
+    else
+        log_warn "Unable to create dedicated service user; running agent as root"
+        SERVICE_USER_ACTUAL="root"
+        SERVICE_GROUP_ACTUAL="root"
+        SERVICE_USER_AVAILABLE="false"
+        return
+    fi
+
+    if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+        SERVICE_USER_ACTUAL="$SERVICE_USER"
+        if getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+            SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
+        else
+            SERVICE_GROUP_ACTUAL="$(id -gn "$SERVICE_USER")"
+        fi
+        if [[ "$SERVICE_USER_CREATED" == "true" ]]; then
+            log_success "Created service user: $SERVICE_USER"
+        fi
+        return
+    fi
+
+    log_warn "Failed to create service user; falling back to root"
+    SERVICE_USER_ACTUAL="root"
+    SERVICE_GROUP_ACTUAL="root"
+    SERVICE_USER_AVAILABLE="false"
+}
+
+ensure_service_home() {
+    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
+        return
+    fi
+
+    if [[ -z "$SERVICE_HOME" ]]; then
+        return
+    fi
+
+    if [[ ! -d "$SERVICE_HOME" ]]; then
+        mkdir -p "$SERVICE_HOME"
+    fi
+
+    chown "$SERVICE_USER_ACTUAL":"$SERVICE_GROUP_ACTUAL" "$SERVICE_HOME" >/dev/null 2>&1 || true
+    chmod 750 "$SERVICE_HOME" >/dev/null 2>&1 || true
+}
+
+ensure_docker_group_membership() {
+    SYSTEMD_SUPPLEMENTARY_GROUPS_LINE=""
+    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
+        return
+    fi
+
+    if getent group docker >/dev/null 2>&1; then
+        DOCKER_GROUP_PRESENT="true"
+        if ! id -nG "$SERVICE_USER_ACTUAL" 2>/dev/null | tr ' ' '\n' | grep -Fxq "docker"; then
+            if command -v usermod >/dev/null 2>&1; then
+                usermod -a -G docker "$SERVICE_USER_ACTUAL" >/dev/null 2>&1 || log_warn "Failed to add $SERVICE_USER_ACTUAL to docker group; adjust socket permissions manually."
+            elif command -v adduser >/dev/null 2>&1; then
+                adduser "$SERVICE_USER_ACTUAL" docker >/dev/null 2>&1 || log_warn "Failed to add $SERVICE_USER_ACTUAL to docker group; adjust socket permissions manually."
+            else
+                log_warn "Unable to manage docker group membership; ensure $SERVICE_USER_ACTUAL can access /var/run/docker.sock"
+            fi
+        fi
+
+        if id -nG "$SERVICE_USER_ACTUAL" 2>/dev/null | tr ' ' '\n' | grep -Fxq "docker"; then
+            SYSTEMD_SUPPLEMENTARY_GROUPS_LINE="SupplementaryGroups=docker"
+            log_success "Ensured docker group access for $SERVICE_USER_ACTUAL"
+        else
+            log_warn "Service user $SERVICE_USER_ACTUAL is not in docker group; ensure the Docker socket ACL grants access."
+        fi
+    else
+        log_warn "docker group not found; ensure the agent user can access /var/run/docker.sock"
+    fi
+}
+
+write_env_file() {
+    local target="$ENV_FILE"
+    local dir
+    dir=$(dirname "$target")
+    mkdir -p "$dir"
+
+    local tmp
+    tmp=$(mktemp "${target}.XXXXXX")
+    chmod 600 "$tmp"
+
+    {
+        if [[ -n "$PRIMARY_URL" ]]; then
+            printf 'PULSE_URL=%q\n' "$PRIMARY_URL"
+        fi
+        if [[ -n "$PRIMARY_TOKEN" ]]; then
+            printf 'PULSE_TOKEN=%q\n' "$PRIMARY_TOKEN"
+        fi
+        if [[ -n "$JOINED_TARGETS" ]]; then
+            printf 'PULSE_TARGETS=%q\n' "$JOINED_TARGETS"
+        fi
+        if [[ -n "$PRIMARY_INSECURE" ]]; then
+            printf 'PULSE_INSECURE_SKIP_VERIFY=%q\n' "$PRIMARY_INSECURE"
+        fi
+        if [[ -n "$INTERVAL" ]]; then
+            printf 'PULSE_INTERVAL=%q\n' "$INTERVAL"
+        fi
+        if [[ -n "$NO_AUTO_UPDATE_FLAG" ]]; then
+            printf 'PULSE_NO_AUTO_UPDATE=true\n'
+        fi
+    } > "$tmp"
+
+    chown root:root "$tmp"
+    chmod 600 "$tmp"
+    mv "$tmp" "$target"
+    log_success "Wrote environment file: $target"
+}
+
+configure_polkit_rule() {
+    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
+        return
+    fi
+
+    local polkit_dir="/etc/polkit-1/rules.d"
+    if [[ ! -d "$polkit_dir" ]]; then
+        log_warn "polkit not detected; remote stop commands may require manual sudo access"
+        return
+    fi
+
+    local rule_path="${polkit_dir}/90-pulse-docker-agent.rules"
+    local tmp
+    tmp=$(mktemp "${rule_path}.XXXXXX")
+    cat > "$tmp" <<EOF
+// Pulse Docker agent installer managed rule
+polkit.addRule(function(action, subject) {
+  if ((action.id == "org.freedesktop.systemd1.manage-units" ||
+       action.id == "org.freedesktop.systemd1.manage-unit-files") &&
+      subject.user == "$SERVICE_USER_ACTUAL") {
+    return polkit.Result.YES;
+  }
+});
+EOF
+
+    chown root:root "$tmp" 2>/dev/null || true
+    chmod 0644 "$tmp"
+
+    if [[ -f "$rule_path" ]]; then
+        if command -v cmp >/dev/null 2>&1 && cmp -s "$tmp" "$rule_path" 2>/dev/null; then
+            rm -f "$tmp"
+            log_info "polkit rule already present for $SERVICE_USER_ACTUAL"
+            return
+        fi
+    fi
+
+    mv "$tmp" "$rule_path"
+    log_success "Configured polkit rule allowing $SERVICE_USER_ACTUAL to manage pulse-docker-agent service"
+}
+
+remove_polkit_rule() {
+    local polkit_dir="/etc/polkit-1/rules.d"
+    local rule_path="${polkit_dir}/90-pulse-docker-agent.rules"
+    if [[ -f "$rule_path" ]] && grep -q 'Pulse Docker agent installer managed rule' "$rule_path" 2>/dev/null; then
+        rm -f "$rule_path"
+        log_success "Removed polkit rule: $rule_path"
+    fi
+}
+
 # Pulse Docker Agent Installer/Uninstaller
 # Install (single target):
 #   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --url http://pulse.example.com --token <api-token>
@@ -370,6 +557,7 @@ DEFAULT_AGENT_PATH_WRITABLE="unknown"
 EXISTING_AGENT_PATH=""
 AGENT_PATH=""
 SERVICE_PATH="/etc/systemd/system/pulse-docker-agent.service"
+ENV_FILE="/etc/pulse/pulse-docker-agent.env"
 UNRAID_STARTUP="/boot/config/go.d/pulse-docker-agent.sh"
 LOG_PATH="/var/log/pulse-docker-agent.log"
 INTERVAL="30s"
@@ -385,6 +573,15 @@ PRIMARY_TOKEN=""
 PRIMARY_INSECURE="false"
 JOINED_TARGETS=""
 ORIGINAL_ARGS=("$@")
+SERVICE_USER="pulse-docker"
+SERVICE_GROUP="$SERVICE_USER"
+SERVICE_HOME="/var/lib/pulse-docker-agent"
+SERVICE_USER_ACTUAL="$SERVICE_USER"
+SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
+SERVICE_USER_CREATED="false"
+SERVICE_USER_AVAILABLE="true"
+DOCKER_GROUP_PRESENT="false"
+SYSTEMD_SUPPLEMENTARY_GROUPS_LINE=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -687,6 +884,11 @@ if [ "$UNINSTALL" = true ]; then
         log_warn "systemctl not found; skipping service disable"
     fi
 
+    if [ -f "$ENV_FILE" ]; then
+        rm -f "$ENV_FILE"
+        log_success "Removed environment file: $ENV_FILE"
+    fi
+
     if pgrep -f pulse-docker-agent > /dev/null 2>&1; then
         log_info "Stopping running agent processes"
         pkill -f pulse-docker-agent 2>/dev/null || true
@@ -705,12 +907,18 @@ if [ "$UNINSTALL" = true ]; then
         log_success "Removed Unraid startup script: $UNRAID_STARTUP"
     fi
 
+    remove_polkit_rule
+
     if [ "$PURGE" = true ]; then
         if [ -f "$LOG_PATH" ]; then
             rm -f "$LOG_PATH"
             log_success "Removed agent log file: $LOG_PATH"
         else
             log_info "Agent log file already absent: $LOG_PATH"
+        fi
+        if [[ -d "$SERVICE_HOME" ]]; then
+            rm -rf "$SERVICE_HOME"
+            log_success "Removed service home directory: $SERVICE_HOME"
         fi
     elif [ -f "$LOG_PATH" ]; then
         log_info "Preserving agent log file at $LOG_PATH (use --purge to remove)"
@@ -946,14 +1154,107 @@ download_agent_from_url() {
     return 1
 }
 
+fetch_checksum_header() {
+    local url="$1"
+    local header=""
+
+    if command -v curl &> /dev/null; then
+        local curl_args=(-fsSI "$url")
+        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+            curl_args=(-k "${curl_args[@]}")
+        fi
+        header=$(curl "${curl_args[@]}" 2>/dev/null || true)
+    elif command -v wget &> /dev/null; then
+        local tmp
+        tmp=$(mktemp)
+        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+            wget --spider --no-check-certificate --server-response "$url" >/dev/null 2>"$tmp" || true
+        else
+            wget --spider --server-response "$url" >/dev/null 2>"$tmp" || true
+        fi
+        header=$(cat "$tmp" 2>/dev/null || true)
+        rm -f "$tmp"
+    fi
+
+    if [[ -z "$header" ]]; then
+        return 1
+    fi
+
+    local checksum_line
+    checksum_line=$(printf '%s\n' "$header" | awk 'BEGIN{IGNORECASE=1} /^ *X-Checksum-Sha256:/{print $0; exit}')
+    if [[ -z "$checksum_line" ]]; then
+        return 1
+    fi
+
+    local value
+    value=$(printf '%s\n' "$checksum_line" | awk -F':' '{sub(/^[[:space:]]*/,"",$2); print $2}')
+    value=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')
+    if [[ -z "$value" ]]; then
+        return 1
+    fi
+
+    FETCHED_CHECKSUM="$value"
+    return 0
+}
+
+calculate_sha256() {
+    local file="$1"
+    local hash=""
+
+    if command -v sha256sum &> /dev/null; then
+        hash=$(sha256sum "$file" | awk '{print $1}')
+    elif command -v shasum &> /dev/null; then
+        hash=$(shasum -a 256 "$file" | awk '{print $1}')
+    fi
+
+    if [[ -z "$hash" ]]; then
+        return 1
+    fi
+
+    CALCULATED_CHECKSUM=$(printf '%s' "$hash" | tr '[:upper:]' '[:lower:]')
+    return 0
+}
+
+verify_agent_checksum() {
+    local url="$1"
+    if ! fetch_checksum_header "$url"; then
+        log_warn 'Agent download did not include X-Checksum-Sha256 header; skipping verification'
+        return 0
+    fi
+
+    if ! calculate_sha256 "$AGENT_PATH"; then
+        log_warn 'Unable to calculate sha256 checksum locally; skipping verification'
+        return 0
+    fi
+
+    if [[ "$FETCHED_CHECKSUM" != "$CALCULATED_CHECKSUM" ]]; then
+        rm -f "$AGENT_PATH"
+        log_error "Checksum mismatch. Expected $FETCHED_CHECKSUM but downloaded $CALCULATED_CHECKSUM"
+        return 1
+    fi
+
+    log_success 'Checksum verified for agent binary'
+    unset FETCHED_CHECKSUM CALCULATED_CHECKSUM
+    return 0
+}
+
+DOWNLOAD_SUCCESS_URL=""
 if download_agent_from_url "$DOWNLOAD_URL"; then
-    :
+    DOWNLOAD_SUCCESS_URL="$DOWNLOAD_URL"
 elif [[ "$DOWNLOAD_URL" != "$DOWNLOAD_URL_BASE" ]] && download_agent_from_url "$DOWNLOAD_URL_BASE"; then
     log_info 'Falling back to server default agent binary'
+    DOWNLOAD_SUCCESS_URL="$DOWNLOAD_URL_BASE"
 else
     log_warn 'Failed to download agent binary'
     log_warn "Ensure the Pulse server is reachable at $PRIMARY_URL"
     exit 1
+fi
+
+if [[ -n "$DOWNLOAD_SUCCESS_URL" ]]; then
+    if ! verify_agent_checksum "$DOWNLOAD_SUCCESS_URL"; then
+        log_error 'Agent download failed checksum verification'
+        exit 1
+    fi
 fi
 
 chmod +x "$AGENT_PATH"
@@ -991,9 +1292,11 @@ allow_reenroll_if_needed() {
     fi
 
     if [[ "$success" == "true" ]]; then
-        log_success "Cleared any previous stop block for host"
+        log_success "Cleared previous removal block via Pulse API"
     else
-        log_warn "Unable to confirm removal block clearance (continuing)"
+        log_warn 'Pulse still considers this host removed.'
+        log_warn 'If you just reinstalled, visit Pulse → Docker → Removed Hosts and allow re-enroll,'
+        log_warn 'or rerun this installer with an API token that includes the docker:manage scope.'
     fi
 
     return 0
@@ -1070,31 +1373,49 @@ if [[ -n "$NO_AUTO_UPDATE_FLAG" ]]; then
 fi
 fi
 
+log_header 'Preparing service environment'
+ensure_service_user
+ensure_service_home
+ensure_docker_group_membership
+write_env_file
+configure_polkit_rule
+
 # Create systemd service
 log_header 'Configuring systemd service'
-SYSTEMD_ENV_TARGETS_LINE=""
-if [[ -n "$JOINED_TARGETS" ]]; then
-SYSTEMD_ENV_TARGETS_LINE="Environment=\"PULSE_TARGETS=$JOINED_TARGETS\""
-fi
-SYSTEMD_ENV_URL_LINE="Environment=\"PULSE_URL=$PRIMARY_URL\""
-SYSTEMD_ENV_TOKEN_LINE="Environment=\"PULSE_TOKEN=$PRIMARY_TOKEN\""
-SYSTEMD_ENV_INSECURE_LINE="Environment=\"PULSE_INSECURE_SKIP_VERIFY=$PRIMARY_INSECURE\""
 cat > "$SERVICE_PATH" << EOF
 [Unit]
 Description=Pulse Docker Agent
-After=network-online.target docker.service
-Wants=network-online.target
+After=network-online.target docker.socket docker.service
+Wants=network-online.target docker.socket
 
 [Service]
 Type=simple
-$SYSTEMD_ENV_URL_LINE
-$SYSTEMD_ENV_TOKEN_LINE
-$SYSTEMD_ENV_TARGETS_LINE
-$SYSTEMD_ENV_INSECURE_LINE
+EnvironmentFile=-$ENV_FILE
 ExecStart=$AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"$NO_AUTO_UPDATE_FLAG
 Restart=on-failure
 RestartSec=5s
-User=root
+StartLimitIntervalSec=120
+StartLimitBurst=5
+User=$SERVICE_USER_ACTUAL
+Group=$SERVICE_GROUP_ACTUAL
+$SYSTEMD_SUPPLEMENTARY_GROUPS_LINE
+UMask=0077
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/run/docker.sock
+ProtectHostname=yes
+ProtectClock=yes
 
 [Install]
 WantedBy=multi-user.target
