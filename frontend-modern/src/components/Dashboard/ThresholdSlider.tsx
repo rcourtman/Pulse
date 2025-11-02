@@ -3,7 +3,7 @@ import { createSignal, createEffect, onMount } from 'solid-js';
 interface ThresholdSliderProps {
   value: number;
   onChange: (value: number) => void;
-  type: 'cpu' | 'memory' | 'disk';
+  type: 'cpu' | 'memory' | 'disk' | 'temperature';
   min?: number;
   max?: number;
 }
@@ -15,10 +15,11 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
   const [isDragging, setIsDragging] = createSignal(false);
 
   // Color mapping
-  const colorMap = {
+  const colorMap: Record<ThresholdSliderProps['type'], string> = {
     cpu: 'text-blue-500',
     memory: 'text-green-500',
     disk: 'text-amber-500',
+    temperature: 'text-rose-500',
   };
 
   // Calculate visual position - allow full range 0-100%
@@ -81,7 +82,9 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
             ? 'bg-blue-500/30'
             : props.type === 'memory'
               ? 'bg-green-500/30'
-              : 'bg-amber-500/30'
+              : props.type === 'disk'
+                ? 'bg-amber-500/30'
+                : 'bg-rose-500/30'
         }`}
         style={{ width: `${calculateVisualPosition(props.value)}%` }}
       ></div>
@@ -98,7 +101,11 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
         onWheel={(e) => e.preventDefault()}
         class="absolute inset-0 w-full h-3.5 opacity-0 cursor-pointer z-20"
         style={{ 'touch-action': 'none' }}
-        title={`${props.type.toUpperCase()}: ${props.value}%`}
+        title={
+          props.type === 'temperature'
+            ? `Temperature: ${props.value}°C`
+            : `${props.type.toUpperCase()}: ${props.value}%`
+        }
       />
 
       {/* Custom thumb with value */}
@@ -118,7 +125,9 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       >
         <div class="relative">
           <div class="w-9 h-4 bg-white dark:bg-gray-800 rounded-full shadow-md border-2 border-current flex items-center justify-center">
-            <span class="text-[9px] font-semibold">{props.value}%</span>
+            <span class="text-[9px] font-semibold">
+              {props.type === 'temperature' ? `${props.value}°` : `${props.value}%`}
+            </span>
           </div>
         </div>
       </div>

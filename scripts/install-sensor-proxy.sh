@@ -67,12 +67,19 @@ SOCKET_PATH="${RUNTIME_DIR}/pulse-sensor-proxy.sock"
 WORK_DIR="/var/lib/pulse-sensor-proxy"
 SSH_DIR="${WORK_DIR}/ssh"
 CONFIG_DIR="/etc/pulse-sensor-proxy"
+CTID_FILE="${CONFIG_DIR}/ctid"
 CLEANUP_SCRIPT_PATH="/usr/local/bin/pulse-sensor-cleanup.sh"
 CLEANUP_PATH_UNIT="/etc/systemd/system/pulse-sensor-cleanup.path"
 CLEANUP_SERVICE_UNIT="/etc/systemd/system/pulse-sensor-cleanup.service"
 CLEANUP_REQUEST_PATH="${WORK_DIR}/cleanup-request.json"
 SERVICE_USER="pulse-sensor-proxy"
 LOG_DIR="/var/log/pulse/sensor-proxy"
+SHARE_DIR="/usr/local/share/pulse"
+STORED_INSTALLER="${SHARE_DIR}/install-sensor-proxy.sh"
+SELFHEAL_SCRIPT="/usr/local/bin/pulse-sensor-proxy-selfheal.sh"
+SELFHEAL_SERVICE_UNIT="/etc/systemd/system/pulse-sensor-proxy-selfheal.service"
+SELFHEAL_TIMER_UNIT="/etc/systemd/system/pulse-sensor-proxy-selfheal.timer"
+SCRIPT_SOURCE="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]:-$0}")"
 
 cleanup_local_authorized_keys() {
     local auth_keys_file="/root/.ssh/authorized_keys"
@@ -196,6 +203,34 @@ EOF
     if [[ -f "$CLEANUP_SERVICE_UNIT" ]]; then
         rm -f "$CLEANUP_SERVICE_UNIT"
         print_success "Removed cleanup service unit ${CLEANUP_SERVICE_UNIT}"
+    fi
+
+    if [[ -f "$SELFHEAL_TIMER_UNIT" ]]; then
+        systemctl stop pulse-sensor-proxy-selfheal.timer 2>/dev/null || true
+        systemctl disable pulse-sensor-proxy-selfheal.timer 2>/dev/null || true
+        rm -f "$SELFHEAL_TIMER_UNIT"
+        print_success "Removed self-heal timer ${SELFHEAL_TIMER_UNIT}"
+    fi
+
+    if [[ -f "$SELFHEAL_SERVICE_UNIT" ]]; then
+        systemctl stop pulse-sensor-proxy-selfheal.service 2>/dev/null || true
+        systemctl disable pulse-sensor-proxy-selfheal.service 2>/dev/null || true
+        rm -f "$SELFHEAL_SERVICE_UNIT"
+        print_success "Removed self-heal service ${SELFHEAL_SERVICE_UNIT}"
+    fi
+
+    if [[ -f "$SELFHEAL_SCRIPT" ]]; then
+        rm -f "$SELFHEAL_SCRIPT"
+        print_success "Removed self-heal helper ${SELFHEAL_SCRIPT}"
+    fi
+
+    if [[ -f "$STORED_INSTALLER" ]]; then
+        rm -f "$STORED_INSTALLER"
+        print_success "Removed cached installer ${STORED_INSTALLER}"
+    fi
+
+    if [[ -f "$CTID_FILE" ]]; then
+        rm -f "$CTID_FILE"
     fi
 
     if command -v systemctl >/dev/null 2>&1; then
@@ -557,6 +592,11 @@ install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-se
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 "$SSH_DIR"
 install -m 0600 -o pulse-sensor-proxy -g pulse-sensor-proxy /dev/null "$SSH_DIR/known_hosts"
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0755 /etc/pulse-sensor-proxy
+
+if [[ -n "$CTID" ]]; then
+    echo "$CTID" > "$CTID_FILE"
+    chmod 0644 "$CTID_FILE"
+fi
 
 # Create config file with ACL for Docker containers (standalone mode)
 if [[ "$STANDALONE" == true ]]; then
@@ -946,7 +986,7 @@ LimitNOFILE=1024
 SERVICE_EOF
 
 # Enable and start the path unit
-systemctl daemon-reload
+systemctl daemon-reload || true
 systemctl enable pulse-sensor-cleanup.path
 systemctl start pulse-sensor-cleanup.path
 
@@ -1261,7 +1301,7 @@ for key_type in id_rsa id_dsa id_ecdsa id_ed25519; do
             print_warn "Found legacy SSH key: /root/.ssh/$key_type"
         fi
         pct exec "$CTID" -- rm -f "/root/.ssh/$key_type" "/root/.ssh/${key_type}.pub"
-        print_info "  Removed /root/.ssh/$key_type"
+    print_info "  Removed /root/.ssh/$key_type"
     fi
 done
 
@@ -1271,6 +1311,88 @@ if [ "$LEGACY_KEYS_FOUND" = true ] && [ "$QUIET" != true ]; then
     print_info ""
 fi
 fi  # End of container-specific configuration
+
+# Install self-heal safeguards to keep proxy available
+print_info "Configuring self-heal safeguards..."
+if [[ -n "$SCRIPT_SOURCE" && -f "$SCRIPT_SOURCE" ]]; then
+    install -d "$SHARE_DIR"
+    cp "$SCRIPT_SOURCE" "$STORED_INSTALLER"
+    chmod 0755 "$STORED_INSTALLER"
+else
+    print_warn "Unable to cache installer script for self-heal (source path unavailable)"
+fi
+
+cat > "$SELFHEAL_SCRIPT" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+SERVICE="pulse-sensor-proxy"
+INSTALLER="/usr/local/share/pulse/install-sensor-proxy.sh"
+CTID_FILE="/etc/pulse-sensor-proxy/ctid"
+LOG_TAG="pulse-sensor-proxy-selfheal"
+
+log() {
+    logger -t "$LOG_TAG" "$1"
+}
+
+if ! command -v systemctl >/dev/null 2>&1; then
+    exit 0
+fi
+
+if ! systemctl list-unit-files | grep -q "^${SERVICE}\\.service"; then
+    if [[ -x "$INSTALLER" && -f "$CTID_FILE" ]]; then
+        log "Service unit missing; attempting reinstall"
+        bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
+    fi
+    exit 0
+fi
+
+if ! systemctl is-active --quiet "${SERVICE}.service"; then
+    systemctl start "${SERVICE}.service" || true
+    sleep 2
+fi
+
+if ! systemctl is-active --quiet "${SERVICE}.service"; then
+    if [[ -x "$INSTALLER" && -f "$CTID_FILE" ]]; then
+        log "Service failed to start; attempting reinstall"
+        bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
+        systemctl start "${SERVICE}.service" || true
+    fi
+fi
+EOF
+chmod 0755 "$SELFHEAL_SCRIPT"
+
+cat > "$SELFHEAL_SERVICE_UNIT" <<'EOF'
+[Unit]
+Description=Pulse Sensor Proxy Self-Heal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pulse-sensor-proxy-selfheal.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > "$SELFHEAL_TIMER_UNIT" <<'EOF'
+[Unit]
+Description=Ensure pulse-sensor-proxy stays installed and running
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Unit=pulse-sensor-proxy-selfheal.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now pulse-sensor-proxy-selfheal.timer >/dev/null 2>&1 || true
 
 if [ "$QUIET" = true ]; then
     print_success "pulse-sensor-proxy installed and running"

@@ -167,6 +167,7 @@ type ThresholdConfig struct {
 	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
 	Usage               *HysteresisThreshold `json:"usage,omitempty"`       // For storage devices
 	Temperature         *HysteresisThreshold `json:"temperature,omitempty"` // For node CPU temperature
+	Note                *string              `json:"note,omitempty"`
 	// Legacy fields for backward compatibility
 	CPULegacy        *float64 `json:"cpuLegacy,omitempty"`
 	MemoryLegacy     *float64 `json:"memoryLegacy,omitempty"`
@@ -7015,6 +7016,14 @@ func cloneThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {
 	return &clone
 }
 
+func cloneStringPtr(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
 func cloneThresholdConfig(cfg ThresholdConfig) ThresholdConfig {
 	clone := cfg
 	clone.CPU = cloneThreshold(cfg.CPU)
@@ -7026,6 +7035,7 @@ func cloneThresholdConfig(cfg ThresholdConfig) ThresholdConfig {
 	clone.NetworkOut = cloneThreshold(cfg.NetworkOut)
 	clone.Temperature = cloneThreshold(cfg.Temperature)
 	clone.Usage = cloneThreshold(cfg.Usage)
+	clone.Note = cloneStringPtr(cfg.Note)
 	return clone
 }
 
@@ -7087,6 +7097,16 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 
 	if override.Usage != nil {
 		result.Usage = ensureHysteresisThreshold(cloneThreshold(override.Usage))
+	}
+
+	if override.Note != nil {
+		note := strings.TrimSpace(*override.Note)
+		if note == "" {
+			result.Note = nil
+		} else {
+			noteCopy := note
+			result.Note = &noteCopy
+		}
 	}
 
 	return result

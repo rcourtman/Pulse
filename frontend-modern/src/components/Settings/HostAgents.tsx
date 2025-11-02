@@ -94,6 +94,25 @@ const commandsByPlatform: Record<
   },
 };
 
+const computeHostStaleness = (host: Host) => {
+  const intervalSeconds = host.intervalSeconds && host.intervalSeconds > 0 ? host.intervalSeconds : 30;
+  const staleThresholdMs = Math.max(intervalSeconds * 1000 * 3, 60_000);
+  const lastSeenValue =
+    typeof host.lastSeen === 'number'
+      ? host.lastSeen
+      : Number.isFinite(Number(host.lastSeen))
+        ? Number(host.lastSeen)
+        : NaN;
+  const lastSeenMs = Number.isFinite(lastSeenValue) ? lastSeenValue : null;
+  const isStale = lastSeenMs === null ? true : Date.now() - lastSeenMs >= staleThresholdMs;
+
+  return {
+    isStale,
+    lastSeenMs,
+    staleThresholdMs,
+  };
+};
+
 export const HostAgents: Component = () => {
   const { state } = useWebSocket();
 
@@ -111,6 +130,13 @@ export const HostAgents: Component = () => {
   const [lookupLoading, setLookupLoading] = createSignal(false);
   const [highlightedHostId, setHighlightedHostId] = createSignal<string | null>(null);
   let highlightTimer: ReturnType<typeof setTimeout> | null = null;
+  const [showRemoveModal, setShowRemoveModal] = createSignal(false);
+  const [hostToRemoveId, setHostToRemoveId] = createSignal<string | null>(null);
+  const [removeActionLoading, setRemoveActionLoading] = createSignal<'remove' | null>(null);
+  const [uninstallCommandCopied, setUninstallCommandCopied] = createSignal(false);
+  const [uninstallCommandCopiedAt, setUninstallCommandCopiedAt] = createSignal<number | null>(null);
+  const [hostRemovalCountdownSeconds, setHostRemovalCountdownSeconds] = createSignal<number | null>(null);
+  const [uninstallConfirmed, setUninstallConfirmed] = createSignal(false);
 
   createEffect(() => {
     if (requiresToken()) {
@@ -144,6 +170,129 @@ export const HostAgents: Component = () => {
     if (!status) return false;
     const value = status.toLowerCase();
     return value === 'online' || value === 'running' || value === 'healthy';
+  };
+
+  const hostToRemove = createMemo(() => {
+    const id = hostToRemoveId();
+    if (!id) return null;
+    return allHosts().find((host) => host.id === id) ?? null;
+  });
+
+  const hostRemovalDisplayName = () => {
+    const host = hostToRemove();
+    return host ? host.displayName || host.hostname || host.id : '';
+  };
+
+  const hostRemovalPlatform = createMemo(() => hostToRemove()?.platform?.toLowerCase() || '');
+  const hostRemovalStatus = createMemo(() => {
+    const host = hostToRemove();
+    return (host?.status || 'unknown').toLowerCase();
+  });
+
+  const hostRemovalStatusLabel = () => hostToRemove()?.status || 'unknown';
+
+  const hostRemovalIsOnline = createMemo(() => {
+    const status = hostRemovalStatus();
+    return status === 'online' || status === 'running' || status === 'healthy';
+  });
+
+  const hostRemovalStaleness = createMemo(() => {
+    const host = hostToRemove();
+    if (!host) {
+      return { isStale: false, lastSeenMs: null as number | null, staleThresholdMs: 90_000 };
+    }
+    return computeHostStaleness(host);
+  });
+
+  const hostRemovalIsStale = createMemo(() => hostRemovalStaleness().isStale);
+
+  const hostRemovalLastSeen = createMemo(() => {
+    const { lastSeenMs } = hostRemovalStaleness();
+    if (!lastSeenMs) return null;
+    return {
+      relative: formatRelativeTime(lastSeenMs),
+      absolute: formatAbsoluteTime(lastSeenMs),
+    };
+  });
+
+  const hostRemovalStaleThresholdSeconds = createMemo(() => {
+    const threshold = hostRemovalStaleness().staleThresholdMs;
+    return Math.max(Math.round(threshold / 1000), 0);
+  });
+
+  const hostRemovalUninstallCommand = createMemo(() => getHostUninstallCommand(hostToRemove()));
+
+  const hostRemovalUninstallNote = () => {
+    const platform = hostRemovalPlatform();
+    if (platform === 'macos' || platform === 'darwin' || platform === 'mac') {
+      return 'Unloads the launch agent, removes the plist, deletes the binary, and clears the local log.';
+    }
+    if (platform === 'windows' || platform === 'win32' || platform === 'windows_nt') {
+      return 'Stops the Windows service, removes it, and deletes the installed binary and log. Run from an elevated PowerShell window.';
+    }
+    return 'Stops the agent, removes the systemd unit, deletes the binary, and reloads systemd.';
+  };
+
+  const formatCountdown = (seconds: number | null) => {
+    if (seconds === null || seconds < 0) return null;
+    if (seconds === 0) return 'any moment now';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins <= 0) {
+      return `${secs}s`;
+    }
+    if (secs === 0) {
+      return `${mins}m`;
+    }
+    return `${mins}m ${secs}s`;
+  };
+
+  const countdownLabel = createMemo(() => formatCountdown(hostRemovalCountdownSeconds()));
+
+  const canRemoveHost = createMemo(() => uninstallCommandCopied() && uninstallConfirmed());
+
+  const openRemoveModal = (host: Host) => {
+    setHostToRemoveId(host.id);
+    setShowRemoveModal(true);
+    setRemoveActionLoading(null);
+    setUninstallCommandCopied(false);
+    setUninstallCommandCopiedAt(null);
+    setHostRemovalCountdownSeconds(null);
+    setUninstallConfirmed(false);
+  };
+
+  const closeRemoveModal = () => {
+    setShowRemoveModal(false);
+    setHostToRemoveId(null);
+    setRemoveActionLoading(null);
+    setUninstallCommandCopied(false);
+    setUninstallCommandCopiedAt(null);
+    setHostRemovalCountdownSeconds(null);
+    setUninstallConfirmed(false);
+  };
+
+  const performHostRemoval = async () => {
+    const host = hostToRemove();
+    if (!host || removeActionLoading()) return;
+
+    setRemoveActionLoading('remove');
+    const displayName = host.displayName || host.hostname || host.id;
+
+    try {
+      await MonitoringAPI.deleteHostAgent(host.id);
+      notificationStore.success(`Host "${displayName}" removed`, 4000);
+      closeRemoveModal();
+    } catch (error) {
+      console.error('Failed to remove host agent', error);
+      const message = error instanceof Error ? error.message : 'Failed to remove host. Please try again.';
+      notificationStore.error(message, 6000);
+    } finally {
+      setRemoveActionLoading(null);
+    }
+  };
+
+  const handleRemoveHost = () => {
+    void performHostRemoval();
   };
 
   createEffect(() => {
@@ -194,6 +343,48 @@ export const HostAgents: Component = () => {
 
     setLookupResult(updated);
     setLookupError(null);
+  });
+
+  createEffect(() => {
+    if (!showRemoveModal()) return;
+    const id = hostToRemoveId();
+    const host = hostToRemove();
+    if (id && !host) {
+      closeRemoveModal();
+    }
+  });
+
+  createEffect(() => {
+    if (!showRemoveModal()) {
+      setHostRemovalCountdownSeconds(null);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const host = hostToRemove();
+      if (!host) {
+        setHostRemovalCountdownSeconds(null);
+        return;
+      }
+
+      const { lastSeenMs, staleThresholdMs } = computeHostStaleness(host);
+      if (!lastSeenMs) {
+        setHostRemovalCountdownSeconds(null);
+        return;
+      }
+
+      const elapsed = Date.now() - lastSeenMs;
+      const remaining = staleThresholdMs - elapsed;
+      setHostRemovalCountdownSeconds(remaining > 0 ? Math.ceil(remaining / 1000) : 0);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => {
+      clearInterval(interval);
+      setHostRemovalCountdownSeconds(null);
+    };
   });
 
   onMount(() => {
@@ -348,12 +539,30 @@ User=root
 [Install]
 WantedBy=multi-user.target`;
 
-  const getManualUninstallCommand = () =>
-    `sudo systemctl stop pulse-host-agent && \\
+  function getManualUninstallCommand(): string {
+    return `sudo systemctl stop pulse-host-agent && \\
 sudo systemctl disable pulse-host-agent && \\
 sudo rm -f /etc/systemd/system/pulse-host-agent.service && \\
 sudo rm -f /usr/local/bin/pulse-host-agent && \\
 sudo systemctl daemon-reload`;
+  }
+
+  function getHostUninstallCommand(host: Host | null): string {
+    const platform = host?.platform?.toLowerCase();
+    if (platform === 'macos' || platform === 'darwin' || platform === 'mac') {
+      return `launchctl unload ~/Library/LaunchAgents/com.pulse.host-agent.plist >/dev/null 2>&1 || true && \\
+rm -f ~/Library/LaunchAgents/com.pulse.host-agent.plist && \\
+sudo rm -f /usr/local/bin/pulse-host-agent && \\
+rm -f ~/Library/Logs/pulse-host-agent.log`;
+    }
+    if (platform === 'windows' || platform === 'win32' || platform === 'windows_nt') {
+      return `Stop-Service -Name PulseHostAgent -ErrorAction SilentlyContinue; \\
+sc.exe delete PulseHostAgent; \\
+Remove-Item 'C:\\\\Program Files\\\\Pulse\\\\pulse-host-agent.exe' -Force -ErrorAction SilentlyContinue; \\
+Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAction SilentlyContinue`;
+    }
+    return getManualUninstallCommand();
+  }
 
   return (
     <div class="space-y-6">
@@ -697,22 +906,15 @@ sudo systemctl daemon-reload`;
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                   <For each={allHosts()}>
                     {(host) => {
-                      const [isDeleting, setIsDeleting] = createSignal(false);
+                      const staleness = computeHostStaleness(host);
+                      const isStale = staleness.isStale;
                       const tokenRevokedAt = host.tokenRevokedAt;
                       const tokenRevoked = typeof tokenRevokedAt === 'number';
-                      const lastSeenMs = host.lastSeen ? new Date(host.lastSeen).getTime() : null;
-                      const expectedIntervalMs =
-                        (host.intervalSeconds && host.intervalSeconds > 0 ? host.intervalSeconds : 30) * 1000;
-                      const staleThresholdMs = Math.max(expectedIntervalMs * 3, 60_000);
-                      const isStale =
-                        lastSeenMs === null || Date.now() - lastSeenMs >= staleThresholdMs;
-
                       const status = (host.status || 'unknown').toLowerCase();
                       const isOnline =
-                        status === 'online' ||
-                        status === 'running' ||
-                        status === 'healthy';
+                        status === 'online' || status === 'running' || status === 'healthy';
                       const isHighlighted = highlightedHostId() === host.id;
+                      const isRemovingThisHost = hostToRemoveId() === host.id && removeActionLoading() !== null;
 
                       const baseRowClass = isStale
                         ? 'bg-gray-50 dark:bg-gray-800/50 opacity-60'
@@ -724,33 +926,8 @@ sudo systemctl daemon-reload`;
                         ? 'ring-2 ring-blue-500/70 dark:ring-blue-400/70 shadow-md'
                         : '';
 
-                      const handleDelete = async () => {
-                        if (!confirm(`Remove host "${host.displayName || host.hostname || host.id}"?\n\nThis will remove the host from Pulse monitoring. The host agent will re-register if it continues to report.`)) {
-                          return;
-                        }
-
-                        setIsDeleting(true);
-                        try {
-                          const response = await fetch(`/api/agents/host/${host.id}`, {
-                            method: 'DELETE',
-                            credentials: 'include',
-                          });
-
-                          if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.message || 'Failed to delete host');
-                          }
-
-                          notificationStore.success(`Host "${host.displayName || host.hostname}" removed`, 4000);
-                        } catch (err) {
-                          console.error('Failed to delete host:', err);
-                          notificationStore.error(
-                            err instanceof Error ? err.message : 'Failed to delete host. Please try again.',
-                            6000,
-                          );
-                        } finally {
-                          setIsDeleting(false);
-                        }
+                      const handleRemoveClick = () => {
+                        openRemoveModal(host);
                       };
 
                       return (
@@ -828,16 +1005,16 @@ sudo systemctl daemon-reload`;
                           <td class="py-3 px-4 text-right">
                             <button
                               type="button"
-                              onClick={handleDelete}
-                              disabled={isDeleting() || !isStale}
+                              onClick={handleRemoveClick}
+                              disabled={isRemovingThisHost}
                               class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title={
                                 isStale
                                   ? 'Remove this stale host entry from the inventory'
-                                  : 'Host is still reporting — stop the agent before removing'
+                                  : 'Host is still reporting — review the removal steps first'
                               }
                             >
-                              {isDeleting() ? (
+                              {isRemovingThisHost ? (
                                 <>
                                   <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -848,7 +1025,7 @@ sudo systemctl daemon-reload`;
                               ) : (
                                 <>
                                   <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                   <span>Remove</span>
                                 </>
@@ -865,6 +1042,181 @@ sudo systemctl daemon-reload`;
         </Show>
         </div>
       </Card>
+
+      <Show when={showRemoveModal()}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+            <div class="space-y-2">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Remove host "{hostRemovalDisplayName()}"
+              </h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                Walk through uninstalling the agent and cleaning up the entry in Pulse.
+              </p>
+            </div>
+
+            <div class="mt-4 space-y-4">
+              <div class="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                <div class="flex items-start gap-3">
+                  <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div class="flex-1 space-y-2">
+                    <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-100">Step 1 · Stop the agent on {hostRemovalDisplayName()}</h4>
+                    <p class="text-sm text-blue-800 dark:text-blue-200">
+                      Copy the tailored uninstall script below, run it on the host, then confirm once the command finishes. It runs silently, so no terminal output is expected.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="space-y-2 rounded border border-blue-200 bg-white p-3 text-xs text-blue-800 dark:border-blue-700 dark:bg-blue-800/20 dark:text-blue-200">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-semibold uppercase tracking-wide text-[11px] text-blue-600 dark:text-blue-300">Manual uninstall</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const command = hostRemovalUninstallCommand();
+                        if (!command) return;
+                        const success = await copyToClipboard(command);
+                        if (success) {
+                          setUninstallCommandCopied(true);
+                          setUninstallCommandCopiedAt(Date.now());
+                        }
+                        if (typeof window !== 'undefined' && window.showToast) {
+                          window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                        }
+                      }}
+                      class="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+                    >
+                      <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path d="M4 4a2 2 0 012-2h5a2 2 0 012 2v2h-2V4H6v10h5v-2h2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" />
+                        <path d="M14.293 7.293a1 1 0 011.414 0L18 9.586l-2.293 2.293a1 1 0 01-1.414-1.415L14.586 10H9a1 1 0 110-2h5.586l-.293-.293a1 1 0 010-1.414z" />
+                      </svg>
+                      {uninstallCommandCopied() ? 'Copied' : 'Copy command'}
+                    </button>
+                  </div>
+                  <code class="block overflow-x-auto rounded bg-gray-900 px-3 py-2 font-mono text-xs text-gray-100 dark:bg-gray-950 whitespace-pre-wrap">
+                    {hostRemovalUninstallCommand()}
+                  </code>
+                  <p class="text-[11px] leading-snug">{hostRemovalUninstallNote()}</p>
+                  <Show when={uninstallCommandCopied()}>
+                    <div class="space-y-2 rounded border border-blue-200 bg-white p-3 text-[11px] text-blue-800 dark:border-blue-700 dark:bg-blue-800/20 dark:text-blue-200">
+                      <p class="font-medium">Command copied.</p>
+                      <p>This script runs silently—no CLI output is expected. Once it completes, mark it finished below.</p>
+                      <Show when={uninstallCommandCopiedAt()}>
+                        <p class="text-blue-700/80 dark:text-blue-200/80">Copied {formatRelativeTime(uninstallCommandCopiedAt()!)}.</p>
+                      </Show>
+                      <button
+                        type="button"
+                        onClick={() => setUninstallConfirmed(true)}
+                        disabled={uninstallConfirmed()}
+                        class={`inline-flex items-center gap-2 rounded ${uninstallConfirmed() ? 'bg-blue-100 text-blue-500 cursor-default' : 'bg-blue-600 text-white hover:bg-blue-700'} px-3 py-1.5 text-[11px] font-semibold transition-colors dark:${uninstallConfirmed() ? 'bg-blue-900/30 text-blue-200' : 'bg-blue-500 hover:bg-blue-400'}`}
+                      >
+                        <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.172 7.707 8.879A1 1 0 006.293 10.293l2 2a1 1 0 001.414 0l3-3z" clip-rule="evenodd" />
+                        </svg>
+                        {uninstallConfirmed() ? 'Marked complete' : 'I ran this command'}
+                      </button>
+                      <Show when={!uninstallConfirmed()}>
+                        <p>Click once you have run the script on {hostRemovalDisplayName()}.</p>
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+
+              <div class="space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
+                  <span class="font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-gray-400">Host status</span>
+                  <span
+                    class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${
+                      hostRemovalIsOnline()
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                        : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+                    }`}
+                  >
+                    {hostRemovalStatusLabel()}
+                  </span>
+                </div>
+                <div class="text-xs text-gray-600 dark:text-gray-300">
+                  <div class="flex items-center justify-between">
+                    <span class="font-medium">Last heartbeat</span>
+                    <span class="text-gray-700 dark:text-gray-200">
+                      {hostRemovalLastSeen()?.relative ?? 'No reports yet'}
+                    </span>
+                  </div>
+                  <Show when={hostRemovalLastSeen()}>
+                    <div class="text-[11px] text-gray-500 dark:text-gray-400 text-right">
+                      {hostRemovalLastSeen()?.absolute}
+                    </div>
+                  </Show>
+                </div>
+                <Show when={!hostRemovalIsStale()}>
+                  <div class="rounded border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-200">
+                    <p class="font-semibold">Host still reporting</p>
+                    <p class="mt-1 leading-snug">
+                      Pulse revokes the host's API token as soon as you remove it. After the uninstall script stops the service, the next heartbeat will fail and the agent will disappear within about {hostRemovalStaleThresholdSeconds()} seconds.
+                    </p>
+                    <Show when={countdownLabel()}>
+                      <p class="mt-2 rounded bg-yellow-100/60 px-2 py-1 text-[11px] font-medium text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-100">
+                        Waiting for the next missed heartbeat ({countdownLabel()}).
+                      </p>
+                    </Show>
+                  </div>
+                </Show>
+                <Show when={hostRemovalIsStale()}>
+                  <div class="rounded border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">
+                    <p class="flex items-center gap-1 font-semibold">
+                      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.172 7.707 8.879A1 1 0 006.293 10.293l2 2a1 1 0 001.414 0l3-3z" clip-rule="evenodd" />
+                      </svg>
+                      Host offline
+                    </p>
+                    <p class="mt-1 leading-snug">
+                      Pulse no longer receives heartbeats from {hostRemovalDisplayName()}. It’s safe to remove the entry now.
+                    </p>
+                  </div>
+                </Show>
+              </div>
+            </div>
+
+            <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={closeRemoveModal}
+                class="self-start rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Close
+              </button>
+              <Show
+                when={canRemoveHost()}
+                fallback={
+                  <div class="max-w-sm text-xs text-gray-500 dark:text-gray-400">
+                    <p class="font-semibold text-gray-600 dark:text-gray-200">Run the uninstall script and mark it complete above.</p>
+                    <p class="mt-1">Once confirmed, Pulse will enable the final removal step.</p>
+                  </div>
+                }
+              >
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <button
+                    type="button"
+                    onClick={handleRemoveHost}
+                    disabled={removeActionLoading() !== null}
+                    class="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-red-500 dark:hover:bg-red-400"
+                  >
+                    {removeActionLoading() === 'remove' ? 'Removing…' : 'Remove host'}
+                  </button>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    <p>
+                      Removing a host revokes its API token so it cannot register again. With the service already uninstalled, Pulse just needs one more missed heartbeat to clear the row automatically.
+                    </p>
+                  </div>
+                </div>
+              </Show>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 };

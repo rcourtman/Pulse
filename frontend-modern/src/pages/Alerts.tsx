@@ -320,7 +320,7 @@ export const extractTriggerValues = (
   const result: Record<string, number> = {};
   Object.entries(thresholds).forEach(([key, value]) => {
     // Skip non-threshold fields
-    if (key === 'disabled' || key === 'disableConnectivity' || key === 'poweredOffSeverity') return;
+    if (key === 'disabled' || key === 'disableConnectivity' || key === 'poweredOffSeverity' || key === 'note') return;
     if (typeof value === 'string') return;
     result[key] = getTriggerValue(value);
   });

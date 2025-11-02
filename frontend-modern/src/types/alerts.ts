@@ -32,6 +32,7 @@ export type RawOverrideConfig = AlertThresholds & {
   disabled?: boolean;
   disableConnectivity?: boolean;
   poweredOffSeverity?: 'warning' | 'critical';
+  note?: string;
   // NOTE: To disable individual metrics, set threshold to -1
 };
 

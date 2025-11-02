@@ -38,6 +38,7 @@ type DiagnosticsInfo struct {
 	Nodes            []NodeDiagnostic            `json:"nodes"`
 	PBS              []PBSDiagnostic             `json:"pbs"`
 	System           SystemDiagnostic            `json:"system"`
+	Discovery        *DiscoveryDiagnostic        `json:"discovery,omitempty"`
 	TemperatureProxy *TemperatureProxyDiagnostic `json:"temperatureProxy,omitempty"`
 	APITokens        *APITokenDiagnostic         `json:"apiTokens,omitempty"`
 	DockerAgents     *DockerAgentDiagnostic      `json:"dockerAgents,omitempty"`
@@ -49,6 +50,36 @@ type DiagnosticsInfo struct {
 	GuestSnapshots []monitoring.GuestMemorySnapshot `json:"guestSnapshots,omitempty"`
 	// MemorySources summarizes how many nodes currently rely on each memory source per instance.
 	MemorySources []MemorySourceStat `json:"memorySources,omitempty"`
+}
+
+// DiscoveryDiagnostic summarizes discovery configuration and recent activity.
+type DiscoveryDiagnostic struct {
+	Enabled             bool     `json:"enabled"`
+	ConfiguredSubnet    string   `json:"configuredSubnet,omitempty"`
+	ActiveSubnet        string   `json:"activeSubnet,omitempty"`
+	EnvironmentOverride string   `json:"environmentOverride,omitempty"`
+	SubnetAllowlist     []string `json:"subnetAllowlist"`
+	SubnetBlocklist     []string `json:"subnetBlocklist"`
+	Scanning            bool     `json:"scanning"`
+	ScanInterval        string   `json:"scanInterval,omitempty"`
+	LastScanStartedAt   string   `json:"lastScanStartedAt,omitempty"`
+	LastResultTimestamp string   `json:"lastResultTimestamp,omitempty"`
+	LastResultServers   int      `json:"lastResultServers,omitempty"`
+	LastResultErrors    int      `json:"lastResultErrors,omitempty"`
+	History             []DiscoveryHistoryItem `json:"history,omitempty"`
+}
+
+// DiscoveryHistoryItem summarizes the outcome of a recent discovery scan.
+type DiscoveryHistoryItem struct {
+	StartedAt       string `json:"startedAt"`
+	CompletedAt     string `json:"completedAt"`
+	Duration        string `json:"duration"`
+	DurationMs      int64  `json:"durationMs"`
+	Subnet          string `json:"subnet"`
+	ServerCount     int    `json:"serverCount"`
+	ErrorCount      int    `json:"errorCount"`
+	BlocklistLength int    `json:"blocklistLength"`
+	Status          string `json:"status"`
 }
 
 // MemorySourceStat aggregates memory-source usage per instance.
@@ -475,6 +506,8 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	diag.DockerAgents = buildDockerAgentDiagnostic(r.monitor, diag.Version)
 	diag.Alerts = buildAlertsDiagnostic(r.monitor)
 
+	diag.Discovery = buildDiscoveryDiagnostic(r.config, r.monitor)
+
 	if r.monitor != nil {
 		snapshots := r.monitor.GetDiagnosticSnapshots()
 		if len(snapshots.Nodes) > 0 {
@@ -534,6 +567,90 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	}
 
 	return diag
+}
+
+func copyStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), values...)
+}
+
+func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *DiscoveryDiagnostic {
+	if cfg == nil {
+		return nil
+	}
+
+	discovery := &DiscoveryDiagnostic{
+		Enabled:             cfg.DiscoveryEnabled,
+		ConfiguredSubnet:    strings.TrimSpace(cfg.DiscoverySubnet),
+		EnvironmentOverride: strings.TrimSpace(cfg.Discovery.EnvironmentOverride),
+		SubnetAllowlist:     copyStringSlice(cfg.Discovery.SubnetAllowlist),
+		SubnetBlocklist:     copyStringSlice(cfg.Discovery.SubnetBlocklist),
+	}
+
+	if discovery.ConfiguredSubnet == "" {
+		discovery.ConfiguredSubnet = "auto"
+	}
+	if discovery.SubnetAllowlist == nil {
+		discovery.SubnetAllowlist = []string{}
+	}
+	if discovery.SubnetBlocklist == nil {
+		discovery.SubnetBlocklist = []string{}
+	}
+
+	if monitor != nil {
+		if svc := monitor.GetDiscoveryService(); svc != nil {
+			status := svc.GetStatus()
+
+			if val, ok := status["subnet"].(string); ok {
+				discovery.ActiveSubnet = val
+			}
+			if val, ok := status["is_scanning"].(bool); ok {
+				discovery.Scanning = val
+			}
+			if val, ok := status["interval"].(string); ok {
+				discovery.ScanInterval = val
+			}
+			if val, ok := status["last_scan"].(time.Time); ok && !val.IsZero() {
+				discovery.LastScanStartedAt = val.UTC().Format(time.RFC3339)
+			}
+
+			if result, updated := svc.GetCachedResult(); result != nil {
+				discovery.LastResultServers = len(result.Servers)
+				if len(result.StructuredErrors) > 0 {
+					discovery.LastResultErrors = len(result.StructuredErrors)
+				} else if len(result.Errors) > 0 {
+					discovery.LastResultErrors = len(result.Errors)
+				}
+				if !updated.IsZero() {
+					discovery.LastResultTimestamp = updated.UTC().Format(time.RFC3339)
+				}
+			}
+
+			history := svc.GetHistory(10)
+			if len(history) > 0 {
+				items := make([]DiscoveryHistoryItem, 0, len(history))
+				for _, entry := range history {
+					item := DiscoveryHistoryItem{
+						StartedAt:       entry.startedAt.UTC().Format(time.RFC3339),
+						CompletedAt:     entry.completedAt.UTC().Format(time.RFC3339),
+						Duration:        entry.duration.Truncate(time.Millisecond).String(),
+						DurationMs:      entry.duration.Milliseconds(),
+						Subnet:          entry.subnet,
+						ServerCount:     entry.serverCount,
+						ErrorCount:      entry.errorCount,
+						BlocklistLength: entry.blocklistLength,
+						Status:          entry.status,
+					}
+					items = append(items, item)
+				}
+				discovery.History = items
+			}
+		}
+	}
+
+	return discovery
 }
 
 func buildTemperatureProxyDiagnostic(cfg *config.Config, legacyDetected, recommendProxy bool) *TemperatureProxyDiagnostic {

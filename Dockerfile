@@ -113,6 +113,8 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 COPY --from=backend-builder /app/VERSION /VERSION
 
+ENV PULSE_NO_AUTO_UPDATE=true
+
 ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
 
 # Final stage (Pulse server runtime)

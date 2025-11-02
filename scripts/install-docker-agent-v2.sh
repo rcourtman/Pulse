@@ -697,6 +697,7 @@ download_agent_binary() {
     fi
 
     if http::download "${download_args[@]}"; then
+        AGENT_DOWNLOAD_SOURCE="${primary_url}"
         return 0
     fi
 
@@ -711,6 +712,7 @@ download_agent_binary() {
             download_args+=(--insecure)
         fi
         if http::download "${download_args[@]}"; then
+            AGENT_DOWNLOAD_SOURCE="${fallback_url}"
             return 0
         fi
 
@@ -722,12 +724,111 @@ download_agent_binary() {
     return 1
 }
 
+unset AGENT_DOWNLOAD_SOURCE
+
 if download_agent_binary "$DOWNLOAD_URL" "$DOWNLOAD_URL_BASE"; then
     :
 else
     log_warn 'Failed to download agent binary'
     log_warn "Ensure the Pulse server is reachable at $PRIMARY_URL"
     exit 1
+fi
+
+fetch_checksum_header() {
+    local url="$1"
+    local header=""
+
+    if command -v curl &> /dev/null; then
+        local curl_args=(-fsSI "$url")
+        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+            curl_args=(-k "${curl_args[@]}")
+        fi
+        header=$(curl "${curl_args[@]}" 2>/dev/null || true)
+    elif command -v wget &> /dev/null; then
+        local tmp
+        tmp=$(mktemp)
+        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+            wget --spider --no-check-certificate --server-response "$url" >/dev/null 2>"$tmp" || true
+        else
+            wget --spider --server-response "$url" >/dev/null 2>"$tmp" || true
+        fi
+        header=$(cat "$tmp" 2>/dev/null || true)
+        rm -f "$tmp"
+    fi
+
+    if [[ -z "$header" ]]; then
+        return 1
+    fi
+
+    local checksum_line
+    checksum_line=$(printf '%s\n' "$header" | awk 'BEGIN{IGNORECASE=1} /^ *X-Checksum-Sha256:/{print $0; exit}')
+    if [[ -z "$checksum_line" ]]; then
+        return 1
+    fi
+
+    local value
+    value=$(printf '%s\n' "$checksum_line" | awk -F':' '{sub(/^[[:space:]]*/,"",$2); print $2}')
+    value=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')
+    if [[ -z "$value" ]]; then
+        return 1
+    fi
+
+    FETCHED_CHECKSUM="$value"
+    return 0
+}
+
+calculate_sha256() {
+    local file="$1"
+    local hash=""
+
+    if command -v sha256sum &> /dev/null; then
+        hash=$(sha256sum "$file" | awk '{print $1}')
+    elif command -v shasum &> /dev/null; then
+        hash=$(shasum -a 256 "$file" | awk '{print $1}')
+    fi
+
+    if [[ -z "$hash" ]]; then
+        return 1
+    fi
+
+    CALCULATED_CHECKSUM=$(printf '%s' "$hash" | tr '[:upper:]' '[:lower:]')
+    return 0
+}
+
+verify_agent_checksum() {
+    local url="$1"
+
+    if common::is_dry_run; then
+        log_info '[dry-run] Skipping checksum verification'
+        return 0
+    fi
+
+    if ! fetch_checksum_header "$url"; then
+        log_warn 'Agent download did not include X-Checksum-Sha256 header; skipping verification'
+        return 0
+    fi
+
+    if ! calculate_sha256 "$AGENT_PATH"; then
+        log_warn 'Unable to calculate sha256 checksum locally; skipping verification'
+        return 0
+    fi
+
+    if [[ "$FETCHED_CHECKSUM" != "$CALCULATED_CHECKSUM" ]]; then
+        rm -f "$AGENT_PATH"
+        log_error "Checksum mismatch. Expected $FETCHED_CHECKSUM but downloaded $CALCULATED_CHECKSUM"
+        return 1
+    fi
+
+    log_success 'Checksum verified for agent binary'
+    unset FETCHED_CHECKSUM CALCULATED_CHECKSUM
+    return 0
+}
+
+if [[ -n "${AGENT_DOWNLOAD_SOURCE:-}" ]]; then
+    if ! verify_agent_checksum "$AGENT_DOWNLOAD_SOURCE"; then
+        log_error 'Agent download failed checksum verification'
+        exit 1
+    fi
 fi
 
 if ! common::is_dry_run; then
@@ -841,8 +942,8 @@ SYSTEMD_ENV_INSECURE_LINE="Environment=\"PULSE_INSECURE_SKIP_VERIFY=$PRIMARY_INS
 systemd::create_service "$SERVICE_PATH" <<EOF
 [Unit]
 Description=Pulse Docker Agent
-After=network-online.target docker.service
-Wants=network-online.target
+After=network-online.target docker.socket docker.service
+Wants=network-online.target docker.socket
 
 [Service]
 Type=simple
@@ -854,6 +955,22 @@ ExecStart=$AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"$NO_AUTO_UPDATE
 Restart=on-failure
 RestartSec=5s
 User=root
+ProtectSystem=full
+ProtectHome=read-only
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+UMask=0077
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+PrivateTmp=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/run/docker.sock
+ProtectHostname=yes
+ProtectClock=yes
 
 [Install]
 WantedBy=multi-user.target

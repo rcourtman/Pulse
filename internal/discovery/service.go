@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
@@ -14,17 +15,20 @@ import (
 
 // Service handles background network discovery
 type Service struct {
-	scanner    *pkgdiscovery.Scanner
-	wsHub      *websocket.Hub
-	cache      *DiscoveryCache
-	interval   time.Duration
-	subnet     string
-	mu         sync.RWMutex
-	lastScan   time.Time
-	isScanning bool
-	stopChan   chan struct{}
-	ctx        context.Context
-	cfgProvider func() config.DiscoveryConfig
+	scanner        discoveryScanner
+	wsHub          *websocket.Hub
+	cache          *DiscoveryCache
+	interval       time.Duration
+	subnet         string
+	mu             sync.RWMutex
+	lastScan       time.Time
+	isScanning     bool
+	stopChan       chan struct{}
+	ctx            context.Context
+	cfgProvider    func() config.DiscoveryConfig
+	history        []historyEntry
+	historyLimit   int
+	scannerFactory scannerFactory
 }
 
 // DiscoveryCache stores the latest discovery results
@@ -32,6 +36,66 @@ type DiscoveryCache struct {
 	mu      sync.RWMutex
 	result  *pkgdiscovery.DiscoveryResult
 	updated time.Time
+}
+
+type historyEntry struct {
+	startedAt       time.Time
+	completedAt     time.Time
+	subnet          string
+	serverCount     int
+	errorCount      int
+	duration        time.Duration
+	blocklistLength int
+	status          string
+}
+
+const defaultHistoryLimit = 20
+
+type discoveryScanner interface {
+	DiscoverServersWithCallbacks(ctx context.Context, subnet string, serverCallback pkgdiscovery.ServerCallback, progressCallback pkgdiscovery.ProgressCallback) (*pkgdiscovery.DiscoveryResult, error)
+}
+
+type scannerFactory func(config.DiscoveryConfig) (discoveryScanner, error)
+
+var (
+	discoveryScanResults = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "pulse",
+			Subsystem: "discovery",
+			Name:      "scans_total",
+			Help:      "Total number of discovery scans by result status.",
+		},
+		[]string{"result"},
+	)
+	discoveryScanDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: "pulse",
+			Subsystem: "discovery",
+			Name:      "scan_duration_seconds",
+			Help:      "Duration of discovery scans in seconds.",
+			Buckets:   []float64{5, 10, 20, 30, 45, 60, 90, 120, 180},
+		},
+	)
+	discoveryScanServers = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "pulse",
+			Subsystem: "discovery",
+			Name:      "last_scan_servers",
+			Help:      "Number of servers found in the most recent discovery scan.",
+		},
+	)
+	discoveryScanErrors = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "pulse",
+			Subsystem: "discovery",
+			Name:      "last_scan_errors",
+			Help:      "Number of errors encountered in the most recent discovery scan.",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(discoveryScanResults, discoveryScanDuration, discoveryScanServers, discoveryScanErrors)
 }
 
 // NewService creates a new discovery service
@@ -48,13 +112,18 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 	}
 
 	return &Service{
-		scanner:  pkgdiscovery.NewScanner(),
-		wsHub:    wsHub,
-		cache:    &DiscoveryCache{},
-		interval: interval,
-		subnet:   subnet,
-		stopChan: make(chan struct{}),
-		cfgProvider: cfgProvider,
+		scanner:      pkgdiscovery.NewScanner(),
+		wsHub:        wsHub,
+		cache:        &DiscoveryCache{},
+		interval:     interval,
+		subnet:       subnet,
+		stopChan:     make(chan struct{}),
+		cfgProvider:  cfgProvider,
+		history:      make([]historyEntry, 0, defaultHistoryLimit),
+		historyLimit: defaultHistoryLimit,
+		scannerFactory: func(cfg config.DiscoveryConfig) (discoveryScanner, error) {
+			return BuildScanner(cfg)
+		},
 	}
 }
 
@@ -97,8 +166,46 @@ func (s *Service) scanLoop() {
 	}
 }
 
+func (s *Service) appendHistory(entry historyEntry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.historyLimit <= 0 {
+		s.historyLimit = defaultHistoryLimit
+	}
+
+	s.history = append(s.history, entry)
+	if len(s.history) > s.historyLimit {
+		offset := len(s.history) - s.historyLimit
+		s.history = append([]historyEntry(nil), s.history[offset:]...)
+	}
+}
+
+// GetHistory returns up to limit recent discovery history entries (most recent first).
+func (s *Service) GetHistory(limit int) []historyEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit <= 0 || limit > len(s.history) {
+		limit = len(s.history)
+	}
+	if limit == 0 {
+		return nil
+	}
+
+	result := make([]historyEntry, 0, limit)
+	for i := len(s.history) - 1; i >= 0 && len(result) < limit; i-- {
+		result = append(result, s.history[i])
+	}
+	return result
+}
+
 // performScan executes a network scan
 func (s *Service) performScan() {
+	startTime := time.Now()
+	var scanErr error
+	var blocklistLength int
+
 	s.mu.Lock()
 	if s.isScanning {
 		s.mu.Unlock()
@@ -111,16 +218,54 @@ func (s *Service) performScan() {
 	var result *pkgdiscovery.DiscoveryResult
 
 	defer func() {
+		duration := time.Since(startTime)
+		completedAt := time.Now()
+		serverCount := 0
+		errorCount := 0
+		status := "success"
+		if result != nil {
+			serverCount = len(result.Servers)
+			if len(result.StructuredErrors) > 0 {
+				errorCount = len(result.StructuredErrors)
+			} else {
+				errorCount = len(result.Errors)
+			}
+		}
+
+		if scanErr != nil {
+			if result == nil || serverCount == 0 {
+				status = "failure"
+			} else {
+				status = "partial"
+			}
+		}
+
+		discoveryScanDuration.Observe(duration.Seconds())
+		discoveryScanServers.Set(float64(serverCount))
+		discoveryScanErrors.Set(float64(errorCount))
+		discoveryScanResults.WithLabelValues(status).Inc()
+
+		s.appendHistory(historyEntry{
+			startedAt:       startTime,
+			completedAt:     completedAt,
+			subnet:          s.subnet,
+			serverCount:     serverCount,
+			errorCount:      errorCount,
+			duration:        duration,
+			blocklistLength: blocklistLength,
+			status:          status,
+		})
+
 		s.mu.Lock()
 		s.isScanning = false
-		s.lastScan = time.Now()
+		s.lastScan = completedAt
 		s.mu.Unlock()
 
 		// Send scan complete notification
 		if s.wsHub != nil {
 			data := map[string]interface{}{
 				"scanning":  false,
-				"timestamp": time.Now().Unix(),
+				"timestamp": completedAt.Unix(),
 			}
 			if result != nil && result.Environment != nil {
 				data["environment"] = result.Environment
@@ -155,10 +300,23 @@ func (s *Service) performScan() {
 	if s.cfgProvider != nil {
 		cfg = config.NormalizeDiscoveryConfig(config.CloneDiscoveryConfig(s.cfgProvider()))
 	}
+	blocklistLength = len(cfg.SubnetBlocklist)
 
-	newScanner, err := BuildScanner(cfg)
+	var (
+		newScanner discoveryScanner
+		err        error
+	)
+	if s.scannerFactory != nil {
+		newScanner, err = s.scannerFactory(cfg)
+	} else {
+		newScanner, err = BuildScanner(cfg)
+	}
 	if err != nil {
 		log.Warn().Err(err).Msg("Environment detection failed during discovery; falling back to default scanner configuration")
+		newScanner = pkgdiscovery.NewScanner()
+	}
+	if newScanner == nil {
+		log.Warn().Msg("Discovery scanner factory returned nil; using default scanner configuration")
 		newScanner = pkgdiscovery.NewScanner()
 	}
 	s.mu.Lock()
@@ -199,6 +357,7 @@ func (s *Service) performScan() {
 	}
 
 	result, err = newScanner.DiscoverServersWithCallbacks(scanCtx, s.subnet, serverCallback, progressCallback)
+	scanErr = err
 	if err != nil {
 		// Even if scan timed out, we might have partial results
 		if result == nil || (len(result.Servers) == 0 && !errors.Is(err, context.DeadlineExceeded)) {
@@ -235,7 +394,7 @@ func (s *Service) performScan() {
 		if s.wsHub != nil {
 			data := map[string]interface{}{
 				"servers":           result.Servers,
-				"errors":            result.Errors,            // Legacy format (deprecated)
+				"errors":            result.Errors,           // Legacy format (deprecated)
 				"structured_errors": result.StructuredErrors, // New structured format
 				"scanning":          false,
 				"timestamp":         time.Now().Unix(),
@@ -256,11 +415,11 @@ func (s *Service) GetCachedResult() (*pkgdiscovery.DiscoveryResult, time.Time) {
 	s.cache.mu.RLock()
 	defer s.cache.mu.RUnlock()
 
- if s.cache.result == nil {
- 	return &pkgdiscovery.DiscoveryResult{
- 		Servers: []pkgdiscovery.DiscoveredServer{},
- 		Errors:  []string{},
- 	}, time.Time{}
+	if s.cache.result == nil {
+		return &pkgdiscovery.DiscoveryResult{
+			Servers: []pkgdiscovery.DiscoveredServer{},
+			Errors:  []string{},
+		}, time.Time{}
 	}
 
 	return s.cache.result, s.cache.updated

@@ -600,8 +600,8 @@ func (tc *TemperatureCollector) shouldDisableProxy(err error) bool {
 	var proxyErr *tempproxy.ProxyError
 	if errors.As(err, &proxyErr) {
 		switch proxyErr.Type {
-		case tempproxy.ErrorTypeTransport, tempproxy.ErrorTypeTimeout, tempproxy.ErrorTypeSSH:
-			return true
+	case tempproxy.ErrorTypeTransport, tempproxy.ErrorTypeTimeout:
+		return true
 		default:
 			return false
 		}

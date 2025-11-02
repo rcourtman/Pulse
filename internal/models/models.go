@@ -9,29 +9,30 @@ import (
 
 // State represents the current state of all monitored resources
 type State struct {
-	mu               sync.RWMutex
-	Nodes            []Node           `json:"nodes"`
-	VMs              []VM             `json:"vms"`
-	Containers       []Container      `json:"containers"`
-	DockerHosts      []DockerHost     `json:"dockerHosts"`
-	Hosts            []Host           `json:"hosts"`
-	Storage          []Storage        `json:"storage"`
-	CephClusters     []CephCluster    `json:"cephClusters"`
-	PhysicalDisks    []PhysicalDisk   `json:"physicalDisks"`
-	PBSInstances     []PBSInstance    `json:"pbs"`
-	PMGInstances     []PMGInstance    `json:"pmg"`
-	PBSBackups       []PBSBackup      `json:"pbsBackups"`
-	PMGBackups       []PMGBackup      `json:"pmgBackups"`
-	Backups          Backups          `json:"backups"`
-	ReplicationJobs  []ReplicationJob `json:"replicationJobs"`
-	Metrics          []Metric         `json:"metrics"`
-	PVEBackups       PVEBackups       `json:"pveBackups"`
-	Performance      Performance      `json:"performance"`
-	ConnectionHealth map[string]bool  `json:"connectionHealth"`
-	Stats            Stats            `json:"stats"`
-	ActiveAlerts     []Alert          `json:"activeAlerts"`
-	RecentlyResolved []ResolvedAlert  `json:"recentlyResolved"`
-	LastUpdate       time.Time        `json:"lastUpdate"`
+	mu                 sync.RWMutex
+	Nodes              []Node              `json:"nodes"`
+	VMs                []VM                `json:"vms"`
+	Containers         []Container         `json:"containers"`
+	DockerHosts        []DockerHost        `json:"dockerHosts"`
+	RemovedDockerHosts []RemovedDockerHost `json:"removedDockerHosts"`
+	Hosts              []Host              `json:"hosts"`
+	Storage            []Storage           `json:"storage"`
+	CephClusters       []CephCluster       `json:"cephClusters"`
+	PhysicalDisks      []PhysicalDisk      `json:"physicalDisks"`
+	PBSInstances       []PBSInstance       `json:"pbs"`
+	PMGInstances       []PMGInstance       `json:"pmg"`
+	PBSBackups         []PBSBackup         `json:"pbsBackups"`
+	PMGBackups         []PMGBackup         `json:"pmgBackups"`
+	Backups            Backups             `json:"backups"`
+	ReplicationJobs    []ReplicationJob    `json:"replicationJobs"`
+	Metrics            []Metric            `json:"metrics"`
+	PVEBackups         PVEBackups          `json:"pveBackups"`
+	Performance        Performance         `json:"performance"`
+	ConnectionHealth   map[string]bool     `json:"connectionHealth"`
+	Stats              Stats               `json:"stats"`
+	ActiveAlerts       []Alert             `json:"activeAlerts"`
+	RecentlyResolved   []ResolvedAlert     `json:"recentlyResolved"`
+	LastUpdate         time.Time           `json:"lastUpdate"`
 }
 
 // Alert represents an active alert (simplified for State)
@@ -224,6 +225,14 @@ type DockerHost struct {
 	Command           *DockerHostCommandStatus `json:"command,omitempty"`
 }
 
+// RemovedDockerHost tracks a docker host that was deliberately removed and blocked from reporting.
+type RemovedDockerHost struct {
+	ID          string    `json:"id"`
+	Hostname    string    `json:"hostname,omitempty"`
+	DisplayName string    `json:"displayName,omitempty"`
+	RemovedAt   time.Time `json:"removedAt"`
+}
+
 // DockerContainer represents the state of a Docker container on a monitored host.
 type DockerContainer struct {
 	ID                  string                       `json:"id"`
@@ -268,8 +277,10 @@ type DockerContainerNetworkLink struct {
 
 // DockerContainerBlockIO captures aggregate block IO usage for a container.
 type DockerContainerBlockIO struct {
-	ReadBytes  uint64 `json:"readBytes,omitempty"`
-	WriteBytes uint64 `json:"writeBytes,omitempty"`
+	ReadBytes               uint64   `json:"readBytes,omitempty"`
+	WriteBytes              uint64   `json:"writeBytes,omitempty"`
+	ReadRateBytesPerSecond  *float64 `json:"readRateBytesPerSecond,omitempty"`
+	WriteRateBytesPerSecond *float64 `json:"writeRateBytesPerSecond,omitempty"`
 }
 
 // DockerContainerMount describes a mount exposed to a container.
@@ -1229,6 +1240,52 @@ func (s *State) GetDockerHosts() []DockerHost {
 	hosts := make([]DockerHost, len(s.DockerHosts))
 	copy(hosts, s.DockerHosts)
 	return hosts
+}
+
+// AddRemovedDockerHost records a removed docker host entry.
+func (s *State) AddRemovedDockerHost(entry RemovedDockerHost) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	replaced := false
+	for i, existing := range s.RemovedDockerHosts {
+		if existing.ID == entry.ID {
+			s.RemovedDockerHosts[i] = entry
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		s.RemovedDockerHosts = append(s.RemovedDockerHosts, entry)
+	}
+	sort.Slice(s.RemovedDockerHosts, func(i, j int) bool {
+		return s.RemovedDockerHosts[i].RemovedAt.After(s.RemovedDockerHosts[j].RemovedAt)
+	})
+	s.LastUpdate = time.Now()
+}
+
+// RemoveRemovedDockerHost deletes a removed docker host entry by ID.
+func (s *State) RemoveRemovedDockerHost(hostID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, entry := range s.RemovedDockerHosts {
+		if entry.ID == hostID {
+			s.RemovedDockerHosts = append(s.RemovedDockerHosts[:i], s.RemovedDockerHosts[i+1:]...)
+			s.LastUpdate = time.Now()
+			break
+		}
+	}
+}
+
+// GetRemovedDockerHosts returns a copy of removed docker host entries.
+func (s *State) GetRemovedDockerHosts() []RemovedDockerHost {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	entries := make([]RemovedDockerHost, len(s.RemovedDockerHosts))
+	copy(entries, s.RemovedDockerHosts)
+	return entries
 }
 
 // UpsertHost inserts or updates a generic host in state.
