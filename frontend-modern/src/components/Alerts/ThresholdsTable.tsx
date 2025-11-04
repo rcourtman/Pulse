@@ -29,6 +29,7 @@ import type {
 } from '@/types/alerts';
 import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { logger } from '@/utils/logger';
 type OverrideType =
   | 'guest'
   | 'node'
@@ -336,7 +337,8 @@ const [editingThresholds, setEditingThresholds] = createSignal<
   // Determine active tab from URL
   const getActiveTabFromRoute = (): 'proxmox' | 'pmg' | 'hosts' | 'docker' => {
     const path = location.pathname;
-    if (path.includes('/thresholds/docker')) return 'docker';
+    if (path.includes('/thresholds/containers')) return 'docker';
+    if (path.includes('/thresholds/docker')) return 'docker'; // Legacy support
     if (path.includes('/thresholds/hosts')) return 'hosts';
     if (path.includes('/thresholds/mail-gateway')) return 'pmg';
     return 'proxmox'; // default
@@ -357,12 +359,21 @@ const [editingThresholds, setEditingThresholds] = createSignal<
     }
   });
 
+  createEffect(() => {
+    if (location.pathname.startsWith('/alerts/thresholds/docker')) {
+      navigate(
+        location.pathname.replace('/alerts/thresholds/docker', '/alerts/thresholds/containers'),
+        { replace: true, scroll: false },
+      );
+    }
+  });
+
   const handleTabClick = (tab: 'proxmox' | 'pmg' | 'hosts' | 'docker') => {
     const tabRoutes = {
       proxmox: '/alerts/thresholds/proxmox',
       pmg: '/alerts/thresholds/mail-gateway',
       hosts: '/alerts/thresholds/hosts',
-      docker: '/alerts/thresholds/docker',
+      docker: '/alerts/thresholds/containers',
     };
     navigate(tabRoutes[tab]);
   };
@@ -731,7 +742,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
         displayName: friendlyName,
         rawName: originalName,
         type: 'dockerHost' as const,
-        resourceType: 'Docker Host',
+        resourceType: 'Container Host',
         node: host.hostname,
         instance: host.displayName,
         status,
@@ -754,7 +765,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
           displayName: friendlyName,
           rawName: originalName,
           type: 'dockerHost',
-          resourceType: 'Docker Host',
+          resourceType: 'Container Host',
           node: override.node || '',
           instance: override.instance || '',
           status: 'unknown',
@@ -844,7 +855,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
           id: resourceId,
           name: containerName,
           type: 'dockerContainer',
-          resourceType: 'Docker Container',
+          resourceType: 'Container',
           node: groupKey,
           instance: host.hostname,
           status,
@@ -871,7 +882,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
       .filter((override) => override.type === 'dockerContainer' && !seen.has(override.id))
       .forEach((override) => {
         const fallbackName = override.name || override.id.split('/').pop() || override.id;
-        const group = 'Unassigned Docker Containers';
+        const group = 'Unassigned Containers';
         if (!groups[group]) {
           groups[group] = [];
         }
@@ -879,7 +890,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
           id: override.id,
           name: fallbackName,
           type: 'dockerContainer',
-          resourceType: 'Docker Container',
+          resourceType: 'Container',
           status: 'unknown',
           hasOverride: true,
           disabled: override.disabled || false,
@@ -934,8 +945,8 @@ const [editingThresholds, setEditingThresholds] = createSignal<
         });
     });
 
-    meta['Unassigned Docker Containers'] = {
-      displayName: 'Unassigned Docker Containers',
+    meta['Unassigned Containers'] = {
+      displayName: 'Unassigned Containers',
       status: 'unknown',
     };
 
@@ -1448,7 +1459,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
         },
         {
           key: 'dockerHosts' as const,
-          label: 'Docker Hosts',
+          label: 'Container Hosts',
           total: props.dockerHosts?.length ?? 0,
           overrides: countOverrides(dockerHostsWithOverrides()),
           tab: 'docker' as const,
@@ -1497,7 +1508,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
         },
         {
           key: 'dockerContainers' as const,
-          label: 'Docker Containers',
+          label: 'Containers',
           total: totalDockerContainers() ?? 0,
           overrides: countOverrides(dockerContainersFlat()),
           tab: 'docker' as const,
@@ -1514,7 +1525,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
       const filtered = items.filter((item) => item.total > 0 || item.overrides > 0);
       return filtered.filter((item) => item.tab === activeTab());
     } catch (err) {
-      console.error('Error in summaryItems memo:', err);
+      logger.error('Error in summaryItems memo:', err);
       return [];
     }
   });
@@ -2245,7 +2256,7 @@ const cancelEdit = () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
             }`}
           >
-            Docker
+            Containers
           </button>
         </nav>
       </div>
@@ -2270,6 +2281,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={props.nodeDefaults}
@@ -2309,6 +2322,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={{ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
@@ -2382,6 +2397,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={props.guestDefaults}
@@ -2444,6 +2461,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={backupDefaultsRecord()}
@@ -2516,6 +2535,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={snapshotDefaultsRecord()}
@@ -2591,6 +2612,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={{ usage: props.storageDefault() }}
@@ -2664,6 +2687,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={pmgGlobalDefaults()}
@@ -2699,6 +2724,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={props.hostDefaults}
@@ -2725,7 +2752,7 @@ const cancelEdit = () => {
                   Ignored container prefixes
                 </h3>
                 <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                  Containers whose name or ID starts with any prefix below are skipped for Docker
+                  Containers whose name or ID starts with any prefix below are skipped for container
                   alerts. Enter one prefix per line; matching is case-insensitive.
                 </p>
               </div>
@@ -2836,11 +2863,11 @@ const cancelEdit = () => {
           <Show when={hasSection('dockerHosts')}>
             <div ref={registerSection('dockerHosts')} class="scroll-mt-24">
               <ResourceTable
-                title="Docker Hosts"
+                title="Container Hosts"
                 resources={dockerHostsWithOverrides()}
                 columns={[]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No Docker hosts match the current filters."
+                emptyMessage="No container hosts match the current filters."
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -2851,6 +2878,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDisableFlag={props.disableAllDockerHosts}
@@ -2868,7 +2897,7 @@ const cancelEdit = () => {
           <Show when={hasSection('dockerContainers')}>
             <div ref={registerSection('dockerContainers')} class="scroll-mt-24">
               <ResourceTable
-                title="Docker Containers"
+                title="Containers"
                 groupedResources={dockerContainersGroupedByHost()}
                 groupHeaderMeta={dockerHostGroupMeta()}
                 columns={[
@@ -2881,7 +2910,7 @@ const cancelEdit = () => {
                   'Memory Critical %',
                 ]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No Docker containers match the current filters."
+                emptyMessage="No containers match the current filters."
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -2891,6 +2920,8 @@ const cancelEdit = () => {
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
+                editingNote={editingNote}
+                setEditingNote={setEditingNote}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
                 globalDefaults={{

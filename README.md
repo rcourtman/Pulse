@@ -108,10 +108,13 @@ helm install pulse oci://ghcr.io/rcourtman/pulse-chart \
 ### Initial Setup
 
 **Option A: Interactive Setup (UI)**
-1. Open `http://<your-server>:7655`
-2. **Complete the mandatory security setup** (first-time only)
-3. Create your admin username and password
-4. Use **Settings → Security → API tokens** to mint dedicated tokens for automation. Assign scopes so each token only has the permissions it needs (e.g. `docker:report`, `host-agent:report`). Legacy tokens default to full access until you edit and save new scopes.
+1. On the host, read the bootstrap token that protects the first-time setup screen:
+   - Standard install: `cat /etc/pulse/.bootstrap_token`
+   - Docker/Helm: `cat /data/.bootstrap_token` inside the container or mounted volume
+2. Open `http://<your-server>:7655`
+3. When prompted, paste the bootstrap token to unlock the wizard, then **complete the mandatory security setup** (first-time only)
+4. Create your admin username and password and store the generated API token safely (the token file is removed after setup)
+5. Use **Settings → Security → API tokens** to mint dedicated tokens for automation. Assign scopes so each token only has the permissions it needs (e.g. `docker:report`, `host-agent:report`). Legacy tokens default to full access until you edit and save new scopes.
 
 **Option B: Automated Setup (No UI)**
 For automated deployments, configure authentication via environment variables:

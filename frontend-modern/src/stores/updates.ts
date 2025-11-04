@@ -1,8 +1,10 @@
 import { createSignal } from 'solid-js';
 import { UpdatesAPI } from '@/api/updates';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
+import { getPulseHostname } from '@/utils/url';
+import { logger } from '@/utils/logger';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
-const STORAGE_KEY = 'pulse-updates';
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 
 interface UpdateState {
@@ -14,12 +16,12 @@ interface UpdateState {
 // Load state from localStorage
 const loadState = (): UpdateState => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEYS.UPDATES);
     if (stored) {
       return JSON.parse(stored);
     }
   } catch (e) {
-    console.error('Failed to load update state:', e);
+    logger.error('Failed to load update state:', e);
   }
   return { lastCheck: 0 };
 };
@@ -27,9 +29,9 @@ const loadState = (): UpdateState => {
 // Save state to localStorage
 const saveState = (state: UpdateState) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEYS.UPDATES, JSON.stringify(state));
   } catch (e) {
-    console.error('Failed to save update state:', e);
+    logger.error('Failed to save update state:', e);
   }
 };
 
@@ -76,7 +78,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
         }
       } catch (e) {
         // If we can't get version, continue with normal check
-        console.error('Failed to verify version for cache:', e);
+        logger.error('Failed to verify version for cache:', e);
       }
     } else {
       return;
@@ -134,7 +136,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
       updateInfo: info,
     });
   } catch (error) {
-    console.error('Failed to check for updates:', error);
+    logger.error('Failed to check for updates:', error);
     setLastError(error instanceof Error ? error.message : 'Failed to check for updates');
     setUpdateAvailable(false);
   } finally {
@@ -206,10 +208,12 @@ declare global {
   }
 }
 
+const pulseHostname = getPulseHostname();
+
 if (
   import.meta.env.DEV ||
-  window.location.hostname === 'localhost' ||
-  window.location.hostname.startsWith('192.168')
+  pulseHostname === 'localhost' ||
+  pulseHostname.startsWith('192.168')
 ) {
   window.updateStore = updateStore;
 }

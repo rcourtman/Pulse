@@ -25,10 +25,8 @@ mkdir -p $BUILD_DIR $RELEASE_DIR
 
 # Build frontend
 echo "Building frontend..."
-cd frontend-modern
-npm ci
-npm run build
-cd ..
+npm --prefix frontend-modern ci
+npm --prefix frontend-modern run build
 
 # Copy frontend dist for embedding (required for Go embed)
 echo "Copying frontend dist for embedding..."

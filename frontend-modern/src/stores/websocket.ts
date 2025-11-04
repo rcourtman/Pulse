@@ -331,7 +331,9 @@ export function createWebSocketStore(url: string) {
 
             // Only update if we have actual data, don't overwrite with empty arrays
             if (message.data.nodes !== undefined) {
-              console.log('[WebSocket] Updating nodes:', message.data.nodes?.length || 0);
+              logger.debug('[WebSocket] Updating nodes', {
+                count: message.data.nodes?.length || 0,
+              });
               setState('nodes', message.data.nodes);
             }
             if (message.data.vms !== undefined) {
@@ -405,25 +407,30 @@ export function createWebSocketStore(url: string) {
                     message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
 
                   if (shouldApplyEmptyState) {
-                    console.log('[WebSocket] Updating dockerHosts:', incomingHosts.length, 'hosts');
+                    logger.debug('[WebSocket] Updating dockerHosts', {
+                      count: incomingHosts.length,
+                    });
                     setState('dockerHosts', mergeDockerHostRevocations(incomingHosts));
                   } else {
-                    console.debug(
-                      '[WebSocket] Skipping transient empty dockerHosts payload',
-                      consecutiveEmptyDockerUpdates,
-                    );
+                    logger.debug('[WebSocket] Skipping transient empty dockerHosts payload', {
+                      streak: consecutiveEmptyDockerUpdates,
+                    });
                   }
                 } else {
                   consecutiveEmptyDockerUpdates = 0;
                   hasReceivedNonEmptyDockerHosts = true;
-                  console.log('[WebSocket] Updating dockerHosts:', incomingHosts.length, 'hosts');
+                  logger.debug('[WebSocket] Updating dockerHosts', {
+                    count: incomingHosts.length,
+                  });
                   setState('dockerHosts', mergeDockerHostRevocations(incomingHosts));
                 }
               } else {
-                console.warn('[WebSocket] Received non-array dockerHosts:', typeof message.data.dockerHosts);
+                logger.warn('[WebSocket] Received non-array dockerHosts payload', {
+                  type: typeof message.data.dockerHosts,
+                });
               }
             } else if (message.data.dockerHosts === null) {
-              console.log('[WebSocket] Received null dockerHosts, ignoring');
+              logger.debug('[WebSocket] Received null dockerHosts payload');
             }
             if (message.data.hosts !== undefined && message.data.hosts !== null) {
               if (Array.isArray(message.data.hosts)) {

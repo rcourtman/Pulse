@@ -1,6 +1,6 @@
-# Docker Monitoring Agent
+# Docker & Podman Monitoring Agent
 
-Pulse is focused on Proxmox VE and PBS, but many homelabs also run application stacks in Docker. The optional Pulse Docker agent turns container health and resource usage into first-class metrics that show up alongside your hypervisor data. The recommended deployment is the bundled, least-privilege systemd service that runs the static `pulse-docker-agent` binary directly on the host. That path lets the installer lock down permissions, manage upgrades automatically, and integrate with the native init system. Containerising the agent is still available for orchestrated environments, but it trades away some of those controls (and still needs the Docker socket) so treat that option as advanced.
+Pulse is focused on Proxmox VE and PBS, but many homelabs also run application stacks in container runtimes such as Docker and Podman. The optional Pulse container agent turns runtime health and resource usage into first-class metrics that show up alongside your hypervisor data. The recommended deployment is the bundled, least-privilege systemd service that runs the static `pulse-docker-agent` binary directly on the host. That path lets the installer lock down permissions, manage upgrades automatically, and integrate with the native init system. Containerising the agent is still available for orchestrated environments, but it trades away some of those controls (and still needs the runtime socket) so treat that option as advanced.
 
 ## What the agent reports
 
@@ -11,7 +11,7 @@ Every check interval (30s by default) the agent collects:
 - Restart counters and exit codes
 - CPU usage, memory consumption and limits
 - Images, port mappings, network addresses, and start times
-- Writable layer size, root filesystem size, block I/O totals, and mount metadata (shown in the Docker table drawer)
+- Writable layer size, root filesystem size, block I/O totals, and mount metadata (shown in the Containers table drawer)
 - Read/write throughput derived from Docker block I/O counters so you can spot noisy workloads at a glance
 - Health-check failures, restart-loop windows, and recent exit codes (displayed in the UI under each container drawer)
 
@@ -21,8 +21,8 @@ Data is pushed to Pulse over HTTPS using your existing API token – no inbound 
 
 - Pulse v4.22.0 or newer with an API token enabled (`Settings → Security`)
 - API token with the `docker:report` scope (add `docker:manage` if you use remote lifecycle commands)
-- Docker 20.10+ on Linux (the agent uses the Docker Engine API via the local socket)
-- Access to the Docker socket (`/var/run/docker.sock`) or a configured `DOCKER_HOST`
+- Docker 20.10+ **or** Podman 4.7+ on Linux (the agent talks to the runtime API socket)
+- Access to the runtime socket (`/var/run/docker.sock`, `/run/podman/podman.sock`, or a `unix://` URI)
 - Go 1.24+ if you plan to build the binary from source
 
 ## Installation
@@ -44,8 +44,9 @@ Copy the binary to your Docker host (e.g. `/usr/local/bin/pulse-docker-agent`) a
 Use the bundled installation script (ships with Pulse v4.22.0+) to deploy and manage the agent. Replace the token placeholder with an API token generated in **Settings → Security**. Create a dedicated token for each Docker host so you can revoke individual credentials without touching others—sharing one token across many hosts makes incident response much harder. Tokens used here should include the `docker:report` scope so the agent can submit telemetry (add `docker:manage` only if you plan to issue lifecycle commands remotely).
 
 ```bash
-curl -fsSL http://pulse.example.com/install-docker-agent.sh \
-  | sudo bash -s -- --url http://pulse.example.com --token <api-token>
+curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+  sudo bash /tmp/pulse-install-docker-agent.sh --url http://pulse.example.com --token <api-token> && \
+  rm -f /tmp/pulse-install-docker-agent.sh
 ```
 
 > **Why sudo?** The installer needs to drop binaries under `/usr/local/bin`, create a systemd service, and start it—actions that require root privileges. Piping to `sudo bash …` saves you from retrying if you run the command as an unprivileged user.
@@ -59,11 +60,44 @@ Running the one-liner again from another Pulse server (with its own URL/token) w
 To report to more than one Pulse instance from the same Docker host, repeat the `--target` flag (format: `https://pulse.example.com|<api-token>`) or export `PULSE_TARGETS` before running the script:
 
 ```bash
-curl -fsSL http://pulse.example.com/install-docker-agent.sh \
-  | sudo bash -s -- \
+curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+  sudo bash /tmp/pulse-install-docker-agent.sh -- \
     --target https://pulse.example.com|<primary-token> \
-    --target https://pulse-dr.example.com|<dr-token>
+    --target https://pulse-dr.example.com|<dr-token> && \
+  rm -f /tmp/pulse-install-docker-agent.sh
 ```
+
+### Quick install for Podman (system service)
+
+Use the multi-runtime installer when you want the agent to run against Podman as a systemd service. The script takes care of enabling `podman.socket`, creating a dedicated service account, and wiring the correct runtime socket automatically:
+
+```bash
+curl -fSL http://pulse.example.com/install-container-agent.sh -o /tmp/pulse-install-container-agent.sh && \
+  sudo bash /tmp/pulse-install-container-agent.sh --runtime podman --url http://pulse.example.com --token <api-token> && \
+  rm -f /tmp/pulse-install-container-agent.sh
+```
+
+The environment file lives at `/etc/pulse/pulse-docker-agent.env` and the unit is still named `pulse-docker-agent.service` for backwards compatibility. The agent exports `PULSE_RUNTIME=podman` and points both `CONTAINER_HOST` and `DOCKER_HOST` at the Podman socket (`/run/podman/podman.sock` by default). Restart the service after editing the env file with `sudo systemctl restart pulse-docker-agent`.
+
+> **What's new for Podman?** The agent now sends pod- and compose-aware metadata for Podman hosts. Pulse surfaces pod names, infra-container markers, compose project/service identifiers, auto-update policies, and user namespace hints so you can see how containers relate without leaving the UI.
+
+### Quick install for Podman (rootless user service)
+
+Podman’s rootless mode works too. Run the installer as the target user and add the `--rootless` flag — no sudo required:
+
+```bash
+curl -fSL http://pulse.example.com/install-container-agent.sh -o /tmp/pulse-install-container-agent.sh && \
+  bash /tmp/pulse-install-container-agent.sh --runtime podman --rootless --url http://pulse.example.com --token <api-token> && \
+  rm -f /tmp/pulse-install-container-agent.sh
+```
+
+The agent binary is dropped into `~/.local/bin`, configuration lives under `~/.config/pulse`, and a user-level service (`~/.config/systemd/user/pulse-docker-agent.service`) is created. Enable lingering so the agent keeps running after you log out:
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
+If `systemctl --user` is unavailable, the installer will print the exact command you can place in a cron job or another init system.
 
 ## Running the agent
 
@@ -106,7 +140,7 @@ Use the new flags to tune the payload:
 
 If a manager cannot reach the Swarm API the agent automatically falls back to node scope so updates keep flowing.
 
-Adjust warning and critical replica gaps (or disable service alerts entirely) under **Alerts → Thresholds → Docker** in the Pulse UI.
+Adjust warning and critical replica gaps (or disable service alerts entirely) under **Alerts → Thresholds → Containers** in the Pulse UI.
 
 ### Multiple Pulse instances
 
@@ -186,6 +220,9 @@ docker run -d \
 | `--token`, `PULSE_TOKEN`| Pulse API token with `docker:report` scope (required).    | —               |
 | `--target`, `PULSE_TARGETS` | One or more `url|token[|insecure]` entries to fan-out reports to multiple Pulse servers. Separate entries with `;` or repeat the flag. | — |
 | `--interval`, `PULSE_INTERVAL` | Reporting cadence (supports `30s`, `1m`, etc.).     | `30s`           |
+| `--runtime`, `PULSE_RUNTIME` | Container runtime to target (`docker`, `podman`, `auto`). | `docker` |
+| `--container-socket`, `PULSE_CONTAINER_SOCKET` / `CONTAINER_HOST` | Explicit runtime socket path or `unix://` URI. | Runtime default |
+| `--rootless`, `PULSE_RUNTIME_ROOTLESS` | Install/manage the agent as a user service (Podman). | Auto (rootful) |
 | `--container-state`, `PULSE_CONTAINER_STATES` | Limit reports to specific Docker statuses (`created`, `running`, `restarting`, `removing`, `paused`, `exited`, `dead`). Separate multiple values with commas/semicolons or repeat the flag. | — |
 | `--swarm-scope`, `PULSE_SWARM_SCOPE` | Swarm data scope: `node`, `cluster`, or `auto` (auto picks cluster on managers, node on workers). | `node` |
 | `--swarm-services`, `PULSE_SWARM_SERVICES` | Include Swarm service summaries in reports. | `true` |
@@ -200,20 +237,20 @@ The agent automatically discovers the Docker socket via the usual environment va
 
 ### Disk usage monitoring & alerts
 
-When `--collect-disk` is enabled (the default), Pulse records each container’s writable layer and root filesystem sizes. The Alerts engine treats the proportion of writable data to total filesystem as the disk usage percentage for that container. A fleet-wide threshold lives under **Alerts → Thresholds → Docker Containers** and defaults to 85% trigger / 80% clear; adjust or disable it per host/container when your workload makes heavy use of copy-on-write layers. Containers that stop reporting disk metrics (for example when size queries are disabled) automatically skip the disk alert evaluation.
+When `--collect-disk` is enabled (the default), Pulse records each container’s writable layer and root filesystem sizes. The Alerts engine treats the proportion of writable data to total filesystem as the disk usage percentage for that container. A fleet-wide threshold lives under **Alerts → Thresholds → Containers** and defaults to 85% trigger / 80% clear; adjust or disable it per host/container when your workload makes heavy use of copy-on-write layers. Containers that stop reporting disk metrics (for example when size queries are disabled) automatically skip the disk alert evaluation.
 
 ### Suppressing ephemeral containers
 
-CI runners and short-lived build containers can generate noisy state alerts when they exit on schedule. In Pulse v4.24.0 and later you can provide a list of prefixes to ignore under **Alerts → Thresholds → Docker → Ignored container prefixes**. Any container whose name *or* ID begins with a configured prefix is skipped for state, health, metric, restart-loop, and OOM alerts. Matching is case-insensitive and the list is saved as `dockerIgnoredContainerPrefixes` inside `alerts.json`. Use one entry per family of ephemeral containers (for example, `runner-` or `gitlab-job-`).
+CI runners and short-lived build containers can generate noisy state alerts when they exit on schedule. In Pulse v4.24.0 and later you can provide a list of prefixes to ignore under **Alerts → Thresholds → Containers → Ignored container prefixes**. Any container whose name *or* ID begins with a configured prefix is skipped for state, health, metric, restart-loop, and OOM alerts. Matching is case-insensitive and the list is saved as `dockerIgnoredContainerPrefixes` inside `alerts.json`. Use one entry per family of ephemeral containers (for example, `runner-` or `gitlab-job-`).
 
-Need the alerts but at a different tone? The same Docker tab exposes global controls for the container state detector. Flip **Disable container state alerts** (`stateDisableConnectivity`) to mute powered-off/offline warnings across the fleet, or change **Default severity** (`statePoweredOffSeverity`) to `critical` so unexpected exits page immediately. Individual host/container overrides still win when you need exceptions.
+Need the alerts but at a different tone? The same Containers tab exposes global controls for the container state detector. Flip **Disable container state alerts** (`stateDisableConnectivity`) to mute powered-off/offline warnings across the fleet, or change **Default severity** (`statePoweredOffSeverity`) to `critical` so unexpected exits page immediately. Individual host/container overrides still win when you need exceptions.
 
 ## Testing and troubleshooting
 
 - Run with `--interval 15s --insecure` in a terminal to see log output while testing.
 - Ensure the Pulse API token has not expired or been regenerated.
 - If `pulse-docker-agent` reports `Cannot connect to the Docker daemon`, verify the socket path and permissions.
-- Check Pulse (`/docker` tab) for the latest heartbeat time. Hosts are marked offline if they stop reporting for >4× the configured interval.
+- Check Pulse (`/containers` tab) for the latest heartbeat time. Hosts are marked offline if they stop reporting for >4× the configured interval.
 - Use the search box above the host grid to filter by host name, stack label, or container name. Restart loops surface in the “Issues” column and display the last five exit codes.
 
 ## Removing the agent

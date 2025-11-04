@@ -4,7 +4,7 @@ import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
 
-type SettingsSection = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host';
+type SettingsSection = 'pve' | 'pbs' | 'pmg';
 
 interface SettingsSectionNavProps {
   current: SettingsSection;

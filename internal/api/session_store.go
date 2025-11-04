@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -19,9 +21,21 @@ type SessionStore struct {
 	stopChan   chan bool
 }
 
+func sessionHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+type sessionPersisted struct {
+	Key       string    `json:"key"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UserAgent string    `json:"user_agent,omitempty"`
+	IP        string    `json:"ip,omitempty"`
+}
+
 // SessionData represents a user session
 type SessionData struct {
-	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedAt time.Time `json:"created_at"`
 	UserAgent string    `json:"user_agent,omitempty"`
@@ -72,8 +86,8 @@ func (s *SessionStore) CreateSession(token string, duration time.Duration, userA
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.sessions[token] = &SessionData{
-		Token:     token,
+	key := sessionHash(token)
+	s.sessions[key] = &SessionData{
 		ExpiresAt: time.Now().Add(duration),
 		CreatedAt: time.Now(),
 		UserAgent: userAgent,
@@ -89,7 +103,7 @@ func (s *SessionStore) ValidateSession(token string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	session, exists := s.sessions[token]
+	session, exists := s.sessions[sessionHash(token)]
 	if !exists {
 		return false
 	}
@@ -102,7 +116,7 @@ func (s *SessionStore) ExtendSession(token string, duration time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if session, exists := s.sessions[token]; exists {
+	if session, exists := s.sessions[sessionHash(token)]; exists {
 		session.ExpiresAt = time.Now().Add(duration)
 		s.saveUnsafe()
 	}
@@ -113,7 +127,7 @@ func (s *SessionStore) DeleteSession(token string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.sessions, token)
+	delete(s.sessions, sessionHash(token))
 	s.saveUnsafe()
 }
 
@@ -122,7 +136,7 @@ func (s *SessionStore) GetSession(token string) *SessionData {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	session, exists := s.sessions[token]
+	session, exists := s.sessions[sessionHash(token)]
 	if !exists || time.Now().After(session.ExpiresAt) {
 		return nil
 	}
@@ -136,10 +150,10 @@ func (s *SessionStore) cleanup() {
 	defer s.mu.Unlock()
 
 	now := time.Now()
-	for token, session := range s.sessions {
+	for key, session := range s.sessions {
 		if now.After(session.ExpiresAt) {
-			delete(s.sessions, token)
-			log.Debug().Str("token", token[:8]+"...").Msg("Cleaned up expired session")
+			delete(s.sessions, key)
+			log.Debug().Str("sessionKey", key[:8]+"...").Msg("Cleaned up expired session")
 		}
 	}
 }
@@ -162,7 +176,18 @@ func (s *SessionStore) saveUnsafe() {
 	}
 
 	// Marshal sessions
-	data, err := json.Marshal(s.sessions)
+	persisted := make([]sessionPersisted, 0, len(s.sessions))
+	for key, session := range s.sessions {
+		persisted = append(persisted, sessionPersisted{
+			Key:       key,
+			ExpiresAt: session.ExpiresAt,
+			CreatedAt: session.CreatedAt,
+			UserAgent: session.UserAgent,
+			IP:        session.IP,
+		})
+	}
+
+	data, err := json.Marshal(persisted)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal sessions")
 		return
@@ -196,31 +221,44 @@ func (s *SessionStore) load() {
 		return
 	}
 
-	var sessions map[string]*SessionData
-	if err := json.Unmarshal(data, &sessions); err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal sessions")
+	now := time.Now()
+	s.sessions = make(map[string]*SessionData)
+
+	var persisted []sessionPersisted
+	if err := json.Unmarshal(data, &persisted); err == nil {
+		for _, entry := range persisted {
+			if now.After(entry.ExpiresAt) {
+				continue
+			}
+			s.sessions[entry.Key] = &SessionData{
+				ExpiresAt: entry.ExpiresAt,
+				CreatedAt: entry.CreatedAt,
+				UserAgent: entry.UserAgent,
+				IP:        entry.IP,
+			}
+		}
+		log.Info().Int("loaded", len(s.sessions)).Int("total", len(persisted)).Msg("Sessions loaded from disk (hashed format)")
 		return
 	}
 
-	// Filter out expired sessions
-	now := time.Now()
-	loaded := 0
-	for token, session := range sessions {
-		if now.Before(session.ExpiresAt) {
-			s.sessions[token] = session
-			loaded++
-		}
+	// Legacy map format fallback (keys stored as raw tokens)
+	var legacy map[string]*SessionData
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal legacy sessions")
+		return
 	}
 
-	log.Info().Int("loaded", loaded).Int("total", len(sessions)).Msg("Sessions loaded from disk")
-}
+	loaded := 0
+	for token, session := range legacy {
+		if now.After(session.ExpiresAt) {
+			continue
+		}
+		s.sessions[sessionHash(token)] = session
+		loaded++
+	}
 
-// ClearAll removes all sessions (use carefully)
-func (s *SessionStore) ClearAll() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.sessions = make(map[string]*SessionData)
-	s.saveUnsafe()
-	log.Info().Msg("All sessions cleared")
+	log.Info().
+		Int("loaded", loaded).
+		Int("total", len(legacy)).
+		Msg("Sessions loaded from disk (legacy format migrated)")
 }

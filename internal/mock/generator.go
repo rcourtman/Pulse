@@ -57,6 +57,17 @@ var dockerHostPrefixes = []string{
 	"draco", "phoenix", "hydra", "pegasus", "lyra",
 }
 
+type podDefinition struct {
+	Name              string
+	ID                string
+	ComposeProject    string
+	ComposeWorkdir    string
+	ComposeConfigHash string
+	AutoUpdatePolicy  string
+	AutoUpdateRestart string
+	UserNamespace     string
+}
+
 var dockerOperatingSystems = []string{
 	"Debian GNU/Linux 12 (bookworm)",
 	"Ubuntu 24.04.1 LTS",
@@ -78,6 +89,13 @@ var dockerVersions = []string{
 	"27.3.1",
 	"26.1.3",
 	"25.0.6",
+}
+
+var podmanVersions = []string{
+	"5.0.2",
+	"4.9.3",
+	"4.8.1",
+	"4.7.2",
 }
 
 var dockerAgentVersions = []string{
@@ -1027,7 +1045,17 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 		interval := 30
 		uptime := int64(86400*(3+rand.Intn(25))) + int64(rand.Intn(3600))
 
-		containers := generateDockerContainers(hostname, i, config)
+		isPodman := hostCount > 1 && i%3 == 0
+		runtime := "docker"
+		runtimeVersion := dockerVersions[rand.Intn(len(dockerVersions))]
+		dockerVersion := runtimeVersion
+		if isPodman {
+			runtime = "podman"
+			runtimeVersion = podmanVersions[rand.Intn(len(podmanVersions))]
+			dockerVersion = ""
+		}
+
+		containers := generateDockerContainers(hostname, i, config, isPodman)
 
 		// Optionally ensure the second host looks degraded for UI coverage
 		if i == 1 && len(containers) > 0 && hostCount > 1 {
@@ -1093,26 +1121,29 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			}
 		}
 
-		swarmInfo := &models.DockerSwarmInfo{
-			NodeID:           fmt.Sprintf("%s-node", hostID),
-			NodeRole:         "worker",
-			LocalState:       "active",
-			ControlAvailable: false,
-			Scope:            "node",
-		}
-
+		var swarmInfo *models.DockerSwarmInfo
 		var services []models.DockerService
 		var tasks []models.DockerTask
-		if i%2 == 0 {
-			swarmInfo.NodeRole = "manager"
-			swarmInfo.ControlAvailable = true
-			swarmInfo.Scope = "cluster"
-			services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
-			if len(services) == 0 {
-				swarmInfo.Scope = "node"
+		if !isPodman {
+			swarmInfo = &models.DockerSwarmInfo{
+				NodeID:           fmt.Sprintf("%s-node", hostID),
+				NodeRole:         "worker",
+				LocalState:       "active",
+				ControlAvailable: false,
+				Scope:            "node",
 			}
-		} else if i%3 == 0 {
-			services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
+
+			if i%2 == 0 {
+				swarmInfo.NodeRole = "manager"
+				swarmInfo.ControlAvailable = true
+				swarmInfo.Scope = "cluster"
+				services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
+				if len(services) == 0 {
+					swarmInfo.Scope = "node"
+				}
+			} else if i%3 == 0 {
+				services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
+			}
 		}
 
 		cpuUsage := clampFloat(10+rand.Float64()*70, 4, 98)
@@ -1186,7 +1217,9 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			OS:                dockerOperatingSystems[rand.Intn(len(dockerOperatingSystems))],
 			KernelVersion:     dockerKernelVersions[rand.Intn(len(dockerKernelVersions))],
 			Architecture:      dockerArchitectures[rand.Intn(len(dockerArchitectures))],
-			DockerVersion:     dockerVersions[rand.Intn(len(dockerVersions))],
+			Runtime:           runtime,
+			RuntimeVersion:    runtimeVersion,
+			DockerVersion:     dockerVersion,
 			CPUs:              cpus,
 			TotalMemoryBytes:  totalMemoryBytes,
 			UptimeSeconds:     uptime,
@@ -1418,7 +1451,7 @@ func generateHosts(config MockConfig) []models.Host {
 
 	return hosts
 }
-func generateDockerContainers(hostName string, hostIdx int, config MockConfig) []models.DockerContainer {
+func generateDockerContainers(hostName string, hostIdx int, config MockConfig, podman bool) []models.DockerContainer {
 	base := config.DockerContainersPerHost
 	if base < 1 {
 		base = 6
@@ -1433,12 +1466,73 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig) [
 	containers := make([]models.DockerContainer, 0, count)
 	nameUsage := make(map[string]int)
 
+	var podDefs []podDefinition
+	infraAssigned := make(map[string]bool)
+	if podman {
+		maxPods := 1
+		if count > 1 {
+			if count < 3 {
+				maxPods = count
+			} else {
+				maxPods = 3
+			}
+		}
+
+		podCount := maxPods
+		if maxPods > 1 {
+			podCount = 1 + rand.Intn(maxPods)
+		}
+
+		podDefs = make([]podDefinition, podCount)
+		baseProject := strings.ReplaceAll(hostName, "-", "")
+		for idx := 0; idx < podCount; idx++ {
+			composeProject := ""
+			composeWorkdir := ""
+			if rand.Float64() < 0.7 {
+				composeProject = fmt.Sprintf("%s-stack", baseProject)
+				composeWorkdir = fmt.Sprintf("/srv/%s", baseProject)
+			}
+
+			autoUpdatePolicy := ""
+			autoUpdateRestart := ""
+			if rand.Float64() < 0.35 {
+				autoUpdatePolicy = []string{"image", "registry"}[rand.Intn(2)]
+				if rand.Float64() < 0.5 {
+					autoUpdateRestart = []string{"rolling", "daily"}[rand.Intn(2)]
+				}
+			}
+
+			userNS := []string{"keep-id", "host", "private"}[rand.Intn(3)]
+
+			podDefs[idx] = podDefinition{
+				Name:              fmt.Sprintf("%s-pod-%d", baseProject, idx+1),
+				ID:                randomHexString(24),
+				ComposeProject:    composeProject,
+				ComposeWorkdir:    composeWorkdir,
+				ComposeConfigHash: randomHexString(16),
+				AutoUpdatePolicy:  autoUpdatePolicy,
+				AutoUpdateRestart: autoUpdateRestart,
+				UserNamespace:     userNS,
+			}
+		}
+	}
+
 	for i := 0; i < count; i++ {
 		baseName := appNames[rand.Intn(len(appNames))]
 		nameUsage[baseName]++
 		containerName := baseName
 		if nameUsage[baseName] > 1 {
 			containerName = fmt.Sprintf("%s-%d", baseName, nameUsage[baseName])
+		}
+
+		var pod *podDefinition
+		isInfra := false
+		if podman && len(podDefs) > 0 {
+			pod = &podDefs[rand.Intn(len(podDefs))]
+			if !infraAssigned[pod.ID] {
+				isInfra = true
+				infraAssigned[pod.ID] = true
+			}
 		}
 
 		id := fmt.Sprintf("%s-%s", hostName, randomHexString(12))
@@ -1503,6 +1597,8 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig) [
 			}
 		}
 
+		labels := generateDockerLabels(containerName, hostName, podman && pod != nil, pod, isInfra)
+
 		container := models.DockerContainer{
 			ID:            id,
 			Name:          containerName,
@@ -1521,8 +1617,23 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig) [
 			StartedAt:     startedAt,
 			FinishedAt:    finishedAt,
 			Ports:         generateDockerPorts(),
-			Labels:        generateDockerLabels(containerName, hostName),
+			Labels:        labels,
 			Networks:      generateDockerNetworks(hostIdx, i),
+		}
+
+		if pod != nil {
+			container.Podman = &models.DockerPodmanContainer{
+				PodName:           pod.Name,
+				PodID:             pod.ID,
+				Infra:             isInfra,
+				ComposeProject:    pod.ComposeProject,
+				ComposeService:    containerName,
+				ComposeWorkdir:    pod.ComposeWorkdir,
+				ComposeConfigHash: pod.ComposeConfigHash,
+				AutoUpdatePolicy:  pod.AutoUpdatePolicy,
+				AutoUpdateRestart: pod.AutoUpdateRestart,
+				UserNamespace:     pod.UserNamespace,
+			}
 		}
 
 		containers = append(containers, container)
@@ -1584,7 +1695,50 @@ func generateDockerNetworks(hostIdx, containerIdx int) []models.DockerContainerN
 	return networks
 }
 
-func generateDockerLabels(serviceName, hostName string) map[string]string {
+func generateDockerLabels(serviceName, hostName string, podman bool, pod *podDefinition, infra bool) map[string]string {
+	if podman && pod != nil {
+		labels := map[string]string{
+			"io.podman.annotations.pod.name": pod.Name,
+			"io.podman.annotations.pod.id":   pod.ID,
+		}
+
+		if infra {
+			labels["io.podman.annotations.pod.infra"] = "true"
+		} else {
+			labels["io.podman.annotations.pod.infra"] = "false"
+		}
+
+		if pod.ComposeProject != "" {
+			labels["io.podman.compose.project"] = pod.ComposeProject
+			labels["io.podman.compose.service"] = serviceName
+			if pod.ComposeWorkdir != "" {
+				labels["io.podman.compose.working_dir"] = pod.ComposeWorkdir
+			}
+			if pod.ComposeConfigHash != "" {
+				labels["io.podman.compose.config-hash"] = pod.ComposeConfigHash
+			}
+		}
+
+		if pod.AutoUpdatePolicy != "" {
+			labels["io.containers.autoupdate"] = pod.AutoUpdatePolicy
+		}
+		if pod.AutoUpdateRestart != "" {
+			labels["io.containers.autoupdate.restart"] = pod.AutoUpdateRestart
+		}
+		if pod.UserNamespace != "" {
+			labels["io.podman.annotations.userns"] = pod.UserNamespace
+		}
+
+		if rand.Float64() < 0.25 {
+			labels["io.containers.capabilities"] = "CHOWN,DAC_OVERRIDE,SETUID,SETGID"
+		}
+		if rand.Float64() < 0.2 {
+			labels["environment"] = []string{"production", "staging", "development"}[rand.Intn(3)]
+		}
+
+		return labels
+	}
+
 	labels := map[string]string{
 		"com.docker.compose.project": hostName,
 		"com.docker.compose.service": serviceName,
@@ -3252,7 +3406,8 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 			host.Status = "online"
 			host.LastSeen = now
 			if len(host.Containers) == 0 {
-				host.Containers = generateDockerContainers(host.Hostname, i, config)
+				isPodman := strings.EqualFold(host.Runtime, "podman")
+				host.Containers = generateDockerContainers(host.Hostname, i, config, isPodman)
 			}
 		}
 

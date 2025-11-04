@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,46 @@ import (
 )
 
 const minProxyReadyVersion = "4.24.0"
+
+var (
+	setupAuthTokenPattern = regexp.MustCompile(`^[A-Fa-f0-9]{32,128}$`)
+)
+
+func sanitizeInstallerURL(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
+	}
+	if strings.ContainsAny(trimmed, "\r\n") {
+		return "", fmt.Errorf("value must not contain control characters")
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("scheme must be http or https")
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("host component is required")
+	}
+	parsed.Fragment = ""
+	return parsed.String(), nil
+}
+
+func sanitizeSetupAuthToken(token string) (string, error) {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return "", nil
+	}
+	if strings.ContainsAny(trimmed, "\r\n") {
+		return "", fmt.Errorf("token must not contain control characters")
+	}
+	if !setupAuthTokenPattern.MatchString(trimmed) {
+		return "", fmt.Errorf("token must be hexadecimal")
+	}
+	return trimmed, nil
+}
 
 // SetupCode represents a one-time setup code for secure node registration
 type SetupCode struct {
@@ -2642,112 +2683,6 @@ func isRunningInContainer() bool {
 	return false
 }
 
-// HandleUpdateSystemSettingsOLD updates system settings in the unified config (DEPRECATED - use SystemSettingsHandler instead)
-func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r *http.Request) {
-	var settings config.SystemSettings
-	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate PBS polling interval (must be positive)
-	if settings.PBSPollingInterval < 0 {
-		http.Error(w, "PBS polling interval must be positive", http.StatusBadRequest)
-		return
-	}
-	if settings.BackupPollingInterval < 0 {
-		http.Error(w, "Backup polling interval cannot be negative", http.StatusBadRequest)
-		return
-	}
-
-	// Update polling intervals
-	needsReload := false
-
-	// Note: PVE polling is hardcoded to 10s, only PBS interval can be configured
-	if settings.PBSPollingInterval > 0 {
-		h.config.PBSPollingInterval = time.Duration(settings.PBSPollingInterval) * time.Second
-		needsReload = true
-	}
-	if settings.BackupPollingInterval > 0 || (settings.BackupPollingInterval == 0 && h.config.BackupPollingInterval != 0) {
-		h.config.BackupPollingInterval = time.Duration(settings.BackupPollingInterval) * time.Second
-		needsReload = true
-	}
-	if settings.BackupPollingEnabled != nil {
-		h.config.EnableBackupPolling = *settings.BackupPollingEnabled
-		needsReload = true
-	}
-
-	// Trigger a monitor reload if intervals changed
-	if needsReload && h.reloadFunc != nil {
-		log.Info().
-			Int("pbsInterval", settings.PBSPollingInterval).
-			Msg("Triggering monitor reload for new PBS polling interval")
-		if err := h.reloadFunc(); err != nil {
-			log.Error().Err(err).Msg("Failed to reload monitor with new polling intervals")
-			// Don't fail the request, the setting was saved
-		}
-	}
-
-	// Update allowed origins if provided
-	if settings.AllowedOrigins != "" {
-		h.config.AllowedOrigins = settings.AllowedOrigins
-		// Update WebSocket hub with new origins
-		if h.wsHub != nil {
-			origins := strings.Split(settings.AllowedOrigins, ",")
-			for i := range origins {
-				origins[i] = strings.TrimSpace(origins[i])
-			}
-			h.wsHub.SetAllowedOrigins(origins)
-		}
-	}
-
-	// Update update-related settings
-	if settings.UpdateChannel != "" {
-		h.config.UpdateChannel = settings.UpdateChannel
-	}
-	h.config.AutoUpdateEnabled = settings.AutoUpdateEnabled
-	if settings.AutoUpdateCheckInterval > 0 {
-		h.config.AutoUpdateCheckInterval = time.Duration(settings.AutoUpdateCheckInterval) * time.Hour
-	}
-	if settings.AutoUpdateTime != "" {
-		h.config.AutoUpdateTime = settings.AutoUpdateTime
-	}
-	settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.config.Discovery)
-
-	// Save settings to persistence
-	if err := h.persistence.SaveSystemSettings(settings); err != nil {
-		log.Error().Err(err).Msg("Failed to persist system settings")
-		// Continue anyway - settings are applied in memory
-	} else if h.reloadSystemSettingsFunc != nil {
-		// Reload cached system settings after successful save
-		h.reloadSystemSettingsFunc()
-	}
-
-	log.Info().
-		Int("pbsPollingInterval", settings.PBSPollingInterval).
-		Int("backendPort", settings.BackendPort).
-		Int("frontendPort", settings.FrontendPort).
-		Msg("Updated system settings in unified config")
-
-	// Trigger monitor reload to apply new settings
-	if h.reloadFunc != nil {
-		if err := h.reloadFunc(); err != nil {
-			log.Error().Err(err).Msg("Failed to reload monitor after system settings update")
-			// Continue anyway - settings are saved
-		} else {
-			log.Info().
-				Int("pbsPollingInterval", settings.PBSPollingInterval).
-				Msg("Monitor reloaded with new PBS polling interval")
-		}
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "success",
-		"message": "Settings updated successfully",
-	})
-}
-
 // generateNodeID creates a unique ID for a node
 func generateNodeID(nodeType string, index int) string {
 	return fmt.Sprintf("%s-%d", nodeType, index)
@@ -3038,10 +2973,35 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	// Get query parameters
 	query := r.URL.Query()
 	serverType := query.Get("type") // "pve" or "pbs"
-	serverHost := query.Get("host")
-	pulseURL := query.Get("pulse_url")                 // URL of the Pulse server for auto-registration
-	backupPerms := query.Get("backup_perms") == "true" // Whether to add backup management permissions
-	authToken := query.Get("auth_token")               // Temporary auth token for auto-registration
+	serverHost := strings.TrimSpace(query.Get("host"))
+	pulseURL := strings.TrimSpace(query.Get("pulse_url"))   // URL of the Pulse server for auto-registration
+	backupPerms := query.Get("backup_perms") == "true"      // Whether to add backup management permissions
+	authToken := strings.TrimSpace(query.Get("auth_token")) // Temporary auth token for auto-registration
+
+	if serverHost != "" {
+		safeHost, err := sanitizeInstallerURL(serverHost)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid host parameter: %v", err), http.StatusBadRequest)
+			return
+		}
+		serverHost = safeHost
+	}
+
+	if pulseURL != "" {
+		safeURL, err := sanitizeInstallerURL(pulseURL)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid pulse_url parameter: %v", err), http.StatusBadRequest)
+			return
+		}
+		pulseURL = safeURL
+	}
+
+	if sanitizedToken, err := sanitizeSetupAuthToken(authToken); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid auth_token parameter: %v", err), http.StatusBadRequest)
+		return
+	} else {
+		authToken = sanitizedToken
+	}
 
 	// Validate required parameters
 	if serverType == "" {
@@ -3068,6 +3028,11 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 			scheme = "https"
 		}
 		pulseURL = fmt.Sprintf("%s://%s", scheme, r.Host)
+	} else {
+		// Ensure derived pulseURL is still sanitized (should already be, but double check)
+		if safeURL, err := sanitizeInstallerURL(pulseURL); err == nil {
+			pulseURL = safeURL
+		}
 	}
 
 	log.Info().
@@ -5390,9 +5355,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Broadcast auto-registration success via WebSocket
-	fmt.Println("[AUTO-REGISTER] About to broadcast WebSocket message")
 	if h.wsHub != nil {
-		fmt.Println("[AUTO-REGISTER] WebSocket hub is available")
 		nodeInfo := map[string]interface{}{
 			"type":      req.Type,
 			"host":      req.Host,
@@ -5404,13 +5367,11 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		}
 
 		// Broadcast the auto-registration success
-		fmt.Printf("[AUTO-REGISTER] Broadcasting message type: node_auto_registered for host: %s\n", req.Host)
 		h.wsHub.BroadcastMessage(websocket.Message{
 			Type:      "node_auto_registered",
 			Data:      nodeInfo,
 			Timestamp: time.Now().Format(time.RFC3339),
 		})
-		fmt.Println("[AUTO-REGISTER] Broadcast complete")
 
 		// Also broadcast a discovery update to refresh the UI
 		if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
@@ -5435,7 +5396,6 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			Str("type", "node_auto_registered").
 			Msg("Broadcasted auto-registration success via WebSocket")
 	} else {
-		fmt.Println("[AUTO-REGISTER] ERROR: WebSocket hub is nil!")
 		log.Warn().Msg("WebSocket hub is nil, cannot broadcast auto-registration")
 	}
 

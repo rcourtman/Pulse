@@ -4,13 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 )
-
-// Float64Ptr returns a pointer to the given float64 value
-func Float64Ptr(v float64) *float64 {
-	return &v
-}
 
 // GenerateID generates a unique ID with the given prefix
 func GenerateID(prefix string) string {
@@ -29,17 +26,17 @@ func WriteJSONResponse(w http.ResponseWriter, data interface{}) error {
 	return err
 }
 
-// WriteJSONError writes a JSON error response to the http.ResponseWriter
-func WriteJSONError(w http.ResponseWriter, message string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+// ParseBool interprets common boolean strings, returning true for typical truthy values.
+func ParseBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
 }
 
-// DecodeJSONBody decodes a JSON request body into the given interface
-func DecodeJSONBody(r *http.Request, v interface{}) error {
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		return err
-	}
-	return nil
+// GetenvTrim returns the environment variable value with surrounding whitespace removed.
+func GetenvTrim(key string) string {
+	return strings.TrimSpace(os.Getenv(key))
 }

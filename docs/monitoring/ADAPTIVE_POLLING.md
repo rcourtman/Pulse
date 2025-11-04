@@ -63,8 +63,8 @@ Exposed via Prometheus (`:9091/metrics`):
 | `pulse_monitor_poll_staleness_seconds`      | gauge     | `instance_type`, `instance`           | Age since last success (0 on success)           |
 | `pulse_monitor_poll_queue_depth`            | gauge     | —                                     | Size of priority queue                          |
 | `pulse_monitor_poll_inflight`               | gauge     | `instance_type`                       | Concurrent tasks per type                       |
-| `pulse_monitor_poll_errors_total`           | counter   | `instance_type`, `instance`, `category` | **New in v4.24.0**: Error counts by category (transient/permanent) |
-| `pulse_monitor_poll_last_success_timestamp` | gauge     | `instance_type`, `instance`           | **New in v4.24.0**: Unix timestamp of last successful poll |
+| `pulse_monitor_poll_errors_total`           | counter   | `instance_type`, `instance`, `category` | Error counts by category (transient/permanent) |
+| `pulse_monitor_poll_last_success_timestamp` | gauge     | `instance_type`, `instance`           | Unix timestamp of last successful poll |
 
 **Alerting Recommendations:**
 - Alert when `pulse_monitor_poll_staleness_seconds` > 120 for critical instances
@@ -185,4 +185,3 @@ Returns comprehensive scheduler health data (authentication required).
 
 - Task 8: expose scheduler health & dead-letter statistics via API and UI panels.
 - Task 9: add dedicated unit/integration harness for the scheduler & workers.
-

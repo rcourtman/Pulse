@@ -33,6 +33,8 @@ type HostInfo struct {
 	Name             string             `json:"name,omitempty"`
 	MachineID        string             `json:"machineId,omitempty"`
 	OS               string             `json:"os,omitempty"`
+	Runtime          string             `json:"runtime,omitempty"`
+	RuntimeVersion   string             `json:"runtimeVersion,omitempty"`
 	KernelVersion    string             `json:"kernelVersion,omitempty"`
 	Architecture     string             `json:"architecture,omitempty"`
 	DockerVersion    string             `json:"dockerVersion,omitempty"`
@@ -72,6 +74,7 @@ type Container struct {
 	RootFilesystemBytes int64              `json:"rootFilesystemBytes,omitempty"`
 	BlockIO             *ContainerBlockIO  `json:"blockIo,omitempty"`
 	Mounts              []ContainerMount   `json:"mounts,omitempty"`
+	Podman              *PodmanContainer   `json:"podman,omitempty"`
 }
 
 // ContainerPort tracks an exposed container port mapping.
@@ -93,6 +96,20 @@ type ContainerNetwork struct {
 type ContainerBlockIO struct {
 	ReadBytes  uint64 `json:"readBytes,omitempty"`
 	WriteBytes uint64 `json:"writeBytes,omitempty"`
+}
+
+// PodmanContainer carries metadata extracted from Podman-specific annotations.
+type PodmanContainer struct {
+	PodName           string `json:"podName,omitempty"`
+	PodID             string `json:"podId,omitempty"`
+	Infra             bool   `json:"infra,omitempty"`
+	ComposeProject    string `json:"composeProject,omitempty"`
+	ComposeService    string `json:"composeService,omitempty"`
+	ComposeWorkdir    string `json:"composeWorkdir,omitempty"`
+	ComposeConfig     string `json:"composeConfigHash,omitempty"`
+	AutoUpdatePolicy  string `json:"autoUpdatePolicy,omitempty"`
+	AutoUpdateRestart string `json:"autoUpdateRestart,omitempty"`
+	UserNS            string `json:"userNamespace,omitempty"`
 }
 
 // ContainerMount describes a mount point exposed inside a container.

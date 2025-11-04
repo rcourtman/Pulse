@@ -3,6 +3,7 @@ import { AlertsAPI } from '@/api/alerts';
 import type { AlertConfig, ActivationState as ActivationStateType } from '@/types/alerts';
 import type { Alert } from '@/types/api';
 import { setGlobalActivationState } from '@/utils/alertsActivation';
+import { logger } from '@/utils/logger';
 
 // Create signals for activation state
 const [config, setConfig] = createSignal<AlertConfig | null>(null);
@@ -34,7 +35,7 @@ const refreshConfig = async (): Promise<void> => {
     setConfig(alertConfig);
     applyActivationState(alertConfig.activationState || 'active');
   } catch (error) {
-    console.error('Failed to fetch alert config:', error);
+    logger.error('Failed to fetch alert config:', error);
     setLastError(error instanceof Error ? error.message : 'Unknown error');
   } finally {
     setIsLoading(false);
@@ -47,7 +48,7 @@ const refreshActiveAlerts = async (): Promise<void> => {
     const alerts = await AlertsAPI.getActive();
     setActiveAlerts(alerts);
   } catch (error) {
-    console.error('Failed to fetch active alerts:', error);
+    logger.error('Failed to fetch active alerts:', error);
     // Don't set error state for this - it's not critical
   }
 };
@@ -66,7 +67,7 @@ const activate = async (): Promise<boolean> => {
     }
     return false;
   } catch (error) {
-    console.error('Failed to activate alerts:', error);
+    logger.error('Failed to activate alerts:', error);
     setLastError(error instanceof Error ? error.message : 'Unknown error');
     return false;
   } finally {
@@ -91,7 +92,7 @@ const updateActivationState = async (state: ActivationStateType): Promise<boolea
     applyActivationState(state);
     return true;
   } catch (error) {
-    console.error('Failed to update activation state:', error);
+    logger.error('Failed to update activation state:', error);
     setLastError(error instanceof Error ? error.message : 'Unknown error');
     return false;
   } finally {

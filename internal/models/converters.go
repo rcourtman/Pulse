@@ -204,6 +204,8 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		OS:               d.OS,
 		KernelVersion:    d.KernelVersion,
 		Architecture:     d.Architecture,
+		Runtime:          d.Runtime,
+		RuntimeVersion:   d.RuntimeVersion,
 		DockerVersion:    d.DockerVersion,
 		CPUs:             d.CPUs,
 		TotalMemoryBytes: d.TotalMemoryBytes,
@@ -433,6 +435,21 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 			}
 		}
 		container.Mounts = mounts
+	}
+
+	if c.Podman != nil {
+		container.Podman = &DockerPodmanContainerFrontend{
+			PodName:           c.Podman.PodName,
+			PodID:             c.Podman.PodID,
+			Infra:             c.Podman.Infra,
+			ComposeProject:    c.Podman.ComposeProject,
+			ComposeService:    c.Podman.ComposeService,
+			ComposeWorkdir:    c.Podman.ComposeWorkdir,
+			ComposeConfigHash: c.Podman.ComposeConfigHash,
+			AutoUpdatePolicy:  c.Podman.AutoUpdatePolicy,
+			AutoUpdateRestart: c.Podman.AutoUpdateRestart,
+			UserNamespace:     c.Podman.UserNamespace,
+		}
 	}
 
 	return container

@@ -5,6 +5,8 @@ import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
 import { UpdateProgressModal } from './UpdateProgressModal';
 import { WebSocketContext } from '@/App';
+import { copyToClipboard } from '@/utils/clipboard';
+import { logger } from '@/utils/logger';
 
 export function UpdateBanner() {
   const navigate = useNavigate();
@@ -24,7 +26,7 @@ export function UpdateBanner() {
         const plan = await UpdatesAPI.getUpdatePlan(info.latestVersion);
         setUpdatePlan(plan);
       } catch (error) {
-        console.error('Failed to fetch update plan:', error);
+        logger.error('Failed to fetch update plan', error);
       }
     }
   });
@@ -44,21 +46,21 @@ export function UpdateBanner() {
       setShowConfirmModal(false);
       setShowProgressModal(true);
     } catch (error) {
-      console.error('Failed to start update:', error);
+      logger.error('Failed to start update', error);
       alert('Failed to start update. Please try again.');
     } finally {
       setIsApplying(false);
     }
   };
 
-  const copyToClipboard = async (text: string, index: number) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedIndex(index);
-      setTimeout(() => setCopiedIndex(null), 2000);
-    } catch (error) {
-      console.error('Failed to copy:', error);
+  const handleCopy = async (text: string, index: number) => {
+    const success = await copyToClipboard(text);
+    if (!success) {
+      logger.error('Failed to copy update instruction to clipboard', new Error('clipboard copy failed'));
+      return;
     }
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   // Get deployment type message
@@ -223,7 +225,7 @@ export function UpdateBanner() {
                                 {instruction}
                               </code>
                               <button
-                                onClick={() => copyToClipboard(instruction, index())}
+                                onClick={() => handleCopy(instruction, index())}
                                 class="flex-shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
                                 title="Copy to clipboard"
                               >

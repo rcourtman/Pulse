@@ -1,3 +1,5 @@
+import { logger } from '@/utils/logger';
+
 const DEFAULT_MAX_HISTORY = 10;
 
 type HistoryEntry = string;
@@ -21,7 +23,7 @@ function readHistory(key: string): HistoryEntry[] {
     }
     return parsed.filter((value): value is string => typeof value === 'string');
   } catch (error) {
-    console.warn(`[searchHistory] Failed to parse history for key "${key}":`, error);
+    logger.warn(`[searchHistory] Failed to parse history for key "${key}":`, error);
     return [];
   }
 }
@@ -33,7 +35,7 @@ function writeHistory(key: string, history: HistoryEntry[]): void {
   try {
     window.localStorage.setItem(key, JSON.stringify(history));
   } catch (error) {
-    console.warn(`[searchHistory] Failed to persist history for key "${key}":`, error);
+    logger.warn(`[searchHistory] Failed to persist history for key "${key}":`, error);
   }
 }
 

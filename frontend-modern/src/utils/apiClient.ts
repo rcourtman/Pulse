@@ -1,13 +1,26 @@
 // Centralized API client with authentication support
 // This replaces the three separate auth utilities (api.ts, auth.ts, authInterceptor.ts)
 
+import { logger } from '@/utils/logger';
+import { STORAGE_KEYS } from '@/utils/localStorage';
+
+const getSessionStorage = (): Storage | undefined => {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+  try {
+    return window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+};
+
 interface FetchOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
   skipAuth?: boolean;
 }
 
 class ApiClient {
-  private authHeader: string | null = null;
   private apiToken: string | null = null;
   private csrfToken: string | null = null;
 
@@ -16,6 +29,35 @@ class ApiClient {
     this.loadStoredAuth();
     // Load CSRF token from cookie
     this.loadCSRFToken();
+  }
+
+  private persistToken(token: string) {
+    const storage = getSessionStorage();
+    if (!storage) return;
+
+    try {
+      storage.setItem(
+        STORAGE_KEYS.AUTH,
+        JSON.stringify({
+          type: 'token',
+          value: token,
+        }),
+      );
+    } catch {
+      // Ignore storage quota errors
+    }
+  }
+
+  private removeStoredToken() {
+    const storage = getSessionStorage();
+    if (!storage) return;
+
+    try {
+      storage.removeItem(AUTH_STORAGE_KEY);
+      storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
+    } catch {
+      // Ignore storage quota errors
+    }
   }
 
   private loadCSRFToken() {
@@ -32,79 +74,107 @@ class ApiClient {
 
   private loadStoredAuth() {
     try {
-      // Try to load from session storage (survives page refresh but not tab close)
-      const stored = sessionStorage.getItem('pulse_auth');
+      const storage = getSessionStorage();
+      if (!storage) return;
+
+      const stored = storage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
         const { type, value } = JSON.parse(stored);
-        if (type === 'basic') {
-          this.authHeader = value;
-        } else if (type === 'token') {
+        if (type === 'token') {
           this.apiToken = value;
         }
+        return;
+      }
+
+      // Legacy storage key used before apiClient refactor
+      const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
+      if (legacyToken) {
+        this.apiToken = legacyToken;
+        this.persistToken(legacyToken);
+        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
       }
     } catch (_err) {
       // Invalid stored auth, ignore
     }
   }
 
-  // Set basic auth credentials
-  setBasicAuth(username: string, password: string) {
-    const encoded = btoa(`${username}:${password}`);
-    this.authHeader = `Basic ${encoded}`;
-
-    // Store in session storage
-    sessionStorage.setItem(
-      'pulse_auth',
-      JSON.stringify({
-        type: 'basic',
-        value: this.authHeader,
-      }),
-    );
-
-    // Also store username for password change functionality
-    sessionStorage.setItem('pulse_auth_user', username);
-  }
-
   // Set API token
   setApiToken(token: string) {
     this.apiToken = token;
 
-    // Store in session storage
-    sessionStorage.setItem(
-      'pulse_auth',
-      JSON.stringify({
-        type: 'token',
-        value: token,
-      }),
-    );
+    this.persistToken(token);
+  }
+
+  getApiToken(): string | null {
+    if (this.apiToken) {
+      return this.apiToken;
+    }
+
+    const storage = getSessionStorage();
+    if (!storage) {
+      return null;
+    }
+
+    try {
+      const stored = storage.getItem(AUTH_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.type === 'token' && typeof parsed.value === 'string') {
+          this.apiToken = parsed.value;
+          return parsed.value;
+        }
+      }
+
+      const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
+      if (legacyToken) {
+        this.apiToken = legacyToken;
+        this.persistToken(legacyToken);
+        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
+        return legacyToken;
+      }
+    } catch {
+      // Ignore parsing/storage errors
+    }
+
+    return null;
   }
 
   // Clear all authentication
   clearAuth() {
-    this.authHeader = null;
     this.apiToken = null;
-    sessionStorage.removeItem('pulse_auth');
-    sessionStorage.removeItem('pulse_auth_user');
+    this.removeStoredToken();
+
+    const storage = getSessionStorage();
+    if (!storage) return;
+    try {
+      storage.removeItem('pulse_auth_user');
+    } catch {
+      // Ignore storage quota errors
+    }
   }
 
   clearApiToken() {
     this.apiToken = null;
-    try {
-      const stored = sessionStorage.getItem('pulse_auth');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.type === 'token') {
-          sessionStorage.removeItem('pulse_auth');
-        }
-      }
-    } catch {
-      sessionStorage.removeItem('pulse_auth');
-    }
+    this.removeStoredToken();
   }
 
   // Check if we have any auth configured
   hasAuth(): boolean {
-    return !!(this.authHeader || this.apiToken);
+    if (this.apiToken) {
+      return true;
+    }
+
+    if (typeof document !== 'undefined') {
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const [name] = cookie.trim().split('=');
+        if (name === 'pulse_session') {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   // Main fetch wrapper that adds authentication
@@ -124,9 +194,6 @@ class ApiClient {
 
     // Add authentication if available and not skipped
     if (!skipAuth) {
-      if (this.authHeader) {
-        finalHeaders['Authorization'] = this.authHeader;
-      }
       if (this.apiToken) {
         finalHeaders['X-API-Token'] = this.apiToken;
       }
@@ -150,7 +217,7 @@ class ApiClient {
     // If we get a 401, our auth might be invalid
     if (response.status === 401 && this.hasAuth()) {
       // Could trigger a re-login flow here
-      console.warn('Authentication failed - credentials may be incorrect');
+      logger.warn('Authentication failed - credentials may be incorrect');
       // Don't clear auth automatically - let the user retry
     }
 
@@ -177,7 +244,7 @@ class ApiClient {
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000; // Default 2 seconds
 
-      console.warn(`Rate limit hit, retrying after ${waitTime}ms`);
+      logger.warn(`Rate limit hit, retrying after ${waitTime}ms`);
 
       // Wait and retry once
       await new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -232,39 +299,11 @@ class ApiClient {
     try {
       return JSON.parse(text) as T;
     } catch (_err) {
-      console.error('Failed to parse JSON response:', text);
+      logger.error('Failed to parse JSON response', text);
       throw new Error('Invalid JSON response from server');
     }
   }
 
-  // Check if authentication is required
-  async checkAuthRequired(): Promise<boolean> {
-    try {
-      // Try to access a protected endpoint without auth
-      const response = await fetch('/api/state', {
-        method: 'GET',
-        credentials: 'omit', // Don't send cookies or auth
-      });
-
-      // If we get 401, auth is required
-      if (response.status === 401) {
-        return true;
-      }
-
-      // If we get 200, no auth required
-      return false;
-    } catch (_err) {
-      // Network error - try the security status endpoint
-      try {
-        const response = await fetch('/api/security/status');
-        const data = await response.json();
-        return data.hasAuthentication || data.requiresAuth || false;
-      } catch (_fallbackErr) {
-        // Can't determine, assume no auth
-        return false;
-      }
-    }
-  }
 }
 
 // Create singleton instance
@@ -274,10 +313,8 @@ export const apiClient = new ApiClient();
 export const apiFetch = (url: string, options?: FetchOptions) => apiClient.fetch(url, options);
 export const apiFetchJSON = <T = unknown>(url: string, options?: FetchOptions) =>
   apiClient.fetchJSON<T>(url, options);
-export const setBasicAuth = (username: string, password: string) =>
-  apiClient.setBasicAuth(username, password);
 export const setApiToken = (token: string) => apiClient.setApiToken(token);
+export const getApiToken = () => apiClient.getApiToken();
 export const clearAuth = () => apiClient.clearAuth();
 export const clearApiToken = () => apiClient.clearApiToken();
 export const hasAuth = () => apiClient.hasAuth();
-export const checkAuthRequired = () => apiClient.checkAuthRequired();

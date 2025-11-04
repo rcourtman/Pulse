@@ -105,6 +105,8 @@ type DockerHostFrontend struct {
 	OS                string                     `json:"os,omitempty"`
 	KernelVersion     string                     `json:"kernelVersion,omitempty"`
 	Architecture      string                     `json:"architecture,omitempty"`
+	Runtime           string                     `json:"runtime"`
+	RuntimeVersion    string                     `json:"runtimeVersion,omitempty"`
 	DockerVersion     string                     `json:"dockerVersion,omitempty"`
 	CPUs              int                        `json:"cpus"`
 	TotalMemoryBytes  int64                      `json:"totalMemoryBytes"`
@@ -163,6 +165,7 @@ type DockerContainerFrontend struct {
 	RootFilesystemBytes int64                            `json:"rootFilesystemBytes,omitempty"`
 	BlockIO             *DockerContainerBlockIOFrontend  `json:"blockIo,omitempty"`
 	Mounts              []DockerContainerMountFrontend   `json:"mounts,omitempty"`
+	Podman              *DockerPodmanContainerFrontend   `json:"podman,omitempty"`
 }
 
 // DockerContainerPortFrontend represents a container port mapping
@@ -198,6 +201,20 @@ type DockerContainerMountFrontend struct {
 	Propagation string `json:"propagation,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Driver      string `json:"driver,omitempty"`
+}
+
+// DockerPodmanContainerFrontend exposes podman-specific metadata.
+type DockerPodmanContainerFrontend struct {
+	PodName           string `json:"podName,omitempty"`
+	PodID             string `json:"podId,omitempty"`
+	Infra             bool   `json:"infra,omitempty"`
+	ComposeProject    string `json:"composeProject,omitempty"`
+	ComposeService    string `json:"composeService,omitempty"`
+	ComposeWorkdir    string `json:"composeWorkdir,omitempty"`
+	ComposeConfigHash string `json:"composeConfigHash,omitempty"`
+	AutoUpdatePolicy  string `json:"autoUpdatePolicy,omitempty"`
+	AutoUpdateRestart string `json:"autoUpdateRestart,omitempty"`
+	UserNamespace     string `json:"userNamespace,omitempty"`
 }
 
 // DockerServiceFrontend represents a Swarm service for the frontend.

@@ -22,9 +22,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
-	"github.com/pkg/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -652,7 +652,7 @@ func Load() (*Config, error) {
 	// Limited environment variable support
 	// NOTE: Node configuration is NOT done via env vars - use the web UI instead
 
-	if cyclesStr := strings.TrimSpace(os.Getenv("BACKUP_POLLING_CYCLES")); cyclesStr != "" {
+	if cyclesStr := utils.GetenvTrim("BACKUP_POLLING_CYCLES"); cyclesStr != "" {
 		if cycles, err := strconv.Atoi(cyclesStr); err == nil {
 			if cycles < 0 {
 				log.Warn().Str("value", cyclesStr).Msg("Ignoring negative BACKUP_POLLING_CYCLES from environment")
@@ -666,7 +666,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if intervalStr := strings.TrimSpace(os.Getenv("BACKUP_POLLING_INTERVAL")); intervalStr != "" {
+	if intervalStr := utils.GetenvTrim("BACKUP_POLLING_INTERVAL"); intervalStr != "" {
 		if dur, err := time.ParseDuration(intervalStr); err == nil {
 			if dur < 0 {
 				log.Warn().Str("value", intervalStr).Msg("Ignoring negative BACKUP_POLLING_INTERVAL from environment")
@@ -688,7 +688,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if enabledStr := strings.TrimSpace(os.Getenv("ENABLE_BACKUP_POLLING")); enabledStr != "" {
+	if enabledStr := utils.GetenvTrim("ENABLE_BACKUP_POLLING"); enabledStr != "" {
 		switch strings.ToLower(enabledStr) {
 		case "0", "false", "no", "off":
 			cfg.EnableBackupPolling = false
@@ -699,7 +699,7 @@ func Load() (*Config, error) {
 		log.Info().Bool("enabled", cfg.EnableBackupPolling).Msg("Overriding backup polling enabled flag from environment")
 	}
 
-	if adaptiveEnabled := strings.TrimSpace(os.Getenv("ADAPTIVE_POLLING_ENABLED")); adaptiveEnabled != "" {
+	if adaptiveEnabled := utils.GetenvTrim("ADAPTIVE_POLLING_ENABLED"); adaptiveEnabled != "" {
 		switch strings.ToLower(adaptiveEnabled) {
 		case "0", "false", "no", "off":
 			cfg.AdaptivePollingEnabled = false
@@ -710,7 +710,7 @@ func Load() (*Config, error) {
 		log.Info().Bool("enabled", cfg.AdaptivePollingEnabled).Msg("Adaptive polling feature flag overridden by environment")
 	}
 
-	if baseInterval := strings.TrimSpace(os.Getenv("ADAPTIVE_POLLING_BASE_INTERVAL")); baseInterval != "" {
+	if baseInterval := utils.GetenvTrim("ADAPTIVE_POLLING_BASE_INTERVAL"); baseInterval != "" {
 		if dur, err := time.ParseDuration(baseInterval); err == nil {
 			cfg.AdaptivePollingBaseInterval = dur
 			cfg.EnvOverrides["ADAPTIVE_POLLING_BASE_INTERVAL"] = true
@@ -720,7 +720,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if minInterval := strings.TrimSpace(os.Getenv("ADAPTIVE_POLLING_MIN_INTERVAL")); minInterval != "" {
+	if minInterval := utils.GetenvTrim("ADAPTIVE_POLLING_MIN_INTERVAL"); minInterval != "" {
 		if dur, err := time.ParseDuration(minInterval); err == nil {
 			cfg.AdaptivePollingMinInterval = dur
 			cfg.EnvOverrides["ADAPTIVE_POLLING_MIN_INTERVAL"] = true
@@ -730,7 +730,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if maxInterval := strings.TrimSpace(os.Getenv("ADAPTIVE_POLLING_MAX_INTERVAL")); maxInterval != "" {
+	if maxInterval := utils.GetenvTrim("ADAPTIVE_POLLING_MAX_INTERVAL"); maxInterval != "" {
 		if dur, err := time.ParseDuration(maxInterval); err == nil {
 			cfg.AdaptivePollingMaxInterval = dur
 			cfg.EnvOverrides["ADAPTIVE_POLLING_MAX_INTERVAL"] = true
@@ -740,7 +740,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if minRefresh := strings.TrimSpace(os.Getenv("GUEST_METADATA_MIN_REFRESH_INTERVAL")); minRefresh != "" {
+	if minRefresh := utils.GetenvTrim("GUEST_METADATA_MIN_REFRESH_INTERVAL"); minRefresh != "" {
 		if dur, err := time.ParseDuration(minRefresh); err == nil {
 			if dur <= 0 {
 				log.Warn().Str("value", minRefresh).Msg("Ignoring non-positive GUEST_METADATA_MIN_REFRESH_INTERVAL from environment")
@@ -754,7 +754,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if jitter := strings.TrimSpace(os.Getenv("GUEST_METADATA_REFRESH_JITTER")); jitter != "" {
+	if jitter := utils.GetenvTrim("GUEST_METADATA_REFRESH_JITTER"); jitter != "" {
 		if dur, err := time.ParseDuration(jitter); err == nil {
 			if dur < 0 {
 				log.Warn().Str("value", jitter).Msg("Ignoring negative GUEST_METADATA_REFRESH_JITTER from environment")
@@ -768,7 +768,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if backoff := strings.TrimSpace(os.Getenv("GUEST_METADATA_RETRY_BACKOFF")); backoff != "" {
+	if backoff := utils.GetenvTrim("GUEST_METADATA_RETRY_BACKOFF"); backoff != "" {
 		if dur, err := time.ParseDuration(backoff); err == nil {
 			if dur <= 0 {
 				log.Warn().Str("value", backoff).Msg("Ignoring non-positive GUEST_METADATA_RETRY_BACKOFF from environment")
@@ -782,7 +782,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if concurrent := strings.TrimSpace(os.Getenv("GUEST_METADATA_MAX_CONCURRENT")); concurrent != "" {
+	if concurrent := utils.GetenvTrim("GUEST_METADATA_MAX_CONCURRENT"); concurrent != "" {
 		if val, err := strconv.Atoi(concurrent); err == nil {
 			if val <= 0 {
 				log.Warn().Str("value", concurrent).Msg("Ignoring non-positive GUEST_METADATA_MAX_CONCURRENT from environment")
@@ -810,7 +810,7 @@ func Load() (*Config, error) {
 		}
 	}
 	envTokens := make([]string, 0, 4)
-	if list := strings.TrimSpace(os.Getenv("API_TOKENS")); list != "" {
+	if list := utils.GetenvTrim("API_TOKENS"); list != "" {
 		for _, part := range strings.Split(list, ",") {
 			part = strings.TrimSpace(part)
 			if part != "" {
@@ -818,7 +818,7 @@ func Load() (*Config, error) {
 			}
 		}
 	}
-	if token := strings.TrimSpace(os.Getenv("API_TOKEN")); token != "" {
+	if token := utils.GetenvTrim("API_TOKEN"); token != "" {
 		envTokens = append(envTokens, token)
 	}
 
@@ -1047,7 +1047,7 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["discoverySubnet"] = true
 		log.Info().Str("subnet", discoverySubnet).Msg("Discovery subnet overridden by DISCOVERY_SUBNET env var")
 	}
-	if envOverride := strings.TrimSpace(os.Getenv("DISCOVERY_ENVIRONMENT_OVERRIDE")); envOverride != "" {
+	if envOverride := utils.GetenvTrim("DISCOVERY_ENVIRONMENT_OVERRIDE"); envOverride != "" {
 		if IsValidDiscoveryEnvironment(envOverride) {
 			cfg.Discovery.EnvironmentOverride = strings.ToLower(envOverride)
 			cfg.EnvOverrides["discoveryEnvironmentOverride"] = true
@@ -1056,19 +1056,19 @@ func Load() (*Config, error) {
 			log.Warn().Str("value", envOverride).Msg("Ignoring invalid DISCOVERY_ENVIRONMENT_OVERRIDE value")
 		}
 	}
-	if allowlistEnv := strings.TrimSpace(os.Getenv("DISCOVERY_SUBNET_ALLOWLIST")); allowlistEnv != "" {
+	if allowlistEnv := utils.GetenvTrim("DISCOVERY_SUBNET_ALLOWLIST"); allowlistEnv != "" {
 		parts := splitAndTrim(allowlistEnv)
 		cfg.Discovery.SubnetAllowlist = sanitizeCIDRList(parts)
 		cfg.EnvOverrides["discoverySubnetAllowlist"] = true
 		log.Info().Int("allowlistCount", len(cfg.Discovery.SubnetAllowlist)).Msg("Discovery subnet allowlist overridden by DISCOVERY_SUBNET_ALLOWLIST")
 	}
-	if blocklistEnv := strings.TrimSpace(os.Getenv("DISCOVERY_SUBNET_BLOCKLIST")); blocklistEnv != "" {
+	if blocklistEnv := utils.GetenvTrim("DISCOVERY_SUBNET_BLOCKLIST"); blocklistEnv != "" {
 		parts := splitAndTrim(blocklistEnv)
 		cfg.Discovery.SubnetBlocklist = sanitizeCIDRList(parts)
 		cfg.EnvOverrides["discoverySubnetBlocklist"] = true
 		log.Info().Int("blocklistCount", len(cfg.Discovery.SubnetBlocklist)).Msg("Discovery subnet blocklist overridden by DISCOVERY_SUBNET_BLOCKLIST")
 	}
-	if maxHostsEnv := strings.TrimSpace(os.Getenv("DISCOVERY_MAX_HOSTS_PER_SCAN")); maxHostsEnv != "" {
+	if maxHostsEnv := utils.GetenvTrim("DISCOVERY_MAX_HOSTS_PER_SCAN"); maxHostsEnv != "" {
 		if v, err := strconv.Atoi(maxHostsEnv); err == nil && v > 0 {
 			cfg.Discovery.MaxHostsPerScan = v
 			cfg.EnvOverrides["discoveryMaxHostsPerScan"] = true
@@ -1077,7 +1077,7 @@ func Load() (*Config, error) {
 			log.Warn().Str("value", maxHostsEnv).Msg("Ignoring invalid DISCOVERY_MAX_HOSTS_PER_SCAN value")
 		}
 	}
-	if maxConcurrentEnv := strings.TrimSpace(os.Getenv("DISCOVERY_MAX_CONCURRENT")); maxConcurrentEnv != "" {
+	if maxConcurrentEnv := utils.GetenvTrim("DISCOVERY_MAX_CONCURRENT"); maxConcurrentEnv != "" {
 		if v, err := strconv.Atoi(maxConcurrentEnv); err == nil && v > 0 {
 			cfg.Discovery.MaxConcurrent = v
 			cfg.EnvOverrides["discoveryMaxConcurrent"] = true
@@ -1086,7 +1086,7 @@ func Load() (*Config, error) {
 			log.Warn().Str("value", maxConcurrentEnv).Msg("Ignoring invalid DISCOVERY_MAX_CONCURRENT value")
 		}
 	}
-	if reverseDNSEnv := strings.TrimSpace(os.Getenv("DISCOVERY_ENABLE_REVERSE_DNS")); reverseDNSEnv != "" {
+	if reverseDNSEnv := utils.GetenvTrim("DISCOVERY_ENABLE_REVERSE_DNS"); reverseDNSEnv != "" {
 		switch strings.ToLower(reverseDNSEnv) {
 		case "0", "false", "no", "off":
 			cfg.Discovery.EnableReverseDNS = false
@@ -1096,7 +1096,7 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["discoveryEnableReverseDns"] = true
 		log.Info().Bool("enableReverseDNS", cfg.Discovery.EnableReverseDNS).Msg("Discovery reverse DNS setting overridden by DISCOVERY_ENABLE_REVERSE_DNS")
 	}
-	if scanGatewaysEnv := strings.TrimSpace(os.Getenv("DISCOVERY_SCAN_GATEWAYS")); scanGatewaysEnv != "" {
+	if scanGatewaysEnv := utils.GetenvTrim("DISCOVERY_SCAN_GATEWAYS"); scanGatewaysEnv != "" {
 		switch strings.ToLower(scanGatewaysEnv) {
 		case "0", "false", "no", "off":
 			cfg.Discovery.ScanGateways = false
@@ -1106,7 +1106,7 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["discoveryScanGateways"] = true
 		log.Info().Bool("scanGateways", cfg.Discovery.ScanGateways).Msg("Discovery gateway scanning overridden by DISCOVERY_SCAN_GATEWAYS")
 	}
-	if dialTimeoutEnv := strings.TrimSpace(os.Getenv("DISCOVERY_DIAL_TIMEOUT_MS")); dialTimeoutEnv != "" {
+	if dialTimeoutEnv := utils.GetenvTrim("DISCOVERY_DIAL_TIMEOUT_MS"); dialTimeoutEnv != "" {
 		if v, err := strconv.Atoi(dialTimeoutEnv); err == nil && v > 0 {
 			cfg.Discovery.DialTimeout = v
 			cfg.EnvOverrides["discoveryDialTimeoutMs"] = true
@@ -1115,7 +1115,7 @@ func Load() (*Config, error) {
 			log.Warn().Str("value", dialTimeoutEnv).Msg("Ignoring invalid DISCOVERY_DIAL_TIMEOUT_MS value")
 		}
 	}
-	if httpTimeoutEnv := strings.TrimSpace(os.Getenv("DISCOVERY_HTTP_TIMEOUT_MS")); httpTimeoutEnv != "" {
+	if httpTimeoutEnv := utils.GetenvTrim("DISCOVERY_HTTP_TIMEOUT_MS"); httpTimeoutEnv != "" {
 		if v, err := strconv.Atoi(httpTimeoutEnv); err == nil && v > 0 {
 			cfg.Discovery.HTTPTimeout = v
 			cfg.EnvOverrides["discoveryHttpTimeoutMs"] = true
@@ -1175,7 +1175,7 @@ func Load() (*Config, error) {
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
-		return nil, errors.Wrap(err, "load config: invalid configuration")
+		return nil, fmt.Errorf("load config: invalid configuration: %w", err)
 	}
 
 	return cfg, nil

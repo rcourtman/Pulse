@@ -1,5 +1,6 @@
 import { createSignal, Show, onMount, onCleanup, createEffect } from 'solid-js';
 import { UpdatesAPI, type UpdateStatus } from '@/api/updates';
+import { logger } from '@/utils/logger';
 
 interface UpdateProgressModalProps {
   isOpen: boolean;
@@ -57,7 +58,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         }
       }
     } catch (error) {
-      console.error('Failed to poll update status:', error);
+      logger.error('Failed to poll update status', error);
       // If we get errors during update, assume we're restarting
       const currentStatus = status();
       const shouldAssumeRestart =
@@ -95,12 +96,12 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
           isHealthy = true;
         }
       } catch (error) {
-        console.warn('Health check request failed, will retry', error);
+        logger.warn('Health check request failed, will retry', error);
       }
 
       if (isHealthy) {
         // Backend is back! Reload the page to get the new version
-        console.log('Backend is healthy again, reloading...');
+        logger.info('Backend is healthy again, reloading...');
         window.location.reload();
         return;
       }
@@ -130,17 +131,17 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
     // If websocket reconnected after being disconnected, the backend is likely back
     if (wsDisconnected() && connected === true && !reconnecting) {
-      console.log('WebSocket reconnected after restart, verifying health...');
+      logger.info('WebSocket reconnected after restart, verifying health...');
       // Give it a moment for the backend to fully initialize
       setTimeout(async () => {
         try {
           const response = await fetch('/api/health', { cache: 'no-store' });
           if (response.ok) {
-            console.log('Backend healthy after websocket reconnect, reloading...');
+            logger.info('Backend healthy after websocket reconnect, reloading...');
             window.location.reload();
           }
         } catch (_error) {
-          console.warn('Health check failed after websocket reconnect, will keep trying');
+          logger.warn('Health check failed after websocket reconnect, will keep trying');
         }
       }, 1000);
     }

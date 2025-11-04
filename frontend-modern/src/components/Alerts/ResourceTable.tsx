@@ -5,6 +5,7 @@ import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
+import { logger } from '@/utils/logger';
 
 const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'cpu %': 'Percent CPU utilization allowed before an alert fires.',
@@ -173,7 +174,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
   // Track changes to global defaults and factory defaults for debugging
   createEffect(() => {
-    console.log('[ResourceTable] createEffect triggered - props changed:', {
+    logger.debug('[ResourceTable] props changed', {
       title: props.title,
       globalDefaults: props.globalDefaults,
       factoryDefaults: props.factoryDefaults,
@@ -183,13 +184,13 @@ export function ResourceTable(props: ResourceTableProps) {
 
   // Check if global defaults have been customized from factory defaults
   const hasCustomGlobalDefaults = () => {
-    console.log('[ResourceTable] hasCustomGlobalDefaults check:', {
+    logger.debug('[ResourceTable] hasCustomGlobalDefaults check', {
       globalDefaults: props.globalDefaults,
       factoryDefaults: props.factoryDefaults,
       title: props.title,
     });
     if (!props.globalDefaults || !props.factoryDefaults) {
-      console.log('[ResourceTable] Missing props, returning false');
+      logger.debug('[ResourceTable] Missing props, returning false');
       return false;
     }
     const result = Object.keys(props.factoryDefaults).some((key) => {
@@ -197,13 +198,15 @@ export function ResourceTable(props: ResourceTableProps) {
       const factory = props.factoryDefaults?.[key];
       const differs = current !== undefined && current !== factory;
       if (differs) {
-        console.log(
-          `[ResourceTable] Difference found: ${key} current=${current} factory=${factory}`,
-        );
+        logger.debug('[ResourceTable] Difference found', {
+          key,
+          current,
+          factory,
+        });
       }
       return differs;
     });
-    console.log(`[ResourceTable] hasCustomGlobalDefaults result: ${result}`);
+    logger.debug('[ResourceTable] hasCustomGlobalDefaults result', { result });
     return result;
   };
 

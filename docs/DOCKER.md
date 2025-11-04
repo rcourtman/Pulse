@@ -13,9 +13,10 @@ docker run -d \
   rcourtman/pulse:latest
 ```
 
-1. Access at `http://your-server:7655`
-2. **Complete the mandatory security setup** on first access
-3. Save your credentials - they won't be shown again!
+1. Inspect the bootstrap token generated inside the container: `docker exec -it pulse cat /data/.bootstrap_token`
+2. Access `http://your-server:7655`
+3. Paste the bootstrap token when prompted, then **complete the mandatory security setup**
+4. Save the generated credentials and API token—they are shown only once and the bootstrap file is deleted after success
 
 ## First-Time Setup
 
@@ -207,7 +208,7 @@ If a host remains offline, review [Troubleshooting → Docker Agent Shows Hosts 
 
 ## Network Discovery
 
-**New in v4.5.0+**: Pulse automatically scans common home/office networks when running in Docker!
+Pulse automatically scans common home/office networks when running in Docker.
 
 ### How It Works
 1. Detects Docker environment automatically

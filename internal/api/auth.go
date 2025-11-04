@@ -26,8 +26,13 @@ const (
 
 // Global session store instance
 var (
-	sessionStore *SessionStore
-	sessionOnce  sync.Once
+	sessionStore     *SessionStore
+	sessionOnce      sync.Once
+	adminBypassState struct {
+		once     sync.Once
+		enabled  bool
+		declined bool
+	}
 )
 
 // InitSessionStore initializes the persistent session store
@@ -128,7 +133,7 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	proxySecret := r.Header.Get("X-Proxy-Secret")
 	if proxySecret != cfg.ProxyAuthSecret {
 		log.Debug().
-			Str("provided_secret", proxySecret[:min(8, len(proxySecret))]+"...").
+			Int("provided_secret_length", len(proxySecret)).
 			Msg("Invalid proxy secret")
 		return false, "", false
 	}
@@ -226,9 +231,6 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
 		// Check if an API token was provided
 		providedToken := r.Header.Get("X-API-Token")
-		if providedToken == "" {
-			providedToken = r.URL.Query().Get("token")
-		}
 
 		// If a token was provided, validate it
 		if providedToken != "" {
@@ -245,8 +247,8 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 		// Require a valid token for all requests in API-only mode
 		if w != nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="API Token Required"`)
-			http.Error(w, "API token required", http.StatusUnauthorized)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="API token required; supply via Authorization header or X-API-Token header"`)
+			http.Error(w, "API token required via Authorization header or X-API-Token header", http.StatusUnauthorized)
 		}
 		return false
 	}
@@ -280,9 +282,6 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 					return true
 				}
 			}
-		}
-		if validateToken(r.URL.Query().Get("token")) {
-			return true
 		}
 	}
 
@@ -492,7 +491,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Dev mode bypass for all auth (disabled by default)
-		if os.Getenv("ALLOW_ADMIN_BYPASS") == "1" {
+		if adminBypassEnabled() {
 			log.Debug().
 				Str("path", r.URL.Path).
 				Msg("Auth bypass enabled for dev mode")
@@ -531,12 +530,7 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Dev mode bypass for admin endpoints (disabled by default)
-		bypassValue := os.Getenv("ALLOW_ADMIN_BYPASS")
-		log.Info().
-			Str("bypass_value", bypassValue).
-			Str("path", r.URL.Path).
-			Msg("=== CHECKING ADMIN BYPASS ===")
-		if bypassValue == "1" {
+		if adminBypassEnabled() {
 			log.Debug().
 				Str("path", r.URL.Path).
 				Msg("Admin bypass enabled for dev mode")
@@ -671,4 +665,21 @@ func getAPITokenRecordFromRequest(r *http.Request) *config.APITokenRecord {
 	}
 	clone := record.Clone()
 	return &clone
+}
+func adminBypassEnabled() bool {
+	adminBypassState.once.Do(func() {
+		if os.Getenv("ALLOW_ADMIN_BYPASS") != "1" {
+			return
+		}
+
+		if os.Getenv("PULSE_DEV") == "true" || strings.EqualFold(os.Getenv("NODE_ENV"), "development") {
+			log.Warn().Msg("Admin authentication bypass ENABLED (development mode)")
+			adminBypassState.enabled = true
+			return
+		}
+
+		log.Warn().Msg("Ignoring ALLOW_ADMIN_BYPASS outside development mode")
+		adminBypassState.declined = true
+	})
+	return adminBypassState.enabled
 }

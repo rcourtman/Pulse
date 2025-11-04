@@ -49,6 +49,10 @@ func (a *Agent) resolvedSwarmScope(info systemtypes.Info) string {
 }
 
 func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, containers []agentsdocker.Container) ([]agentsdocker.Service, []agentsdocker.Task, *agentsdocker.SwarmInfo) {
+	if !a.supportsSwarm {
+		return nil, nil, nil
+	}
+
 	if info.Swarm.NodeID == "" && string(info.Swarm.LocalNodeState) == "" && strings.TrimSpace(info.Swarm.Error) == "" {
 		return nil, nil, nil
 	}

@@ -54,18 +54,18 @@ type DiagnosticsInfo struct {
 
 // DiscoveryDiagnostic summarizes discovery configuration and recent activity.
 type DiscoveryDiagnostic struct {
-	Enabled             bool     `json:"enabled"`
-	ConfiguredSubnet    string   `json:"configuredSubnet,omitempty"`
-	ActiveSubnet        string   `json:"activeSubnet,omitempty"`
-	EnvironmentOverride string   `json:"environmentOverride,omitempty"`
-	SubnetAllowlist     []string `json:"subnetAllowlist"`
-	SubnetBlocklist     []string `json:"subnetBlocklist"`
-	Scanning            bool     `json:"scanning"`
-	ScanInterval        string   `json:"scanInterval,omitempty"`
-	LastScanStartedAt   string   `json:"lastScanStartedAt,omitempty"`
-	LastResultTimestamp string   `json:"lastResultTimestamp,omitempty"`
-	LastResultServers   int      `json:"lastResultServers,omitempty"`
-	LastResultErrors    int      `json:"lastResultErrors,omitempty"`
+	Enabled             bool                   `json:"enabled"`
+	ConfiguredSubnet    string                 `json:"configuredSubnet,omitempty"`
+	ActiveSubnet        string                 `json:"activeSubnet,omitempty"`
+	EnvironmentOverride string                 `json:"environmentOverride,omitempty"`
+	SubnetAllowlist     []string               `json:"subnetAllowlist"`
+	SubnetBlocklist     []string               `json:"subnetBlocklist"`
+	Scanning            bool                   `json:"scanning"`
+	ScanInterval        string                 `json:"scanInterval,omitempty"`
+	LastScanStartedAt   string                 `json:"lastScanStartedAt,omitempty"`
+	LastResultTimestamp string                 `json:"lastResultTimestamp,omitempty"`
+	LastResultServers   int                    `json:"lastResultServers,omitempty"`
+	LastResultErrors    int                    `json:"lastResultErrors,omitempty"`
 	History             []DiscoveryHistoryItem `json:"history,omitempty"`
 }
 
@@ -234,19 +234,17 @@ type SystemDiagnostic struct {
 
 // TemperatureProxyDiagnostic summarizes proxy detection state
 type TemperatureProxyDiagnostic struct {
-	LegacySSHDetected     bool     `json:"legacySSHDetected"`
-	RecommendProxyUpgrade bool     `json:"recommendProxyUpgrade"`
-	SocketFound           bool     `json:"socketFound"`
-	SocketPath            string   `json:"socketPath,omitempty"`
-	SocketPermissions     string   `json:"socketPermissions,omitempty"`
-	SocketOwner           string   `json:"socketOwner,omitempty"`
-	SocketGroup           string   `json:"socketGroup,omitempty"`
-	ProxyReachable        bool     `json:"proxyReachable"`
-	ProxyVersion          string   `json:"proxyVersion,omitempty"`
-	ProxyPublicKeySHA256  string   `json:"proxyPublicKeySha256,omitempty"`
-	ProxySSHDirectory     string   `json:"proxySshDirectory,omitempty"`
-	LegacySSHKeyCount     int      `json:"legacySshKeyCount,omitempty"`
-	Notes                 []string `json:"notes,omitempty"`
+	SocketFound          bool     `json:"socketFound"`
+	SocketPath           string   `json:"socketPath,omitempty"`
+	SocketPermissions    string   `json:"socketPermissions,omitempty"`
+	SocketOwner          string   `json:"socketOwner,omitempty"`
+	SocketGroup          string   `json:"socketGroup,omitempty"`
+	ProxyReachable       bool     `json:"proxyReachable"`
+	ProxyVersion         string   `json:"proxyVersion,omitempty"`
+	ProxyPublicKeySHA256 string   `json:"proxyPublicKeySha256,omitempty"`
+	ProxySSHDirectory    string   `json:"proxySshDirectory,omitempty"`
+	LegacySSHKeyCount    int      `json:"legacySshKeyCount,omitempty"`
+	Notes                []string `json:"notes,omitempty"`
 }
 
 // APITokenDiagnostic reports on the state of the multi-token authentication system.
@@ -396,8 +394,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		MemoryMB:     memStats.Alloc / 1024 / 1024,
 	}
 
-	legacySSH, recommendProxy := r.detectLegacySSH()
-	diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config, legacySSH, recommendProxy)
+	diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config)
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 
 	// Test each configured node
@@ -633,15 +630,15 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 				items := make([]DiscoveryHistoryItem, 0, len(history))
 				for _, entry := range history {
 					item := DiscoveryHistoryItem{
-						StartedAt:       entry.startedAt.UTC().Format(time.RFC3339),
-						CompletedAt:     entry.completedAt.UTC().Format(time.RFC3339),
-						Duration:        entry.duration.Truncate(time.Millisecond).String(),
-						DurationMs:      entry.duration.Milliseconds(),
-						Subnet:          entry.subnet,
-						ServerCount:     entry.serverCount,
-						ErrorCount:      entry.errorCount,
-						BlocklistLength: entry.blocklistLength,
-						Status:          entry.status,
+						StartedAt:       entry.StartedAt().UTC().Format(time.RFC3339),
+						CompletedAt:     entry.CompletedAt().UTC().Format(time.RFC3339),
+						Duration:        entry.Duration().Truncate(time.Millisecond).String(),
+						DurationMs:      entry.Duration().Milliseconds(),
+						Subnet:          entry.Subnet(),
+						ServerCount:     entry.ServerCount(),
+						ErrorCount:      entry.ErrorCount(),
+						BlocklistLength: entry.BlocklistLength(),
+						Status:          entry.Status(),
 					}
 					items = append(items, item)
 				}
@@ -653,11 +650,8 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 	return discovery
 }
 
-func buildTemperatureProxyDiagnostic(cfg *config.Config, legacyDetected, recommendProxy bool) *TemperatureProxyDiagnostic {
-	diag := &TemperatureProxyDiagnostic{
-		LegacySSHDetected:     legacyDetected,
-		RecommendProxyUpgrade: recommendProxy,
-	}
+func buildTemperatureProxyDiagnostic(cfg *config.Config) *TemperatureProxyDiagnostic {
+	diag := &TemperatureProxyDiagnostic{}
 
 	appendNote := func(note string) {
 		if note == "" || contains(diag.Notes, note) {
@@ -741,10 +735,6 @@ func buildTemperatureProxyDiagnostic(cfg *config.Config, legacyDetected, recomme
 			diag.LegacySSHKeyCount = count
 			appendNote(fmt.Sprintf("Found %d SSH key(s) inside the Pulse data directory. Remove them after migrating to the secure proxy.", count))
 		}
-	}
-
-	if diag.LegacySSHDetected && diag.RecommendProxyUpgrade {
-		appendNote("Legacy SSH temperature collection detected. Remove each node from Pulse and re-add it using the installer script copied from Settings → Nodes (or rerun the host installer script) to migrate to the secure proxy.")
 	}
 
 	return diag

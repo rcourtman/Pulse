@@ -1,6 +1,8 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { isPulseHttps } from '@/utils/url';
+import { logger } from '@/utils/logger';
 
 interface SecurityStatus {
   hasAuthentication: boolean;
@@ -42,15 +44,17 @@ export const SecurityWarning: Component = () => {
         let score = 0;
         const maxScore = 5;
 
+        const runningOverHttps = isPulseHttps();
+
         if (data.credentialsEncrypted !== false) score++; // Always true currently
         if (data.exportProtected) score++;
         if (data.apiTokenConfigured) score++;
-        if (data.hasHTTPS || window.location.protocol === 'https:') score++;
+        if (data.hasHTTPS || runningOverHttps) score++;
         if (data.hasAuthentication) score++;
 
         setStatus({
           hasAuthentication: data.hasAuthentication || false,
-          hasHTTPS: window.location.protocol === 'https:',
+          hasHTTPS: runningOverHttps,
           hasAPIToken: data.apiTokenConfigured || false,
           hasAuditLogging: data.hasAuditLogging || false,
           credentialsEncrypted: true, // Always true in current implementation
@@ -63,7 +67,7 @@ export const SecurityWarning: Component = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to fetch security status:', error);
+      logger.error('Failed to fetch security status:', error);
     }
   });
 

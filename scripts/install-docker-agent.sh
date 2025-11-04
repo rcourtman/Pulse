@@ -530,15 +530,167 @@ remove_polkit_rule() {
     fi
 }
 
+# Auto-detect container runtime if not explicitly specified
+detect_container_runtime() {
+    local has_podman=false
+    local has_docker=false
+
+    # Check if Podman is available and accessible
+    if command -v podman &>/dev/null && podman info &>/dev/null 2>&1; then
+        has_podman=true
+    fi
+
+    # Check if Docker is available and accessible
+    if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
+        has_docker=true
+    fi
+
+    # If both are available, ask the user
+    if [[ "$has_podman" == "true" && "$has_docker" == "true" ]]; then
+        echo "" >&2
+        echo "Both Docker and Podman are detected on this system." >&2
+        echo "Which container runtime would you like to monitor?" >&2
+        echo "" >&2
+        echo "  1) Docker" >&2
+        echo "  2) Podman" >&2
+        echo "" >&2
+
+        # Read user choice
+        while true; do
+            printf "Enter choice [1-2]: " >&2
+            read -r choice
+            case "$choice" in
+                1|docker|Docker)
+                    printf 'docker'
+                    return 0
+                    ;;
+                2|podman|Podman)
+                    printf 'podman'
+                    return 0
+                    ;;
+                *)
+                    echo "Invalid choice. Please enter 1 or 2." >&2
+                    ;;
+            esac
+        done
+    fi
+
+    # Only one is available - use it automatically
+    if [[ "$has_podman" == "true" ]]; then
+        printf 'podman'
+        return 0
+    fi
+
+    if [[ "$has_docker" == "true" ]]; then
+        printf 'docker'
+        return 0
+    fi
+
+    # Default to docker if nothing detected
+    printf 'docker'
+}
+
+# Early runtime detection so we can chain to the container-aware installer.
+ORIGINAL_ARGS=("$@")
+
+# Check for explicit --runtime flag
+DETECTED_RUNTIME="${PULSE_RUNTIME:-}"
+if [[ -z "$DETECTED_RUNTIME" ]]; then
+    idx=0
+    total_args=${#ORIGINAL_ARGS[@]}
+    while [[ $idx -lt $total_args ]]; do
+        arg="${ORIGINAL_ARGS[$idx]}"
+        case "$arg" in
+            --runtime)
+                if (( idx + 1 < total_args )); then
+                    DETECTED_RUNTIME="${ORIGINAL_ARGS[$((idx + 1))]}"
+                fi
+                ((idx += 2))
+                continue
+                ;;
+            --runtime=*)
+                DETECTED_RUNTIME="${arg#--runtime=}"
+                ;;
+        esac
+        ((idx += 1))
+    done
+    unset total_args
+fi
+
+# If still not set, auto-detect
+if [[ -z "$DETECTED_RUNTIME" ]]; then
+    DETECTED_RUNTIME="$(detect_container_runtime)"
+fi
+
+if [[ -n "$DETECTED_RUNTIME" ]]; then
+    runtime_lower=$(printf '%s' "$DETECTED_RUNTIME" | tr '[:upper:]' '[:lower:]')
+    if [[ "$runtime_lower" == "podman" ]]; then
+        # Try to find the script locally first (for development)
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [[ -f "${SCRIPT_DIR}/install-container-agent.sh" ]]; then
+            exec "${SCRIPT_DIR}/install-container-agent.sh" "${ORIGINAL_ARGS[@]}"
+        fi
+
+        # Extract Pulse URL from arguments to download the container agent script
+        PULSE_URL=""
+        idx=0
+        total_args=${#ORIGINAL_ARGS[@]}
+        while [[ $idx -lt $total_args ]]; do
+            arg="${ORIGINAL_ARGS[$idx]}"
+            case "$arg" in
+                --url)
+                    if (( idx + 1 < total_args )); then
+                        PULSE_URL="${ORIGINAL_ARGS[$((idx + 1))]}"
+                        break
+                    fi
+                    ;;
+                --url=*)
+                    PULSE_URL="${arg#--url=}"
+                    break
+                    ;;
+            esac
+            ((idx += 1))
+        done
+
+        if [[ -n "$PULSE_URL" ]]; then
+            log_info "Detected Podman runtime, downloading container agent installer..."
+            CONTAINER_SCRIPT="/tmp/pulse-install-container-agent-$$.sh"
+            if command -v curl &>/dev/null; then
+                if curl -fsSL "${PULSE_URL%/}/install-container-agent.sh" -o "$CONTAINER_SCRIPT" 2>/dev/null; then
+                    chmod +x "$CONTAINER_SCRIPT"
+                    exec bash "$CONTAINER_SCRIPT" "${ORIGINAL_ARGS[@]}"
+                fi
+            elif command -v wget &>/dev/null; then
+                if wget -q -O "$CONTAINER_SCRIPT" "${PULSE_URL%/}/install-container-agent.sh" 2>/dev/null; then
+                    chmod +x "$CONTAINER_SCRIPT"
+                    exec bash "$CONTAINER_SCRIPT" "${ORIGINAL_ARGS[@]}"
+                fi
+            fi
+            echo "[ERROR] Failed to download install-container-agent.sh from $PULSE_URL" >&2
+            exit 1
+        fi
+
+        echo "[ERROR] Podman detected but no --url provided to download container agent installer." >&2
+        echo "[INFO] Please provide --url parameter or use --runtime docker to force Docker mode." >&2
+        exit 1
+    fi
+fi
+
 # Pulse Docker Agent Installer/Uninstaller
 # Install (single target):
-#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --url http://pulse.example.com --token <api-token>
+#   curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+#     sudo bash /tmp/pulse-install-docker-agent.sh --url http://pulse.example.com --token <api-token> && \
+#     rm -f /tmp/pulse-install-docker-agent.sh
 # Install (multi-target fan-out):
-#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- \
-#     --target https://pulse.example.com|<api-token> \
-#     --target https://pulse-dr.example.com|<api-token>
+#   curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+#     sudo bash /tmp/pulse-install-docker-agent.sh -- \
+#       --target https://pulse.example.com|<api-token> \
+#       --target https://pulse-dr.example.com|<api-token> && \
+#     rm -f /tmp/pulse-install-docker-agent.sh
 # Uninstall:
-#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --uninstall [--purge]
+#   curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+#     sudo bash /tmp/pulse-install-docker-agent.sh --uninstall [--purge] && \
+#     rm -f /tmp/pulse-install-docker-agent.sh
 
 PULSE_URL=""
 DEFAULT_AGENT_PATH="/usr/local/bin/pulse-docker-agent"
@@ -701,17 +853,22 @@ PIPELINE_COMMAND_SUDO_C=""
 PIPELINE_COMMAND_INNER=""
 if [[ -n "$INSTALLER_URL_HINT" ]]; then
     INSTALLER_URL_QUOTED=$(quote_shell_arg "$INSTALLER_URL_HINT")
-    PIPELINE_COMMAND="curl -fsSL ${INSTALLER_URL_QUOTED} | sudo bash -s"
+    INSTALLER_URL_ESCAPED=$(printf '%q' "$INSTALLER_URL_HINT")
+    TMP_INSTALLER_PATH="/tmp/pulse-install-docker-agent.sh"
+    TMP_INSTALLER_QUOTED=$(quote_shell_arg "$TMP_INSTALLER_PATH")
+    PIPELINE_PREFIX="curl -fSL ${INSTALLER_URL_QUOTED} -o ${TMP_INSTALLER_QUOTED} && sudo bash ${TMP_INSTALLER_QUOTED}"
+    PIPELINE_INNER_PREFIX="curl -fSL ${INSTALLER_URL_ESCAPED} -o ${TMP_INSTALLER_QUOTED} && bash ${TMP_INSTALLER_QUOTED}"
+    PIPELINE_SUFFIX=" && rm -f ${TMP_INSTALLER_QUOTED}"
+    PIPELINE_COMMAND="${PIPELINE_PREFIX}"
+    PIPELINE_COMMAND_INNER="${PIPELINE_INNER_PREFIX}"
     if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
         PIPELINE_COMMAND+=" -- ${ORIGINAL_ARGS_STRING}"
-    fi
-    INSTALLER_URL_ESCAPED=$(printf '%q' "$INSTALLER_URL_HINT")
-    PIPELINE_COMMAND_INNER="curl -fsSL ${INSTALLER_URL_ESCAPED} | bash -s"
-    if [[ -n "$ORIGINAL_ARGS_ESCAPED" ]]; then
         PIPELINE_COMMAND_INNER+=" -- ${ORIGINAL_ARGS_ESCAPED}"
     fi
+    PIPELINE_COMMAND+="${PIPELINE_SUFFIX}"
+    PIPELINE_COMMAND_INNER+="${PIPELINE_SUFFIX}"
     PIPELINE_COMMAND_SUDO_C="sudo bash -c $(quote_shell_arg "$PIPELINE_COMMAND_INNER")"
-    unset INSTALLER_URL_ESCAPED INSTALLER_URL_QUOTED
+    unset INSTALLER_URL_ESCAPED INSTALLER_URL_QUOTED TMP_INSTALLER_PATH TMP_INSTALLER_QUOTED PIPELINE_PREFIX PIPELINE_INNER_PREFIX PIPELINE_SUFFIX
 fi
 
 SCRIPT_SOURCE_HINT=""
@@ -796,16 +953,16 @@ if [[ $EUID -ne 0 ]]; then
            echo ""
        fi
        if [[ -z "$PIPELINE_COMMAND" && -z "$LOCAL_COMMAND" ]]; then
-           echo "Please re-run the installer with elevated privileges, for example:"
-           if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
-               echo "  curl -fsSL <URL>/install-docker-agent.sh | sudo bash -s -- ${ORIGINAL_ARGS_STRING}"
-               FALLBACK_PIPELINE_INNER="curl -fsSL <URL>/install-docker-agent.sh | bash -s -- ${ORIGINAL_ARGS_ESCAPED}"
-               echo "  sudo bash -c $(quote_shell_arg "$FALLBACK_PIPELINE_INNER")"
-               unset FALLBACK_PIPELINE_INNER
-           else
-               echo "  curl -fsSL <URL>/install-docker-agent.sh | sudo bash -s"
-               echo "  sudo bash -c 'curl -fsSL <URL>/install-docker-agent.sh | bash -s'"
-           fi
+        echo "Please re-run the installer with elevated privileges, for example:"
+        if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+            echo "  curl -fSL <URL>/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \\"
+            echo "    sudo bash /tmp/pulse-install-docker-agent.sh -- ${ORIGINAL_ARGS_STRING} && \\"
+            echo "    rm -f /tmp/pulse-install-docker-agent.sh"
+        else
+            echo "  curl -fSL <URL>/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \\"
+            echo "    sudo bash /tmp/pulse-install-docker-agent.sh && \\"
+            echo "    rm -f /tmp/pulse-install-docker-agent.sh"
+        fi
        fi
        exit "${AUTO_SUDO_EXIT_CODE:-1}"
    fi
@@ -832,16 +989,16 @@ if [[ $EUID -ne 0 ]]; then
        echo ""
    fi
    if [[ -z "$PIPELINE_COMMAND" && -z "$LOCAL_COMMAND" ]]; then
-       echo "Please re-run the installer with elevated privileges, for example:"
-       if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
-           echo "  curl -fsSL <URL>/install-docker-agent.sh | sudo bash -s -- ${ORIGINAL_ARGS_STRING}"
-           FALLBACK_PIPELINE_INNER="curl -fsSL <URL>/install-docker-agent.sh | bash -s -- ${ORIGINAL_ARGS_ESCAPED}"
-           echo "  sudo bash -c $(quote_shell_arg "$FALLBACK_PIPELINE_INNER")"
-           unset FALLBACK_PIPELINE_INNER
-       else
-           echo "  curl -fsSL <URL>/install-docker-agent.sh | sudo bash -s"
-           echo "  sudo bash -c 'curl -fsSL <URL>/install-docker-agent.sh | bash -s'"
-       fi
+    echo "Please re-run the installer with elevated privileges, for example:"
+    if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+        echo "  curl -fSL <URL>/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \\"
+        echo "    sudo bash /tmp/pulse-install-docker-agent.sh -- ${ORIGINAL_ARGS_STRING} && \\"
+        echo "    rm -f /tmp/pulse-install-docker-agent.sh"
+    else
+        echo "  curl -fSL <URL>/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \\"
+        echo "    sudo bash /tmp/pulse-install-docker-agent.sh && \\"
+        echo "    rm -f /tmp/pulse-install-docker-agent.sh"
+    fi
    fi
    exit 1
 fi

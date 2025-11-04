@@ -407,8 +407,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 					Str("username", username).
 					Msg("Non-admin user attempted to update system settings")
 
-					// Return forbidden error
-				utils.WriteJSONError(w, "Admin privileges required", http.StatusForbidden)
+				// Return forbidden error
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
 				return
 			}
 		}

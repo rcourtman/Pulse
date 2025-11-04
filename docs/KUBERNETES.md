@@ -2,7 +2,7 @@
 
 Deploy Pulse to Kubernetes with the bundled Helm chart under `deploy/helm/pulse`. The chart provisions the Pulse hub (web UI + API) and can optionally run the Docker monitoring agent alongside it. Stable builds are published automatically to the GitHub Container Registry (GHCR) whenever a Pulse release goes out.
 
-> **New in v4.25.0:** The Helm chart is shipped with the release archives and pairs with the upgraded monitoring engine (staleness tracking, circuit breakers, detailed poll metrics) so Kubernetes clusters benefit from the same adaptive scheduling improvements as bare-metal installs.
+> The Helm chart ships with the release archives and pairs with the upgraded monitoring engine (staleness tracking, circuit breakers, detailed poll metrics) so Kubernetes clusters benefit from the same adaptive scheduling improvements as bare-metal installs.
 
 ## Prerequisites
 

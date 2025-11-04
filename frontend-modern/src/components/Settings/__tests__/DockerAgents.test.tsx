@@ -108,11 +108,11 @@ describe('DockerAgents removed hosts', () => {
     allowDockerHostReenrollMock.mockResolvedValue(undefined);
     const clipboardSpy = vi.fn().mockResolvedValue(undefined);
 
-    vi.stubGlobal('navigator', { clipboard: { writeText: clipboardSpy } } as Navigator);
+    vi.stubGlobal('navigator', { clipboard: { writeText: clipboardSpy } } as unknown as Navigator);
 
     setupComponent([], [createRemovedHost()]);
 
-    expect(screen.getByText('Recently removed Docker hosts')).toBeInTheDocument();
+    expect(screen.getByText('Recently removed container hosts')).toBeInTheDocument();
     const allowButton = screen.getByRole('button', { name: 'Allow re-enroll' });
     fireEvent.click(allowButton);
 
@@ -149,7 +149,7 @@ describe('DockerAgents removed hosts', () => {
     const removeButton = screen.getByRole('button', { name: 'Remove' });
     fireEvent.click(removeButton);
 
-    await screen.findByText('Remove Docker host "Host One"');
+    await screen.findByText('Remove container host "Host One"');
     expect(screen.getByText('acknowledged')).toBeInTheDocument();
 
     const progressHeading = screen.getByText('Progress');
@@ -202,7 +202,7 @@ describe('DockerAgents removed hosts', () => {
     const removeButton = screen.getByRole('button', { name: 'Remove' });
     fireEvent.click(removeButton);
 
-    await screen.findByText('Remove Docker host "Host One"');
+    await screen.findByText('Remove container host "Host One"');
 
     const stopButton = screen.getByRole('button', { name: 'Stop agent now' });
     fireEvent.click(stopButton);

@@ -28,26 +28,3 @@ export const getCpuTemperature = (temperature?: Temperature | null): number | nu
 
   return Math.max(...candidates);
 };
-
-export type NvmeTemperatureReading = {
-  value: number;
-  device?: string;
-};
-
-export const getHottestNvmeTemperature = (
-  temperature?: Temperature | null,
-): NvmeTemperatureReading | null => {
-  if (!temperature?.available || !Array.isArray(temperature.nvme)) {
-    return null;
-  }
-
-  const readings = temperature.nvme
-    .filter((nvme) => isValidTemperature(nvme.temp))
-    .map((nvme) => ({ value: nvme.temp, device: nvme.device }));
-
-  if (readings.length === 0) {
-    return null;
-  }
-
-  return readings.reduce((max, current) => (current.value > max.value ? current : max));
-};

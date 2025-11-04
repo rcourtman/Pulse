@@ -368,11 +368,10 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	// Verify checksum if available
 	m.updateStatus("verifying", 30, "Verifying download...")
 	if err := m.verifyChecksum(ctx, downloadURL, tarballPath); err != nil {
-		// Log warning but don't fail - checksums might not be available for all releases
-		log.Warn().Err(err).Msg("Checksum verification failed or unavailable")
-	} else {
-		log.Info().Msg("Checksum verification passed")
+		m.updateStatus("error", 30, "Failed to verify update checksum")
+		return fmt.Errorf("checksum verification failed: %w", err)
 	}
+	log.Info().Msg("Checksum verification passed")
 
 	m.updateStatus("extracting", 40, "Extracting update...")
 

@@ -2,7 +2,7 @@
 ARG BUILD_AGENT=1
 
 # Build stage for frontend (must be built first for embedding)
-FROM node:20-alpine AS frontend-builder
+FROM node:20.16.0-alpine3.19 AS frontend-builder
 
 WORKDIR /app/frontend-modern
 
@@ -19,7 +19,7 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
     npm run build
 
 # Build stage for Go backend
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:1.24.9-alpine3.19 AS backend-builder
 
 ARG BUILD_AGENT
 WORKDIR /app
@@ -86,7 +86,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
-FROM alpine:latest AS agent_runtime
+FROM alpine:3.19.1 AS agent_runtime
 
 # Use TARGETARCH to select the correct binary for the build platform
 ARG TARGETARCH
@@ -118,7 +118,7 @@ ENV PULSE_NO_AUTO_UPDATE=true
 ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
 
 # Final stage (Pulse server runtime)
-FROM alpine:latest
+FROM alpine:3.19.1
 
 RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client
 

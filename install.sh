@@ -1675,7 +1675,9 @@ download_pulse() {
         print_info "Detected architecture: $ARCH ($PULSE_ARCH)"
         
         # Download architecture-specific release
-        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/pulse-${LATEST_RELEASE}-linux-${PULSE_ARCH}.tar.gz"
+        ARCHIVE_NAME="pulse-${LATEST_RELEASE}-linux-${PULSE_ARCH}.tar.gz"
+        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/${ARCHIVE_NAME}"
+        CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
         print_info "Downloading from: $DOWNLOAD_URL"
         
         # Detect and stop existing service BEFORE downloading (to free the binary)
@@ -1687,18 +1689,38 @@ download_pulse() {
         fi
         
         cd /tmp
+
+        if ! command -v sha256sum >/dev/null 2>&1; then
+            print_error "sha256sum is required but not installed"
+            exit 1
+        fi
+
         # Download with timeout (60 seconds should be enough for ~5MB file)
-        if ! wget -q --timeout=60 --tries=2 -O pulse.tar.gz "$DOWNLOAD_URL"; then
+        ARCHIVE_PATH="/tmp/$ARCHIVE_NAME"
+        if ! wget -q --timeout=60 --tries=2 -O "$ARCHIVE_PATH" "$DOWNLOAD_URL"; then
             print_error "Failed to download Pulse release"
             print_info "This can happen due to network issues or GitHub rate limiting"
             print_info "You can try downloading manually from: $DOWNLOAD_URL"
             exit 1
         fi
+
+        # Download checksum and verify
+        if ! wget -q --timeout=60 --tries=2 -O "${ARCHIVE_PATH}.sha256" "$CHECKSUM_URL"; then
+            print_error "Failed to download checksum for Pulse release"
+            print_info "Refusing to install without checksum verification"
+            exit 1
+        fi
+
+        if ! (cd /tmp && sha256sum -c "${ARCHIVE_NAME}.sha256" >/dev/null 2>&1); then
+            print_error "Checksum verification failed for downloaded Pulse release"
+            exit 1
+        fi
+        rm -f "${ARCHIVE_PATH}.sha256"
         
         # Extract to temporary directory first
         TEMP_EXTRACT="/tmp/pulse-extract-$$"
         mkdir -p "$TEMP_EXTRACT"
-        tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
+        tar -xzf "$ARCHIVE_PATH" -C "$TEMP_EXTRACT"
     
         # Ensure install directory and bin subdirectory exist
         mkdir -p "$INSTALL_DIR/bin"
@@ -1797,11 +1819,11 @@ download_pulse() {
             
             # Force remove and recopy
             rm -f "$INSTALL_DIR/bin/pulse"
-            if [[ -f "/tmp/pulse.tar.gz" ]]; then
+            if [[ -f "$ARCHIVE_PATH" ]]; then
                 # Re-extract and try again
                 TEMP_EXTRACT2="/tmp/pulse-extract2-$$"
                 mkdir -p "$TEMP_EXTRACT2"
-                tar -xzf /tmp/pulse.tar.gz -C "$TEMP_EXTRACT2"
+                tar -xzf "$ARCHIVE_PATH" -C "$TEMP_EXTRACT2"
                 
                 if [[ -f "$TEMP_EXTRACT2/bin/pulse" ]]; then
                     cp -f "$TEMP_EXTRACT2/bin/pulse" "$INSTALL_DIR/bin/pulse"
@@ -1842,7 +1864,7 @@ download_pulse() {
         fi
     
         # Cleanup
-        rm -rf "$TEMP_EXTRACT" pulse.tar.gz
+        rm -rf "$TEMP_EXTRACT" "$ARCHIVE_PATH"
     fi  # End of SKIP_DOWNLOAD check
 }
 

@@ -39,16 +39,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      'lucide-solid/icons': path.resolve(__dirname, './node_modules/lucide-solid/dist/esm/icons'),
     },
     conditions: ['import', 'browser', 'default'],
-  },
-  optimizeDeps: {
-    include: ['lucide-solid'],
-    force: true,
-  },
-  ssr: {
-    noExternal: ['lucide-solid'],
   },
   server: {
     port: frontendDevPort,
@@ -65,6 +57,10 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/install-docker-agent.sh': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/install-container-agent.sh': {
         target: backendUrl,
         changeOrigin: true,
       },

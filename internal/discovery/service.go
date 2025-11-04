@@ -49,6 +49,38 @@ type historyEntry struct {
 	status          string
 }
 
+func (h historyEntry) StartedAt() time.Time {
+	return h.startedAt
+}
+
+func (h historyEntry) CompletedAt() time.Time {
+	return h.completedAt
+}
+
+func (h historyEntry) Subnet() string {
+	return h.subnet
+}
+
+func (h historyEntry) ServerCount() int {
+	return h.serverCount
+}
+
+func (h historyEntry) ErrorCount() int {
+	return h.errorCount
+}
+
+func (h historyEntry) Duration() time.Duration {
+	return h.duration
+}
+
+func (h historyEntry) BlocklistLength() int {
+	return h.blocklistLength
+}
+
+func (h historyEntry) Status() string {
+	return h.status
+}
+
 const defaultHistoryLimit = 20
 
 type discoveryScanner interface {

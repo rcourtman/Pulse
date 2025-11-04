@@ -1,4 +1,5 @@
 import { Accessor, Setter, createEffect, createSignal } from 'solid-js';
+import { logger } from '@/utils/logger';
 
 export type PersistentSignalOptions<T> = {
   /**
@@ -45,7 +46,7 @@ export function usePersistentSignal<T>(
       }
       return deserialize(raw);
     } catch (err) {
-      console.warn(`[usePersistentSignal] Failed to read "${key}" from storage`, err);
+      logger.warn(`[usePersistentSignal] Failed to read "${key}" from storage`, err);
       return defaultValue;
     }
   })();
@@ -66,10 +67,9 @@ export function usePersistentSignal<T>(
         storage.setItem(key, serialize(current));
       }
     } catch (err) {
-      console.warn(`[usePersistentSignal] Failed to persist "${key}"`, err);
+      logger.warn(`[usePersistentSignal] Failed to persist "${key}"`, err);
     }
   });
 
   return [value, setValue];
 }
-

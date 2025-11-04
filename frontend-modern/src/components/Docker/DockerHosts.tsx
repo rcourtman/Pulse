@@ -11,6 +11,8 @@ import { useWebSocket } from '@/App';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 import { DockerMetadataAPI, type DockerMetadata } from '@/api/dockerMetadata';
+import { logger } from '@/utils/logger';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
 const DEGRADED_HOST_STATUSES = new Set([
@@ -21,8 +23,6 @@ const DEGRADED_HOST_STATUSES = new Set([
   'initializing',
   'unknown',
 ]);
-
-const DOCKER_METADATA_STORAGE_KEY = 'pulseDockerMetadata';
 
 type DockerMetadataRecord = Record<string, DockerMetadata>;
 
@@ -36,17 +36,21 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
   const { initialDataReceived, reconnecting, connected } = useWebSocket();
 
   // Load docker metadata from localStorage or API
-  const [dockerMetadata, setDockerMetadata] = createSignal<DockerMetadataRecord>(() => {
+  const loadInitialDockerMetadata = (): DockerMetadataRecord => {
     try {
-      const cached = localStorage.getItem(DOCKER_METADATA_STORAGE_KEY);
+      const cached = localStorage.getItem(STORAGE_KEYS.DOCKER_METADATA);
       if (cached) {
         return JSON.parse(cached);
       }
     } catch (err) {
-      console.warn('Failed to parse cached docker metadata:', err);
+      logger.warn('Failed to parse cached docker metadata', err);
     }
     return {};
-  });
+  };
+
+  const [dockerMetadata, setDockerMetadata] = createSignal<DockerMetadataRecord>(
+    loadInitialDockerMetadata(),
+  );
 
   const sortedHosts = createMemo(() => {
     const hosts = props.hosts || [];
@@ -167,13 +171,13 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
       .then((metadata) => {
         setDockerMetadata(metadata || {});
         try {
-          localStorage.setItem(DOCKER_METADATA_STORAGE_KEY, JSON.stringify(metadata || {}));
+          localStorage.setItem(STORAGE_KEYS.DOCKER_METADATA, JSON.stringify(metadata || {}));
         } catch (err) {
-          console.warn('Failed to cache docker metadata:', err);
+          logger.warn('Failed to cache docker metadata', err);
         }
       })
       .catch((err) => {
-        console.debug('Failed to load docker metadata:', err);
+      logger.debug('Failed to load docker metadata', err);
       });
   });
   onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
@@ -196,9 +200,9 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
 
       // Cache to localStorage
       try {
-        localStorage.setItem(DOCKER_METADATA_STORAGE_KEY, JSON.stringify(updated));
+        localStorage.setItem(STORAGE_KEYS.DOCKER_METADATA, JSON.stringify(updated));
       } catch (err) {
-        console.warn('Failed to cache docker metadata:', err);
+        logger.warn('Failed to cache docker metadata', err);
       }
 
       return updated;
@@ -283,12 +287,12 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                 />
               </svg>
             }
-            title={reconnecting() ? 'Reconnecting to Docker agents...' : 'Loading Docker data...'}
+            title={reconnecting() ? 'Reconnecting to container agents...' : 'Loading container data...'}
             description={
               reconnecting()
                 ? 'Re-establishing metrics from the monitoring service.'
                 : connected()
-                  ? 'Waiting for the first Docker update.'
+                  ? 'Waiting for the first container update.'
                   : 'Connecting to the monitoring service.'
             }
           />
@@ -313,15 +317,15 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                       />
                     </svg>
                   }
-                  title="No Docker hosts configured"
-                  description="Deploy the Pulse Docker agent on at least one Docker host to light up this tab. As soon as an agent reports in, container metrics appear automatically."
+                  title="No container runtimes reporting"
+                  description="Deploy the Pulse container agent (Docker or Podman) on at least one host to light up this tab. As soon as an agent reports in, runtime metrics appear automatically."
                   actions={
                     <button
                       type="button"
-                      onClick={() => navigate('/settings/docker')}
+                      onClick={() => navigate('/settings/containers')}
                       class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                     >
-                      <span>Set up Docker agent</span>
+                      <span>Set up container agent</span>
                       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                       </svg>

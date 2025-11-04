@@ -40,7 +40,9 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
         </div>
 
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 mb-4">
-          <p class="text-sm text-red-800 dark:text-red-200 font-mono">{props.error.message}</p>
+          <p class="text-sm text-red-800 dark:text-red-200">
+            Please try again or reload the page. If the problem persists, contact your administrator.
+          </p>
         </div>
 
         <div class="flex gap-2">
@@ -60,21 +62,9 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setDetails(!details())}
-          class="mt-4 text-sm text-gray-500 dark:text-gray-400 underline hover:text-gray-700 dark:hover:text-gray-300"
-        >
-          {details() ? 'Hide' : 'Show'} error details
-        </button>
-
-        {details() && (
-          <div class="mt-4 p-3 bg-gray-100 dark:bg-gray-700 rounded overflow-x-auto">
-            <pre class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-              {props.error.stack}
-            </pre>
-          </div>
-        )}
+        <div class="mt-4 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+          Technical details are suppressed in this view. Check server logs for full context.
+        </div>
       </div>
     </div>
   );

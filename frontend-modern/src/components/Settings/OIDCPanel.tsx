@@ -5,6 +5,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
+import { logger } from '@/utils/logger';
 
 interface OIDCConfigResponse {
   enabled: boolean;
@@ -115,7 +116,7 @@ export const OIDCPanel: Component<Props> = (props) => {
       resetForm(data);
       props.onConfigUpdated?.(data);
     } catch (error) {
-      console.error('[OIDCPanel] Failed to load config:', error);
+      logger.error('[OIDCPanel] Failed to load config:', error);
       notificationStore.error('Failed to load OIDC settings');
       setConfig(null);
       resetForm(null);
@@ -177,7 +178,7 @@ export const OIDCPanel: Component<Props> = (props) => {
       notificationStore.success('OIDC settings updated');
       props.onConfigUpdated?.(updated);
     } catch (error) {
-      console.error('[OIDCPanel] Failed to save config:', error);
+      logger.error('[OIDCPanel] Failed to save config:', error);
       notificationStore.error('Failed to save OIDC settings');
     } finally {
       setSaving(false);

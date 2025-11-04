@@ -134,6 +134,8 @@ export interface DockerHost {
   os?: string;
   kernelVersion?: string;
   architecture?: string;
+  runtime?: string;
+  runtimeVersion?: string;
   dockerVersion?: string;
   cpus: number;
   totalMemoryBytes: number;
@@ -261,6 +263,7 @@ export interface DockerContainer {
   rootFilesystemBytes?: number;
   blockIo?: DockerContainerBlockIO;
   mounts?: DockerContainerMount[];
+  podman?: PodmanContainerMetadata;
 }
 
 export interface DockerContainerPort {
@@ -292,6 +295,19 @@ export interface DockerContainerMount {
   propagation?: string;
   name?: string;
   driver?: string;
+}
+
+export interface PodmanContainerMetadata {
+  podName?: string;
+  podId?: string;
+  infra?: boolean;
+  composeProject?: string;
+  composeService?: string;
+  composeWorkdir?: string;
+  composeConfigHash?: string;
+  autoUpdatePolicy?: string;
+  autoUpdateRestart?: string;
+  userNamespace?: string;
 }
 
 export interface Host {

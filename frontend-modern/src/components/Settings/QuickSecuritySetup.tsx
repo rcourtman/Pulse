@@ -1,8 +1,7 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
-import { clearStoredAPIToken } from '@/utils/tokenStorage';
-import { clearApiToken as clearApiClientToken } from '@/utils/apiClient';
+import { clearAuth as clearApiClientAuth } from '@/utils/apiClient';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
@@ -124,19 +123,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       setCredentials(newCredentials);
       setShowCredentials(true);
 
-      try {
-        sessionStorage.removeItem('pulse_auth');
-        sessionStorage.removeItem('pulse_auth_user');
-      } catch (storageError) {
-        console.warn('Unable to clear cached auth session storage', storageError);
-      }
-
-      try {
-        clearStoredAPIToken();
-        clearApiClientToken();
-      } catch (storageError) {
-        console.warn('Unable to clear cached API token', storageError);
-      }
+      clearApiClientAuth();
 
       // Show success message
       showSuccess(
@@ -146,9 +133,6 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       );
 
       // DON'T notify parent yet - wait until user dismisses credentials
-      // if (props.onConfigured) {
-      //   props.onConfigured();
-      // }
     } catch (error) {
       showError(`Failed to setup security: ${error}`);
     } finally {

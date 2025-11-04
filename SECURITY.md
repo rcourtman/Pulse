@@ -396,8 +396,8 @@ docker run -e API_TOKENS=ansible-token,docker-agent-token rcourtman/pulse:latest
 # Include the ORIGINAL token (not hash) in X-API-Token header
 curl -H "X-API-Token: your-original-token" http://localhost:7655/api/health
 
-# Or in query parameter for export/import
-curl "http://localhost:7655/api/export?token=your-original-token"
+# or in Authorization header (preferred for shared tooling)
+curl -H "Authorization: Bearer your-original-token" http://localhost:7655/api/export
 ```
 
 ### Auto-Registration Security

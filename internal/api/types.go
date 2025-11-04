@@ -14,8 +14,6 @@ type HealthResponse struct {
 	Status                      string  `json:"status"`
 	Timestamp                   int64   `json:"timestamp"`
 	Uptime                      float64 `json:"uptime"`
-	LegacySSHDetected           bool    `json:"legacySSHDetected,omitempty"`
-	RecommendProxyUpgrade       bool    `json:"recommendProxyUpgrade,omitempty"`
 	ProxyInstallScriptAvailable bool    `json:"proxyInstallScriptAvailable,omitempty"`
 	DevModeSSH                  bool    `json:"devModeSSH,omitempty"` // DEV/TEST ONLY: SSH keys allowed in containers
 }

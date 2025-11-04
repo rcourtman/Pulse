@@ -1,12 +1,12 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
-import { clearStoredAPIToken } from '@/utils/tokenStorage';
-import { clearApiToken as clearApiClientToken, setApiToken as setApiClientToken } from '@/utils/apiClient';
-import { STORAGE_KEYS } from '@/constants';
+import { clearAuth as clearApiClientAuth, setApiToken as setApiClientToken } from '@/utils/apiClient';
+import { getPulseBaseUrl } from '@/utils/url';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTokenReveal } from '@/stores/tokenReveal';
 import type { APITokenRecord } from '@/api/security';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: boolean }> = (
   props,
@@ -135,19 +135,7 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
       setSavedToken(token);
 
       // Clear any cached credentials from prior sessions so a reload doesn't auto-submit again
-      try {
-        sessionStorage.removeItem('pulse_auth');
-        sessionStorage.removeItem('pulse_auth_user');
-      } catch (storageError) {
-        console.warn('Unable to clear cached auth session storage', storageError);
-      }
-
-      try {
-        clearStoredAPIToken();
-        clearApiClientToken();
-      } catch (storageError) {
-        console.warn('Unable to clear cached API token', storageError);
-      }
+      clearApiClientAuth();
 
       const bootstrapRecord: APITokenRecord = {
         id: 'bootstrap-token',
@@ -183,13 +171,14 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
   };
 
   const downloadCredentials = () => {
+    const baseUrl = getPulseBaseUrl();
     const credentials = `Pulse Security Credentials
 ========================
 Generated: ${new Date().toISOString()}
 
 Web Interface Login:
 -------------------
-URL: ${window.location.origin}
+URL: ${baseUrl}
 Username: ${savedUsername()}
 Password: ${savedPassword()}
 
@@ -198,7 +187,7 @@ API Access:
 API Token: ${savedToken()}
 
 Example API Usage:
-curl -H "X-API-Token: ${savedToken()}" ${window.location.origin}/api/state
+curl -H "X-API-Token: ${savedToken()}" ${baseUrl}/api/state
 
 IMPORTANT: Keep these credentials secure!
 `;

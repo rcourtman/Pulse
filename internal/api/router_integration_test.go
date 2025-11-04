@@ -495,6 +495,81 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 	}
 }
 
+func TestAPITokenQueryParameterRejected(t *testing.T) {
+	const apiToken = "query-token-1234567890"
+
+	srv := newIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		cfg.APITokenEnabled = true
+		record, err := config.NewAPITokenRecord(apiToken, "Query token test", nil)
+		if err != nil {
+			t.Fatalf("create API token record: %v", err)
+		}
+		cfg.APITokens = []config.APITokenRecord{*record}
+		cfg.SortAPITokens()
+	})
+
+	queryURL := srv.server.URL + "/api/state?token=" + apiToken
+	res, err := http.Get(queryURL)
+	if err != nil {
+		t.Fatalf("query parameter request failed: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when token supplied via query string, got %d", res.StatusCode)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/api/state", nil)
+	if err != nil {
+		t.Fatalf("create header-auth request: %v", err)
+	}
+	req.Header.Set("X-API-Token", apiToken)
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("header-auth request failed: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 with header token, got %d", res.StatusCode)
+	}
+}
+
+func TestRecoveryEndpointRequiresDirectLoopback(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	generateBody := strings.NewReader(`{"action":"generate_token"}`)
+	req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/security/recovery", generateBody)
+	if err != nil {
+		t.Fatalf("create generate token request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("generate token request failed: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 generating token from loopback, got %d", res.StatusCode)
+	}
+
+	forwardedBody := strings.NewReader(`{"action":"generate_token"}`)
+	reqForwarded, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/security/recovery", forwardedBody)
+	if err != nil {
+		t.Fatalf("create forwarded request: %v", err)
+	}
+	reqForwarded.Header.Set("Content-Type", "application/json")
+	reqForwarded.Header.Set("X-Forwarded-For", "198.51.100.42")
+
+	resForwarded, err := http.DefaultClient.Do(reqForwarded)
+	if err != nil {
+		t.Fatalf("forwarded recovery request failed: %v", err)
+	}
+	defer resForwarded.Body.Close()
+	if resForwarded.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 when forwarded headers present, got %d", resForwarded.StatusCode)
+	}
+}
+
 func TestWebSocketSendsInitialState(t *testing.T) {
 	srv := newIntegrationServer(t)
 

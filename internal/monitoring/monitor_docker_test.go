@@ -184,3 +184,37 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 		t.Fatalf("unexpected mount payload: %+v", mount)
 	}
 }
+
+func TestApplyDockerReportPodmanRuntimeMetadata(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-podman",
+			Version:         "2.0.0",
+			IntervalSeconds: 60,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:       "podman-host",
+			Runtime:        "podman",
+			RuntimeVersion: "4.9.3",
+			DockerVersion:  "",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport returned error: %v", err)
+	}
+
+	if host.Runtime != "podman" {
+		t.Fatalf("expected runtime podman, got %q", host.Runtime)
+	}
+	if host.RuntimeVersion != "4.9.3" {
+		t.Fatalf("expected runtime version 4.9.3, got %q", host.RuntimeVersion)
+	}
+	if host.DockerVersion != "4.9.3" {
+		t.Fatalf("expected docker version fallback to runtime version, got %q", host.DockerVersion)
+	}
+}

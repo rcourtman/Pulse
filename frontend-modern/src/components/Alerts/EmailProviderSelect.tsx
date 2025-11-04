@@ -1,5 +1,6 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import { NotificationsAPI } from '@/api/notifications';
+import { logger } from '@/utils/logger';
 import {
   formField,
   labelClass,
@@ -53,7 +54,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
       const data = await NotificationsAPI.getEmailProviders();
       setProviders(data);
     } catch (err) {
-      console.error('Failed to load email providers:', err);
+      logger.error('Failed to load email providers', err);
     }
   });
 

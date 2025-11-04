@@ -4,6 +4,7 @@ import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
 import { copyToClipboard } from '@/utils/clipboard';
 import { showSuccess, showError } from '@/utils/toast';
+import { getPulseBaseUrl } from '@/utils/url';
 import { NodesAPI } from '@/api/nodes';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import {
@@ -13,6 +14,7 @@ import {
   labelClass,
   formCheckbox,
 } from '@/components/shared/Form';
+import { logger } from '@/utils/logger';
 
 interface NodeModalProps {
   isOpen: boolean;
@@ -298,7 +300,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
             message: result.message || 'Connection successful',
           });
         } catch (error) {
-          console.error('Test existing node error:', error);
+          logger.error('Test existing node error:', error);
           let errorMessage = 'Connection failed';
           if (error instanceof Error) {
             // Remove "API request failed: XXX " prefix if present
@@ -360,7 +362,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         isCluster: result.isCluster,
       });
     } catch (error) {
-      console.error('Test connection error:', error);
+      logger.error('Test connection error:', error);
       let errorMessage = 'Connection failed';
       if (error instanceof Error) {
         // Remove "API request failed: XXX " prefix if present
@@ -651,16 +653,18 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <button
                                       type="button"
                                       onClick={async () => {
-                                        console.log('[Quick Setup] Copy button clicked');
+                                        logger.debug('[Quick Setup] Copy button clicked');
                                         try {
                                           // Check if host is populated
                                           if (!formData().host || formData().host.trim() === '') {
-                                            console.log('[Quick Setup] No host entered');
+                                            logger.debug('[Quick Setup] No host entered');
                                             showError('Please enter the Host URL first');
                                             return;
                                           }
 
-                                          console.log('[Quick Setup] Generating setup URL for host:', formData().host);
+                                          logger.debug('[Quick Setup] Generating setup URL for host', {
+                                            host: formData().host,
+                                          });
                                           // Always regenerate URL when host changes
                                           const { apiFetch } = await import('@/utils/apiClient');
                                           const response = await apiFetch('/api/setup-script-url', {
@@ -673,10 +677,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             }),
                                           });
 
-                                          console.log('[Quick Setup] API response:', response.status, response.ok);
+                                          logger.debug('[Quick Setup] API response', {
+                                            status: response.status,
+                                            ok: response.ok,
+                                          });
                                           if (response.ok) {
                                             const data = await response.json();
-                                            console.log('[Quick Setup] Setup data received:', data);
+                                            logger.debug('[Quick Setup] Setup data received', data);
 
                                             setQuickSetupToken(data.setupToken ?? '');
                                             setQuickSetupExpiry(typeof data.expires === 'number' ? data.expires : null);
@@ -684,17 +691,17 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             // Backend returns url, command, and expires
                                             // Just copy the command - don't show the modal
                                             if (data.command) {
-                                              console.log('[Quick Setup] Copying command to clipboard:', data.command);
+                                              logger.debug('[Quick Setup] Copying command to clipboard');
                                               setQuickSetupCommand(data.command);
                                               const copied = await copyToClipboard(data.command);
-                                              console.log('[Quick Setup] Copy result:', copied);
+                                              logger.debug('[Quick Setup] Copy result', copied);
                                               if (copied) {
                                                 showSuccess('Command copied to clipboard! Paste the setup token shown below when prompted.');
                                               } else {
                                                 showError('Failed to copy to clipboard');
                                               }
                                             } else {
-                                              console.log('[Quick Setup] No command in response');
+                                              logger.debug('[Quick Setup] No command in response');
                                             }
                                           } else {
                                             setQuickSetupToken('');
@@ -702,7 +709,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             showError('Failed to generate setup URL');
                                           }
                                         } catch (error) {
-                                          console.error('[Quick Setup] Error:', error);
+                                          logger.error('[Quick Setup] Error:', error);
                                           setQuickSetupToken('');
                                           setQuickSetupExpiry(null);
                                           showError('Failed to copy command');
@@ -799,7 +806,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const hostValue = formData().host || '';
                                             const encodedHost = encodeURIComponent(hostValue);
                                             const pulseUrl = encodeURIComponent(
-                                              window.location.origin,
+                                              getPulseBaseUrl(),
                                             );
                                             const scriptUrl = `/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}&backup_perms=true`;
 
@@ -827,7 +834,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               'Script downloaded! Upload it to your server and run: bash pulse-setup.sh',
                                             );
                                           } catch (error) {
-                                            console.error('Failed to download script:', error);
+                                            logger.error('Failed to download script:', error);
                                             showSuccess(
                                               'Failed to download script. Please check your connection.',
                                             );
@@ -1173,7 +1180,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               showError('Failed to generate setup URL');
                                             }
                                           } catch (error) {
-                                            console.error('Failed to copy command:', error);
+                                            logger.error('Failed to copy command:', error);
                                             showError('Failed to copy command');
                                           }
                                         }}
@@ -1269,7 +1276,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const hostValue = formData().host || '';
                                             const encodedHost = encodeURIComponent(hostValue);
                                             const pulseUrl = encodeURIComponent(
-                                              window.location.origin,
+                                              getPulseBaseUrl(),
                                             );
                                             const scriptUrl = `/api/setup-script?type=pbs&host=${encodedHost}&pulse_url=${pulseUrl}`;
 
@@ -1297,7 +1304,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               'Script downloaded! Upload it to your PBS and run: bash pulse-pbs-setup.sh',
                                             );
                                           } catch (error) {
-                                            console.error('Failed to download script:', error);
+                                            logger.error('Failed to download script:', error);
                                             showSuccess(
                                               'Failed to download script. Please check your connection.',
                                             );
@@ -1801,7 +1808,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 <Show when={testResult()}>
                   {(() => {
                     const result = testResult();
-                    console.log('Test result display:', {
+                    logger.debug('Test result display', {
                       status: result?.status,
                       message: result?.message,
                     });

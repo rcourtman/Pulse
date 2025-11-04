@@ -1,8 +1,7 @@
 import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
-import { setBasicAuth } from '@/utils/apiClient';
-import { STORAGE_KEYS } from '@/constants';
+import { logger } from '@/utils/logger';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
-// Force include FirstRunSetup with lazy loading
 const FirstRunSetup = lazy(() =>
   import('./FirstRunSetup').then((m) => ({ default: m.FirstRunSetup })),
 );
@@ -95,29 +94,29 @@ export const Login: Component<LoginProps> = (props) => {
       window.history.replaceState({}, document.title, newUrl);
     }
 
-    console.log('[Login] Starting auth check...');
+    logger.debug('[Login] Starting auth check...');
     try {
       const response = await fetch('/api/security/status');
-      console.log('[Login] Auth check response:', response.status);
+      logger.debug('[Login] Auth check response', { status: response.status });
       if (response.ok) {
         const data = await response.json();
-        console.log('[Login] Auth status data:', data);
+        logger.debug('[Login] Auth status data', data);
         setAuthStatus(data);
       } else if (response.status === 429) {
         // Rate limited - wait a bit and assume auth is configured
-        console.log('[Login] Rate limited, assuming auth is configured');
+        logger.debug('[Login] Rate limited, assuming auth is configured');
         setAuthStatus({ hasAuthentication: true });
       } else {
-        console.log('[Login] Auth check failed, assuming no auth');
+        logger.debug('[Login] Auth check failed, assuming no auth');
         // On error, assume no auth configured
         setAuthStatus({ hasAuthentication: false });
       }
     } catch (err) {
-      console.error('[Login] Failed to check auth status:', err);
+      logger.error('[Login] Failed to check auth status:', err);
       // On error, assume no auth configured
       setAuthStatus({ hasAuthentication: false });
     } finally {
-      console.log('[Login] Auth check complete, setting loading to false');
+      logger.debug('[Login] Auth check complete, setting loading to false');
       setLoadingAuth(false);
     }
   });
@@ -156,7 +155,7 @@ export const Login: Component<LoginProps> = (props) => {
 
       throw new Error('OIDC response missing authorization URL');
     } catch (err) {
-      console.error('[Login] Failed to start OIDC login:', err);
+      logger.error('[Login] Failed to start OIDC login:', err);
       setOidcError('Failed to start single sign-on. Please try again.');
     } finally {
       if (!redirecting) {
@@ -165,14 +164,8 @@ export const Login: Component<LoginProps> = (props) => {
     }
   };
 
-  // Only auto-redirect to OIDC if password auth is disabled
-  // This prevents redirect loops when both password and OIDC are configured
-  // createEffect(() => {
-  //   if (!loadingAuth() && supportsOIDC() && !autoOidcTriggered()) {
-  //     setAutoOidcTriggered(true);
-  //     startOidcLogin();
-  //   }
-  // });
+  // Auto-redirect to OIDC is intentionally disabled to prevent redirect loops
+  // when both password and OIDC are configured. Users must manually click OIDC button.
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -197,8 +190,12 @@ export const Login: Component<LoginProps> = (props) => {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Credentials are valid, save them and notify parent
-        setBasicAuth(username(), password());
+        // Credentials are valid; persist username for convenience and rely on session cookie
+        try {
+          sessionStorage.setItem('pulse_auth_user', username());
+        } catch (_err) {
+          // Ignore storage failures (private browsing, etc.)
+        }
         props.onLogin();
       } else if (response.status === 403) {
         // Account is locked
@@ -245,7 +242,11 @@ export const Login: Component<LoginProps> = (props) => {
         });
 
         if (response.ok) {
-          setBasicAuth(username(), password());
+          try {
+            sessionStorage.setItem('pulse_auth_user', username());
+          } catch (_storageErr) {
+            // Ignore storage issues
+          }
           props.onLogin();
         } else if (response.status === 401) {
           setError('Invalid username or password');
@@ -263,7 +264,10 @@ export const Login: Component<LoginProps> = (props) => {
   };
 
   // Debug logging
-  console.log('[Login] Render - loadingAuth:', loadingAuth(), 'authStatus:', authStatus());
+  logger.debug('[Login] Render', {
+    loadingAuth: loadingAuth(),
+    authStatus: authStatus(),
+  });
 
   const legacyDisableAuth = () => authStatus()?.deprecatedDisableAuth === true;
   const showFirstRunSetup = () =>
