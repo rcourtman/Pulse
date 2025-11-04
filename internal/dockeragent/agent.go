@@ -81,25 +81,33 @@ const (
 
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
-	cfg           Config
-	docker        *client.Client
-	daemonHost    string
-	runtime       RuntimeKind
-	runtimeVer    string
-	supportsSwarm bool
-	httpClients   map[bool]*http.Client
-	logger        zerolog.Logger
-	machineID     string
-	hostName      string
-	cpuCount      int
-	targets       []TargetConfig
-	allowedStates map[string]struct{}
-	stateFilters  []string
-	hostID        string
+	cfg              Config
+	docker           *client.Client
+	daemonHost       string
+	runtime          RuntimeKind
+	runtimeVer       string
+	supportsSwarm    bool
+	httpClients      map[bool]*http.Client
+	logger           zerolog.Logger
+	machineID        string
+	hostName         string
+	cpuCount         int
+	targets          []TargetConfig
+	allowedStates    map[string]struct{}
+	stateFilters     []string
+	hostID           string
+	prevContainerCPU map[string]cpuSample
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
 var ErrStopRequested = errors.New("docker host stop requested")
+
+type cpuSample struct {
+	totalUsage  uint64
+	systemUsage uint64
+	onlineCPUs  uint32
+	read        time.Time
+}
 
 // New creates a new Docker agent instance.
 func New(cfg Config) (*Agent, error) {
@@ -212,19 +220,20 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	agent := &Agent{
-		cfg:           cfg,
-		docker:        dockerClient,
-		daemonHost:    dockerClient.DaemonHost(),
-		runtime:       runtimeKind,
-		runtimeVer:    info.ServerVersion,
-		supportsSwarm: runtimeKind == RuntimeDocker,
-		httpClients:   httpClients,
-		logger:        *logger,
-		machineID:     machineID,
-		hostName:      hostName,
-		targets:       cfg.Targets,
-		allowedStates: make(map[string]struct{}, len(stateFilters)),
-		stateFilters:  stateFilters,
+		cfg:              cfg,
+		docker:           dockerClient,
+		daemonHost:       dockerClient.DaemonHost(),
+		runtime:          runtimeKind,
+		runtimeVer:       info.ServerVersion,
+		supportsSwarm:    runtimeKind == RuntimeDocker,
+		httpClients:      httpClients,
+		logger:           *logger,
+		machineID:        machineID,
+		hostName:         hostName,
+		targets:          cfg.Targets,
+		allowedStates:    make(map[string]struct{}, len(stateFilters)),
+		stateFilters:     stateFilters,
+		prevContainerCPU: make(map[string]cpuSample),
 	}
 
 	for _, state := range stateFilters {
@@ -702,12 +711,15 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 	}
 
 	containers := make([]agentsdocker.Container, 0, len(list))
+	active := make(map[string]struct{}, len(list))
 	for _, summary := range list {
 		if len(a.allowedStates) > 0 {
 			if _, ok := a.allowedStates[strings.ToLower(summary.State)]; !ok {
 				continue
 			}
 		}
+
+		active[summary.ID] = struct{}{}
 
 		container, err := a.collectContainer(ctx, summary)
 		if err != nil {
@@ -716,7 +728,20 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		}
 		containers = append(containers, container)
 	}
+	a.pruneStaleCPUSamples(active)
 	return containers, nil
+}
+
+func (a *Agent) pruneStaleCPUSamples(active map[string]struct{}) {
+	if len(a.prevContainerCPU) == 0 {
+		return
+	}
+
+	for id := range a.prevContainerCPU {
+		if _, ok := active[id]; !ok {
+			delete(a.prevContainerCPU, id)
+		}
+	}
 }
 
 func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (agentsdocker.Container, error) {
@@ -751,9 +776,11 @@ func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (
 			return agentsdocker.Container{}, fmt.Errorf("decode stats: %w", err)
 		}
 
-		cpuPercent = calculateCPUPercent(stats, a.cpuCount)
+		cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats)
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
 		blockIO = summarizeBlockIO(stats)
+	} else {
+		delete(a.prevContainerCPU, summary.ID)
 	}
 
 	createdAt := time.Unix(summary.Created, 0)
@@ -1254,6 +1281,74 @@ func summarizeBlockIO(stats containertypes.StatsResponse) *agentsdocker.Containe
 		ReadBytes:  readBytes,
 		WriteBytes: writeBytes,
 	}
+}
+
+func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.StatsResponse) float64 {
+	current := cpuSample{
+		totalUsage:  stats.CPUStats.CPUUsage.TotalUsage,
+		systemUsage: stats.CPUStats.SystemUsage,
+		onlineCPUs:  stats.CPUStats.OnlineCPUs,
+		read:        stats.Read,
+	}
+
+	percent := calculateCPUPercent(stats, a.cpuCount)
+	if percent > 0 {
+		a.prevContainerCPU[id] = current
+		return percent
+	}
+
+	prev, ok := a.prevContainerCPU[id]
+	a.prevContainerCPU[id] = current
+	if !ok {
+		return 0
+	}
+
+	var totalDelta float64
+	if current.totalUsage >= prev.totalUsage {
+		totalDelta = float64(current.totalUsage - prev.totalUsage)
+	} else {
+		// Counter likely reset (container restart); fall back to current reading.
+		totalDelta = float64(current.totalUsage)
+	}
+
+	if totalDelta <= 0 {
+		return 0
+	}
+
+	onlineCPUs := current.onlineCPUs
+	if onlineCPUs == 0 {
+		onlineCPUs = prev.onlineCPUs
+	}
+	if onlineCPUs == 0 && a.cpuCount > 0 {
+		onlineCPUs = uint32(a.cpuCount)
+	}
+	if onlineCPUs == 0 {
+		return 0
+	}
+
+	var systemDelta float64
+	if current.systemUsage >= prev.systemUsage {
+		systemDelta = float64(current.systemUsage - prev.systemUsage)
+	} else if current.systemUsage > 0 {
+		systemDelta = float64(current.systemUsage)
+	}
+
+	if systemDelta > 0 {
+		return safeFloat((totalDelta / systemDelta) * float64(onlineCPUs) * 100.0)
+	}
+
+	if !prev.read.IsZero() && !current.read.IsZero() {
+		elapsed := current.read.Sub(prev.read).Seconds()
+		if elapsed > 0 {
+			denominator := elapsed * float64(onlineCPUs) * 1e9
+			if denominator > 0 {
+				cpuPercent := (totalDelta / denominator) * 100.0
+				return safeFloat(cpuPercent)
+			}
+		}
+	}
+
+	return 0
 }
 
 func calculateCPUPercent(stats containertypes.StatsResponse, hostCPUs int) float64 {

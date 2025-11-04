@@ -1461,6 +1461,28 @@ allow_reenroll_if_needed() {
 
 allow_reenroll_if_needed "$AGENT_IDENTIFIER"
 
+# Determine whether to disable auto-update (development server)
+NO_AUTO_UPDATE_FLAG=""
+if command -v curl &> /dev/null || command -v wget &> /dev/null; then
+    SERVER_INFO_URL="$PRIMARY_URL/api/server/info"
+    SERVER_INFO=""
+    if command -v curl &> /dev/null; then
+        SERVER_INFO=$(curl -fsSL "$SERVER_INFO_URL" 2>/dev/null || true)
+    else
+        SERVER_INFO=$(wget -qO- "$SERVER_INFO_URL" 2>/dev/null || true)
+    fi
+
+    if [[ -n "$SERVER_INFO" ]] && echo "$SERVER_INFO" | grep -q '"isDevelopment"[[:space:]]*:[[:space:]]*true'; then
+        NO_AUTO_UPDATE_FLAG=" --no-auto-update"
+        log_info 'Development server detected – auto-update disabled'
+    fi
+
+    if [[ -n "$NO_AUTO_UPDATE_FLAG" ]] && ! "$AGENT_PATH" --help 2>&1 | grep -q -- '--no-auto-update'; then
+        log_warn 'Agent binary lacks --no-auto-update flag; keeping auto-update enabled'
+        NO_AUTO_UPDATE_FLAG=""
+    fi
+fi
+
 # Check if systemd is available
 if ! command -v systemctl &> /dev/null || [ ! -d /etc/systemd/system ]; then
     printf '\n%s\n' '-- Systemd not detected; configuring alternative startup --'
@@ -1489,6 +1511,87 @@ EOF
         log_info 'Log file             : /var/log/pulse-docker-agent.log'
         log_info 'Host visible in Pulse: ~30 seconds'
         exit 0
+    elif command -v rc-service >/dev/null 2>&1 && { [ -x /sbin/openrc-run ] || [ -x /bin/openrc-run ] || [ -x /usr/bin/openrc-run ]; }; then
+        log_info 'Detected OpenRC environment'
+
+        log_header 'Preparing service environment'
+        ensure_service_user
+        ensure_service_home
+        ensure_docker_group_membership
+        write_env_file
+
+        OPENRC_SERVICE="/etc/init.d/pulse-docker-agent"
+        OPENRC_PIDFILE="/run/pulse-docker-agent.pid"
+        OPENRC_PIDDIR=$(dirname "$OPENRC_PIDFILE")
+        OPENRC_LOG="/var/log/pulse-docker-agent.log"
+        OPENRC_ENV_FILE="$ENV_FILE"
+        OPENRC_OWNER="$SERVICE_USER_ACTUAL:$SERVICE_GROUP_ACTUAL"
+
+        mkdir -p "$(dirname "$OPENRC_LOG")"
+        if [[ ! -f "$OPENRC_LOG" ]]; then
+            touch "$OPENRC_LOG"
+        fi
+        chown "$SERVICE_USER_ACTUAL":"$SERVICE_GROUP_ACTUAL" "$OPENRC_LOG" >/dev/null 2>&1 || true
+        chmod 0640 "$OPENRC_LOG" >/dev/null 2>&1 || true
+
+        cat > "$OPENRC_SERVICE" <<EOF
+#!/sbin/openrc-run
+
+description="Pulse Docker Agent"
+command="$AGENT_PATH"
+command_args="--url $PRIMARY_URL --interval $INTERVAL$NO_AUTO_UPDATE_FLAG"
+command_user="$SERVICE_USER_ACTUAL:$SERVICE_GROUP_ACTUAL"
+pidfile="$OPENRC_PIDFILE"
+supervisor="supervise-daemon"
+output_log="$OPENRC_LOG"
+error_log="$OPENRC_LOG"
+
+env_file="$OPENRC_ENV_FILE"
+log_owner="$OPENRC_OWNER"
+pid_dir="$OPENRC_PIDDIR"
+
+depend() {
+    need localmount
+    use net docker
+    after docker
+}
+
+start_pre() {
+    if [ -f "\$env_file" ]; then
+        set -a
+        . "\$env_file"
+        set +a
+    fi
+    checkpath --directory --mode 0755 "\$pid_dir"
+    checkpath --file --owner "\$log_owner" --mode 0640 "$OPENRC_LOG"
+    return 0
+}
+EOF
+
+        chmod +x "$OPENRC_SERVICE"
+
+        if rc-service pulse-docker-agent status >/dev/null 2>&1; then
+            rc-service pulse-docker-agent stop >/dev/null 2>&1 || true
+        fi
+
+        if rc-update add pulse-docker-agent default >/dev/null 2>&1; then
+            log_success 'Added pulse-docker-agent to OpenRC default runlevel'
+        else
+            log_warn 'Failed to add service to default runlevel; run: rc-update add pulse-docker-agent default'
+        fi
+
+        if rc-service pulse-docker-agent start >/dev/null 2>&1; then
+            log_success 'Started pulse-docker-agent service'
+        else
+            log_warn 'Failed to start pulse-docker-agent service; run: rc-service pulse-docker-agent start'
+        fi
+
+        log_header 'Installation complete'
+        log_info 'Agent service enabled via OpenRC'
+        log_info 'Check status          : rc-service pulse-docker-agent status'
+        log_info 'Follow logs           : tail -f /var/log/pulse-docker-agent.log'
+        log_info 'Host visible in Pulse : ~30 seconds'
+        exit 0
     fi
 
     log_info 'Manual startup environment detected'
@@ -1501,33 +1604,6 @@ EOF
     log_info 'Add the same command to your init system to start automatically.'
     exit 0
 
-fi
-
-
-# Check if server is in development mode
-NO_AUTO_UPDATE_FLAG=""
-if command -v curl &> /dev/null || command -v wget &> /dev/null; then
-    SERVER_INFO_URL="$PRIMARY_URL/api/server/info"
-    IS_DEV="false"
-
-    if command -v curl &> /dev/null; then
-        SERVER_INFO=$(curl -fsSL "$SERVER_INFO_URL" 2>/dev/null || echo "")
-    elif command -v wget &> /dev/null; then
-        SERVER_INFO=$(wget -qO- "$SERVER_INFO_URL" 2>/dev/null || echo "")
-    fi
-
-if [[ -n "$SERVER_INFO" ]] && echo "$SERVER_INFO" | grep -q '"isDevelopment"[[:space:]]*:[[:space:]]*true'; then
-    IS_DEV="true"
-    NO_AUTO_UPDATE_FLAG=" --no-auto-update"
-    log_info 'Development server detected – auto-update disabled'
-fi
-
-if [[ -n "$NO_AUTO_UPDATE_FLAG" ]]; then
-    if ! "$AGENT_PATH" --help 2>&1 | grep -q -- '--no-auto-update'; then
-        log_warn 'Agent binary lacks --no-auto-update flag; keeping auto-update enabled'
-        NO_AUTO_UPDATE_FLAG=""
-    fi
-fi
 fi
 
 log_header 'Preparing service environment'
