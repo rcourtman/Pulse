@@ -1,5 +1,11 @@
 # Development Quick Start
 
+## Prerequisites
+
+- Go **1.24.9** or newer
+- Node.js 20+
+- pnpm 9+ (for frontend work)
+
 ## Hot-Reload Development Mode
 
 Start the development environment with hot-reload:

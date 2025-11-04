@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -60,14 +61,14 @@ func main() {
 }
 
 func loadConfig() hostagent.Config {
-	envURL := strings.TrimSpace(os.Getenv("PULSE_URL"))
-	envToken := strings.TrimSpace(os.Getenv("PULSE_TOKEN"))
-	envInterval := strings.TrimSpace(os.Getenv("PULSE_INTERVAL"))
-	envHostname := strings.TrimSpace(os.Getenv("PULSE_HOSTNAME"))
-	envAgentID := strings.TrimSpace(os.Getenv("PULSE_AGENT_ID"))
-	envInsecure := strings.TrimSpace(os.Getenv("PULSE_INSECURE_SKIP_VERIFY"))
-	envTags := strings.TrimSpace(os.Getenv("PULSE_TAGS"))
-	envRunOnce := strings.TrimSpace(os.Getenv("PULSE_ONCE"))
+	envURL := utils.GetenvTrim("PULSE_URL")
+	envToken := utils.GetenvTrim("PULSE_TOKEN")
+	envInterval := utils.GetenvTrim("PULSE_INTERVAL")
+	envHostname := utils.GetenvTrim("PULSE_HOSTNAME")
+	envAgentID := utils.GetenvTrim("PULSE_AGENT_ID")
+	envInsecure := utils.GetenvTrim("PULSE_INSECURE_SKIP_VERIFY")
+	envTags := utils.GetenvTrim("PULSE_TAGS")
+	envRunOnce := utils.GetenvTrim("PULSE_ONCE")
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -81,8 +82,8 @@ func loadConfig() hostagent.Config {
 	intervalFlag := flag.Duration("interval", defaultInterval, "Reporting interval (e.g. 30s, 1m)")
 	hostnameFlag := flag.String("hostname", envHostname, "Override hostname reported to Pulse")
 	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
-	insecureFlag := flag.Bool("insecure", parseBool(envInsecure), "Skip TLS certificate verification")
-	runOnceFlag := flag.Bool("once", parseBool(envRunOnce), "Collect and send a single report, then exit")
+	insecureFlag := flag.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS certificate verification")
+	runOnceFlag := flag.Bool("once", utils.ParseBool(envRunOnce), "Collect and send a single report, then exit")
 	showVersion := flag.Bool("version", false, "Print the agent version and exit")
 
 	var tagFlags multiValue
@@ -142,13 +143,4 @@ func gatherTags(env string, flags []string) []string {
 		}
 	}
 	return tags
-}
-
-func parseBool(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1", "true", "yes", "y", "on":
-		return true
-	default:
-		return false
-	}
 }

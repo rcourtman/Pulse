@@ -125,6 +125,43 @@ split_targets_from_env() {
     done
 }
 
+# Early runtime detection to hand off Podman installs to the container-aware script.
+ORIGINAL_ARGS=("$@")
+DETECTED_RUNTIME="${PULSE_RUNTIME:-}"
+if [[ -z "$DETECTED_RUNTIME" ]]; then
+    idx=0
+    total_args=${#ORIGINAL_ARGS[@]}
+    while [[ $idx -lt $total_args ]]; do
+        arg="${ORIGINAL_ARGS[$idx]}"
+        case "$arg" in
+            --runtime)
+                if (( idx + 1 < total_args )); then
+                    DETECTED_RUNTIME="${ORIGINAL_ARGS[$((idx + 1))]}"
+                fi
+                ((idx += 2))
+                continue
+                ;;
+            --runtime=*)
+                DETECTED_RUNTIME="${arg#--runtime=}"
+                ;;
+        esac
+        ((idx += 1))
+    done
+    unset total_args
+fi
+
+if [[ -n "$DETECTED_RUNTIME" ]]; then
+    runtime_lower=$(printf '%s' "$DETECTED_RUNTIME" | tr '[:upper:]' '[:lower:]')
+    if [[ "$runtime_lower" == "podman" ]]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [[ -f "${SCRIPT_DIR}/install-container-agent.sh" ]]; then
+            exec "${SCRIPT_DIR}/install-container-agent.sh" "${ORIGINAL_ARGS[@]}"
+        fi
+        common::log_error "Podman runtime requested but install-container-agent.sh not found."
+        exit 1
+    fi
+fi
+
 extract_targets_from_service() {
     local file="$1"
     [[ ! -f "$file" ]] && return
@@ -357,13 +394,19 @@ resolve_agent_path_for_uninstall() {
 
 # Pulse Docker Agent Installer/Uninstaller
 # Install (single target):
-#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --url http://pulse.example.com --token <api-token>
+#   curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+#     sudo bash /tmp/pulse-install-docker-agent.sh --url http://pulse.example.com --token <api-token> && \
+#     rm -f /tmp/pulse-install-docker-agent.sh
 # Install (multi-target fan-out):
-#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- \
-#     --target https://pulse.example.com|<api-token> \
-#     --target https://pulse-dr.example.com|<api-token>
+#   curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+#     sudo bash /tmp/pulse-install-docker-agent.sh -- \
+#       --target https://pulse.example.com|<api-token> \
+#       --target https://pulse-dr.example.com|<api-token> && \
+#     rm -f /tmp/pulse-install-docker-agent.sh
 # Uninstall:
-#   curl -fsSL http://pulse.example.com/install-docker-agent.sh | bash -s -- --uninstall
+#   curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+#     sudo bash /tmp/pulse-install-docker-agent.sh --uninstall && \
+#     rm -f /tmp/pulse-install-docker-agent.sh
 
 PULSE_URL=""
 DEFAULT_AGENT_PATH="/usr/local/bin/pulse-docker-agent"

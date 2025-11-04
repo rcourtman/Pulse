@@ -1289,23 +1289,6 @@ func (c *Client) IsClusterMember(ctx context.Context) (bool, error) {
 	return nodeCount > 1, nil
 }
 
-// GetClusterNodes returns all nodes in the cluster with their connection info
-func (c *Client) GetClusterNodes(ctx context.Context) ([]ClusterStatus, error) {
-	status, err := c.GetClusterStatus(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var nodes []ClusterStatus
-	for _, s := range status {
-		if s.Type == "node" {
-			nodes = append(nodes, s)
-		}
-	}
-
-	return nodes, nil
-}
-
 // GetVMConfig returns the configuration for a specific VM
 func (c *Client) GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/config", node, vmid))
@@ -1972,26 +1955,4 @@ func (c *Client) GetDisks(ctx context.Context, node string) ([]Disk, error) {
 	}
 
 	return result.Data, nil
-}
-
-// GetDiskSmart returns SMART data for a specific disk
-func (c *Client) GetDiskSmart(ctx context.Context, node, disk string) (*DiskSmart, error) {
-	params := url.Values{
-		"disk": {disk},
-	}
-
-	resp, err := c.request(ctx, "GET", fmt.Sprintf("/nodes/%s/disks/smart?%s", node, params.Encode()), nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data DiskSmart `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return &result.Data, nil
 }

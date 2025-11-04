@@ -1,8 +1,6 @@
 import type { Alert } from '@/types/api';
 import type { AlertConfig } from '@/types/alerts';
 import { apiFetchJSON } from '@/utils/apiClient';
-// Error handling utilities available for future use
-// import { handleError, createErrorBoundary } from '@/utils/errorHandler';
 
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';
@@ -30,8 +28,6 @@ export class AlertsAPI {
 
     return apiFetchJSON(`${this.baseUrl}/history?${queryParams}`);
   }
-
-  // Removed unused config methods - not implemented in backend
 
   static async acknowledge(alertId: string, user?: string): Promise<{ success: boolean }> {
     return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(alertId)}/acknowledge`, {
@@ -64,12 +60,6 @@ export class AlertsAPI {
     });
   }
 
-  static async clearAlert(alertId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(alertId)}/clear`, {
-      method: 'POST',
-    });
-  }
-
   static async clearHistory(): Promise<{ success: boolean }> {
     return apiFetchJSON(`${this.baseUrl}/history`, {
       method: 'DELETE',
@@ -86,12 +76,4 @@ export class AlertsAPI {
     });
   }
 
-  static async bulkClear(
-    alertIds: string[],
-  ): Promise<{ results: Array<{ alertId: string; success: boolean; error?: string }> }> {
-    return apiFetchJSON(`${this.baseUrl}/bulk/clear`, {
-      method: 'POST',
-      body: JSON.stringify({ alertIds }),
-    });
-  }
 }

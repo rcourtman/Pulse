@@ -1,23 +1,17 @@
 package api
 
 import (
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
 // Security improvements for Pulse
-
-// CSRF Protection
-type CSRFToken struct {
-	Token   string
-	Expires time.Time
-}
-
-// CSRF tokens are now managed by the persistent CSRFTokenStore
 
 // generateCSRFToken creates a new CSRF token for a session
 func generateCSRFToken(sessionID string) string {
@@ -60,65 +54,41 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		csrfToken = r.FormValue("csrf_token")
 	}
 
-	// If no CSRF token is provided, check if this is a valid session
-	// This handles the case where the server restarted and lost CSRF tokens
+	// No CSRF token means request is not eligible for mutation
 	if csrfToken == "" {
-		// No CSRF token provided - this is definitely invalid
 		log.Warn().
 			Str("path", r.URL.Path).
 			Str("session", cookie.Value[:8]+"...").
 			Msg("Missing CSRF token")
+		clearCSRFCookie(w)
 		return false
 	}
 
 	// Check if the CSRF token validates
 	if !validateCSRFToken(cookie.Value, csrfToken) {
-		// CSRF validation failed, but check if session is still valid
-		// If session is valid but CSRF token doesn't match, it might be due to server restart
-		if ValidateSession(cookie.Value) {
-			// Valid session but mismatched CSRF - likely server restart
-			// Generate a new CSRF token for this session
-			newToken := generateCSRFToken(cookie.Value)
-
-			// Detect if we're behind a proxy/tunnel
-			isProxied := r.Header.Get("X-Forwarded-For") != "" ||
-				r.Header.Get("X-Real-IP") != "" ||
-				r.Header.Get("CF-Ray") != "" ||
-				r.Header.Get("X-Forwarded-Proto") != ""
-
-			sameSitePolicy := http.SameSiteStrictMode
-			if isProxied {
-				sameSitePolicy = http.SameSiteNoneMode
-			}
-
-			isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-
-			// Set the new CSRF token as a cookie
-			http.SetCookie(w, &http.Cookie{
-				Name:     "pulse_csrf",
-				Value:    newToken,
-				Path:     "/",
-				Secure:   isSecure,
-				SameSite: sameSitePolicy,
-				MaxAge:   86400, // 24 hours
-			})
-			// For this request, we'll be lenient and allow it through
-			log.Debug().
-				Str("path", r.URL.Path).
-				Str("session", cookie.Value[:8]+"...").
-				Msg("Regenerated CSRF token after server restart")
-			return true
-		}
-
 		log.Warn().
 			Str("path", r.URL.Path).
 			Str("session", cookie.Value[:8]+"...").
 			Str("provided_token", csrfToken[:8]+"...").
 			Msg("Invalid CSRF token")
+		clearCSRFCookie(w)
 		return false
 	}
 
 	return true
+}
+
+func clearCSRFCookie(w http.ResponseWriter) {
+	if w == nil {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_csrf",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: false,
+	})
 }
 
 // Rate Limiting - using existing RateLimiter from ratelimit.go
@@ -132,28 +102,23 @@ var (
 
 // GetClientIP extracts the client IP from the request
 func GetClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		// Take the first IP in the chain
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
+	rawRemoteIP := extractRemoteIP(r.RemoteAddr)
+	if rawRemoteIP == "" {
+		return ""
+	}
+
+	// Only trust proxy headers when the immediate peer is trusted.
+	if isTrustedProxyIP(rawRemoteIP) {
+		if forwarded := firstValidForwardedIP(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+			return forwarded
+		}
+
+		if realIP := strings.TrimSpace(strings.Trim(r.Header.Get("X-Real-IP"), "[]")); realIP != "" && net.ParseIP(realIP) != nil {
+			return realIP
 		}
 	}
 
-	// Check X-Real-IP header
-	xri := r.Header.Get("X-Real-IP")
-	if xri != "" {
-		return xri
-	}
-
-	// Fall back to RemoteAddr
-	addr := r.RemoteAddr
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		return addr[:idx]
-	}
-	return addr
+	return rawRemoteIP
 }
 
 // Failed Login Tracking
@@ -169,7 +134,172 @@ var (
 
 	maxFailedAttempts = 5
 	lockoutDuration   = 15 * time.Minute
+
+	trustedProxyOnce  sync.Once
+	trustedProxyCIDRs []*net.IPNet
 )
+
+func loadTrustedProxyCIDRs() {
+	raw := utils.GetenvTrim("PULSE_TRUSTED_PROXY_CIDRS")
+	if raw == "" {
+		return
+	}
+
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		if strings.Contains(entry, "/") {
+			_, network, parseErr := net.ParseCIDR(entry)
+			if parseErr == nil {
+				network.IP = network.IP.Mask(network.Mask)
+				trustedProxyCIDRs = append(trustedProxyCIDRs, network)
+				continue
+			}
+			log.Warn().
+				Str("cidr", entry).
+				Err(parseErr).
+				Msg("Ignoring invalid CIDR in PULSE_TRUSTED_PROXY_CIDRS")
+			continue
+		}
+
+		ip := net.ParseIP(entry)
+		if ip == nil {
+			log.Warn().
+				Str("value", entry).
+				Msg("Ignoring invalid IP in PULSE_TRUSTED_PROXY_CIDRS")
+			continue
+		}
+
+		bits := 32
+		if ip.To4() == nil {
+			bits = 128
+		}
+		mask := net.CIDRMask(bits, bits)
+		network := &net.IPNet{IP: ip.Mask(mask), Mask: mask}
+		trustedProxyCIDRs = append(trustedProxyCIDRs, network)
+	}
+}
+
+func extractRemoteIP(remoteAddr string) string {
+	if remoteAddr == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		return strings.Trim(host, "[]")
+	}
+	return strings.Trim(remoteAddr, "[]")
+}
+
+func firstValidForwardedIP(header string) string {
+	if header == "" {
+		return ""
+	}
+	for _, part := range strings.Split(header, ",") {
+		part = strings.TrimSpace(strings.Trim(part, "[]"))
+		if part == "" {
+			continue
+		}
+
+		if net.ParseIP(part) != nil {
+			return part
+		}
+	}
+	return ""
+}
+
+func isTrustedProxyIP(ipStr string) bool {
+	ipStr = strings.TrimSpace(strings.Trim(ipStr, "[]"))
+	if ipStr == "" {
+		return false
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+
+	trustedProxyOnce.Do(loadTrustedProxyCIDRs)
+	if len(trustedProxyCIDRs) == 0 {
+		return false
+	}
+	for _, network := range trustedProxyCIDRs {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isPrivateIP(ip string) bool {
+	host := extractRemoteIP(ip)
+	if host == "" {
+		return false
+	}
+
+	parsedIP := net.ParseIP(host)
+	if parsedIP == nil {
+		return false
+	}
+
+	if parsedIP.IsLoopback() ||
+		parsedIP.IsLinkLocalUnicast() ||
+		parsedIP.IsLinkLocalMulticast() {
+		return true
+	}
+
+	privateRanges := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"::1/128",
+		"fc00::/7",
+		"fe80::/10",
+	}
+
+	for _, cidr := range privateRanges {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(parsedIP) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isTrustedNetwork(ip string, trustedNetworks []string) bool {
+	if len(trustedNetworks) == 0 {
+		return isPrivateIP(ip)
+	}
+
+	host := extractRemoteIP(ip)
+	if host == "" {
+		return false
+	}
+
+	parsedIP := net.ParseIP(host)
+	if parsedIP == nil {
+		return false
+	}
+
+	for _, cidr := range trustedNetworks {
+		_, network, err := net.ParseCIDR(strings.TrimSpace(cidr))
+		if err != nil {
+			continue
+		}
+		if network.Contains(parsedIP) {
+			return true
+		}
+	}
+
+	return false
+}
 
 // RecordFailedLogin tracks failed login attempts
 func RecordFailedLogin(identifier string) {

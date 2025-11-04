@@ -49,8 +49,10 @@ docker run -e API_TOKENS=token-a,token-b rcourtman/pulse:latest
 # With API token (header)
 curl -H "X-API-Token: your-secure-token" http://localhost:7655/api/health
 
-# With API Token (query parameter, for export/import)
-curl "http://localhost:7655/api/export?token=your-secure-token"
+# With API token (Authorization header)
+curl -H "Authorization: Bearer your-secure-token" http://localhost:7655/api/health
+
+# (Query parameters are rejected to avoid leaking tokens in logs or referrers.)
 
 # With session cookie (after login)
 curl -b cookies.txt http://localhost:7655/api/health
@@ -125,8 +127,6 @@ Response:
   "status": "healthy",
   "timestamp": 1754995749,
   "uptime": 166.187561244,
-  "legacySSHDetected": false,
-  "recommendProxyUpgrade": false,
   "proxyInstallScriptAvailable": true,
   "devModeSSH": false
 }
@@ -218,7 +218,7 @@ Each service entry lists offline daemons in `message` when present (for example,
 
 ### Scheduler Health
 
-**New in v4.24.0:** Monitor Pulse's internal adaptive polling scheduler and circuit breaker status.
+Monitor Pulse's internal adaptive polling scheduler and circuit breaker status.
 
 ```bash
 GET /api/monitoring/scheduler/health
@@ -479,14 +479,21 @@ Quick setup for authentication (first-time setup).
 POST /api/security/quick-setup
 ```
 
+Authentication:
+- Provide the bootstrap token in the `X-Setup-Token` header (or in the JSON payload) when no auth is configured yet.
+- Once credentials exist, an authenticated admin session or API token with `settings:write` is required.
+
 Request body:
 ```json
 {
   "username": "admin",
   "password": "secure-password",
-  "generateApiToken": true
+  "apiToken": "raw-token-value",
+  "setupToken": "<bootstrap-token>"
 }
 ```
+
+The bootstrap token can be read from `/.bootstrap_token` in the data directory (for example `/etc/pulse/.bootstrap_token` on bare metal or `/data/.bootstrap_token` in Docker). The token file is removed automatically after a successful setup run.
 
 #### API Token Management
 Manage API tokens for automation workflows, Docker agents, and tool integrations.

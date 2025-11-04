@@ -5,11 +5,11 @@ import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { DockerHost, Host } from '@/types/api';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
-import { setStoredAPIToken } from '@/utils/tokenStorage';
 import { setApiToken as setApiClientToken } from '@/utils/apiClient';
+import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
-import { ApiIcon } from '@/components/icons/ApiIcon';
+import BadgeCheck from 'lucide-solid/icons/badge-check';
 import {
   API_SCOPE_LABELS,
   API_SCOPE_OPTIONS,
@@ -125,14 +125,14 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       description: 'Allow pulse-host-agent to submit OS, CPU, and disk metrics.',
   },
   {
-    label: 'Docker report',
+    label: 'Container report',
     scopes: [DOCKER_REPORT_SCOPE],
-    description: 'Permits Docker agents to stream host and container telemetry only.',
+    description: 'Permits container agents (Docker or Podman) to stream host and container telemetry only.',
   },
   {
-    label: 'Docker manage',
+    label: 'Container manage',
     scopes: [DOCKER_REPORT_SCOPE, DOCKER_MANAGE_SCOPE],
-    description: 'Extends Docker reporting with lifecycle actions (restart, stop, etc.).',
+    description: 'Extends container reporting with lifecycle actions (restart, stop, etc.).',
   },
   {
     label: 'Settings read',
@@ -189,7 +189,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       setTokens(list);
       setTokensLoaded(true);
     } catch (err) {
-      console.error('Failed to load API tokens', err);
+      logger.error('Failed to load API tokens', err);
       showError('Failed to load API tokens');
     } finally {
       setLoading(false);
@@ -263,10 +263,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       showSuccess('New API token generated. Copy it below while it is still visible.');
       props.onTokensChanged?.();
 
-      setStoredAPIToken(token);
       setApiClientToken(token);
     } catch (err) {
-      console.error('Failed to generate API token', err);
+      logger.error('Failed to generate API token', err);
       showError('Failed to generate API token');
     } finally {
       setIsGenerating(false);
@@ -309,7 +308,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       const hostSummary =
         extraCount > 0 ? `${hostListPreview}, +${extraCount} more` : hostListPreview;
       const hostCountLabel =
-        dockerUsage.count === 1 ? 'Docker host' : `${dockerUsage.count} Docker hosts`;
+        dockerUsage.count === 1 ? 'container host' : `${dockerUsage.count} container hosts`;
       messageChunks.push(`${hostCountLabel}: ${hostSummary}`);
     }
     if (hostUsage) {
@@ -346,7 +345,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         setNewTokenRecord(null);
       }
     } catch (err) {
-      console.error('Failed to revoke API token', err);
+      logger.error('Failed to revoke API token', err);
       showError('Failed to revoke API token');
     }
   };
@@ -379,7 +378,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap items-center gap-3">
               <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200">
-                <ApiIcon class="h-5 w-5" />
+                <BadgeCheck class="h-5 w-5" />
               </div>
               <SectionHeader
                 label="Token inventory"
@@ -561,11 +560,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     if (dockerUsageEntry) {
                       usageSegments.push(
                         dockerUsageEntry.count === 1
-                          ? dockerUsageEntry.hosts[0]?.label ?? 'Docker host'
-                          : `${dockerUsageEntry.count} Docker hosts`,
+                          ? dockerUsageEntry.hosts[0]?.label ?? 'Container host'
+                          : `${dockerUsageEntry.count} container hosts`,
                       );
                       usageTitleSegments.push(
-                        `Docker hosts: ${dockerUsageEntry.hosts.map((host) => host.label).join(', ')}`,
+                        `Container hosts: ${dockerUsageEntry.hosts.map((host) => host.label).join(', ')}`,
                       );
                     }
                     if (hostUsageEntry) {
@@ -690,7 +689,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 type="text"
                 value={nameInput()}
                 onInput={(e) => setNameInput(e.currentTarget.value)}
-                placeholder="e.g. Docker pipeline"
+                placeholder="e.g. Container pipeline"
                 class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/40"
               />
             </div>

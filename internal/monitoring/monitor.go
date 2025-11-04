@@ -1397,6 +1397,25 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		displayName = hostname
 	}
 
+	runtime := strings.ToLower(strings.TrimSpace(report.Host.Runtime))
+	switch runtime {
+	case "", "auto", "default":
+		runtime = "docker"
+	case "docker", "podman":
+		// supported runtimes
+	default:
+		runtime = "docker"
+	}
+
+	runtimeVersion := strings.TrimSpace(report.Host.RuntimeVersion)
+	dockerVersion := strings.TrimSpace(report.Host.DockerVersion)
+	if runtimeVersion == "" {
+		runtimeVersion = dockerVersion
+	}
+	if dockerVersion == "" {
+		dockerVersion = runtimeVersion
+	}
+
 	containers := make([]models.DockerContainer, 0, len(report.Containers))
 	for _, payload := range report.Containers {
 		container := models.DockerContainer{
@@ -1563,7 +1582,9 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		OS:                report.Host.OS,
 		KernelVersion:     report.Host.KernelVersion,
 		Architecture:      report.Host.Architecture,
-		DockerVersion:     report.Host.DockerVersion,
+		Runtime:           runtime,
+		RuntimeVersion:    runtimeVersion,
+		DockerVersion:     dockerVersion,
 		CPUs:              report.Host.TotalCPU,
 		TotalMemoryBytes:  report.Host.TotalMemoryBytes,
 		UptimeSeconds:     report.Host.UptimeSeconds,
@@ -3513,10 +3534,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.alertManager.SetResolvedCallback(func(alertID string) {
 		wsHub.BroadcastAlertResolved(alertID)
 		m.notificationMgr.CancelAlert(alertID)
-		// Don't broadcast full state here - it causes a cascade with many guests
-		// The frontend will get the updated alerts through the regular broadcast ticker
-		// state := m.GetState()
-		// wsHub.BroadcastState(state)
+		// Don't broadcast full state here - it causes a cascade with many guests.
+		// The frontend will get the updated alerts through the regular broadcast ticker.
 	})
 	m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {
 		log.Info().
@@ -7454,23 +7473,6 @@ func (m *Monitor) GetNotificationManager() *notifications.NotificationManager {
 // GetConfigPersistence returns the config persistence manager
 func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 	return m.configPersist
-}
-
-// pollStorageBackups polls backup files from storage
-// Deprecated: This function should not be called directly as it causes duplicate GetNodes calls.
-// Use pollStorageBackupsWithNodes instead.
-func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Warn().Str("instance", instanceName).Msg("pollStorageBackups called directly - this causes duplicate GetNodes calls and syslog spam on non-clustered nodes")
-
-	// Get all nodes
-	nodes, err := client.GetNodes(ctx)
-	if err != nil {
-		monErr := errors.WrapConnectionError("get_nodes_for_backups", instanceName, err)
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes for backup polling")
-		return
-	}
-
-	m.pollStorageBackupsWithNodes(ctx, instanceName, client, nodes)
 }
 
 // pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls

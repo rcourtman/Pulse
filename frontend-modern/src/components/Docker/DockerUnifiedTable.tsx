@@ -4,10 +4,12 @@ import { Card } from '@/components/shared/Card';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
-import { formatBytes, formatPercent, formatUptime, formatRelativeTime } from '@/utils/format';
+import { formatBytes, formatPercent, formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import type { DockerMetadata } from '@/api/dockerMetadata';
 import { DockerMetadataAPI } from '@/api/dockerMetadata';
+import { resolveHostRuntime } from './runtimeDisplay';
 import { showSuccess, showError } from '@/utils/toast';
+import { logger } from '@/utils/logger';
 
 const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
 const DEGRADED_HOST_STATUSES = new Set([
@@ -108,6 +110,214 @@ const parseSearchTerm = (term?: string): SearchToken[] => {
     });
 };
 
+interface PodmanMetadataItem {
+  label: string;
+  value?: string;
+}
+
+interface PodmanMetadataSection {
+  title: string;
+  items: PodmanMetadataItem[];
+}
+
+const PODMAN_METADATA_GROUPS: Array<{
+  title: string;
+  prefixes?: string[];
+  keys?: string[];
+}> = [
+  {
+    title: 'Pod',
+    prefixes: ['io.podman.annotations.pod.', 'io.podman.pod.', 'net.containers.podman.pod.'],
+  },
+  {
+    title: 'Compose',
+    prefixes: ['io.podman.compose.'],
+  },
+  {
+    title: 'Auto Update',
+    prefixes: ['io.containers.autoupdate.'],
+    keys: ['io.containers.autoupdate'],
+  },
+  {
+    title: 'User Namespace',
+    keys: ['io.podman.annotations.userns', 'io.containers.userns'],
+  },
+  {
+    title: 'Capabilities',
+    keys: ['io.containers.capabilities', 'io.containers.selinux', 'io.containers.seccomp'],
+  },
+  {
+    title: 'Podman Annotations',
+    prefixes: ['io.podman.annotations.'],
+  },
+  {
+    title: 'Container Settings',
+    prefixes: ['io.containers.'],
+  },
+];
+
+const humanizePodmanKey = (raw: string): string => {
+  if (!raw) return 'Value';
+  const cleaned = raw.replace(/[_\-.]+/g, ' ').trim();
+  if (!cleaned) return 'Value';
+  return cleaned
+    .split(' ')
+    .map((segment) => {
+      if (!segment) return segment;
+      if (segment.toUpperCase() === segment) return segment;
+      return segment.charAt(0).toUpperCase() + segment.slice(1);
+    })
+    .join(' ')
+    .replace(/\bId\b/g, 'ID')
+    .replace(/\bUrl\b/g, 'URL');
+};
+
+const stripPrefix = (key: string, prefixes: string[] = []): string => {
+  for (const prefix of prefixes) {
+    if (prefix && key.startsWith(prefix)) {
+      const stripped = key.slice(prefix.length);
+      if (stripped) {
+        return stripped;
+      }
+    }
+  }
+  const lastDot = key.lastIndexOf('.');
+  if (lastDot >= 0 && lastDot < key.length - 1) {
+    return key.slice(lastDot + 1);
+  }
+  return key;
+};
+
+const buildPodmanMetadataSections = (
+  metadata?: DockerContainer['podman'],
+  labels?: Record<string, string>,
+): PodmanMetadataSection[] => {
+  const sections: PodmanMetadataSection[] = [];
+  const consumed = new Set<string>();
+  const markConsumed = (...keys: (string | undefined)[]) => {
+    keys.forEach((key) => {
+      if (key) consumed.add(key);
+    });
+  };
+
+  const pushSection = (title: string, items: PodmanMetadataItem[]) => {
+    if (items.length > 0) {
+      sections.push({ title, items });
+    }
+  };
+
+  if (metadata) {
+    const podItems: PodmanMetadataItem[] = [];
+    if (metadata.podName) {
+      podItems.push({ label: 'Pod Name', value: metadata.podName });
+      markConsumed('io.podman.annotations.pod.name');
+    }
+    if (metadata.podId) {
+      podItems.push({ label: 'Pod ID', value: metadata.podId });
+      markConsumed('io.podman.annotations.pod.id');
+    }
+    if (metadata.infra !== undefined) {
+      podItems.push({ label: 'Infra Container', value: metadata.infra ? 'true' : 'false' });
+      markConsumed('io.podman.annotations.pod.infra');
+    }
+    pushSection('Pod', podItems);
+
+    const composeItems: PodmanMetadataItem[] = [];
+    if (metadata.composeProject) {
+      composeItems.push({ label: 'Project', value: metadata.composeProject });
+      markConsumed('io.podman.compose.project');
+    }
+    if (metadata.composeService) {
+      composeItems.push({ label: 'Service', value: metadata.composeService });
+      markConsumed('io.podman.compose.service');
+    }
+    if (metadata.composeWorkdir) {
+      composeItems.push({ label: 'Working Dir', value: metadata.composeWorkdir });
+      markConsumed('io.podman.compose.working_dir');
+    }
+    if (metadata.composeConfigHash) {
+      composeItems.push({ label: 'Config Hash', value: metadata.composeConfigHash });
+      markConsumed('io.podman.compose.config-hash');
+    }
+    pushSection('Compose', composeItems);
+
+    const autoUpdateItems: PodmanMetadataItem[] = [];
+    if (metadata.autoUpdatePolicy) {
+      autoUpdateItems.push({ label: 'Policy', value: metadata.autoUpdatePolicy });
+      markConsumed('io.containers.autoupdate');
+    }
+    if (metadata.autoUpdateRestart) {
+      autoUpdateItems.push({ label: 'Restart', value: metadata.autoUpdateRestart });
+      markConsumed('io.containers.autoupdate.restart');
+    }
+    pushSection('Auto Update', autoUpdateItems);
+
+    const namespaceItems: PodmanMetadataItem[] = [];
+    if (metadata.userNamespace) {
+      namespaceItems.push({ label: 'User Namespace', value: metadata.userNamespace });
+      markConsumed('io.podman.annotations.userns', 'io.containers.userns');
+    }
+    pushSection('Security', namespaceItems);
+  }
+
+  if (!labels || Object.keys(labels).length === 0) {
+    return sections;
+  }
+
+  const entries = Object.entries(labels);
+  const remaining = entries.filter(
+    ([key]) =>
+      !consumed.has(key) && (key.includes('podman') || key.startsWith('io.containers.')),
+  );
+  if (remaining.length === 0) {
+    return sections;
+  }
+
+  const used = new Set<string>();
+  const addSection = (title: string, prefixes: string[] = [], keys: string[] = []) => {
+    const items: Array<[string, string]> = [];
+
+    for (const [key, value] of remaining) {
+      if (used.has(key)) continue;
+
+      const matchesPrefix = prefixes.some((prefix) => prefix && key.startsWith(prefix));
+      const matchesKey = keys.includes(key);
+
+      if (!matchesPrefix && !matchesKey) continue;
+
+      items.push([key, value]);
+      used.add(key);
+    }
+
+    if (items.length === 0) return;
+
+    sections.push({
+      title,
+      items: items.map(([key, value]) => ({
+        label: humanizePodmanKey(stripPrefix(key, prefixes)),
+        value: value || undefined,
+      })),
+    });
+  };
+
+  for (const group of PODMAN_METADATA_GROUPS) {
+    addSection(group.title, group.prefixes ?? [], group.keys ?? []);
+  }
+
+  const leftovers = remaining.filter(([key]) => !used.has(key));
+  if (leftovers.length > 0) {
+    sections.push({
+      title: 'Additional Podman Labels',
+      items: leftovers.map(([key, value]) => ({
+        label: humanizePodmanKey(stripPrefix(key)),
+        value: value || undefined,
+      })),
+    });
+  }
+
+  return sections;
+};
+
 const findContainerForTask = (containers: DockerContainer[], task: DockerTask) => {
   if (!containers.length) return undefined;
 
@@ -194,6 +404,17 @@ const containerMatchesToken = (
     return hostName.includes(token.value);
   }
 
+  if (token.key === 'pod') {
+    const pod = container.podman?.podName?.toLowerCase() ?? '';
+    return pod.includes(token.value);
+  }
+
+  if (token.key === 'compose') {
+    const project = container.podman?.composeProject?.toLowerCase() ?? '';
+    const service = container.podman?.composeService?.toLowerCase() ?? '';
+    return project.includes(token.value) || service.includes(token.value);
+  }
+
   if (token.key === 'state') {
     return state.includes(token.value) || health.includes(token.value);
   }
@@ -211,6 +432,19 @@ const containerMatchesToken = (
   ]
     .filter(Boolean)
     .map((value) => value!.toLowerCase());
+
+  if (container.podman) {
+    [
+      container.podman.podName,
+      container.podman.podId,
+      container.podman.composeProject,
+      container.podman.composeService,
+      container.podman.autoUpdatePolicy,
+      container.podman.userNamespace,
+    ]
+      .filter(Boolean)
+      .forEach((value) => fields.push(value!.toLowerCase()));
+  }
 
   if (container.labels) {
     Object.entries(container.labels).forEach(([key, value]) => {
@@ -312,7 +546,6 @@ const GROUPED_RESOURCE_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
 
 const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = (props) => {
   const displayName = props.host.displayName || props.host.hostname || props.host.id;
-
   return (
     <tr class="bg-gray-50 dark:bg-gray-900/40">
       <td colSpan={props.colspan} class="py-0.5 pr-2 pl-4">
@@ -336,6 +569,8 @@ const DockerContainerRow: Component<{
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
 }> = (props) => {
   const { host, container } = props.row;
+  const runtimeInfo = resolveHostRuntime(host);
+  const runtimeVersion = () => host.runtimeVersion || host.dockerVersion || null;
   const rowId = buildRowId(host, props.row);
   const resourceId = () => `${host.id}:container:${container.id || container.name}`;
   const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
@@ -369,6 +604,14 @@ const DockerContainerRow: Component<{
     if (!total || total <= 0) return undefined;
     return `${diskUsageLabel()} / ${formatBytes(total, 0)}`;
   });
+  const createdRelative = createMemo(() => (container.createdAt ? formatRelativeTime(container.createdAt) : null));
+  const createdAbsolute = createMemo(() => (container.createdAt ? formatAbsoluteTime(container.createdAt) : null));
+  const startedRelative = createMemo(() =>
+    container.startedAt ? formatRelativeTime(container.startedAt) : null,
+  );
+  const startedAbsolute = createMemo(() =>
+    container.startedAt ? formatAbsoluteTime(container.startedAt) : null,
+  );
   const mounts = createMemo(() => container.mounts || []);
   const hasMounts = createMemo(() => mounts().length > 0);
   const blockIo = createMemo(() => container.blockIo);
@@ -384,6 +627,15 @@ const DockerContainerRow: Component<{
   };
   const blockIoReadRateLabel = createMemo(() => formatIoRate(blockIoReadRate()));
   const blockIoWriteRateLabel = createMemo(() => formatIoRate(blockIoWriteRate()));
+  const podmanMetadata = createMemo(() => container.podman);
+  const podName = createMemo(() => podmanMetadata()?.podName?.trim() || undefined);
+  const isPodInfra = createMemo(() => podmanMetadata()?.infra ?? false);
+  const podmanMetadataSections = createMemo(() =>
+    buildPodmanMetadataSections(podmanMetadata(), container.labels),
+  );
+  const hasPodmanMetadata = createMemo(
+    () => !!podmanMetadata() || podmanMetadataSections().length > 0,
+  );
   const hasBlockIo = createMemo(() => {
     const stats = blockIo();
     if (!stats) return false;
@@ -393,15 +645,14 @@ const DockerContainerRow: Component<{
     const writeRate = stats.writeRateBytesPerSecond ?? 0;
     return read > 0 || write > 0 || readRate > 0 || writeRate > 0;
   });
-  const hasBlockIoRates = createMemo(() => !!blockIoReadRateLabel() || !!blockIoWriteRateLabel());
-
   const hasDrawerContent = createMemo(() => {
     return (
       (container.ports && container.ports.length > 0) ||
       (container.labels && Object.keys(container.labels).length > 0) ||
       (container.networks && container.networks.length > 0) ||
       hasMounts() ||
-      hasBlockIo()
+      hasBlockIo() ||
+      hasPodmanMetadata()
     );
   });
 
@@ -531,7 +782,7 @@ const DockerContainerRow: Component<{
         showSuccess('Container URL cleared');
       }
     } catch (err: any) {
-      console.error('Failed to save container URL:', err);
+      logger.error('Failed to save container URL:', err);
       showError(err.message || 'Failed to save container URL');
       // Revert on error
       setCustomUrl(hadUrl ? customUrl() : undefined);
@@ -562,7 +813,7 @@ const DockerContainerRow: Component<{
 
         showSuccess('Container URL removed');
       } catch (err: any) {
-        console.error('Failed to remove container URL:', err);
+        logger.error('Failed to remove container URL:', err);
         showError(err.message || 'Failed to remove container URL');
       }
     }
@@ -646,6 +897,18 @@ const DockerContainerRow: Component<{
                   >
                     {container.name || container.id}
                   </span>
+                  <Show when={podName()}>
+                    {(name) => (
+                      <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                        Pod: {name()}
+                        <Show when={isPodInfra()}>
+                          <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200">
+                            infra
+                          </span>
+                        </Show>
+                      </span>
+                    )}
+                  </Show>
                   <Show when={customUrl()}>
                     <a
                       href={customUrl()}
@@ -726,11 +989,14 @@ const DockerContainerRow: Component<{
         </td>
         <td class="px-2 py-0.5">
           <span
-            class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
-              'container',
-            )}`}
+            class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${runtimeInfo.badgeClass}`}
+            title={
+              runtimeVersion()
+                ? `${runtimeInfo.label} ${runtimeVersion()}`
+                : runtimeInfo.raw || runtimeInfo.label
+            }
           >
-            Container
+            {runtimeInfo.label}
           </span>
         </td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
@@ -764,7 +1030,7 @@ const DockerContainerRow: Component<{
             />
           </Show>
         </td>
-        <td class="px-2 py-0.5 min-w-[180px]">
+        <td class="px-2 py-0.5 min-w-[200px]">
           <Show when={hasDiskStats()} fallback={<span class="text-xs text-gray-400">—</span>}>
             <Show
               when={diskPercent() !== null}
@@ -777,19 +1043,6 @@ const DockerContainerRow: Component<{
                 sublabel={diskSublabel() ?? diskUsageLabel()}
               />
             </Show>
-          </Show>
-          <Show when={hasBlockIoRates()}>
-            <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-              <Show when={blockIoReadRateLabel()}>
-                <span>R {blockIoReadRateLabel()}</span>
-              </Show>
-              <Show when={blockIoReadRateLabel() && blockIoWriteRateLabel()}>
-                <span class="mx-1 text-gray-300 dark:text-gray-600">•</span>
-              </Show>
-              <Show when={blockIoWriteRateLabel()}>
-                <span>W {blockIoWriteRateLabel()}</span>
-              </Show>
-            </div>
           </Show>
         </td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
@@ -809,6 +1062,134 @@ const DockerContainerRow: Component<{
         <tr class="bg-gray-50 dark:bg-gray-900/50">
           <td colSpan={props.columns} class="px-4 py-3">
             <div class="flex flex-wrap justify-start gap-3">
+              <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                  Summary
+                </div>
+                <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-200">Runtime</span>
+                    <span
+                      class={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${runtimeInfo.badgeClass}`}
+                      title={runtimeInfo.raw || runtimeInfo.label}
+                    >
+                      {runtimeInfo.label}
+                      <Show when={runtimeVersion()}>
+                        {(version) => (
+                          <span class="text-[10px] text-gray-500 dark:text-gray-400">{version()}</span>
+                        )}
+                      </Show>
+                    </span>
+                  </div>
+                  <div class="flex items-start justify-between gap-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-200">Image</span>
+                    <span class="flex-1 truncate text-right text-gray-600 dark:text-gray-300" title={container.image}>
+                      {container.image || '—'}
+                    </span>
+                  </div>
+                  <Show when={podName()}>
+                    {(name) => (
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Pod</span>
+                        <span class="text-right text-gray-600 dark:text-gray-300">
+                          {name()}
+                          <Show when={isPodInfra()}>
+                            <span class="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                              infra
+                            </span>
+                          </Show>
+                        </span>
+                      </div>
+                    )}
+                  </Show>
+                  <Show when={podmanMetadata()?.composeProject}>
+                    {(project) => (
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Compose Project</span>
+                        <span class="text-right text-gray-600 dark:text-gray-300">{project()}</span>
+                      </div>
+                    )}
+                  </Show>
+                  <Show when={podmanMetadata()?.composeService}>
+                    {(service) => (
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Compose Service</span>
+                        <span class="text-right text-gray-600 dark:text-gray-300">{service()}</span>
+                      </div>
+                    )}
+                  </Show>
+                  <Show when={podmanMetadata()?.autoUpdatePolicy}>
+                    {(policy) => (
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Auto Update</span>
+                        <span class="text-right text-gray-600 dark:text-gray-300">
+                          {policy()}
+                          <Show when={podmanMetadata()?.autoUpdateRestart}>
+                            {(restart) => (
+                              <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400">restart: {restart()}</span>
+                            )}
+                          </Show>
+                        </span>
+                      </div>
+                    )}
+                  </Show>
+                  <Show when={podmanMetadata()?.userNamespace}>
+                    {(userns) => (
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">User Namespace</span>
+                        <span class="text-right text-gray-600 dark:text-gray-300">{userns()}</span>
+                      </div>
+                    )}
+                  </Show>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
+                    <span class="text-right text-gray-600 dark:text-gray-300">{statusLabel()}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-200">Restarts</span>
+                    <span class="text-right text-gray-600 dark:text-gray-300">{restarts()}</span>
+                  </div>
+                  <Show when={createdRelative()}>
+                    {(created) => (
+                      <div class="flex flex-col gap-0.5">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Created</span>
+                        <div class="text-right text-gray-600 dark:text-gray-300">
+                          {created()}
+                          <Show when={createdAbsolute()}>
+                            {(abs) => (
+                              <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
+                            )}
+                          </Show>
+                        </div>
+                      </div>
+                    )}
+                  </Show>
+                  <Show when={startedRelative()}>
+                    {(started) => (
+                      <div class="flex flex-col gap-0.5">
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Started</span>
+                        <div class="text-right text-gray-600 dark:text-gray-300">
+                          {started()}
+                          <Show when={startedAbsolute()}>
+                            {(abs) => (
+                              <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
+                            )}
+                          </Show>
+                        </div>
+                      </div>
+                    )}
+                  </Show>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-200">Uptime</span>
+                    <span class="text-right text-gray-600 dark:text-gray-300">{uptime()}</span>
+                  </div>
+                </div>
+                <Show when={runtimeInfo.id === 'podman'}>
+                  <div class="mt-3 rounded border border-dashed border-purple-200 px-2 py-1 text-[10px] text-purple-700 dark:border-purple-700/60 dark:text-purple-200">
+                    Podman hosts report container metrics, but Swarm services and tasks are unavailable. Runtime annotations and compose metadata appear below when present.
+                  </div>
+                </Show>
+              </div>
               <Show when={container.ports && container.ports.length > 0}>
                 <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
@@ -852,6 +1233,40 @@ const DockerContainerRow: Component<{
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={hasPodmanMetadata()}>
+                <div class="min-w-[220px] rounded border border-purple-200 bg-white/70 p-2 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
+                    Podman Metadata
+                  </div>
+                  <div class="mt-1 space-y-2 text-[11px] text-gray-600 dark:text-gray-300">
+                    <For each={podmanMetadataSections()}>
+                      {(section) => (
+                        <div class="space-y-1 border-b border-purple-100 pb-1 last:border-b-0 last:pb-0 dark:border-purple-800/30">
+                          <div class="text-[10px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
+                            {section.title}
+                          </div>
+                          <div class="space-y-1">
+                            <For each={section.items}>
+                              {(item) => (
+                                <div class="flex items-start justify-between gap-2">
+                                  <span class="font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
+                                  <span
+                                    class="max-w-[220px] break-all text-right text-gray-600 dark:text-gray-300"
+                                    title={item.value || '—'}
+                                  >
+                                    {item.value || '—'}
+                                  </span>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </div>
+                      )}
+                    </For>
                   </div>
                 </div>
               </Show>
@@ -1129,7 +1544,7 @@ const DockerServiceRow: Component<{
         showSuccess('Service URL cleared');
       }
     } catch (err: any) {
-      console.error('Failed to save service URL:', err);
+      logger.error('Failed to save service URL:', err);
       showError(err.message || 'Failed to save service URL');
       // Revert on error
       setCustomUrl(hadUrl ? customUrl() : undefined);
@@ -1160,7 +1575,7 @@ const DockerServiceRow: Component<{
 
         showSuccess('Service URL removed');
       } catch (err: any) {
-        console.error('Failed to remove service URL:', err);
+        logger.error('Failed to remove service URL:', err);
         showError(err.message || 'Failed to remove service URL');
       }
     }
@@ -1318,7 +1733,7 @@ const DockerServiceRow: Component<{
         </td>
         <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[150px]">—</td>
         <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[210px]">—</td>
-        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[180px]">—</td>
+        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[200px]">—</td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <span class="font-semibold text-gray-900 dark:text-gray-100">
             {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
@@ -1628,48 +2043,48 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         fallback={
           <Card padding="lg">
             <EmptyState
-              title="No Docker workloads found"
+              title="No container workloads found"
               description={
                 totalContainers() === 0 && totalServices() === 0
-                  ? 'Add a Docker agent in Settings to start gathering container and service metrics.'
+                  ? 'Add a container agent in Settings to start gathering container and service metrics.'
                   : props.searchTerm || props.statsFilter
-                    ? 'No Docker containers or services match your current filters.'
-                    : 'Docker data is currently unavailable.'
+                    ? 'No containers or services match your current filters.'
+                    : 'Container runtime data is currently unavailable.'
               }
             />
           </Card>
         }
       >
         <Card padding="none" class="overflow-hidden">
-          <ScrollableTable minWidth="1024px">
-            <table class="w-full min-w-[1024px] table-fixed border-collapse whitespace-nowrap">
+          <ScrollableTable minWidth="1080px">
+            <table class="w-full min-w-[1080px] table-fixed border-collapse whitespace-nowrap">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                  <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[24%]">
+                  <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
                     Resource
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[11%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Type
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[17%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%]">
                     Image / Stack
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%]">
                     Status
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%] min-w-[150px]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] min-w-[150px]">
                     CPU
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] min-w-[210px]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] min-w-[210px]">
                     Memory
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] min-w-[180px]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] min-w-[200px]">
                     Disk
                   </th>
                   <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
                     Tasks / Restarts
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
+                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     Updated / Uptime
                   </th>
                 </tr>

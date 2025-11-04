@@ -1,20 +1,24 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev frontend backend all clean dev-hot lint lint-backend lint-frontend format format-backend format-frontend
+.PHONY: build run dev frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend
+
+FRONTEND_DIR := frontend-modern
+FRONTEND_DIST := $(FRONTEND_DIR)/dist
+FRONTEND_EMBED_DIR := internal/api/frontend-modern
 
 # Build everything
 all: frontend backend
 
 # Build frontend only
 frontend:
-	cd frontend-modern && npm run build
+	npm --prefix $(FRONTEND_DIR) run build
 	@echo "================================================"
 	@echo "Copying frontend to internal/api/ for Go embed"
 	@echo "This is REQUIRED - Go cannot embed external paths"
 	@echo "================================================"
-	rm -rf internal/api/frontend-modern
-	mkdir -p internal/api/frontend-modern
-	cp -r frontend-modern/dist internal/api/frontend-modern/
+	rm -rf $(FRONTEND_EMBED_DIR)
+	mkdir -p $(FRONTEND_EMBED_DIR)
+	cp -r $(FRONTEND_DIST) $(FRONTEND_EMBED_DIR)/
 	@echo "✓ Frontend copied for embedding"
 
 # Build backend only (includes embedded frontend)
@@ -38,7 +42,10 @@ dev-hot:
 # Clean build artifacts
 clean:
 	rm -f pulse
-	rm -rf frontend-modern/dist
+	rm -rf $(FRONTEND_DIST) $(FRONTEND_EMBED_DIR)
+
+distclean: clean
+	./scripts/cleanup.sh
 
 # Quick rebuild and restart for development
 restart: frontend backend
@@ -51,7 +58,7 @@ lint-backend:
 	golangci-lint run ./...
 
 lint-frontend:
-	cd frontend-modern && npm run lint
+	npm --prefix $(FRONTEND_DIR) run lint
 
 # Apply formatters
 format: format-backend format-frontend
@@ -60,4 +67,4 @@ format-backend:
 	gofmt -w cmd internal pkg
 
 format-frontend:
-	cd frontend-modern && npm run format
+	npm --prefix $(FRONTEND_DIR) run format

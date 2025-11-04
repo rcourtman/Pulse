@@ -3,7 +3,10 @@ package updates
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,17 +19,17 @@ import (
 
 // InstallShAdapter wraps the install.sh script for systemd/LXC deployments
 type InstallShAdapter struct {
-	history        *UpdateHistory
+	history          *UpdateHistory
 	installScriptURL string
-	logDir         string
+	logDir           string
 }
 
 // NewInstallShAdapter creates a new install.sh adapter
 func NewInstallShAdapter(history *UpdateHistory) *InstallShAdapter {
 	return &InstallShAdapter{
-		history:        history,
+		history:          history,
 		installScriptURL: "https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh",
-		logDir:         "/var/log/pulse",
+		logDir:           "/var/log/pulse",
 	}
 }
 
@@ -291,7 +294,7 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 	if err != nil {
 		return fmt.Errorf("failed to download binary: %w", err)
 	}
-	defer os.Remove(binaryPath)
+	defer os.RemoveAll(filepath.Dir(binaryPath))
 
 	// Step 3: Stop service
 	log.Info().Msg("Stopping Pulse service")
@@ -379,27 +382,69 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 	url := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%s/pulse-linux-%s", version, arch)
 
 	// Create temp file
-	tmpFile, err := os.CreateTemp("", "pulse-rollback-*")
+	tmpDir, err := os.MkdirTemp("", "pulse-rollback-*")
 	if err != nil {
 		return "", err
 	}
-	tmpPath := tmpFile.Name()
-	tmpFile.Close()
 
-	// Download
-	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", tmpPath, url)
+	localName := fmt.Sprintf("pulse-linux-%s", arch)
+	binaryPath := filepath.Join(tmpDir, localName)
+
+	// Download binary
+	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", binaryPath, url)
 	if err := cmd.Run(); err != nil {
-		os.Remove(tmpPath)
+		os.RemoveAll(tmpDir)
 		return "", fmt.Errorf("download failed: %w", err)
 	}
 
-	// Verify it's executable
-	if err := os.Chmod(tmpPath, 0755); err != nil {
-		os.Remove(tmpPath)
+	// Download checksum
+	checksumURL := url + ".sha256"
+	checksumPath := binaryPath + ".sha256"
+	cmd = exec.CommandContext(ctx, "curl", "-fsSL", "-o", checksumPath, checksumURL)
+	if err := cmd.Run(); err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("failed to download checksum: %w", err)
+	}
+
+	checksumData, err := os.ReadFile(checksumPath)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("failed to read checksum file: %w", err)
+	}
+
+	expectedHash := strings.Fields(strings.TrimSpace(string(checksumData)))
+	if len(expectedHash) == 0 {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("checksum file was empty")
+	}
+
+	file, err := os.Open(binaryPath)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("failed to open downloaded binary: %w", err)
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("failed to hash downloaded binary: %w", err)
+	}
+	actualHash := hex.EncodeToString(hasher.Sum(nil))
+
+	if !strings.EqualFold(actualHash, expectedHash[0]) {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("checksum verification failed for %s", localName)
+	}
+
+	_ = os.Remove(checksumPath)
+
+	if err := os.Chmod(binaryPath, 0755); err != nil {
+		os.RemoveAll(tmpDir)
 		return "", err
 	}
 
-	return tmpPath, nil
+	return binaryPath, nil
 }
 
 // stopService stops the Pulse service
@@ -472,13 +517,58 @@ func (a *InstallShAdapter) waitForHealth(ctx context.Context, timeout time.Durat
 
 // downloadInstallScript downloads the install.sh script
 func (a *InstallShAdapter) downloadInstallScript(ctx context.Context) (string, error) {
-	// Use curl to download (simpler than http.Get for script execution)
-	cmd := exec.CommandContext(ctx, "curl", "-fsSL", a.installScriptURL)
-	output, err := cmd.Output()
+	tmpDir, err := os.MkdirTemp("", "pulse-installsh-*")
 	if err != nil {
 		return "", err
 	}
-	return string(output), nil
+	defer os.RemoveAll(tmpDir)
+
+	scriptPath := filepath.Join(tmpDir, "install.sh")
+
+	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", scriptPath, a.installScriptURL)
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+
+	checksumURL := a.installScriptURL + ".sha256"
+	checksumPath := scriptPath + ".sha256"
+	cmd = exec.CommandContext(ctx, "curl", "-fsSL", "-o", checksumPath, checksumURL)
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to download install.sh checksum: %w", err)
+	}
+
+	checksumData, err := os.ReadFile(checksumPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read install.sh checksum: %w", err)
+	}
+
+	expectedParts := strings.Fields(strings.TrimSpace(string(checksumData)))
+	if len(expectedParts) == 0 {
+		return "", fmt.Errorf("install.sh checksum file was empty")
+	}
+
+	file, err := os.Open(scriptPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open install.sh for hashing: %w", err)
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", fmt.Errorf("failed to hash install.sh: %w", err)
+	}
+
+	actualHash := hex.EncodeToString(hasher.Sum(nil))
+	if !strings.EqualFold(actualHash, expectedParts[0]) {
+		return "", fmt.Errorf("install.sh checksum verification failed")
+	}
+
+	content, err := os.ReadFile(scriptPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read install.sh: %w", err)
+	}
+
+	return string(content), nil
 }
 
 // parseProgress attempts to parse progress from install script output

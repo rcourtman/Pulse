@@ -52,7 +52,41 @@ func isRunningAsRoot() bool {
 	return os.Geteuid() == 0
 }
 
+func ensureSettingsWriteScope(w http.ResponseWriter, req *http.Request) bool {
+	record := getAPITokenRecordFromRequest(req)
+	if record == nil {
+		return true
+	}
+	if record.HasScope(config.ScopeSettingsWrite) {
+		return true
+	}
+
+	log.Warn().
+		Str("token_id", record.ID).
+		Str("path", req.URL.Path).
+		Msg("API token missing settings:write scope for privileged operation")
+	respondMissingScope(w, config.ScopeSettingsWrite)
+	return false
+}
+
 // handleQuickSecuritySetupFixed is the fixed version of the Quick Security Setup
+type responseCapture struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (rc *responseCapture) WriteHeader(statusCode int) {
+	if !rc.wrote {
+		rc.wrote = true
+	}
+	rc.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (rc *responseCapture) Write(b []byte) (int, error) {
+	rc.wrote = true
+	return rc.ResponseWriter.Write(b)
+}
+
 func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
@@ -76,6 +110,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			EnableNotifications bool   `json:"enableNotifications"`
 			DarkMode            bool   `json:"darkMode"`
 			Force               bool   `json:"force"`
+			SetupToken          string `json:"setupToken"`
 		}
 
 		if err := json.NewDecoder(req.Body).Decode(&setupRequest); err != nil {
@@ -83,11 +118,91 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 
-		if r.config.DisableAuthEnvDetected {
-			setupRequest.Force = true
+		authConfigured := r.config.AuthUser != "" && r.config.AuthPass != ""
+		setupCompleted := false
+		defer func() {
+			if setupCompleted {
+				r.clearBootstrapToken()
+			}
+		}()
+		forceRequested := setupRequest.Force
+		if r.config.DisableAuthEnvDetected && !authConfigured {
+			forceRequested = true
 		}
 
-		if r.config.AuthUser != "" && r.config.AuthPass != "" && !setupRequest.Force {
+		clientIP = GetClientIP(req)
+		recoveryToken := strings.TrimSpace(req.Header.Get("X-Recovery-Token"))
+		recoveryAuthorized := false
+		if recoveryToken != "" {
+			if GetRecoveryTokenStore().ValidateRecoveryTokenConstantTime(recoveryToken, clientIP) {
+				recoveryAuthorized = true
+				log.Warn().
+					Str("ip", clientIP).
+					Msg("Quick security setup invoked using recovery token")
+			} else {
+				log.Warn().
+					Str("ip", clientIP).
+					Msg("Invalid recovery token for quick security setup")
+			}
+		}
+
+		authorized := recoveryAuthorized
+
+		if !authorized && (authConfigured || forceRequested) {
+			wrapped := &responseCapture{ResponseWriter: w}
+			if CheckAuth(r.config, wrapped, req) {
+				authorized = true
+			} else {
+				if !wrapped.wrote {
+					http.Error(w, "Authentication required to modify existing security settings", http.StatusUnauthorized)
+				}
+				return
+			}
+		}
+
+		if !authorized && !authConfigured {
+			if r.bootstrapTokenHash == "" {
+				log.Error().Msg("Bootstrap setup token unavailable; refusing unauthenticated quick setup")
+				http.Error(w, "Bootstrap token unavailable; restart Pulse or inspect data directory", http.StatusServiceUnavailable)
+				return
+			}
+
+			providedToken := strings.TrimSpace(req.Header.Get(bootstrapTokenHeader))
+			if providedToken == "" {
+				providedToken = strings.TrimSpace(setupRequest.SetupToken)
+			}
+
+			if providedToken == "" {
+				http.Error(w, "Bootstrap setup token required", http.StatusUnauthorized)
+				return
+			}
+
+			if !r.bootstrapTokenValid(providedToken) {
+				log.Warn().
+					Str("ip", clientIP).
+					Msg("Rejected quick setup with invalid bootstrap token")
+				http.Error(w, "Invalid bootstrap setup token", http.StatusUnauthorized)
+				return
+			}
+
+			authorized = true
+		}
+
+		if authConfigured && !authorized {
+			log.Warn().
+				Str("ip", clientIP).
+				Msg("Unauthorized quick security setup attempt rejected")
+			http.Error(w, "Authentication required to modify existing security settings", http.StatusUnauthorized)
+			return
+		}
+
+		if authorized && !ensureSettingsWriteScope(w, req) {
+			return
+		}
+
+		setupRequest.Force = forceRequested && authorized
+
+		if authConfigured && !setupRequest.Force {
 			log.Info().Msg("Security setup skipped - password auth already configured")
 			response := map[string]interface{}{
 				"success": true,
@@ -222,6 +337,7 @@ PULSE_AUDIT_LOG=true
 			}
 
 			w.Header().Set("Content-Type", "application/json")
+			setupCompleted = true
 			json.NewEncoder(w).Encode(response)
 
 		} else if isSystemd && !isRoot {
@@ -273,6 +389,7 @@ PULSE_AUDIT_LOG=true
 			}
 
 			w.Header().Set("Content-Type", "application/json")
+			setupCompleted = true
 			json.NewEncoder(w).Encode(response)
 
 		} else if isSystemd && isRoot {
@@ -321,6 +438,7 @@ Environment="PULSE_AUDIT_LOG=true"
 			}
 
 			w.Header().Set("Content-Type", "application/json")
+			setupCompleted = true
 			json.NewEncoder(w).Encode(response)
 
 		} else {
@@ -364,6 +482,7 @@ PULSE_AUDIT_LOG=true
 			}
 
 			w.Header().Set("Content-Type", "application/json")
+			setupCompleted = true
 			json.NewEncoder(w).Encode(response)
 		}
 	}
@@ -371,46 +490,16 @@ PULSE_AUDIT_LOG=true
 
 // HandleRegenerateAPIToken generates a new API token and updates the .env file
 func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Request) {
-	// Require authentication when password auth is configured
-	if (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
+	if rq.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Check if using proxy auth and if so, verify admin status
-	if r.config.ProxyAuthSecret != "" {
-		valid, username, isAdmin := CheckProxyAuth(r.config, rq)
-		if !valid {
-			// Proxy auth is configured but validation failed - reject immediately
-			log.Warn().
-				Str("ip", rq.RemoteAddr).
-				Str("path", rq.URL.Path).
-				Str("method", rq.Method).
-				Msg("Proxy authentication failed for API token regeneration")
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"Authentication required"}`))
-			return
-		}
-		if !isAdmin {
-			// User is authenticated but not an admin
-			log.Warn().
-				Str("ip", rq.RemoteAddr).
-				Str("path", rq.URL.Path).
-				Str("method", rq.Method).
-				Str("username", username).
-				Msg("Non-admin user attempted to regenerate API token")
-
-			// Return forbidden error
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"error":"Admin privileges required"}`))
-			return
-		}
+	if !CheckAuth(r.config, w, rq) {
+		return
 	}
 
-	if rq.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !ensureSettingsWriteScope(w, rq) {
 		return
 	}
 
@@ -523,42 +612,12 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 	}
 
 	// Require authentication to prevent unauthenticated token guessing oracle
-	// Use same auth logic as regenerate-token endpoint
-	if (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
+	if !CheckAuth(r.config, w, rq) {
 		return
 	}
 
-	// Check if using proxy auth and if so, verify admin status
-	if r.config.ProxyAuthSecret != "" {
-		valid, username, isAdmin := CheckProxyAuth(r.config, rq)
-		if !valid {
-			// Proxy auth is configured but validation failed - reject immediately
-			log.Warn().
-				Str("ip", rq.RemoteAddr).
-				Str("path", rq.URL.Path).
-				Str("method", rq.Method).
-				Msg("Proxy authentication failed for API token validation")
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"Authentication required"}`))
-			return
-		}
-		if !isAdmin {
-			// User is authenticated but not an admin
-			log.Warn().
-				Str("ip", rq.RemoteAddr).
-				Str("path", rq.URL.Path).
-				Str("method", rq.Method).
-				Str("username", username).
-				Msg("Non-admin user attempted to validate API token")
-
-			// Return forbidden error
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"error":"Admin privileges required"}`))
-			return
-		}
+	if !ensureSettingsWriteScope(w, rq) {
+		return
 	}
 
 	// Apply rate limiting to prevent brute force attacks

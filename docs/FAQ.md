@@ -93,9 +93,7 @@ Yes! When you add one cluster node, Pulse automatically discovers and monitors a
 Reduce `metricsRetentionDays` in settings and restart
 
 ### How do I monitor adaptive polling?
-**New in v4.25.0:** The adaptive scheduler now exposes staleness scores, circuit breaker state, and per-resource poll metrics so you can trace why work was delayed.
-
-**New in v4.24.0:** Pulse includes adaptive polling that automatically adjusts polling intervals based on system load.
+The adaptive scheduler exposes staleness scores, circuit breaker state, and per-resource poll metrics so you can trace why work was delayed. Adaptive polling automatically adjusts polling intervals based on system load.
 
 **Monitor adaptive polling:**
 - **Dashboard**: Settings → System → Monitoring shows scheduler health status
@@ -114,8 +112,7 @@ Reduce `metricsRetentionDays` in settings and restart
 See [Adaptive Polling Documentation](monitoring/ADAPTIVE_POLLING.md) for complete details.
 
 ### What's new about rate limiting in v4.25.0?
-**New in v4.25.0:** Adaptive polling metrics and circuit breaker states are now exposed alongside rate-limit headers, making throttling decisions easier to interpret.
-Pulse now returns standard rate limit headers with all API responses:
+Adaptive polling metrics and circuit breaker states are exposed alongside rate-limit headers, making throttling decisions easier to interpret. Pulse returns standard rate limit headers with all API responses:
 
 **Response Headers:**
 - `X-RateLimit-Limit`: Maximum requests allowed per window (e.g., 500)
@@ -219,8 +216,8 @@ Open **Alerts → History** and click an entry. The right-hand panel now shows a
 Yes. When Ceph-backed storage (RBD or CephFS) is detected, Pulse queries `/cluster/ceph/status` and `/cluster/ceph/df` and surfaces the results on the **Storage → Ceph** drawer and via `/api/state` → `cephClusters`. You get cluster health, daemon counts, placement groups, and per-pool capacity without any additional configuration.
 If those sections stay empty, follow [Troubleshooting → Ceph Cluster Data Missing](TROUBLESHOOTING.md#ceph-cluster-data-missing).
 
-### Why does a Docker host show as offline in the Docker tab?
-First, confirm the agent is still running (`systemctl status pulse-docker-agent` or `docker ps`). If it is, check the Issues column for restart-loop notes and verify the host’s last heartbeat under **Details**. Still stuck? Walk through [Troubleshooting → Docker Agent Shows Hosts Offline](TROUBLESHOOTING.md#docker-agent-shows-hosts-offline) for a step-by-step checklist.
+### Why does a container host show as offline in the Containers tab?
+First, confirm the agent is still running (`systemctl status pulse-docker-agent` or `docker ps`). If it is, check the Issues column for restart-loop notes and verify the host’s last heartbeat under **Details**. Still stuck? Walk through [Troubleshooting → Container Agent Shows Hosts Offline](TROUBLESHOOTING.md#container-agent-shows-hosts-offline) for a step-by-step checklist.
 
 ## Updates
 
@@ -229,7 +226,7 @@ First, confirm the agent is still running (`systemctl status pulse-docker-agent`
 - **Manual/systemd**: Run the install script again: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash`
 
 ### Can I roll back if an update misbehaves?
-**New in v4.24.0:** Yes! Pulse now retains previous versions and provides easy rollback.
+Pulse retains previous versions and provides easy rollback.
 
 **Via UI (Recommended):**
 1. Navigate to **Settings → System → Updates**
@@ -265,7 +262,7 @@ Check rollback logs: `journalctl -u pulse | grep rollback`
 - **Docker**: launch with a versioned tag instead of `latest`, e.g. `docker run -d --name pulse -p 7655:7655 rcourtman/pulse:v4.24.0`
 
 ### How do I adjust logging without restarting?
-**New in v4.24.0:** Pulse supports runtime logging configuration—no restart required!
+Pulse supports runtime logging configuration—no restart required.
 
 **Via UI:**
 1. Navigate to **Settings → System → Logging**

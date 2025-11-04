@@ -3,6 +3,7 @@ import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
+import { resolveHostRuntime } from './runtimeDisplay';
 import { formatPercent, formatUptime } from '@/utils/format';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 
@@ -234,6 +235,8 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 };
 
                 const agentOutdated = isAgentOutdated(summary.host.agentVersion);
+                const runtimeInfo = resolveHostRuntime(summary.host);
+                const runtimeVersion = summary.host.runtimeVersion || summary.host.dockerVersion;
 
                 return (
                   <tr
@@ -251,12 +254,15 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                             ({summary.host.hostname})
                           </span>
                         </Show>
-                        <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 whitespace-nowrap">
-                          Docker
+                        <span
+                          class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${runtimeInfo.badgeClass}`}
+                          title={runtimeInfo.raw || runtimeInfo.label}
+                        >
+                          {runtimeInfo.label}
                         </span>
-                        <Show when={summary.host.dockerVersion}>
+                        <Show when={runtimeVersion}>
                           <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            v{summary.host.dockerVersion}
+                            v{runtimeVersion}
                           </span>
                         </Show>
                       </div>

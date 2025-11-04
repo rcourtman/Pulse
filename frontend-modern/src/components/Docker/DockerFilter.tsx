@@ -138,7 +138,7 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
                   ? historyMenuRef?.contains(next) || historyToggleRef?.contains(next)
                   : false;
                 const interactingWithTips =
-                  next?.getAttribute('aria-controls') === 'docker-search-help';
+                  next?.getAttribute('aria-controls') === 'container-search-help';
                 if (!interactingWithHistory && !interactingWithTips) {
                   commitSearchToHistory(e.currentTarget.value);
                 }
@@ -212,8 +212,8 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
                 <span class="sr-only">Show search history</span>
               </button>
               <SearchTipsPopover
-                popoverId="docker-search-help"
-                intro="Filter Docker containers quickly"
+                popoverId="container-search-help"
+                intro="Filter containers quickly"
                 tips={[
                   { code: 'name:api', description: 'Match containers with "api" in the name' },
                   { code: 'image:postgres', description: 'Find containers running a specific image' },

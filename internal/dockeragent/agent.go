@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -24,8 +25,10 @@ import (
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	systemtypes "github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
 )
@@ -49,6 +52,7 @@ type Config struct {
 	Targets            []TargetConfig
 	ContainerStates    []string
 	SwarmScope         string
+	Runtime            string
 	IncludeServices    bool
 	IncludeTasks       bool
 	IncludeContainers  bool
@@ -67,10 +71,22 @@ var allowedContainerStates = map[string]string{
 	"stopped":    "exited",
 }
 
+type RuntimeKind string
+
+const (
+	RuntimeAuto   RuntimeKind = "auto"
+	RuntimeDocker RuntimeKind = "docker"
+	RuntimePodman RuntimeKind = "podman"
+)
+
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
 	cfg           Config
 	docker        *client.Client
+	daemonHost    string
+	runtime       RuntimeKind
+	runtimeVer    string
+	supportsSwarm bool
 	httpClients   map[bool]*http.Client
 	logger        zerolog.Logger
 	machineID     string
@@ -132,10 +148,42 @@ func New(cfg Config) (*Agent, error) {
 		cfg.IncludeTasks = true
 	}
 
-	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create docker client: %w", err)
+	logger := cfg.Logger
+	if logger == nil {
+		defaultLogger := zerolog.New(os.Stdout).With().Timestamp().Str("component", "pulse-docker-agent").Logger()
+		logger = &defaultLogger
+	} else {
+		scoped := logger.With().Str("component", "pulse-docker-agent").Logger()
+		logger = &scoped
 	}
+
+	runtimePref, err := normalizeRuntime(cfg.Runtime)
+	if err != nil {
+		return nil, err
+	}
+
+	dockerClient, info, runtimeKind, err := connectRuntime(runtimePref, logger)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Runtime = string(runtimeKind)
+
+	if runtimeKind == RuntimePodman {
+		if cfg.IncludeServices {
+			logger.Warn().Msg("Podman runtime detected; disabling Swarm service collection")
+		}
+		if cfg.IncludeTasks {
+			logger.Warn().Msg("Podman runtime detected; disabling Swarm task collection")
+		}
+		cfg.IncludeServices = false
+		cfg.IncludeTasks = false
+	}
+
+	logger.Info().
+		Str("runtime", string(runtimeKind)).
+		Str("daemon_host", dockerClient.DaemonHost()).
+		Str("version", info.ServerVersion).
+		Msg("Connected to container runtime")
 
 	hasSecure := false
 	hasInsecure := false
@@ -155,15 +203,6 @@ func New(cfg Config) (*Agent, error) {
 		httpClients[true] = newHTTPClient(true)
 	}
 
-	logger := cfg.Logger
-	if logger == nil {
-		defaultLogger := zerolog.New(os.Stdout).With().Timestamp().Str("component", "pulse-docker-agent").Logger()
-		logger = &defaultLogger
-	} else {
-		scoped := logger.With().Str("component", "pulse-docker-agent").Logger()
-		logger = &scoped
-	}
-
 	machineID, _ := readMachineID()
 	hostName := cfg.HostnameOverride
 	if hostName == "" {
@@ -175,6 +214,10 @@ func New(cfg Config) (*Agent, error) {
 	agent := &Agent{
 		cfg:           cfg,
 		docker:        dockerClient,
+		daemonHost:    dockerClient.DaemonHost(),
+		runtime:       runtimeKind,
+		runtimeVer:    info.ServerVersion,
+		supportsSwarm: runtimeKind == RuntimeDocker,
 		httpClients:   httpClients,
 		logger:        *logger,
 		machineID:     machineID,
@@ -260,6 +303,190 @@ func normalizeContainerStates(raw []string) ([]string, error) {
 	return normalized, nil
 }
 
+func normalizeRuntime(value string) (RuntimeKind, error) {
+	runtime := strings.ToLower(strings.TrimSpace(value))
+	switch runtime {
+	case "", string(RuntimeAuto), "default":
+		return RuntimeAuto, nil
+	case string(RuntimeDocker):
+		return RuntimeDocker, nil
+	case string(RuntimePodman):
+		return RuntimePodman, nil
+	default:
+		return "", fmt.Errorf("unsupported runtime %q: must be auto, docker, or podman", value)
+	}
+}
+
+type runtimeCandidate struct {
+	host           string
+	label          string
+	applyDockerEnv bool
+}
+
+func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (*client.Client, systemtypes.Info, RuntimeKind, error) {
+	candidates := buildRuntimeCandidates(preference)
+	var attempts []string
+
+	for _, candidate := range candidates {
+		opts := []client.Opt{client.WithAPIVersionNegotiation()}
+		if candidate.applyDockerEnv {
+			opts = append(opts, client.FromEnv)
+		}
+		if candidate.host != "" {
+			opts = append(opts, client.WithHost(candidate.host))
+		}
+
+		cli, info, err := tryRuntimeCandidate(opts)
+		if err != nil {
+			attempts = append(attempts, fmt.Sprintf("%s: %v", candidate.label, err))
+			continue
+		}
+
+		endpoint := cli.DaemonHost()
+		runtime := detectRuntime(info, endpoint, preference)
+
+		if preference != RuntimeAuto && runtime != preference {
+			attempts = append(attempts, fmt.Sprintf("%s: detected %s runtime", candidate.label, runtime))
+			_ = cli.Close()
+			continue
+		}
+
+		if logger != nil {
+			logger.Debug().Str("host", endpoint).Str("runtime", string(runtime)).Msg("Connected to container runtime")
+		}
+
+		return cli, info, runtime, nil
+	}
+
+	if len(attempts) == 0 {
+		return nil, systemtypes.Info{}, RuntimeAuto, errors.New("no container runtime endpoints to try")
+	}
+
+	return nil, systemtypes.Info{}, RuntimeAuto, fmt.Errorf("failed to connect to container runtime: %s", strings.Join(attempts, "; "))
+}
+
+func tryRuntimeCandidate(opts []client.Opt) (*client.Client, systemtypes.Info, error) {
+	cli, err := client.NewClientWithOpts(opts...)
+	if err != nil {
+		return nil, systemtypes.Info{}, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	info, err := cli.Info(ctx)
+	if err != nil {
+		_ = cli.Close()
+		return nil, systemtypes.Info{}, err
+	}
+
+	return cli, info, nil
+}
+
+func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
+	candidates := make([]runtimeCandidate, 0, 6)
+	seen := make(map[string]struct{})
+
+	add := func(candidate runtimeCandidate) {
+		hostKey := candidate.host
+		if hostKey == "" {
+			hostKey = "__default__"
+		}
+		if _, ok := seen[hostKey]; ok {
+			return
+		}
+		seen[hostKey] = struct{}{}
+		candidates = append(candidates, candidate)
+	}
+
+	add(runtimeCandidate{
+		label:          "environment defaults",
+		applyDockerEnv: true,
+	})
+
+	if host := utils.GetenvTrim("DOCKER_HOST"); host != "" {
+		add(runtimeCandidate{
+			host:           host,
+			label:          "DOCKER_HOST",
+			applyDockerEnv: true,
+		})
+	}
+
+	if host := utils.GetenvTrim("CONTAINER_HOST"); host != "" {
+		add(runtimeCandidate{
+			host:  host,
+			label: "CONTAINER_HOST",
+		})
+	}
+
+	if host := utils.GetenvTrim("PODMAN_HOST"); host != "" {
+		add(runtimeCandidate{
+			host:  host,
+			label: "PODMAN_HOST",
+		})
+	}
+
+	if preference == RuntimePodman || preference == RuntimeAuto {
+		rootless := fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid())
+		add(runtimeCandidate{
+			host:  rootless,
+			label: "podman rootless socket",
+		})
+
+		add(runtimeCandidate{
+			host:  "unix:///run/podman/podman.sock",
+			label: "podman system socket",
+		})
+	}
+
+	if preference == RuntimeDocker || preference == RuntimeAuto {
+		add(runtimeCandidate{
+			host:           "unix:///var/run/docker.sock",
+			label:          "default docker socket",
+			applyDockerEnv: true,
+		})
+	}
+
+	return candidates
+}
+
+func detectRuntime(info systemtypes.Info, endpoint string, preference RuntimeKind) RuntimeKind {
+	if preference == RuntimePodman {
+		return RuntimePodman
+	}
+
+	lowerEndpoint := strings.ToLower(endpoint)
+	if strings.Contains(lowerEndpoint, "podman") || strings.Contains(lowerEndpoint, "libpod") {
+		return RuntimePodman
+	}
+
+	if strings.Contains(strings.ToLower(info.InitBinary), "podman") {
+		return RuntimePodman
+	}
+
+	if strings.Contains(strings.ToLower(info.ServerVersion), "podman") {
+		return RuntimePodman
+	}
+
+	for _, pair := range info.DriverStatus {
+		if strings.Contains(strings.ToLower(pair[0]), "podman") || strings.Contains(strings.ToLower(pair[1]), "podman") {
+			return RuntimePodman
+		}
+	}
+
+	for _, option := range info.SecurityOptions {
+		if strings.Contains(strings.ToLower(option), "podman") {
+			return RuntimePodman
+		}
+	}
+
+	if preference == RuntimeDocker {
+		return RuntimeDocker
+	}
+
+	return RuntimeDocker
+}
+
 // Run starts the collection loop until the context is cancelled.
 func (a *Agent) Run(ctx context.Context) error {
 	interval := a.cfg.Interval
@@ -338,6 +565,34 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 		return agentsdocker.Report{}, fmt.Errorf("failed to query docker info: %w", err)
 	}
 
+	a.runtimeVer = info.ServerVersion
+	if a.daemonHost == "" {
+		a.daemonHost = a.docker.DaemonHost()
+	}
+
+	newRuntime := detectRuntime(info, a.daemonHost, RuntimeAuto)
+	if newRuntime != a.runtime {
+		if a.runtime != "" {
+			a.logger.Info().
+				Str("runtime_previous", string(a.runtime)).
+				Str("runtime_current", string(newRuntime)).
+				Msg("Detected container runtime change")
+		}
+		a.runtime = newRuntime
+		a.supportsSwarm = newRuntime == RuntimeDocker
+		if newRuntime == RuntimePodman {
+			if a.cfg.IncludeServices {
+				a.logger.Warn().Msg("Podman runtime detected during report; disabling Swarm service collection")
+			}
+			if a.cfg.IncludeTasks {
+				a.logger.Warn().Msg("Podman runtime detected during report; disabling Swarm task collection")
+			}
+			a.cfg.IncludeServices = false
+			a.cfg.IncludeTasks = false
+		}
+		a.cfg.Runtime = string(newRuntime)
+	}
+
 	a.cpuCount = info.NCPU
 
 	agentID := a.cfg.AgentID
@@ -393,6 +648,8 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			Name:             info.Name,
 			MachineID:        a.machineID,
 			OS:               info.OperatingSystem,
+			Runtime:          string(a.runtime),
+			RuntimeVersion:   a.runtimeVer,
 			KernelVersion:    info.KernelVersion,
 			Architecture:     info.Architecture,
 			DockerVersion:    info.ServerVersion,
@@ -606,6 +863,12 @@ func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (
 		Mounts:              mounts,
 	}
 
+	if a.runtime == RuntimePodman {
+		if meta := extractPodmanMetadata(labels); meta != nil {
+			container.Podman = meta
+		}
+	}
+
 	if requestSize {
 		a.logger.Debug().
 			Str("container", container.Name).
@@ -616,6 +879,66 @@ func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (
 	}
 
 	return container, nil
+}
+
+func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContainer {
+	if len(labels) == 0 {
+		return nil
+	}
+
+	meta := &agentsdocker.PodmanContainer{}
+
+	if v := strings.TrimSpace(labels["io.podman.annotations.pod.name"]); v != "" {
+		meta.PodName = v
+	}
+
+	if v := strings.TrimSpace(labels["io.podman.annotations.pod.id"]); v != "" {
+		meta.PodID = v
+	}
+
+	if v := strings.TrimSpace(labels["io.podman.annotations.pod.infra"]); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			meta.Infra = parsed
+		} else if strings.EqualFold(v, "yes") || strings.EqualFold(v, "true") {
+			meta.Infra = true
+		}
+	}
+
+	if v := strings.TrimSpace(labels["io.podman.compose.project"]); v != "" {
+		meta.ComposeProject = v
+	}
+
+	if v := strings.TrimSpace(labels["io.podman.compose.service"]); v != "" {
+		meta.ComposeService = v
+	}
+
+	if v := strings.TrimSpace(labels["io.podman.compose.working_dir"]); v != "" {
+		meta.ComposeWorkdir = v
+	}
+
+	if v := strings.TrimSpace(labels["io.podman.compose.config-hash"]); v != "" {
+		meta.ComposeConfig = v
+	}
+
+	if v := strings.TrimSpace(labels["io.containers.autoupdate"]); v != "" {
+		meta.AutoUpdatePolicy = v
+	}
+
+	if v := strings.TrimSpace(labels["io.containers.autoupdate.restart"]); v != "" {
+		meta.AutoUpdateRestart = v
+	}
+
+	if v := strings.TrimSpace(labels["io.podman.annotations.userns"]); v != "" {
+		meta.UserNS = v
+	} else if v := strings.TrimSpace(labels["io.containers.userns"]); v != "" {
+		meta.UserNS = v
+	}
+
+	if meta.PodName == "" && meta.PodID == "" && meta.ComposeProject == "" && meta.AutoUpdatePolicy == "" && meta.UserNS == "" && !meta.Infra {
+		return nil
+	}
+
+	return meta
 }
 
 func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) error {

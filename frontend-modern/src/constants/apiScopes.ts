@@ -28,14 +28,14 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
   },
   {
     value: DOCKER_REPORT_SCOPE,
-    label: 'Docker agent reporting',
-    description: 'Allow the Docker agent to submit host and container telemetry.',
+    label: 'Container agent reporting',
+    description: 'Allow the container agent to submit host and runtime telemetry.',
     group: 'Agents',
   },
   {
     value: DOCKER_MANAGE_SCOPE,
-    label: 'Docker lifecycle management',
-    description: 'Enable agent-triggered container commands and host actions.',
+    label: 'Container lifecycle management',
+    description: 'Enable agent-triggered runtime commands and host actions.',
     group: 'Agents',
   },
   {

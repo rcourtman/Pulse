@@ -23,14 +23,6 @@ export interface TextCondition {
   value: string;
 }
 
-export type Condition = MetricCondition | TextCondition;
-
-export interface ParsedQuery {
-  conditions: Condition[];
-  logicalOperator: LogicalOperator;
-  rawText?: string; // Fallback for simple text search
-}
-
 // New interfaces for stackable filters
 export interface ParsedFilter {
   type: 'metric' | 'text' | 'raw';
@@ -120,80 +112,6 @@ export function parseFilterStack(searchString: string): FilterStack {
   const logicalOperator = operators.length > 0 ? operators[0] : 'AND';
 
   return { filters, operators, logicalOperator };
-}
-
-function parseCondition(conditionStr: string): Condition | null {
-  // Try to parse metric condition (e.g., "cpu>80")
-  const metricMatch = conditionStr.match(
-    /^(cpu|memory|disk|diskRead|diskWrite|networkIn|networkOut)\s*(>|<|>=|<=|=|==)\s*(\d+(?:\.\d+)?)$/i,
-  );
-  if (metricMatch) {
-    const [, field, operator, value] = metricMatch;
-    return {
-      field: field.toLowerCase() as MetricCondition['field'],
-      operator: operator as ComparisonOperator,
-      value: (() => {
-        const parsed = parseFloat(value);
-        return isNaN(parsed) ? 0 : parsed;
-      })(),
-    } as MetricCondition;
-  }
-
-  // Try to parse text condition (e.g., "name:prod", "tags:production", "storage:local", etc.)
-  const textMatch = conditionStr.match(/^(\w+)\s*:\s*(.+)$/i);
-  if (textMatch) {
-    const [, field, value] = textMatch;
-    return {
-      field: field.toLowerCase() as 'name' | 'node' | 'vmid' | 'tags',
-      value: value.trim(),
-    } as TextCondition;
-  }
-
-  return null;
-}
-
-export function parseSearchQuery(query: string): ParsedQuery {
-  query = query.trim();
-
-  // Check for logical operators
-  const hasAnd = /\bAND\b/i.test(query);
-  const hasOr = /\bOR\b/i.test(query);
-
-  // If no operators or invalid query, treat as simple text search
-  if (!hasAnd && !hasOr && !query.match(/[><=:]/)) {
-    return {
-      conditions: [],
-      logicalOperator: 'AND',
-      rawText: query,
-    };
-  }
-
-  // Split by logical operator
-  const logicalOperator: LogicalOperator = hasAnd ? 'AND' : 'OR';
-  const parts = query.split(hasAnd ? /\bAND\b/i : /\bOR\b/i);
-
-  const conditions: Condition[] = [];
-
-  for (const part of parts) {
-    const condition = parseCondition(part.trim());
-    if (condition) {
-      conditions.push(condition);
-    }
-  }
-
-  // If no valid conditions parsed, fall back to text search
-  if (conditions.length === 0) {
-    return {
-      conditions: [],
-      logicalOperator: 'AND',
-      rawText: query,
-    };
-  }
-
-  return {
-    conditions,
-    logicalOperator,
-  };
 }
 
 type FilterableItem = VM | Container | PBSBackup | StorageBackup | BackupTask | UnifiedBackup;
@@ -295,45 +213,6 @@ function evaluateTextCondition(guest: FilterableItem, condition: TextCondition):
         }
       }
       return false;
-  }
-}
-
-export function evaluateSearchQuery(guest: FilterableItem, query: ParsedQuery): boolean {
-  // If it's a simple text search
-  if (query.rawText) {
-    const searchTerms = query.rawText
-      .toLowerCase()
-      .split(',')
-      .map((term) => term.trim())
-      .filter((term) => term.length > 0);
-    return searchTerms.some(
-      (term) =>
-        ('name' in guest && guest.name && guest.name.toLowerCase().includes(term)) ||
-        ('vmid' in guest && guest.vmid && guest.vmid.toString().includes(term)) ||
-        ('node' in guest && guest.node && guest.node.toLowerCase().includes(term)) ||
-        ('status' in guest && guest.status && guest.status.toLowerCase().includes(term)),
-    );
-  }
-
-  // If no conditions, match all
-  if (query.conditions.length === 0) {
-    return true;
-  }
-
-  // Evaluate conditions
-  const results = query.conditions.map((condition) => {
-    if ('operator' in condition) {
-      return evaluateMetricCondition(guest, condition);
-    } else {
-      return evaluateTextCondition(guest, condition);
-    }
-  });
-
-  // Apply logical operator
-  if (query.logicalOperator === 'AND') {
-    return results.every((result) => result);
-  } else {
-    return results.some((result) => result);
   }
 }
 

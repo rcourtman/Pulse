@@ -6,7 +6,7 @@ import { ThresholdsTable, normalizeDockerIgnoredInput } from '../ThresholdsTable
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import type { Host } from '@/types/api';
 
-let mockPathname = '/alerts/thresholds/docker';
+let mockPathname = '/alerts/thresholds/containers';
 
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => vi.fn(),
@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  mockPathname = '/alerts/thresholds/docker';
+  mockPathname = '/alerts/thresholds/containers';
 });
 
 const DEFAULT_PMG_THRESHOLDS: PMGThresholdDefaults = {

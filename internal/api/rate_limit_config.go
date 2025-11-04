@@ -144,8 +144,8 @@ func UniversalRateLimitMiddleware(next http.Handler) http.Handler {
 		// Extract client IP
 		ip := GetClientIP(r)
 
-		// Skip rate limiting for localhost/development
-		if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
+		// Skip rate limiting only for direct loopback requests (no proxy headers)
+		if (ip == "127.0.0.1" || ip == "::1" || ip == "localhost") && isDirectLoopbackRequest(r) {
 			next.ServeHTTP(w, r)
 			return
 		}

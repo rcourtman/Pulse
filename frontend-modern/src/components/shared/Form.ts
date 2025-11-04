@@ -35,10 +35,6 @@ export function controlClass(extra?: string) {
   return join(baseControl, extra);
 }
 
-export function helpTextClass(extra?: string) {
-  return join(baseHelp, extra);
-}
-
 export default {
   formSection,
   formField,
@@ -54,5 +50,4 @@ export default {
   formCheckbox,
   labelClass,
   controlClass,
-  helpTextClass,
 };

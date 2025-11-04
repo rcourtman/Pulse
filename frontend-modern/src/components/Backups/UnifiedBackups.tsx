@@ -13,6 +13,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import type { BackupType, GuestType, UnifiedBackup } from '@/types/backups';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { logger } from '@/utils/logger';
 
 type BackupSortKey = keyof Pick<
   UnifiedBackup,
@@ -41,10 +42,6 @@ const BACKUP_SORT_KEY_VALUES: readonly BackupSortKey[] = [
 ] as const;
 
 type FilterableGuestType = 'VM' | 'LXC' | 'Host';
-
-// Types for PBS backups - temporarily disabled to avoid unused warnings
-// type PBSBackup = any;
-// type PBSSnapshot = any;
 
 interface DateGroup {
   label: string;
@@ -243,7 +240,7 @@ const UnifiedBackups: Component = () => {
       seenBackups.add(backupKey);
 
       if (debugMode) {
-        console.log(
+        logger.debug(
           `PBS backup: vmid=${backup.vmid}, time=${backupTimeSeconds}, key=${backupKey}, verified=${backup.verified}`,
         );
       }
@@ -273,7 +270,7 @@ const UnifiedBackups: Component = () => {
       const isVmidZero = vmidAsNumber === 0;
 
       if (debugMode && isVmidZero) {
-        console.log('[PMG Debug] PBS backup with VMID=0:', {
+        logger.debug('[PMG Debug] PBS backup with VMID=0:', {
           vmid: backup.vmid,
           vmidType: typeof backup.vmid,
           backupType: backup.backupType,
@@ -363,7 +360,7 @@ const UnifiedBackups: Component = () => {
       // Skip if we've already seen this backup (PBS or local duplicate)
       if (seenBackups.has(backupKey)) {
         if (debugMode) {
-          console.log(
+          logger.debug(
             `PVE storage backup duplicate skipped: vmid=${backup.vmid}, ctime=${backup.ctime}, key=${backupKey}, storage=${backup.storage}`,
           );
         }
@@ -381,7 +378,7 @@ const UnifiedBackups: Component = () => {
       const isVmidZero = vmidAsNumber === 0;
 
       if (debugMode && isVmidZero) {
-        console.log('[PMG Debug] Storage backup with VMID=0:', {
+        logger.debug('[PMG Debug] Storage backup with VMID=0:', {
           vmid: backup.vmid,
           vmidType: typeof backup.vmid,
           type: backup.type,
@@ -425,86 +422,6 @@ const UnifiedBackups: Component = () => {
         encrypted: backup.encryption ? true : false, // Check encryption field from Proxmox API
       });
     });
-
-    // Normalize PBS backups
-    // NOTE: Legacy code - PBS backups are now handled differently in the Go backend
-    // The 'backups' field doesn't exist on PBSInstance anymore, and 'snapshots' field
-    // doesn't exist on PBSDatastore. This code is kept for reference but commented out.
-
-    /*
-    state.pbs?.forEach((pbsInstance) => {
-      // Check if backups are at the instance level
-      if (pbsInstance.backups && Array.isArray(pbsInstance.backups)) {
-        pbsInstance.backups.forEach((backup: PBSBackup) => {
-          // Determine display type - VMID 0 indicates host backup (e.g., PMG)
-          let displayType: GuestType;
-          if (backup.vmid === 0) {
-            displayType = 'Host';
-          } else if (backup.type === 'vm' || backup.type === 'qemu') {
-            displayType = 'VM';
-          } else {
-            displayType = 'LXC';
-          }
-          
-          unified.push({
-            backupType: 'remote',
-            vmid: backup.vmid || 0,
-            name: backup.guestName || '',
-            type: displayType,
-            node: pbsInstance.name || 'PBS',
-            instance: pbsInstance.id || 'PBS',
-            backupTime: backup.ctime || backup.backupTime || 0,
-            backupName: `${backup.vmid}/${new Date((backup.ctime || backup.backupTime || 0) * 1000).toISOString().split('T')[0]}`,
-            description: backup.notes || backup.comment || '',
-            status: backup.verified ? 'verified' : 'unverified',
-            size: backup.size || null,
-            storage: null,
-            datastore: backup.datastore || null,
-            namespace: backup.namespace || 'root',
-            verified: backup.verified || false,
-            protected: backup.protected || false
-          });
-        });
-      }
-      
-      // Also check datastores for snapshots (original JS structure)
-      if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
-        pbsInstance.datastores?.forEach((datastore) => {
-          if (datastore.snapshots && Array.isArray(datastore.snapshots)) {
-            datastore.snapshots.forEach((backup: PBSSnapshot) => {
-              let totalSize = 0;
-              if (backup.files && Array.isArray(backup.files)) {
-                totalSize = backup.files.reduce((sum: number, file) => sum + (file.size || 0), 0);
-              }
-              
-              unified.push({
-                backupType: 'remote',
-                vmid: backup['backup-id'] || 0,
-                name: backup.comment || '',
-                type: backup['backup-type'] === 'vm' || backup['backup-type'] === 'qemu'
-                  ? 'VM'
-                  : backup['backup-type'] === 'host'
-                  ? 'Host'
-                  : 'LXC',
-                node: pbsInstance.name || 'PBS',
-                instance: pbsInstance.id || 'PBS',
-                backupTime: backup['backup-time'] || 0,
-                backupName: `${backup['backup-id']}/${new Date((backup['backup-time'] || 0) * 1000).toISOString().split('T')[0]}`,
-                description: backup.comment || '',
-                status: backup.verified ? 'verified' : 'unverified',
-                size: totalSize || null,
-                storage: null,
-                datastore: datastore.name || null,
-                namespace: backup.namespace || 'root',
-                verified: backup.verified || false,
-                protected: backup.protected || false
-              });
-            });
-          }
-        });
-      }
-    });
-    */
 
     return unified;
   });

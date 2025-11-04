@@ -1,4 +1,5 @@
 import type { ToastType } from '@/components/Toast/Toast';
+import { logger } from '@/utils/logger';
 
 // Global declaration is in Toast.tsx
 
@@ -13,7 +14,7 @@ export const showToast = (
   }
 
   // Fallback to console if toast system not ready
-  console.log(`[${type.toUpperCase()}] ${title}${message ? `: ${message}` : ''}`);
+  logger.info(`[toast:${type}] ${title}${message ? `: ${message}` : ''}`);
   return undefined;
 };
 
@@ -22,5 +23,3 @@ export const showSuccess = (title: string, message?: string, duration?: number) 
   showToast('success', title, message, duration);
 export const showError = (title: string, message?: string, duration?: number) =>
   showToast('error', title, message, duration);
-export const showInfo = (title: string, message?: string, duration?: number) =>
-  showToast('info', title, message, duration);

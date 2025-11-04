@@ -300,9 +300,9 @@ Or if Pulse is installed:
 
 **Tip**: Selecting bars in the chart cross-highlights matching rows. If that does not happen, confirm you do not have browser extensions that block pointer events on canvas elements.
 
-### Docker Agent Shows Hosts Offline
+### Container Agent Shows Hosts Offline
 
-**Symptoms**: `/docker` tab marks hosts as offline or missing container metrics.
+**Symptoms**: `/containers` tab marks hosts as offline or missing container metrics.
 
 **Checklist:**
 1. Run the agent manually with verbose logs:
@@ -318,7 +318,7 @@ Or if Pulse is installed:
 4. Verify Pulse shows a recent heartbeat (`lastSeen`) in `/api/state` → `dockerHosts`. Hosts are marked offline after 4× the configured interval with no update.
 5. For reverse proxies/TLS issues, append `--insecure` temporarily to confirm whether certificate validation is the culprit.
 
-**Restart loops**: The Docker workspace Issues column lists the last exit codes. Investigate recurring non-zero codes in `docker logs <container>` and adjust restart policy if needed.
+**Restart loops**: The Containers workspace Issues column lists the last exit codes. Investigate recurring non-zero codes in `docker logs <container>` and adjust restart policy if needed.
 
 **Step 3: Check Pulse logs**
 

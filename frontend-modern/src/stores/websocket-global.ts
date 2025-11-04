@@ -1,4 +1,5 @@
 import { createWebSocketStore } from './websocket';
+import { getPulseWebSocketUrl } from '@/utils/url';
 
 // Store the instance on window to survive hot reloads
 declare global {
@@ -9,9 +10,7 @@ declare global {
 
 export function getGlobalWebSocketStore() {
   if (!window.__pulseWsStore) {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Use relative URL that works behind proxies
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = getPulseWebSocketUrl();
 
     window.__pulseWsStore = createWebSocketStore(wsUrl);
   }

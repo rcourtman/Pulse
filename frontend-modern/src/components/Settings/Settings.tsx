@@ -14,9 +14,11 @@ import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
-import { clearStoredAPIToken, getStoredAPIToken, setStoredAPIToken } from '@/utils/tokenStorage';
+import { getPulsePort, getPulseWebSocketUrl } from '@/utils/url';
+import { logger } from '@/utils/logger';
 import {
   clearApiToken as clearApiClientToken,
+  getApiToken as getApiClientToken,
   setApiToken as setApiClientToken,
 } from '@/utils/apiClient';
 import { NodeModal } from './NodeModal';
@@ -50,9 +52,9 @@ import Monitor from 'lucide-solid/icons/monitor';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
-import { ApiIcon } from '@/components/icons/ApiIcon';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
-import { DockerIcon } from '@/components/icons/DockerIcon';
+import Boxes from 'lucide-solid/icons/boxes';
+import BadgeCheck from 'lucide-solid/icons/badge-check';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { APITokenRecord } from '@/api/security';
@@ -272,7 +274,7 @@ type SettingsTab =
   | 'diagnostics'
   | 'updates';
 
-type AgentKey = 'pve' | 'pbs' | 'pmg' | 'docker' | 'host';
+type AgentKey = 'pve' | 'pbs' | 'pmg';
 
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
   proxmox: {
@@ -370,7 +372,10 @@ const Settings: Component<SettingsProps> = (props) => {
     if (
       path.includes('/settings/hosts') ||
       path.includes('/settings/host-agents') ||
-      path.includes('/settings/servers')
+      path.includes('/settings/servers') ||
+      path.includes('/settings/linuxServers') ||
+      path.includes('/settings/windowsServers') ||
+      path.includes('/settings/macServers')
     )
       return 'hosts';
     if (path.includes('/settings/system-general')) return 'system-general';
@@ -404,16 +409,6 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/pve')) return 'pve';
     if (path.includes('/settings/pbs')) return 'pbs';
     if (path.includes('/settings/pmg')) return 'pmg';
-    if (path.includes('/settings/docker')) return 'docker';
-    if (
-      path.includes('/settings/host') ||
-      path.includes('/settings/host-agents') ||
-      path.includes('/settings/linuxServers') ||
-      path.includes('/settings/windowsServers') ||
-      path.includes('/settings/macServers')
-    ) {
-      return 'host';
-    }
     return null;
   };
 
@@ -428,8 +423,6 @@ const Settings: Component<SettingsProps> = (props) => {
     pve: '/settings/pve',
     pbs: '/settings/pbs',
     pmg: '/settings/pmg',
-    docker: '/settings/docker',
-    host: '/settings/host-agents',
   };
 
   const handleSelectAgent = (agent: AgentKey) => {
@@ -444,10 +437,9 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   const setActiveTab = (tab: SettingsTab) => {
-    if (tab === 'proxmox' && !['pve', 'pbs', 'pmg', 'docker', 'host'].includes(selectedAgent())) {
+    if (tab === 'proxmox' && deriveAgentFromPath(location.pathname) === null) {
       setSelectedAgent('pve');
     }
-
     const targetPath = `/settings/${tab}`;
     if (location.pathname !== targetPath) {
       navigate(targetPath, { scroll: false });
@@ -496,6 +488,18 @@ const Settings: Component<SettingsProps> = (props) => {
           return;
         }
 
+        if (
+          path.startsWith('/settings/linuxServers') ||
+          path.startsWith('/settings/windowsServers') ||
+          path.startsWith('/settings/macServers')
+        ) {
+          navigate('/settings/hosts', {
+            replace: true,
+            scroll: false,
+          });
+          return;
+        }
+
         const resolved = deriveTabFromPath(path);
         if (resolved !== currentTab()) {
           setCurrentTab(resolved);
@@ -503,11 +507,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
         if (resolved === 'proxmox') {
           const agentFromPath = deriveAgentFromPath(path);
-          if (agentFromPath) {
-            setSelectedAgent(agentFromPath);
-          } else if (!['pve', 'pbs', 'pmg', 'docker', 'host'].includes(selectedAgent())) {
-            setSelectedAgent('pve');
-          }
+          setSelectedAgent(agentFromPath ?? 'pve');
         }
       },
     ),
@@ -776,7 +776,7 @@ const Settings: Component<SettingsProps> = (props) => {
       const diag = await response.json();
       setDiagnosticsData(diag);
     } catch (err) {
-      console.error('Failed to fetch diagnostics:', err);
+      logger.error('Failed to fetch diagnostics', err);
       showError('Failed to run diagnostics');
     } finally {
       setRunningDiagnostics(false);
@@ -810,7 +810,7 @@ const Settings: Component<SettingsProps> = (props) => {
       showSuccess('Queried proxy node registration state');
       await runDiagnostics();
     } catch (err) {
-      console.error('Failed to query proxy node registration state:', err);
+      logger.error('Failed to query proxy node registration state', err);
       showError('Failed to query proxy nodes');
     } finally {
       setProxyActionLoading(null);
@@ -874,7 +874,7 @@ const Settings: Component<SettingsProps> = (props) => {
       showSuccess(`Generated dedicated token for ${hostName}`);
       await runDiagnostics();
     } catch (err) {
-      console.error('Failed to prepare Docker token', err);
+      logger.error('Failed to prepare Docker token', err);
       showError('Failed to prepare Docker token');
     } finally {
       setDockerActionLoading(null);
@@ -893,26 +893,33 @@ const Settings: Component<SettingsProps> = (props) => {
   const tabGroups: {
     id: 'platforms' | 'operations' | 'system' | 'security';
     label: string;
-    items: { id: SettingsTab; label: string; icon: JSX.Element; disabled?: boolean }[];
+    items: {
+      id: SettingsTab;
+      label: string;
+      icon: Component<{ class?: string; strokeWidth?: number }>;
+      iconProps?: { strokeWidth?: number };
+      disabled?: boolean;
+    }[];
   }[] = [
     {
       id: 'platforms',
       label: 'Platforms',
       items: [
-        { id: 'proxmox', label: 'Proxmox', icon: <ProxmoxIcon class="w-4 h-4" /> },
-        { id: 'docker', label: 'Docker', icon: <DockerIcon class="w-4 h-4" /> },
-        { id: 'hosts', label: 'Hosts', icon: <Monitor class="w-4 h-4" strokeWidth={2} /> },
+        { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
+        { id: 'docker', label: 'Docker', icon: Boxes },
+        { id: 'hosts', label: 'Hosts', icon: Monitor, iconProps: { strokeWidth: 2 } },
       ],
     },
     {
       id: 'operations',
       label: 'Operations',
       items: [
-        { id: 'api', label: 'API Tokens', icon: <ApiIcon class="w-4 h-4" /> },
+        { id: 'api', label: 'API Tokens', icon: BadgeCheck },
         {
           id: 'diagnostics',
           label: 'Diagnostics',
-          icon: <Activity class="w-4 h-4" strokeWidth={2} />,
+          icon: Activity,
+          iconProps: { strokeWidth: 2 },
         },
       ],
     },
@@ -923,19 +930,27 @@ const Settings: Component<SettingsProps> = (props) => {
         {
           id: 'system-general',
           label: 'General',
-          icon: <Sliders class="w-4 h-4" strokeWidth={2} />,
+          icon: Sliders,
+          iconProps: { strokeWidth: 2 },
         },
         {
           id: 'system-network',
           label: 'Network',
-          icon: <Network class="w-4 h-4" strokeWidth={2} />,
+          icon: Network,
+          iconProps: { strokeWidth: 2 },
         },
         {
           id: 'system-updates',
           label: 'Updates',
-          icon: <RefreshCw class="w-4 h-4" strokeWidth={2} />,
+          icon: RefreshCw,
+          iconProps: { strokeWidth: 2 },
         },
-        { id: 'system-backups', label: 'Backups', icon: <Clock class="w-4 h-4" strokeWidth={2} /> },
+        {
+          id: 'system-backups',
+          label: 'Backups',
+          icon: Clock,
+          iconProps: { strokeWidth: 2 },
+        },
       ],
     },
     {
@@ -945,17 +960,20 @@ const Settings: Component<SettingsProps> = (props) => {
         {
           id: 'security-overview',
           label: 'Overview',
-          icon: <Shield class="w-4 h-4" strokeWidth={2} />,
+          icon: Shield,
+          iconProps: { strokeWidth: 2 },
         },
         {
           id: 'security-auth',
           label: 'Authentication',
-          icon: <Lock class="w-4 h-4" strokeWidth={2} />,
+          icon: Lock,
+          iconProps: { strokeWidth: 2 },
         },
         {
           id: 'security-sso',
           label: 'Single Sign-On',
-          icon: <Key class="w-4 h-4" strokeWidth={2} />,
+          icon: Key,
+          iconProps: { strokeWidth: 2 },
         },
       ],
     },
@@ -1002,13 +1020,13 @@ const Settings: Component<SettingsProps> = (props) => {
       });
       setNodes(nodesWithStatus);
     } catch (error) {
-      console.error('Failed to load nodes:', error);
+      logger.error('Failed to load nodes', error);
       // If we get a 429 or network error, retry after a delay
       if (
         error instanceof Error &&
         (error.message.includes('429') || error.message.includes('fetch'))
       ) {
-        console.log('Retrying node load after delay...');
+        logger.info('Retrying node load after delay');
         setTimeout(() => loadNodes(), 3000);
       }
     }
@@ -1022,13 +1040,13 @@ const Settings: Component<SettingsProps> = (props) => {
       const response = await apiFetch('/api/security/status');
       if (response.ok) {
         const status = await response.json();
-        console.log('Security status loaded:', status);
+        logger.debug('Security status loaded', status);
         setSecurityStatus(status);
       } else {
-        console.error('Failed to fetch security status:', response.status);
+        logger.error('Failed to fetch security status', { status: response.status });
       }
     } catch (err) {
-      console.error('Failed to fetch security status:', err);
+      logger.error('Failed to fetch security status', err);
     } finally {
       setSecurityStatusLoading(false);
     }
@@ -1182,7 +1200,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
       }
     } catch (error) {
-      console.error('Failed to load discovered nodes:', error);
+      logger.error('Failed to load discovered nodes', error);
     }
   };
 
@@ -1216,7 +1234,7 @@ const Settings: Component<SettingsProps> = (props) => {
         notificationStore.info('Discovery scan started', 2000);
       }
     } catch (error) {
-      console.error('Failed to start discovery scan:', error);
+      logger.error('Failed to start discovery scan', error);
       notificationStore.error('Failed to start discovery scan');
       setDiscoveryScanStatus((prev) => ({
         ...prev,
@@ -1285,7 +1303,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
       return true;
     } catch (error) {
-      console.error('Failed to update discovery setting:', error);
+      logger.error('Failed to update discovery setting', error);
       notificationStore.error('Failed to update discovery setting');
       setDiscoveryEnabled(previousEnabled);
       applySavedDiscoverySubnet(previousSubnet);
@@ -1348,7 +1366,7 @@ const Settings: Component<SettingsProps> = (props) => {
       }
       return true;
     } catch (error) {
-      console.error('Failed to update discovery subnet:', error);
+      logger.error('Failed to update discovery subnet', error);
       notificationStore.error('Failed to update discovery subnet');
       applySavedDiscoverySubnet(previousSubnet);
       setDiscoverySubnetDraft(previousSubnet === 'auto' ? '' : normalizeSubnetList(previousSubnet));
@@ -1388,7 +1406,7 @@ const Settings: Component<SettingsProps> = (props) => {
           4000,
         );
       } catch (error) {
-        console.error('Failed to update discovery subnet:', error);
+        logger.error('Failed to update discovery subnet', error);
         notificationStore.error('Failed to update discovery subnet');
         applySavedDiscoverySubnet(previousSubnet);
       } finally {
@@ -1539,50 +1557,43 @@ const Settings: Component<SettingsProps> = (props) => {
 
       // Load system settings
       try {
-        const systemResponse = await fetch('/api/config/system');
-        if (systemResponse.ok) {
-          const systemSettings = await systemResponse.json();
-          // PBS polling interval is now fixed at 10 seconds
-          setAllowedOrigins(systemSettings.allowedOrigins || '*');
-          // Connection timeout is backend-only
-          // Load discovery settings
-          // Backend defaults to false, so we should respect that
-          setDiscoveryEnabled(systemSettings.discoveryEnabled ?? false); // Default to false if undefined
-          applySavedDiscoverySubnet(systemSettings.discoverySubnet);
-          // Load embedding settings
-          setAllowEmbedding(systemSettings.allowEmbedding ?? false);
-          setAllowedEmbedOrigins(systemSettings.allowedEmbedOrigins || '');
-          // Backup polling controls
-          if (typeof systemSettings.backupPollingEnabled === 'boolean') {
-            setBackupPollingEnabled(systemSettings.backupPollingEnabled);
-          } else {
-            setBackupPollingEnabled(true);
-          }
-          const intervalSeconds =
-            typeof systemSettings.backupPollingInterval === 'number'
-              ? Math.max(0, Math.floor(systemSettings.backupPollingInterval))
-              : 0;
-          setBackupPollingInterval(intervalSeconds);
-          if (intervalSeconds > 0) {
-            setBackupPollingCustomMinutes(Math.max(1, Math.round(intervalSeconds / 60)));
-          }
-          // Load auto-update settings
-          setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
-          setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
-          setAutoUpdateTime(systemSettings.autoUpdateTime || '03:00');
-          if (systemSettings.updateChannel) {
-            setUpdateChannel(systemSettings.updateChannel as 'stable' | 'rc');
-          }
-          // Track environment variable overrides
-          if (systemSettings.envOverrides) {
-            setEnvOverrides(systemSettings.envOverrides);
-          }
+        const systemSettings = await SettingsAPI.getSystemSettings();
+        // PBS polling interval is now fixed at 10 seconds
+        setAllowedOrigins(systemSettings.allowedOrigins || '*');
+        // Connection timeout is backend-only
+        // Load discovery settings (default to false when unset)
+        setDiscoveryEnabled(systemSettings.discoveryEnabled ?? false);
+        applySavedDiscoverySubnet(systemSettings.discoverySubnet);
+        // Load embedding settings
+        setAllowEmbedding(systemSettings.allowEmbedding ?? false);
+        setAllowedEmbedOrigins(systemSettings.allowedEmbedOrigins || '');
+        // Backup polling controls
+        if (typeof systemSettings.backupPollingEnabled === 'boolean') {
+          setBackupPollingEnabled(systemSettings.backupPollingEnabled);
         } else {
-          // Fallback to old endpoint
-          await SettingsAPI.getSettings();
+          setBackupPollingEnabled(true);
+        }
+        const intervalSeconds =
+          typeof systemSettings.backupPollingInterval === 'number'
+            ? Math.max(0, Math.floor(systemSettings.backupPollingInterval))
+            : 0;
+        setBackupPollingInterval(intervalSeconds);
+        if (intervalSeconds > 0) {
+          setBackupPollingCustomMinutes(Math.max(1, Math.round(intervalSeconds / 60)));
+        }
+        // Load auto-update settings
+        setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
+        setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
+        setAutoUpdateTime(systemSettings.autoUpdateTime || '03:00');
+        if (systemSettings.updateChannel) {
+          setUpdateChannel(systemSettings.updateChannel as 'stable' | 'rc');
+        }
+        // Track environment variable overrides
+        if (systemSettings.envOverrides) {
+          setEnvOverrides(systemSettings.envOverrides);
         }
       } catch (error) {
-        console.error('Failed to load settings:', error);
+        logger.error('Failed to load settings', error);
       }
 
       // Load version information
@@ -1595,10 +1606,10 @@ const Settings: Component<SettingsProps> = (props) => {
           setUpdateChannel(version.channel as 'stable' | 'rc');
         }
       } catch (error) {
-        console.error('Failed to load version:', error);
+        logger.error('Failed to load version', error);
       }
     } catch (error) {
-      console.error('Failed to load configuration:', error);
+      logger.error('Failed to load configuration', error);
     } finally {
       // Mark initial load as complete even if there were errors
       setInitialLoadComplete(true);
@@ -1766,7 +1777,7 @@ const Settings: Component<SettingsProps> = (props) => {
       }
     } catch (error) {
       showError('Failed to check for updates');
-      console.error('Update check error:', error);
+      logger.error('Update check error', error);
     } finally {
       setCheckingForUpdates(false);
     }
@@ -1795,7 +1806,7 @@ const Settings: Component<SettingsProps> = (props) => {
     // Only check for API token if user is not authenticated via password
     // If user is logged in with password, session auth is sufficient
     const hasPasswordAuth = securityStatus()?.hasAuthentication;
-    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !getStoredAPIToken()) {
+    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !getApiClientToken()) {
       setApiTokenModalSource('export');
       setShowApiTokenModal(true);
       return;
@@ -1818,7 +1829,7 @@ const Settings: Component<SettingsProps> = (props) => {
       }
 
       // Add API token if configured
-      const apiToken = getStoredAPIToken();
+      const apiToken = getApiClientToken();
       if (apiToken) {
         headers['X-API-Token'] = apiToken;
       }
@@ -1838,9 +1849,8 @@ const Settings: Component<SettingsProps> = (props) => {
           const hasPasswordAuth = securityStatus()?.hasAuthentication;
           if (!hasPasswordAuth) {
             // Clear invalid token if we had one
-            const hadToken = getStoredAPIToken();
+            const hadToken = getApiClientToken();
             if (hadToken) {
-              clearStoredAPIToken();
               clearApiClientToken();
               showError('Invalid or expired API token. Please re-enter.');
               setApiTokenModalSource('export');
@@ -1878,7 +1888,7 @@ const Settings: Component<SettingsProps> = (props) => {
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to export configuration';
       showError(errorMessage);
-      console.error('Export error:', error);
+      logger.error('Export error', error);
     }
   };
 
@@ -1896,7 +1906,7 @@ const Settings: Component<SettingsProps> = (props) => {
     // Only check for API token if user is not authenticated via password
     // If user is logged in with password, session auth is sufficient
     const hasPasswordAuth = securityStatus()?.hasAuthentication;
-    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !getStoredAPIToken()) {
+    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !getApiClientToken()) {
       setApiTokenModalSource('import');
       setShowApiTokenModal(true);
       return;
@@ -1909,7 +1919,7 @@ const Settings: Component<SettingsProps> = (props) => {
         exportData = JSON.parse(fileContent);
       } catch (parseError) {
         showError('Invalid JSON file format');
-        console.error('JSON parse error:', parseError);
+        logger.error('JSON parse error', parseError);
         return;
       }
 
@@ -1929,7 +1939,7 @@ const Settings: Component<SettingsProps> = (props) => {
       }
 
       // Add API token if configured
-      const apiToken = getStoredAPIToken();
+      const apiToken = getApiClientToken();
       if (apiToken) {
         headers['X-API-Token'] = apiToken;
       }
@@ -1952,9 +1962,8 @@ const Settings: Component<SettingsProps> = (props) => {
           const hasPasswordAuth = securityStatus()?.hasAuthentication;
           if (!hasPasswordAuth) {
             // Clear invalid token if we had one
-            const hadToken = getStoredAPIToken();
+            const hadToken = getApiClientToken();
             if (hadToken) {
-              clearStoredAPIToken();
               clearApiClientToken();
               showError('Invalid or expired API token. Please re-enter.');
               setApiTokenModalSource('import');
@@ -1981,7 +1990,7 @@ const Settings: Component<SettingsProps> = (props) => {
       setTimeout(() => window.location.reload(), 2000);
     } catch (error) {
       showError('Failed to import configuration');
-      console.error('Import error:', error);
+      logger.error('Import error', error);
     }
   };
 
@@ -2136,7 +2145,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 }}
                                 title={sidebarCollapsed() ? item.label : undefined}
                               >
-                                {item.icon}
+                                <item.icon class="w-4 h-4" {...(item.iconProps || {})} />
                                 <Show when={!sidebarCollapsed()}>
                                   <span class="truncate">{item.label}</span>
                                 </Show>
@@ -3059,13 +3068,6 @@ const Settings: Component<SettingsProps> = (props) => {
                   </div>
                 </div>
               </Show>
-              {/* Docker Tab */}
-              <Show when={activeTab() === 'proxmox' && selectedAgent() === 'docker'}>
-                <div class="space-y-6 mt-6">
-                  <DockerAgents />
-                </div>
-              </Show>
-
               {/* Docker Platform Tab */}
               <Show when={activeTab() === 'docker'}>
                 <DockerAgents />
@@ -3074,13 +3076,6 @@ const Settings: Component<SettingsProps> = (props) => {
               {/* Servers Platform Tab */}
               <Show when={activeTab() === 'hosts'}>
                 <HostAgents />
-              </Show>
-
-              {/* Host Agents */}
-              <Show when={activeTab() === 'proxmox' && selectedAgent() === 'host'}>
-                <div class="space-y-6 mt-6">
-                  <HostAgents />
-                </div>
               </Show>
 
               {/* System General Tab */}
@@ -4265,7 +4260,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                       <div class="flex items-center gap-3">
                         <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                          <ApiIcon class="w-5 h-5 text-blue-600 dark:text-blue-300" />
+                          <BadgeCheck class="w-5 h-5 text-blue-600 dark:text-blue-300" />
                         </div>
                         <SectionHeader
                           title="API Access"
@@ -5448,8 +5443,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           <div class="flex justify-between">
                             <span class="text-gray-600 dark:text-gray-400">Server Port:</span>
                             <span class="font-medium">
-                              {window.location.port ||
-                                (window.location.protocol === 'https:' ? '443' : '80')}
+                              {getPulsePort()}
                             </span>
                           </div>
                         </div>
@@ -6163,7 +6157,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               },
                               websocket: {
                                 connected: connected(),
-                                url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`,
+                                url: getPulseWebSocketUrl(),
                               },
                               // Include backend diagnostics if available
                               backendDiagnostics: diagnosticsData() || null,
@@ -6888,7 +6882,6 @@ const Settings: Component<SettingsProps> = (props) => {
                 onClick={() => {
                   if (apiTokenInput()) {
                     const tokenValue = apiTokenInput()!;
-                    setStoredAPIToken(tokenValue);
                     setApiClientToken(tokenValue);
                     const source = apiTokenModalSource();
                     setShowApiTokenModal(false);

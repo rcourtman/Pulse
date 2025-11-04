@@ -1,5 +1,7 @@
 import { createSignal, onCleanup, splitProps } from 'solid-js';
 import type { JSX } from 'solid-js';
+import { copyToClipboard } from '@/utils/clipboard';
+import { logger } from '@/utils/logger';
 
 interface CopyButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   text: string;
@@ -11,39 +13,6 @@ export function CopyButton(props: CopyButtonProps) {
   const [local, others] = splitProps(props, ['text', 'children', 'class', 'onClick', 'onCopied']);
   const [copied, setCopied] = createSignal(false);
   let resetTimeout: number | undefined;
-
-  const copyText = async (text: string): Promise<boolean> => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch (error) {
-        console.warn('Clipboard API copy failed, attempting fallback copy.', error);
-      }
-    }
-
-    if (typeof document === 'undefined') {
-      return false;
-    }
-
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-999999px';
-    textarea.style.top = '-999999px';
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-
-    try {
-      return document.execCommand('copy');
-    } catch (error) {
-      console.error('Fallback copy failed', error);
-      return false;
-    } finally {
-      document.body.removeChild(textarea);
-    }
-  };
 
   const handleClick = async (event: MouseEvent) => {
     const handler = local.onClick as
@@ -60,7 +29,7 @@ export function CopyButton(props: CopyButtonProps) {
       return;
     }
 
-    const success = await copyText(local.text);
+    const success = await copyToClipboard(local.text);
     if (success) {
       setCopied(true);
       window.clearTimeout(resetTimeout);
@@ -69,7 +38,7 @@ export function CopyButton(props: CopyButtonProps) {
         try {
           local.onCopied();
         } catch (error) {
-          console.error('onCopied handler failed', error);
+          logger.error('onCopied handler failed', error);
         }
       }
     }

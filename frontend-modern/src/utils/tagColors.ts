@@ -18,8 +18,9 @@ function hashString(str: string): number {
 /**
  * Generate a color for a tag based on its text
  * Uses HSL to ensure good visibility and consistent saturation/lightness
+ * (Internal helper - use getTagColorWithSpecial instead)
  */
-export function getTagColor(tag: string): { bg: string; text: string; border: string } {
+function getTagColor(tag: string): { bg: string; text: string; border: string } {
   // Get a hash of the tag
   const hash = hashString(tag.toLowerCase());
 
@@ -43,8 +44,9 @@ export function getTagColor(tag: string): { bg: string; text: string; border: st
 
 /**
  * Get tag colors adjusted for dark mode
+ * (Internal helper - use getTagColorWithSpecial instead)
  */
-export function getTagColorDark(tag: string): { bg: string; text: string; border: string } {
+function getTagColorDark(tag: string): { bg: string; text: string; border: string } {
   const hash = hashString(tag.toLowerCase());
   const hue = hash % 360;
   const saturation = 55; // Moderate saturation in dark mode

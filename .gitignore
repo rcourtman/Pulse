@@ -1,6 +1,12 @@
 # Binaries
 /bin/
 /pulse
+/pulse-docker-agent
+/pulse-sensor-proxy
+/pulse-server
+/pulse-test
+/pulse-host-agent
+/pulse-host-agent-*
 
 # Logs
 *.log
@@ -28,7 +34,6 @@ Thumbs.db
 *.test
 *.out
 vendor/
-pulse-test
 test-pulse
 
 # Node.js (for frontend-modern)
@@ -36,6 +41,9 @@ node_modules/
 .npm/
 .yarn/
 frontend-modern/.vite/
+frontend/
+frontend-modern/public/download/
+data/
 
 # Environment
 .env
@@ -47,6 +55,8 @@ dist/
 build/
 *.tar.gz
 pulse-fixes*.tar.gz
+release/pulse-host-agent-*.tar.gz
+scripts/macos/dist/
 
 # Frontend copy for embedding (generated during build)
 # Frontend build artifact for Go embedding

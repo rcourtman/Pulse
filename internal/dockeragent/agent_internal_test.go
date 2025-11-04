@@ -80,3 +80,31 @@ func TestNormalizeSwarmScopeInvalid(t *testing.T) {
 		t.Fatalf("expected error for invalid swarm scope")
 	}
 }
+
+func TestNormalizeRuntime(t *testing.T) {
+	tests := map[string]RuntimeKind{
+		"":       RuntimeAuto,
+		"auto":   RuntimeAuto,
+		"docker": RuntimeDocker,
+		"podman": RuntimePodman,
+		" Auto ": RuntimeAuto,
+		"DOCKER": RuntimeDocker,
+		"PODMAN": RuntimePodman,
+	}
+
+	for input, expected := range tests {
+		runtime, err := normalizeRuntime(input)
+		if err != nil {
+			t.Fatalf("normalizeRuntime(%q) returned error: %v", input, err)
+		}
+		if runtime != expected {
+			t.Fatalf("normalizeRuntime(%q) = %q, expected %q", input, runtime, expected)
+		}
+	}
+}
+
+func TestNormalizeRuntimeInvalid(t *testing.T) {
+	if _, err := normalizeRuntime("containerd"); err == nil {
+		t.Fatalf("expected error for unsupported runtime")
+	}
+}

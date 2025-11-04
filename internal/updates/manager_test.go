@@ -1,11 +1,15 @@
 package updates
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -240,6 +244,71 @@ func TestStableUpdateNotifications(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func buildDummyTarball(t *testing.T) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+
+	content := []byte("dummy")
+	hdr := &tar.Header{
+		Name: "dummy.txt",
+		Mode: 0600,
+		Size: int64(len(content)),
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		t.Fatalf("write tar header: %v", err)
+	}
+	if _, err := tw.Write(content); err != nil {
+		t.Fatalf("write tar content: %v", err)
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar writer: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("close gzip writer: %v", err)
+	}
+
+	return buf.Bytes()
+}
+
+func TestApplyUpdateFailsOnChecksumError(t *testing.T) {
+	t.Setenv("PULSE_UPDATE_SERVER", "http://example.invalid")
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	tarball := buildDummyTarball(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, ".tar.gz"):
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write(tarball); err != nil {
+				t.Fatalf("write tarball: %v", err)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	manager := NewManager(cfg)
+
+	downloadURL := server.URL + "/pulse-v0.0.1-linux-amd64.tar.gz"
+
+	err := manager.ApplyUpdate(context.Background(), downloadURL)
+	if err == nil {
+		t.Fatalf("expected checksum failure error, got nil")
+	}
+
+	status := manager.GetStatus()
+	if status.Status != "error" {
+		t.Fatalf("expected status error, got %q", status.Status)
 	}
 }
 

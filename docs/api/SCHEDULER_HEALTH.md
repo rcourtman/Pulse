@@ -1,6 +1,6 @@
 # Scheduler Health API
 
-**New in v4.24.0**
+Adaptive scheduler health endpoint
 
 Endpoint: `GET /api/monitoring/scheduler/health`
 
@@ -86,7 +86,7 @@ Each element gives a complete view of one instance.
 | `lastSuccess` | timestamp nullable | RFC 3339 timestamp of most recent successful poll |
 | `lastError` | object nullable | `{ at, message, category }` where `at` is RFC 3339, `message` describes the error, and `category` is `transient` (network issues, timeouts) or `permanent` (auth failures, invalid config) |
 | `consecutiveFailures` | integer | Current failure streak length (resets on successful poll) |
-| `firstFailureAt` | timestamp nullable | **New in v4.24.0**: RFC 3339 timestamp when the current failure streak began. Useful for calculating failure duration |
+| `firstFailureAt` | timestamp nullable | RFC 3339 timestamp when the current failure streak began. Useful for calculating failure duration |
 
 **Timing Metadata (v4.24.0+):**
 - `firstFailureAt`: Tracks when a failure streak started, enabling "failing for X minutes" calculations
@@ -98,10 +98,10 @@ Each element gives a complete view of one instance.
 | Field | Type | Description |
 |-------|------|-------------|
 | `state` | string | `closed` (healthy), `open` (failing), `half_open` (testing recovery), or `unknown` (not initialized) |
-| `since` | timestamp nullable | **New in v4.24.0**: RFC 3339 timestamp when the current state began. Use to calculate how long a breaker has been open |
-| `lastTransition` | timestamp nullable | **New in v4.24.0**: RFC 3339 timestamp of the most recent state change (e.g., closed → open) |
-| `retryAt` | timestamp nullable | **New in v4.24.0**: RFC 3339 timestamp of next scheduled retry attempt when breaker is open or half-open |
-| `failureCount` | integer | **New in v4.24.0**: Number of failures in the current breaker cycle. Resets when breaker closes |
+| `since` | timestamp nullable | RFC 3339 timestamp when the current state began. Use to calculate how long a breaker has been open |
+| `lastTransition` | timestamp nullable | RFC 3339 timestamp of the most recent state change (e.g., closed → open) |
+| `retryAt` | timestamp nullable | RFC 3339 timestamp of next scheduled retry attempt when breaker is open or half-open |
+| `failureCount` | integer | Number of failures in the current breaker cycle. Resets when breaker closes |
 
 **Circuit Breaker Timing (v4.24.0+):**
 - `since`: When did the current state start? (e.g., "breaker has been open for 5 minutes")

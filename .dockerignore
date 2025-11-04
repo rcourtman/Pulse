@@ -10,8 +10,17 @@ dev-docs/
 # Binaries and build artifacts
 pulse
 backend
+/pulse-host-agent
+/pulse-host-agent-*
+/pulse-docker-agent
+/pulse-server
 bin/
 dist/
+frontend/
+frontend-modern/public/download/
+frontend-modern/public/pulse-host-agent*
+frontend-modern/dist/
+scripts/macos/dist/
 *.exe
 *.dll
 *.so

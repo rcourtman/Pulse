@@ -13,6 +13,23 @@ The installer will prompt you for the port (default: 7655). To skip the prompt, 
 FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
+### First-Time Authentication Bootstrap
+
+Pulse protects the initial Quick Security Setup screen with a one-time bootstrap token. After the service starts, read the token from the data directory before opening the UI:
+
+| Deployment | Token Path |
+|------------|------------|
+| Standard install / Proxmox LXC | `/etc/pulse/.bootstrap_token` |
+| Docker container | `/data/.bootstrap_token` inside the container or the mounted host volume |
+| Helm / Kubernetes | The persistent volume mounted at `/data` |
+
+1. SSH to the host (or `docker exec` into the container).
+2. Display the token: `cat /etc/pulse/.bootstrap_token` (adjust the path per the table).
+3. When the UI prompts for setup, paste the token into the dialog or send it as the `X-Setup-Token` header for API calls.
+4. The token is deleted automatically after setup succeeds; remove the file manually if you abort the wizard and need a new token.
+
+If you preconfigure `PULSE_AUTH_USER`/`PULSE_AUTH_PASS`, OIDC, or proxy auth, the bootstrap token is ignored because authentication is already in place.
+
 ## Installation Methods
 
 ### Proxmox VE Hosts
@@ -107,8 +124,8 @@ systemctl status pulse-update.timer         # Check status
 - Creates backup before updating
 - Automatically rolls back if update fails
 - Logs all activity to systemd journal
-- **New in v4.25.0**: Adaptive monitoring now ships with circuit breakers, staleness tracking, and richer poll metrics while the Helm chart streamlines Kubernetes installs bundled with the binary.
-- **New in v4.24.0**: Rollback history is retained in Settings → System → Updates; use the new 'Restore previous version' button if the latest build regresses
+- Adaptive monitoring ships with circuit breakers, staleness tracking, and richer poll metrics, and the bundled Helm chart mirrors these defaults for Kubernetes clusters.
+- Rollback history is retained in Settings → System → Updates; use the **Restore previous version** button if the latest build regresses.
 
 #### View Update Logs
 ```bash
@@ -139,7 +156,7 @@ docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:late
 
 ### Rollback to Previous Version
 
-**New in v4.25.0:** Pulse retains previous versions and allows easy rollback if an update causes issues, now backed by detailed scheduler metrics so you can see why a rollback triggered.
+Pulse retains previous versions and allows easy rollback if an update causes issues, backed by detailed scheduler metrics so you can see why a rollback triggered.
 
 #### Via UI (Recommended)
 1. Navigate to **Settings → System → Updates**
@@ -188,7 +205,7 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 
 ### Runtime Logging Configuration
 
-**New in v4.25.0:** Adjust logging settings without restarting Pulse; the structured logging subsystem now centralizes format, destinations, and rotation controls.
+Adjust logging settings without restarting Pulse; the structured logging subsystem centralizes format, destinations, and rotation controls.
 
 #### Via UI
 Navigate to **Settings → System → Logging** to configure:
@@ -210,7 +227,7 @@ docker run -e LOG_LEVEL=debug -e LOG_FORMAT=json rcourtman/pulse:latest
 
 ### Adaptive Polling
 
-**New in v4.25.0:** Adaptive polling now publishes staleness scores, circuit breaker states, and poll timings in `/api/monitoring/scheduler/health`, giving operators context when the scheduler slows down.
+Adaptive polling publishes staleness scores, circuit breaker states, and poll timings in `/api/monitoring/scheduler/health`, giving operators context when the scheduler slows down.
 
 ## Troubleshooting
 

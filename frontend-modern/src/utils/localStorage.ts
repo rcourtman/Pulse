@@ -7,7 +7,7 @@ import { createSignal, createEffect, Signal } from 'solid-js';
  * @param parse - Optional parser function for complex types
  * @param stringify - Optional stringify function for complex types
  */
-export function createLocalStorageSignal<T>(
+function createLocalStorageSignal<T>(
   key: string,
   defaultValue: T,
   parse?: (value: string) => T,
@@ -55,25 +55,25 @@ export function createLocalStorageBooleanSignal(
  * @param key - The localStorage key
  * @param defaultValue - Default value if nothing in localStorage
  */
-export function createLocalStorageNumberSignal(
-  key: string,
-  defaultValue: number = 0,
-): Signal<number> {
-  return createLocalStorageSignal(
-    key,
-    defaultValue,
-    (val) => Number(val),
-    (val) => String(val),
-  );
-}
-
-/**
- * Storage keys used throughout the application
- */
+// Storage keys used throughout the application
 export const STORAGE_KEYS = {
+  // Authentication
+  AUTH: 'pulse_auth',
+  LEGACY_TOKEN: 'pulse_api_token',
+
   // UI preferences
   DARK_MODE: 'darkMode',
   SIDEBAR_COLLAPSED: 'sidebarCollapsed',
+
+  // Metadata
+  GUEST_METADATA: 'pulseGuestMetadata',
+  DOCKER_METADATA: 'pulseDockerMetadata',
+
+  // Platform tracking
+  PLATFORMS_SEEN: 'pulse-platforms-seen',
+
+  // Updates
+  UPDATES: 'pulse-updates',
 
   // Alert settings
   ALERT_HISTORY_TIME_FILTER: 'alertHistoryTimeFilter',
@@ -105,7 +105,4 @@ export const STORAGE_KEYS = {
 
   // Alerts search
   ALERTS_SEARCH_HISTORY: 'alertsSearchHistory',
-
-  // API token
-  API_TOKEN: 'apiToken',
 } as const;

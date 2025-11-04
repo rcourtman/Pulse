@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -57,20 +58,21 @@ func main() {
 }
 
 func loadConfig() dockeragent.Config {
-	envURL := strings.TrimSpace(os.Getenv("PULSE_URL"))
-	envToken := strings.TrimSpace(os.Getenv("PULSE_TOKEN"))
-	envInterval := strings.TrimSpace(os.Getenv("PULSE_INTERVAL"))
-	envHostname := strings.TrimSpace(os.Getenv("PULSE_HOSTNAME"))
-	envAgentID := strings.TrimSpace(os.Getenv("PULSE_AGENT_ID"))
-	envInsecure := strings.TrimSpace(os.Getenv("PULSE_INSECURE_SKIP_VERIFY"))
-	envNoAutoUpdate := strings.TrimSpace(os.Getenv("PULSE_NO_AUTO_UPDATE"))
-	envTargets := strings.TrimSpace(os.Getenv("PULSE_TARGETS"))
-	envContainerStates := strings.TrimSpace(os.Getenv("PULSE_CONTAINER_STATES"))
-	envSwarmScope := strings.TrimSpace(os.Getenv("PULSE_SWARM_SCOPE"))
-	envSwarmServices := strings.TrimSpace(os.Getenv("PULSE_SWARM_SERVICES"))
-	envSwarmTasks := strings.TrimSpace(os.Getenv("PULSE_SWARM_TASKS"))
-	envIncludeContainers := strings.TrimSpace(os.Getenv("PULSE_INCLUDE_CONTAINERS"))
-	envCollectDisk := strings.TrimSpace(os.Getenv("PULSE_COLLECT_DISK"))
+	envURL := utils.GetenvTrim("PULSE_URL")
+	envToken := utils.GetenvTrim("PULSE_TOKEN")
+	envInterval := utils.GetenvTrim("PULSE_INTERVAL")
+	envHostname := utils.GetenvTrim("PULSE_HOSTNAME")
+	envAgentID := utils.GetenvTrim("PULSE_AGENT_ID")
+	envInsecure := utils.GetenvTrim("PULSE_INSECURE_SKIP_VERIFY")
+	envNoAutoUpdate := utils.GetenvTrim("PULSE_NO_AUTO_UPDATE")
+	envTargets := utils.GetenvTrim("PULSE_TARGETS")
+	envRuntime := utils.GetenvTrim("PULSE_RUNTIME")
+	envContainerStates := utils.GetenvTrim("PULSE_CONTAINER_STATES")
+	envSwarmScope := utils.GetenvTrim("PULSE_SWARM_SCOPE")
+	envSwarmServices := utils.GetenvTrim("PULSE_SWARM_SERVICES")
+	envSwarmTasks := utils.GetenvTrim("PULSE_SWARM_TASKS")
+	envIncludeContainers := utils.GetenvTrim("PULSE_INCLUDE_CONTAINERS")
+	envCollectDisk := utils.GetenvTrim("PULSE_COLLECT_DISK")
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -86,22 +88,22 @@ func loadConfig() dockeragent.Config {
 
 	includeServicesDefault := true
 	if envSwarmServices != "" {
-		includeServicesDefault = parseBool(envSwarmServices)
+		includeServicesDefault = utils.ParseBool(envSwarmServices)
 	}
 
 	includeTasksDefault := true
 	if envSwarmTasks != "" {
-		includeTasksDefault = parseBool(envSwarmTasks)
+		includeTasksDefault = utils.ParseBool(envSwarmTasks)
 	}
 
 	includeContainersDefault := true
 	if envIncludeContainers != "" {
-		includeContainersDefault = parseBool(envIncludeContainers)
+		includeContainersDefault = utils.ParseBool(envIncludeContainers)
 	}
 
 	collectDiskDefault := true
 	if envCollectDisk != "" {
-		collectDiskDefault = parseBool(envCollectDisk)
+		collectDiskDefault = utils.ParseBool(envCollectDisk)
 	}
 
 	urlFlag := flag.String("url", envURL, "Pulse server URL (e.g. http://pulse:7655)")
@@ -109,8 +111,9 @@ func loadConfig() dockeragent.Config {
 	intervalFlag := flag.Duration("interval", defaultInterval, "Reporting interval (e.g. 30s)")
 	hostnameFlag := flag.String("hostname", envHostname, "Override hostname reported to Pulse")
 	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
-	insecureFlag := flag.Bool("insecure", parseBool(envInsecure), "Skip TLS certificate verification")
-	noAutoUpdateFlag := flag.Bool("no-auto-update", parseBool(envNoAutoUpdate), "Disable automatic agent updates")
+	insecureFlag := flag.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS certificate verification")
+	noAutoUpdateFlag := flag.Bool("no-auto-update", utils.ParseBool(envNoAutoUpdate), "Disable automatic agent updates")
+	runtimeFlag := flag.String("runtime", envRuntime, "Container runtime to expect (auto, docker, podman)")
 	var targetFlags stringFlagList
 	flag.Var(&targetFlags, "target", "Pulse target in url|token[|insecure] format. Repeat to send to multiple Pulse instances")
 	var containerStateFlags stringFlagList
@@ -182,19 +185,11 @@ func loadConfig() dockeragent.Config {
 		Targets:            targets,
 		ContainerStates:    containerStates,
 		SwarmScope:         strings.ToLower(strings.TrimSpace(*swarmScopeFlag)),
+		Runtime:            strings.ToLower(strings.TrimSpace(*runtimeFlag)),
 		IncludeServices:    *includeServicesFlag,
 		IncludeTasks:       *includeTasksFlag,
 		IncludeContainers:  *includeContainersFlag,
 		CollectDiskMetrics: *collectDiskFlag,
-	}
-}
-
-func parseBool(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1", "true", "yes", "y", "on":
-		return true
-	default:
-		return false
 	}
 }
 

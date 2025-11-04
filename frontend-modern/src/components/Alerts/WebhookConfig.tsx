@@ -1,5 +1,6 @@
 import { createSignal, createEffect, Show, For, Index } from 'solid-js';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
+import { logger } from '@/utils/logger';
 import {
   formField,
   labelClass,
@@ -164,7 +165,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       const data = await NotificationsAPI.getWebhookTemplates();
       setTemplates(data);
     } catch (err) {
-      console.error('Failed to load webhook templates:', err);
+      logger.error('Failed to load webhook templates:', err);
     }
   });
 

@@ -18,9 +18,9 @@ import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 import { isNodeOnline } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
+import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
-
-const GUEST_METADATA_STORAGE_KEY = 'pulseGuestMetadata';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
 type IdleCallbackHandle = number;
@@ -49,7 +49,7 @@ const readGuestMetadataCache = (): GuestMetadataRecord => {
   }
 
   try {
-    const raw = window.localStorage.getItem(GUEST_METADATA_STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEYS.GUEST_METADATA);
     if (!raw) {
       cachedGuestMetadata = {};
       lastPersistedGuestMetadataJSON = null;
@@ -62,7 +62,7 @@ const readGuestMetadataCache = (): GuestMetadataRecord => {
       return cachedGuestMetadata;
     }
   } catch (err) {
-    console.warn('Failed to parse cached guest metadata:', err);
+    logger.warn('Failed to parse cached guest metadata', err);
   }
 
   cachedGuestMetadata = {};
@@ -110,7 +110,7 @@ const runGuestMetadataPersist = () => {
       performance.clearMarks(`${markBase}:end`);
       performance.clearMeasures(markBase);
     }
-    console.warn('Failed to serialize guest metadata cache:', err);
+    logger.warn('Failed to serialize guest metadata cache', err);
     return;
   }
 
@@ -121,9 +121,9 @@ const runGuestMetadataPersist = () => {
       const entries = performance.getEntriesByName(markBase);
       const entry = entries[entries.length - 1];
       if (entry) {
-        console.debug(
-          `[guestMetadataCache] skipped persist (unchanged) in ${entry.duration.toFixed(2)}ms`,
-        );
+        logger.debug('[guestMetadataCache] skipped persist (unchanged)', {
+          durationMs: entry.duration,
+        });
       }
       performance.clearMarks(`${markBase}:start`);
       performance.clearMarks(`${markBase}:end`);
@@ -133,7 +133,7 @@ const runGuestMetadataPersist = () => {
   }
 
   try {
-    window.localStorage.setItem(GUEST_METADATA_STORAGE_KEY, serialized);
+    window.localStorage.setItem(STORAGE_KEYS.GUEST_METADATA, serialized);
     lastPersistedGuestMetadataJSON = serialized;
     if (markBase) {
       performance.mark(`${markBase}:end`);
@@ -141,9 +141,10 @@ const runGuestMetadataPersist = () => {
       const entries = performance.getEntriesByName(markBase);
       const entry = entries[entries.length - 1];
       if (entry) {
-        console.debug(
-          `[guestMetadataCache] persisted ${Object.keys(metadata).length} entries in ${entry.duration.toFixed(2)}ms`,
-        );
+        logger.debug('[guestMetadataCache] persisted entries', {
+          count: Object.keys(metadata).length,
+          durationMs: entry.duration,
+        });
       }
       performance.clearMarks(`${markBase}:start`);
       performance.clearMarks(`${markBase}:end`);
@@ -157,7 +158,7 @@ const runGuestMetadataPersist = () => {
       performance.clearMarks(`${markBase}:end`);
       performance.clearMeasures(markBase);
     }
-    console.warn('Failed to persist guest metadata cache:', err);
+    logger.warn('Failed to persist guest metadata cache', err);
   }
 };
 
@@ -264,7 +265,7 @@ export function Dashboard(props: DashboardProps) {
       updateGuestMetadataState(() => metadata || {});
     } catch (err) {
       // Silently fail - metadata is optional for display
-      console.debug('Failed to load guest metadata:', err);
+      logger.debug('Failed to load guest metadata', err);
     }
   });
 
@@ -694,11 +695,11 @@ export function Dashboard(props: DashboardProps) {
   });
 
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
-    console.log('handleNodeSelect called:', nodeId, nodeType);
+    logger.debug('handleNodeSelect called', { nodeId, nodeType });
     // Track selected node for filtering (independent of search)
     if (nodeType === 'pve' || nodeType === null) {
       setSelectedNode(nodeId);
-      console.log('Set selected node to:', nodeId);
+      logger.debug('Set selected node', { nodeId });
       // Show filters if a node is selected
       if (nodeId && !showFilters()) {
         setShowFilters(true);

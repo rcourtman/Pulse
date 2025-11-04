@@ -37,17 +37,6 @@ func IsPasswordHashed(password string) bool {
 	return strings.HasPrefix(password, "$2") && len(password) == 60
 }
 
-// MigratePassword takes a password that might be plain text or hashed
-// and returns a properly hashed version
-func MigratePassword(password string) (string, error) {
-	if IsPasswordHashed(password) {
-		// Already hashed, return as-is
-		return password, nil
-	}
-	// Plain text password, hash it
-	return HashPassword(password)
-}
-
 // ValidatePasswordComplexity checks if a password meets complexity requirements
 func ValidatePasswordComplexity(password string) error {
 	if len(password) < MinPasswordLength {

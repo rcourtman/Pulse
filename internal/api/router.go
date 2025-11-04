@@ -59,6 +59,28 @@ type Router struct {
 	cachedAllowedOrigins string
 	publicURLMu          sync.Mutex
 	publicURLDetected    bool
+	bootstrapTokenHash   string
+	bootstrapTokenPath   string
+}
+
+func isDirectLoopbackRequest(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+
+	remote := extractRemoteIP(req.RemoteAddr)
+	ip := net.ParseIP(remote)
+	if ip == nil || !ip.IsLoopback() {
+		return false
+	}
+
+	if req.Header.Get("X-Forwarded-For") != "" ||
+		req.Header.Get("Forwarded") != "" ||
+		req.Header.Get("X-Real-IP") != "" {
+		return false
+	}
+
+	return true
 }
 
 // NewRouter creates a new router instance
@@ -83,6 +105,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		persistence:   config.NewConfigPersistence(cfg.DataPath),
 		projectRoot:   projectRoot,
 	}
+
+	r.initializeBootstrapToken()
 
 	r.setupRoutes()
 
@@ -263,9 +287,6 @@ func (r *Router) setupRoutes() {
 		switch req.Method {
 		case http.MethodGet:
 			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetSystemSettings))(w, req)
-		case http.MethodPut:
-			// DEPRECATED - use /api/system/settings/update instead
-			RequireAdmin(r.configHandlers.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateSystemSettingsOLD))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -352,22 +373,31 @@ func (r *Router) setupRoutes() {
 			credentialsEncrypted := true
 
 			// Check network context
-			clientIP := utils.GetClientIP(
-				req.RemoteAddr,
-				req.Header.Get("X-Forwarded-For"),
-				req.Header.Get("X-Real-IP"),
-			)
-			isPrivateNetwork := utils.IsPrivateIP(clientIP)
+			clientIP := GetClientIP(req)
+			isPrivateNetwork := isPrivateIP(clientIP)
 
 			// Get trusted networks from environment
 			trustedNetworks := []string{}
 			if nets := os.Getenv("PULSE_TRUSTED_NETWORKS"); nets != "" {
 				trustedNetworks = strings.Split(nets, ",")
 			}
-			isTrustedNetwork := utils.IsTrustedNetwork(clientIP, trustedNetworks)
+			isTrustedNetwork := isTrustedNetwork(clientIP, trustedNetworks)
 
-			// Create token hint if token exists
-			apiTokenHint := r.config.PrimaryAPITokenHint()
+			// Determine whether the caller is authenticated before exposing sensitive fields
+			isAuthenticated := false
+			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+				isAuthenticated = true
+			} else if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
+				if _, ok := r.config.ValidateAPIToken(token); ok {
+					isAuthenticated = true
+				}
+			}
+
+			// Create token hint if token exists (only revealed to authenticated callers)
+			apiTokenHint := ""
+			if isAuthenticated {
+				apiTokenHint = r.config.PrimaryAPITokenHint()
+			}
 
 			// Check for proxy auth
 			hasProxyAuth := r.config.ProxyAuthSecret != ""
@@ -415,9 +445,14 @@ func (r *Router) setupRoutes() {
 				"proxyAuthLogoutURL":          r.config.ProxyAuthLogoutURL,
 				"proxyAuthUsername":           proxyAuthUsername,
 				"proxyAuthIsAdmin":            proxyAuthIsAdmin,
-				"authUsername":                r.config.AuthUser,
-				"authLastModified":            authLastModified,
+				"authUsername":                "",
+				"authLastModified":            "",
 				"oidcUsername":                oidcUsername,
+			}
+
+			if isAuthenticated {
+				status["authUsername"] = r.config.AuthUser
+				status["authLastModified"] = authLastModified
 			}
 
 			if oidcCfg != nil {
@@ -515,20 +550,21 @@ func (r *Router) setupRoutes() {
 	// Recovery endpoint - requires localhost access OR valid recovery token
 	r.mux.HandleFunc("/api/security/recovery", func(w http.ResponseWriter, req *http.Request) {
 		// Get client IP
-		ip := strings.Split(req.RemoteAddr, ":")[0]
-		isLocalhost := ip == "127.0.0.1" || ip == "::1" || ip == "localhost"
+		isLoopback := isDirectLoopbackRequest(req)
+		clientIP := GetClientIP(req)
 
 		// Check for recovery token in header
 		recoveryToken := req.Header.Get("X-Recovery-Token")
 		hasValidToken := false
 		if recoveryToken != "" {
-			hasValidToken = GetRecoveryTokenStore().ValidateRecoveryTokenConstantTime(recoveryToken, ip)
+			hasValidToken = GetRecoveryTokenStore().ValidateRecoveryTokenConstantTime(recoveryToken, clientIP)
 		}
 
 		// Only allow from localhost OR with valid recovery token
-		if !isLocalhost && !hasValidToken {
+		if !isLoopback && !hasValidToken {
 			log.Warn().
-				Str("ip", ip).
+				Str("ip", clientIP).
+				Bool("direct_loopback", isLoopback).
 				Bool("has_token", recoveryToken != "").
 				Msg("Unauthorized recovery endpoint access attempt")
 			http.Error(w, "Recovery endpoint requires localhost access or valid recovery token", http.StatusForbidden)
@@ -552,7 +588,7 @@ func (r *Router) setupRoutes() {
 			switch recoveryRequest.Action {
 			case "generate_token":
 				// Only allow token generation from localhost
-				if !isLocalhost {
+				if !isLoopback {
 					http.Error(w, "Token generation only allowed from localhost", http.StatusForbidden)
 					return
 				}
@@ -573,7 +609,8 @@ func (r *Router) setupRoutes() {
 					response["expires_in_minutes"] = duration
 					response["message"] = fmt.Sprintf("Recovery token generated. Valid for %d minutes.", duration)
 					log.Warn().
-						Str("ip", ip).
+						Str("ip", clientIP).
+						Bool("direct_loopback", isLoopback).
 						Int("duration_minutes", duration).
 						Msg("Recovery token generated")
 				}
@@ -581,7 +618,7 @@ func (r *Router) setupRoutes() {
 			case "disable_auth":
 				// Temporarily disable auth by creating recovery file
 				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
-				content := fmt.Sprintf("Recovery mode enabled at %s\nAuth temporarily disabled for local access\nEnabled by: %s\n", time.Now().Format(time.RFC3339), ip)
+				content := fmt.Sprintf("Recovery mode enabled at %s\nAuth temporarily disabled for local access\nEnabled by: %s\n", time.Now().Format(time.RFC3339), clientIP)
 				if err := os.WriteFile(recoveryFile, []byte(content), 0600); err != nil {
 					response["success"] = false
 					response["message"] = fmt.Sprintf("Failed to enable recovery mode: %v", err)
@@ -589,7 +626,8 @@ func (r *Router) setupRoutes() {
 					response["success"] = true
 					response["message"] = "Recovery mode enabled. Auth disabled for localhost. Delete .auth_recovery file to re-enable."
 					log.Warn().
-						Str("ip", ip).
+						Str("ip", clientIP).
+						Bool("direct_loopback", isLoopback).
 						Bool("via_token", hasValidToken).
 						Msg("AUTH RECOVERY: Authentication disabled via recovery endpoint")
 				}
@@ -687,11 +725,9 @@ func (r *Router) setupRoutes() {
 				return
 			} else if !authRequired {
 				// No auth configured - check if this is a homelab/private network
-				clientIP := utils.GetClientIP(req.RemoteAddr,
-					req.Header.Get("X-Forwarded-For"),
-					req.Header.Get("X-Real-IP"))
+				clientIP := GetClientIP(req)
 
-				isPrivate := utils.IsPrivateIP(clientIP)
+				isPrivate := isPrivateIP(clientIP)
 				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
 
 				if !isPrivate && !allowUnprotected {
@@ -783,11 +819,9 @@ func (r *Router) setupRoutes() {
 				return
 			} else if !authRequired {
 				// No auth configured - check if this is a homelab/private network
-				clientIP := utils.GetClientIP(req.RemoteAddr,
-					req.Header.Get("X-Forwarded-For"),
-					req.Header.Get("X-Real-IP"))
+				clientIP := GetClientIP(req)
 
-				isPrivate := utils.IsPrivateIP(clientIP)
+				isPrivate := isPrivateIP(clientIP)
 				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
 
 				if !isPrivate && !allowUnprotected {
@@ -863,10 +897,6 @@ func (r *Router) setupRoutes() {
 	// Notification routes
 	r.mux.HandleFunc("/api/notifications/", RequireAdmin(r.config, r.notificationHandlers.HandleNotifications))
 
-	// Settings routes
-	r.mux.HandleFunc("/api/settings", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, getSettings)))
-	r.mux.HandleFunc("/api/settings/update", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateSettings)))
-
 	// System settings and API token management
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings)
 	r.mux.HandleFunc("/api/system/settings", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.systemSettingsHandler.HandleGetSystemSettings)))
@@ -878,6 +908,7 @@ func (r *Router) setupRoutes() {
 
 	// Docker agent download endpoints
 	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript)
+	r.mux.HandleFunc("/install-container-agent.sh", r.handleDownloadContainerAgentInstallScript)
 	r.mux.HandleFunc("/download/pulse-docker-agent", r.handleDownloadAgent)
 
 	// Host agent download endpoints
@@ -1160,21 +1191,23 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		// Check if we need authentication
 		needsAuth := true
+		clientIP := GetClientIP(req)
 
 		// Recovery mechanism: Check if recovery mode is enabled
 		recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
 		if _, err := os.Stat(recoveryFile); err == nil {
 			// Recovery mode is enabled - allow local access only
-			ip := strings.Split(req.RemoteAddr, ":")[0]
 			log.Debug().
 				Str("recovery_file", recoveryFile).
-				Str("remote_ip", ip).
+				Str("client_ip", clientIP).
+				Str("remote_addr", req.RemoteAddr).
 				Str("path", req.URL.Path).
 				Bool("file_exists", err == nil).
 				Msg("Checking auth recovery mode")
-			if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
+			if isDirectLoopbackRequest(req) {
 				log.Warn().
 					Str("recovery_file", recoveryFile).
+					Str("client_ip", clientIP).
 					Msg("AUTH RECOVERY MODE: Allowing local access without authentication")
 				// Allow access but add a warning header
 				w.Header().Set("X-Auth-Recovery", "true")
@@ -1198,6 +1231,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/oidc/login",
 				config.DefaultOIDCCallbackPath,
 				"/install-docker-agent.sh",             // Docker agent bootstrap script must be public
+				"/install-container-agent.sh",          // Container agent bootstrap script must be public
 				"/download/pulse-docker-agent",         // Agent binary download should not require auth
 				"/install-host-agent.sh",               // Host agent bootstrap script must be public
 				"/install-host-agent.ps1",              // Host agent PowerShell script must be public
@@ -1265,16 +1299,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				isPublic = true
 			}
 
-			// Special case: quick-setup should be accessible to check if already configured
-			// The handler itself will verify if setup should be skipped
-			if normalizedPath == "/api/security/quick-setup" && req.Method == http.MethodPost {
-				isPublic = true
-			}
 			// Dev mode bypass for admin endpoints (disabled by default)
-			if os.Getenv("ALLOW_ADMIN_BYPASS") == "1" {
-				log.Info().
+			if adminBypassEnabled() {
+				log.Debug().
 					Str("path", req.URL.Path).
-					Msg("=== ADMIN BYPASS ENABLED - SKIPPING GLOBAL AUTH ===")
+					Msg("Admin bypass enabled - skipping global auth")
 				needsAuth = false
 			}
 
@@ -1333,6 +1362,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			strings.HasPrefix(req.URL.Path, "/download/") ||
 			req.URL.Path == "/simple-stats" ||
 			req.URL.Path == "/install-docker-agent.sh" ||
+			req.URL.Path == "/install-container-agent.sh" ||
 			req.URL.Path == "/install-host-agent.sh" ||
 			req.URL.Path == "/install-host-agent.ps1" ||
 			req.URL.Path == "/uninstall-host-agent.ps1" {
@@ -1501,112 +1531,6 @@ func shouldAppendForwardedPort(port, scheme string) bool {
 	return true
 }
 
-// detectLegacySSH checks if Pulse is using legacy SSH for temperature monitoring
-//
-// ⚠️ MIGRATION SCAFFOLDING - TEMPORARY CODE
-// This detection exists only to handle migration from legacy SSH-in-container
-// to the secure pulse-sensor-proxy architecture introduced in v4.23.0.
-//
-// REMOVAL CRITERIA: Remove after v5.0 or when banner telemetry shows <1% fire rate
-// for 30+ days. This code serves no functional purpose beyond migration assistance.
-//
-// Can be disabled via environment variable: PULSE_LEGACY_DETECTION=false
-func (r *Router) detectLegacySSH() (legacyDetected, recommendProxy bool) {
-	// Check if detection is disabled via environment variable
-	if os.Getenv("PULSE_LEGACY_DETECTION") == "false" {
-		return false, false
-	}
-
-	// Check if running in a container using multiple detection methods
-	inContainer := false
-
-	// Method 1: Check for /.dockerenv (Docker)
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		inContainer = true
-	}
-
-	// Method 2: Check /proc/1/cgroup (Docker/LXC)
-	if !inContainer {
-		if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
-			cgroupStr := string(data)
-			if strings.Contains(cgroupStr, "docker") ||
-				strings.Contains(cgroupStr, "lxc") ||
-				strings.Contains(cgroupStr, "/docker/") ||
-				strings.Contains(cgroupStr, "/lxc/") {
-				inContainer = true
-			}
-		}
-	}
-
-	// Method 3: Check /run/systemd/container (systemd containers)
-	if !inContainer {
-		if _, err := os.Stat("/run/systemd/container"); err == nil {
-			inContainer = true
-		}
-	}
-
-	// Method 4: Check /proc/1/environ for container indicators
-	if !inContainer {
-		if data, err := os.ReadFile("/proc/1/environ"); err == nil {
-			environStr := string(data)
-			if strings.Contains(environStr, "container=") ||
-				strings.Contains(environStr, "DOCKER") ||
-				strings.Contains(environStr, "LXC") {
-				inContainer = true
-			}
-		}
-	}
-
-	// If not in container, no need for proxy
-	if !inContainer {
-		return false, false
-	}
-
-	// Check if SSH keys are configured in the data directory
-	sshKeysConfigured := false
-
-	// Check for SSH keys in the configured data directory
-	dataDir := r.config.DataPath
-	if dataDir == "" {
-		dataDir = "/etc/pulse"
-	}
-
-	sshPrivKeyPath := filepath.Join(dataDir, ".ssh", "id_ed25519")
-	if _, err := os.Stat(sshPrivKeyPath); err == nil {
-		sshKeysConfigured = true
-	}
-
-	// Also check for RSA keys
-	sshPrivKeyPathRSA := filepath.Join(dataDir, ".ssh", "id_rsa")
-	if _, err := os.Stat(sshPrivKeyPathRSA); err == nil {
-		sshKeysConfigured = true
-	}
-
-	// If SSH keys exist, check if proxy is configured vs just temporarily down
-	if sshKeysConfigured {
-		// Check if pulse-sensor-proxy is available via unix socket
-		proxySocket := "/run/pulse-sensor-proxy/sensor.sock"
-		proxyBinary := "/usr/local/bin/pulse-sensor-proxy"
-
-		// If socket doesn't exist, need to distinguish:
-		// - Legacy setup: proxy never installed (binary doesn't exist)
-		// - Migrated setup: proxy installed but temporarily down
-		if _, err := os.Stat(proxySocket); err != nil {
-			// Socket missing - check if proxy was ever installed
-			if _, err := os.Stat(proxyBinary); err != nil {
-				// Proxy binary doesn't exist - this is legacy SSH setup
-				// User needs to remove nodes and re-add them
-				return true, true
-			}
-			// Proxy binary exists but socket is missing - likely just restarting/down
-			// Don't show banner - this is a transient issue, not a configuration problem
-			return false, false
-		}
-	}
-
-	return false, false
-}
-
 // handleHealth handles health check requests
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
@@ -1614,28 +1538,12 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Detect legacy SSH setup
-	legacySSH, recommendProxy := r.detectLegacySSH()
-
-	// Log when legacy SSH is detected for telemetry/metrics
-	// This helps track removal criteria: <1% detection rate for 30+ days
-	if legacySSH && recommendProxy {
-		log.Warn().
-			Str("detection_type", "legacy_ssh_migration").
-			Msg("Legacy SSH configuration detected - user should migrate to proxy architecture")
-	}
-
-	// Check for dev mode SSH override (FOR TESTING ONLY - NEVER in production)
-	devModeSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
-
 	response := HealthResponse{
 		Status:                      "healthy",
 		Timestamp:                   time.Now().Unix(),
 		Uptime:                      time.Since(r.monitor.GetStartTime()).Seconds(),
-		LegacySSHDetected:           legacySSH,
-		RecommendProxyUpgrade:       recommendProxy,
-		ProxyInstallScriptAvailable: true, // Install script is always available
-		DevModeSSH:                  devModeSSH,
+		ProxyInstallScriptAvailable: true,
+		DevModeSSH:                  os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true",
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -2185,6 +2093,13 @@ func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if !CheckAuth(r.config, w, req) {
+		return
+	}
+	if !ensureSettingsWriteScope(w, req) {
+		return
+	}
+
 	// Parse request
 	var resetReq struct {
 		Identifier string `json:"identifier"` // Can be username or IP
@@ -2228,14 +2143,12 @@ func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 
 // handleState handles state requests
 func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
-	log.Debug().Msg("[DEBUG] handleState: START")
 	if req.Method != http.MethodGet {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
 			"Only GET method is allowed", nil)
 		return
 	}
 
-	log.Debug().Msg("[DEBUG] handleState: Before auth check")
 	// Use standard auth check (supports both basic auth and API tokens) unless auth is disabled
 	if !CheckAuth(r.config, w, req) {
 		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
@@ -2248,18 +2161,14 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Debug().Msg("[DEBUG] handleState: Before GetState")
 	state := r.monitor.GetState()
-	log.Debug().Msg("[DEBUG] handleState: After GetState, before ToFrontend")
 	frontendState := state.ToFrontend()
 
-	log.Debug().Msg("[DEBUG] handleState: Before WriteJSONResponse")
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
 		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error",
 			"Failed to encode state data", nil)
 	}
-	log.Debug().Msg("[DEBUG] handleState: END")
 }
 
 // handleVersion handles version requests
@@ -3163,6 +3072,22 @@ func (r *Router) handleDownloadInstallScript(w http.ResponseWriter, req *http.Re
 	http.ServeFile(w, req, scriptPath)
 }
 
+// handleDownloadContainerAgentInstallScript serves the container agent install script
+func (r *Router) handleDownloadContainerAgentInstallScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	scriptPath := "/opt/pulse/scripts/install-container-agent.sh"
+	http.ServeFile(w, req, scriptPath)
+}
+
 // handleDownloadAgent serves the Docker agent binary
 func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
@@ -3465,7 +3390,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 
 	baseURL := strings.TrimRight(r.resolvePublicURL(req), "/")
-	installCommand := fmt.Sprintf("curl -fsSL %s/install-docker-agent.sh | bash -s -- --url %s --token %s", baseURL, baseURL, rawToken)
+	installCommand := fmt.Sprintf("curl -fSL '%s/install-docker-agent.sh' -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --url '%s' --token '%s' && rm -f /tmp/pulse-install-docker-agent.sh", baseURL, baseURL, rawToken)
 	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-docker-agent --url %s --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL)
 
 	response := map[string]any{

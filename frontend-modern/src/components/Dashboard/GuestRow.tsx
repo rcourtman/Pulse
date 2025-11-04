@@ -5,9 +5,10 @@ import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { TagBadges } from './TagBadges';
 import { DiskList } from './DiskList';
-import { isGuestRunning, shouldDisplayGuestMetrics } from '@/utils/status';
+import { isGuestRunning } from '@/utils/status';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { showSuccess, showError } from '@/utils/toast';
+import { logger } from '@/utils/logger';
 
 type Guest = VM | Container;
 
@@ -286,7 +287,7 @@ export function GuestRow(props: GuestRowProps) {
         showSuccess('Guest URL cleared');
       }
     } catch (err: any) {
-      console.error('Failed to save guest URL:', err);
+      logger.error('Failed to save guest URL:', err);
       showError(err.message || 'Failed to save guest URL');
     }
   };
@@ -313,7 +314,7 @@ export function GuestRow(props: GuestRowProps) {
 
         showSuccess('Guest URL removed');
       } catch (err: any) {
-        console.error('Failed to remove guest URL:', err);
+        logger.error('Failed to remove guest URL:', err);
         showError(err.message || 'Failed to remove guest URL');
       }
     }
@@ -342,7 +343,6 @@ export function GuestRow(props: GuestRowProps) {
 
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);
   const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
-  const showGuestMetrics = createMemo(() => shouldDisplayGuestMetrics(props.guest, parentOnline()));
   const lockLabel = createMemo(() => (props.guest.lock || '').trim());
 
   // Get helpful tooltip for disk status
@@ -581,7 +581,7 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* CPU */}
       <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[180px]">
-        <Show when={showGuestMetrics()} fallback={<span class="text-sm text-gray-400">-</span>}>
+        <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
           <MetricBar
             value={cpuPercent()}
             label={formatPercent(cpuPercent())}
@@ -598,7 +598,7 @@ export function GuestRow(props: GuestRowProps) {
       {/* Memory */}
       <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[180px]">
         <div title={memoryTooltip() ?? undefined}>
-          <Show when={showGuestMetrics()} fallback={<span class="text-sm text-gray-400">-</span>}>
+          <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
             <MetricBar
               value={memPercent()}
               label={formatPercent(memPercent())}

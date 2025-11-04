@@ -9,6 +9,11 @@ import type { SecurityStatus } from '@/types/config';
 import type { DockerHost } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
 import { DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
+import { resolveHostRuntime } from '@/components/Docker/runtimeDisplay';
+import { copyToClipboard } from '@/utils/clipboard';
+import { getPulseBaseUrl } from '@/utils/url';
+import { logger } from '@/utils/logger';
+
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
@@ -66,15 +71,7 @@ export const DockerAgents: Component = () => {
   const [commandQueuedTime, setCommandQueuedTime] = createSignal<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = createSignal(0);
 
-  const pulseUrl = () => {
-    if (typeof window !== 'undefined') {
-      const protocol = window.location.protocol;
-      const hostname = window.location.hostname;
-      const port = window.location.port;
-      return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
-    }
-    return 'http://localhost:7655';
-  };
+  const pulseUrl = () => getPulseBaseUrl();
 
   const TOKEN_PLACEHOLDER = '<api-token>';
 
@@ -86,6 +83,12 @@ export const DockerAgents: Component = () => {
 
   const getDisplayName = (host: DockerHost | { id: string; displayName?: string | null; hostname?: string | null }) => {
     return host.displayName || host.hostname || host.id;
+  };
+
+  const describeRuntime = (host: DockerHost) => {
+    const runtimeInfo = resolveHostRuntime(host);
+    const version = host.runtimeVersion || host.dockerVersion || '';
+    return version ? `${runtimeInfo.label} ${version}` : runtimeInfo.label;
   };
 
   const modalDisplayName = () => {
@@ -149,7 +152,7 @@ const modalCommandTimedOut = createMemo(() => {
 
 const modalLastHeartbeat = createMemo(() => {
   const host = hostToRemove();
-  return host?.lastReportTime ? formatRelativeTime(new Date(host.lastReportTime)) : null;
+  return host?.lastSeen ? formatRelativeTime(host.lastSeen) : null;
 });
 
 const modalHostPendingUninstall = createMemo(() => Boolean(hostToRemove()?.pendingUninstall));
@@ -295,7 +298,7 @@ const getRemovalStatusInfo = (host: DockerHost): { label: string; tone: RemovalS
       } catch (err) {
         if (!hasLoggedSecurityStatusError) {
           hasLoggedSecurityStatusError = true;
-          console.error('Failed to load security status', err);
+          logger.error('Failed to load security status', err);
         }
       }
     };
@@ -304,43 +307,11 @@ const getRemovalStatusInfo = (host: DockerHost): { label: string; tone: RemovalS
 
   const showInstallCommand = () => !requiresToken() || Boolean(currentToken());
 
-  // Find the token record that matches the currently stored token
-  const copyToClipboard = async (text: string): Promise<boolean> => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-
-      if (typeof document === 'undefined') {
-        return false;
-      }
-
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.left = '-999999px';
-      textarea.style.top = '-999999px';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-
-      try {
-        return document.execCommand('copy');
-      } finally {
-        document.body.removeChild(textarea);
-      }
-    } catch (err) {
-      console.error('Failed to copy to clipboard', err);
-      return false;
-    }
-  };
-
   const handleGenerateToken = async () => {
     if (isGeneratingToken()) return;
     setIsGeneratingToken(true);
     try {
-      const name = tokenName().trim() || `Docker host ${new Date().toISOString().slice(0, 10)}`;
+      const name = tokenName().trim() || `Container host ${new Date().toISOString().slice(0, 10)}`;
       const { token, record } = await SecurityAPI.createToken(name, [DOCKER_REPORT_SCOPE]);
 
       setCurrentToken(token);
@@ -348,8 +319,9 @@ const getRemovalStatusInfo = (host: DockerHost): { label: string; tone: RemovalS
       setTokenName('');
       notificationStore.success('Token generated and inserted into the command below.', 4000);
     } catch (err) {
-      console.error('Failed to generate API token', err);
-      notificationStore.error('Failed to generate API token. Confirm you are signed in as an administrator.', 6000);
+      logger.error('Failed to generate API token', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      notificationStore.error(`Failed to generate API token: ${errorMsg}`, 8000);
     } finally {
       setIsGeneratingToken(false);
     }
@@ -366,15 +338,14 @@ const getRemovalStatusInfo = (host: DockerHost): { label: string; tone: RemovalS
   // Always return command template with placeholder; the UI replaces it with the selected token.
   const getInstallCommandTemplate = () => {
     const url = pulseUrl();
-    if (!requiresToken()) {
-      return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url} --token disabled`;
-    }
-    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER}`;
+    const tokenValue = requiresToken() ? TOKEN_PLACEHOLDER : 'disabled';
+    const tokenSegment = `--token '${tokenValue}'`;
+    return `curl -fSL '${url}/install-docker-agent.sh' -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --url '${url}' ${tokenSegment} && rm -f /tmp/pulse-install-docker-agent.sh`;
   };
 
   const getUninstallCommand = () => {
     const url = pulseUrl();
-    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --uninstall`;
+    return `curl -fSL '${url}/install-docker-agent.sh' -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --uninstall && rm -f /tmp/pulse-install-docker-agent.sh`;
   };
 
   const getSystemdService = () => {
@@ -405,8 +376,11 @@ WantedBy=multi-user.target`;
       await MonitoringAPI.allowDockerHostReenroll(hostId);
       notificationStore.success(`Allowed ${label} to report again`, 4000);
     } catch (error) {
-      console.error('Failed to allow Docker host re-enroll', error);
-      const message = error instanceof Error ? error.message : 'Failed to clear the removal block. Confirm your account has docker:manage access.';
+      logger.error('Failed to allow host re-enroll', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to clear the removal block. Confirm your account has docker:manage access.';
       notificationStore.error(message, 8000);
     }
   };
@@ -454,7 +428,7 @@ WantedBy=multi-user.target`;
       notificationStore.success(`Stop command sent to ${displayName}`, 3500);
       setRemoveActionLoading('awaitingCommand');
     } catch (error) {
-      console.error('Failed to queue Docker host stop command', error);
+      logger.error('Failed to queue host stop command', error);
       const message = error instanceof Error ? error.message : 'Failed to send stop command';
       notificationStore.error(message, 8000);
       setRemoveActionLoading(null);
@@ -473,11 +447,11 @@ WantedBy=multi-user.target`;
 
     try {
       await MonitoringAPI.deleteDockerHost(host.id, { hide: true });
-      notificationStore.success(`Hidden Docker host ${displayName}`, 3500);
+      notificationStore.success(`Hidden host ${displayName}`, 3500);
       closeRemoveModal();
     } catch (error) {
-      console.error('Failed to hide Docker host', error);
-      const message = error instanceof Error ? error.message : 'Failed to hide Docker host';
+      logger.error('Failed to hide host', error);
+      const message = error instanceof Error ? error.message : 'Failed to hide host';
       notificationStore.error(message, 8000);
     } finally {
       setRemovingHostId(null);
@@ -495,11 +469,11 @@ WantedBy=multi-user.target`;
 
     try {
       await MonitoringAPI.deleteDockerHost(host.id, { force: true });
-      notificationStore.success(`Removed Docker host ${displayName}`, 3500);
+      notificationStore.success(`Removed host ${displayName}`, 3500);
       closeRemoveModal();
     } catch (error) {
-      console.error('Failed to remove Docker host', error);
-      const message = error instanceof Error ? error.message : 'Failed to remove Docker host';
+      logger.error('Failed to remove host', error);
+      const message = error instanceof Error ? error.message : 'Failed to remove host';
       notificationStore.error(message, 8000);
     } finally {
       setRemovingHostId(null);
@@ -514,13 +488,13 @@ WantedBy=multi-user.target`;
 
     try {
       await MonitoringAPI.deleteDockerHost(hostId, { force: true });
-      notificationStore.success(`Removed Docker host ${displayName}`, 3500);
+      notificationStore.success(`Removed host ${displayName}`, 3500);
       if (hostToRemoveId() === hostId) {
         closeRemoveModal();
       }
     } catch (error) {
-      console.error('Failed to remove Docker host', error);
-      const message = error instanceof Error ? error.message : 'Failed to remove Docker host';
+      logger.error('Failed to remove host', error);
+      const message = error instanceof Error ? error.message : 'Failed to remove host';
       notificationStore.error(message, 8000);
     } finally {
       setRemovingHostId(null);
@@ -534,10 +508,10 @@ WantedBy=multi-user.target`;
 
     try {
       await MonitoringAPI.unhideDockerHost(hostId);
-      notificationStore.success(`Unhidden Docker host ${displayName}`, 3500);
+      notificationStore.success(`Unhidden host ${displayName}`, 3500);
     } catch (error) {
-      console.error('Failed to unhide Docker host', error);
-      const message = error instanceof Error ? error.message : 'Failed to unhide Docker host';
+      logger.error('Failed to unhide host', error);
+      const message = error instanceof Error ? error.message : 'Failed to unhide host';
       notificationStore.error(message, 8000);
     } finally {
       setRemovingHostId(null);
@@ -552,7 +526,7 @@ WantedBy=multi-user.target`;
           class="space-y-4 border border-amber-300 bg-amber-50 text-amber-900 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
         >
           <div class="space-y-1">
-            <h3 class="text-sm font-semibold">Recently removed Docker hosts</h3>
+            <h3 class="text-sm font-semibold">Recently removed container hosts</h3>
             <p class="text-sm text-amber-800 dark:text-amber-200">
               Pulse is currently blocking these hosts because they were explicitly removed. Allow them to re-enroll or
               copy the command below and run it with a token that includes the <code>docker:manage</code> scope.
@@ -603,10 +577,10 @@ WantedBy=multi-user.target`;
       </Show>
 
         <Card padding="lg" class="space-y-5">
-          <div class="space-y-1">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Add a Docker host</h3>
+          <div class="space-y-2">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Enroll a container runtime</h3>
             <p class="text-sm text-gray-600 dark:text-gray-400">
-              Run this command as root on your Docker host to start monitoring.
+              Run the command below on any host running Docker or Podman. The installer will automatically detect your container runtime.
             </p>
           </div>
 
@@ -678,7 +652,7 @@ WantedBy=multi-user.target`;
                   <code>{getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER)}</code>
                 </pre>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                  Run as root on your Docker host. The installer downloads the agent, creates a systemd service, and starts reporting automatically.
+                  The installer downloads the agent, detects your container runtime, configures a systemd service, and starts reporting automatically.
                 </p>
               </div>
             </Show>
@@ -773,13 +747,13 @@ WantedBy=multi-user.target`;
           </details>
         </Card>
 
-      {/* Remove Docker Host Modal */}
+      {/* Remove Container Host Modal */}
       <Show when={showRemoveModal()}>
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
             <div class="space-y-2">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Remove Docker host "{modalDisplayName()}"
+                Remove container host "{modalDisplayName()}"
               </h3>
               <p class="text-sm text-gray-600 dark:text-gray-400">
                 Pulse guides you through uninstalling the agent and safely cleaning up the host entry.
@@ -1161,7 +1135,7 @@ WantedBy=multi-user.target`;
         </div>
       </Show>
 
-      {/* Active Docker Hosts */}
+      {/* Active container hosts */}
       <Card>
         <div class="space-y-4">
           {/* Pending hosts banner */}
@@ -1248,21 +1222,21 @@ WantedBy=multi-user.target`;
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                Reporting Docker hosts ({dockerHosts().length})
+                Reporting container hosts ({dockerHosts().length})
               </h3>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Use this list to enroll or retire agents. For live health and troubleshooting, open the Docker monitoring view.
+                Use this list to enroll or retire agents. For live health and troubleshooting, open the container monitoring view.
               </p>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               <a
-                href="/docker"
+                href="/containers"
                 class="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-600/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
               >
                 <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
-                Open Docker monitoring
+                Open container monitoring
               </a>
               <Show when={hiddenCount() > 0}>
                 <button
@@ -1291,7 +1265,7 @@ WantedBy=multi-user.target`;
                   </svg>
                 </div>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  No Docker agents are currently reporting.
+                  No container agents are currently reporting.
                 </p>
                 <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
                   Click "Show deployment instructions" above to get started.
@@ -1305,7 +1279,7 @@ WantedBy=multi-user.target`;
                   <tr class="border-b border-gray-200 dark:border-gray-700">
                     <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Host</th>
                     <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Status</th>
-                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Agent &amp; Docker</th>
+                    <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Agent &amp; runtime</th>
                     <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Last Seen</th>
                     <th class="text-right py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Actions</th>
                   </tr>
@@ -1317,6 +1291,7 @@ WantedBy=multi-user.target`;
                       const displayName = getDisplayName(host);
                       const commandStatus = host.command?.status ?? null;
                       const removalStatusInfo = getRemovalStatusInfo(host);
+                      const runtimeInfo = resolveHostRuntime(host);
                       const commandInProgress =
                         commandStatus === 'queued' ||
                         commandStatus === 'dispatched' ||
@@ -1339,6 +1314,14 @@ WantedBy=multi-user.target`;
                           <td class="py-3 px-4 align-top">
                             <div class="font-medium text-gray-900 dark:text-gray-100">{displayName}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">{host.hostname}</div>
+                            <div class="mt-1 text-[10px] uppercase tracking-wide">
+                              <span
+                                class={`inline-flex items-center rounded-full px-2 py-0.5 font-semibold ${runtimeInfo.badgeClass}`}
+                                title={runtimeInfo.raw || runtimeInfo.label}
+                              >
+                                {runtimeInfo.label}
+                              </span>
+                            </div>
                             <Show when={host.os || host.architecture}>
                               <div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
                                 {host.os}
@@ -1396,16 +1379,19 @@ WantedBy=multi-user.target`;
                               </Show>
                             </div>
                             <Show when={removalStatusInfo}>
-                              {(info) => (
-                                <div class={`mt-2 text-xs ${removalTextClassMap[info.tone]}`}>
-                                  {info.label}
-                                </div>
-                              )}
+                              {(info) => {
+                                const details = info();
+                                return (
+                                  <div class={`mt-2 text-xs ${removalTextClassMap[details.tone]}`}>
+                                    {details.label}
+                                  </div>
+                                );
+                              }}
                             </Show>
                          </td>
                           <td class="py-3 px-4 align-top">
                             <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {host.dockerVersion ? `Docker ${host.dockerVersion}` : 'Docker version unavailable'}
+                              {describeRuntime(host)}
                             </div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">
                               Agent {host.agentVersion ? `v${host.agentVersion}` : 'not reporting'}

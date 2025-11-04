@@ -20,10 +20,3 @@ export function isGuestRunning(
   if (!parentNodeOnline) return false;
   return guest.status === RUNNING_STATUS;
 }
-
-export function shouldDisplayGuestMetrics(
-  guest: Partial<VM | Container> | undefined | null,
-  parentNodeOnline = true,
-): boolean {
-  return isGuestRunning(guest, parentNodeOnline);
-}

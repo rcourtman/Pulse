@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -23,12 +23,11 @@ var (
 	devProxyOnce sync.Once
 	devProxy     *httputil.ReverseProxy
 	devProxyErr  error
-	devProxyURL  string
 )
 
 func getFrontendDevProxy() (*httputil.ReverseProxy, error) {
 	devProxyOnce.Do(func() {
-		devURL := strings.TrimSpace(os.Getenv("FRONTEND_DEV_SERVER"))
+		devURL := utils.GetenvTrim("FRONTEND_DEV_SERVER")
 		if devURL == "" {
 			return
 		}
@@ -45,8 +44,7 @@ func getFrontendDevProxy() (*httputil.ReverseProxy, error) {
 			w.WriteHeader(http.StatusBadGateway)
 		}
 		devProxy = proxy
-		devProxyURL = target.String()
-		log.Warn().Str("frontend_dev_server", devProxyURL).Msg("Serving frontend via development proxy")
+		log.Warn().Str("frontend_dev_server", target.String()).Msg("Serving frontend via development proxy")
 	})
 
 	if devProxyErr != nil {
@@ -57,7 +55,7 @@ func getFrontendDevProxy() (*httputil.ReverseProxy, error) {
 
 // getFrontendFS returns the embedded frontend filesystem
 func getFrontendFS() (http.FileSystem, error) {
-	if dir := strings.TrimSpace(os.Getenv("PULSE_FRONTEND_DIR")); dir != "" {
+	if dir := utils.GetenvTrim("PULSE_FRONTEND_DIR"); dir != "" {
 		log.Warn().Str("frontend_dir", dir).Msg("Serving frontend from filesystem override")
 		return http.Dir(dir), nil
 	}

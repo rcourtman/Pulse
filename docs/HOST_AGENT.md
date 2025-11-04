@@ -3,14 +3,14 @@
 The Pulse host agent extends monitoring to standalone servers that do not expose
 Proxmox or Docker APIs. With it you can surface uptime, OS metadata, CPU load,
 memory/disk utilisation, and connection health for any Linux, macOS, or Windows
-machine alongside the rest of your infrastructure. Beginning with the upcoming
-release the installer now handshakes with Pulse in real time so you can confirm
-registration directly from the UI and receive host-agent alerts alongside your
-existing Docker/Proxmox notifications.
+machine alongside the rest of your infrastructure. Starting in v4.26.0 the
+installer handshakes with Pulse in real time so you can confirm registration
+from the UI and receive host-agent alerts alongside your existing
+Docker/Proxmox notifications.
 
 ## Prerequisites
 
-- Pulse `main` (or a release that includes `/api/agents/host/report`)
+- Pulse v4.26.0 or newer (host agent reporting shipped with `/api/agents/host/report`)
 - An API token with the `host-agent:report` scope (create under **Settings → Security**)
 - Outbound HTTP/HTTPS connectivity from the host back to Pulse
 

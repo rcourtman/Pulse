@@ -17,12 +17,12 @@ import type { JSX } from 'solid-js';
 import { Router, Route, Navigate, useNavigate, useLocation } from '@solidjs/router';
 import { getGlobalWebSocketStore } from './stores/websocket-global';
 import { ToastContainer } from './components/Toast/Toast';
-import NotificationContainer from './components/NotificationContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SecurityWarning } from './components/SecurityWarning';
 import { Login } from './components/Login';
 import { logger } from './utils/logger';
-import { POLLING_INTERVALS, STORAGE_KEYS } from './constants';
+import { POLLING_INTERVALS } from './constants';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
 import { apiFetch } from './utils/apiClient';
@@ -30,15 +30,14 @@ import { SettingsAPI } from './api/settings';
 import { eventBus } from './stores/events';
 import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
-import { LegacySSHBanner } from './components/LegacySSHBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
-import { DockerIcon } from '@/components/icons/DockerIcon';
-import { HostsIcon } from '@/components/icons/HostsIcon';
-import { AlertsIcon } from '@/components/icons/AlertsIcon';
-import { SettingsGearIcon } from '@/components/icons/SettingsGearIcon';
+import BoxesIcon from 'lucide-solid/icons/boxes';
+import MonitorIcon from 'lucide-solid/icons/monitor';
+import BellIcon from 'lucide-solid/icons/bell';
+import SettingsIcon from 'lucide-solid/icons/settings';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
 
@@ -138,7 +137,7 @@ function App() {
 
     loaders.forEach((load) => {
       void load().catch((error) => {
-        console.warn('[App] Failed to preload route module', error);
+        logger.warn('Preloading route module failed', error);
       });
     });
   };
@@ -264,7 +263,7 @@ function App() {
         updateStore.checkForUpdates();
       })
       .catch((error) => {
-        console.error('Failed to load version:', error);
+        logger.error('Failed to load version', error);
       });
   });
 
@@ -362,13 +361,13 @@ function App() {
 
   // Check auth on mount
   onMount(async () => {
-    console.log('[App] Starting auth check...');
+    logger.debug('[App] Starting auth check...');
 
     // Check if we just logged out - if so, always show login page
     const justLoggedOut = localStorage.getItem('just_logged_out');
     if (justLoggedOut) {
       localStorage.removeItem('just_logged_out');
-      console.log('[App] Just logged out, showing login page');
+      logger.debug('[App] User logged out, showing login page');
       setHasAuth(true); // Force showing login instead of setup
       setNeedsAuth(true);
       setIsLoading(false);
@@ -380,14 +379,14 @@ function App() {
       const securityRes = await apiFetch('/api/security/status');
 
       if (securityRes.status === 401) {
-        console.warn(
+        logger.warn(
           '[App] Security status request returned 401. Clearing stored credentials and showing login.',
         );
         try {
           const { clearAuth } = await import('./utils/apiClient');
           clearAuth();
         } catch (clearError) {
-          console.warn('[App] Failed to clear stored auth after 401:', clearError);
+          logger.warn('[App] Failed to clear stored auth after 401', clearError);
         }
         setHasAuth(false);
         setNeedsAuth(true);
@@ -399,13 +398,13 @@ function App() {
       }
 
       const securityData = await securityRes.json();
-      console.log('[App] Security status:', securityData);
+      logger.debug('[App] Security status fetched', securityData);
 
       // Detect legacy DISABLE_AUTH flag (now ignored) so we can surface a warning
       if (securityData.deprecatedDisableAuth === true) {
-        console.warn(
-          '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
-        );
+          logger.warn(
+            '[App] Legacy DISABLE_AUTH flag detected; authentication remains enabled. Remove the flag and restart Pulse to silence this warning.',
+          );
       }
 
       const authConfigured = securityData.hasAuthentication || false;
@@ -413,7 +412,7 @@ function App() {
 
       // Check for proxy auth
       if (securityData.hasProxyAuth && securityData.proxyAuthUsername) {
-        console.log('[App] Proxy auth detected, user:', securityData.proxyAuthUsername);
+        logger.info('[App] Proxy auth detected', { user: securityData.proxyAuthUsername });
         setProxyAuthInfo({
           username: securityData.proxyAuthUsername,
           logoutURL: securityData.proxyAuthLogoutURL,
@@ -439,7 +438,7 @@ function App() {
             }
             setHasLoadedServerTheme(true);
           } catch (error) {
-            console.error('Failed to load theme from server:', error);
+            logger.error('Failed to load theme from server', error);
           }
         }
 
@@ -450,7 +449,7 @@ function App() {
             // Check for updates after loading version info (non-blocking)
             updateStore.checkForUpdates();
           })
-          .catch((error) => console.error('Failed to load version:', error));
+          .catch((error) => logger.error('Failed to load version', error));
 
         setIsLoading(false);
         return;
@@ -458,7 +457,7 @@ function App() {
 
       // Check for OIDC session
       if (securityData.oidcEnabled && securityData.oidcUsername) {
-        console.log('[App] OIDC session detected, user:', securityData.oidcUsername);
+        logger.info('[App] OIDC session detected', { user: securityData.oidcUsername });
         setHasAuth(true); // OIDC is enabled, so auth is configured
         setProxyAuthInfo({
           username: securityData.oidcUsername,
@@ -485,7 +484,7 @@ function App() {
             }
             setHasLoadedServerTheme(true);
           } catch (error) {
-            console.error('Failed to load theme from server:', error);
+            logger.error('Failed to load theme from server', error);
           }
         }
 
@@ -496,7 +495,7 @@ function App() {
             // Check for updates after loading version info (non-blocking)
             updateStore.checkForUpdates();
           })
-          .catch((error) => console.error('Failed to load version:', error));
+          .catch((error) => logger.error('Failed to load version', error));
 
         setIsLoading(false);
         return;
@@ -504,7 +503,7 @@ function App() {
 
       // If no auth is configured, show FirstRunSetup
       if (!authConfigured) {
-        console.log('[App] No auth configured, showing Login/FirstRunSetup');
+        logger.info('[App] No auth configured, showing Login/FirstRunSetup');
         setNeedsAuth(true); // This will show the Login component which shows FirstRunSetup
         setIsLoading(false);
         return;
@@ -542,7 +541,7 @@ function App() {
             }
             setHasLoadedServerTheme(true);
           } catch (error) {
-            console.error('Failed to load theme from server:', error);
+            logger.error('Failed to load theme from server', error);
           }
         } else {
           // We have a local preference, just mark that we've checked the server
@@ -550,12 +549,12 @@ function App() {
         }
       }
     } catch (error) {
-      console.error('Auth check error:', error);
+      logger.error('Auth check error', error);
       try {
         const { clearAuth } = await import('./utils/apiClient');
         clearAuth();
       } catch (clearError) {
-        console.warn('[App] Failed to clear stored auth after auth check error:', clearError);
+        logger.warn('[App] Failed to clear stored auth after auth check error', clearError);
       }
       setHasAuth(false);
       setNeedsAuth(true);
@@ -587,13 +586,13 @@ function App() {
       });
 
       if (!response.ok) {
-        console.error('Logout failed:', response.status);
+        logger.error('Logout failed', { status: response.status });
       }
 
       // Clear auth from apiClient
       clearAuth();
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error', error);
     }
 
     // Clear all local storage EXCEPT theme preference and logout flag
@@ -645,7 +644,6 @@ function App() {
                   <SecurityWarning />
                   <DemoBanner />
                   <UpdateBanner />
-                  <LegacySSHBanner />
                   <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6">
                     <AppLayout
                       connected={connected}
@@ -663,7 +661,6 @@ function App() {
                     </AppLayout>
                   </div>
                   <ToastContainer />
-                  <NotificationContainer />
                   <TokenRevealDialog />
                   <TooltipRoot />
                 </DarkModeContext.Provider>
@@ -766,12 +763,11 @@ function AppLayout(props: {
 }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const PLATFORM_SEEN_STORAGE_KEY = 'pulse-platforms-seen';
 
   const readSeenPlatforms = (): Record<string, boolean> => {
     if (typeof window === 'undefined') return {};
     try {
-      const stored = window.localStorage.getItem(PLATFORM_SEEN_STORAGE_KEY);
+      const stored = window.localStorage.getItem(STORAGE_KEYS.PLATFORMS_SEEN);
       if (stored) {
         const parsed = JSON.parse(stored) as Record<string, boolean>;
         if (parsed && typeof parsed === 'object') {
@@ -779,7 +775,7 @@ function AppLayout(props: {
         }
       }
     } catch (error) {
-      console.warn('Failed to parse stored platform visibility preferences', error);
+      logger.warn('Failed to parse stored platform visibility preferences', error);
     }
     return {};
   };
@@ -789,9 +785,9 @@ function AppLayout(props: {
   const persistSeenPlatforms = (map: Record<string, boolean>) => {
     if (typeof window === 'undefined') return;
     try {
-      window.localStorage.setItem(PLATFORM_SEEN_STORAGE_KEY, JSON.stringify(map));
+      window.localStorage.setItem(STORAGE_KEYS.PLATFORMS_SEEN, JSON.stringify(map));
     } catch (error) {
-      console.warn('Failed to persist platform visibility preferences', error);
+      logger.warn('Failed to persist platform visibility preferences', error);
     }
   };
 
@@ -867,7 +863,7 @@ function AppLayout(props: {
         enabled: hasDockerHosts() || !!seenPlatforms()['docker'],
         live: hasDockerHosts(),
         icon: (
-          <DockerIcon class="w-4 h-4 shrink-0" />
+          <BoxesIcon class="w-4 h-4 shrink-0" />
         ),
       },
       {
@@ -879,7 +875,7 @@ function AppLayout(props: {
         enabled: hasHosts() || !!seenPlatforms()['hosts'],
         live: hasHosts(),
         icon: (
-          <HostsIcon class="w-4 h-4 shrink-0" />
+          <MonitorIcon class="w-4 h-4 shrink-0" />
         ),
       },
     ];
@@ -910,7 +906,7 @@ function AppLayout(props: {
         badge: null as 'update' | null,
         count: activeAlertCount,
         breakdown,
-        icon: <AlertsIcon class="w-4 h-4 shrink-0" />,
+        icon: <BellIcon class="w-4 h-4 shrink-0" />,
       },
       {
         id: 'settings' as const,
@@ -920,7 +916,7 @@ function AppLayout(props: {
         badge: updateStore.isUpdateVisible() ? ('update' as const) : null,
         count: undefined,
         breakdown: undefined,
-        icon: <SettingsGearIcon class="w-4 h-4 shrink-0" />,
+        icon: <SettingsIcon class="w-4 h-4 shrink-0" />,
       },
     ];
   });

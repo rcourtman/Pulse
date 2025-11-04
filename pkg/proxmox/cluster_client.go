@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1071,42 +1070,6 @@ func (cc *ClusterClient) GetZFSPoolsWithDetails(ctx context.Context, node string
 		return nil
 	})
 	return result, err
-}
-
-// GetClusterHealthInfo returns detailed health information about the cluster
-func (cc *ClusterClient) GetClusterHealthInfo() models.ClusterHealth {
-	cc.mu.RLock()
-	defer cc.mu.RUnlock()
-
-	health := models.ClusterHealth{
-		Name:         cc.name,
-		TotalNodes:   len(cc.endpoints),
-		OnlineNodes:  0,
-		OfflineNodes: 0,
-		NodeStatuses: make([]models.ClusterNodeStatus, 0, len(cc.endpoints)),
-	}
-
-	for endpoint, isHealthy := range cc.nodeHealth {
-		status := models.ClusterNodeStatus{
-			Endpoint: endpoint,
-			Online:   isHealthy,
-		}
-
-		if isHealthy {
-			health.OnlineNodes++
-		} else {
-			health.OfflineNodes++
-		}
-
-		health.NodeStatuses = append(health.NodeStatuses, status)
-	}
-
-	// Calculate overall health percentage
-	if health.TotalNodes > 0 {
-		health.HealthPercentage = float64(health.OnlineNodes) / float64(health.TotalNodes) * 100
-	}
-
-	return health
 }
 
 // Helper to check if error is auth-related

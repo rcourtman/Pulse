@@ -21,6 +21,7 @@ import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container, DockerHost, DockerContainer, Host } from '@/types/api';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { logger } from '@/utils/logger';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
@@ -349,7 +350,7 @@ export function Alerts() {
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
-          console.error('Failed to refresh alerts after activation', error);
+          logger.error('Failed to refresh alerts after activation', error);
         }
       } else {
         showError('Unable to activate alerts. Please try again.');
@@ -371,13 +372,13 @@ export function Alerts() {
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
-          console.error('Failed to refresh alerts after deactivation', error);
+          logger.error('Failed to refresh alerts after deactivation', error);
         }
       } else {
         showError('Unable to deactivate alerts. Please try again.');
       }
     } catch (error) {
-      console.error('Deactivate alerts failed', error);
+      logger.error('Deactivate alerts failed', error);
       showError('Unable to deactivate alerts. Please try again.');
     } finally {
       setIsSwitchingActivation(false);
@@ -550,7 +551,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
             id: key,
             name: dockerHost.displayName?.trim() || dockerHost.hostname || dockerHost.id,
             type: 'dockerHost',
-            resourceType: 'Docker Host',
+            resourceType: 'Container Host',
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
           });
@@ -566,7 +567,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
             id: key,
             name: containerName,
             type: 'dockerContainer',
-            resourceType: 'Docker Container',
+            resourceType: 'Container',
             node: host.hostname,
             instance: host.displayName,
             disabled: thresholds.disabled || false,
@@ -592,7 +593,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               id: key,
               name: containerId,
               type: 'dockerContainer',
-              resourceType: 'Docker Container',
+              resourceType: 'Container',
               node: hostId,
               disabled: thresholds.disabled || false,
               disableConnectivity: thresholds.disableConnectivity || false,
@@ -611,7 +612,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
             id: hostId || key,
             name: hostId || key,
             type: 'dockerHost',
-            resourceType: 'Docker Host',
+            resourceType: 'Container Host',
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
           });
@@ -1069,7 +1070,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           rateLimit: 60,
         });
       } catch (emailErr) {
-        console.error('Failed to load email configuration:', emailErr);
+        logger.error('Failed to load email configuration:', emailErr);
       }
 
       try {
@@ -1090,14 +1091,14 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           skipTlsVerify: Boolean(appriseData.skipTlsVerify),
         });
       } catch (appriseErr) {
-        console.error('Failed to load Apprise configuration:', appriseErr);
+        logger.error('Failed to load Apprise configuration:', appriseErr);
       }
 
       if (options.notify) {
         showSuccess('Changes discarded');
       }
     } catch (err) {
-      console.error('Failed to load alert configuration:', err);
+      logger.error('Failed to load alert configuration:', err);
       if (options.notify) {
         showError('Failed to reload configuration');
       }
@@ -1135,7 +1136,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           });
         })
         .catch((err) => {
-          console.error('Failed to reload email configuration:', err);
+          logger.error('Failed to reload email configuration:', err);
         });
 
       NotificationsAPI.getAppriseConfig()
@@ -1157,7 +1158,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           });
         })
         .catch((err) => {
-          console.error('Failed to reload Apprise configuration:', err);
+          logger.error('Failed to reload Apprise configuration:', err);
         });
     }
   });
@@ -1630,7 +1631,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                     setHasUnsavedChanges(false);
                     showSuccess('Configuration saved successfully!');
                   } catch (err) {
-                    console.error('Failed to save configuration:', err);
+                    logger.error('Failed to save configuration:', err);
                     showError(err instanceof Error ? err.message : 'Failed to save configuration');
                   }
                 }}
@@ -2111,7 +2112,7 @@ function OverviewTab(props: {
                         );
                       }
                     } catch (error) {
-                      console.error('Bulk acknowledge failed', error);
+                      logger.error('Bulk acknowledge failed', error);
                       showError('Failed to acknowledge alerts');
                     } finally {
                       setBulkAckProcessing(false);
@@ -2263,7 +2264,7 @@ function OverviewTab(props: {
                               showSuccess('Alert acknowledged');
                             }
                           } catch (err) {
-                            console.error(
+                            logger.error(
                               `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
                               err,
                             );
@@ -2312,6 +2313,7 @@ interface ThresholdsTabProps {
   dockerDefaults: () => {
     cpu: number;
     memory: number;
+    disk: number;
     restartCount: number;
     restartWindow: number;
     memoryWarnPct: number;
@@ -2357,6 +2359,7 @@ interface ThresholdsTabProps {
       | {
           cpu: number;
           memory: number;
+          disk: number;
           restartCount: number;
           restartWindow: number;
           memoryWarnPct: number;
@@ -2367,6 +2370,7 @@ interface ThresholdsTabProps {
       | ((prev: {
           cpu: number;
           memory: number;
+          disk: number;
           restartCount: number;
           restartWindow: number;
           memoryWarnPct: number;
@@ -2376,6 +2380,7 @@ interface ThresholdsTabProps {
         }) => {
           cpu: number;
           memory: number;
+          disk: number;
           restartCount: number;
           restartWindow: number;
           memoryWarnPct: number;
@@ -2591,7 +2596,7 @@ function DestinationsTab(props: DestinationsTabProps) {
         })),
       );
     } catch (err) {
-      console.error('Failed to load webhooks:', err);
+      logger.error('Failed to load webhooks:', err);
     }
   });
 
@@ -2606,7 +2611,7 @@ function DestinationsTab(props: DestinationsTabProps) {
       });
       showSuccess('Test email sent successfully!', 'Check your inbox.');
     } catch (err) {
-      console.error('Failed to send test email:', err);
+      logger.error('Failed to send test email:', err);
       showError('Failed to send test email', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setTestingEmail(false);
@@ -2862,7 +2867,7 @@ mailto://alerts@example.com`}
               setWebhooks([...webhooks(), created]);
               showSuccess('Webhook added successfully');
             } catch (err) {
-              console.error('Failed to add webhook:', err);
+              logger.error('Failed to add webhook:', err);
               showError(err instanceof Error ? err.message : 'Failed to add webhook');
             }
           }}
@@ -2872,7 +2877,7 @@ mailto://alerts@example.com`}
               setWebhooks(webhooks().map((w) => (w.id === webhook.id ? updated : w)));
               showSuccess('Webhook updated successfully');
             } catch (err) {
-              console.error('Failed to update webhook:', err);
+              logger.error('Failed to update webhook:', err);
               showError(err instanceof Error ? err.message : 'Failed to update webhook');
             }
           }}
@@ -2882,7 +2887,7 @@ mailto://alerts@example.com`}
               setWebhooks(webhooks().filter((w) => w.id !== id));
               showSuccess('Webhook deleted successfully');
             } catch (err) {
-              console.error('Failed to delete webhook:', err);
+              logger.error('Failed to delete webhook:', err);
               showError(err instanceof Error ? err.message : 'Failed to delete webhook');
             }
           }}
@@ -3746,7 +3751,7 @@ function HistoryTab() {
       }
     } catch (err) {
       if (requestId === fetchRequestId) {
-        console.error('Failed to load alert history:', err);
+        logger.error('Failed to load alert history:', err);
       }
     } finally {
       if (requestId === fetchRequestId) {
@@ -3917,13 +3922,13 @@ function HistoryTab() {
         host.agentId === resourceName ||
         host.id === resourceName,
     );
-    if (dockerHost) return 'Docker Host';
+    if (dockerHost) return 'Container Host';
 
     // Docker containers (via known hosts)
     const dockerContainer = state.dockerHosts
       ?.flatMap((host) => host.containers || [])
       .find((c) => c.name === resourceName || c.id === resourceName);
-    if (dockerContainer) return 'Docker Container';
+    if (dockerContainer) return 'Container';
 
     // PBS instances
     const pbsInstance = state.pbs?.find(
@@ -4776,7 +4781,7 @@ function HistoryTab() {
                       setAlertHistory([]);
                       // Alert history cleared successfully
                     } catch (err) {
-                      console.error('Error clearing alert history:', err);
+                      logger.error('Error clearing alert history:', err);
                       showError(
                         'Error clearing alert history',
                         'Please check your connection and try again.',

@@ -239,10 +239,9 @@ func runServer() {
 			// Reload system.json
 			persistence := config.NewConfigPersistence(cfg.DataPath)
 			if persistence != nil {
-				if sysConfig, err := persistence.LoadSystemSettings(); err == nil {
+				if _, err := persistence.LoadSystemSettings(); err == nil {
 					// Note: Polling interval is now hardcoded to 10s, no longer configurable
 					// Could reload other system.json settings here
-					_ = sysConfig // Avoid unused variable warning
 					log.Info().Msg("Reloaded system configuration")
 				} else {
 					log.Error().Err(err).Msg("Failed to reload system.json")

@@ -199,6 +199,8 @@ type DockerHost struct {
 	OS                string                   `json:"os,omitempty"`
 	KernelVersion     string                   `json:"kernelVersion,omitempty"`
 	Architecture      string                   `json:"architecture,omitempty"`
+	Runtime           string                   `json:"runtime,omitempty"`
+	RuntimeVersion    string                   `json:"runtimeVersion,omitempty"`
 	DockerVersion     string                   `json:"dockerVersion,omitempty"`
 	CPUs              int                      `json:"cpus"`
 	TotalMemoryBytes  int64                    `json:"totalMemoryBytes"`
@@ -258,6 +260,21 @@ type DockerContainer struct {
 	RootFilesystemBytes int64                        `json:"rootFilesystemBytes,omitempty"`
 	BlockIO             *DockerContainerBlockIO      `json:"blockIo,omitempty"`
 	Mounts              []DockerContainerMount       `json:"mounts,omitempty"`
+	Podman              *DockerPodmanContainer       `json:"podman,omitempty"`
+}
+
+// DockerPodmanContainer captures Podman-specific annotations for a container.
+type DockerPodmanContainer struct {
+	PodName           string `json:"podName,omitempty"`
+	PodID             string `json:"podId,omitempty"`
+	Infra             bool   `json:"infra,omitempty"`
+	ComposeProject    string `json:"composeProject,omitempty"`
+	ComposeService    string `json:"composeService,omitempty"`
+	ComposeWorkdir    string `json:"composeWorkdir,omitempty"`
+	ComposeConfigHash string `json:"composeConfigHash,omitempty"`
+	AutoUpdatePolicy  string `json:"autoUpdatePolicy,omitempty"`
+	AutoUpdateRestart string `json:"autoUpdateRestart,omitempty"`
+	UserNamespace     string `json:"userNamespace,omitempty"`
 }
 
 // DockerContainerPort describes an exposed container port mapping.

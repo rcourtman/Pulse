@@ -2,7 +2,10 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,6 +14,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 )
+
+// CSRFToken represents a hashed token with expiration metadata.
+type CSRFToken struct {
+	Hash    string
+	Expires time.Time
+}
 
 // CSRFTokenStore handles persistent CSRF token storage
 type CSRFTokenStore struct {
@@ -21,12 +30,26 @@ type CSRFTokenStore struct {
 	stopChan   chan bool
 }
 
+func csrfSessionKey(sessionID string) string {
+	return sessionHash(sessionID)
+}
+
+func csrfTokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
 // CSRFTokenData represents CSRF token data
 type CSRFTokenData struct {
+	TokenHash  string    `json:"token_hash"`
+	SessionKey string    `json:"session_key"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+type legacyCSRFTokenData struct {
 	Token     string    `json:"token"`
 	SessionID string    `json:"session_id"`
 	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
 var (
@@ -94,8 +117,9 @@ func (c *CSRFTokenStore) GenerateCSRFToken(sessionID string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.tokens[sessionID] = &CSRFToken{
-		Token:   token,
+	key := csrfSessionKey(sessionID)
+	c.tokens[key] = &CSRFToken{
+		Hash:    csrfTokenHash(token),
 		Expires: time.Now().Add(4 * time.Hour),
 	}
 
@@ -110,17 +134,8 @@ func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	csrfToken, exists := c.tokens[sessionID]
+	csrfToken, exists := c.tokens[csrfSessionKey(sessionID)]
 	if !exists {
-		// No CSRF token for this session - could be server restart
-		// Generate a new one on the fly if session is valid
-		if ValidateSession(sessionID) {
-			c.mu.RUnlock()
-			newToken := c.GenerateCSRFToken(sessionID)
-			c.mu.RLock()
-			// Allow this request but with new token
-			return newToken != ""
-		}
 		return false
 	}
 
@@ -128,20 +143,7 @@ func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
 		return false
 	}
 
-	return csrfToken.Token == token
-}
-
-// GetCSRFToken returns the CSRF token for a session if it exists
-func (c *CSRFTokenStore) GetCSRFToken(sessionID string) string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	csrfToken, exists := c.tokens[sessionID]
-	if !exists || time.Now().After(csrfToken.Expires) {
-		return ""
-	}
-
-	return csrfToken.Token
+	return subtle.ConstantTimeCompare([]byte(csrfToken.Hash), []byte(csrfTokenHash(token))) == 1
 }
 
 // ExtendCSRFToken extends the expiration of a CSRF token
@@ -149,7 +151,8 @@ func (c *CSRFTokenStore) ExtendCSRFToken(sessionID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if csrfToken, exists := c.tokens[sessionID]; exists {
+	key := csrfSessionKey(sessionID)
+	if csrfToken, exists := c.tokens[key]; exists {
 		csrfToken.Expires = time.Now().Add(4 * time.Hour)
 		c.saveUnsafe()
 	}
@@ -160,7 +163,7 @@ func (c *CSRFTokenStore) DeleteCSRFToken(sessionID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	delete(c.tokens, sessionID)
+	delete(c.tokens, csrfSessionKey(sessionID))
 	c.saveUnsafe()
 }
 
@@ -170,10 +173,10 @@ func (c *CSRFTokenStore) cleanup() {
 	defer c.mu.Unlock()
 
 	now := time.Now()
-	for sessionID, token := range c.tokens {
+	for sessionKey, token := range c.tokens {
 		if now.After(token.Expires) {
-			delete(c.tokens, sessionID)
-			log.Debug().Str("session", sessionID[:8]+"...").Msg("Cleaned up expired CSRF token")
+			delete(c.tokens, sessionKey)
+			log.Debug().Str("sessionKey", sessionKey[:8]+"...").Msg("Cleaned up expired CSRF token")
 		}
 	}
 }
@@ -196,18 +199,17 @@ func (c *CSRFTokenStore) saveUnsafe() {
 	}
 
 	// Convert to serializable format
-	data := make(map[string]*CSRFTokenData)
-	for sessionID, token := range c.tokens {
-		data[sessionID] = &CSRFTokenData{
-			Token:     token.Token,
-			SessionID: sessionID,
-			ExpiresAt: token.Expires,
-			CreatedAt: time.Now(),
-		}
+	persisted := make([]*CSRFTokenData, 0, len(c.tokens))
+	for sessionKey, token := range c.tokens {
+		persisted = append(persisted, &CSRFTokenData{
+			TokenHash:  token.Hash,
+			SessionKey: sessionKey,
+			ExpiresAt:  token.Expires,
+		})
 	}
 
 	// Marshal tokens
-	jsonData, err := json.Marshal(data)
+	jsonData, err := json.Marshal(persisted)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal CSRF tokens")
 		return
@@ -241,34 +243,48 @@ func (c *CSRFTokenStore) load() {
 		return
 	}
 
-	var tokens map[string]*CSRFTokenData
-	if err := json.Unmarshal(data, &tokens); err != nil {
+	c.tokens = make(map[string]*CSRFToken)
+
+	var current []*CSRFTokenData
+	if err := json.Unmarshal(data, &current); err == nil {
+		now := time.Now()
+		for _, record := range current {
+			if record == nil || now.After(record.ExpiresAt) {
+				continue
+			}
+			c.tokens[record.SessionKey] = &CSRFToken{
+				Hash:    record.TokenHash,
+				Expires: record.ExpiresAt,
+			}
+		}
+		log.Info().
+			Int("loaded", len(c.tokens)).
+			Int("total", len(current)).
+			Msg("CSRF tokens loaded from disk (hashed format)")
+		return
+	}
+
+	var legacy map[string]*legacyCSRFTokenData
+	if err := json.Unmarshal(data, &legacy); err != nil {
 		log.Error().Err(err).Msg("Failed to unmarshal CSRF tokens")
 		return
 	}
 
-	// Filter out expired tokens and convert to internal format
 	now := time.Now()
 	loaded := 0
-	for sessionID, tokenData := range tokens {
+	for sessionID, tokenData := range legacy {
 		if now.Before(tokenData.ExpiresAt) {
-			c.tokens[sessionID] = &CSRFToken{
-				Token:   tokenData.Token,
+			key := csrfSessionKey(sessionID)
+			c.tokens[key] = &CSRFToken{
+				Hash:    csrfTokenHash(tokenData.Token),
 				Expires: tokenData.ExpiresAt,
 			}
 			loaded++
 		}
 	}
 
-	log.Info().Int("loaded", loaded).Int("total", len(tokens)).Msg("CSRF tokens loaded from disk")
-}
-
-// ClearAll removes all CSRF tokens (use carefully)
-func (c *CSRFTokenStore) ClearAll() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.tokens = make(map[string]*CSRFToken)
-	c.saveUnsafe()
-	log.Info().Msg("All CSRF tokens cleared")
+	log.Info().
+		Int("loaded", loaded).
+		Int("total", len(legacy)).
+		Msg("CSRF tokens loaded from disk (legacy format migrated)")
 }

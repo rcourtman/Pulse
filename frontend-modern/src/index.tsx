@@ -3,8 +3,6 @@ import { render } from 'solid-js/web';
 import './index.css';
 import './styles/animations.css';
 import App from './App';
-// import App from './Test';
-// import App from './SimpleApp';
 import { logger } from './utils/logger';
 
 const root = document.getElementById('root');
@@ -15,17 +13,15 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   );
 }
 
-// Initialize app with logging
-console.log('[Index] Starting Pulse app...');
 logger.info('Pulse monitoring dashboard starting');
 
 if (root) {
-  console.log('[Index] Root element found, rendering App...');
+  logger.debug('[Index] Root element found, rendering App...');
   try {
     render(() => <App />, root);
-    console.log('[Index] Render call completed');
+    logger.debug('[Index] Render call completed');
   } catch (error) {
-    console.error('[Index] Render error:', error);
+    logger.error('[Index] Render error', error);
     // Show error on page
     root.innerHTML = `<div style="color: red; padding: 20px;">
       <h1>Error Loading App</h1>
@@ -33,5 +29,5 @@ if (root) {
     </div>`;
   }
 } else {
-  console.error('[Index] Root element not found!');
+  logger.error('[Index] Root element not found', new Error('root element missing'));
 }

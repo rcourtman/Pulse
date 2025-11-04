@@ -4,19 +4,18 @@ import { useWebSocket } from '@/App';
 import type { Host, HostLookupResponse } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { formatBytes, formatRelativeTime, formatUptime, formatAbsoluteTime } from '@/utils/format';
+import { copyToClipboard } from '@/utils/clipboard';
+import { getPulseBaseUrl } from '@/utils/url';
 import { notificationStore } from '@/stores/notifications';
 import { HOST_AGENT_SCOPE } from '@/constants/apiScopes';
 import type { SecurityStatus } from '@/types/config';
 import type { APITokenRecord } from '@/api/security';
 import { SecurityAPI } from '@/api/security';
 import { MonitoringAPI } from '@/api/monitoring';
+import { logger } from '@/utils/logger';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
-const pulseUrl = () => {
-  if (typeof window === 'undefined') return 'http://localhost:7655';
-  const { protocol, hostname, port } = window.location;
-  return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
-};
+const pulseUrl = () => getPulseBaseUrl();
 
 const buildDefaultTokenName = () => {
   const now = new Date();
@@ -283,7 +282,7 @@ export const HostAgents: Component = () => {
       notificationStore.success(`Host "${displayName}" removed`, 4000);
       closeRemoveModal();
     } catch (error) {
-      console.error('Failed to remove host agent', error);
+      logger.error('Failed to remove host agent', error);
       const message = error instanceof Error ? error.message : 'Failed to remove host. Please try again.';
       notificationStore.error(message, 6000);
     } finally {
@@ -402,7 +401,7 @@ export const HostAgents: Component = () => {
       } catch (err) {
         if (!hasLoggedSecurityStatusError) {
           hasLoggedSecurityStatusError = true;
-          console.error('Failed to load security status', err);
+          logger.error('Failed to load security status', err);
         }
       }
     };
@@ -453,38 +452,10 @@ export const HostAgents: Component = () => {
       setConfirmedNoToken(false);
       notificationStore.success('Token generated and inserted into the command below.', 4000);
     } catch (err) {
-      console.error('Failed to generate host agent token', err);
+      logger.error('Failed to generate host agent token', err);
       notificationStore.error('Failed to generate host agent token. Confirm you are signed in as an administrator.', 6000);
     } finally {
       setIsGeneratingToken(false);
-    }
-  };
-
-  const copyToClipboard = async (text: string): Promise<boolean> => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-      if (typeof document === 'undefined') {
-        return false;
-      }
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.left = '-999999px';
-      textarea.style.top = '-999999px';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      try {
-        return document.execCommand('copy');
-      } finally {
-        document.body.removeChild(textarea);
-      }
-    } catch (err) {
-      console.error('Failed to copy to clipboard', err);
-      return false;
     }
   };
 
