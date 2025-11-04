@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
@@ -2662,25 +2663,6 @@ func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *ht
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(response.String()))
-}
-
-// isRunningInContainer detects if Pulse is running inside a container
-func isRunningInContainer() bool {
-	// Check for /.dockerenv file
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		return true
-	}
-
-	// Check cgroup for container indicators
-	data, err := os.ReadFile("/proc/1/cgroup")
-	if err == nil {
-		content := string(data)
-		if strings.Contains(content, "docker") || strings.Contains(content, "lxc") || strings.Contains(content, "containerd") {
-			return true
-		}
-	}
-
-	return false
 }
 
 // generateNodeID creates a unique ID for a node
@@ -5579,7 +5561,7 @@ func (h *ConfigHandlers) getOrGenerateSSHKeys() SSHKeyPair {
 	// CRITICAL SECURITY CHECK: Never generate SSH keys in containers (unless dev mode)
 	// Container compromise = SSH key compromise = root access to Proxmox
 	devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
-	if isRunningInContainer() && !devModeAllowSSH {
+	if system.InContainer() && !devModeAllowSSH {
 		log.Error().Msg("SECURITY BLOCK: SSH key generation disabled in containerized deployments")
 		log.Error().Msg("For temperature monitoring in containers, deploy pulse-sensor-proxy on the Proxmox host")
 		log.Error().Msg("See: https://docs.pulseapp.io/security/containerized-deployments")
@@ -5587,7 +5569,7 @@ func (h *ConfigHandlers) getOrGenerateSSHKeys() SSHKeyPair {
 		return SSHKeyPair{}
 	}
 
-	if devModeAllowSSH && isRunningInContainer() {
+	if devModeAllowSSH && system.InContainer() {
 		log.Warn().Msg("⚠️  DEV MODE: SSH key generation ENABLED in container - FOR TESTING ONLY")
 		log.Warn().Msg("⚠️  This grants root SSH access from container - NEVER use in production!")
 	}

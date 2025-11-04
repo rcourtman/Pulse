@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
@@ -2978,7 +2979,7 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 // in a container with SSH-based temperature monitoring enabled
 func checkContainerizedTempMonitoring() {
 	// Check if running in container
-	isContainer := os.Getenv("PULSE_DOCKER") == "true" || isRunningInContainer()
+	isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
 	if !isContainer {
 		return
 	}
@@ -3000,27 +3001,6 @@ func checkContainerizedTempMonitoring() {
 			"SSH private keys are stored inside the container, which could be a security risk if the container is compromised. " +
 			"Future versions will use agent-based architecture for better security. " +
 			"See documentation for hardening recommendations.")
-}
-
-// isRunningInContainer detects if running inside a container
-func isRunningInContainer() bool {
-	// Check for /.dockerenv
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		return true
-	}
-
-	// Check cgroup for container indicators
-	data, err := os.ReadFile("/proc/1/cgroup")
-	if err == nil {
-		content := string(data)
-		if strings.Contains(content, "docker") ||
-			strings.Contains(content, "lxc") ||
-			strings.Contains(content, "containerd") {
-			return true
-		}
-	}
-
-	return false
 }
 
 // New creates a new Monitor instance
