@@ -193,15 +193,17 @@ from="192.168.0.0/24,10.0.0.0/8"
 
 **In containers**, direct SSH is blocked:
 ```go
-if isRunningInContainer() && !devModeAllowSSH {
+if system.InContainer() && !devModeAllowSSH {
     log.Error().Msg("SECURITY BLOCK: SSH temperature collection disabled in containers")
     return &Temperature{Available: false}, nil
 }
 ```
 
 **Container Detection Methods**:
-1. Check for `/.dockerenv` file
-2. Check `/proc/1/cgroup` for "docker", "lxc", "containerd"
+1. `PULSE_FORCE_CONTAINER=1` override for explicit opt-in
+2. Presence of `/.dockerenv` or `/run/.containerenv`
+3. `container=` hints from environment variables
+4. `/proc/1/environ` and `/proc/1/cgroup` markers (`docker`, `lxc`, `containerd`, `kubepods`, etc.)
 
 **Bypass**: Only possible with explicit environment variable (see [Development Mode](#development-mode))
 

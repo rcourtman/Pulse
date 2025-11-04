@@ -17,6 +17,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rs/zerolog/log"
 )
@@ -102,7 +103,7 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		// SECURITY: Block SSH fallback when running in containers (unless dev mode)
 		// Container compromise = SSH key compromise = root access to infrastructure
 		devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
-		if isRunningInContainer() && !devModeAllowSSH {
+		if system.InContainer() && !devModeAllowSSH {
 			log.Error().
 				Str("node", nodeName).
 				Msg("SECURITY BLOCK: SSH temperature collection disabled in containers - deploy pulse-sensor-proxy")
@@ -600,8 +601,8 @@ func (tc *TemperatureCollector) shouldDisableProxy(err error) bool {
 	var proxyErr *tempproxy.ProxyError
 	if errors.As(err, &proxyErr) {
 		switch proxyErr.Type {
-	case tempproxy.ErrorTypeTransport, tempproxy.ErrorTypeTimeout:
-		return true
+		case tempproxy.ErrorTypeTransport, tempproxy.ErrorTypeTimeout:
+			return true
 		default:
 			return false
 		}
