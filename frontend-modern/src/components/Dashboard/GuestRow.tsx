@@ -12,7 +12,8 @@ import { logger } from '@/utils/logger';
 
 type Guest = VM | Container;
 
-const drawerState = new Map<string, boolean>();
+// Global state for currently expanded drawer (only one drawer open at a time)
+const [currentlyExpandedGuestId, setCurrentlyExpandedGuestId] = createSignal<string | null>(null);
 // Global editing state - use a signal so all components react
 const [currentlyEditingGuestId, setCurrentlyEditingGuestId] = createSignal<string | null>(null);
 // Store the editing value globally so it survives re-renders
@@ -67,7 +68,7 @@ export function GuestRow(props: GuestRowProps) {
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
-  const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(initialGuestId) ?? false);
+  const drawerOpen = createMemo(() => currentlyExpandedGuestId() === guestId());
   const editingUrlValue = createMemo(() => {
     editingValuesVersion(); // Subscribe to changes
     return editingValues.get(guestId()) || '';
@@ -148,23 +149,9 @@ export function GuestRow(props: GuestRowProps) {
   );
   const canShowDrawer = createMemo(() => hasDrawerContent() || hasFallbackContent());
 
-  createEffect(on(guestId, (id) => {
-    const stored = drawerState.get(id);
-    if (stored !== undefined) {
-      setDrawerOpen(stored);
-    } else {
-      setDrawerOpen(false);
-    }
-  }));
-
-  createEffect(() => {
-    drawerState.set(guestId(), drawerOpen());
-  });
-
   createEffect(() => {
     if (!canShowDrawer() && drawerOpen()) {
-      setDrawerOpen(false);
-      drawerState.set(guestId(), false);
+      setCurrentlyExpandedGuestId(null);
     }
   });
 
@@ -174,7 +161,8 @@ export function GuestRow(props: GuestRowProps) {
     if (target.closest('a, button, input, [data-prevent-toggle]')) {
       return;
     }
-    setDrawerOpen((prev) => !prev);
+    // Toggle: if this guest is currently expanded, close it; otherwise open it (closing any other)
+    setCurrentlyExpandedGuestId(prev => prev === guestId() ? null : guestId());
   };
 
   const startEditingUrl = (event: MouseEvent) => {
@@ -674,7 +662,7 @@ export function GuestRow(props: GuestRowProps) {
               <Show
                 when={hasDrawerContent()}
                 fallback={
-                  <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                  <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                     <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">
                       Guest details unavailable
                     </div>
@@ -700,7 +688,7 @@ export function GuestRow(props: GuestRowProps) {
               >
                 <>
                   <Show when={hasOsInfo() || hasAgentInfo() || ipAddresses().length > 0}>
-                    <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                       <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Guest Overview</div>
                       <div class="mt-1 space-y-1">
                         <Show when={hasOsInfo()}>
@@ -730,7 +718,10 @@ export function GuestRow(props: GuestRowProps) {
                           <div class="flex flex-wrap gap-1">
                             <For each={ipAddresses()}>
                               {(ip) => (
-                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                <span
+                                  class="max-w-full truncate rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                                  title={ip}
+                                >
                                   {ip}
                                 </span>
                               )}
@@ -742,7 +733,7 @@ export function GuestRow(props: GuestRowProps) {
                   </Show>
 
                   <Show when={memoryExtraLines() && memoryExtraLines()!.length > 0}>
-                    <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                       <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Memory</div>
                       <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
                         <For each={memoryExtraLines()!}>{(line) => <div>{line}</div>}</For>
@@ -751,7 +742,7 @@ export function GuestRow(props: GuestRowProps) {
                   </Show>
 
                   <Show when={hasFilesystemDetails() && props.guest.disks && props.guest.disks.length > 0}>
-                    <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                       <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Filesystems</div>
                       <div class="mt-1 text-gray-600 dark:text-gray-300">
                         <DiskList
@@ -785,7 +776,10 @@ export function GuestRow(props: GuestRowProps) {
                                   <div class="flex flex-wrap gap-1">
                                     <For each={addresses}>
                                       {(ip) => (
-                                        <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                        <span
+                                          class="max-w-full truncate rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                                          title={ip}
+                                        >
                                           {ip}
                                         </span>
                                       )}

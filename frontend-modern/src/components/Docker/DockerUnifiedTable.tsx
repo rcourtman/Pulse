@@ -77,7 +77,8 @@ interface DockerUnifiedTableProps {
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
 }
 
-const rowExpandState = new Map<string, boolean>();
+// Global state for currently expanded drawer (only one drawer open at a time)
+const [currentlyExpandedRowId, setCurrentlyExpandedRowId] = createSignal<string | null>(null);
 
 // Global editing state for Docker resource URLs
 const [currentlyEditingDockerResourceId, setCurrentlyEditingDockerResourceId] = createSignal<string | null>(null);
@@ -577,7 +578,7 @@ const DockerContainerRow: Component<{
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
-  const [expanded, setExpanded] = createSignal(rowExpandState.get(rowId) ?? false);
+  const expanded = createMemo(() => currentlyExpandedRowId() === rowId);
   const editingUrlValue = createMemo(() => {
     dockerEditingValuesVersion(); // Subscribe to changes
     return dockerEditingValues.get(resourceId()) || '';
@@ -684,11 +685,8 @@ const DockerContainerRow: Component<{
     if (!hasDrawerContent()) return;
     const target = event.target as HTMLElement;
     if (target.closest('a, button, input, [data-prevent-toggle]')) return;
-    setExpanded((prev) => {
-      const next = !prev;
-      rowExpandState.set(rowId, next);
-      return next;
-    });
+    // Toggle: if this row is currently expanded, close it; otherwise open it (closing any other)
+    setCurrentlyExpandedRowId(prev => prev === rowId ? null : rowId);
   };
 
   const startEditingUrl = (event: MouseEvent) => {
@@ -1062,7 +1060,7 @@ const DockerContainerRow: Component<{
         <tr class="bg-gray-50 dark:bg-gray-900/50">
           <td colSpan={props.columns} class="px-4 py-3">
             <div class="flex flex-wrap justify-start gap-3">
-              <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                   Summary
                 </div>
@@ -1191,7 +1189,7 @@ const DockerContainerRow: Component<{
                 </Show>
               </div>
               <Show when={container.ports && container.ports.length > 0}>
-                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     Ports
                   </div>
@@ -1211,7 +1209,7 @@ const DockerContainerRow: Component<{
               </Show>
 
               <Show when={container.networks && container.networks.length > 0}>
-                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     Networks
                   </div>
@@ -1238,7 +1236,7 @@ const DockerContainerRow: Component<{
               </Show>
 
               <Show when={hasPodmanMetadata()}>
-                <div class="min-w-[220px] rounded border border-purple-200 bg-white/70 p-2 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
+                <div class="min-w-[220px] flex-1 rounded border border-purple-200 bg-white/70 p-2 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
                     Podman Metadata
                   </div>
@@ -1272,7 +1270,7 @@ const DockerContainerRow: Component<{
               </Show>
 
               <Show when={hasBlockIo()}>
-                <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
                     Block I/O
                   </div>
@@ -1379,12 +1377,18 @@ const DockerContainerRow: Component<{
                     Labels
                   </div>
                   <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
-                    {Object.entries(container.labels!).map(([key, value]) => (
-                      <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
-                        {key}
-                        <Show when={value}>: {value}</Show>
-                      </span>
-                    ))}
+                    {Object.entries(container.labels!).map(([key, value]) => {
+                      const fullLabel = value ? `${key}: ${value}` : key;
+                      return (
+                        <span
+                          class="max-w-full truncate rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200"
+                          title={fullLabel}
+                        >
+                          {key}
+                          <Show when={value}>: {value}</Show>
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               </Show>
@@ -1409,7 +1413,7 @@ const DockerServiceRow: Component<{
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
-  const [expanded, setExpanded] = createSignal(rowExpandState.get(rowId) ?? false);
+  const expanded = createMemo(() => currentlyExpandedRowId() === rowId);
   const editingUrlValue = createMemo(() => {
     dockerEditingValuesVersion(); // Subscribe to changes
     return dockerEditingValues.get(resourceId()) || '';
@@ -1446,11 +1450,8 @@ const DockerServiceRow: Component<{
     if (!hasTasks()) return;
     const target = event.target as HTMLElement;
     if (target.closest('a, button, input, [data-prevent-toggle]')) return;
-    setExpanded((prev) => {
-      const next = !prev;
-      rowExpandState.set(rowId, next);
-      return next;
-    });
+    // Toggle: if this row is currently expanded, close it; otherwise open it (closing any other)
+    setCurrentlyExpandedRowId(prev => prev === rowId ? null : rowId);
   };
 
   const startEditingUrl = (event: MouseEvent) => {
