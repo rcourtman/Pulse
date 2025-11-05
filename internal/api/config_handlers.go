@@ -4065,6 +4065,20 @@ if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true
                     TEMP_MONITORING_AVAILABLE=false
                 fi
 
+                # Fetch the proxy's SSH public key now that it's installed and running
+                if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PROXY_HEALTHY" = true ]; then
+                    echo "  • Fetching SSH public key from proxy..."
+                    TEMPERATURE_PROXY_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
+                    if [ -n "$TEMPERATURE_PROXY_KEY" ] && [[ "$TEMPERATURE_PROXY_KEY" =~ ^ssh-(rsa|ed25519) ]]; then
+                        SSH_SENSORS_PUBLIC_KEY="$TEMPERATURE_PROXY_KEY"
+                        SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $TEMPERATURE_PROXY_KEY # pulse-sensor-proxy"
+                        echo "  ✓ SSH public key retrieved from proxy"
+                    else
+                        echo "  ⚠️  Could not fetch SSH key from proxy (this is normal if container hasn't restarted yet)"
+                        echo "      Rerun this setup script after the Pulse container restarts"
+                    fi
+                fi
+
                 # Note: Mount configuration and container restart are handled by the installer
             else
                 echo ""
@@ -4408,15 +4422,34 @@ Host ${NODE}
             fi
         else
             echo ""
-            echo "⚠️  SSH key not available from Pulse server"
+            echo "⚠️  Temperature monitoring cannot be configured yet"
+            echo ""
             if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
-                echo "  Pulse is running in a container, so host-side temperature proxy is required."
-                echo "  Install pulse-sensor-proxy on the Proxmox host and bind-mount /run/pulse-sensor-proxy into the container."
-                echo "  After the proxy is online, rerun this setup script to push the SSH key."
-                echo "  Docs: https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md#quick-start-for-docker-deployments"
+                echo "Pulse is running in a container, which requires pulse-sensor-proxy."
+                echo ""
+                echo "Current status:"
+                echo "  • pulse-sensor-proxy: Not installed or not providing SSH key"
+                echo "  • Container socket mount: Unknown (check docker-compose.yml)"
+                echo ""
+                echo "Next steps:"
+                echo "  1. If the proxy was just installed, restart the Pulse container:"
+                echo "     docker-compose restart pulse"
+                echo ""
+                echo "  2. Verify the socket is mounted in the container:"
+                echo "     docker exec pulse ls -la /run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+                echo ""
+                echo "  3. Rerun this setup script - it will automatically fetch the SSH key"
+                echo ""
+                echo "Documentation:"
+                echo "  https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md#quick-start-for-docker-deployments"
             else
-                echo "  Temperature monitoring cannot be configured automatically."
-                echo "  Ensure the Pulse service user has generated SSH keys and rerun this step."
+                echo "For bare-metal Pulse deployments:"
+                echo "  • SSH keys should be auto-generated on first use"
+                echo "  • Check Pulse logs for SSH key generation errors"
+                echo "  • Verify the Pulse service user has write access to ~/.ssh/"
+                echo ""
+                echo "If problems persist, check:"
+                echo "  journalctl -u pulse -n 100 | grep -i ssh"
             fi
         fi
         else
