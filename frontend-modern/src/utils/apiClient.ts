@@ -219,11 +219,17 @@ class ApiClient {
 
     const response = await fetch(url, finalOptions);
 
-    // If we get a 401, our auth might be invalid
-    if (response.status === 401 && this.hasAuth()) {
-      // Could trigger a re-login flow here
-      logger.warn('Authentication failed - credentials may be incorrect');
-      // Don't clear auth automatically - let the user retry
+    // If we get a 401 on an API call (not during initial auth check), redirect to login
+    // Skip redirect for specific auth-check endpoints to avoid loops
+    if (response.status === 401 && !url.includes('/api/security/status') && !url.includes('/api/state')) {
+      logger.warn('Authentication expired - redirecting to login');
+      // Clear auth and redirect to login
+      if (typeof window !== 'undefined') {
+        this.clearAuth();
+        localStorage.setItem('just_logged_out', 'true');
+        window.location.href = '/';
+      }
+      return response;
     }
 
     // Handle CSRF token failures

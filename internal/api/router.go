@@ -2772,6 +2772,10 @@ func (r *Router) handleSnapshots(w http.ResponseWriter, req *http.Request) {
 
 // handleWebSocket handles WebSocket connections
 func (r *Router) handleWebSocket(w http.ResponseWriter, req *http.Request) {
+	// Check authentication before allowing WebSocket upgrade
+	if !CheckAuth(r.config, w, req) {
+		return
+	}
 	r.wsHub.HandleWebSocket(w, req)
 }
 

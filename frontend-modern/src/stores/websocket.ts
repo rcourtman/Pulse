@@ -611,6 +611,18 @@ export function createWebSocketStore(url: string) {
         return;
       }
 
+      // If we get a 1008 (policy violation) close code, it's likely an auth failure
+      // Redirect to login page to re-authenticate
+      if (event.code === 1008) {
+        logger.warn('WebSocket closed due to authentication failure, redirecting to login');
+        // Clear auth and reload to trigger login
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('just_logged_out', 'true');
+          window.location.href = '/';
+        }
+        return;
+      }
+
       handleReconnect();
     };
 
