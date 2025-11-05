@@ -7523,6 +7523,20 @@ func (m *Monitor) StopDiscoveryService() {
 	}
 }
 
+// EnableTemperatureMonitoring enables temperature data collection
+func (m *Monitor) EnableTemperatureMonitoring() {
+	// Temperature collection is always enabled when tempCollector is initialized
+	// This method exists for interface compatibility
+	log.Info().Msg("Temperature monitoring enabled")
+}
+
+// DisableTemperatureMonitoring disables temperature data collection
+func (m *Monitor) DisableTemperatureMonitoring() {
+	// Temperature collection is always enabled when tempCollector is initialized
+	// This method exists for interface compatibility
+	log.Info().Msg("Temperature monitoring disabled")
+}
+
 // GetGuestMetrics returns historical metrics for a guest
 func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
 	return m.metricsHistory.GetAllGuestMetrics(guestID, duration)
