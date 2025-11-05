@@ -21,6 +21,7 @@ type RateLimitConfig struct {
 type Config struct {
 	AllowedSourceSubnets []string `yaml:"allowed_source_subnets"`
 	MetricsAddress       string   `yaml:"metrics_address"`
+	LogLevel             string   `yaml:"log_level"`
 
 	AllowIDMappedRoot bool     `yaml:"allow_idmapped_root"`
 	AllowedPeerUIDs   []uint32 `yaml:"allowed_peer_uids"`
@@ -35,6 +36,7 @@ func loadConfig(configPath string) (*Config, error) {
 	cfg := &Config{
 		AllowIDMappedRoot: true,
 		AllowedIDMapUsers: []string{"root"},
+		LogLevel:          "info", // Default log level
 	}
 
 	// Try to load config file if it exists
@@ -164,6 +166,12 @@ func loadConfig(configPath string) (*Config, error) {
 			Int("per_peer_interval_ms", cfg.RateLimit.PerPeerIntervalMs).
 			Int("per_peer_burst", cfg.RateLimit.PerPeerBurst).
 			Msg("Rate limit configuration loaded from config file")
+	}
+
+	// Log level from environment variable
+	if envLogLevel := os.Getenv("PULSE_SENSOR_PROXY_LOG_LEVEL"); envLogLevel != "" {
+		cfg.LogLevel = strings.ToLower(strings.TrimSpace(envLogLevel))
+		log.Info().Str("log_level", cfg.LogLevel).Msg("Log level set from environment")
 	}
 
 	return cfg, nil

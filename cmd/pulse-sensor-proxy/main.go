@@ -85,6 +85,31 @@ func main() {
 	}
 }
 
+// parseLogLevel converts a string log level to zerolog.Level
+func parseLogLevel(levelStr string) zerolog.Level {
+	switch strings.ToLower(strings.TrimSpace(levelStr)) {
+	case "trace":
+		return zerolog.TraceLevel
+	case "debug":
+		return zerolog.DebugLevel
+	case "info":
+		return zerolog.InfoLevel
+	case "warn", "warning":
+		return zerolog.WarnLevel
+	case "error":
+		return zerolog.ErrorLevel
+	case "fatal":
+		return zerolog.FatalLevel
+	case "panic":
+		return zerolog.PanicLevel
+	case "disabled", "none":
+		return zerolog.Disabled
+	default:
+		log.Warn().Str("level", levelStr).Msg("Unknown log level, defaulting to info")
+		return zerolog.InfoLevel
+	}
+}
+
 type userSpec struct {
 	name   string
 	uid    int
@@ -276,7 +301,7 @@ type RPCResponse struct {
 type handlerFunc func(ctx context.Context, req *RPCRequest, logger zerolog.Logger) (interface{}, error)
 
 func runProxy() {
-	// Initialize logger
+	// Initialize logger with default level (will be configured after loading config)
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
@@ -304,6 +329,10 @@ func runProxy() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
+
+	// Apply configured log level
+	level := parseLogLevel(cfg.LogLevel)
+	zerolog.SetGlobalLevel(level)
 
 	runAsUser := os.Getenv("PULSE_SENSOR_PROXY_USER")
 	if runAsUser == "" {
@@ -339,6 +368,7 @@ func runProxy() {
 		Str("ssh_key_dir", sshKeyPath).
 		Str("config_path", cfgPath).
 		Str("audit_log", auditPath).
+		Str("log_level", cfg.LogLevel).
 		Str("version", Version).
 		Msg("Starting pulse-sensor-proxy")
 
