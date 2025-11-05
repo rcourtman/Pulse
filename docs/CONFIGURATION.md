@@ -63,7 +63,6 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - **DO NOT** put port configuration here - use system.json or systemd overrides
 - Copy `.env.example` from the repository for a ready-to-edit template
 - Locked out? Create `<data-path>/.auth_recovery`, restart Pulse, and sign in from localhost to reset credentials. Remove the file afterwards.
-- **UI Behavior:** When authentication is not configured, the Settings tab is automatically hidden from the web interface, providing a cleaner monitoring-only view for unauthenticated deployments.
 
 ---
 
