@@ -126,7 +126,26 @@ func loadConfig() dockeragent.Config {
 
 	flag.Parse()
 
+	// Check for common mistakes with unparsed arguments
+	unparsedArgs := flag.Args()
+	if len(unparsedArgs) > 0 {
+		// Check if any look like flags with single dash
+		for _, arg := range unparsedArgs {
+			if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") {
+				fmt.Fprintf(os.Stderr, "error: unrecognized argument %q\n", arg)
+				fmt.Fprintln(os.Stderr, "note: flags must use double dashes (e.g., --token, not -token)")
+				fmt.Fprintln(os.Stderr, "\nUsage:")
+				flag.Usage()
+				os.Exit(1)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "error: unexpected arguments: %v\n", unparsedArgs)
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	pulseURL := *urlFlag
+	urlFromEnvOrFlag := envURL != "" || *urlFlag != envURL
 	if pulseURL == "" {
 		pulseURL = "http://localhost:7655"
 	}
@@ -157,8 +176,20 @@ func loadConfig() dockeragent.Config {
 	token := strings.TrimSpace(*tokenFlag)
 	if token == "" && len(targets) == 0 {
 		fmt.Fprintln(os.Stderr, "error: PULSE_TOKEN, --token, or at least one --target/PULSE_TARGETS entry must be provided")
-		flag.Usage()
+		fmt.Fprintln(os.Stderr, "\nExample usage:")
+		fmt.Fprintln(os.Stderr, "  pulse-docker-agent --url http://pulse.example.com:7655 --token <your-token>")
+		fmt.Fprintln(os.Stderr, "\nOr set environment variables:")
+		fmt.Fprintln(os.Stderr, "  export PULSE_URL=http://pulse.example.com:7655")
+		fmt.Fprintln(os.Stderr, "  export PULSE_TOKEN=<your-token>")
+		fmt.Fprintln(os.Stderr, "  pulse-docker-agent")
 		os.Exit(1)
+	}
+
+	// Warn if using default localhost URL without explicit configuration
+	if !urlFromEnvOrFlag && len(targets) == 0 && token != "" {
+		fmt.Fprintln(os.Stderr, "warning: no --url or PULSE_URL provided, defaulting to http://localhost:7655")
+		fmt.Fprintln(os.Stderr, "note: if your Pulse server is not on localhost, specify --url http://your-pulse-server:7655")
+		fmt.Fprintln(os.Stderr, "")
 	}
 
 	interval := *intervalFlag

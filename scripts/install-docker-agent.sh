@@ -1511,8 +1511,15 @@ EOF
         log_info 'Log file             : /var/log/pulse-docker-agent.log'
         log_info 'Host visible in Pulse: ~30 seconds'
         exit 0
-    elif command -v rc-service >/dev/null 2>&1 && { [ -x /sbin/openrc-run ] || [ -x /bin/openrc-run ] || [ -x /usr/bin/openrc-run ]; }; then
-        log_info 'Detected OpenRC environment'
+    elif command -v rc-service >/dev/null 2>&1 && command -v rc-update >/dev/null 2>&1; then
+        # Alpine Linux and other OpenRC-based systems
+        IS_ALPINE="false"
+        if [ -f /etc/alpine-release ] || grep -qi 'alpine' /etc/os-release 2>/dev/null; then
+            IS_ALPINE="true"
+            log_info 'Detected Alpine Linux with OpenRC'
+        else
+            log_info 'Detected OpenRC environment'
+        fi
 
         log_header 'Preparing service environment'
         ensure_service_user
@@ -1596,12 +1603,30 @@ EOF
 
     log_info 'Manual startup environment detected'
     log_info "Binary location      : $AGENT_PATH"
-    log_info 'Start manually with  :'
-    printf '  PULSE_URL=%s PULSE_TOKEN=<api-token> \\n' "$PRIMARY_URL"
-    printf '  PULSE_TARGETS="%s" \\n' "https://pulse.example.com|<token>[;https://pulse-alt.example.com|<token2>]"
-    printf '  %s --interval %s &
-' "$AGENT_PATH" "$INTERVAL"
-    log_info 'Add the same command to your init system to start automatically.'
+    printf '\n'
+    log_warn 'No supported init system detected (systemd, OpenRC, or Unraid).'
+    log_warn 'You must start the agent manually and configure it to start on boot.'
+    printf '\n'
+    log_info 'Start the agent in the background with:'
+    printf '  PULSE_URL=%s PULSE_TOKEN=%s \\\n' "$(quote_shell_arg "$PRIMARY_URL")" "$(quote_shell_arg "$PRIMARY_TOKEN")"
+    if [[ ${#TARGETS[@]} -gt 1 ]]; then
+        printf '  PULSE_TARGETS=%s \\\n' "$(quote_shell_arg "$JOINED_TARGETS")"
+    fi
+    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+        printf '  PULSE_INSECURE_SKIP_VERIFY=true \\\n'
+    fi
+    printf '  %s --url %s --token %s --interval %s%s > /var/log/pulse-docker-agent.log 2>&1 &\n' \
+        "$AGENT_PATH" \
+        "$(quote_shell_arg "$PRIMARY_URL")" \
+        "$(quote_shell_arg "$PRIMARY_TOKEN")" \
+        "$INTERVAL" \
+        "$NO_AUTO_UPDATE_FLAG"
+    printf '\n'
+    log_info 'Check if running: ps aux | grep pulse-docker-agent'
+    log_info 'View logs       : tail -f /var/log/pulse-docker-agent.log'
+    printf '\n'
+    log_warn 'IMPORTANT: Add the command above to your system startup scripts'
+    log_warn 'to ensure the agent starts automatically after reboots.'
     exit 0
 
 fi
