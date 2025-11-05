@@ -66,3 +66,50 @@ func TestShouldPreserveBackups(t *testing.T) {
 		})
 	}
 }
+
+func TestShouldPreservePBSBackups(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		datastoreCount   int
+		datastoreFetches int
+		want             bool
+	}{
+		{
+			name:             "all datastores failed",
+			datastoreCount:   3,
+			datastoreFetches: 0,
+			want:             true,
+		},
+		{
+			name:             "no datastores skips preservation",
+			datastoreCount:   0,
+			datastoreFetches: 0,
+			want:             false,
+		},
+		{
+			name:             "some datastores succeeded",
+			datastoreCount:   3,
+			datastoreFetches: 2,
+			want:             false,
+		},
+		{
+			name:             "all datastores succeeded",
+			datastoreCount:   3,
+			datastoreFetches: 3,
+			want:             false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := shouldPreservePBSBackups(tt.datastoreCount, tt.datastoreFetches)
+			if got != tt.want {
+				t.Fatalf("shouldPreservePBSBackups() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

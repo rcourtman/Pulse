@@ -7928,6 +7928,14 @@ func shouldPreserveBackups(nodeCount int, hadSuccessfulNode bool, storagesWithBa
 	return false
 }
 
+func shouldPreservePBSBackups(datastoreCount, datastoreFetches int) bool {
+	// If there are datastores but all fetches failed, preserve existing backups
+	if datastoreCount > 0 && datastoreFetches == 0 {
+		return true
+	}
+	return false
+}
+
 func buildGuestLookups(snapshot models.StateSnapshot) (map[string]alerts.GuestLookup, map[string]alerts.GuestLookup) {
 	byKey := make(map[string]alerts.GuestLookup)
 	byVMID := make(map[string]alerts.GuestLookup)
@@ -8507,6 +8515,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	log.Debug().Str("instance", instanceName).Msg("Polling PBS backups")
 
 	var allBackups []models.PBSBackup
+	datastoreCount := len(datastores)       // Number of datastores to query
+	datastoreFetches := 0                   // Number of successful datastore fetches
+	datastoreErrors := 0                    // Number of failed datastore fetches
 
 	// Process each datastore
 	for _, ds := range datastores {
@@ -8530,8 +8541,11 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				Str("instance", instanceName).
 				Str("datastore", ds.Name).
 				Msg("Failed to fetch PBS backups")
+			datastoreErrors++
 			continue
 		}
+
+		datastoreFetches++
 
 		// Convert PBS backups to model backups
 		for namespace, snapshots := range backupsMap {
@@ -8603,6 +8617,16 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		Str("instance", instanceName).
 		Int("count", len(allBackups)).
 		Msg("PBS backups fetched")
+
+	// Decide whether to keep existing backups when all queries failed
+	if shouldPreservePBSBackups(datastoreCount, datastoreFetches) {
+		log.Warn().
+			Str("instance", instanceName).
+			Int("datastores", datastoreCount).
+			Int("errors", datastoreErrors).
+			Msg("All PBS datastore queries failed; keeping previous backup list")
+		return
+	}
 
 	// Update state
 	m.state.UpdatePBSBackups(instanceName, allBackups)
