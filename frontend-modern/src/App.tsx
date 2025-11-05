@@ -897,7 +897,7 @@ function AppLayout(props: {
       { warning: 0, critical: 0 },
     );
     const activeAlertCount = breakdown.warning + breakdown.critical;
-    return [
+    const tabs = [
       {
         id: 'alerts' as const,
         label: 'Alerts',
@@ -908,7 +908,11 @@ function AppLayout(props: {
         breakdown,
         icon: <BellIcon class="w-4 h-4 shrink-0" />,
       },
-      {
+    ];
+
+    // Only show Settings tab when authentication is configured
+    if (hasAuth()) {
+      tabs.push({
         id: 'settings' as const,
         label: 'Settings',
         route: '/settings',
@@ -917,8 +921,10 @@ function AppLayout(props: {
         count: undefined,
         breakdown: undefined,
         icon: <SettingsIcon class="w-4 h-4 shrink-0" />,
-      },
-    ];
+      });
+    }
+
+    return tabs;
   });
 
   const handlePlatformClick = (platform: ReturnType<typeof platformTabs>[number]) => {
