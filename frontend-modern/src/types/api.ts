@@ -40,6 +40,7 @@ export interface Node {
   displayName?: string;
   instance: string;
   host: string;
+  guestURL?: string; // Optional guest-accessible URL (for navigation)
   status: string;
   type: string;
   cpu: number;

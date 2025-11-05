@@ -388,7 +388,8 @@ func splitAndTrim(value string) []string {
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
 	Name                         string
-	Host                         string // Primary endpoint (user-provided)
+	Host                         string  // Primary endpoint (user-provided)
+	GuestURL                     string  // Optional guest-accessible URL (for navigation)
 	User                         string
 	Password                     string
 	TokenName                    string
@@ -414,6 +415,7 @@ type ClusterEndpoint struct {
 	NodeID   string    // Node ID in cluster
 	NodeName string    // Node name
 	Host     string    // Full URL (e.g., https://node1.lan:8006)
+	GuestURL string    // Optional guest-accessible URL (for navigation)
 	IP       string    // IP address
 	Online   bool      // Current online status
 	LastSeen time.Time // Last successful connection

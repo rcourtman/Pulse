@@ -6,6 +6,7 @@ export interface ClusterEndpoint {
   NodeID: string;
   NodeName: string;
   Host: string;
+  GuestURL?: string;
   IP: string;
   Online: boolean;
   LastSeen: string;
@@ -15,6 +16,7 @@ export interface PVENodeConfig {
   id: string;
   name: string;
   host: string;
+  guestURL?: string;
   user: string;
   hasPassword?: boolean;
   hasToken?: boolean;

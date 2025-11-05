@@ -4885,11 +4885,15 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		nodeStart := time.Now()
 		displayName := getNodeDisplayName(instanceCfg, node.Node)
 		connectionHost := instanceCfg.Host
+		guestURL := instanceCfg.GuestURL
 		if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
 			for _, ep := range instanceCfg.ClusterEndpoints {
 				if strings.EqualFold(ep.NodeName, node.Node) {
 					if effective := clusterEndpointEffectiveURL(ep); effective != "" {
 						connectionHost = effective
+					}
+					if ep.GuestURL != "" {
+						guestURL = ep.GuestURL
 					}
 					break
 				}
@@ -4939,6 +4943,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			DisplayName: displayName,
 			Instance:    instanceName,
 			Host:        connectionHost,
+			GuestURL:    guestURL,
 			Status:      effectiveStatus,
 			Type:        "node",
 			CPU:         safeFloat(node.CPU), // Already in percentage

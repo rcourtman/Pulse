@@ -327,7 +327,7 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
 	h.clusterDetectMutex.Unlock()
 
 	clientConfig := config.CreateProxmoxConfig(instance)
-	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name)
+	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name, instance.ClusterEndpoints)
 	if !isCluster || len(clusterEndpoints) == 0 {
 		log.Debug().
 			Str("instance", instance.Name).
@@ -366,6 +366,7 @@ type NodeConfigRequest struct {
 	Type                         string `json:"type"` // "pve", "pbs", or "pmg"
 	Name                         string `json:"name"`
 	Host                         string `json:"host"`
+	GuestURL                     string `json:"guestURL,omitempty"`                     // Optional guest-accessible URL (for navigation)
 	User                         string `json:"user,omitempty"`
 	Password                     string `json:"password,omitempty"`
 	TokenName                    string `json:"tokenName,omitempty"`
@@ -395,6 +396,7 @@ type NodeResponse struct {
 	Type                 string                   `json:"type"`
 	Name                 string                   `json:"name"`
 	Host                 string                   `json:"host"`
+	GuestURL             string                   `json:"guestURL,omitempty"`
 	User                 string                   `json:"user,omitempty"`
 	HasPassword          bool                     `json:"hasPassword"`
 	TokenName            string                   `json:"tokenName,omitempty"`
@@ -569,8 +571,19 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 	return true
 }
 
+// findExistingGuestURL looks up the GuestURL for a node from existing endpoints
+func findExistingGuestURL(nodeName string, existingEndpoints []config.ClusterEndpoint) string {
+	for _, ep := range existingEndpoints {
+		if ep.NodeName == nodeName {
+			return ep.GuestURL
+		}
+	}
+	return ""
+}
+
 // detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
-func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
+// If existingEndpoints is provided, GuestURL values will be preserved for matching nodes
+func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
 	tempClient, err := proxmox.NewClient(clientConfig)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create client for cluster detection")
@@ -664,6 +677,7 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 				NodeID:   clusterNode.ID,
 				NodeName: clusterNode.Name,
 				Host:     schemePrefix + nodeHost,
+				GuestURL: findExistingGuestURL(clusterNode.Name, existingEndpoints),
 				Online:   clusterNode.Online == 1,
 				LastSeen: time.Now(),
 			}
@@ -695,6 +709,7 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 					NodeID:   clusterNode.ID,
 					NodeName: clusterNode.Name,
 					Host:     schemePrefix + nodeHost,
+					GuestURL: findExistingGuestURL(clusterNode.Name, existingEndpoints),
 					Online:   clusterNode.Online == 1,
 					LastSeen: time.Now(),
 				}
@@ -737,6 +752,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			Type:                         "pve",
 			Name:                         pve.Name,
 			Host:                         pve.Host,
+			GuestURL:                     pve.GuestURL,
 			User:                         pve.User,
 			HasPassword:                  pve.Password != "",
 			TokenName:                    pve.TokenName,
@@ -1152,7 +1168,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				verifySSL = *req.VerifySSL
 			}
 			clientConfig := config.CreateProxmoxConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, verifySSL)
-			isCluster, clusterName, clusterEndpoints = detectPVECluster(clientConfig, req.Name)
+			isCluster, clusterName, clusterEndpoints = detectPVECluster(clientConfig, req.Name, nil)
 		}
 
 		if isCluster {
@@ -1187,6 +1203,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		pve := config.PVEInstance{
 			Name:                             req.Name,
 			Host:                             host, // Use normalized host
+			GuestURL:                         req.GuestURL,
 			User:                             req.User,
 			Password:                         req.Password,
 			TokenName:                        req.TokenName,
@@ -1534,7 +1551,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		isCluster, _, clusterEndpoints := detectPVECluster(clientConfig, req.Name)
+		isCluster, _, clusterEndpoints := detectPVECluster(clientConfig, req.Name, nil)
 
 		response := map[string]interface{}{
 			"status":    "success",
@@ -1809,6 +1826,9 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			}
 			pve.Host = host
 		}
+
+		// Update GuestURL if provided
+		pve.GuestURL = req.GuestURL
 
 		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" || req.TokenValue != "" {
@@ -5414,7 +5434,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 					VerifySSL:  instance.VerifySSL,
 				}
 
-				isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name)
+				isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name, instance.ClusterEndpoints)
 				if isCluster {
 					instance.IsCluster = true
 					instance.ClusterName = clusterName
@@ -5456,7 +5476,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				VerifySSL:  verifySSL,
 			}
 
-			isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, nodeConfig.Name)
+			isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, nodeConfig.Name, nil)
 
 			monitorVMs := true
 			if nodeConfig.MonitorVMs != nil {

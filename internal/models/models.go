@@ -66,7 +66,8 @@ type Node struct {
 	Name             string       `json:"name"`
 	DisplayName      string       `json:"displayName,omitempty"`
 	Instance         string       `json:"instance"`
-	Host             string       `json:"host"` // Full host URL from config
+	Host             string       `json:"host"`     // Full host URL from config
+	GuestURL         string       `json:"guestURL"` // Optional guest-accessible URL (for navigation)
 	Status           string       `json:"status"`
 	Type             string       `json:"type"`
 	CPU              float64      `json:"cpu"`

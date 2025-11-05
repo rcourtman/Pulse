@@ -9,7 +9,7 @@ interface NodeGroupHeaderProps {
 
 export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
   const isOnline = () => props.node.status === 'online' && (props.node.uptime || 0) > 0;
-  const nodeUrl = () => props.node.host || `https://${props.node.name}:8006`;
+  const nodeUrl = () => props.node.guestURL || props.node.host || `https://${props.node.name}:8006`;
   const displayName = () => getNodeDisplayName(props.node);
   const showActualName = () => hasAlternateDisplayName(props.node);
 

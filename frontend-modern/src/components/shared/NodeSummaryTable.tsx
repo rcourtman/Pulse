@@ -509,7 +509,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         <a
                           href={
                             isPVE
-                              ? node!.host || `https://${node!.name}:8006`
+                              ? node!.guestURL || node!.host || `https://${node!.name}:8006`
                               : pbs!.host || `https://${pbs!.name}:8007`
                           }
                           target="_blank"

@@ -65,6 +65,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const getCleanFormData = (nodeType: 'pve' | 'pbs' | 'pmg' = props.nodeType) => ({
     name: '',
     host: '',
+    guestURL: '',
     authType: nodeType === 'pmg' ? 'password' : ('token' as 'password' | 'token'),
     setupMode: 'auto' as 'auto' | 'manual',
     user: '',
@@ -172,6 +173,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       setFormData({
         name: node.name || '',
         host: node.host || '',
+        guestURL: ('guestURL' in node ? node.guestURL : '') || '',
         authType: node.hasPassword ? 'password' : 'token',
         setupMode: 'auto',
         user: username,
@@ -211,6 +213,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       type: props.nodeType,
       name: normalizedName,
       host: data.host,
+      guestURL: data.guestURL,
       fingerprint: data.fingerprint,
       verifySSL: data.verifySSL,
     };
@@ -488,6 +491,28 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             PMG API listens on HTTPS. Default port is 8006.
                           </p>
                         </Show>
+                      </div>
+
+                      <div class={formField}>
+                        <label class={labelClass('flex items-center gap-1')}>
+                          Guest URL <span class="text-gray-500 text-xs font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formData().guestURL}
+                          onInput={(e) => updateField('guestURL', e.currentTarget.value)}
+                          placeholder={
+                            props.nodeType === 'pve'
+                              ? 'https://pve.yourdomain.com'
+                              : props.nodeType === 'pbs'
+                                ? 'https://pbs.yourdomain.com'
+                                : 'https://pmg.yourdomain.com'
+                          }
+                          class={controlClass()}
+                        />
+                        <p class={formHelpText}>
+                          Optional guest-accessible URL for navigation. If specified, this URL will be used when opening the web UI instead of the Host URL.
+                        </p>
                       </div>
                     </div>
                   </div>
