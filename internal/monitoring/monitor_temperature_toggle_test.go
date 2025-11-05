@@ -12,7 +12,7 @@ func TestMonitorTemperatureCollectorToggle(t *testing.T) {
 
 	cfg := &config.Config{TemperatureMonitoringEnabled: false}
 
-	service := newTemperatureService(false, "root", filepath.Join(t.TempDir(), "id_ed25519_sensors"))
+	service := newTemperatureService(false, "root", filepath.Join(t.TempDir(), "id_ed25519_sensors"), 22)
 
 	m := &Monitor{
 		config:      cfg,

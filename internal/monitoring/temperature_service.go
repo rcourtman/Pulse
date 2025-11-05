@@ -28,14 +28,19 @@ type temperatureService struct {
 	enabled   bool
 	user      string
 	keyPath   string
+	sshPort   int
 	collector *TemperatureCollector
 }
 
-func newTemperatureService(enabled bool, user, keyPath string) TemperatureService {
+func newTemperatureService(enabled bool, user, keyPath string, sshPort int) TemperatureService {
+	if sshPort <= 0 {
+		sshPort = 22
+	}
 	return &temperatureService{
 		enabled: enabled,
 		user:    user,
 		keyPath: keyPath,
+		sshPort: sshPort,
 	}
 }
 
@@ -55,7 +60,7 @@ func (s *temperatureService) Enable() {
 
 	s.enabled = true
 	if s.collector == nil && s.user != "" && s.keyPath != "" {
-		s.collector = NewTemperatureCollector(s.user, s.keyPath)
+		s.collector = NewTemperatureCollectorWithPort(s.user, s.keyPath, s.sshPort)
 	}
 }
 
@@ -80,7 +85,7 @@ func (s *temperatureService) Collect(ctx context.Context, host, nodeName string)
 	if collector == nil {
 		s.mu.Lock()
 		if s.enabled && s.collector == nil && s.user != "" && s.keyPath != "" {
-			s.collector = NewTemperatureCollector(s.user, s.keyPath)
+			s.collector = NewTemperatureCollectorWithPort(s.user, s.keyPath, s.sshPort)
 		}
 		collector = s.collector
 		enabled = s.enabled

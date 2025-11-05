@@ -20,6 +20,9 @@ type Manager interface {
 	// Ensure guarantees that the host key for the provided host exists in the
 	// managed known_hosts file.
 	Ensure(ctx context.Context, host string) error
+	// EnsureWithPort guarantees that the host key for the provided host:port exists
+	// in the managed known_hosts file.
+	EnsureWithPort(ctx context.Context, host string, port int) error
 	// Path returns the absolute path to the managed known_hosts file.
 	Path() string
 }
@@ -32,7 +35,7 @@ type manager struct {
 	keyscanTimeout  time.Duration
 }
 
-type keyscanFunc func(ctx context.Context, host string, timeout time.Duration) ([]byte, error)
+type keyscanFunc func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error)
 
 const (
 	defaultKeyscanTimeout = 5 * time.Second
@@ -84,16 +87,26 @@ func NewManager(path string, opts ...Option) (Manager, error) {
 	return m, nil
 }
 
-// Ensure implements Manager.Ensure.
+// Ensure implements Manager.Ensure (uses default port 22).
 func (m *manager) Ensure(ctx context.Context, host string) error {
+	return m.EnsureWithPort(ctx, host, 22)
+}
+
+// EnsureWithPort implements Manager.EnsureWithPort.
+func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) error {
 	if strings.TrimSpace(host) == "" {
 		return fmt.Errorf("knownhosts: missing host")
 	}
+	if port <= 0 {
+		port = 22 // Default to standard SSH port
+	}
+
+	cacheKey := fmt.Sprintf("%s:%d", host, port)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.cache[host]; ok {
+	if _, ok := m.cache[cacheKey]; ok {
 		return nil
 	}
 
@@ -101,30 +114,36 @@ func (m *manager) Ensure(ctx context.Context, host string) error {
 		return err
 	}
 
-	exists, err := hostKeyExists(m.path, host)
+	// For non-standard ports, check for [host]:port format
+	hostSpec := host
+	if port != 22 {
+		hostSpec = fmt.Sprintf("[%s]:%d", host, port)
+	}
+
+	exists, err := hostKeyExists(m.path, hostSpec)
 	if err != nil {
 		return err
 	}
 	if exists {
-		m.cache[host] = struct{}{}
+		m.cache[cacheKey] = struct{}{}
 		return nil
 	}
 
-	keyData, err := m.keyscanFn(ctx, host, m.keyscanTimeout)
+	keyData, err := m.keyscanFn(ctx, host, port, m.keyscanTimeout)
 	if err != nil {
-		return fmt.Errorf("knownhosts: ssh-keyscan failed for %s: %w", host, err)
+		return fmt.Errorf("knownhosts: ssh-keyscan failed for %s:%d: %w", host, port, err)
 	}
 
-	entries := sanitizeKeyscanOutput(host, keyData)
+	entries := sanitizeKeyscanOutput(hostSpec, keyData)
 	if len(entries) == 0 {
-		return fmt.Errorf("%w for %s", ErrNoHostKeys, host)
+		return fmt.Errorf("%w for %s:%d", ErrNoHostKeys, host, port)
 	}
 
 	if err := appendHostKey(m.path, entries); err != nil {
 		return err
 	}
 
-	m.cache[host] = struct{}{}
+	m.cache[cacheKey] = struct{}{}
 	return nil
 }
 
@@ -261,16 +280,25 @@ func hostCandidates(part string) []string {
 	return candidates
 }
 
-func defaultKeyscan(ctx context.Context, host string, timeout time.Duration) ([]byte, error) {
+func defaultKeyscan(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
 	seconds := int(timeout.Round(time.Second) / time.Second)
 	if seconds <= 0 {
 		seconds = int(defaultKeyscanTimeout / time.Second)
+	}
+	if port <= 0 {
+		port = 22
 	}
 
 	scanCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(scanCtx, "ssh-keyscan", "-T", strconv.Itoa(seconds), host)
+	args := []string{"-T", strconv.Itoa(seconds)}
+	if port != 22 {
+		args = append(args, "-p", strconv.Itoa(port))
+	}
+	args = append(args, host)
+
+	cmd := exec.CommandContext(scanCtx, "ssh-keyscan", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("%w (output: %s)", err, strings.TrimSpace(string(output)))

@@ -2837,7 +2837,7 @@ func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *ht
 		homeDir = "/home/pulse"
 	}
 	sshKeyPath := filepath.Join(homeDir, ".ssh/id_ed25519_sensors")
-	tempCollector := monitoring.NewTemperatureCollector("root", sshKeyPath)
+	tempCollector := monitoring.NewTemperatureCollectorWithPort("root", sshKeyPath, h.config.SSHPort)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

@@ -103,6 +103,7 @@ type Config struct {
 	GuestMetadataRetryBackoff       time.Duration `envconfig:"GUEST_METADATA_RETRY_BACKOFF" default:"30s" json:"guestMetadataRetryBackoff"`
 	GuestMetadataMaxConcurrent      int           `envconfig:"GUEST_METADATA_MAX_CONCURRENT" default:"4" json:"guestMetadataMaxConcurrent"`
 	DNSCacheTimeout                 time.Duration `envconfig:"DNS_CACHE_TIMEOUT" default:"5m" json:"dnsCacheTimeout"`
+	SSHPort                         int           `envconfig:"SSH_PORT" default:"22" json:"sshPort"` // Default SSH port for temperature monitoring
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -403,6 +404,7 @@ type PVEInstance struct {
 	MonitorPhysicalDisks         *bool // Monitor physical disks (nil = enabled by default, can be explicitly disabled)
 	PhysicalDiskPollingMinutes   int   // How often to poll physical disks (0 = use default)
 	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
+	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
 
 	// Cluster support
 	IsCluster        bool              // True if this is a cluster
@@ -438,6 +440,7 @@ type PBSInstance struct {
 	MonitorPruneJobs             bool
 	MonitorGarbageJobs           bool
 	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
+	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
 }
 
 // PMGInstance represents a Proxmox Mail Gateway connection
@@ -456,6 +459,7 @@ type PMGInstance struct {
 	MonitorQuarantine            bool
 	MonitorDomainStats           bool
 	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
+	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
 }
 
 // Global persistence instance for saving
@@ -623,6 +627,12 @@ func Load() (*Config, error) {
 		// Load DNS cache timeout
 		if systemSettings.DNSCacheTimeout > 0 {
 			cfg.DNSCacheTimeout = time.Duration(systemSettings.DNSCacheTimeout) * time.Second
+		}
+		// Load SSH port
+		if systemSettings.SSHPort > 0 {
+			cfg.SSHPort = systemSettings.SSHPort
+		} else {
+			cfg.SSHPort = 22 // Default SSH port
 		}
 		// APIToken no longer loaded from system.json - only from .env
 			log.Info().
@@ -837,6 +847,20 @@ func Load() (*Config, error) {
 			}
 		} else {
 			log.Warn().Str("value", dnsCacheTimeout).Msg("Invalid DNS_CACHE_TIMEOUT value, expected duration string")
+		}
+	}
+
+	if sshPort := utils.GetenvTrim("SSH_PORT"); sshPort != "" {
+		if port, err := strconv.Atoi(sshPort); err == nil {
+			if port <= 0 || port > 65535 {
+				log.Warn().Str("value", sshPort).Msg("Ignoring invalid SSH_PORT from environment (must be 1-65535)")
+			} else {
+				cfg.SSHPort = port
+				cfg.EnvOverrides["SSH_PORT"] = true
+				log.Info().Int("port", port).Msg("SSH port overridden by environment")
+			}
+		} else {
+			log.Warn().Str("value", sshPort).Msg("Invalid SSH_PORT value, expected integer")
 		}
 	}
 
@@ -1259,6 +1283,7 @@ func SaveConfig(cfg *Config) error {
 		AdaptivePollingMinInterval:  int(cfg.AdaptivePollingMinInterval / time.Second),
 		AdaptivePollingMaxInterval:  int(cfg.AdaptivePollingMaxInterval / time.Second),
 		DNSCacheTimeout:             int(cfg.DNSCacheTimeout / time.Second),
+		SSHPort:                     cfg.SSHPort,
 		// APIToken removed - now handled via .env only
 	}
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {

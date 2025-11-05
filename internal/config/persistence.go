@@ -822,6 +822,7 @@ type SystemSettings struct {
 	AllowedEmbedOrigins          string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
 	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"`
 	DNSCacheTimeout              int             `json:"dnsCacheTimeout,omitempty"` // DNS cache timeout in seconds (0 = default 5 minutes)
+	SSHPort                      int             `json:"sshPort,omitempty"`         // Default SSH port for temperature monitoring (0 = use 22)
 	// APIToken removed - now handled via .env file only
 }
 

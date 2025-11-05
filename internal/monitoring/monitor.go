@@ -3101,7 +3101,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		homeDir = "/home/pulse"
 	}
 	sshKeyPath := filepath.Join(homeDir, ".ssh/id_ed25519_sensors")
-	tempCollector := NewTemperatureCollector("root", sshKeyPath)
+	tempCollector := NewTemperatureCollectorWithPort("root", sshKeyPath, cfg.SSHPort)
 
 	// Security warning if running in container with SSH temperature monitoring
 	checkContainerizedTempMonitoring()

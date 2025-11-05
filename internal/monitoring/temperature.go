@@ -36,6 +36,7 @@ type temperatureProxy interface {
 type TemperatureCollector struct {
 	sshUser            string           // SSH user (typically "root" or "pulse-monitor")
 	sshKeyPath         string           // Path to SSH private key
+	sshPort            int              // SSH port (default 22)
 	proxyClient        temperatureProxy // Optional: unix socket client for proxy
 	useProxy           bool             // Whether to use proxy for temperature collection
 	hostKeys           knownhosts.Manager
@@ -46,11 +47,21 @@ type TemperatureCollector struct {
 	legacySSHDisabled  atomic.Bool
 }
 
-// NewTemperatureCollector creates a new temperature collector
+// NewTemperatureCollector creates a new temperature collector with default SSH port (22)
 func NewTemperatureCollector(sshUser, sshKeyPath string) *TemperatureCollector {
+	return NewTemperatureCollectorWithPort(sshUser, sshKeyPath, 22)
+}
+
+// NewTemperatureCollectorWithPort creates a new temperature collector with custom SSH port
+func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *TemperatureCollector {
+	if sshPort <= 0 {
+		sshPort = 22 // Default to standard SSH port
+	}
+
 	tc := &TemperatureCollector{
 		sshUser:    sshUser,
 		sshKeyPath: sshKeyPath,
+		sshPort:    sshPort,
 	}
 
 	homeDir := os.Getenv("HOME")
@@ -192,6 +203,7 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 		"-o", "BatchMode=yes",
 		"-o", "LogLevel=ERROR", // Suppress host key warnings that break JSON parsing
 		"-o", "ConnectTimeout=5",
+		"-p", fmt.Sprintf("%d", tc.sshPort), // Use configured SSH port
 	}
 
 	if tc.hostKeys != nil && tc.hostKeys.Path() != "" {
@@ -625,7 +637,7 @@ func (tc *TemperatureCollector) ensureHostKey(ctx context.Context, host string) 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return tc.hostKeys.Ensure(ctx, host)
+	return tc.hostKeys.EnsureWithPort(ctx, host, tc.sshPort)
 }
 
 func (tc *TemperatureCollector) isProxyEnabled() bool {
