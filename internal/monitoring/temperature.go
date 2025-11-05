@@ -326,9 +326,25 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 			strings.Contains(chipLower, "k8temp") ||
 			strings.Contains(chipLower, "acpitz") ||
 			strings.Contains(chipLower, "it87") ||
+			strings.Contains(chipLower, "nct6687") || // Nuvoton NCT6687 SuperIO
+			strings.Contains(chipLower, "nct6775") || // Nuvoton NCT6775 SuperIO
+			strings.Contains(chipLower, "nct6776") || // Nuvoton NCT6776 SuperIO
+			strings.Contains(chipLower, "nct6779") || // Nuvoton NCT6779 SuperIO
+			strings.Contains(chipLower, "nct6791") || // Nuvoton NCT6791 SuperIO
+			strings.Contains(chipLower, "nct6792") || // Nuvoton NCT6792 SuperIO
+			strings.Contains(chipLower, "nct6793") || // Nuvoton NCT6793 SuperIO
+			strings.Contains(chipLower, "nct6795") || // Nuvoton NCT6795 SuperIO
+			strings.Contains(chipLower, "nct6796") || // Nuvoton NCT6796 SuperIO
+			strings.Contains(chipLower, "nct6797") || // Nuvoton NCT6797 SuperIO
+			strings.Contains(chipLower, "nct6798") || // Nuvoton NCT6798 SuperIO
+			strings.Contains(chipLower, "w83627") ||  // Winbond W83627 SuperIO series
+			strings.Contains(chipLower, "f71882") ||  // Fintek F71882 SuperIO
 			strings.Contains(chipLower, "cpu_thermal") || // Raspberry Pi CPU temperature
 			strings.Contains(chipLower, "rpitemp") {
 			foundCPUChip = true
+			log.Debug().
+				Str("chip", chipName).
+				Msg("Detected CPU temperature chip")
 			tc.parseCPUTemps(chipMap, temp)
 		}
 
@@ -355,12 +371,34 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 	// Available means any temperature data exists (backward compatibility)
 	temp.Available = temp.HasCPU || temp.HasNVMe
 
+	// Log summary of what was detected
+	if !foundCPUChip {
+		// List all chip names found for debugging
+		chipNames := make([]string, 0, len(sensorsData))
+		for chipName := range sensorsData {
+			chipNames = append(chipNames, chipName)
+		}
+		log.Debug().
+			Strs("chips", chipNames).
+			Msg("No recognized CPU temperature chip found in sensors output")
+	} else {
+		log.Debug().
+			Bool("hasCPU", temp.HasCPU).
+			Bool("hasNVMe", temp.HasNVMe).
+			Float64("cpuPackage", temp.CPUPackage).
+			Float64("cpuMax", temp.CPUMax).
+			Int("coreCount", len(temp.Cores)).
+			Int("nvmeCount", len(temp.NVMe)).
+			Msg("Temperature data parsed successfully")
+	}
+
 	return temp, nil
 }
 
 // parseCPUTemps extracts CPU temperature data from a sensor chip
 func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, temp *models.Temperature) {
 	foundPackageTemp := false
+	var chipletTemps []float64 // Store AMD Tccd chiplet temps for fallback
 
 	for sensorName, sensorData := range chipMap {
 		sensorMap, ok := sensorData.(map[string]interface{})
@@ -380,6 +418,43 @@ func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, te
 				if tempVal > temp.CPUMax {
 					temp.CPUMax = tempVal
 				}
+				log.Debug().
+					Str("sensor", sensorName).
+					Float64("temp", tempVal).
+					Msg("Found CPU package temperature")
+			}
+		}
+
+		// Look for AMD chiplet temperatures (Tccd1, Tccd2, etc.) as fallback
+		if strings.HasPrefix(sensorName, "Tccd") {
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+				chipletTemps = append(chipletTemps, tempVal)
+				if tempVal > temp.CPUMax {
+					temp.CPUMax = tempVal
+				}
+				log.Debug().
+					Str("sensor", sensorName).
+					Float64("temp", tempVal).
+					Msg("Found AMD chiplet temperature")
+			}
+		}
+
+		// Look for SuperIO chip CPU temperature fields (CPUTIN, CPU Temperature, etc.)
+		if strings.Contains(sensorNameLower, "cputin") ||
+			strings.Contains(sensorNameLower, "cpu temperature") ||
+			(strings.Contains(sensorNameLower, "temp") && strings.Contains(sensorNameLower, "cpu")) {
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+				if !foundPackageTemp {
+					temp.CPUPackage = tempVal
+					foundPackageTemp = true
+				}
+				if tempVal > temp.CPUMax {
+					temp.CPUMax = tempVal
+				}
+				log.Debug().
+					Str("sensor", sensorName).
+					Float64("temp", tempVal).
+					Msg("Found SuperIO CPU temperature")
 			}
 		}
 
@@ -394,8 +469,26 @@ func (tc *TemperatureCollector) parseCPUTemps(chipMap map[string]interface{}, te
 				if tempVal > temp.CPUMax {
 					temp.CPUMax = tempVal
 				}
+				log.Debug().
+					Str("sensor", sensorName).
+					Int("core", coreNum).
+					Float64("temp", tempVal).
+					Msg("Found core temperature")
 			}
 		}
+	}
+
+	// If no package temperature found, use highest chiplet temp (AMD Ryzen)
+	if !foundPackageTemp && len(chipletTemps) > 0 {
+		for _, chipletTemp := range chipletTemps {
+			if chipletTemp > temp.CPUPackage {
+				temp.CPUPackage = chipletTemp
+			}
+		}
+		foundPackageTemp = true
+		log.Debug().
+			Float64("temp", temp.CPUPackage).
+			Msg("Using highest chiplet temperature as CPU package temperature")
 	}
 
 	// If no package temperature was found (e.g., Raspberry Pi), look for generic temp sensors

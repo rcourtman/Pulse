@@ -582,3 +582,131 @@ func TestDisableLegacySSHOnAuthFailure(t *testing.T) {
 		t.Fatalf("expected non-authentication errors to leave legacy SSH enabled")
 	}
 }
+
+// TestParseSensorsJSON_NCT6687SuperIO tests NCT6687 SuperIO chip detection
+func TestParseSensorsJSON_NCT6687SuperIO(t *testing.T) {
+	collector := &TemperatureCollector{}
+
+	jsonStr := `{
+		"nct6687-isa-0a20": {
+			"CPUTIN": {"temp1_input": 48.5},
+			"SYSTIN": {"temp2_input": 35.0}
+		}
+	}`
+
+	temp, err := collector.parseSensorsJSON(jsonStr)
+	if err != nil {
+		t.Fatalf("unexpected error parsing NCT6687 sensors output: %v", err)
+	}
+	if temp == nil {
+		t.Fatalf("expected temperature struct, got nil")
+	}
+	if !temp.Available {
+		t.Fatalf("expected temperature to be available when NCT6687 CPUTIN is present")
+	}
+	if !temp.HasCPU {
+		t.Fatalf("expected HasCPU to be true when NCT6687 chip is detected")
+	}
+	if temp.CPUPackage != 48.5 {
+		t.Fatalf("expected cpu package temperature 48.5 from CPUTIN, got %.2f", temp.CPUPackage)
+	}
+}
+
+// TestParseSensorsJSON_AmdChipletTemps tests AMD Tccd chiplet temperature detection
+func TestParseSensorsJSON_AmdChipletTemps(t *testing.T) {
+	collector := &TemperatureCollector{}
+
+	jsonStr := `{
+		"k10temp-pci-00c3": {
+			"Tccd1": {"temp3_input": 62.5},
+			"Tccd2": {"temp4_input": 58.0}
+		}
+	}`
+
+	temp, err := collector.parseSensorsJSON(jsonStr)
+	if err != nil {
+		t.Fatalf("unexpected error parsing AMD chiplet sensors output: %v", err)
+	}
+	if temp == nil {
+		t.Fatalf("expected temperature struct, got nil")
+	}
+	if !temp.Available {
+		t.Fatalf("expected temperature to be available when AMD chiplet temps are present")
+	}
+	if !temp.HasCPU {
+		t.Fatalf("expected HasCPU to be true when K10temp chip is detected")
+	}
+	// Should use highest chiplet temp as package temp
+	if temp.CPUPackage != 62.5 {
+		t.Fatalf("expected cpu package temperature to be highest chiplet temp (62.5), got %.2f", temp.CPUPackage)
+	}
+	// CPUMax should also be 62.5
+	if temp.CPUMax != 62.5 {
+		t.Fatalf("expected cpu max temperature 62.5, got %.2f", temp.CPUMax)
+	}
+}
+
+// TestParseSensorsJSON_AmdTctlAndChiplets tests AMD with both Tctl and chiplet temps
+func TestParseSensorsJSON_AmdTctlAndChiplets(t *testing.T) {
+	collector := &TemperatureCollector{}
+
+	jsonStr := `{
+		"k10temp-pci-00c3": {
+			"Tctl": {"temp1_input": 65.0},
+			"Tccd1": {"temp3_input": 62.5},
+			"Tccd2": {"temp4_input": 58.0}
+		}
+	}`
+
+	temp, err := collector.parseSensorsJSON(jsonStr)
+	if err != nil {
+		t.Fatalf("unexpected error parsing AMD full sensors output: %v", err)
+	}
+	if temp == nil {
+		t.Fatalf("expected temperature struct, got nil")
+	}
+	if !temp.Available {
+		t.Fatalf("expected temperature to be available")
+	}
+	if !temp.HasCPU {
+		t.Fatalf("expected HasCPU to be true")
+	}
+	// Tctl should take precedence over chiplet temps for package temperature
+	if temp.CPUPackage != 65.0 {
+		t.Fatalf("expected cpu package temperature from Tctl (65.0), got %.2f", temp.CPUPackage)
+	}
+	// CPUMax should be Tctl since it's highest
+	if temp.CPUMax != 65.0 {
+		t.Fatalf("expected cpu max temperature 65.0, got %.2f", temp.CPUMax)
+	}
+}
+
+// TestParseSensorsJSON_MultipleSuperioCPUFields tests SuperIO chips with multiple CPU temp fields
+func TestParseSensorsJSON_MultipleSuperioCPUFields(t *testing.T) {
+	collector := &TemperatureCollector{}
+
+	jsonStr := `{
+		"nct6775-isa-0290": {
+			"CPU Temperature": {"temp1_input": 52.0},
+			"SYSTIN": {"temp2_input": 38.0},
+			"AUXTIN0": {"temp3_input": 40.0}
+		}
+	}`
+
+	temp, err := collector.parseSensorsJSON(jsonStr)
+	if err != nil {
+		t.Fatalf("unexpected error parsing NCT6775 sensors output: %v", err)
+	}
+	if temp == nil {
+		t.Fatalf("expected temperature struct, got nil")
+	}
+	if !temp.Available {
+		t.Fatalf("expected temperature to be available")
+	}
+	if !temp.HasCPU {
+		t.Fatalf("expected HasCPU to be true")
+	}
+	if temp.CPUPackage != 52.0 {
+		t.Fatalf("expected cpu package temperature from 'CPU Temperature' field (52.0), got %.2f", temp.CPUPackage)
+	}
+}
