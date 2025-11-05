@@ -18,6 +18,8 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
 > - **LXC containers:** Fully automatic via the setup script (Settings → Nodes → Setup Script)
 > - **Docker containers:** Requires manual proxy installation (see below)
 > - **Native installs:** Direct SSH, no proxy needed
+>
+> **For automation (Ansible/Terraform/etc.):** Jump to [Automation-Friendly Installation](#automation-friendly-installation)
 
 ## Quick Start for Docker Deployments
 
@@ -464,21 +466,253 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/instal
 
 > **Heads up for v4.23.x:** Those builds don't ship a standalone `pulse-sensor-proxy` binary yet and the HTTP fallback still requires authentication. Either upgrade to a newer release, install Pulse from source (`install.sh --source main`), or pass a locally built binary with `--local-binary /path/to/pulse-sensor-proxy`.
 
-### Manual / Automated Host Configuration
+### Automation-Friendly Installation
 
-If you prefer to manage the proxy installation yourself (Ansible, Salt, etc.), follow these steps:
+For infrastructure-as-code tools (Ansible, Terraform, Salt, Puppet), the installer script is fully scriptable.
 
-1. **Copy the installer**  
-   Download `install-sensor-proxy.sh` from the repository (or cache it internally) and distribute it to the Proxmox host(s).
-2. **Run with required flags**  
-   Execute it with the container ID and Pulse URL:  
-   `bash install-sensor-proxy.sh --ctid <ctid> --pulse-server http://<pulse-container-ip>:7655`
-3. **Verify bind mount**  
-   Check `/etc/pve/lxc/<ctid>.conf` for the `mp` entry and ensure `/mnt/pulse-proxy/pulse-sensor-proxy.sock` exists inside the container after the restart.
-4. **Re-run after adding Proxmox nodes**  
-   The script is idempotent; rerun it anytime you add Proxmox nodes so their SSH keys are provisioned.
+#### Installation Script Flags
 
-Document these steps in your automation so GitHub/network hiccups still succeed by pulling the proxy binary directly from the running Pulse instance.
+```bash
+install-sensor-proxy.sh [OPTIONS]
+```
+
+**Required (choose one):**
+- `--ctid <id>` - For LXC containers (auto-configures bind mount)
+- `--standalone` - For Docker or standalone deployments
+
+**Optional:**
+- `--pulse-server <url>` - Pulse server URL (for binary fallback if GitHub unavailable)
+- `--version <tag>` - Specific version to install (default: latest)
+- `--local-binary <path>` - Use local binary instead of downloading
+- `--quiet` - Non-interactive mode (suppress progress output)
+- `--skip-restart` - Don't restart LXC container after installation
+- `--uninstall` - Remove the proxy service
+- `--purge` - Remove data directories (use with --uninstall)
+
+**Behavior:**
+- ✅ **Idempotent** - Safe to re-run, won't break existing installations
+- ✅ **Non-interactive** - Use `--quiet` for automated deployments
+- ✅ **Verifiable** - Returns exit code 0 on success, non-zero on failure
+
+#### Ansible Playbook Example
+
+**For LXC deployments:**
+
+```yaml
+---
+- name: Install Pulse sensor proxy for LXC
+  hosts: proxmox_hosts
+  become: yes
+  tasks:
+    - name: Download installer script
+      get_url:
+        url: https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh
+        dest: /tmp/install-sensor-proxy.sh
+        mode: '0755'
+
+    - name: Install sensor proxy
+      command: >
+        /tmp/install-sensor-proxy.sh
+        --ctid {{ pulse_container_id }}
+        --pulse-server {{ pulse_server_url }}
+        --quiet
+      register: install_result
+      changed_when: "'already exists' not in install_result.stdout"
+      failed_when: install_result.rc != 0
+
+    - name: Verify proxy is running
+      systemd:
+        name: pulse-sensor-proxy
+        state: started
+        enabled: yes
+      register: service_status
+```
+
+**For Docker deployments:**
+
+```yaml
+---
+- name: Install Pulse sensor proxy for Docker
+  hosts: proxmox_hosts
+  become: yes
+  tasks:
+    - name: Download installer script
+      get_url:
+        url: https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh
+        dest: /tmp/install-sensor-proxy.sh
+        mode: '0755'
+
+    - name: Install sensor proxy (standalone mode)
+      command: >
+        /tmp/install-sensor-proxy.sh
+        --standalone
+        --pulse-server {{ pulse_server_url }}
+        --quiet
+      register: install_result
+      failed_when: install_result.rc != 0
+
+    - name: Verify proxy is running
+      systemd:
+        name: pulse-sensor-proxy
+        state: started
+        enabled: yes
+
+    - name: Ensure docker-compose includes sensor proxy bind mount
+      blockinfile:
+        path: /opt/pulse/docker-compose.yml
+        marker: "# {mark} ANSIBLE MANAGED - Sensor Proxy"
+        insertafter: "volumes:"
+        block: |
+          - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw
+      notify: restart pulse container
+
+  handlers:
+    - name: restart pulse container
+      community.docker.docker_compose:
+        project_src: /opt/pulse
+        state: restarted
+```
+
+#### Terraform Example
+
+```hcl
+resource "null_resource" "pulse_sensor_proxy" {
+  for_each = var.proxmox_hosts
+
+  connection {
+    type     = "ssh"
+    host     = each.value.host
+    user     = "root"
+    private_key = file(var.ssh_private_key)
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh -o /tmp/install-sensor-proxy.sh",
+      "chmod +x /tmp/install-sensor-proxy.sh",
+      "/tmp/install-sensor-proxy.sh --standalone --pulse-server ${var.pulse_server_url} --quiet",
+      "systemctl is-active pulse-sensor-proxy || exit 1"
+    ]
+  }
+
+  triggers = {
+    pulse_version = var.pulse_version
+  }
+}
+```
+
+#### Manual Configuration (No Script)
+
+If you can't run the installer script, create the configuration manually:
+
+**1. Download binary:**
+```bash
+curl -L https://github.com/rcourtman/Pulse/releases/download/v4.27.0/pulse-sensor-proxy-linux-amd64 \
+  -o /usr/local/bin/pulse-sensor-proxy
+chmod 0755 /usr/local/bin/pulse-sensor-proxy
+```
+
+**2. Create service user:**
+```bash
+useradd --system --user-group --no-create-home --shell /usr/sbin/nologin pulse-sensor-proxy
+usermod -aG www-data pulse-sensor-proxy  # For pvecm access
+```
+
+**3. Create directories:**
+```bash
+install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy
+install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 /var/lib/pulse-sensor-proxy/ssh
+install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0755 /etc/pulse-sensor-proxy
+```
+
+**4. Create config (optional, for Docker):**
+```yaml
+# /etc/pulse-sensor-proxy/config.yaml
+allowed_peer_uids: [1000]  # Docker container UID
+allow_idmapped_root: true
+allowed_idmap_users:
+  - root
+```
+
+**5. Install systemd service:**
+```bash
+# Download from: https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh
+# Extract the systemd unit from lines 630-730, or see systemd unit in installer script
+systemctl daemon-reload
+systemctl enable --now pulse-sensor-proxy
+```
+
+**6. Verify:**
+```bash
+systemctl status pulse-sensor-proxy
+ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock
+```
+
+#### Configuration File Format
+
+The proxy reads `/etc/pulse-sensor-proxy/config.yaml` (optional):
+
+```yaml
+# Allowed UIDs that can connect to the socket (default: [0] = root only)
+allowed_peer_uids: [0, 1000]  # Allow root and UID 1000 (typical Docker)
+
+# Allowed GIDs that can connect to the socket
+allowed_peer_gids: [0]
+
+# Allow ID-mapped root from LXC containers
+allow_idmapped_root: true
+allowed_idmap_users:
+  - root
+
+# Source subnets for SSH key restrictions (auto-detected if not specified)
+allowed_source_subnets:
+  - 192.168.1.0/24
+  - 10.0.0.0/8
+
+# Rate limiting (per calling UID)
+rate_limit:
+  per_peer_interval_ms: 1000  # 1 request per second
+  per_peer_burst: 5           # Allow burst of 5
+
+# Metrics endpoint (default: 127.0.0.1:9127)
+metrics_address: 127.0.0.1:9127  # or "disabled"
+```
+
+**Environment Variable Overrides:**
+
+Config values can also be set via environment variables (useful for containerized proxy deployments):
+
+```bash
+# Add allowed subnets (comma-separated, appends to config file values)
+PULSE_SENSOR_PROXY_ALLOWED_SUBNETS=192.168.1.0/24,10.0.0.0/8
+
+# Allow/disallow ID-mapped root (overrides config file)
+PULSE_SENSOR_PROXY_ALLOW_IDMAPPED_ROOT=true
+```
+
+Example systemd override:
+```ini
+# /etc/systemd/system/pulse-sensor-proxy.service.d/override.conf
+[Service]
+Environment="PULSE_SENSOR_PROXY_ALLOWED_SUBNETS=192.168.1.0/24"
+```
+
+**Note:** Socket path, SSH key directory, and audit log path are configured via command-line flags (see main.go), not the YAML config file.
+
+#### Re-running After Changes
+
+The installer is idempotent and safe to re-run:
+
+```bash
+# After adding a new Proxmox node to cluster
+bash install-sensor-proxy.sh --standalone --pulse-server http://pulse:7655 --quiet
+
+# After upgrading Pulse version
+bash install-sensor-proxy.sh --standalone --pulse-server http://pulse:7655 --version v4.27.0 --quiet
+
+# Verify installation
+systemctl status pulse-sensor-proxy
+```
 
 ### Legacy Security Concerns (Pre-v4.24.0)
 
