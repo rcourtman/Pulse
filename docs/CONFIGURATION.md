@@ -284,14 +284,82 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 **Key behaviours:**
 
 - Thresholds use hysteresis pairs (`trigger` / `clear`) to avoid flapping. Use decimals for fine-grained network and IO limits.
-- Set a metric to `-1` to disable it globally or per-resource (the UI shows “Off” and adds a **Custom** badge).
-- `timeThresholds` apply a grace period before an alert fires; `metricTimeThresholds` allow per-metric overrides (e.g., delay network alerts longer than CPU).
+- Set a metric to `-1` to disable it globally or per-resource (the UI shows "Off" and adds a **Custom** badge).
+- `timeThresholds` apply a grace period (in seconds) before an alert fires, with separate defaults per resource type (guest, node, storage, pbs).
+- `metricTimeThresholds` provide **per-metric alert delays**, allowing you to configure different wait times for different metrics. See "Alert Delay Configuration" below for details.
 - `overrides` are indexed by the stable resource ID returned from `/api/state` (VMs: `instance/qemu/vmid`, containers: `instance/lxc/ctid`, nodes: `instance/node`).
 - `dockerIgnoredContainerPrefixes` lets you silence state/metric/restart alerts for ephemeral containers whose names or IDs share a common, case-insensitive prefix. The Containers tab in the UI keeps this list in sync.
 - Swarm service alerts track missing replicas: `serviceWarnGapPercent` defines when a warning fires, and `serviceCriticalGapPercent` must be greater than or equal to the warning gap (Pulse automatically clamps the critical value upward if an older client submits something smaller).
 - Docker container state controls live in `dockerDefaults`: flip `stateDisableConnectivity` to silence exit/offline alerts globally, or change `statePoweredOffSeverity` to `critical` when you want exiting containers to page immediately. Per-container overrides still take precedence.
 - `dockerDefaults.disk` defines the writable-layer usage threshold (% of the container's upper filesystem compared to its base image). Defaults trigger at 85% and clear at 80%, and can be overridden per container or host when noisy workloads need a different window.
 - Quiet hours, escalation, deduplication, and restart loop detection are all managed here, and the UI keeps the JSON in sync automatically.
+
+#### Alert Delay Configuration
+
+Alert delays prevent spurious notifications by requiring a threshold to remain exceeded for a specified duration before triggering an alert. Pulse supports **per-metric delay configuration**, allowing you to fine-tune delays for different types of alerts.
+
+**Configuration Levels** (in order of precedence):
+
+1. **Metric-specific delay for resource type**: `metricTimeThresholds[resourceType][metricName]`
+2. **Resource-type default**: `timeThresholds[resourceType]` (e.g., `guest`, `node`, `storage`, `pbs`)
+3. **Global metric delay**: `metricTimeThresholds["all"][metricName]` (only applies when no resource-type default exists)
+4. **Legacy global delay**: `timeThreshold` (deprecated, use `timeThresholds` instead)
+
+**Examples:**
+
+```json
+{
+  "timeThresholds": {
+    "guest": 60,
+    "node": 30,
+    "storage": 180
+  },
+  "metricTimeThresholds": {
+    "guest": {
+      "cpu": 300,
+      "memory": 60,
+      "disk": 120,
+      "networkout": 240
+    },
+    "node": {
+      "cpu": 120,
+      "temperature": 300
+    },
+    "docker": {
+      "restartcount": 10,
+      "cpu": 120
+    },
+    "all": {
+      "networkout": 300
+    }
+  }
+}
+```
+
+**How it works:**
+
+- **CPU alerts for VMs** wait 300 seconds (5 minutes) because CPU spikes are often transient
+- **Memory alerts for VMs** wait 60 seconds (1 minute) because memory pressure is typically persistent
+- **Disk alerts for VMs** wait 120 seconds (2 minutes), balancing urgency with stability
+- **Network Out for VMs** waits 240 seconds (4 minutes) because backups and migrations create temporary spikes
+- **Temperature alerts for nodes** wait 300 seconds (5 minutes) to allow fans time to respond
+- **Docker restart count** alerts trigger after only 10 seconds for immediate attention
+- **Storage usage** with no specific override uses the `storage` default (180 seconds)
+
+**UI Access:**
+
+In the Alerts page, the "Global Defaults" row for each resource table shows an expandable "Alert Delay (s)" sub-row. Each metric column has an input where you can configure per-metric delays. Empty fields inherit from the resource-type default shown in the placeholder.
+
+**Common Use Cases:**
+
+| Metric | Recommended Delay | Reasoning |
+|--------|-------------------|-----------|
+| CPU | 2-5 minutes | Transient spikes during load balancing, backups, or startup |
+| Memory | 30-60 seconds | Persistent issue that needs attention quickly |
+| Disk | 1-3 minutes | Gradual fill-up, not usually urgent |
+| Network | 3-5 minutes | Backups, migrations, and replication cause temporary spikes |
+| Temperature | 5+ minutes | Fans need time to ramp up; short spikes are normal |
+| Restart Count | 10-30 seconds | Container crashes need immediate attention |
 
 > Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.
 
