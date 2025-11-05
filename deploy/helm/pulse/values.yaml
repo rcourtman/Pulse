@@ -22,13 +22,16 @@ serviceAccount:
 podAnnotations: {}
 podLabels: {}
 
-podSecurityContext: {}
+podSecurityContext:
+  enabled: true
+  fsGroup: 1000
 
-securityContext:
+containerSecurityContext:
+  enabled: true
   runAsNonRoot: true
   runAsUser: 1000
   runAsGroup: 1000
-  fsGroup: 1000
+
 
 service:
   type: ClusterIP

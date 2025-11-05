@@ -23,10 +23,14 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "pulse.serviceAccountName" . }}
-      {{- $podSecurityContext := merge (dict) .Values.podSecurityContext .Values.server.podSecurityContext }}
+      {{- $podSecurityContext :=
+        ternary
+          (merge (dict) .Values.podSecurityContext .Values.server.podSecurityContext)
+          .Values.server.podSecurityContext
+          .Values.podSecurityContext.enabled }}
       {{- if $podSecurityContext }}
       securityContext:
-        {{- toYaml $podSecurityContext | nindent 8 }}
+        {{- omit $podSecurityContext "enabled" | toYaml | nindent 8 }}
       {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -39,10 +43,14 @@ spec:
           ports:
             - name: http
               containerPort: 7655
-          {{- $containerSecurityContext := merge (dict) .Values.securityContext .Values.server.securityContext }}
+          {{- $containerSecurityContext :=
+            ternary
+              (merge (dict) .Values.containerSecurityContext .Values.server.securityContext)
+              .Values.server.securityContext
+              .Values.containerSecurityContext.enabled }}
           {{- if $containerSecurityContext }}
           securityContext:
-            {{- toYaml $containerSecurityContext | nindent 12 }}
+            {{- omit $containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           {{- $envList := list }}
           {{- range .Values.server.env }}
