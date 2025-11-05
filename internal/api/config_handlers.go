@@ -4409,7 +4409,15 @@ Host ${NODE}
         else
             echo ""
             echo "⚠️  SSH key not available from Pulse server"
-            echo "  Temperature monitoring cannot be configured automatically"
+            if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
+                echo "  Pulse is running in a container, so host-side temperature proxy is required."
+                echo "  Install pulse-sensor-proxy on the Proxmox host and bind-mount /run/pulse-sensor-proxy into the container."
+                echo "  After the proxy is online, rerun this setup script to push the SSH key."
+                echo "  Docs: https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md#quick-start-for-docker-deployments"
+            else
+                echo "  Temperature monitoring cannot be configured automatically."
+                echo "  Ensure the Pulse service user has generated SSH keys and rerun this step."
+            fi
         fi
         else
             echo "Temperature monitoring skipped."
