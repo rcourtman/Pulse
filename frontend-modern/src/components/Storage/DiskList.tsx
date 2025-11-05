@@ -13,6 +13,11 @@ interface DiskListProps {
 export const DiskList: Component<DiskListProps> = (props) => {
   const { state } = useWebSocket();
 
+  // Check if there are any PVE nodes configured
+  const hasPVENodes = createMemo(() => {
+    return (state.nodes || []).length > 0;
+  });
+
   // Filter disks based on selected node and search term
   const filteredDisks = createMemo(() => {
     let disks = props.disks || [];
@@ -108,10 +113,38 @@ export const DiskList: Component<DiskListProps> = (props) => {
   return (
     <div>
       <Show when={filteredDisks().length === 0}>
-        <Card padding="lg" class="text-center text-gray-500">
-          No physical disks found
-          {selectedNodeName() && ` for node ${selectedNodeName()}`}
-          {props.searchTerm && ` matching "${props.searchTerm}"`}
+        <Card padding="lg" class="text-center">
+          <div class="text-gray-500">
+            <p class="text-sm font-medium">No physical disks found</p>
+            {selectedNodeName() && <p class="text-xs mt-1">for node {selectedNodeName()}</p>}
+            {props.searchTerm && <p class="text-xs mt-1">matching "{props.searchTerm}"</p>}
+          </div>
+          <Show when={!props.searchTerm && props.disks.length === 0}>
+            <Show
+              when={hasPVENodes()}
+              fallback={
+                <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-left">
+                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                    No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.
+                  </p>
+                </div>
+              }
+            >
+              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-left">
+                <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                  Physical disk monitoring requirements:
+                </p>
+                <ol class="text-xs text-blue-800 dark:text-blue-200 space-y-1.5 ml-4 list-decimal">
+                  <li>Enable "Monitor physical disk health (SMART)" in Settings → Proxmox Nodes (Advanced)</li>
+                  <li>Enable SMART monitoring in Proxmox VE at Datacenter → Node → System → Advanced → "Monitor physical disk health"</li>
+                  <li>Wait 5 minutes for Proxmox to collect SMART data</li>
+                </ol>
+                <p class="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
+                  Note: Both Pulse and Proxmox must have SMART monitoring enabled.
+                </p>
+              </div>
+            </Show>
+          </Show>
         </Card>
       </Show>
 
