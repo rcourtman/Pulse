@@ -25,6 +25,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -101,6 +102,7 @@ type Config struct {
 	GuestMetadataRefreshJitter      time.Duration `envconfig:"GUEST_METADATA_REFRESH_JITTER" default:"45s" json:"guestMetadataRefreshJitter"`
 	GuestMetadataRetryBackoff       time.Duration `envconfig:"GUEST_METADATA_RETRY_BACKOFF" default:"30s" json:"guestMetadataRetryBackoff"`
 	GuestMetadataMaxConcurrent      int           `envconfig:"GUEST_METADATA_MAX_CONCURRENT" default:"4" json:"guestMetadataMaxConcurrent"`
+	DNSCacheTimeout                 time.Duration `envconfig:"DNS_CACHE_TIMEOUT" default:"5m" json:"dnsCacheTimeout"`
 
 	// Logging settings
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -521,6 +523,7 @@ func Load() (*Config, error) {
 		GuestMetadataRefreshJitter:      DefaultGuestMetadataRefreshJitter,
 		GuestMetadataRetryBackoff:       DefaultGuestMetadataRetryBackoff,
 		GuestMetadataMaxConcurrent:      DefaultGuestMetadataMaxConcurrent,
+		DNSCacheTimeout:                 5 * time.Minute, // Default DNS cache timeout
 		LogLevel:                        "info",
 		LogFormat:                       "auto",
 		LogMaxSize:                      100,
@@ -615,10 +618,15 @@ func Load() (*Config, error) {
 		}
 		cfg.Discovery = NormalizeDiscoveryConfig(CloneDiscoveryConfig(systemSettings.DiscoveryConfig))
 		cfg.TemperatureMonitoringEnabled = systemSettings.TemperatureMonitoringEnabled
+		// Load DNS cache timeout
+		if systemSettings.DNSCacheTimeout > 0 {
+			cfg.DNSCacheTimeout = time.Duration(systemSettings.DNSCacheTimeout) * time.Second
+		}
 		// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
 				Str("logLevel", cfg.LogLevel).
+				Dur("dnsCacheTimeout", cfg.DNSCacheTimeout).
 				Msg("Loaded system configuration")
 		} else {
 			// No system.json exists - create default one
@@ -813,6 +821,20 @@ func Load() (*Config, error) {
 			}
 		} else {
 			log.Warn().Str("value", concurrent).Msg("Invalid GUEST_METADATA_MAX_CONCURRENT value, expected integer")
+		}
+	}
+
+	if dnsCacheTimeout := utils.GetenvTrim("DNS_CACHE_TIMEOUT"); dnsCacheTimeout != "" {
+		if dur, err := time.ParseDuration(dnsCacheTimeout); err == nil {
+			if dur <= 0 {
+				log.Warn().Str("value", dnsCacheTimeout).Msg("Ignoring non-positive DNS_CACHE_TIMEOUT from environment")
+			} else {
+				cfg.DNSCacheTimeout = dur
+				cfg.EnvOverrides["DNS_CACHE_TIMEOUT"] = true
+				log.Info().Dur("timeout", dur).Msg("DNS cache timeout overridden by environment")
+			}
+		} else {
+			log.Warn().Str("value", dnsCacheTimeout).Msg("Invalid DNS_CACHE_TIMEOUT value, expected duration string")
 		}
 	}
 
@@ -1193,6 +1215,10 @@ func Load() (*Config, error) {
 		Component: "pulse-config",
 	})
 
+	// Initialize DNS cache with configured timeout
+	// This must be done before any HTTP clients are created
+	tlsutil.SetDNSCacheTTL(cfg.DNSCacheTimeout)
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("load config: invalid configuration: %w", err)
@@ -1230,6 +1256,7 @@ func SaveConfig(cfg *Config) error {
 		AdaptivePollingBaseInterval: int(cfg.AdaptivePollingBaseInterval / time.Second),
 		AdaptivePollingMinInterval:  int(cfg.AdaptivePollingMinInterval / time.Second),
 		AdaptivePollingMaxInterval:  int(cfg.AdaptivePollingMaxInterval / time.Second),
+		DNSCacheTimeout:             int(cfg.DNSCacheTimeout / time.Second),
 		// APIToken removed - now handled via .env only
 	}
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {

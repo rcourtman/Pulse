@@ -818,9 +818,10 @@ type SystemSettings struct {
 	DiscoverySubnet             string          `json:"discoverySubnet,omitempty"`
 	DiscoveryConfig             DiscoveryConfig `json:"discoveryConfig"`
 	Theme                       string          `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
-	AllowEmbedding              bool            `json:"allowEmbedding"`                // Allow iframe embedding
-	AllowedEmbedOrigins         string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
-	TemperatureMonitoringEnabled bool           `json:"temperatureMonitoringEnabled"`
+	AllowEmbedding               bool            `json:"allowEmbedding"`                // Allow iframe embedding
+	AllowedEmbedOrigins          string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
+	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"`
+	DNSCacheTimeout              int             `json:"dnsCacheTimeout,omitempty"` // DNS cache timeout in seconds (0 = default 5 minutes)
 	// APIToken removed - now handled via .env file only
 }
 
@@ -828,14 +829,15 @@ type SystemSettings struct {
 func DefaultSystemSettings() *SystemSettings {
 	defaultDiscovery := DefaultDiscoveryConfig()
 	return &SystemSettings{
-		PBSPollingInterval: 60,
-		PMGPollingInterval: 60,
-		AutoUpdateEnabled:  false,
-		DiscoveryEnabled:   false,
-		DiscoverySubnet:    "auto",
-		DiscoveryConfig:    defaultDiscovery,
-		AllowEmbedding:     false,
+		PBSPollingInterval:           60,
+		PMGPollingInterval:           60,
+		AutoUpdateEnabled:            false,
+		DiscoveryEnabled:             false,
+		DiscoverySubnet:              "auto",
+		DiscoveryConfig:              defaultDiscovery,
+		AllowEmbedding:               false,
 		TemperatureMonitoringEnabled: true,
+		DNSCacheTimeout:              300, // Default: 5 minutes (300 seconds)
 	}
 }
 

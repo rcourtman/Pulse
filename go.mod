@@ -13,6 +13,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/prometheus/client_golang v1.23.2
+	github.com/rs/dnscache v0.0.0-20230804202142-fc85eb664529
 	github.com/rs/zerolog v1.34.0
 	github.com/shirou/gopsutil/v4 v4.25.9
 	github.com/spf13/cobra v1.9.1
@@ -68,6 +69,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
+	golang.org/x/sync v0.13.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
