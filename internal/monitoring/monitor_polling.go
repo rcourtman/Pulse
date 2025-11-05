@@ -493,8 +493,17 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 								Msg("Guest agent enabled, fetching filesystem info")
 						}
 
-						statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-						if fsInfo, err := client.GetVMFSInfo(statusCtx, n.Node, vm.VMID); err != nil {
+						// Filesystem info with configurable timeout and retry (refs #592)
+						fsInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+							return client.GetVMFSInfo(ctx, n.Node, vm.VMID)
+						})
+						var fsInfo []proxmox.VMFileSystem
+						if err == nil {
+							if fs, ok := fsInfoRaw.([]proxmox.VMFileSystem); ok {
+								fsInfo = fs
+							}
+						}
+						if err != nil {
 							// Handle errors
 							errStr := err.Error()
 							log.Warn().
@@ -655,7 +664,6 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
 							}
 						}
-						cancel()
 					} else {
 						// No vmStatus available or agent disabled - show allocated disk
 						if diskTotal > 0 {

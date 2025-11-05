@@ -439,7 +439,7 @@ type Monitor struct {
 	backoffCfg                 backoffConfig
 	rng                        *rand.Rand
 	maxRetryAttempts           int
-	tempService                TemperatureService
+	tempCollector              *TemperatureCollector // SSH-based temperature collector
 	mu                         sync.RWMutex
 	startTime                  time.Time
 	rateTracker                *RateTracker
@@ -477,62 +477,19 @@ type Monitor struct {
 	guestMetadataRefreshJitter time.Duration
 	guestMetadataRetryBackoff  time.Duration
 	guestMetadataHoldDuration  time.Duration
-	executor                   PollExecutor
+	// Configurable guest agent timeouts (refs #592)
+	guestAgentFSInfoTimeout   time.Duration
+	guestAgentNetworkTimeout  time.Duration
+	guestAgentOSInfoTimeout   time.Duration
+	guestAgentVersionTimeout  time.Duration
+	guestAgentRetries         int
+	executor                  PollExecutor
 	breakerBaseRetry           time.Duration
 	breakerMaxDelay            time.Duration
 	breakerHalfOpenWindow      time.Duration
 	instanceInfoCache          map[string]*instanceInfo
 	pollStatusMap              map[string]*pollStatus
 	dlqInsightMap              map[string]*dlqInsight
-}
-
-func (m *Monitor) temperatureService() TemperatureService {
-	if m == nil {
-		return nil
-	}
-
-	m.mu.RLock()
-	service := m.tempService
-	m.mu.RUnlock()
-	return service
-}
-
-// EnableTemperatureMonitoring reenables temperature collection and ensures the provider is available.
-func (m *Monitor) EnableTemperatureMonitoring() {
-	if m == nil {
-		return
-	}
-
-	m.mu.Lock()
-	service := m.tempService
-	defer m.mu.Unlock()
-
-	if m.config != nil {
-		m.config.TemperatureMonitoringEnabled = true
-	}
-
-	if service != nil {
-		service.Enable()
-	}
-}
-
-// DisableTemperatureMonitoring stops temperature collection attempts.
-func (m *Monitor) DisableTemperatureMonitoring() {
-	if m == nil {
-		return
-	}
-
-	m.mu.Lock()
-	service := m.tempService
-	defer m.mu.Unlock()
-
-	if m.config != nil {
-		m.config.TemperatureMonitoringEnabled = false
-	}
-
-	if service != nil {
-		service.Disable()
-	}
 }
 
 type rrdMemCacheEntry struct {
@@ -568,6 +525,44 @@ func safeFloat(val float64) float64 {
 		return 0
 	}
 	return val
+}
+
+// parseDurationEnv parses a duration from an environment variable, returning defaultVal if not set or invalid
+func parseDurationEnv(key string, defaultVal time.Duration) time.Duration {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	parsed, err := time.ParseDuration(val)
+	if err != nil {
+		log.Warn().
+			Str("key", key).
+			Str("value", val).
+			Err(err).
+			Dur("default", defaultVal).
+			Msg("Failed to parse duration from environment variable, using default")
+		return defaultVal
+	}
+	return parsed
+}
+
+// parseIntEnv parses an integer from an environment variable, returning defaultVal if not set or invalid
+func parseIntEnv(key string, defaultVal int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	parsed, err := strconv.Atoi(val)
+	if err != nil {
+		log.Warn().
+			Str("key", key).
+			Str("value", val).
+			Err(err).
+			Int("default", defaultVal).
+			Msg("Failed to parse integer from environment variable, using default")
+		return defaultVal
+	}
+	return parsed
 }
 
 func clampUint64ToInt64(val uint64) int64 {
@@ -782,6 +777,15 @@ const (
 	nodeRRDRequestTimeout        = 2 * time.Second
 	guestMetadataCacheTTL        = 5 * time.Minute
 	defaultGuestMetadataHold     = 15 * time.Second
+
+	// Guest agent timeout defaults (configurable via environment variables)
+	// Increased from 3-5s to 10-15s to handle high-load environments better (refs #592)
+	defaultGuestAgentFSInfoTimeout        = 15 * time.Second // GUEST_AGENT_FSINFO_TIMEOUT
+	defaultGuestAgentNetworkTimeout       = 10 * time.Second // GUEST_AGENT_NETWORK_TIMEOUT
+	defaultGuestAgentOSInfoTimeout        = 10 * time.Second // GUEST_AGENT_OSINFO_TIMEOUT
+	defaultGuestAgentVersionTimeout       = 10 * time.Second // GUEST_AGENT_VERSION_TIMEOUT
+	defaultGuestAgentRetries              = 1                // GUEST_AGENT_RETRIES (0 = no retry, 1 = one retry)
+	defaultGuestAgentRetryDelay           = 500 * time.Millisecond
 )
 
 type guestMetadataCacheEntry struct {
@@ -2047,6 +2051,36 @@ func (m *Monitor) releaseGuestMetadataSlot() {
 	}
 }
 
+// retryGuestAgentCall executes a guest agent API call with timeout and retry logic (refs #592)
+func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration, maxRetries int, fn func(context.Context) (interface{}, error)) (interface{}, error) {
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		callCtx, cancel := context.WithTimeout(ctx, timeout)
+		result, err := fn(callCtx)
+		cancel()
+
+		if err == nil {
+			return result, nil
+		}
+
+		lastErr = err
+
+		// Don't retry non-timeout errors or if this was the last attempt
+		if attempt >= maxRetries || !strings.Contains(err.Error(), "timeout") {
+			break
+		}
+
+		// Brief delay before retry to avoid hammering the API
+		select {
+		case <-time.After(defaultGuestAgentRetryDelay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	return nil, lastErr
+}
+
 func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus) ([]string, []models.GuestNetworkInterface, string, string, string) {
 	if vmStatus == nil || client == nil {
 		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
@@ -2100,9 +2134,10 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		}()
 	}
 
-	ifaceCtx, cancelIface := context.WithTimeout(ctx, 5*time.Second)
-	interfaces, err := client.GetVMNetworkInterfaces(ifaceCtx, nodeName, vmid)
-	cancelIface()
+	// Network interfaces with configurable timeout and retry (refs #592)
+	interfaces, err := m.retryGuestAgentCall(ctx, m.guestAgentNetworkTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+		return client.GetVMNetworkInterfaces(ctx, nodeName, vmid)
+	})
 	if err != nil {
 		log.Debug().
 			Str("instance", instanceName).
@@ -2110,16 +2145,17 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			Int("vmid", vmid).
 			Err(err).
 			Msg("Guest agent network interfaces unavailable")
-	} else if len(interfaces) > 0 {
-		ipAddresses, networkIfaces = processGuestNetworkInterfaces(interfaces)
+	} else if ifaces, ok := interfaces.([]proxmox.VMNetworkInterface); ok && len(ifaces) > 0 {
+		ipAddresses, networkIfaces = processGuestNetworkInterfaces(ifaces)
 	} else {
 		ipAddresses = nil
 		networkIfaces = nil
 	}
 
-	osCtx, cancelOS := context.WithTimeout(ctx, 3*time.Second)
-	agentInfo, err := client.GetVMAgentInfo(osCtx, nodeName, vmid)
-	cancelOS()
+	// OS info with configurable timeout and retry (refs #592)
+	agentInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentOSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+		return client.GetVMAgentInfo(ctx, nodeName, vmid)
+	})
 	if err != nil {
 		log.Debug().
 			Str("instance", instanceName).
@@ -2127,16 +2163,17 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			Int("vmid", vmid).
 			Err(err).
 			Msg("Guest agent OS info unavailable")
-	} else if len(agentInfo) > 0 {
+	} else if agentInfo, ok := agentInfoRaw.(map[string]interface{}); ok && len(agentInfo) > 0 {
 		osName, osVersion = extractGuestOSInfo(agentInfo)
 	} else {
 		osName = ""
 		osVersion = ""
 	}
 
-	versionCtx, cancelVersion := context.WithTimeout(ctx, 3*time.Second)
-	version, err := client.GetVMAgentVersion(versionCtx, nodeName, vmid)
-	cancelVersion()
+	// Agent version with configurable timeout and retry (refs #592)
+	versionRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentVersionTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+		return client.GetVMAgentVersion(ctx, nodeName, vmid)
+	})
 	if err != nil {
 		log.Debug().
 			Str("instance", instanceName).
@@ -2144,7 +2181,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			Int("vmid", vmid).
 			Err(err).
 			Msg("Guest agent version unavailable")
-	} else if version != "" {
+	} else if version, ok := versionRaw.(string); ok && version != "" {
 		agentVersion = version
 	} else {
 		agentVersion = ""
@@ -3061,12 +3098,10 @@ func New(cfg *config.Config) (*Monitor, error) {
 		homeDir = "/home/pulse"
 	}
 	sshKeyPath := filepath.Join(homeDir, ".ssh/id_ed25519_sensors")
-	tempService := newTemperatureService(cfg.TemperatureMonitoringEnabled, "root", sshKeyPath)
+	tempCollector := NewTemperatureCollector("root", sshKeyPath)
 
 	// Security warning if running in container with SSH temperature monitoring
-	if cfg.TemperatureMonitoringEnabled {
-		checkContainerizedTempMonitoring()
-	}
+	checkContainerizedTempMonitoring()
 
 	stalenessTracker := NewStalenessTracker(getPollMetrics())
 	stalenessTracker.SetBounds(cfg.AdaptivePollingBaseInterval, cfg.AdaptivePollingMaxInterval)
@@ -3114,6 +3149,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 	holdDuration := defaultGuestMetadataHold
 
+	// Load guest agent timeout configuration from environment variables (refs #592)
+	guestAgentFSInfoTimeout := parseDurationEnv("GUEST_AGENT_FSINFO_TIMEOUT", defaultGuestAgentFSInfoTimeout)
+	guestAgentNetworkTimeout := parseDurationEnv("GUEST_AGENT_NETWORK_TIMEOUT", defaultGuestAgentNetworkTimeout)
+	guestAgentOSInfoTimeout := parseDurationEnv("GUEST_AGENT_OSINFO_TIMEOUT", defaultGuestAgentOSInfoTimeout)
+	guestAgentVersionTimeout := parseDurationEnv("GUEST_AGENT_VERSION_TIMEOUT", defaultGuestAgentVersionTimeout)
+	guestAgentRetries := parseIntEnv("GUEST_AGENT_RETRIES", defaultGuestAgentRetries)
+
 	m := &Monitor{
 		config:                     cfg,
 		state:                      models.NewState(),
@@ -3131,7 +3173,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		backoffCfg:                 backoff,
 		rng:                        rand.New(rand.NewSource(time.Now().UnixNano())),
 		maxRetryAttempts:           5,
-		tempService:                tempService,
+		tempCollector:              tempCollector,
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
@@ -3159,6 +3201,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestMetadataRefreshJitter: jitter,
 		guestMetadataRetryBackoff:  retryBackoff,
 		guestMetadataHoldDuration:  holdDuration,
+		guestAgentFSInfoTimeout:    guestAgentFSInfoTimeout,
+		guestAgentNetworkTimeout:   guestAgentNetworkTimeout,
+		guestAgentOSInfoTimeout:    guestAgentOSInfoTimeout,
+		guestAgentVersionTimeout:   guestAgentVersionTimeout,
+		guestAgentRetries:          guestAgentRetries,
 		instanceInfoCache:          make(map[string]*instanceInfo),
 		pollStatusMap:              make(map[string]*pollStatus),
 		dlqInsightMap:              make(map[string]*dlqInsight),
@@ -5236,103 +5283,97 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 		// Collect temperature data via SSH (non-blocking, best effort)
 		// Only attempt for online nodes
-		if node.Status == "online" {
-			if tempService := m.temperatureService(); tempService != nil && tempService.Enabled() {
-				tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
+		if node.Status == "online" && m.tempCollector != nil {
+			tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
 
-				// Determine SSH hostname to use (most robust approach):
-				// Prefer the resolved host for this node, with cluster overrides when available.
-				sshHost := modelNode.Host
+			// Determine SSH hostname to use (most robust approach):
+			// Prefer the resolved host for this node, with cluster overrides when available.
+			sshHost := modelNode.Host
 
-				if modelNode.IsClusterMember && instanceCfg.IsCluster {
-					for _, ep := range instanceCfg.ClusterEndpoints {
-						if strings.EqualFold(ep.NodeName, node.Node) {
-							if effective := clusterEndpointEffectiveURL(ep); effective != "" {
-								sshHost = effective
-							}
-							break
+			if modelNode.IsClusterMember && instanceCfg.IsCluster {
+				for _, ep := range instanceCfg.ClusterEndpoints {
+					if strings.EqualFold(ep.NodeName, node.Node) {
+						if effective := clusterEndpointEffectiveURL(ep); effective != "" {
+							sshHost = effective
 						}
+						break
+					}
+				}
+			}
+
+			if strings.TrimSpace(sshHost) == "" {
+				sshHost = node.Node
+			}
+
+			temp, err := m.tempCollector.CollectTemperature(tempCtx, sshHost, node.Node)
+			tempCancel()
+
+			if err == nil && temp != nil && temp.Available {
+				// Get the current CPU temperature (prefer package, fall back to max)
+				currentTemp := temp.CPUPackage
+				if currentTemp == 0 && temp.CPUMax > 0 {
+					currentTemp = temp.CPUMax
+				}
+
+				// Find previous temperature data for this node to preserve min/max
+				var prevTemp *models.Temperature
+				for _, prevNode := range prevInstanceNodes {
+					if prevNode.ID == modelNode.ID && prevNode.Temperature != nil {
+						prevTemp = prevNode.Temperature
+						break
 					}
 				}
 
-				if strings.TrimSpace(sshHost) == "" {
-					sshHost = node.Node
-				}
+				// Initialize or update min/max tracking
+				if prevTemp != nil && prevTemp.CPUMin > 0 {
+					// Preserve existing min/max and update if necessary
+					temp.CPUMin = prevTemp.CPUMin
+					temp.CPUMaxRecord = prevTemp.CPUMaxRecord
+					temp.MinRecorded = prevTemp.MinRecorded
+					temp.MaxRecorded = prevTemp.MaxRecorded
 
-				temp, err := tempService.Collect(tempCtx, sshHost, node.Node)
-				tempCancel()
-
-				switch {
-				case err == nil && temp != nil && temp.Available:
-					// Get the current CPU temperature (prefer package, fall back to max)
-					currentTemp := temp.CPUPackage
-					if currentTemp == 0 && temp.CPUMax > 0 {
-						currentTemp = temp.CPUMax
-					}
-
-					// Find previous temperature data for this node to preserve min/max
-					var prevTemp *models.Temperature
-					for _, prevNode := range prevInstanceNodes {
-						if prevNode.ID == modelNode.ID && prevNode.Temperature != nil {
-							prevTemp = prevNode.Temperature
-							break
-						}
-					}
-
-					// Initialize or update min/max tracking
-					if prevTemp != nil && prevTemp.CPUMin > 0 {
-						// Preserve existing min/max and update if necessary
-						temp.CPUMin = prevTemp.CPUMin
-						temp.CPUMaxRecord = prevTemp.CPUMaxRecord
-						temp.MinRecorded = prevTemp.MinRecorded
-						temp.MaxRecorded = prevTemp.MaxRecorded
-
-						// Update min if current is lower
-						if currentTemp > 0 && currentTemp < temp.CPUMin {
-							temp.CPUMin = currentTemp
-							temp.MinRecorded = time.Now()
-						}
-
-						// Update max if current is higher
-						if currentTemp > temp.CPUMaxRecord {
-							temp.CPUMaxRecord = currentTemp
-							temp.MaxRecorded = time.Now()
-						}
-					} else if currentTemp > 0 {
-						// First reading - initialize min/max to current value
+					// Update min if current is lower
+					if currentTemp > 0 && currentTemp < temp.CPUMin {
 						temp.CPUMin = currentTemp
-						temp.CPUMaxRecord = currentTemp
 						temp.MinRecorded = time.Now()
+					}
+
+					// Update max if current is higher
+					if currentTemp > temp.CPUMaxRecord {
+						temp.CPUMaxRecord = currentTemp
 						temp.MaxRecorded = time.Now()
 					}
-
-					modelNode.Temperature = temp
-					log.Debug().
-						Str("node", node.Node).
-						Str("sshHost", sshHost).
-						Float64("cpuPackage", temp.CPUPackage).
-						Float64("cpuMax", temp.CPUMax).
-						Float64("cpuMin", temp.CPUMin).
-						Float64("cpuMaxRecord", temp.CPUMaxRecord).
-						Int("nvmeCount", len(temp.NVMe)).
-						Msg("Collected temperature data")
-				case err != nil:
-					if !stderrors.Is(err, ErrTemperatureMonitoringDisabled) && !stderrors.Is(err, ErrTemperatureCollectorUnavailable) {
-						log.Debug().
-							Str("node", node.Node).
-							Str("sshHost", sshHost).
-							Bool("isCluster", modelNode.IsClusterMember).
-							Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
-							Err(err).
-							Msg("Temperature collection failed - check SSH access")
-					}
-				case temp != nil:
-					log.Debug().
-						Str("node", node.Node).
-						Str("sshHost", sshHost).
-						Bool("available", temp.Available).
-						Msg("Temperature data unavailable after collection")
+				} else if currentTemp > 0 {
+					// First reading - initialize min/max to current value
+					temp.CPUMin = currentTemp
+					temp.CPUMaxRecord = currentTemp
+					temp.MinRecorded = time.Now()
+					temp.MaxRecorded = time.Now()
 				}
+
+				modelNode.Temperature = temp
+				log.Debug().
+					Str("node", node.Node).
+					Str("sshHost", sshHost).
+					Float64("cpuPackage", temp.CPUPackage).
+					Float64("cpuMax", temp.CPUMax).
+					Float64("cpuMin", temp.CPUMin).
+					Float64("cpuMaxRecord", temp.CPUMaxRecord).
+					Int("nvmeCount", len(temp.NVMe)).
+					Msg("Collected temperature data")
+			} else if err != nil {
+				log.Debug().
+					Str("node", node.Node).
+					Str("sshHost", sshHost).
+					Bool("isCluster", modelNode.IsClusterMember).
+					Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
+					Msg("Temperature collection failed - check SSH access")
+			} else if temp != nil {
+				log.Debug().
+					Str("node", node.Node).
+					Str("sshHost", sshHost).
+					Bool("available", temp.Available).
+					Msg("Temperature data unavailable after collection")
 			}
 		}
 
