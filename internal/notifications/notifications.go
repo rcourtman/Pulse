@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -1615,6 +1616,10 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		ackTime = alert.AckTime.Format(time.RFC3339)
 	}
 
+	// Round Value and Threshold to 1 decimal place for cleaner webhook payloads
+	roundedValue := math.Round(alert.Value*10) / 10
+	roundedThreshold := math.Round(alert.Threshold*10) / 10
+
 	return WebhookPayloadData{
 		ID:                 alert.ID,
 		Level:              string(alert.Level),
@@ -1624,8 +1629,8 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		Node:               alert.Node,
 		Instance:           instance,
 		Message:            alert.Message,
-		Value:              alert.Value,
-		Threshold:          alert.Threshold,
+		Value:              roundedValue,
+		Threshold:          roundedThreshold,
 		ValueFormatted:     formatMetricValue(alert.Type, alert.Value),
 		ThresholdFormatted: formatMetricThreshold(alert.Type, alert.Threshold),
 		StartTime:          alert.StartTime.Format(time.RFC3339),
