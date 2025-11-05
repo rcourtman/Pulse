@@ -2856,7 +2856,7 @@ func (h *ConfigHandlers) HandleVerifyTemperatureSSH(w http.ResponseWriter, r *ht
 		}
 		response.WriteString("\n")
 		response.WriteString("For LXC deployments, consider installing pulse-sensor-proxy on the Proxmox host.\n")
-		response.WriteString("See: https://docs.pulseapp.io for detailed SSH configuration options.\n")
+		response.WriteString("See: https://github.com/rcourtman/Pulse/blob/main/SECURITY.md for detailed SSH configuration options.\n")
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
@@ -4188,7 +4188,7 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
             echo "  4. Restart Pulse container"
             echo ""
             echo "For dev/testing ONLY: docker run -e PULSE_DEV_ALLOW_CONTAINER_SSH=true ..."
-            echo "Documentation: https://docs.pulseapp.io/security/containerized-deployments"
+            echo "Documentation: https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#critical-security-notice-for-container-deployments"
             echo ""
             TEMPERATURE_ENABLED=false
         fi
@@ -5820,7 +5820,7 @@ func (h *ConfigHandlers) getOrGenerateSSHKeys() SSHKeyPair {
 	if system.InContainer() && !devModeAllowSSH {
 		log.Error().Msg("SECURITY BLOCK: SSH key generation disabled in containerized deployments")
 		log.Error().Msg("For temperature monitoring in containers, deploy pulse-sensor-proxy on the Proxmox host")
-		log.Error().Msg("See: https://docs.pulseapp.io/security/containerized-deployments")
+		log.Error().Msg("See: https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#critical-security-notice-for-container-deployments")
 		log.Error().Msg("To test SSH keys in dev/lab only: PULSE_DEV_ALLOW_CONTAINER_SSH=true (NEVER in production!)")
 		return SSHKeyPair{}
 	}

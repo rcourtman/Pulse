@@ -120,8 +120,8 @@ docker logs pulse | grep -i "temperature proxy detected"
 systemctl status pulse-sensor-proxy
 ```
 
-**Documentation:** https://docs.pulseapp.io/security/containerized-deployments  
-**Issues:** https://github.com/rcourtman/pulse/issues  
+**Documentation:** https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#critical-security-notice-for-container-deployments
+**Issues:** https://github.com/rcourtman/pulse/issues
 **Private disclosures:** security@pulseapp.io
 
 ---
