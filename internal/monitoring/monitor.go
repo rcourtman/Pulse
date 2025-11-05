@@ -7735,6 +7735,20 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	contentFailures := 0                // Number of failed storage content fetches
 	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
 
+	// Build guest lookup map to find actual node for each VMID
+	snapshot := m.state.GetSnapshot()
+	guestNodeMap := make(map[int]string) // VMID -> actual node name
+	for _, vm := range snapshot.VMs {
+		if vm.Instance == instanceName {
+			guestNodeMap[vm.VMID] = vm.Node
+		}
+	}
+	for _, ct := range snapshot.Containers {
+		if ct.Instance == instanceName {
+			guestNodeMap[int(ct.VMID)] = ct.Node
+		}
+	}
+
 	// For each node, get storage and check content
 	for _, node := range nodes {
 		if nodeEffectiveStatus[node.Node] != "online" {
@@ -7828,8 +7842,15 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					backupType = "qemu"
 				}
 
-				// Always use the actual node name
+				// Determine the correct node: for guest backups (VMID > 0), use the actual guest's node
+				// For host backups (VMID == 0), use the node where the backup was found
 				backupNode := node.Node
+				if content.VMID > 0 {
+					if actualNode, found := guestNodeMap[content.VMID]; found {
+						backupNode = actualNode
+					}
+					// If not found in map, fall back to queried node (shouldn't happen normally)
+				}
 				isPBSStorage := strings.HasPrefix(storage.Storage, "pbs-") || storage.Type == "pbs"
 
 				// Check verification status for PBS backups
