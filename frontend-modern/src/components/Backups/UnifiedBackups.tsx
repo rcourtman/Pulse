@@ -1076,6 +1076,7 @@ const UnifiedBackups: Component = () => {
       {/* Unified Node Selector */}
       <UnifiedNodeSelector
         currentTab="backups"
+        globalTemperatureMonitoringEnabled={state.temperatureMonitoringEnabled}
         onNodeSelect={(nodeId) => {
           setSelectedNode(nodeId);
         }}

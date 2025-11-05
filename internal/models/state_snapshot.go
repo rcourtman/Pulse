@@ -23,10 +23,11 @@ type StateSnapshot struct {
 	PVEBackups         PVEBackups          `json:"pveBackups"`
 	Performance        Performance         `json:"performance"`
 	ConnectionHealth   map[string]bool     `json:"connectionHealth"`
-	Stats              Stats               `json:"stats"`
-	ActiveAlerts       []Alert             `json:"activeAlerts"`
-	RecentlyResolved   []ResolvedAlert     `json:"recentlyResolved"`
-	LastUpdate         time.Time           `json:"lastUpdate"`
+	Stats                        Stats               `json:"stats"`
+	ActiveAlerts                 []Alert             `json:"activeAlerts"`
+	RecentlyResolved             []ResolvedAlert     `json:"recentlyResolved"`
+	LastUpdate                   time.Time           `json:"lastUpdate"`
+	TemperatureMonitoringEnabled bool                `json:"temperatureMonitoringEnabled"`
 }
 
 // GetSnapshot returns a snapshot of the current state without mutex
@@ -67,10 +68,11 @@ func (s *State) GetSnapshot() StateSnapshot {
 		PVEBackups:       pveBackups,
 		Performance:      s.Performance,
 		ConnectionHealth: make(map[string]bool),
-		Stats:            s.Stats,
-		ActiveAlerts:     append([]Alert{}, s.ActiveAlerts...),
-		RecentlyResolved: append([]ResolvedAlert{}, s.RecentlyResolved...),
-		LastUpdate:       s.LastUpdate,
+		Stats:                        s.Stats,
+		ActiveAlerts:                 append([]Alert{}, s.ActiveAlerts...),
+		RecentlyResolved:             append([]ResolvedAlert{}, s.RecentlyResolved...),
+		LastUpdate:                   s.LastUpdate,
+		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 	}
 
 	// Copy map
@@ -153,8 +155,9 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		Metrics:            make(map[string]any),
 		PVEBackups:         s.PVEBackups,
 		Performance:        make(map[string]any),
-		ConnectionHealth:   s.ConnectionHealth,
-		Stats:              make(map[string]any),
-		LastUpdate:         s.LastUpdate.Unix() * 1000, // JavaScript timestamp
+		ConnectionHealth:             s.ConnectionHealth,
+		Stats:                        make(map[string]any),
+		LastUpdate:                   s.LastUpdate.Unix() * 1000, // JavaScript timestamp
+		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 	}
 }

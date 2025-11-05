@@ -5,6 +5,7 @@ import type { Node, VM, Container, Storage } from '@/types/api';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
+  globalTemperatureMonitoringEnabled?: boolean;
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
   onNamespaceSelect?: (namespace: string) => void;
   nodes?: Node[];
@@ -108,6 +109,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         backupCounts={backupCounts()}
         currentTab={props.currentTab}
         selectedNode={selectedNode()}
+        globalTemperatureMonitoringEnabled={props.globalTemperatureMonitoringEnabled}
         onNodeClick={handleNodeClick}
       />
     </div>

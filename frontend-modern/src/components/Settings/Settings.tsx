@@ -369,6 +369,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/proxmox')) return 'proxmox';
     if (path.includes('/settings/agent-hub')) return 'proxmox';
     if (path.includes('/settings/docker')) return 'docker';
+    if (path.includes('/settings/containers')) return 'docker';
     if (
       path.includes('/settings/hosts') ||
       path.includes('/settings/host-agents') ||
@@ -482,6 +483,14 @@ const Settings: Component<SettingsProps> = (props) => {
 
         if (path.startsWith('/settings/servers')) {
           navigate(path.replace('/settings/servers', '/settings/hosts'), {
+            replace: true,
+            scroll: false,
+          });
+          return;
+        }
+
+        if (path.startsWith('/settings/containers')) {
+          navigate(path.replace('/settings/containers', '/settings/docker'), {
             replace: true,
             scroll: false,
           });
@@ -1404,6 +1413,54 @@ const Settings: Component<SettingsProps> = (props) => {
       logger.error('Failed to update temperature monitoring setting', error);
       notificationStore.error('Failed to update temperature monitoring setting');
       setTemperatureMonitoringEnabled(previous);
+    } finally {
+      setSavingTemperatureSetting(false);
+    }
+  };
+
+  const handleNodeTemperatureMonitoringChange = async (nodeId: string, enabled: boolean | null): Promise<void> => {
+    if (savingTemperatureSetting()) {
+      return;
+    }
+
+    const node = nodes().find((n) => n.id === nodeId);
+    if (!node) {
+      return;
+    }
+
+    const previous = node.temperatureMonitoringEnabled;
+    setSavingTemperatureSetting(true);
+
+    // Update local state optimistically
+    setNodes(
+      nodes().map((n) => (n.id === nodeId ? { ...n, temperatureMonitoringEnabled: enabled } : n)),
+    );
+
+    // Also update editingNode if this is the node being edited
+    if (editingNode()?.id === nodeId) {
+      setEditingNode({ ...editingNode()!, temperatureMonitoringEnabled: enabled });
+    }
+
+    try {
+      await NodesAPI.updateNode(nodeId, { temperatureMonitoringEnabled: enabled } as any);
+      if (enabled === true) {
+        notificationStore.success('Temperature monitoring enabled for this node', 2000);
+      } else if (enabled === false) {
+        notificationStore.info('Temperature monitoring disabled for this node', 2000);
+      } else {
+        notificationStore.info('Using global temperature monitoring setting', 2000);
+      }
+    } catch (error) {
+      logger.error('Failed to update node temperature monitoring setting', error);
+      notificationStore.error('Failed to update temperature monitoring setting');
+      // Revert on error
+      setNodes(
+        nodes().map((n) => (n.id === nodeId ? { ...n, temperatureMonitoringEnabled: previous } : n)),
+      );
+      // Also revert editingNode
+      if (editingNode()?.id === nodeId) {
+        setEditingNode({ ...editingNode()!, temperatureMonitoringEnabled: previous });
+      }
     } finally {
       setSavingTemperatureSetting(false);
     }
@@ -2356,6 +2413,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             <PveNodesTable
                               nodes={pveNodes()}
                               stateNodes={state.nodes ?? []}
+                              globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
                                 setEditingNode(node);
@@ -2642,6 +2700,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             <PbsNodesTable
                               nodes={pbsNodes()}
                               statePbs={state.pbs ?? []}
+                              globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
                                 setEditingNode(node);
@@ -2928,6 +2987,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             <PmgNodesTable
                               nodes={pmgNodes()}
                               statePmg={state.pmg ?? []}
+                              globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
                                 setEditingNode(nodes().find((n) => n.id === node.id) ?? null);
@@ -6572,10 +6632,18 @@ const Settings: Component<SettingsProps> = (props) => {
           nodeType="pve"
           editingNode={editingNode()?.type === 'pve' ? (editingNode() ?? undefined) : undefined}
           securityStatus={securityStatus() ?? undefined}
-          temperatureMonitoringEnabled={temperatureMonitoringEnabled()}
+          temperatureMonitoringEnabled={
+            editingNode()?.temperatureMonitoringEnabled !== undefined
+              ? editingNode()!.temperatureMonitoringEnabled
+              : temperatureMonitoringEnabled()
+          }
           temperatureMonitoringLocked={temperatureMonitoringLocked()}
           savingTemperatureSetting={savingTemperatureSetting()}
-          onToggleTemperatureMonitoring={handleTemperatureMonitoringChange}
+          onToggleTemperatureMonitoring={
+            editingNode()?.id
+              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+              : handleTemperatureMonitoringChange
+          }
           onSave={async (nodeData) => {
             try {
               if (editingNode() && editingNode()!.id) {
@@ -6638,6 +6706,18 @@ const Settings: Component<SettingsProps> = (props) => {
           nodeType="pbs"
           editingNode={editingNode()?.type === 'pbs' ? (editingNode() ?? undefined) : undefined}
           securityStatus={securityStatus() ?? undefined}
+          temperatureMonitoringEnabled={
+            editingNode()?.temperatureMonitoringEnabled !== undefined
+              ? editingNode()!.temperatureMonitoringEnabled
+              : temperatureMonitoringEnabled()
+          }
+          temperatureMonitoringLocked={temperatureMonitoringLocked()}
+          savingTemperatureSetting={savingTemperatureSetting()}
+          onToggleTemperatureMonitoring={
+            editingNode()?.id
+              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+              : handleTemperatureMonitoringChange
+          }
           onSave={async (nodeData) => {
             try {
               if (editingNode() && editingNode()!.id) {
@@ -6698,6 +6778,18 @@ const Settings: Component<SettingsProps> = (props) => {
           nodeType="pmg"
           editingNode={editingNode()?.type === 'pmg' ? (editingNode() ?? undefined) : undefined}
           securityStatus={securityStatus() ?? undefined}
+          temperatureMonitoringEnabled={
+            editingNode()?.temperatureMonitoringEnabled !== undefined
+              ? editingNode()!.temperatureMonitoringEnabled
+              : temperatureMonitoringEnabled()
+          }
+          temperatureMonitoringLocked={temperatureMonitoringLocked()}
+          savingTemperatureSetting={savingTemperatureSetting()}
+          onToggleTemperatureMonitoring={
+            editingNode()?.id
+              ? (enabled: boolean) => handleNodeTemperatureMonitoringChange(editingNode()!.id, enabled)
+              : handleTemperatureMonitoringChange
+          }
           onSave={async (nodeData) => {
             try {
               if (editingNode() && editingNode()!.id) {

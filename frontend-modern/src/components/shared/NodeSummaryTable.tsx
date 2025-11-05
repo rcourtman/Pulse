@@ -18,6 +18,7 @@ interface NodeSummaryTableProps {
   backupCounts?: Record<string, number>;
   currentTab: 'dashboard' | 'storage' | 'backups';
   selectedNode: string | null;
+  globalTemperatureMonitoringEnabled?: boolean;
   onNodeClick: (nodeId: string, nodeType: 'pve' | 'pbs') => void;
 }
 
@@ -25,6 +26,16 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const { activeAlerts, state } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+
+  const isTemperatureMonitoringEnabled = (node: Node): boolean => {
+    const globalEnabled = props.globalTemperatureMonitoringEnabled ?? true;
+    // Check per-node setting first, fall back to global
+    if (node.temperatureMonitoringEnabled !== undefined && node.temperatureMonitoringEnabled !== null) {
+      return node.temperatureMonitoringEnabled;
+    }
+    return globalEnabled;
+  };
+
   type CountSortKey = 'vmCount' | 'containerCount' | 'storageCount' | 'diskCount' | 'backupCount';
   type SortKey =
     | 'default'
@@ -69,7 +80,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   });
 
   const hasAnyTemperatureData = createMemo(() => {
-    return props.nodes?.some((node) => node.temperature?.available) || false;
+    // Show temperature column if ANY node has monitoring enabled OR has temperature data
+    return (
+      props.nodes?.some(
+        (node) => node.temperature?.available || isTemperatureMonitoringEnabled(node),
+      ) || false
+    );
   });
 
   const nodeKey = (instance?: string, nodeName?: string) => `${instance ?? ''}::${nodeName ?? ''}`;
@@ -612,7 +628,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             online &&
                             isPVE &&
                             cpuTemperatureValue !== null &&
-                            (node!.temperature?.hasCPU ?? node!.temperature?.available)
+                            (node!.temperature?.hasCPU ?? node!.temperature?.available) &&
+                            isTemperatureMonitoringEnabled(node!)
                           }
                           fallback={
                             <span class="text-xs text-gray-400 dark:text-gray-500">-</span>

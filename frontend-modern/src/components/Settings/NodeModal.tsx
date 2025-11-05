@@ -1746,7 +1746,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <div>
                                   <p class="font-medium text-gray-900 dark:text-gray-100">Temperature monitoring</p>
                                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for every node. Disable if you don’t need temperature data or haven’t deployed the proxy yet.
+                                    Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this node. Disable if you don't need temperature data or haven't deployed the proxy yet.
                                   </p>
                                 </div>
                                 <TogglePrimitive
@@ -1760,7 +1760,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               </div>
                               <Show when={!enabled}>
                                 <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
-                                  Pulse will skip all SSH temperature polling until you re-enable this toggle. Existing dashboard readings will stop refreshing.
+                                  Pulse will skip SSH temperature polling for this node. Existing dashboard readings will stop refreshing.
                                 </p>
                               </Show>
                               <Show when={props.temperatureMonitoringLocked}>

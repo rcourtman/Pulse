@@ -10,6 +10,7 @@ type NodeConfigWithStatus = NodeConfig & {
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
   stateNodes: { instance: string; status?: string; connectionHealth?: string }[];
+  globalTemperatureMonitoringEnabled?: boolean;
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;
   onDelete: (node: NodeConfigWithStatus) => void;
@@ -43,6 +44,17 @@ const STATUS_META: Record<string, StatusMeta> = {
     label: 'Unknown',
     labelClass: 'text-gray-500 dark:text-gray-400',
   },
+};
+
+const isTemperatureMonitoringEnabled = (
+  node: NodeConfigWithStatus,
+  globalEnabled: boolean,
+): boolean => {
+  // Check per-node setting first, fall back to global
+  if (node.temperatureMonitoringEnabled !== undefined && node.temperatureMonitoringEnabled !== null) {
+    return node.temperatureMonitoringEnabled;
+  }
+  return globalEnabled;
 };
 
 const resolvePveStatusMeta = (
@@ -199,11 +211,12 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                             Physical Disks
                           </span>
                         )}
-                      {node.type === 'pve' && node.temperature?.available && (
-                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                          Temperature
-                        </span>
-                      )}
+                      {node.type === 'pve' &&
+                        isTemperatureMonitoringEnabled(node, props.globalTemperatureMonitoringEnabled ?? true) && (
+                          <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                            Temperature
+                          </span>
+                        )}
                     </div>
                   </td>
                   <td class="align-top px-3 py-3 whitespace-nowrap">
@@ -261,6 +274,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
 interface PbsNodesTableProps {
   nodes: NodeConfigWithStatus[];
   statePbs: { name: string; status?: string; connectionHealth?: string }[];
+  globalTemperatureMonitoringEnabled?: boolean;
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;
   onDelete: (node: NodeConfigWithStatus) => void;
@@ -380,11 +394,12 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                             Garbage Collection
                           </span>
                         )}
-                      {node.type === 'pbs' && node.temperature?.available && (
-                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                          Temperature
-                        </span>
-                      )}
+                      {node.type === 'pbs' &&
+                        isTemperatureMonitoringEnabled(node, props.globalTemperatureMonitoringEnabled ?? true) && (
+                          <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                            Temperature
+                          </span>
+                        )}
                     </div>
                   </td>
                   <td class="align-top px-3 py-3 whitespace-nowrap">
@@ -442,6 +457,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
 interface PmgNodesTableProps {
   nodes: NodeConfigWithStatus[];
   statePmg: { name: string; status?: string; connectionHealth?: string }[];
+  globalTemperatureMonitoringEnabled?: boolean;
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;
   onDelete: (node: NodeConfigWithStatus) => void;

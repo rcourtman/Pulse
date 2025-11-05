@@ -527,6 +527,7 @@ const Storage: Component = () => {
       {/* Node Selector */}
       <UnifiedNodeSelector
         currentTab="storage"
+        globalTemperatureMonitoringEnabled={state.temperatureMonitoringEnabled}
         onNodeSelect={handleNodeSelect}
         filteredStorage={sortedStorage()}
         searchTerm={searchTerm()}

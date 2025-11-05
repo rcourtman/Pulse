@@ -363,29 +363,30 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
 
 // NodeConfigRequest represents a request to add/update a node
 type NodeConfigRequest struct {
-	Type                 string `json:"type"` // "pve", "pbs", or "pmg"
-	Name                 string `json:"name"`
-	Host                 string `json:"host"`
-	User                 string `json:"user,omitempty"`
-	Password             string `json:"password,omitempty"`
-	TokenName            string `json:"tokenName,omitempty"`
-	TokenValue           string `json:"tokenValue,omitempty"`
-	Fingerprint          string `json:"fingerprint,omitempty"`
-	VerifySSL            bool   `json:"verifySSL"`
-	MonitorVMs           bool   `json:"monitorVMs,omitempty"`           // PVE only
-	MonitorContainers    bool   `json:"monitorContainers,omitempty"`    // PVE only
-	MonitorStorage       bool   `json:"monitorStorage,omitempty"`       // PVE only
-	MonitorBackups       bool   `json:"monitorBackups,omitempty"`       // PVE only
-	MonitorPhysicalDisks *bool  `json:"monitorPhysicalDisks,omitempty"` // PVE only (nil = enabled by default)
-	MonitorDatastores    bool   `json:"monitorDatastores,omitempty"`    // PBS only
-	MonitorSyncJobs      bool   `json:"monitorSyncJobs,omitempty"`      // PBS only
-	MonitorVerifyJobs    bool   `json:"monitorVerifyJobs,omitempty"`    // PBS only
-	MonitorPruneJobs     bool   `json:"monitorPruneJobs,omitempty"`     // PBS only
-	MonitorGarbageJobs   bool   `json:"monitorGarbageJobs,omitempty"`   // PBS only
-	MonitorMailStats     bool   `json:"monitorMailStats,omitempty"`     // PMG only
-	MonitorQueues        bool   `json:"monitorQueues,omitempty"`        // PMG only
-	MonitorQuarantine    bool   `json:"monitorQuarantine,omitempty"`    // PMG only
-	MonitorDomainStats   bool   `json:"monitorDomainStats,omitempty"`   // PMG only
+	Type                         string `json:"type"` // "pve", "pbs", or "pmg"
+	Name                         string `json:"name"`
+	Host                         string `json:"host"`
+	User                         string `json:"user,omitempty"`
+	Password                     string `json:"password,omitempty"`
+	TokenName                    string `json:"tokenName,omitempty"`
+	TokenValue                   string `json:"tokenValue,omitempty"`
+	Fingerprint                  string `json:"fingerprint,omitempty"`
+	VerifySSL                    *bool  `json:"verifySSL,omitempty"`
+	MonitorVMs                   *bool  `json:"monitorVMs,omitempty"`                   // PVE only
+	MonitorContainers            *bool  `json:"monitorContainers,omitempty"`            // PVE only
+	MonitorStorage               *bool  `json:"monitorStorage,omitempty"`               // PVE only
+	MonitorBackups               *bool  `json:"monitorBackups,omitempty"`               // PVE only
+	MonitorPhysicalDisks         *bool  `json:"monitorPhysicalDisks,omitempty"`         // PVE only (nil = enabled by default)
+	TemperatureMonitoringEnabled *bool  `json:"temperatureMonitoringEnabled,omitempty"` // All types (nil = use global setting)
+	MonitorDatastores            *bool  `json:"monitorDatastores,omitempty"`            // PBS only
+	MonitorSyncJobs              *bool  `json:"monitorSyncJobs,omitempty"`              // PBS only
+	MonitorVerifyJobs            *bool  `json:"monitorVerifyJobs,omitempty"`            // PBS only
+	MonitorPruneJobs             *bool  `json:"monitorPruneJobs,omitempty"`             // PBS only
+	MonitorGarbageJobs           *bool  `json:"monitorGarbageJobs,omitempty"`           // PBS only
+	MonitorMailStats             *bool  `json:"monitorMailStats,omitempty"`             // PMG only
+	MonitorQueues                *bool  `json:"monitorQueues,omitempty"`                // PMG only
+	MonitorQuarantine            *bool  `json:"monitorQuarantine,omitempty"`            // PMG only
+	MonitorDomainStats           *bool  `json:"monitorDomainStats,omitempty"`           // PMG only
 }
 
 // NodeResponse represents a node in API responses
@@ -403,9 +404,10 @@ type NodeResponse struct {
 	MonitorVMs           bool                     `json:"monitorVMs,omitempty"`
 	MonitorContainers    bool                     `json:"monitorContainers,omitempty"`
 	MonitorStorage       bool                     `json:"monitorStorage,omitempty"`
-	MonitorBackups       bool                     `json:"monitorBackups,omitempty"`
-	MonitorPhysicalDisks *bool                    `json:"monitorPhysicalDisks,omitempty"`
-	MonitorDatastores    bool                     `json:"monitorDatastores,omitempty"`
+	MonitorBackups               bool                     `json:"monitorBackups,omitempty"`
+	MonitorPhysicalDisks         *bool                    `json:"monitorPhysicalDisks,omitempty"`
+	TemperatureMonitoringEnabled *bool                    `json:"temperatureMonitoringEnabled,omitempty"`
+	MonitorDatastores            bool                     `json:"monitorDatastores,omitempty"`
 	MonitorSyncJobs      bool                     `json:"monitorSyncJobs,omitempty"`
 	MonitorVerifyJobs    bool                     `json:"monitorVerifyJobs,omitempty"`
 	MonitorPruneJobs     bool                     `json:"monitorPruneJobs,omitempty"`
@@ -731,25 +733,26 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 		h.maybeRefreshClusterInfo(&h.config.PVEInstances[i])
 		pve = h.config.PVEInstances[i]
 		node := NodeResponse{
-			ID:                   generateNodeID("pve", i),
-			Type:                 "pve",
-			Name:                 pve.Name,
-			Host:                 pve.Host,
-			User:                 pve.User,
-			HasPassword:          pve.Password != "",
-			TokenName:            pve.TokenName,
-			HasToken:             pve.TokenValue != "",
-			Fingerprint:          pve.Fingerprint,
-			VerifySSL:            pve.VerifySSL,
-			MonitorVMs:           pve.MonitorVMs,
-			MonitorContainers:    pve.MonitorContainers,
-			MonitorStorage:       pve.MonitorStorage,
-			MonitorBackups:       pve.MonitorBackups,
-			MonitorPhysicalDisks: pve.MonitorPhysicalDisks,
-			Status:               h.getNodeStatus("pve", pve.Name),
-			IsCluster:            pve.IsCluster,
-			ClusterName:          pve.ClusterName,
-			ClusterEndpoints:     pve.ClusterEndpoints,
+			ID:                           generateNodeID("pve", i),
+			Type:                         "pve",
+			Name:                         pve.Name,
+			Host:                         pve.Host,
+			User:                         pve.User,
+			HasPassword:                  pve.Password != "",
+			TokenName:                    pve.TokenName,
+			HasToken:                     pve.TokenValue != "",
+			Fingerprint:                  pve.Fingerprint,
+			VerifySSL:                    pve.VerifySSL,
+			MonitorVMs:                   pve.MonitorVMs,
+			MonitorContainers:            pve.MonitorContainers,
+			MonitorStorage:               pve.MonitorStorage,
+			MonitorBackups:               pve.MonitorBackups,
+			MonitorPhysicalDisks:         pve.MonitorPhysicalDisks,
+			TemperatureMonitoringEnabled: pve.TemperatureMonitoringEnabled,
+			Status:                       h.getNodeStatus("pve", pve.Name),
+			IsCluster:                    pve.IsCluster,
+			ClusterName:                  pve.ClusterName,
+			ClusterEndpoints:             pve.ClusterEndpoints,
 		}
 		nodes = append(nodes, node)
 	}
@@ -757,22 +760,23 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 	// Add PBS nodes
 	for i, pbs := range h.config.PBSInstances {
 		node := NodeResponse{
-			ID:                 generateNodeID("pbs", i),
-			Type:               "pbs",
-			Name:               pbs.Name,
-			Host:               pbs.Host,
-			User:               pbs.User,
-			HasPassword:        pbs.Password != "",
-			TokenName:          pbs.TokenName,
-			HasToken:           pbs.TokenValue != "",
-			Fingerprint:        pbs.Fingerprint,
-			VerifySSL:          pbs.VerifySSL,
-			MonitorDatastores:  pbs.MonitorDatastores,
-			MonitorSyncJobs:    pbs.MonitorSyncJobs,
-			MonitorVerifyJobs:  pbs.MonitorVerifyJobs,
-			MonitorPruneJobs:   pbs.MonitorPruneJobs,
-			MonitorGarbageJobs: pbs.MonitorGarbageJobs,
-			Status:             h.getNodeStatus("pbs", pbs.Name),
+			ID:                           generateNodeID("pbs", i),
+			Type:                         "pbs",
+			Name:                         pbs.Name,
+			Host:                         pbs.Host,
+			User:                         pbs.User,
+			HasPassword:                  pbs.Password != "",
+			TokenName:                    pbs.TokenName,
+			HasToken:                     pbs.TokenValue != "",
+			Fingerprint:                  pbs.Fingerprint,
+			VerifySSL:                    pbs.VerifySSL,
+			TemperatureMonitoringEnabled: pbs.TemperatureMonitoringEnabled,
+			MonitorDatastores:            pbs.MonitorDatastores,
+			MonitorSyncJobs:              pbs.MonitorSyncJobs,
+			MonitorVerifyJobs:            pbs.MonitorVerifyJobs,
+			MonitorPruneJobs:             pbs.MonitorPruneJobs,
+			MonitorGarbageJobs:           pbs.MonitorGarbageJobs,
+			Status:                       h.getNodeStatus("pbs", pbs.Name),
 		}
 		nodes = append(nodes, node)
 	}
@@ -785,21 +789,22 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 		}
 
 		node := NodeResponse{
-			ID:                 generateNodeID("pmg", i),
-			Type:               "pmg",
-			Name:               pmgInst.Name,
-			Host:               pmgInst.Host,
-			User:               pmgInst.User,
-			HasPassword:        pmgInst.Password != "",
-			TokenName:          pmgInst.TokenName,
-			HasToken:           pmgInst.TokenValue != "",
-			Fingerprint:        pmgInst.Fingerprint,
-			VerifySSL:          pmgInst.VerifySSL,
-			MonitorMailStats:   monitorMailStats,
-			MonitorQueues:      pmgInst.MonitorQueues,
-			MonitorQuarantine:  pmgInst.MonitorQuarantine,
-			MonitorDomainStats: pmgInst.MonitorDomainStats,
-			Status:             h.getNodeStatus("pmg", pmgInst.Name),
+			ID:                           generateNodeID("pmg", i),
+			Type:                         "pmg",
+			Name:                         pmgInst.Name,
+			Host:                         pmgInst.Host,
+			User:                         pmgInst.User,
+			HasPassword:                  pmgInst.Password != "",
+			TokenName:                    pmgInst.TokenName,
+			HasToken:                     pmgInst.TokenValue != "",
+			Fingerprint:                  pmgInst.Fingerprint,
+			VerifySSL:                    pmgInst.VerifySSL,
+			TemperatureMonitoringEnabled: pmgInst.TemperatureMonitoringEnabled,
+			MonitorMailStats:             monitorMailStats,
+			MonitorQueues:                pmgInst.MonitorQueues,
+			MonitorQuarantine:            pmgInst.MonitorQuarantine,
+			MonitorDomainStats:           pmgInst.MonitorDomainStats,
+			Status:                       h.getNodeStatus("pmg", pmgInst.Name),
 		}
 		nodes = append(nodes, node)
 	}
@@ -1142,7 +1147,11 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			strings.Contains(req.Name, "concurrent-")
 
 		if !skipClusterDetection {
-			clientConfig := config.CreateProxmoxConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, req.VerifySSL)
+			verifySSL := false
+			if req.VerifySSL != nil {
+				verifySSL = *req.VerifySSL
+			}
+			clientConfig := config.CreateProxmoxConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, verifySSL)
 			isCluster, clusterName, clusterEndpoints = detectPVECluster(clientConfig, req.Name)
 		}
 
@@ -1153,23 +1162,46 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				Msg("Detected Proxmox cluster, auto-discovering all nodes")
 		}
 
+		// Use sensible defaults for boolean fields if not provided
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		monitorVMs := true // Default to true
+		if req.MonitorVMs != nil {
+			monitorVMs = *req.MonitorVMs
+		}
+		monitorContainers := true // Default to true
+		if req.MonitorContainers != nil {
+			monitorContainers = *req.MonitorContainers
+		}
+		monitorStorage := true // Default to true
+		if req.MonitorStorage != nil {
+			monitorStorage = *req.MonitorStorage
+		}
+		monitorBackups := true // Default to true
+		if req.MonitorBackups != nil {
+			monitorBackups = *req.MonitorBackups
+		}
+
 		pve := config.PVEInstance{
-			Name:                 req.Name,
-			Host:                 host, // Use normalized host
-			User:                 req.User,
-			Password:             req.Password,
-			TokenName:            req.TokenName,
-			TokenValue:           req.TokenValue,
-			Fingerprint:          req.Fingerprint,
-			VerifySSL:            req.VerifySSL,
-			MonitorVMs:           req.MonitorVMs,
-			MonitorContainers:    req.MonitorContainers,
-			MonitorStorage:       req.MonitorStorage,
-			MonitorBackups:       req.MonitorBackups,
-			MonitorPhysicalDisks: req.MonitorPhysicalDisks,
-			IsCluster:            isCluster,
-			ClusterName:          clusterName,
-			ClusterEndpoints:     clusterEndpoints,
+			Name:                             req.Name,
+			Host:                             host, // Use normalized host
+			User:                             req.User,
+			Password:                         req.Password,
+			TokenName:                        req.TokenName,
+			TokenValue:                       req.TokenValue,
+			Fingerprint:                      req.Fingerprint,
+			VerifySSL:                        verifySSL,
+			MonitorVMs:                       monitorVMs,
+			MonitorContainers:                monitorContainers,
+			MonitorStorage:                   monitorStorage,
+			MonitorBackups:                   monitorBackups,
+			MonitorPhysicalDisks:             req.MonitorPhysicalDisks,
+			TemperatureMonitoringEnabled:     req.TemperatureMonitoringEnabled,
+			IsCluster:                        isCluster,
+			ClusterName:                      clusterName,
+			ClusterEndpoints:                 clusterEndpoints,
 		}
 		h.config.PVEInstances = append(h.config.PVEInstances, pve)
 
@@ -1221,21 +1253,52 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Use sensible defaults for boolean fields if not provided
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		monitorBackups := true // Default to true for PBS
+		if req.MonitorBackups != nil {
+			monitorBackups = *req.MonitorBackups
+		}
+		monitorDatastores := false
+		if req.MonitorDatastores != nil {
+			monitorDatastores = *req.MonitorDatastores
+		}
+		monitorSyncJobs := false
+		if req.MonitorSyncJobs != nil {
+			monitorSyncJobs = *req.MonitorSyncJobs
+		}
+		monitorVerifyJobs := false
+		if req.MonitorVerifyJobs != nil {
+			monitorVerifyJobs = *req.MonitorVerifyJobs
+		}
+		monitorPruneJobs := false
+		if req.MonitorPruneJobs != nil {
+			monitorPruneJobs = *req.MonitorPruneJobs
+		}
+		monitorGarbageJobs := false
+		if req.MonitorGarbageJobs != nil {
+			monitorGarbageJobs = *req.MonitorGarbageJobs
+		}
+
 		pbs := config.PBSInstance{
-			Name:               req.Name,
-			Host:               host,
-			User:               pbsUser,
-			Password:           pbsPassword,
-			TokenName:          pbsTokenName,
-			TokenValue:         pbsTokenValue,
-			Fingerprint:        req.Fingerprint,
-			VerifySSL:          req.VerifySSL,
-			MonitorBackups:     true, // Enable by default for PBS
-			MonitorDatastores:  req.MonitorDatastores,
-			MonitorSyncJobs:    req.MonitorSyncJobs,
-			MonitorVerifyJobs:  req.MonitorVerifyJobs,
-			MonitorPruneJobs:   req.MonitorPruneJobs,
-			MonitorGarbageJobs: req.MonitorGarbageJobs,
+			Name:                         req.Name,
+			Host:                         host,
+			User:                         pbsUser,
+			Password:                     pbsPassword,
+			TokenName:                    pbsTokenName,
+			TokenValue:                   pbsTokenValue,
+			Fingerprint:                  req.Fingerprint,
+			VerifySSL:                    verifySSL,
+			MonitorBackups:               monitorBackups,
+			MonitorDatastores:            monitorDatastores,
+			MonitorSyncJobs:              monitorSyncJobs,
+			MonitorVerifyJobs:            monitorVerifyJobs,
+			MonitorPruneJobs:             monitorPruneJobs,
+			MonitorGarbageJobs:           monitorGarbageJobs,
+			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
 		h.config.PBSInstances = append(h.config.PBSInstances, pbs)
 	} else if req.Type == "pmg" {
@@ -1269,24 +1332,53 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		monitorMailStats := req.MonitorMailStats
-		if !req.MonitorMailStats && !req.MonitorQueues && !req.MonitorQuarantine && !req.MonitorDomainStats {
-			monitorMailStats = true
+		// Use sensible defaults for boolean fields if not provided
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+
+		// Check if any monitoring flags are explicitly set to true
+		anyMonitoringEnabled := (req.MonitorMailStats != nil && *req.MonitorMailStats) ||
+			(req.MonitorQueues != nil && *req.MonitorQueues) ||
+			(req.MonitorQuarantine != nil && *req.MonitorQuarantine) ||
+			(req.MonitorDomainStats != nil && *req.MonitorDomainStats)
+
+		// Default MonitorMailStats to true if no monitoring is explicitly enabled
+		monitorMailStats := true // Default to true
+		if req.MonitorMailStats != nil {
+			monitorMailStats = *req.MonitorMailStats
+		} else if anyMonitoringEnabled {
+			monitorMailStats = false // Don't default to true if other monitoring is enabled
+		}
+
+		monitorQueues := false
+		if req.MonitorQueues != nil {
+			monitorQueues = *req.MonitorQueues
+		}
+		monitorQuarantine := false
+		if req.MonitorQuarantine != nil {
+			monitorQuarantine = *req.MonitorQuarantine
+		}
+		monitorDomainStats := false
+		if req.MonitorDomainStats != nil {
+			monitorDomainStats = *req.MonitorDomainStats
 		}
 
 		pmgInstance := config.PMGInstance{
-			Name:               req.Name,
-			Host:               host,
-			User:               pmgUser,
-			Password:           pmgPassword,
-			TokenName:          pmgTokenName,
-			TokenValue:         pmgTokenValue,
-			Fingerprint:        req.Fingerprint,
-			VerifySSL:          req.VerifySSL,
-			MonitorMailStats:   monitorMailStats,
-			MonitorQueues:      req.MonitorQueues,
-			MonitorQuarantine:  req.MonitorQuarantine,
-			MonitorDomainStats: req.MonitorDomainStats,
+			Name:                         req.Name,
+			Host:                         host,
+			User:                         pmgUser,
+			Password:                     pmgPassword,
+			TokenName:                    pmgTokenName,
+			TokenValue:                   pmgTokenValue,
+			Fingerprint:                  req.Fingerprint,
+			VerifySSL:                    verifySSL,
+			MonitorMailStats:             monitorMailStats,
+			MonitorQueues:                monitorQueues,
+			MonitorQuarantine:            monitorQuarantine,
+			MonitorDomainStats:           monitorDomainStats,
+			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
 		h.config.PMGInstances = append(h.config.PMGInstances, pmgInstance)
 	}
@@ -1412,13 +1504,17 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			authUser = normalizePVEUser(authUser)
 			req.User = authUser
 		}
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
 		clientConfig := proxmox.ClientConfig{
 			Host:        host,
 			User:        authUser,
 			Password:    req.Password,
 			TokenName:   req.TokenName, // Pass the full token ID
 			TokenValue:  req.TokenValue,
-			VerifySSL:   req.VerifySSL,
+			VerifySSL:   verifySSL,
 			Fingerprint: req.Fingerprint,
 		}
 
@@ -1500,13 +1596,17 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
 		}
 
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
 		clientConfig := pbs.ClientConfig{
 			Host:        host,
 			User:        pbsUser,
 			Password:    req.Password,
 			TokenName:   pbsTokenName,
 			TokenValue:  req.TokenValue,
-			VerifySSL:   req.VerifySSL,
+			VerifySSL:   verifySSL,
 			Fingerprint: req.Fingerprint,
 		}
 
@@ -1549,7 +1649,11 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			host = host + ":8006"
 		}
 
-		clientConfig := config.CreatePMGConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, req.VerifySSL)
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
+		clientConfig := config.CreatePMGConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, verifySSL)
 
 		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
 			if clientConfig.User != "" && !strings.Contains(clientConfig.User, "@") {
@@ -1632,6 +1736,12 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Debug: Log the received temperatureMonitoringEnabled value
+	log.Info().
+		Str("nodeID", nodeID).
+		Interface("temperatureMonitoringEnabled", req.TemperatureMonitoringEnabled).
+		Msg("Received node update request")
+
 	// Parse node ID
 	parts := strings.Split(nodeID, "-")
 	if len(parts) != 2 {
@@ -1706,12 +1816,27 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 
 		pve.Fingerprint = req.Fingerprint
-		pve.VerifySSL = req.VerifySSL
-		pve.MonitorVMs = req.MonitorVMs
-		pve.MonitorContainers = req.MonitorContainers
-		pve.MonitorStorage = req.MonitorStorage
-		pve.MonitorBackups = req.MonitorBackups
-		pve.MonitorPhysicalDisks = req.MonitorPhysicalDisks
+		if req.VerifySSL != nil {
+			pve.VerifySSL = *req.VerifySSL
+		}
+		if req.MonitorVMs != nil {
+			pve.MonitorVMs = *req.MonitorVMs
+		}
+		if req.MonitorContainers != nil {
+			pve.MonitorContainers = *req.MonitorContainers
+		}
+		if req.MonitorStorage != nil {
+			pve.MonitorStorage = *req.MonitorStorage
+		}
+		if req.MonitorBackups != nil {
+			pve.MonitorBackups = *req.MonitorBackups
+		}
+		if req.MonitorPhysicalDisks != nil {
+			pve.MonitorPhysicalDisks = req.MonitorPhysicalDisks
+		}
+		if req.TemperatureMonitoringEnabled != nil {
+			pve.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+		}
 	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
 		pbs := &h.config.PBSInstances[index]
 		pbs.Name = req.Name
@@ -1775,13 +1900,32 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		// else: No authentication changes - preserve existing auth fields
 
 		pbs.Fingerprint = req.Fingerprint
-		pbs.VerifySSL = req.VerifySSL
-		pbs.MonitorBackups = true // Enable by default for PBS
-		pbs.MonitorDatastores = req.MonitorDatastores
-		pbs.MonitorSyncJobs = req.MonitorSyncJobs
-		pbs.MonitorVerifyJobs = req.MonitorVerifyJobs
-		pbs.MonitorPruneJobs = req.MonitorPruneJobs
-		pbs.MonitorGarbageJobs = req.MonitorGarbageJobs
+		if req.VerifySSL != nil {
+			pbs.VerifySSL = *req.VerifySSL
+		}
+		if req.MonitorBackups != nil {
+			pbs.MonitorBackups = *req.MonitorBackups
+		} else {
+			pbs.MonitorBackups = true // Enable by default for PBS
+		}
+		if req.MonitorDatastores != nil {
+			pbs.MonitorDatastores = *req.MonitorDatastores
+		}
+		if req.MonitorSyncJobs != nil {
+			pbs.MonitorSyncJobs = *req.MonitorSyncJobs
+		}
+		if req.MonitorVerifyJobs != nil {
+			pbs.MonitorVerifyJobs = *req.MonitorVerifyJobs
+		}
+		if req.MonitorPruneJobs != nil {
+			pbs.MonitorPruneJobs = *req.MonitorPruneJobs
+		}
+		if req.MonitorGarbageJobs != nil {
+			pbs.MonitorGarbageJobs = *req.MonitorGarbageJobs
+		}
+		if req.TemperatureMonitoringEnabled != nil {
+			pbs.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+		}
 	} else if nodeType == "pmg" && index < len(h.config.PMGInstances) {
 		pmgInst := &h.config.PMGInstances[index]
 		pmgInst.Name = req.Name
@@ -1838,15 +1982,30 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		// else: No authentication changes - preserve existing auth fields
 
 		pmgInst.Fingerprint = req.Fingerprint
-		pmgInst.VerifySSL = req.VerifySSL
-		monitorMailStats := req.MonitorMailStats
-		if !req.MonitorMailStats && !req.MonitorQueues && !req.MonitorQuarantine && !req.MonitorDomainStats {
-			monitorMailStats = true
+		if req.VerifySSL != nil {
+			pmgInst.VerifySSL = *req.VerifySSL
 		}
-		pmgInst.MonitorMailStats = monitorMailStats
-		pmgInst.MonitorQueues = req.MonitorQueues
-		pmgInst.MonitorQuarantine = req.MonitorQuarantine
-		pmgInst.MonitorDomainStats = req.MonitorDomainStats
+		// Special logic for MonitorMailStats: default to true if all monitor flags are false/unset
+		if req.MonitorMailStats != nil {
+			pmgInst.MonitorMailStats = *req.MonitorMailStats
+		} else if (req.MonitorMailStats == nil || !*req.MonitorMailStats) &&
+			(req.MonitorQueues == nil || !*req.MonitorQueues) &&
+			(req.MonitorQuarantine == nil || !*req.MonitorQuarantine) &&
+			(req.MonitorDomainStats == nil || !*req.MonitorDomainStats) {
+			pmgInst.MonitorMailStats = true
+		}
+		if req.MonitorQueues != nil {
+			pmgInst.MonitorQueues = *req.MonitorQueues
+		}
+		if req.MonitorQuarantine != nil {
+			pmgInst.MonitorQuarantine = *req.MonitorQuarantine
+		}
+		if req.MonitorDomainStats != nil {
+			pmgInst.MonitorDomainStats = *req.MonitorDomainStats
+		}
+		if req.TemperatureMonitoringEnabled != nil {
+			pmgInst.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+		}
 	} else {
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
@@ -2220,13 +2379,17 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 			authUser = normalizePVEUser(authUser)
 			req.User = authUser
 		}
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
 		clientConfig := proxmox.ClientConfig{
 			Host:        req.Host,
 			User:        authUser,
 			Password:    req.Password,
 			TokenName:   req.TokenName,
 			TokenValue:  req.TokenValue,
-			VerifySSL:   req.VerifySSL,
+			VerifySSL:   verifySSL,
 			Fingerprint: req.Fingerprint,
 		}
 		client, err := proxmox.NewClient(clientConfig)
@@ -2257,13 +2420,17 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 		}
 	} else if req.Type == "pbs" {
 		// Create a temporary client to test connection
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
 		clientConfig := pbs.ClientConfig{
 			Host:        req.Host,
 			User:        req.User,
 			Password:    req.Password,
 			TokenName:   req.TokenName,
 			TokenValue:  req.TokenValue,
-			VerifySSL:   req.VerifySSL,
+			VerifySSL:   verifySSL,
 			Fingerprint: req.Fingerprint,
 		}
 		client, err := pbs.NewClient(clientConfig)
@@ -2293,13 +2460,17 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 			}
 		}
 	} else if req.Type == "pmg" {
+		verifySSL := false
+		if req.VerifySSL != nil {
+			verifySSL = *req.VerifySSL
+		}
 		clientConfig := pmg.ClientConfig{
 			Host:        req.Host,
 			User:        req.User,
 			Password:    req.Password,
 			TokenName:   req.TokenName,
 			TokenValue:  req.TokenValue,
-			VerifySSL:   req.VerifySSL,
+			VerifySSL:   verifySSL,
 			Fingerprint: req.Fingerprint,
 		}
 		client, err := pmg.NewClient(clientConfig)
@@ -5148,22 +5319,24 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Create a node configuration
+	boolFalse := false
+	boolTrue := true
 	nodeConfig := NodeConfigRequest{
 		Type:               req.Type,
 		Name:               req.ServerName,
 		Host:               host, // Use normalized host
 		TokenName:          req.TokenID,
 		TokenValue:         req.TokenValue,
-		VerifySSL:          false, // Default to not verifying SSL for auto-registration
-		MonitorVMs:         true,
-		MonitorContainers:  true,
-		MonitorStorage:     true,
-		MonitorBackups:     true,
-		MonitorDatastores:  true,
-		MonitorSyncJobs:    true,
-		MonitorVerifyJobs:  true,
-		MonitorPruneJobs:   true,
-		MonitorGarbageJobs: false,
+		VerifySSL:          &boolFalse, // Default to not verifying SSL for auto-registration
+		MonitorVMs:         &boolTrue,
+		MonitorContainers:  &boolTrue,
+		MonitorStorage:     &boolTrue,
+		MonitorBackups:     &boolTrue,
+		MonitorDatastores:  &boolTrue,
+		MonitorSyncJobs:    &boolTrue,
+		MonitorVerifyJobs:  &boolTrue,
+		MonitorPruneJobs:   &boolTrue,
+		MonitorGarbageJobs: &boolFalse,
 	}
 
 	// Check if a node with this host already exists
@@ -5235,25 +5408,46 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		// Add new node
 		if req.Type == "pve" {
 			// Check for cluster detection using helper
+			verifySSL := false
+			if nodeConfig.VerifySSL != nil {
+				verifySSL = *nodeConfig.VerifySSL
+			}
 			clientConfig := proxmox.ClientConfig{
 				Host:       nodeConfig.Host,
 				TokenName:  nodeConfig.TokenName,
 				TokenValue: nodeConfig.TokenValue,
-				VerifySSL:  nodeConfig.VerifySSL,
+				VerifySSL:  verifySSL,
 			}
 
 			isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, nodeConfig.Name)
+
+			monitorVMs := true
+			if nodeConfig.MonitorVMs != nil {
+				monitorVMs = *nodeConfig.MonitorVMs
+			}
+			monitorContainers := true
+			if nodeConfig.MonitorContainers != nil {
+				monitorContainers = *nodeConfig.MonitorContainers
+			}
+			monitorStorage := true
+			if nodeConfig.MonitorStorage != nil {
+				monitorStorage = *nodeConfig.MonitorStorage
+			}
+			monitorBackups := true
+			if nodeConfig.MonitorBackups != nil {
+				monitorBackups = *nodeConfig.MonitorBackups
+			}
 
 			newInstance := config.PVEInstance{
 				Name:              nodeConfig.Name,
 				Host:              nodeConfig.Host,
 				TokenName:         nodeConfig.TokenName,
 				TokenValue:        nodeConfig.TokenValue,
-				VerifySSL:         nodeConfig.VerifySSL,
-				MonitorVMs:        nodeConfig.MonitorVMs,
-				MonitorContainers: nodeConfig.MonitorContainers,
-				MonitorStorage:    nodeConfig.MonitorStorage,
-				MonitorBackups:    nodeConfig.MonitorBackups,
+				VerifySSL:         verifySSL,
+				MonitorVMs:        monitorVMs,
+				MonitorContainers: monitorContainers,
+				MonitorStorage:    monitorStorage,
+				MonitorBackups:    monitorBackups,
 				IsCluster:         isCluster,
 				ClusterName:       clusterName,
 				ClusterEndpoints:  clusterEndpoints,
@@ -5267,18 +5461,43 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 					Msg("Added Proxmox cluster via auto-registration")
 			}
 		} else {
+			verifySSL := false
+			if nodeConfig.VerifySSL != nil {
+				verifySSL = *nodeConfig.VerifySSL
+			}
+			monitorDatastores := false
+			if nodeConfig.MonitorDatastores != nil {
+				monitorDatastores = *nodeConfig.MonitorDatastores
+			}
+			monitorSyncJobs := false
+			if nodeConfig.MonitorSyncJobs != nil {
+				monitorSyncJobs = *nodeConfig.MonitorSyncJobs
+			}
+			monitorVerifyJobs := false
+			if nodeConfig.MonitorVerifyJobs != nil {
+				monitorVerifyJobs = *nodeConfig.MonitorVerifyJobs
+			}
+			monitorPruneJobs := false
+			if nodeConfig.MonitorPruneJobs != nil {
+				monitorPruneJobs = *nodeConfig.MonitorPruneJobs
+			}
+			monitorGarbageJobs := false
+			if nodeConfig.MonitorGarbageJobs != nil {
+				monitorGarbageJobs = *nodeConfig.MonitorGarbageJobs
+			}
+
 			newInstance := config.PBSInstance{
 				Name:               nodeConfig.Name,
 				Host:               nodeConfig.Host,
 				TokenName:          nodeConfig.TokenName,
 				TokenValue:         nodeConfig.TokenValue,
-				VerifySSL:          nodeConfig.VerifySSL,
+				VerifySSL:          verifySSL,
 				MonitorBackups:     true, // Enable by default for PBS
-				MonitorDatastores:  nodeConfig.MonitorDatastores,
-				MonitorSyncJobs:    nodeConfig.MonitorSyncJobs,
-				MonitorVerifyJobs:  nodeConfig.MonitorVerifyJobs,
-				MonitorPruneJobs:   nodeConfig.MonitorPruneJobs,
-				MonitorGarbageJobs: nodeConfig.MonitorGarbageJobs,
+				MonitorDatastores:  monitorDatastores,
+				MonitorSyncJobs:    monitorSyncJobs,
+				MonitorVerifyJobs:  monitorVerifyJobs,
+				MonitorPruneJobs:   monitorPruneJobs,
+				MonitorGarbageJobs: monitorGarbageJobs,
 			}
 			h.config.PBSInstances = append(h.config.PBSInstances, newInstance)
 		}

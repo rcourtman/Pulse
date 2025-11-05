@@ -762,6 +762,7 @@ export function Dashboard(props: DashboardProps) {
       {/* Unified Node Selector */}
       <UnifiedNodeSelector
         currentTab="dashboard"
+        globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
         onNodeSelect={handleNodeSelect}
         nodes={props.nodes}
         filteredVms={filteredGuests().filter((g) => g.type === 'qemu')}

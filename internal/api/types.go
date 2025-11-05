@@ -81,17 +81,18 @@ type ConfigResponse struct {
 
 // NodeConfig represents a node configuration
 type NodeConfig struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Type        string            `json:"type"`
-	Address     string            `json:"address"`
-	Port        int               `json:"port,omitempty"`
-	Username    string            `json:"username,omitempty"`
-	HasPassword bool              `json:"hasPassword"`
-	HasToken    bool              `json:"hasToken"`
-	SkipTLS     bool              `json:"skipTLS,omitempty"`
-	Tags        []string          `json:"tags,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	ID                            string            `json:"id"`
+	Name                          string            `json:"name"`
+	Type                          string            `json:"type"`
+	Address                       string            `json:"address"`
+	Port                          int               `json:"port,omitempty"`
+	Username                      string            `json:"username,omitempty"`
+	HasPassword                   bool              `json:"hasPassword"`
+	HasToken                      bool              `json:"hasToken"`
+	SkipTLS                       bool              `json:"skipTLS,omitempty"`
+	TemperatureMonitoringEnabled  *bool             `json:"temperatureMonitoringEnabled,omitempty"`
+	Tags                          []string          `json:"tags,omitempty"`
+	Metadata                      map[string]string `json:"metadata,omitempty"`
 }
 
 // SettingsConfig represents application settings

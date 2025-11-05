@@ -29,10 +29,11 @@ type State struct {
 	PVEBackups         PVEBackups          `json:"pveBackups"`
 	Performance        Performance         `json:"performance"`
 	ConnectionHealth   map[string]bool     `json:"connectionHealth"`
-	Stats              Stats               `json:"stats"`
-	ActiveAlerts       []Alert             `json:"activeAlerts"`
-	RecentlyResolved   []ResolvedAlert     `json:"recentlyResolved"`
-	LastUpdate         time.Time           `json:"lastUpdate"`
+	Stats                        Stats               `json:"stats"`
+	ActiveAlerts                 []Alert             `json:"activeAlerts"`
+	RecentlyResolved             []ResolvedAlert     `json:"recentlyResolved"`
+	LastUpdate                   time.Time           `json:"lastUpdate"`
+	TemperatureMonitoringEnabled bool                `json:"temperatureMonitoringEnabled"`
 }
 
 // Alert represents an active alert (simplified for State)
@@ -76,9 +77,10 @@ type Node struct {
 	KernelVersion    string       `json:"kernelVersion"`
 	PVEVersion       string       `json:"pveVersion"`
 	CPUInfo          CPUInfo      `json:"cpuInfo"`
-	Temperature      *Temperature `json:"temperature,omitempty"` // CPU/NVMe temperatures
-	LastSeen         time.Time    `json:"lastSeen"`
-	ConnectionHealth string       `json:"connectionHealth"`
+	Temperature                  *Temperature `json:"temperature,omitempty"`                  // CPU/NVMe temperatures
+	TemperatureMonitoringEnabled *bool        `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
+	LastSeen                     time.Time    `json:"lastSeen"`
+	ConnectionHealth             string       `json:"connectionHealth"`
 	IsClusterMember  bool         `json:"isClusterMember"` // True if part of a cluster
 	ClusterName      string       `json:"clusterName"`     // Name of cluster (empty if standalone)
 }

@@ -27,6 +27,7 @@ export interface PVENodeConfig {
   monitorStorage: boolean;
   monitorBackups: boolean;
   monitorPhysicalDisks: boolean;
+  temperatureMonitoringEnabled?: boolean | null;
   // Cluster information
   isCluster?: boolean;
   clusterName?: string;
@@ -45,6 +46,7 @@ export interface PBSNodeConfig {
   password?: string;
   fingerprint?: string;
   verifySSL: boolean;
+  temperatureMonitoringEnabled?: boolean | null;
   monitorDatastores: boolean;
   monitorSyncJobs: boolean;
   monitorVerifyJobs: boolean;
@@ -64,6 +66,7 @@ export interface PMGNodeConfig {
   password?: string;
   fingerprint?: string;
   verifySSL: boolean;
+  temperatureMonitoringEnabled?: boolean | null;
   monitorMailStats: boolean;
   monitorQueues: boolean;
   monitorQuarantine: boolean;

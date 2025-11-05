@@ -24,6 +24,7 @@ export interface State {
   activeAlerts: Alert[];
   recentlyResolved: ResolvedAlert[];
   lastUpdate: string;
+  temperatureMonitoringEnabled?: boolean;
 }
 
 export interface RemovedDockerHost {
@@ -50,6 +51,7 @@ export interface Node {
   pveVersion: string;
   cpuInfo: CPUInfo;
   temperature?: Temperature; // CPU/NVMe temperatures
+  temperatureMonitoringEnabled?: boolean | null; // Per-node temperature monitoring override
   lastSeen: string;
   connectionHealth: string;
   isClusterMember?: boolean; // True if part of a cluster

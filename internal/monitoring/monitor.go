@@ -3224,6 +3224,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 	m.executor = newRealExecutor(m)
 	m.buildInstanceInfoCache(cfg)
 
+	// Initialize state with config values
+	m.state.TemperatureMonitoringEnabled = cfg.TemperatureMonitoringEnabled
+
 	if m.pollMetrics != nil {
 		m.pollMetrics.ResetQueueDepth(0)
 	}
@@ -4914,8 +4917,9 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			LoadAverage:      []float64{},
 			LastSeen:         time.Now(),
 			ConnectionHealth: connectionHealthStr, // Use the determined health status
-			IsClusterMember:  instanceCfg.IsCluster,
-			ClusterName:      instanceCfg.ClusterName,
+			IsClusterMember:              instanceCfg.IsCluster,
+			ClusterName:                  instanceCfg.ClusterName,
+			TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
 		}
 
 		nodeSnapshotRaw := NodeMemoryRaw{
@@ -5282,8 +5286,13 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		})
 
 		// Collect temperature data via SSH (non-blocking, best effort)
-		// Only attempt for online nodes
-		if node.Status == "online" && m.tempCollector != nil {
+		// Only attempt for online nodes when temperature monitoring is enabled
+		// Check per-node setting first, fall back to global setting
+		tempMonitoringEnabled := m.config.TemperatureMonitoringEnabled
+		if instanceCfg.TemperatureMonitoringEnabled != nil {
+			tempMonitoringEnabled = *instanceCfg.TemperatureMonitoringEnabled
+		}
+		if node.Status == "online" && m.tempCollector != nil && tempMonitoringEnabled {
 			tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
 
 			// Determine SSH hostname to use (most robust approach):

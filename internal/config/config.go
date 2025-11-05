@@ -385,20 +385,21 @@ func splitAndTrim(value string) []string {
 
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
-	Name                       string
-	Host                       string // Primary endpoint (user-provided)
-	User                       string
-	Password                   string
-	TokenName                  string
-	TokenValue                 string
-	Fingerprint                string
-	VerifySSL                  bool
-	MonitorVMs                 bool
-	MonitorContainers          bool
-	MonitorStorage             bool
-	MonitorBackups             bool
-	MonitorPhysicalDisks       *bool // Monitor physical disks (nil = enabled by default, can be explicitly disabled)
-	PhysicalDiskPollingMinutes int   // How often to poll physical disks (0 = use default)
+	Name                         string
+	Host                         string // Primary endpoint (user-provided)
+	User                         string
+	Password                     string
+	TokenName                    string
+	TokenValue                   string
+	Fingerprint                  string
+	VerifySSL                    bool
+	MonitorVMs                   bool
+	MonitorContainers            bool
+	MonitorStorage               bool
+	MonitorBackups               bool
+	MonitorPhysicalDisks         *bool // Monitor physical disks (nil = enabled by default, can be explicitly disabled)
+	PhysicalDiskPollingMinutes   int   // How often to poll physical disks (0 = use default)
+	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
 
 	// Cluster support
 	IsCluster        bool              // True if this is a cluster
@@ -418,20 +419,21 @@ type ClusterEndpoint struct {
 
 // PBSInstance represents a Proxmox Backup Server connection
 type PBSInstance struct {
-	Name               string
-	Host               string
-	User               string
-	Password           string
-	TokenName          string
-	TokenValue         string
-	Fingerprint        string
-	VerifySSL          bool
-	MonitorBackups     bool
-	MonitorDatastores  bool
-	MonitorSyncJobs    bool
-	MonitorVerifyJobs  bool
-	MonitorPruneJobs   bool
-	MonitorGarbageJobs bool
+	Name                         string
+	Host                         string
+	User                         string
+	Password                     string
+	TokenName                    string
+	TokenValue                   string
+	Fingerprint                  string
+	VerifySSL                    bool
+	MonitorBackups               bool
+	MonitorDatastores            bool
+	MonitorSyncJobs              bool
+	MonitorVerifyJobs            bool
+	MonitorPruneJobs             bool
+	MonitorGarbageJobs           bool
+	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
 }
 
 // PMGInstance represents a Proxmox Mail Gateway connection
@@ -445,10 +447,11 @@ type PMGInstance struct {
 	Fingerprint string
 	VerifySSL   bool
 
-	MonitorMailStats   bool
-	MonitorQueues      bool
-	MonitorQuarantine  bool
-	MonitorDomainStats bool
+	MonitorMailStats             bool
+	MonitorQueues                bool
+	MonitorQuarantine            bool
+	MonitorDomainStats           bool
+	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
 }
 
 // Global persistence instance for saving

@@ -26,9 +26,10 @@ type NodeFrontend struct {
 	CPUInfo          CPUInfo      `json:"cpuInfo"`
 	Temperature      *Temperature `json:"temperature,omitempty"` // CPU/NVMe temperatures
 	LastSeen         int64        `json:"lastSeen"`              // Unix timestamp
-	ConnectionHealth string       `json:"connectionHealth"`
-	IsClusterMember  bool         `json:"isClusterMember,omitempty"`
-	ClusterName      string       `json:"clusterName,omitempty"`
+	ConnectionHealth             string `json:"connectionHealth"`
+	IsClusterMember              bool   `json:"isClusterMember,omitempty"`
+	ClusterName                  string `json:"clusterName,omitempty"`
+	TemperatureMonitoringEnabled *bool  `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
 }
 
 // VMFrontend represents a VM with frontend-friendly field names
@@ -438,7 +439,8 @@ type StateFrontend struct {
 	Metrics            map[string]any              `json:"metrics"`          // Empty object for now
 	PVEBackups         PVEBackups                  `json:"pveBackups"`       // Keep as is
 	Performance        map[string]any              `json:"performance"`      // Empty object for now
-	ConnectionHealth   map[string]bool             `json:"connectionHealth"` // Keep as is
-	Stats              map[string]any              `json:"stats"`            // Empty object for now
-	LastUpdate         int64                       `json:"lastUpdate"`       // Unix timestamp
+	ConnectionHealth             map[string]bool `json:"connectionHealth"`             // Keep as is
+	Stats                        map[string]any  `json:"stats"`                        // Empty object for now
+	LastUpdate                   int64           `json:"lastUpdate"`                   // Unix timestamp
+	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
 }
