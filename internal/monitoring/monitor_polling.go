@@ -1124,7 +1124,18 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 	clusterStorages, err := client.GetAllStorage(ctx)
 	clusterStorageAvailable := err == nil
 	if err != nil {
-		log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to get cluster storage config - will continue with node storage only")
+		// Provide detailed context about cluster health issues
+		if strings.Contains(err.Error(), "no healthy nodes available") {
+			log.Warn().
+				Err(err).
+				Str("instance", instanceName).
+				Msg("Cluster health check shows no healthy endpoints - continuing with direct node storage polling. Check network connectivity and API accessibility from Pulse to each cluster node.")
+		} else {
+			log.Warn().
+				Err(err).
+				Str("instance", instanceName).
+				Msg("Failed to get cluster storage config - will continue with node storage only")
+		}
 	}
 
 	// Create a map for quick lookup of cluster storage config

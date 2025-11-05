@@ -203,12 +203,23 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		healthyEndpoints = append(healthyEndpoints, coolingEndpoints...)
 	}
 
-	log.Debug().
-		Str("cluster", cc.name).
-		Int("healthy", len(healthyEndpoints)).
-		Int("total", len(cc.nodeHealth)).
-		Interface("nodeHealth", cc.nodeHealth).
-		Msg("Checking for healthy endpoints")
+	// Log at warn level if no healthy endpoints to aid troubleshooting
+	if len(healthyEndpoints) == 0 && len(coolingEndpoints) == 0 {
+		log.Warn().
+			Str("cluster", cc.name).
+			Int("healthy", len(healthyEndpoints)).
+			Int("total", len(cc.nodeHealth)).
+			Interface("nodeHealth", cc.nodeHealth).
+			Msg("No healthy endpoints available - attempting recovery")
+	} else {
+		log.Debug().
+			Str("cluster", cc.name).
+			Int("healthy", len(healthyEndpoints)).
+			Int("cooling", len(coolingEndpoints)).
+			Int("total", len(cc.nodeHealth)).
+			Interface("nodeHealth", cc.nodeHealth).
+			Msg("Checking for healthy endpoints")
+	}
 
 	if len(healthyEndpoints) == 0 {
 		// Try to recover by testing all endpoints
@@ -235,7 +246,19 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 				// Mark it as healthy optimistically
 				cc.nodeHealth[cc.endpoints[0]] = true
 			} else {
-				return nil, fmt.Errorf("no healthy nodes available in cluster %s", cc.name)
+				// Provide detailed error with endpoint status
+				unhealthyList := make([]string, 0, len(cc.endpoints))
+				for _, ep := range cc.endpoints {
+					if !cc.nodeHealth[ep] {
+						unhealthyList = append(unhealthyList, ep)
+					}
+				}
+				log.Error().
+					Str("cluster", cc.name).
+					Strs("unhealthyEndpoints", unhealthyList).
+					Int("totalEndpoints", len(cc.endpoints)).
+					Msg("All cluster endpoints are unhealthy - verify network connectivity and API accessibility from Pulse server")
+				return nil, fmt.Errorf("no healthy nodes available in cluster %s (all %d endpoints unreachable: %v)", cc.name, len(cc.endpoints), unhealthyList)
 			}
 		}
 	}
@@ -346,6 +369,7 @@ func (cc *ClusterClient) markUnhealthy(endpoint string) {
 func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 	cc.mu.RLock()
 	unhealthyEndpoints := make([]string, 0)
+	throttledEndpoints := make([]string, 0)
 	now := time.Now()
 	for endpoint, healthy := range cc.nodeHealth {
 		if !healthy {
@@ -353,6 +377,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			// Balance between recovery speed and avoiding excessive checks
 			if lastCheck, exists := cc.lastHealthCheck[endpoint]; exists {
 				if now.Sub(lastCheck) < 10*time.Second {
+					throttledEndpoints = append(throttledEndpoints, endpoint)
 					continue
 				}
 			}
@@ -362,8 +387,20 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 	cc.mu.RUnlock()
 
 	if len(unhealthyEndpoints) == 0 {
+		if len(throttledEndpoints) > 0 {
+			log.Debug().
+				Str("cluster", cc.name).
+				Strs("throttledEndpoints", throttledEndpoints).
+				Msg("Skipping recovery check - endpoints checked recently")
+		}
 		return
 	}
+
+	log.Info().
+		Str("cluster", cc.name).
+		Strs("unhealthyEndpoints", unhealthyEndpoints).
+		Int("count", len(unhealthyEndpoints)).
+		Msg("Attempting to recover unhealthy cluster endpoints")
 
 	// Test all unhealthy endpoints concurrently with a short timeout
 	var wg sync.WaitGroup
@@ -385,47 +422,60 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			cfg.Timeout = 2 * time.Second // Use shorter timeout for recovery attempts
 
 			testClient, err := NewClient(cfg)
-			if err == nil {
-				// Try a simple API call with short timeout
-				testCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-				_, err = testClient.GetNodes(testCtx)
-				cancel()
+			if err != nil {
+				log.Debug().
+					Str("cluster", cc.name).
+					Str("endpoint", ep).
+					Err(err).
+					Msg("Failed to create client during recovery attempt")
+				return
+			}
 
-				// Check if error is VM-specific (shouldn't prevent recovery)
-				isVMSpecificError := false
-				if err != nil {
-					errStr := err.Error()
-					if strings.Contains(errStr, "No QEMU guest agent") ||
-						strings.Contains(errStr, "QEMU guest agent is not running") ||
-						strings.Contains(errStr, "guest agent") {
-						isVMSpecificError = true
-					}
+			// Try a simple API call with short timeout
+			testCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			_, err = testClient.GetNodes(testCtx)
+			cancel()
+
+			// Check if error is VM-specific (shouldn't prevent recovery)
+			isVMSpecificError := false
+			if err != nil {
+				errStr := err.Error()
+				if strings.Contains(errStr, "No QEMU guest agent") ||
+					strings.Contains(errStr, "QEMU guest agent is not running") ||
+					strings.Contains(errStr, "guest agent") {
+					isVMSpecificError = true
 				}
+			}
 
-				if err == nil || isVMSpecificError {
-					recoveredEndpoints <- ep
+			if err == nil || isVMSpecificError {
+				recoveredEndpoints <- ep
 
-					// Store the client with original timeout
-					cfg.Timeout = cc.config.Timeout
-					fullClient, _ := NewClient(cfg)
+				// Store the client with original timeout
+				cfg.Timeout = cc.config.Timeout
+				fullClient, _ := NewClient(cfg)
 
-					cc.mu.Lock()
-					cc.nodeHealth[ep] = true
-					cc.clients[ep] = fullClient
-					cc.mu.Unlock()
+				cc.mu.Lock()
+				cc.nodeHealth[ep] = true
+				cc.clients[ep] = fullClient
+				cc.mu.Unlock()
 
-					if isVMSpecificError {
-						log.Info().
-							Str("cluster", cc.name).
-							Str("endpoint", ep).
-							Msg("Recovered unhealthy cluster node (ignoring VM-specific errors)")
-					} else {
-						log.Info().
-							Str("cluster", cc.name).
-							Str("endpoint", ep).
-							Msg("Recovered unhealthy cluster node")
-					}
+				if isVMSpecificError {
+					log.Info().
+						Str("cluster", cc.name).
+						Str("endpoint", ep).
+						Msg("Recovered unhealthy cluster node (ignoring VM-specific errors)")
+				} else {
+					log.Info().
+						Str("cluster", cc.name).
+						Str("endpoint", ep).
+						Msg("Recovered unhealthy cluster node")
 				}
+			} else {
+				log.Debug().
+					Str("cluster", cc.name).
+					Str("endpoint", ep).
+					Err(err).
+					Msg("Recovery attempt failed - endpoint still unhealthy")
 			}
 		}(endpoint)
 	}
@@ -436,9 +486,25 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 		close(recoveredEndpoints)
 	}()
 
-	// Process recovered endpoints (just for logging, actual recovery happens above)
+	// Count recovered endpoints
+	recoveredCount := 0
 	for range recoveredEndpoints {
-		// Endpoints are already marked healthy in the goroutine
+		recoveredCount++
+	}
+
+	// Log recovery summary
+	if recoveredCount > 0 {
+		log.Info().
+			Str("cluster", cc.name).
+			Int("recovered", recoveredCount).
+			Int("attempted", len(unhealthyEndpoints)).
+			Msg("Cluster endpoint recovery completed")
+	} else if len(unhealthyEndpoints) > 0 {
+		log.Warn().
+			Str("cluster", cc.name).
+			Int("attempted", len(unhealthyEndpoints)).
+			Strs("failedEndpoints", unhealthyEndpoints).
+			Msg("No endpoints recovered - cluster may be unreachable from Pulse server")
 	}
 }
 
