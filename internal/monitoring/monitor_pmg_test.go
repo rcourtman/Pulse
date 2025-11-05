@@ -35,15 +35,13 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 			fmt.Fprint(w, `{"data":[{"cid":1,"name":"mail-gateway","type":"master","ip":"10.0.0.1"}]}`)
 
 		case "/api2/json/statistics/mail":
-			if r.URL.Query().Get("timeframe") != "day" {
-				t.Fatalf("expected timeframe=day, got %s", r.URL.RawQuery)
-			}
+			// PMG API does not accept timeframe parameter
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"data":{"count":100,"count_in":60,"count_out":40,"spamcount_in":5,"spamcount_out":2,"viruscount_in":1,"viruscount_out":0,"bounces_in":3,"bounces_out":1,"bytes_in":12345,"bytes_out":54321,"glcount":7,"junk_in":4,"avptime":0.5,"rbl_rejects":2,"pregreet_rejects":1}}`)
 
 		case "/api2/json/statistics/mailcount":
-			if r.URL.Query().Get("timespan") != "24" {
-				t.Fatalf("expected timespan=24, got %s", r.URL.RawQuery)
+			if r.URL.Query().Get("timespan") != "86400" {
+				t.Fatalf("expected timespan=86400 (24 hours in seconds), got %s", r.URL.RawQuery)
 			}
 			now := time.Now().Unix()
 			w.Header().Set("Content-Type", "application/json")

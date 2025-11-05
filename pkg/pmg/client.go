@@ -404,22 +404,19 @@ func (c *Client) GetVersion(ctx context.Context) (*VersionInfo, error) {
 }
 
 func (c *Client) GetMailStatistics(ctx context.Context, timeframe string) (*MailStatistics, error) {
-	params := url.Values{}
-	if timeframe != "" {
-		params.Set("timeframe", timeframe)
-	}
-
+	// PMG API does not accept timeframe parameter - it returns current day statistics
+	// The timeframe parameter is ignored to maintain API compatibility
 	var resp apiResponse[MailStatistics]
-	if err := c.getJSON(ctx, "/statistics/mail", params, &resp); err != nil {
+	if err := c.getJSON(ctx, "/statistics/mail", nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp.Data, nil
 }
 
-func (c *Client) GetMailCount(ctx context.Context, timespanHours int) ([]MailCountEntry, error) {
+func (c *Client) GetMailCount(ctx context.Context, timespanSeconds int) ([]MailCountEntry, error) {
 	params := url.Values{}
-	if timespanHours > 0 {
-		params.Set("timespan", fmt.Sprintf("%d", timespanHours))
+	if timespanSeconds > 0 {
+		params.Set("timespan", fmt.Sprintf("%d", timespanSeconds))
 	}
 
 	var resp apiResponse[[]MailCountEntry]

@@ -7467,7 +7467,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 			Msg("PMG backups polled")
 	}
 
-	if stats, err := client.GetMailStatistics(ctx, "day"); err != nil {
+	if stats, err := client.GetMailStatistics(ctx, ""); err != nil {
 		log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail statistics")
 	} else if stats != nil {
 		pmgInst.MailStats = &models.PMGMailStats{
@@ -7492,7 +7492,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	if counts, err := client.GetMailCount(ctx, 24); err != nil {
+	if counts, err := client.GetMailCount(ctx, 86400); err != nil {
 		if debugEnabled {
 			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail count data")
 		}
