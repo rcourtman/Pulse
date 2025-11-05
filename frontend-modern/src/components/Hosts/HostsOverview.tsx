@@ -333,41 +333,41 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
 
                                     {/* Drawer - Additional Info */}
                                     <Show when={drawerOpen() && hasDrawerContent()}>
-                                      <tr class="text-[11px] bg-gray-50/60 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
-                                        <td class="px-4 py-2" colSpan={5}>
-                                          <div class="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                      <tr class="bg-gray-50 dark:bg-gray-900/50">
+                                        <td class="px-4 py-3" colSpan={5}>
+                                          <div class="flex flex-wrap justify-start gap-3">
                                             {/* System Info */}
-                                            <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                              <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">System</div>
-                                              <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
+                                            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">System</div>
+                                              <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
                                                 <Show when={host.cpuCount}>
-                                                  <div class="flex items-start gap-1">
-                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">CPUs:</span>
-                                                    <span>{host.cpuCount}</span>
+                                                  <div class="flex items-center justify-between gap-2">
+                                                    <span class="font-medium text-gray-700 dark:text-gray-200">CPUs</span>
+                                                    <span class="text-right text-gray-600 dark:text-gray-300">{host.cpuCount}</span>
                                                   </div>
                                                 </Show>
                                                 <Show when={host.loadAverage && host.loadAverage.length > 0}>
-                                                  <div class="flex items-start gap-1">
-                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">Load Avg:</span>
-                                                    <span>{host.loadAverage!.map(l => l.toFixed(2)).join(', ')}</span>
+                                                  <div class="flex items-center justify-between gap-2">
+                                                    <span class="font-medium text-gray-700 dark:text-gray-200">Load Avg</span>
+                                                    <span class="text-right text-gray-600 dark:text-gray-300">{host.loadAverage!.map(l => l.toFixed(2)).join(', ')}</span>
                                                   </div>
                                                 </Show>
                                                 <Show when={host.architecture}>
-                                                  <div class="flex items-start gap-1">
-                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">Arch:</span>
-                                                    <span>{host.architecture}</span>
+                                                  <div class="flex items-center justify-between gap-2">
+                                                    <span class="font-medium text-gray-700 dark:text-gray-200">Arch</span>
+                                                    <span class="text-right text-gray-600 dark:text-gray-300">{host.architecture}</span>
                                                   </div>
                                                 </Show>
                                                 <Show when={host.kernelVersion}>
-                                                  <div class="flex items-start gap-1">
-                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">Kernel:</span>
-                                                    <span class="break-all">{host.kernelVersion}</span>
+                                                  <div class="flex items-center justify-between gap-2">
+                                                    <span class="font-medium text-gray-700 dark:text-gray-200">Kernel</span>
+                                                    <span class="text-right text-gray-600 dark:text-gray-300 truncate">{host.kernelVersion}</span>
                                                   </div>
                                                 </Show>
                                                 <Show when={host.agentVersion}>
-                                                  <div class="flex items-start gap-1">
-                                                    <span class="text-gray-500 dark:text-gray-400 min-w-[60px]">Agent:</span>
-                                                    <span>{host.agentVersion}</span>
+                                                  <div class="flex items-center justify-between gap-2">
+                                                    <span class="font-medium text-gray-700 dark:text-gray-200">Agent</span>
+                                                    <span class="text-right text-gray-600 dark:text-gray-300">{host.agentVersion}</span>
                                                   </div>
                                                 </Show>
                                               </div>
@@ -375,15 +375,15 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
 
                                             {/* Network Interfaces */}
                                             <Show when={host.networkInterfaces && host.networkInterfaces.length > 0}>
-                                              <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                                <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Network</div>
-                                                <div class="mt-1 space-y-1">
+                                              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Network</div>
+                                                <div class="mt-2 space-y-2 text-[11px]">
                                                   <For each={host.networkInterfaces?.slice(0, 4)}>
                                                     {(iface) => (
-                                                      <div class="text-gray-600 dark:text-gray-300">
-                                                        <div class="font-medium">{iface.name}</div>
+                                                      <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
+                                                        <div class="font-medium text-gray-700 dark:text-gray-200">{iface.name}</div>
                                                         <Show when={iface.addresses && iface.addresses.length > 0}>
-                                                          <div class="flex flex-wrap gap-1 mt-0.5">
+                                                          <div class="flex flex-wrap gap-1 mt-1 text-[10px]">
                                                             <For each={iface.addresses}>
                                                               {(addr) => (
                                                                 <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
@@ -402,22 +402,22 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
 
                                             {/* Disk Info */}
                                             <Show when={host.disks && host.disks.length > 0}>
-                                              <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                                <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Disks</div>
-                                                <div class="mt-1 space-y-1">
+                                              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Disks</div>
+                                                <div class="mt-2 space-y-2 text-[11px]">
                                                   <For each={host.disks?.slice(0, 3)}>
                                                     {(disk) => {
                                                       const diskPercent = () => disk.usage ?? 0;
                                                       return (
-                                                        <div class="text-gray-600 dark:text-gray-300">
+                                                        <div class="rounded border border-dashed border-gray-200 p-2 dark:border-gray-700/70">
                                                           <div class="flex items-center justify-between">
-                                                            <span class="font-medium truncate">{disk.mountpoint || disk.device}</span>
+                                                            <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{disk.mountpoint || disk.device}</span>
                                                             <span class="text-[10px] text-gray-500 dark:text-gray-400">
                                                               {formatBytes(disk.used ?? 0, 0)} / {formatBytes(disk.total ?? 0, 0)}
                                                             </span>
                                                           </div>
                                                           <Show when={diskPercent() > 0}>
-                                                            <div class="mt-0.5">
+                                                            <div class="mt-1">
                                                               <MetricBar
                                                                 value={diskPercent()}
                                                                 label={formatPercent(diskPercent())}
@@ -435,14 +435,14 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
 
                                             {/* Temperature Sensors */}
                                             <Show when={host.sensors?.temperatureCelsius && Object.keys(host.sensors.temperatureCelsius).length > 0}>
-                                              <div class="rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                                <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Temperatures</div>
-                                                <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
+                                              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">Temperatures</div>
+                                                <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
                                                   <For each={Object.entries(host.sensors!.temperatureCelsius!).slice(0, 5)}>
                                                     {([name, temp]) => (
-                                                      <div class="flex items-center justify-between">
-                                                        <span class="truncate text-[10px]">{name}</span>
-                                                        <span class={temp > 80 ? 'text-red-600 dark:text-red-400 font-semibold' : ''}>
+                                                      <div class="flex items-center justify-between gap-2">
+                                                        <span class="font-medium text-gray-700 dark:text-gray-200 truncate">{name}</span>
+                                                        <span class={`text-right ${temp > 80 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-300'}`}>
                                                           {temp.toFixed(1)}°C
                                                         </span>
                                                       </div>

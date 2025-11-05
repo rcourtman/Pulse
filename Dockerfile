@@ -2,7 +2,7 @@
 ARG BUILD_AGENT=1
 
 # Build stage for frontend (must be built first for embedding)
-FROM node:20.16.0-alpine3.19 AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend-modern
 
@@ -19,7 +19,7 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
     npm run build
 
 # Build stage for Go backend
-FROM golang:1.24.9-alpine3.19 AS backend-builder
+FROM golang:1.24-alpine AS backend-builder
 
 ARG BUILD_AGENT
 WORKDIR /app
@@ -77,6 +77,34 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     fi && \
     cp pulse-docker-agent-linux-amd64 pulse-docker-agent
 
+# Build host-agent binaries for all platforms (for download endpoint)
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-host-agent-linux-amd64 ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-host-agent-linux-arm64 ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-host-agent-linux-armv7 ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-host-agent-darwin-amd64 ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-host-agent-darwin-arm64 ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-host-agent-windows-amd64.exe ./cmd/pulse-host-agent
+
 # Build pulse-sensor-proxy
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
@@ -86,7 +114,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
-FROM alpine:3.19.1 AS agent_runtime
+FROM alpine:3.20 AS agent_runtime
 
 # Use TARGETARCH to select the correct binary for the build platform
 ARG TARGETARCH
@@ -118,7 +146,7 @@ ENV PULSE_NO_AUTO_UPDATE=true
 ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
 
 # Final stage (Pulse server runtime)
-FROM alpine:3.19.1
+FROM alpine:3.20
 
 RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client
 
@@ -138,9 +166,10 @@ RUN chmod +x /docker-entrypoint.sh
 # Provide installer scripts for HTTP download endpoints
 RUN mkdir -p /opt/pulse/scripts
 COPY scripts/install-docker-agent.sh /opt/pulse/scripts/install-docker-agent.sh
+COPY scripts/install-host-agent.sh /opt/pulse/scripts/install-host-agent.sh
 COPY scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-sensor-proxy.sh
 COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
-RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh /opt/pulse/scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-docker.sh
+RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh /opt/pulse/scripts/install-host-agent.sh /opt/pulse/scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-docker.sh
 
 # Copy multi-arch docker-agent binaries for download endpoint
 RUN mkdir -p /opt/pulse/bin
@@ -148,6 +177,16 @@ COPY --from=backend-builder /app/pulse-docker-agent-linux-amd64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent-linux-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent-linux-armv7 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent /opt/pulse/bin/pulse-docker-agent
+
+# Copy multi-arch host-agent binaries for download endpoint
+COPY --from=backend-builder /app/pulse-host-agent-linux-amd64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-linux-arm64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-linux-armv7 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-darwin-amd64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-darwin-arm64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-windows-amd64.exe /opt/pulse/bin/
+# Create symlink for Windows without .exe extension
+RUN ln -s pulse-host-agent-windows-amd64.exe /opt/pulse/bin/pulse-host-agent-windows-amd64
 
 # Copy pulse-sensor-proxy binary for download endpoint
 COPY --from=backend-builder /app/pulse-sensor-proxy /opt/pulse/bin/pulse-sensor-proxy

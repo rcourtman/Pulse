@@ -1,13 +1,13 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend
+.PHONY: build run dev frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents
 
 FRONTEND_DIR := frontend-modern
 FRONTEND_DIST := $(FRONTEND_DIR)/dist
 FRONTEND_EMBED_DIR := internal/api/frontend-modern
 
-# Build everything
-all: frontend backend
+# Build everything (including all agent binaries)
+all: frontend backend build-agents
 
 # Build frontend only
 frontend:
@@ -68,3 +68,16 @@ format-backend:
 
 format-frontend:
 	npm --prefix $(FRONTEND_DIR) run format
+
+# Build all host agent binaries for all platforms
+build-agents:
+	@echo "Building host agent binaries for all platforms..."
+	@mkdir -p bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-amd64 ./cmd/pulse-host-agent
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-arm64 ./cmd/pulse-host-agent
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-armv7 ./cmd/pulse-host-agent
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-darwin-amd64 ./cmd/pulse-host-agent
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-darwin-arm64 ./cmd/pulse-host-agent
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-windows-amd64.exe ./cmd/pulse-host-agent
+	@ln -sf pulse-host-agent-windows-amd64.exe bin/pulse-host-agent-windows-amd64
+	@echo "✓ All host agent binaries built in bin/"

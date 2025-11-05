@@ -3302,7 +3302,21 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	http.Error(w, "Host agent binary not found. Please build from source: go build ./cmd/pulse-host-agent", http.StatusNotFound)
+	// Build detailed error message with troubleshooting guidance
+	var errorMsg strings.Builder
+	errorMsg.WriteString(fmt.Sprintf("Host agent binary not found for %s/%s\n\n", platformParam, archParam))
+	errorMsg.WriteString("Troubleshooting:\n")
+	errorMsg.WriteString("1. If running in Docker: Rebuild the Docker image to include all platform binaries\n")
+	errorMsg.WriteString("2. If running bare metal: Run 'scripts/build-release.sh' to build all platform binaries\n")
+	errorMsg.WriteString("3. Build from source:\n")
+	errorMsg.WriteString(fmt.Sprintf("   GOOS=%s GOARCH=%s go build -o pulse-host-agent-%s-%s ./cmd/pulse-host-agent\n", platformParam, archParam, platformParam, archParam))
+	errorMsg.WriteString(fmt.Sprintf("   sudo mv pulse-host-agent-%s-%s /opt/pulse/bin/\n\n", platformParam, archParam))
+	errorMsg.WriteString("Searched locations:\n")
+	for _, path := range searchPaths {
+		errorMsg.WriteString(fmt.Sprintf("  - %s\n", path))
+	}
+
+	http.Error(w, errorMsg.String(), http.StatusNotFound)
 }
 
 // serveChecksum computes and serves the SHA256 checksum of a file

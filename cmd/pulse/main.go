@@ -99,6 +99,9 @@ func runServer() {
 
 	log.Info().Msg("Starting Pulse monitoring server")
 
+	// Validate agent binaries are available for download
+	validateAgentBinaries()
+
 	// Create context that cancels on interrupt
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -344,4 +347,47 @@ func performAutoImport() error {
 
 	log.Info().Msg("Configuration auto-imported successfully")
 	return nil
+}
+
+// validateAgentBinaries checks if agent binaries are available for download
+// and logs warnings if any are missing
+func validateAgentBinaries() {
+	binDirs := []string{"/opt/pulse/bin", "./bin", "."}
+	platforms := []struct {
+		name string
+		file string
+	}{
+		{"linux-amd64", "pulse-host-agent-linux-amd64"},
+		{"linux-arm64", "pulse-host-agent-linux-arm64"},
+		{"linux-armv7", "pulse-host-agent-linux-armv7"},
+		{"darwin-amd64", "pulse-host-agent-darwin-amd64"},
+		{"darwin-arm64", "pulse-host-agent-darwin-arm64"},
+		{"windows-amd64", "pulse-host-agent-windows-amd64"},
+	}
+
+	missing := []string{}
+	searchedPaths := []string{}
+
+	for _, platform := range platforms {
+		found := false
+		for _, dir := range binDirs {
+			path := filepath.Join(dir, platform.file)
+			searchedPaths = append(searchedPaths, path)
+			if _, err := os.Stat(path); err == nil {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, platform.name)
+		}
+	}
+
+	if len(missing) > 0 {
+		log.Warn().
+			Strs("missing_platforms", missing).
+			Msg("Host agent binaries missing - install script downloads will fail. Rebuild Docker image or run build-release.sh to generate all platform binaries.")
+	} else {
+		log.Info().Msg("All host agent binaries available for download")
+	}
 }
