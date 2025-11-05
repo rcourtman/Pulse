@@ -61,6 +61,9 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			Str("session", cookie.Value[:8]+"...").
 			Msg("Missing CSRF token")
 		clearCSRFCookie(w)
+		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
+			w.Header().Set("X-CSRF-Token", newToken)
+		}
 		return false
 	}
 
@@ -72,6 +75,9 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			Str("provided_token", csrfToken[:8]+"...").
 			Msg("Invalid CSRF token")
 		clearCSRFCookie(w)
+		if newToken := issueNewCSRFCookie(w, r, cookie.Value); newToken != "" {
+			w.Header().Set("X-CSRF-Token", newToken)
+		}
 		return false
 	}
 
@@ -89,6 +95,28 @@ func clearCSRFCookie(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: false,
 	})
+}
+
+func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string) string {
+	if w == nil || r == nil {
+		return ""
+	}
+	if strings.TrimSpace(sessionID) == "" {
+		return ""
+	}
+
+	newToken := generateCSRFToken(sessionID)
+	secure, sameSite := getCookieSettings(r)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_csrf",
+		Value:    newToken,
+		Path:     "/",
+		Secure:   secure,
+		SameSite: sameSite,
+		MaxAge:   86400,
+	})
+	return newToken
 }
 
 // Rate Limiting - using existing RateLimiter from ratelimit.go

@@ -820,6 +820,7 @@ type SystemSettings struct {
 	Theme                       string          `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
 	AllowEmbedding              bool            `json:"allowEmbedding"`                // Allow iframe embedding
 	AllowedEmbedOrigins         string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
+	TemperatureMonitoringEnabled bool           `json:"temperatureMonitoringEnabled"`
 	// APIToken removed - now handled via .env file only
 }
 
@@ -834,6 +835,7 @@ func DefaultSystemSettings() *SystemSettings {
 		DiscoverySubnet:    "auto",
 		DiscoveryConfig:    defaultDiscovery,
 		AllowEmbedding:     false,
+		TemperatureMonitoringEnabled: true,
 	}
 }
 

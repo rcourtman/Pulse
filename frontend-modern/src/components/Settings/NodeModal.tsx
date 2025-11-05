@@ -15,6 +15,7 @@ import {
   formCheckbox,
 } from '@/components/shared/Form';
 import { logger } from '@/utils/logger';
+import { TogglePrimitive } from '@/components/shared/Toggle';
 
 interface NodeModalProps {
   isOpen: boolean;
@@ -26,6 +27,10 @@ interface NodeModalProps {
   showBackToDiscovery?: boolean;
   onBackToDiscovery?: () => void;
   securityStatus?: Partial<SecurityStatus>;
+  temperatureMonitoringEnabled?: boolean;
+  temperatureMonitoringLocked?: boolean;
+  savingTemperatureSetting?: boolean;
+  onToggleTemperatureMonitoring?: (enabled: boolean) => Promise<void> | void;
 }
 
 const deriveNameFromHost = (host: string): string => {
@@ -1705,28 +1710,68 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                   {/* Physical Disk Monitoring - PVE only */}
                   <Show when={props.nodeType === 'pve'}>
-                    <div>
+                    <div class="space-y-4">
                       <SectionHeader
                         title="Advanced monitoring"
                         size="sm"
                         class="mb-3"
                         titleClass="text-gray-900 dark:text-gray-100"
                       />
-                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
-                        <input
-                          type="checkbox"
-                          checked={formData().monitorPhysicalDisks}
-                          onChange={(e) => updateField('monitorPhysicalDisks', e.currentTarget.checked)}
-                          class={formCheckbox + ' mt-0.5'}
-                        />
-                        <div>
-                          <div>Monitor physical disk health (SMART)</div>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Polls disk SMART data every 5 minutes. Note: This will cause HDDs to spin up from standby.
-                            If you have HDDs that should stay idle, leave this disabled.
-                          </p>
+                      <div class="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                        <div class="flex items-start justify-between gap-3">
+                          <div>
+                            <p class="font-medium text-gray-900 dark:text-gray-100">Monitor physical disk health (SMART)</p>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              Polls disk SMART data every 5 minutes. This will spin up idle HDDs; leave disabled if you rely on drive standby.
+                            </p>
+                          </div>
+                          <TogglePrimitive
+                            checked={formData().monitorPhysicalDisks}
+                            onChange={(event) => updateField('monitorPhysicalDisks', event.currentTarget.checked)}
+                            ariaLabel={
+                              formData().monitorPhysicalDisks
+                                ? 'Disable physical disk monitoring'
+                                : 'Enable physical disk monitoring'
+                            }
+                          />
                         </div>
-                      </label>
+                      </div>
+
+                      <Show when={typeof props.temperatureMonitoringEnabled === 'boolean'}>
+                        {() => {
+                          const enabled = props.temperatureMonitoringEnabled ?? true;
+                          return (
+                            <div class="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                              <div class="flex items-start justify-between gap-3">
+                                <div>
+                                  <p class="font-medium text-gray-900 dark:text-gray-100">Temperature monitoring</p>
+                                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for every node. Disable if you don’t need temperature data or haven’t deployed the proxy yet.
+                                  </p>
+                                </div>
+                                <TogglePrimitive
+                                  checked={enabled}
+                                  onChange={(event) => {
+                                    props.onToggleTemperatureMonitoring?.(event.currentTarget.checked);
+                                  }}
+                                  disabled={props.temperatureMonitoringLocked || props.savingTemperatureSetting}
+                                  ariaLabel={enabled ? 'Disable temperature monitoring' : 'Enable temperature monitoring'}
+                                />
+                              </div>
+                              <Show when={!enabled}>
+                                <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
+                                  Pulse will skip all SSH temperature polling until you re-enable this toggle. Existing dashboard readings will stop refreshing.
+                                </p>
+                              </Show>
+                              <Show when={props.temperatureMonitoringLocked}>
+                                <p class="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                                  Locked by environment variables. Remove the override (ENABLE_TEMPERATURE_MONITORING) and restart Pulse to manage it in the UI.
+                                </p>
+                              </Show>
+                            </div>
+                          );
+                        }}
+                      </Show>
                     </div>
                   </Show>
                   <Show when={props.nodeType === 'pmg'}>

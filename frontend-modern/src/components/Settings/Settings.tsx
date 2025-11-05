@@ -545,6 +545,12 @@ const Settings: Component<SettingsProps> = (props) => {
   const [discoverySubnetError, setDiscoverySubnetError] = createSignal<string | undefined>();
   const [savingDiscoverySettings, setSavingDiscoverySettings] = createSignal(false);
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
+  const [temperatureMonitoringEnabled, setTemperatureMonitoringEnabled] = createSignal(true);
+  const [savingTemperatureSetting, setSavingTemperatureSetting] = createSignal(false);
+  const temperatureMonitoringLocked = () =>
+    Boolean(
+      envOverrides().temperatureMonitoringEnabled || envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
+    );
   let discoverySubnetInputRef: HTMLInputElement | undefined;
 
   const parseSubnetList = (value: string) => {
@@ -1378,6 +1384,31 @@ const Settings: Component<SettingsProps> = (props) => {
     }
   };
 
+  const handleTemperatureMonitoringChange = async (enabled: boolean): Promise<void> => {
+    if (temperatureMonitoringLocked() || savingTemperatureSetting()) {
+      return;
+    }
+
+    const previous = temperatureMonitoringEnabled();
+    setTemperatureMonitoringEnabled(enabled);
+    setSavingTemperatureSetting(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ temperatureMonitoringEnabled: enabled });
+      if (enabled) {
+        notificationStore.success('Temperature monitoring enabled', 2000);
+      } else {
+        notificationStore.info('Temperature monitoring disabled', 2000);
+      }
+    } catch (error) {
+      logger.error('Failed to update temperature monitoring setting', error);
+      notificationStore.error('Failed to update temperature monitoring setting');
+      setTemperatureMonitoringEnabled(previous);
+    } finally {
+      setSavingTemperatureSetting(false);
+    }
+  };
+
   const handleDiscoveryModeChange = async (mode: 'auto' | 'custom') => {
     if (envOverrides().discoverySubnet || savingDiscoverySettings()) {
       return;
@@ -1567,6 +1598,11 @@ const Settings: Component<SettingsProps> = (props) => {
         // Load embedding settings
         setAllowEmbedding(systemSettings.allowEmbedding ?? false);
         setAllowedEmbedOrigins(systemSettings.allowedEmbedOrigins || '');
+        setTemperatureMonitoringEnabled(
+          typeof systemSettings.temperatureMonitoringEnabled === 'boolean'
+            ? systemSettings.temperatureMonitoringEnabled
+            : true,
+        );
         // Backup polling controls
         if (typeof systemSettings.backupPollingEnabled === 'boolean') {
           setBackupPollingEnabled(systemSettings.backupPollingEnabled);
@@ -6536,6 +6572,10 @@ const Settings: Component<SettingsProps> = (props) => {
           nodeType="pve"
           editingNode={editingNode()?.type === 'pve' ? (editingNode() ?? undefined) : undefined}
           securityStatus={securityStatus() ?? undefined}
+          temperatureMonitoringEnabled={temperatureMonitoringEnabled()}
+          temperatureMonitoringLocked={temperatureMonitoringLocked()}
+          savingTemperatureSetting={savingTemperatureSetting()}
+          onToggleTemperatureMonitoring={handleTemperatureMonitoringChange}
           onSave={async (nodeData) => {
             try {
               if (editingNode() && editingNode()!.id) {

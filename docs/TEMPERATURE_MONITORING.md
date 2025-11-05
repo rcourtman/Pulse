@@ -12,6 +12,19 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
   - Yellow: 60-80°C (warm)
   - Red: > 80°C (hot)
 
+## Disable Temperature Monitoring
+
+Don't need the sensor data? Open **Settings → Proxmox**, edit any node, and scroll to the **Advanced monitoring** section. The temperature toggle there controls collection for all nodes:
+
+- When disabled, Pulse skips every SSH/proxy request for temperature data.
+- CPU and NVMe readings disappear from dashboards and node tables.
+- You can re-enable it later without re-running the setup scripts.
+
+For scripted environments, set either:
+
+- `temperatureMonitoringEnabled: false` in `/etc/pulse/system.json`, or
+- `ENABLE_TEMPERATURE_MONITORING=false` in the environment (locks the UI toggle until removed).
+
 ## How It Works
 
 ### Secure Architecture (v4.24.0+)

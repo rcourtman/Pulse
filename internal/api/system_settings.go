@@ -31,6 +31,8 @@ type SystemSettingsHandler struct {
 		GetDiscoveryService() *discovery.Service
 		StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
 		StopDiscoveryService()
+		EnableTemperatureMonitoring()
+		DisableTemperatureMonitoring()
 	}
 }
 
@@ -39,6 +41,8 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	GetDiscoveryService() *discovery.Service
 	StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
 	StopDiscoveryService()
+	EnableTemperatureMonitoring()
+	DisableTemperatureMonitoring()
 }, reloadSystemSettingsFunc func()) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
 		config:                   cfg,
@@ -54,6 +58,8 @@ func (h *SystemSettingsHandler) SetMonitor(m interface {
 	GetDiscoveryService() *discovery.Service
 	StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
 	StopDiscoveryService()
+	EnableTemperatureMonitoring()
+	DisableTemperatureMonitoring()
 }) {
 	h.monitor = m
 }
@@ -178,6 +184,12 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 	if val, ok := rawRequest["backupPollingEnabled"]; ok {
 		if _, ok := val.(bool); !ok {
 			return fmt.Errorf("backupPollingEnabled must be a boolean")
+		}
+	}
+
+	if val, ok := rawRequest["temperatureMonitoringEnabled"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("temperatureMonitoringEnabled must be a boolean")
 		}
 	}
 
@@ -367,6 +379,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		enabled := h.config.EnableBackupPolling
 		settings.BackupPollingEnabled = &enabled
 		settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.config.Discovery)
+		settings.TemperatureMonitoringEnabled = h.config.TemperatureMonitoringEnabled
 	}
 
 	// Include env override information
@@ -463,6 +476,8 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	// Start with existing settings
 	settings := *existingSettings
 	discoveryConfigUpdated := false
+	prevTempEnabled := h.config.TemperatureMonitoringEnabled
+	tempToggleRequested := false
 
 	// Only update fields that were provided in the request
 	// Note: PVE polling is hardcoded to 10s, legacy polling fields are ignored
@@ -548,6 +563,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["backupPollingEnabled"]; ok {
 		settings.BackupPollingEnabled = updates.BackupPollingEnabled
 	}
+	if _, ok := rawRequest["temperatureMonitoringEnabled"]; ok {
+		settings.TemperatureMonitoringEnabled = updates.TemperatureMonitoringEnabled
+		tempToggleRequested = true
+	}
 
 	// Update the config
 	// Note: PVE polling is hardcoded to 10s
@@ -597,6 +616,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	h.config.Discovery = config.CloneDiscoveryConfig(settings.DiscoveryConfig)
 
+	if tempToggleRequested {
+		h.config.TemperatureMonitoringEnabled = settings.TemperatureMonitoringEnabled
+	}
+
 	// Start or stop discovery service based on setting change
 	if h.monitor != nil {
 		if settings.DiscoveryEnabled && !prevDiscoveryEnabled {
@@ -622,6 +645,14 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 				log.Info().Msg("Discovery configuration changed; triggering refresh")
 				svc.ForceRefresh()
 			}
+		}
+	}
+
+	if tempToggleRequested && h.monitor != nil {
+		if settings.TemperatureMonitoringEnabled && !prevTempEnabled {
+			h.monitor.EnableTemperatureMonitoring()
+		} else if !settings.TemperatureMonitoringEnabled && prevTempEnabled {
+			h.monitor.DisableTemperatureMonitoring()
 		}
 	}
 

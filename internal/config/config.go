@@ -91,6 +91,7 @@ type Config struct {
 	BackupPollingCycles             int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
 	BackupPollingInterval           time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
 	EnableBackupPolling             bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
+	TemperatureMonitoringEnabled    bool          `json:"temperatureMonitoringEnabled"`
 	WebhookBatchDelay               time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
 	AdaptivePollingEnabled          bool          `envconfig:"ADAPTIVE_POLLING_ENABLED" default:"false"`
 	AdaptivePollingBaseInterval     time.Duration `envconfig:"ADAPTIVE_POLLING_BASE_INTERVAL" default:"10s"`
@@ -528,6 +529,7 @@ func Load() (*Config, error) {
 		PMGPollingInterval:              60 * time.Second, // Default PMG polling (aggregated stats)
 		DiscoveryEnabled:                false,
 		DiscoverySubnet:                 "auto",
+		TemperatureMonitoringEnabled:    true,
 		EnvOverrides:                    make(map[string]bool),
 		OIDC:                            NewOIDCConfig(),
 	}
@@ -606,10 +608,11 @@ func Load() (*Config, error) {
 			// Always load DiscoveryEnabled even if false
 			cfg.DiscoveryEnabled = systemSettings.DiscoveryEnabled
 			if systemSettings.DiscoverySubnet != "" {
-				cfg.DiscoverySubnet = systemSettings.DiscoverySubnet
-			}
-			cfg.Discovery = NormalizeDiscoveryConfig(CloneDiscoveryConfig(systemSettings.DiscoveryConfig))
-			// APIToken no longer loaded from system.json - only from .env
+			cfg.DiscoverySubnet = systemSettings.DiscoverySubnet
+		}
+		cfg.Discovery = NormalizeDiscoveryConfig(CloneDiscoveryConfig(systemSettings.DiscoveryConfig))
+		cfg.TemperatureMonitoringEnabled = systemSettings.TemperatureMonitoringEnabled
+		// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
 				Str("logLevel", cfg.LogLevel).
@@ -685,6 +688,20 @@ func Load() (*Config, error) {
 			}
 		} else {
 			log.Warn().Str("value", intervalStr).Msg("Invalid BACKUP_POLLING_INTERVAL value, expected duration or seconds")
+		}
+	}
+
+	if enabledStr := utils.GetenvTrim("ENABLE_TEMPERATURE_MONITORING"); enabledStr != "" {
+		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
+			cfg.TemperatureMonitoringEnabled = enabled
+			cfg.EnvOverrides["temperatureMonitoringEnabled"] = true
+			log.Info().
+				Bool("enabled", enabled).
+				Msg("Overriding temperature monitoring setting from environment")
+		} else {
+			log.Warn().
+				Str("value", enabledStr).
+				Msg("Invalid ENABLE_TEMPERATURE_MONITORING value, ignoring")
 		}
 	}
 
