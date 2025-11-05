@@ -185,7 +185,7 @@ func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 }
 
 // pollVMsWithNodes polls VMs from all nodes in parallel using goroutines
-func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
+func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 	startTime := time.Now()
 
 	// Channel to collect VM results from each node
@@ -201,7 +201,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 	// Count online nodes for logging
 	onlineNodes := 0
 	for _, node := range nodes {
-		if node.Status == "online" {
+		if nodeEffectiveStatus[node.Node] == "online" {
 			onlineNodes++
 		}
 	}
@@ -215,7 +215,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 	// Launch a goroutine for each online node
 	for _, node := range nodes {
 		// Skip offline nodes
-		if node.Status != "online" {
+		if nodeEffectiveStatus[node.Node] != "online" {
 			log.Debug().
 				Str("node", node.Node).
 				Str("status", node.Status).
@@ -788,6 +788,27 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 		}
 	}
 
+	// If we got ZERO VMs but had VMs before (likely cluster health issue),
+	// preserve previous VMs instead of clearing them
+	if len(allVMs) == 0 && len(nodes) > 0 {
+		prevState := m.GetState()
+		prevVMCount := 0
+		for _, vm := range prevState.VMs {
+			if vm.Instance == instanceName {
+				allVMs = append(allVMs, vm)
+				prevVMCount++
+			}
+		}
+		if prevVMCount > 0 {
+			log.Warn().
+				Str("instance", instanceName).
+				Int("prevVMs", prevVMCount).
+				Int("successfulNodes", successfulNodes).
+				Int("totalNodes", len(nodes)).
+				Msg("Traditional polling returned zero VMs but had VMs before - preserving previous VMs")
+		}
+	}
+
 	// Update state with all VMs
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
 
@@ -802,7 +823,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 }
 
 // pollContainersWithNodes polls containers from all nodes in parallel using goroutines
-func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
+func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 	startTime := time.Now()
 
 	// Channel to collect container results from each node
@@ -818,7 +839,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 	// Count online nodes for logging
 	onlineNodes := 0
 	for _, node := range nodes {
-		if node.Status == "online" {
+		if nodeEffectiveStatus[node.Node] == "online" {
 			onlineNodes++
 		}
 	}
@@ -832,7 +853,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 	// Launch a goroutine for each online node
 	for _, node := range nodes {
 		// Skip offline nodes
-		if node.Status != "online" {
+		if nodeEffectiveStatus[node.Node] != "online" {
 			log.Debug().
 				Str("node", node.Node).
 				Str("status", node.Status).
@@ -1030,6 +1051,27 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 		} else {
 			successfulNodes++
 			allContainers = append(allContainers, result.containers...)
+		}
+	}
+
+	// If we got ZERO containers but had containers before (likely cluster health issue),
+	// preserve previous containers instead of clearing them
+	if len(allContainers) == 0 && len(nodes) > 0 {
+		prevState := m.GetState()
+		prevContainerCount := 0
+		for _, container := range prevState.Containers {
+			if container.Instance == instanceName {
+				allContainers = append(allContainers, container)
+				prevContainerCount++
+			}
+		}
+		if prevContainerCount > 0 {
+			log.Warn().
+				Str("instance", instanceName).
+				Int("prevContainers", prevContainerCount).
+				Int("successfulNodes", successfulNodes).
+				Int("totalNodes", len(nodes)).
+				Msg("Traditional polling returned zero containers but had containers before - preserving previous containers")
 		}
 	}
 

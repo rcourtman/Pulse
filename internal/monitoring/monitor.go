@@ -490,6 +490,7 @@ type Monitor struct {
 	instanceInfoCache          map[string]*instanceInfo
 	pollStatusMap              map[string]*pollStatus
 	dlqInsightMap              map[string]*dlqInsight
+	nodeLastOnline             map[string]time.Time // Track last time each node was seen online (for grace period)
 }
 
 type rrdMemCacheEntry struct {
@@ -773,6 +774,7 @@ const (
 	hostOfflineGraceMultiplier   = 4
 	hostMinimumHealthWindow      = 30 * time.Second
 	hostMaximumHealthWindow      = 10 * time.Minute
+	nodeOfflineGracePeriod       = 60 * time.Second // Grace period before marking Proxmox nodes offline
 	nodeRRDCacheTTL              = 30 * time.Second
 	nodeRRDRequestTimeout        = 2 * time.Second
 	guestMetadataCacheTTL        = 5 * time.Minute
@@ -3209,6 +3211,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		instanceInfoCache:          make(map[string]*instanceInfo),
 		pollStatusMap:              make(map[string]*pollStatus),
 		dlqInsightMap:              make(map[string]*dlqInsight),
+		nodeLastOnline:             make(map[string]time.Time),
 	}
 
 	m.breakerBaseRetry = 5 * time.Second
@@ -4877,6 +4880,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 	// Convert to models
 	var modelNodes []models.Node
+	nodeEffectiveStatus := make(map[string]string) // Track effective status (with grace period) for each node
 	for _, node := range nodes {
 		nodeStart := time.Now()
 		displayName := getNodeDisplayName(instanceCfg, node.Node)
@@ -4892,13 +4896,50 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}
 		}
 
+		// Apply grace period for node status to prevent flapping
+		nodeID := instanceName + "-" + node.Node
+		effectiveStatus := node.Status
+		now := time.Now()
+
+		m.mu.Lock()
+		if strings.ToLower(node.Status) == "online" {
+			// Node is online - update last-online timestamp
+			m.nodeLastOnline[nodeID] = now
+		} else {
+			// Node is reported as offline - check grace period
+			lastOnline, exists := m.nodeLastOnline[nodeID]
+			if exists && now.Sub(lastOnline) < nodeOfflineGracePeriod {
+				// Still within grace period - preserve online status
+				effectiveStatus = "online"
+				log.Debug().
+					Str("instance", instanceName).
+					Str("node", node.Node).
+					Dur("timeSinceOnline", now.Sub(lastOnline)).
+					Dur("gracePeriod", nodeOfflineGracePeriod).
+					Msg("Node offline but within grace period - preserving online status")
+			} else {
+				// Grace period expired or never seen online - mark as offline
+				if exists {
+					log.Info().
+						Str("instance", instanceName).
+						Str("node", node.Node).
+						Dur("timeSinceOnline", now.Sub(lastOnline)).
+						Msg("Node offline and grace period expired - marking as offline")
+				}
+			}
+		}
+		m.mu.Unlock()
+
+		// Store effective status for use in subsequent loops
+		nodeEffectiveStatus[node.Node] = effectiveStatus
+
 		modelNode := models.Node{
-			ID:          instanceName + "-" + node.Node,
+			ID:          nodeID,
 			Name:        node.Node,
 			DisplayName: displayName,
 			Instance:    instanceName,
 			Host:        connectionHost,
-			Status:      node.Status,
+			Status:      effectiveStatus,
 			Type:        "node",
 			CPU:         safeFloat(node.CPU), // Already in percentage
 			Memory: models.Memory{
@@ -4950,7 +4991,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		memoryUpdated := false
 
 		// Get detailed node info if available (skip for offline nodes)
-		if node.Status == "online" {
+		if effectiveStatus == "online" {
 			nodeInfo, nodeErr := client.GetNodeStatus(ctx, node.Node)
 			if nodeErr != nil {
 				nodeFallbackReason = "node-status-unavailable"
@@ -5240,7 +5281,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 
 		// If we couldn't update memory metrics using detailed status, preserve previous accurate values if available
-		if !memoryUpdated && node.Status == "online" {
+		if !memoryUpdated && effectiveStatus == "online" {
 			if prevMem, exists := prevNodeMemory[modelNode.ID]; exists && prevMem.Total > 0 {
 				total := int64(node.MaxMem)
 				if total == 0 {
@@ -5292,7 +5333,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		if instanceCfg.TemperatureMonitoringEnabled != nil {
 			tempMonitoringEnabled = *instanceCfg.TemperatureMonitoringEnabled
 		}
-		if node.Status == "online" && m.tempCollector != nil && tempMonitoringEnabled {
+		if effectiveStatus == "online" && m.tempCollector != nil && tempMonitoringEnabled {
 			tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
 
 			// Determine SSH hostname to use (most robust approach):
@@ -5462,7 +5503,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		if err == nil {
 			for _, node := range nodes {
 				// Skip offline nodes to avoid 595 errors
-				if node.Status != "online" {
+				if nodeEffectiveStatus[node.Node] != "online" {
 					continue
 				}
 
@@ -5564,7 +5605,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 			for _, node := range nodes {
 				// Skip offline nodes but preserve their existing disk data
-				if node.Status != "online" {
+				if nodeEffectiveStatus[node.Node] != "online" {
 					log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
 					continue
 				}
@@ -5798,7 +5839,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// Always try the efficient cluster/resources endpoint first
 			// This endpoint works on both clustered and standalone nodes
 			// Testing confirmed it works on standalone nodes like pimox
-			useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+			useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, client, nodeEffectiveStatus)
 
 			if !useClusterEndpoint {
 				// Fall back to traditional polling only if cluster/resources not available
@@ -5820,10 +5861,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 				// Use optimized parallel polling for better performance
 				if instanceCfg.MonitorVMs {
-					m.pollVMsWithNodes(ctx, instanceName, client, nodes)
+					m.pollVMsWithNodes(ctx, instanceName, client, nodes, nodeEffectiveStatus)
 				}
 				if instanceCfg.MonitorContainers {
-					m.pollContainersWithNodes(ctx, instanceName, client, nodes)
+					m.pollContainersWithNodes(ctx, instanceName, client, nodes, nodeEffectiveStatus)
 				}
 			}
 		}
@@ -5887,7 +5928,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						m.pollBackupTasks(backupCtx, inst, pveClient)
 
 						// Poll storage backups - pass nodes to avoid duplicate API calls
-						m.pollStorageBackupsWithNodes(backupCtx, inst, pveClient, nodes)
+						m.pollStorageBackupsWithNodes(backupCtx, inst, pveClient, nodes, nodeEffectiveStatus)
 
 						// Poll guest snapshots
 						m.pollGuestSnapshots(backupCtx, inst, pveClient)
@@ -5911,7 +5952,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 // pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
 // This works on both clustered and standalone nodes for efficient polling
-func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface) bool {
+func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface, nodeEffectiveStatus map[string]string) bool {
 	log.Info().Str("instance", instanceName).Msg("Polling VMs and containers using efficient cluster/resources endpoint")
 
 	// Get all resources in a single API call
@@ -6571,13 +6612,114 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		}
 	}
 
-	// Update state
-	if len(allVMs) > 0 {
-		m.state.UpdateVMsForInstance(instanceName, allVMs)
+	// Preserve VMs and containers from nodes within grace period
+	// The cluster/resources endpoint doesn't return VMs/containers from nodes Proxmox considers offline,
+	// but we want to keep showing them if the node is within grace period
+	prevState := m.GetState()
+
+	// Count previous resources for this instance
+	prevVMCount := 0
+	prevContainerCount := 0
+	for _, vm := range prevState.VMs {
+		if vm.Instance == instanceName {
+			prevVMCount++
+		}
 	}
-	if len(allContainers) > 0 {
-		m.state.UpdateContainersForInstance(instanceName, allContainers)
+	for _, container := range prevState.Containers {
+		if container.Instance == instanceName {
+			prevContainerCount++
+		}
 	}
+
+	// Build map of which nodes are covered by current resources
+	nodesWithResources := make(map[string]bool)
+	for _, res := range resources {
+		nodesWithResources[res.Node] = true
+	}
+
+	log.Info().
+		Str("instance", instanceName).
+		Int("nodesInResources", len(nodesWithResources)).
+		Int("totalVMsFromResources", len(allVMs)).
+		Int("totalContainersFromResources", len(allContainers)).
+		Int("prevVMs", prevVMCount).
+		Int("prevContainers", prevContainerCount).
+		Msg("Cluster resources received, checking for grace period preservation")
+
+	// If we got ZERO resources but had resources before, and we have no node data,
+	// this likely means the cluster health check failed. Preserve everything.
+	if len(allVMs) == 0 && len(allContainers) == 0 &&
+	   (prevVMCount > 0 || prevContainerCount > 0) &&
+	   len(nodeEffectiveStatus) == 0 {
+		log.Warn().
+			Str("instance", instanceName).
+			Int("prevVMs", prevVMCount).
+			Int("prevContainers", prevContainerCount).
+			Msg("Cluster returned zero resources but had resources before - likely cluster health issue, preserving all previous resources")
+
+		// Preserve all previous VMs and containers for this instance
+		for _, vm := range prevState.VMs {
+			if vm.Instance == instanceName {
+				allVMs = append(allVMs, vm)
+			}
+		}
+		for _, container := range prevState.Containers {
+			if container.Instance == instanceName {
+				allContainers = append(allContainers, container)
+			}
+		}
+	}
+
+	// Check for nodes that are within grace period but not in cluster/resources response
+	preservedVMCount := 0
+	preservedContainerCount := 0
+	for nodeName, effectiveStatus := range nodeEffectiveStatus {
+		if effectiveStatus == "online" && !nodesWithResources[nodeName] {
+			// This node is within grace period but Proxmox didn't return its resources
+			// Preserve previous VMs and containers from this node
+			vmsBefore := len(allVMs)
+			containersBefore := len(allContainers)
+
+			// Preserve VMs from this node
+			for _, vm := range prevState.VMs {
+				if vm.Instance == instanceName && vm.Node == nodeName {
+					allVMs = append(allVMs, vm)
+				}
+			}
+
+			// Preserve containers from this node
+			for _, container := range prevState.Containers {
+				if container.Instance == instanceName && container.Node == nodeName {
+					allContainers = append(allContainers, container)
+				}
+			}
+
+			vmsPreserved := len(allVMs) - vmsBefore
+			containersPreserved := len(allContainers) - containersBefore
+			preservedVMCount += vmsPreserved
+			preservedContainerCount += containersPreserved
+
+			log.Info().
+				Str("instance", instanceName).
+				Str("node", nodeName).
+				Int("vmsPreserved", vmsPreserved).
+				Int("containersPreserved", containersPreserved).
+				Msg("Preserved VMs/containers from node in grace period")
+		}
+	}
+
+	if preservedVMCount > 0 || preservedContainerCount > 0 {
+		log.Info().
+			Str("instance", instanceName).
+			Int("totalPreservedVMs", preservedVMCount).
+			Int("totalPreservedContainers", preservedContainerCount).
+			Msg("Grace period preservation complete")
+	}
+
+	// Always update state when using efficient polling path
+	// Even if arrays are empty, we need to update to clear out VMs from genuinely offline nodes
+	m.state.UpdateVMsForInstance(instanceName, allVMs)
+	m.state.UpdateContainersForInstance(instanceName, allContainers)
 
 	m.pollReplicationStatus(ctx, instanceName, client, allVMs)
 
@@ -7577,7 +7719,7 @@ func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 }
 
 // pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls
-func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
+func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 
 	var allBackups []models.StorageBackup
 	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
@@ -7589,7 +7731,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
-		if node.Status != "online" {
+		if nodeEffectiveStatus[node.Node] != "online" {
 			continue
 		}
 
