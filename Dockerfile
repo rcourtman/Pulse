@@ -54,22 +54,23 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 # Build docker-agent binaries (optional cross-arch builds controlled by BUILD_AGENT)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    VERSION="v$(cat VERSION | tr -d '\n')" && \
     if [ "${BUILD_AGENT:-1}" = "1" ]; then \
       CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-        -ldflags="-s -w" \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
         -trimpath \
         -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
       CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-        -ldflags="-s -w" \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
         -trimpath \
         -o pulse-docker-agent-linux-arm64 ./cmd/pulse-docker-agent && \
       CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
-        -ldflags="-s -w" \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
         -trimpath \
         -o pulse-docker-agent-linux-armv7 ./cmd/pulse-docker-agent; \
     else \
       CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-        -ldflags="-s -w" \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
         -trimpath \
         -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
       cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 && \
