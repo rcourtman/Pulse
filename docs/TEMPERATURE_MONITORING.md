@@ -12,6 +12,13 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
   - Yellow: 60-80°C (warm)
   - Red: > 80°C (hot)
 
+## Deployment-Specific Setup
+
+> **Important:** Temperature monitoring setup differs by deployment type:
+> - **LXC containers:** Fully automatic via the setup script (Settings → Nodes → Setup Script)
+> - **Docker containers:** Requires manual proxy installation (see below)
+> - **Native installs:** Direct SSH, no proxy needed
+
 ## Quick Start for Docker Deployments
 
 **Running Pulse in Docker?** Follow these steps to enable temperature monitoring:
@@ -91,8 +98,8 @@ For **containerized deployments** (LXC/Docker), Pulse uses a secure proxy archit
 **Benefits:**
 - SSH keys never enter the container
 - Container compromise doesn't expose infrastructure credentials
-- Automatically configured during installation
-- Transparent to users - no setup changes
+- **LXC:** Automatically configured during installation (fully turnkey)
+- **Docker:** Requires manual proxy installation and volume mount (see Quick Start above)
 
 #### Manual installation (host-side)
 
@@ -221,29 +228,48 @@ For native (non-containerized) installations, Pulse connects directly via SSH:
 
 ## Setup (Automatic)
 
-The auto-setup script (Settings → Nodes → Setup Script) will prompt you to configure SSH access for temperature monitoring:
+The auto-setup script (Settings → Nodes → Setup Script) provides different experiences based on deployment type:
+
+### For LXC Deployments (Fully Automatic)
+
+When run on a Proxmox host with Pulse in an LXC container:
 
 1. Run the auto-setup script on your Proxmox node
-2. When prompted for SSH setup, choose "y"
-3. Get your Pulse server's public key:
-   ```bash
-   # On your Pulse server (run as the user running Pulse)
-   cat ~/.ssh/id_rsa.pub
-   ```
-4. Paste the public key when prompted
-5. The script will:
-   - Add the key to `/root/.ssh/authorized_keys`
+2. The script automatically detects your Pulse LXC container
+3. Installs `pulse-sensor-proxy` on the host
+4. Configures the container bind mount automatically
+5. Sets up SSH keys and cluster discovery
+6. **Fully turnkey - no manual steps required!**
+
+### For Docker Deployments (Manual Steps Required)
+
+When Pulse runs in Docker, the setup script will show you manual steps:
+
+1. Create the Proxmox API token (manual)
+2. Add the node in Pulse UI
+3. **For temperature monitoring**: Follow the [Quick Start for Docker](#quick-start-for-docker-deployments) above
+
+### For Node Configuration (All Deployments)
+
+When prompted for SSH setup on Proxmox nodes:
+
+1. Choose "y" when asked about SSH configuration
+2. The script will:
    - Install `lm-sensors`
    - Run `sensors-detect --auto`
+   - Configure SSH keys (for standalone nodes)
 
-If the node is part of a Proxmox cluster, the script will now detect the other members and offer to configure the same SSH/lm-sensors setup on each of them automatically—confirm when prompted to roll it out cluster-wide.
+If the node is part of a Proxmox cluster, the script will detect other members and offer to configure the same SSH/lm-sensors setup on each of them automatically.
 
-### Host-side responsibilities
+### Host-side responsibilities (Docker only)
 
-- Run the host installer (`install-sensor-proxy.sh`) on the Proxmox machine that hosts Pulse to install and maintain the `pulse-sensor-proxy` service. The node setup script does not create this service.
-- Re-run the host installer if the service or socket disappears after a host upgrade or configuration cleanup; the installer is idempotent.
-- The installer now ships a self-heal timer (`pulse-sensor-proxy-selfheal.timer`) that restarts or reinstalls the proxy if it ever goes missing; leave it enabled for automatic recovery.
-- Hot dev builds now warn when only a container-local proxy socket is present, signalling that the host proxy needs to be reinstalled before temperatures will flow back into Pulse.
+> **Note:** For LXC deployments, the setup script handles all of this automatically. This section applies to **Docker deployments only**.
+
+- Run the host installer (`install-sensor-proxy.sh --standalone`) on the Proxmox machine that hosts Pulse to install and maintain the `pulse-sensor-proxy` service
+- Add the bind mount to your docker-compose.yml: `- /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw`
+- Re-run the host installer if the service or socket disappears after a host upgrade or configuration cleanup; the installer is idempotent
+- The installer ships a self-heal timer (`pulse-sensor-proxy-selfheal.timer`) that restarts or reinstalls the proxy if it ever goes missing; leave it enabled for automatic recovery
+- Hot dev builds warn when only a container-local proxy socket is present, signaling that the host proxy needs to be reinstalled before temperatures will flow back into Pulse
 
 ### Turnkey Setup for Standalone Nodes (v4.25.0+)
 

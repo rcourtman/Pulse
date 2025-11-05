@@ -3387,7 +3387,16 @@ EOF
         echo "  2. In Pulse: Settings → Nodes → Add Node (enter token from above)"
         echo ""
         echo "  3. (Optional) For temperature monitoring on containerized Pulse:"
-        echo "       %s/api/install/install-sensor-proxy.sh --ctid <your-pulse-container-id> --pulse-server %s"
+        echo ""
+        echo "     For LXC containers, run on Proxmox host:"
+        echo "       curl -sSL %s/api/install/install-sensor-proxy.sh | bash -s -- --ctid <CTID> --pulse-server %s"
+        echo ""
+        echo "     For Docker containers, run on Proxmox host:"
+        echo "       curl -sSL %s/api/install/install-sensor-proxy.sh | bash -s -- --standalone --pulse-server %s"
+        echo "       Then add to docker-compose.yml:"
+        echo "         volumes:"
+        echo "           - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw"
+        echo "       And restart: docker-compose down && docker-compose up -d"
         echo ""
         exit 1
         ;;
