@@ -6131,7 +6131,16 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							Uint64("current_maxdisk", diskTotal).
 							Msg("Guest agent enabled, querying filesystem info for accurate disk usage")
 
-						fsInfo, err := client.GetVMFSInfo(ctx, res.Node, res.VMID)
+						// Use retry logic for guest agent calls to handle transient timeouts (refs #630)
+						fsInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+							return client.GetVMFSInfo(ctx, res.Node, res.VMID)
+						})
+						var fsInfo []proxmox.VMFileSystem
+						if err == nil {
+							if fs, ok := fsInfoRaw.([]proxmox.VMFileSystem); ok {
+								fsInfo = fs
+							}
+						}
 						if err != nil {
 							// Log more helpful error messages based on the error type
 							errMsg := err.Error()
