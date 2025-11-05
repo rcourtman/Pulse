@@ -122,6 +122,51 @@ func calculateBackoff(attempt int) time.Duration {
 
 // classifyError categorizes errors for retry logic
 func classifyError(err error, respError string) *ProxyError {
+	// Check response error messages first (even if err is nil)
+	// This handles cases where the socket succeeds but the proxy returns an application error
+	if respError != "" {
+		// Rate limiting - never retry
+		if contains(respError, "rate limit") {
+			return &ProxyError{
+				Type:      ErrorTypeTransport,
+				Message:   respError,
+				Retryable: false,
+				Wrapped:   fmt.Errorf("%s", respError),
+			}
+		}
+
+		// Authorization errors - never retry
+		if respError == "unauthorized" || respError == "method requires host-level privileges" {
+			return &ProxyError{
+				Type:      ErrorTypeAuth,
+				Message:   respError,
+				Retryable: false,
+				Wrapped:   fmt.Errorf("%s", respError),
+			}
+		}
+
+		// SSH-related errors - retryable
+		if contains(respError, "ssh", "connection", "timeout") {
+			return &ProxyError{
+				Type:      ErrorTypeSSH,
+				Message:   "SSH connectivity issue",
+				Retryable: true,
+				Wrapped:   fmt.Errorf("%s", respError),
+			}
+		}
+
+		// Sensor errors - never retry
+		if contains(respError, "sensor", "temperature") {
+			return &ProxyError{
+				Type:      ErrorTypeSensor,
+				Message:   "sensor command failed",
+				Retryable: false,
+				Wrapped:   fmt.Errorf("%s", respError),
+			}
+		}
+	}
+
+	// If no response error and no network error, nothing to classify
 	if err == nil {
 		return nil
 	}
@@ -143,38 +188,6 @@ func classifyError(err error, respError string) *ProxyError {
 			Message:   "failed to connect to proxy socket",
 			Retryable: true,
 			Wrapped:   err,
-		}
-	}
-
-	// Check response error messages
-	if respError != "" {
-		if respError == "unauthorized" || respError == "method requires host-level privileges" {
-			return &ProxyError{
-				Type:      ErrorTypeAuth,
-				Message:   respError,
-				Retryable: false,
-				Wrapped:   fmt.Errorf("%s", respError),
-			}
-		}
-
-		// SSH-related errors
-		if contains(respError, "ssh", "connection", "timeout") {
-			return &ProxyError{
-				Type:      ErrorTypeSSH,
-				Message:   "SSH connectivity issue",
-				Retryable: true,
-				Wrapped:   fmt.Errorf("%s", respError),
-			}
-		}
-
-		// Sensor errors
-		if contains(respError, "sensor", "temperature") {
-			return &ProxyError{
-				Type:      ErrorTypeSensor,
-				Message:   "sensor command failed",
-				Retryable: false,
-				Wrapped:   fmt.Errorf("%s", respError),
-			}
 		}
 	}
 
