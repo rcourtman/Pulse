@@ -281,11 +281,12 @@ func ensureClusterEndpointURL(raw string) string {
 }
 
 func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint) string {
-	if endpoint.Host != "" {
-		return ensureClusterEndpointURL(endpoint.Host)
-	}
+	// Prefer IP address to avoid excessive DNS lookups
 	if endpoint.IP != "" {
 		return ensureClusterEndpointURL(endpoint.IP)
+	}
+	if endpoint.Host != "" {
+		return ensureClusterEndpointURL(endpoint.Host)
 	}
 	return ""
 }
