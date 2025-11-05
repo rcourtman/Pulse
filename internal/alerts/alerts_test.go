@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
@@ -1541,5 +1542,116 @@ func TestDockerResourceID(t *testing.T) {
 				t.Fatalf("dockerResourceID(%q, %q) = %q, want %q", tc.hostID, tc.containerID, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestHasKnownFirmwareBug(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		model string
+		want  bool
+	}{
+		{name: "Samsung 980 with SSD prefix", model: "Samsung SSD 980 1TB", want: true},
+		{name: "Samsung 980 without SSD prefix", model: "Samsung 980 PRO 2TB", want: true},
+		{name: "Samsung 990 with SSD prefix", model: "Samsung SSD 990 PRO 2TB", want: true},
+		{name: "Samsung 990 without SSD prefix", model: "Samsung 990 EVO 1TB", want: true},
+		{name: "Samsung 980 lowercase", model: "samsung ssd 980 1tb", want: true},
+		{name: "Samsung 990 mixed case", model: "SAMSUNG 990 PRO", want: true},
+		{name: "Samsung 970 (not affected)", model: "Samsung SSD 970 EVO Plus", want: false},
+		{name: "Samsung 870 (not affected)", model: "Samsung 870 QVO", want: false},
+		{name: "Other manufacturer", model: "WD Blue SN570", want: false},
+		{name: "Empty model", model: "", want: false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := hasKnownFirmwareBug(tc.model); got != tc.want {
+				t.Fatalf("hasKnownFirmwareBug(%q) = %v, want %v", tc.model, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCheckDiskHealthSkipsSamsung980FalseAlerts(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	// Samsung 980 reporting FAILED health (firmware bug) but actually healthy
+	disk := proxmox.Disk{
+		DevPath: "/dev/nvme0n1",
+		Model:   "Samsung SSD 980 1TB",
+		Serial:  "S649NF0R123456",
+		Type:    "nvme",
+		Health:  "FAILED", // False report due to firmware bug
+		Wearout: 99,       // Drive is actually healthy with 99% life remaining
+		Size:    1000204886016,
+	}
+
+	// Should not create an alert for health status
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	healthAlertID := "disk-health-test-instance-pve-node1-/dev/nvme0n1"
+	if _, exists := m.activeAlerts[healthAlertID]; exists {
+		m.mu.RUnlock()
+		t.Fatalf("expected no health alert for Samsung 980 with known firmware bug")
+	}
+	m.mu.RUnlock()
+
+	// Now test that wearout alerts still work for these drives
+	disk.Wearout = 5 // Low wearout should still trigger alert
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	wearoutAlertID := "disk-wearout-test-instance-pve-node1-/dev/nvme0n1"
+	if _, exists := m.activeAlerts[wearoutAlertID]; !exists {
+		m.mu.RUnlock()
+		t.Fatalf("expected wearout alert to still work for Samsung 980")
+	}
+	m.mu.RUnlock()
+}
+
+func TestCheckDiskHealthClearsExistingSamsung980Alerts(t *testing.T) {
+	m := NewManager()
+	m.ClearActiveAlerts()
+
+	disk := proxmox.Disk{
+		DevPath: "/dev/nvme0n1",
+		Model:   "Samsung SSD 990 PRO 2TB",
+		Serial:  "S6Z0NF0R654321",
+		Type:    "nvme",
+		Health:  "FAILED",
+		Wearout: 98,
+		Size:    2000398934016,
+	}
+
+	alertID := "disk-health-test-instance-pve-node1-/dev/nvme0n1"
+
+	// Manually create an existing alert (simulating alert from before the fix)
+	m.mu.Lock()
+	m.activeAlerts[alertID] = &Alert{
+		ID:           alertID,
+		Type:         "disk-health",
+		Level:        AlertLevelCritical,
+		ResourceID:   "pve-node1-/dev/nvme0n1",
+		ResourceName: "Samsung SSD 990 PRO 2TB (/dev/nvme0n1)",
+		Node:         "pve-node1",
+		Instance:     "test-instance",
+		Message:      "Disk health check failed: FAILED",
+	}
+	m.mu.Unlock()
+
+	// Check disk health - should clear the existing false alert
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := m.activeAlerts[alertID]; exists {
+		t.Fatalf("expected existing Samsung 990 health alert to be cleared")
 	}
 }

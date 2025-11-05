@@ -7902,6 +7902,34 @@ func (m *Manager) periodicSaveAlerts() {
 	}
 }
 
+// hasKnownFirmwareBug checks if a disk model is known to have firmware bugs that cause
+// false health status reports. These drives may report FAILED or other error states
+// due to firmware issues (e.g., incorrect temperature thresholds) even when the drive
+// is actually healthy. This prevents false alerts while still monitoring wearout.
+//
+// Related to GitHub issue #547: Samsung 980/990 SSDs report false health failures
+func hasKnownFirmwareBug(model string) bool {
+	normalizedModel := strings.ToUpper(strings.TrimSpace(model))
+
+	// Samsung 980/990 series drives have known firmware bugs causing false health reports
+	// These drives report incorrect health status due to temperature threshold bugs
+	// even when functioning normally. Users should update firmware to latest version.
+	knownProblematicModels := []string{
+		"SAMSUNG SSD 980",
+		"SAMSUNG 980",
+		"SAMSUNG SSD 990",
+		"SAMSUNG 990",
+	}
+
+	for _, problematic := range knownProblematicModels {
+		if strings.Contains(normalizedModel, problematic) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // CheckDiskHealth checks disk health and creates alerts if needed
 func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	// Create unique alert ID for this disk
@@ -7913,6 +7941,23 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	// Check if disk health is not PASSED
 	normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
 	if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
+		// Skip health alerts for drives with known firmware bugs that cause false reports
+		// These drives may report FAILED status due to firmware issues even when healthy
+		// We still monitor wearout below, which is more reliable for these drives
+		if hasKnownFirmwareBug(disk.Model) {
+			log.Debug().
+				Str("node", node).
+				Str("disk", disk.DevPath).
+				Str("model", disk.Model).
+				Str("health", disk.Health).
+				Msg("Skipping health alert for drive with known firmware bug - health status unreliable")
+
+			// Clear any existing health alert since we now recognize this is a false positive
+			m.clearAlertNoLock(alertID)
+
+			// Continue to wearout check below - wearout monitoring is still valid
+			goto checkWearout
+		}
 		// Check if alert already exists
 		if _, exists := m.activeAlerts[alertID]; !exists {
 			// Create new health alert
@@ -7959,6 +8004,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		m.clearAlertNoLock(alertID)
 	}
 
+checkWearout:
 	// Check for low wearout (SSD life remaining)
 	if disk.Wearout > 0 && disk.Wearout < 10 {
 		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)

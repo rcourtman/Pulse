@@ -95,8 +95,9 @@ type Agent struct {
 	targets          []TargetConfig
 	allowedStates    map[string]struct{}
 	stateFilters     []string
-	hostID           string
-	prevContainerCPU map[string]cpuSample
+	hostID              string
+	prevContainerCPU    map[string]cpuSample
+	preCPUStatsFailures int
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -1291,17 +1292,39 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 		read:        stats.Read,
 	}
 
+	// Try to use PreCPUStats if available
 	percent := calculateCPUPercent(stats, a.cpuCount)
 	if percent > 0 {
 		a.prevContainerCPU[id] = current
+		a.logger.Debug().
+			Str("container_id", id[:12]).
+			Float64("cpu_percent", percent).
+			Msg("CPU calculated from PreCPUStats")
 		return percent
 	}
 
+	// PreCPUStats not available or invalid, use manual tracking
+	a.preCPUStatsFailures++
+	if a.preCPUStatsFailures == 10 {
+		a.logger.Warn().
+			Str("runtime", string(a.runtime)).
+			Msg("PreCPUStats consistently unavailable from Docker API - using manual CPU tracking (this is normal for one-shot stats)")
+	}
 	prev, ok := a.prevContainerCPU[id]
-	a.prevContainerCPU[id] = current
 	if !ok {
+		// First time seeing this container - store current sample and return 0
+		// On next collection cycle we'll have a previous sample to compare against
+		a.prevContainerCPU[id] = current
+		a.logger.Debug().
+			Str("container_id", id[:12]).
+			Uint64("total_usage", current.totalUsage).
+			Uint64("system_usage", current.systemUsage).
+			Msg("First CPU sample collected, no previous data for delta calculation")
 		return 0
 	}
+
+	// We have a previous sample - update it after calculation
+	a.prevContainerCPU[id] = current
 
 	var totalDelta float64
 	if current.totalUsage >= prev.totalUsage {
@@ -1334,20 +1357,44 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	}
 
 	if systemDelta > 0 {
-		return safeFloat((totalDelta / systemDelta) * float64(onlineCPUs) * 100.0)
+		cpuPercent := safeFloat((totalDelta / systemDelta) * float64(onlineCPUs) * 100.0)
+		a.logger.Debug().
+			Str("container_id", id[:12]).
+			Float64("cpu_percent", cpuPercent).
+			Float64("total_delta", totalDelta).
+			Float64("system_delta", systemDelta).
+			Uint32("online_cpus", onlineCPUs).
+			Msg("CPU calculated from system delta")
+		return cpuPercent
 	}
 
+	// Fall back to time-based calculation
 	if !prev.read.IsZero() && !current.read.IsZero() {
 		elapsed := current.read.Sub(prev.read).Seconds()
 		if elapsed > 0 {
 			denominator := elapsed * float64(onlineCPUs) * 1e9
 			if denominator > 0 {
 				cpuPercent := (totalDelta / denominator) * 100.0
-				return safeFloat(cpuPercent)
+				result := safeFloat(cpuPercent)
+				a.logger.Debug().
+					Str("container_id", id[:12]).
+					Float64("cpu_percent", result).
+					Float64("total_delta", totalDelta).
+					Float64("elapsed_seconds", elapsed).
+					Uint32("online_cpus", onlineCPUs).
+					Msg("CPU calculated from time-based delta")
+				return result
 			}
 		}
 	}
 
+	a.logger.Debug().
+		Str("container_id", id[:12]).
+		Float64("total_delta", totalDelta).
+		Float64("system_delta", systemDelta).
+		Bool("prev_read_zero", prev.read.IsZero()).
+		Bool("current_read_zero", current.read.IsZero()).
+		Msg("CPU calculation failed: no valid delta method available")
 	return 0
 }
 
