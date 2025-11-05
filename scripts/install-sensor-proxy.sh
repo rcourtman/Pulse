@@ -101,7 +101,7 @@ cleanup_cluster_authorized_keys_manual() {
     if command -v pvecm >/dev/null 2>&1; then
         while IFS= read -r node_ip; do
             [[ -n "$node_ip" ]] && nodes+=("$node_ip")
-        done < <(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}')
+        done < <(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}' || true)
     fi
 
     if [[ ${#nodes[@]} -eq 0 ]]; then
@@ -841,7 +841,7 @@ if [[ -z "$HOST" ]]; then
 
     # Discover cluster nodes
     if command -v pvecm >/dev/null 2>&1; then
-        CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}')
+        CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}' || true)
 
         if [[ -n "$CLUSTER_NODES" ]]; then
             for node_ip in $CLUSTER_NODES; do
@@ -1016,7 +1016,7 @@ print_info "Proxy public key: ${PROXY_PUBLIC_KEY:0:50}..."
 # Discover cluster nodes
 if command -v pvecm >/dev/null 2>&1; then
     # Extract node IPs from pvecm status
-    CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}')
+    CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}' || true)
 
     if [[ -n "$CLUSTER_NODES" ]]; then
         print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"

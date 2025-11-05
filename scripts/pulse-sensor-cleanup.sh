@@ -50,7 +50,7 @@ if [[ -z "$HOST" ]]; then
 
     # Discover cluster nodes
     if command -v pvecm >/dev/null 2>&1; then
-        CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}')
+        CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}' || true)
 
         if [[ -n "$CLUSTER_NODES" ]]; then
             for node_ip in $CLUSTER_NODES; do

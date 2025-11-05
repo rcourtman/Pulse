@@ -105,13 +105,22 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -trimpath \
       -o pulse-host-agent-windows-amd64.exe ./cmd/pulse-host-agent
 
-# Build pulse-sensor-proxy
+# Build pulse-sensor-proxy for all Linux architectures (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="-s -w" \
       -trimpath \
-      -o pulse-sensor-proxy ./cmd/pulse-sensor-proxy
+      -o pulse-sensor-proxy-linux-amd64 ./cmd/pulse-sensor-proxy && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-sensor-proxy-linux-arm64 ./cmd/pulse-sensor-proxy && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
+      -ldflags="-s -w" \
+      -trimpath \
+      -o pulse-sensor-proxy-linux-armv7 ./cmd/pulse-sensor-proxy && \
+    cp pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
 FROM alpine:3.20 AS agent_runtime
@@ -188,7 +197,10 @@ COPY --from=backend-builder /app/pulse-host-agent-windows-amd64.exe /opt/pulse/b
 # Create symlink for Windows without .exe extension
 RUN ln -s pulse-host-agent-windows-amd64.exe /opt/pulse/bin/pulse-host-agent-windows-amd64
 
-# Copy pulse-sensor-proxy binary for download endpoint
+# Copy multi-arch pulse-sensor-proxy binaries for download endpoint
+COPY --from=backend-builder /app/pulse-sensor-proxy-linux-amd64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-sensor-proxy-linux-arm64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-sensor-proxy-linux-armv7 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-sensor-proxy /opt/pulse/bin/pulse-sensor-proxy
 
 # Create config directory
