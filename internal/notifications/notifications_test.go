@@ -493,3 +493,132 @@ func TestRenderWebhookURL_InvalidTemplate(t *testing.T) {
 		t.Fatalf("expected error for invalid URL template, got nil")
 	}
 }
+
+func TestSendTestNotificationApprise(t *testing.T) {
+	nm := NewNotificationManager("")
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	// Test 1: Apprise not enabled should return error
+	nm.SetAppriseConfig(AppriseConfig{
+		Enabled: false,
+		Targets: []string{"discord://token"},
+	})
+
+	err := nm.SendTestNotification("apprise")
+	if err == nil {
+		t.Fatalf("expected error when Apprise is disabled, got nil")
+	}
+	if !strings.Contains(err.Error(), "not enabled") {
+		t.Fatalf("expected 'not enabled' error, got: %v", err)
+	}
+
+	// Test 2: Apprise enabled with CLI mode should invoke executor
+	done := make(chan struct{})
+	var capturedArgs []string
+
+	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
+		if path != "apprise" {
+			t.Fatalf("expected CLI path 'apprise', got %q", path)
+		}
+		capturedArgs = append([]string(nil), args...)
+		close(done)
+		return []byte("success"), nil
+	}
+
+	nm.SetAppriseConfig(AppriseConfig{
+		Enabled:        true,
+		Targets:        []string{"discord://token"},
+		TimeoutSeconds: 10,
+	})
+
+	err = nm.SendTestNotification("apprise")
+	if err != nil {
+		t.Fatalf("expected no error when testing Apprise, got: %v", err)
+	}
+
+	// Wait for the executor to be called
+	select {
+	case <-done:
+		// Success - executor was called
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for Apprise executor to be called")
+	}
+
+	// Verify the arguments contain the target
+	foundTarget := false
+	for _, arg := range capturedArgs {
+		if arg == "discord://token" {
+			foundTarget = true
+			break
+		}
+	}
+	if !foundTarget {
+		t.Fatalf("expected target 'discord://token' in args, got: %v", capturedArgs)
+	}
+}
+
+func TestSendTestNotificationAppriseHTTP(t *testing.T) {
+	nm := NewNotificationManager("")
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	type apprisePayload struct {
+		Body  string   `json:"body"`
+		Title string   `json:"title"`
+		Type  string   `json:"type"`
+		URLs  []string `json:"urls"`
+	}
+
+	requests := make(chan apprisePayload, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		var payload apprisePayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		requests <- payload
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok": true}`))
+	}))
+	defer server.Close()
+
+	nm.SetAppriseConfig(AppriseConfig{
+		Enabled:        true,
+		Mode:           AppriseModeHTTP,
+		ServerURL:      server.URL,
+		ConfigKey:      "test-key",
+		TimeoutSeconds: 10,
+	})
+
+	err := nm.SendTestNotification("apprise")
+	if err != nil {
+		t.Fatalf("expected no error when testing Apprise HTTP, got: %v", err)
+	}
+
+	// Wait for the HTTP request
+	select {
+	case payload := <-requests:
+		// Verify the payload contains test alert information
+		if payload.Title == "" {
+			t.Fatalf("expected non-empty title in Apprise payload")
+		}
+		if payload.Body == "" {
+			t.Fatalf("expected non-empty body in Apprise payload")
+		}
+		if !strings.Contains(payload.Body, "test alert") && !strings.Contains(payload.Body, "Test Resource") {
+			t.Fatalf("expected test alert content in body, got: %s", payload.Body)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for Apprise HTTP request")
+	}
+}

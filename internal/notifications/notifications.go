@@ -2013,6 +2013,24 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 		}
 		n.sendWebhook(*webhookToTest, testAlert)
 		return nil
+	case "apprise":
+		n.mu.RLock()
+		appriseConfig := n.appriseConfig
+		n.mu.RUnlock()
+
+		log.Info().
+			Bool("enabled", appriseConfig.Enabled).
+			Str("mode", string(appriseConfig.Mode)).
+			Int("targetCount", len(appriseConfig.Targets)).
+			Msg("Testing Apprise notification")
+
+		if !appriseConfig.Enabled {
+			return fmt.Errorf("apprise notifications are not enabled")
+		}
+
+		// Use sendGroupedApprise with a single test alert
+		n.sendGroupedApprise(appriseConfig, []*alerts.Alert{testAlert})
+		return nil
 	default:
 		return fmt.Errorf("unknown notification method: %s", method)
 	}
