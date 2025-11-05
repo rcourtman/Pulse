@@ -12,6 +12,58 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
   - Yellow: 60-80°C (warm)
   - Red: > 80°C (hot)
 
+## Quick Start for Docker Deployments
+
+**Running Pulse in Docker?** Follow these steps to enable temperature monitoring:
+
+### 1. Install the proxy on your Proxmox host
+
+SSH to your **Proxmox host** (not the Docker container) and run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+  bash -s -- --standalone --pulse-server http://YOUR_PULSE_IP:7655
+```
+
+Replace `YOUR_PULSE_IP` with your Pulse server's IP address.
+
+### 2. Add bind mount to docker-compose.yml
+
+Add this volume to your Pulse container configuration:
+
+```yaml
+volumes:
+  - pulse-data:/data
+  - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw  # Add this line
+```
+
+### 3. Restart Pulse container
+
+```bash
+docker-compose down && docker-compose up -d
+```
+
+### 4. Verify
+
+Check Pulse UI for temperature data, or verify the setup:
+
+```bash
+# Verify proxy is running on host
+systemctl status pulse-sensor-proxy
+
+# Verify socket is accessible in container
+docker exec pulse ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock
+
+# Check Pulse logs
+docker logs pulse | grep -i "temperature.*proxy"
+```
+
+You should see: `Temperature proxy detected - using secure host-side bridge`
+
+**Having issues?** See [Troubleshooting](#troubleshooting) below.
+
+---
+
 ## Disable Temperature Monitoring
 
 Don't need the sensor data? Open **Settings → Proxmox**, edit any node, and scroll to the **Advanced monitoring** section. The temperature toggle there controls collection for all nodes:

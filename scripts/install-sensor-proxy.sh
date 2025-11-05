@@ -1401,8 +1401,41 @@ else
     print_info ""
     print_info "Temperature monitoring will use the secure host-side proxy"
     print_info ""
+
+    if [[ "$STANDALONE" == true ]]; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Docker Container Configuration Required"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        print_info "${YELLOW}IMPORTANT:${NC} If Pulse is running in Docker, add this bind mount to your docker-compose.yml:"
+        echo ""
+        echo "  volumes:"
+        echo "    - pulse-data:/data"
+        echo "    - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw"
+        echo ""
+        print_info "Then restart your Pulse container:"
+        echo "  docker-compose down && docker-compose up -d"
+        echo ""
+        print_info "Or if using Docker directly:"
+        echo "  docker restart pulse"
+        echo ""
+    fi
+
     print_info "To check proxy status:"
     print_info "  systemctl status pulse-sensor-proxy"
+
+    if [[ "$STANDALONE" == true ]]; then
+        echo ""
+        print_info "After restarting Pulse, verify the socket is accessible:"
+        print_info "  docker exec pulse ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+        echo ""
+        print_info "Check Pulse logs for temperature proxy detection:"
+        print_info "  docker logs pulse | grep -i 'temperature.*proxy'"
+        echo ""
+        print_info "For detailed documentation, see:"
+        print_info "  https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md"
+    fi
 fi
 
 exit 0
