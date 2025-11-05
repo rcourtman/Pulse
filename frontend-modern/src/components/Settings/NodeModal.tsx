@@ -57,6 +57,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     status: string;
     message: string;
     isCluster?: boolean;
+    warnings?: string[];
   } | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
 
@@ -362,9 +363,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     try {
       const result = await NodesAPI.testConnection(testData as NodeConfig);
       setTestResult({
-        status: 'success',
+        status: result.warnings && result.warnings.length > 0 ? 'warning' : 'success',
         message: result.message || 'Connection successful',
         isCluster: result.isCluster,
+        warnings: result.warnings,
       });
     } catch (error) {
       logger.error('Test connection error:', error);
@@ -1863,7 +1865,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     class={`mx-6 p-3 rounded-lg text-sm ${
                       testResult()?.status === 'success'
                         ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
-                        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                        : testResult()?.status === 'warning'
+                          ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+                          : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
                     }`}
                   >
                     <div class="flex items-start gap-2">
@@ -1881,6 +1885,19 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <circle cx="12" cy="12" r="10"></circle>
                         </svg>
                       </Show>
+                      <Show when={testResult()?.status === 'warning'}>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          class="flex-shrink-0 mt-0.5"
+                        >
+                          <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                      </Show>
                       <Show when={testResult()?.status === 'error'}>
                         <svg
                           width="16"
@@ -1896,12 +1913,22 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <line x1="9" y1="9" x2="15" y2="15"></line>
                         </svg>
                       </Show>
-                      <div>
+                      <div class="flex-1">
                         <p>{testResult()?.message}</p>
                         <Show when={testResult()?.isCluster}>
                           <p class="mt-1 text-xs opacity-80">
                             ✨ Cluster detected! All cluster nodes will be automatically added.
                           </p>
+                        </Show>
+                        <Show when={testResult()?.warnings && testResult()!.warnings!.length > 0}>
+                          <div class="mt-2 space-y-1">
+                            <p class="text-xs font-semibold opacity-90">Warnings:</p>
+                            <ul class="text-xs space-y-0.5 opacity-80">
+                              <For each={testResult()?.warnings}>
+                                {(warning) => <li>• {warning}</li>}
+                              </For>
+                            </ul>
+                          </div>
                         </Show>
                       </div>
                     </div>

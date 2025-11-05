@@ -1675,7 +1675,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
 		version, err := tempClient.GetVersion(ctx)
@@ -1692,9 +1692,33 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			}
 		}
 
+		// Test actual metrics endpoints to ensure monitoring will work
+		warnings := []string{}
+
+		// Test mail statistics endpoint (core PMG functionality)
+		if _, err := tempClient.GetMailStatistics(ctx, "day"); err != nil {
+			warnings = append(warnings, "Mail statistics endpoint unavailable - check user permissions")
+			log.Warn().Err(err).Msg("PMG connection test: mail statistics check failed")
+		}
+
+		// Test cluster status endpoint
+		if _, err := tempClient.GetClusterStatus(ctx, true); err != nil {
+			warnings = append(warnings, "Cluster status endpoint unavailable")
+			log.Warn().Err(err).Msg("PMG connection test: cluster status check failed")
+		}
+
+		// Test quarantine endpoint
+		if _, err := tempClient.GetQuarantineStatus(ctx, "spam"); err != nil {
+			warnings = append(warnings, "Quarantine endpoint unavailable")
+			log.Warn().Err(err).Msg("PMG connection test: quarantine check failed")
+		}
+
 		message := "Connected to PMG instance"
 		if versionLabel != "" {
 			message = fmt.Sprintf("Connected to PMG instance (version %s)", versionLabel)
+		}
+		if len(warnings) > 0 {
+			message += " (some metrics may be unavailable - check logs for details)"
 		}
 
 		response := map[string]interface{}{
@@ -1709,6 +1733,10 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			if version.Release != "" {
 				response["release"] = strings.TrimSpace(version.Release)
 			}
+		}
+
+		if len(warnings) > 0 {
+			response["warnings"] = warnings
 		}
 
 		w.Header().Set("Content-Type", "application/json")

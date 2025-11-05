@@ -12,7 +12,7 @@ import {
 import type { JSX } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
-import { showSuccess, showError } from '@/utils/toast';
+import { showSuccess, showError, showWarning } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getPulsePort, getPulseWebSocketUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
@@ -1843,7 +1843,13 @@ const Settings: Component<SettingsProps> = (props) => {
       // Use the existing node test endpoint which uses stored credentials
       const result = await NodesAPI.testExistingNode(nodeId);
       if (result.status === 'success') {
-        showSuccess(result.message || 'Connection successful');
+        // Check for warnings in the response
+        if (result.warnings && Array.isArray(result.warnings) && result.warnings.length > 0) {
+          const warningMessage = result.message + '\n\nWarnings:\n' + result.warnings.map((w: string) => '• ' + w).join('\n');
+          showWarning(warningMessage);
+        } else {
+          showSuccess(result.message || 'Connection successful');
+        }
       } else {
         throw new Error(result.message || 'Connection failed');
       }
