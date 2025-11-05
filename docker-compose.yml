@@ -9,8 +9,9 @@ services:
       - "${PULSE_PORT:-7655}:7655"
     volumes:
       - pulse-data:/data
-      # Secure temperature monitoring via host-side proxy
-      - /mnt/pulse-proxy:/mnt/pulse-proxy:ro
+      # Secure temperature monitoring via host-side proxy (requires setup - see docs)
+      # Uncomment after installing pulse-sensor-proxy on host with --standalone flag
+      # - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw
     environment:
       - TZ=${TZ:-UTC}
     healthcheck:
