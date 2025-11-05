@@ -2769,6 +2769,13 @@ const cancelEdit = () => {
     <textarea
       value={dockerIgnoredInput()}
       onInput={(event) => handleDockerIgnoredChange(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        // Ensure Enter key works in textarea for creating new lines
+        if (event.key === 'Enter') {
+          // Don't prevent default - allow the newline to be inserted
+          event.stopPropagation();
+        }
+      }}
       placeholder="runner-"
       rows={4}
       class="mt-4 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
