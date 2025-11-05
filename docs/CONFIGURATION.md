@@ -117,6 +117,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
   "allowedOrigins": "",                // CORS allowed origins (empty = same-origin only)
   "allowEmbedding": false,             // Allow iframe embedding
   "allowedEmbedOrigins": "",           // Comma-separated origins allowed to embed Pulse
+  "temperatureMonitoringEnabled": true,// Global temperature polling toggle (Settings → Proxmox → Edit node → Advanced monitoring)
   "backendPort": 3000,                 // Internal API listen port (not normally changed)
   "frontendPort": 7655,                // Public port exposed by the service
   "logLevel": "info",                  // Log level: debug, info, warn, error
@@ -388,6 +389,7 @@ These env vars override system.json values. When set, the UI will show a warning
 - `ADAPTIVE_POLLING_MAX_INTERVAL` - Override the maximum cadence (Go duration or seconds). Values ≤`15s` engage the low-latency backoff profile.
 - `ENABLE_BACKUP_POLLING` - Set to `false` to disable polling of Proxmox backup/snapshot APIs (default: true)
 - `BACKUP_POLLING_INTERVAL` - Override the backup polling cadence. Accepts Go duration syntax (e.g. `30m`, `6h`) or seconds. Use `0` for Pulse's default (~90s) cadence.
+- `ENABLE_TEMPERATURE_MONITORING` - Force-enable or disable SSH temperature polling for all nodes (`true`/`false`)
 - `PULSE_PUBLIC_URL` - Full URL to access Pulse (e.g., `http://192.168.1.100:7655`)
   - **Auto-detected** if not set (except inside Docker where detection is disabled)
   - Used in webhook notifications for "View in Pulse" links

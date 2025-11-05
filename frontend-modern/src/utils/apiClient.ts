@@ -60,16 +60,18 @@ class ApiClient {
     }
   }
 
-  private loadCSRFToken() {
+  private loadCSRFToken(): string | null {
     // Read CSRF token from cookie
     const cookies = document.cookie.split(';');
     for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=');
-      if (name === 'pulse_csrf') {
-        this.csrfToken = decodeURIComponent(value);
-        break;
-      }
+      const [name, ...rest] = cookie.trim().split('=');
+      if (name !== 'pulse_csrf') continue;
+      const value = rest.join('=');
+      this.csrfToken = decodeURIComponent(value || '');
+      return this.csrfToken;
     }
+    this.csrfToken = null;
+    return null;
   }
 
   private loadStoredAuth() {
@@ -201,8 +203,11 @@ class ApiClient {
 
     // Add CSRF token for state-changing requests
     const method = (fetchOptions.method || 'GET').toUpperCase();
-    if (this.csrfToken && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-      finalHeaders['X-CSRF-Token'] = this.csrfToken;
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      const token = this.loadCSRFToken();
+      if (token) {
+        finalHeaders['X-CSRF-Token'] = token;
+      }
     }
 
     // Always include credentials for cookies (WebSocket session support)
@@ -223,19 +228,24 @@ class ApiClient {
 
     // Handle CSRF token failures
     if (response.status === 403) {
-      const text = await response.clone().text();
-      if (text.includes('CSRF')) {
-        // Try to reload CSRF token from cookie and retry
-        this.loadCSRFToken();
-        if (this.csrfToken) {
-          finalHeaders['X-CSRF-Token'] = this.csrfToken;
-          const retryResponse = await fetch(url, {
-            ...fetchOptions,
-            headers: finalHeaders,
-            credentials: 'include',
-          });
-          return retryResponse;
-        }
+      const csrfHeader = response.headers.get('X-CSRF-Token');
+      let refreshedToken: string | null = null;
+      if (csrfHeader) {
+        refreshedToken = csrfHeader;
+      } else {
+        refreshedToken = this.loadCSRFToken();
+      }
+
+      if (refreshedToken) {
+        this.csrfToken = refreshedToken;
+        logger.debug(`[apiClient] Retrying ${method} ${url} with refreshed CSRF token`);
+        finalHeaders['X-CSRF-Token'] = refreshedToken;
+        const retryResponse = await fetch(url, {
+          ...fetchOptions,
+          headers: finalHeaders,
+          credentials: 'include',
+        });
+        return retryResponse;
       }
     }
 

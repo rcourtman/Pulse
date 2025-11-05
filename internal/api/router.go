@@ -1181,6 +1181,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", r.config.AllowedOrigins)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token")
+			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token, X-Authenticated-User, X-Auth-Method")
 		}
 
 		// Handle preflight requests
@@ -1343,6 +1344,29 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "CSRF token validation failed", http.StatusForbidden)
 			LogAuditEvent("csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Invalid CSRF token")
 			return
+		}
+
+		// Issue CSRF token for GET requests if session exists but CSRF cookie is missing
+		// This ensures the frontend has a token before making POST requests
+		if req.Method == "GET" && strings.HasPrefix(req.URL.Path, "/api/") {
+			sessionCookie, err := req.Cookie("pulse_session")
+			if err == nil && sessionCookie.Value != "" {
+				// Check if CSRF cookie exists
+				_, csrfErr := req.Cookie("pulse_csrf")
+				if csrfErr != nil {
+					// Session exists but no CSRF cookie - issue one
+					csrfToken := generateCSRFToken(sessionCookie.Value)
+					isSecure, sameSitePolicy := getCookieSettings(req)
+					http.SetCookie(w, &http.Cookie{
+						Name:     "pulse_csrf",
+						Value:    csrfToken,
+						Path:     "/",
+						Secure:   isSecure,
+						SameSite: sameSitePolicy,
+						MaxAge:   86400,
+					})
+				}
+			}
 		}
 
 		// Rate limiting is now handled by UniversalRateLimitMiddleware

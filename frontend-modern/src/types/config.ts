@@ -36,6 +36,7 @@ export interface SystemConfig {
   autoUpdateTime?: string; // Time for updates (HH:MM format)
   backupPollingInterval?: number; // Backup polling interval in seconds (0 = default cadence)
   backupPollingEnabled?: boolean; // Enable backup polling of PVE/PBS data
+  temperatureMonitoringEnabled?: boolean; // Collect CPU/NVMe temperatures via SSH
   allowedOrigins?: string; // CORS allowed origins
   backendPort?: number; // Backend API port (default: 7655)
   frontendPort?: number; // Frontend UI port (default: 7655)
@@ -154,6 +155,7 @@ export const DEFAULT_CONFIG: {
     autoUpdateTime: '03:00',
     backupPollingEnabled: true,
     backupPollingInterval: 0,
+    temperatureMonitoringEnabled: true,
     allowedOrigins: '',
     backendPort: 7655,
     frontendPort: 7655,
