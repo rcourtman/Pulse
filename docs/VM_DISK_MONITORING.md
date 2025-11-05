@@ -196,6 +196,49 @@ qm config <vmid> | grep agent
 qm agent <vmid> ping
 ```
 
+### Configuring Guest Agent Timeouts
+
+**New in v4.27:** Guest agent timeouts and retry behavior can be configured via environment variables to handle high-load environments or slow networks (refs #592).
+
+**Available Environment Variables:**
+
+```bash
+# Timeout for filesystem info queries (default: 15s, previously 5s)
+GUEST_AGENT_FSINFO_TIMEOUT=15s
+
+# Timeout for network interface queries (default: 10s, previously 5s)
+GUEST_AGENT_NETWORK_TIMEOUT=10s
+
+# Timeout for OS info queries (default: 10s, previously 3s)
+GUEST_AGENT_OSINFO_TIMEOUT=10s
+
+# Timeout for agent version queries (default: 10s, previously 3s)
+GUEST_AGENT_VERSION_TIMEOUT=10s
+
+# Number of retries for timeout failures (default: 1, meaning one retry after initial failure)
+GUEST_AGENT_RETRIES=1
+```
+
+**When to Adjust:**
+- **Large environments (50+ VMs):** Increase timeouts to 20-30s if you see frequent timeout errors
+- **Slow networks/WAN:** Increase timeouts proportionally to network latency
+- **High load periods:** Consider increasing retries to 2 for better resilience
+- **Fast local network:** Can reduce timeouts to 5-8s for quicker feedback
+
+**How to Apply:**
+
+```bash
+# Docker deployment - add to docker run or compose
+docker run -e GUEST_AGENT_FSINFO_TIMEOUT=20s -e GUEST_AGENT_RETRIES=2 ...
+
+# Systemd deployment - add to /etc/systemd/system/pulse.service
+[Service]
+Environment="GUEST_AGENT_FSINFO_TIMEOUT=20s"
+Environment="GUEST_AGENT_RETRIES=2"
+```
+
+After changing environment variables, restart Pulse for the changes to take effect.
+
 ### Permission Denied Errors
 
 If you see "permission denied" in Pulse logs when querying guest agent:
