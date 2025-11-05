@@ -655,9 +655,13 @@ const Settings: Component<SettingsProps> = (props) => {
   const [backupPollingEnabled, setBackupPollingEnabled] = createSignal(true);
   const [backupPollingInterval, setBackupPollingInterval] = createSignal(0);
   const [backupPollingCustomMinutes, setBackupPollingCustomMinutes] = createSignal(60);
+  const [backupPollingUseCustom, setBackupPollingUseCustom] = createSignal(false);
   const backupPollingEnvLocked = () =>
     Boolean(envOverrides()['ENABLE_BACKUP_POLLING'] || envOverrides()['BACKUP_POLLING_INTERVAL']);
   const backupIntervalSelectValue = () => {
+    if (backupPollingUseCustom()) {
+      return 'custom';
+    }
     const seconds = backupPollingInterval();
     return BACKUP_INTERVAL_OPTIONS.some((option) => option.value === seconds)
       ? String(seconds)
@@ -1674,6 +1678,9 @@ const Settings: Component<SettingsProps> = (props) => {
         if (intervalSeconds > 0) {
           setBackupPollingCustomMinutes(Math.max(1, Math.round(intervalSeconds / 60)));
         }
+        // Determine if the loaded interval is a custom value
+        const isPresetInterval = BACKUP_INTERVAL_OPTIONS.some((opt) => opt.value === intervalSeconds);
+        setBackupPollingUseCustom(!isPresetInterval && intervalSeconds > 0);
         // Load auto-update settings
         setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
         setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
@@ -4115,9 +4122,11 @@ const Settings: Component<SettingsProps> = (props) => {
                                   onChange={(e) => {
                                     const value = e.currentTarget.value;
                                     if (value === 'custom') {
+                                      setBackupPollingUseCustom(true);
                                       const minutes = Math.max(1, backupPollingCustomMinutes());
                                       setBackupPollingInterval(minutes * 60);
                                     } else {
+                                      setBackupPollingUseCustom(false);
                                       const seconds = parseInt(value, 10);
                                       if (!Number.isNaN(seconds)) {
                                         setBackupPollingInterval(seconds);
