@@ -191,6 +191,76 @@ systemctl status pulse 2>/dev/null \
 - Try a test service like webhook.site
 - Check logs for response codes (temporarily set `LOG_LEVEL=debug` via **Settings → System → Logging** or export `LOG_LEVEL=debug` and restart; review `webhook.delivery` entries, then revert to `info`)
 
+### HTTPS/TLS Configuration Issues
+
+#### Pulse fails to start after enabling HTTPS
+**Symptoms**: Service exits with status code 1, continuous restart attempts, or permission denied errors in logs
+
+**Common causes and solutions:**
+
+1. **Certificate files not readable by pulse user** (most common)
+   - Pulse runs as the `pulse` user and needs read access to certificate files
+   - Check file ownership: `ls -l /etc/pulse/*.pem`
+   - Solution:
+     ```bash
+     sudo chown pulse:pulse /etc/pulse/cert.pem /etc/pulse/key.pem
+     sudo chmod 644 /etc/pulse/cert.pem   # Certificate
+     sudo chmod 600 /etc/pulse/key.pem    # Private key
+     ```
+
+2. **Invalid certificate or key file**
+   - Verify certificate format: `openssl x509 -in /etc/pulse/cert.pem -text -noout`
+   - Verify private key: `openssl rsa -in /etc/pulse/key.pem -check -noout`
+   - Ensure certificate and key match:
+     ```bash
+     openssl x509 -noout -modulus -in /etc/pulse/cert.pem | openssl md5
+     openssl rsa -noout -modulus -in /etc/pulse/key.pem | openssl md5
+     # Both should output the same hash
+     ```
+
+3. **File paths incorrect**
+   - Verify paths in environment variables match actual file locations
+   - Check for typos in `TLS_CERT_FILE` and `TLS_KEY_FILE`
+   - Use absolute paths, not relative paths
+
+4. **Check startup logs**
+   ```bash
+   # View recent service logs
+   journalctl -u pulse -n 50
+
+   # Follow logs in real-time during restart
+   journalctl -u pulse -f
+   ```
+
+**Complete HTTPS setup example:**
+```bash
+# 1. Place certificate files
+sudo cp mycert.pem /etc/pulse/cert.pem
+sudo cp mykey.pem /etc/pulse/key.pem
+
+# 2. Set ownership and permissions
+sudo chown pulse:pulse /etc/pulse/cert.pem /etc/pulse/key.pem
+sudo chmod 644 /etc/pulse/cert.pem
+sudo chmod 600 /etc/pulse/key.pem
+
+# 3. Configure systemd service
+sudo systemctl edit pulse
+# Add:
+# [Service]
+# Environment="HTTPS_ENABLED=true"
+# Environment="TLS_CERT_FILE=/etc/pulse/cert.pem"
+# Environment="TLS_KEY_FILE=/etc/pulse/key.pem"
+
+# 4. Reload and restart
+sudo systemctl daemon-reload
+sudo systemctl restart pulse
+
+# 5. Verify service started successfully
+sudo systemctl status pulse
+```
+
+See [Configuration Guide](CONFIGURATION.md#tlshttps-configuration) for complete HTTPS setup documentation.
+
 ### Temperature Monitoring Issues
 
 #### Temperature data flickers after adding nodes

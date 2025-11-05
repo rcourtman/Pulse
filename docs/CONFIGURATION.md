@@ -526,8 +526,65 @@ Port configuration should be done via one of these methods:
    - `PORT` - Legacy port variable (use FRONTEND_PORT instead)
 
 #### TLS/HTTPS Configuration
+
+Pulse can serve traffic over HTTPS by configuring TLS certificate and key files.
+
+**Environment Variables:**
 - `HTTPS_ENABLED` - Enable HTTPS (true/false)
-- `TLS_CERT_FILE`, `TLS_KEY_FILE` - Paths to TLS certificate files
+- `TLS_CERT_FILE` - Path to TLS certificate file (e.g., `/etc/pulse/cert.pem`)
+- `TLS_KEY_FILE` - Path to TLS private key file (e.g., `/etc/pulse/key.pem`)
+
+**File Permissions & Ownership:**
+
+Pulse runs as the `pulse` user in bare metal installations. The certificate and key files must be readable by this user:
+
+```bash
+# Set ownership to pulse user
+sudo chown pulse:pulse /etc/pulse/cert.pem /etc/pulse/key.pem
+
+# Set appropriate permissions
+sudo chmod 644 /etc/pulse/cert.pem   # Certificate (can be world-readable)
+sudo chmod 600 /etc/pulse/key.pem    # Private key (must be restricted)
+```
+
+**Common Issues:**
+
+- **Service fails to start**: Check that certificate files are owned by the `pulse` user
+- **Permission denied errors**: Verify file permissions with `ls -l /etc/pulse/*.pem`
+- **Check logs**: Use `journalctl -u pulse -n 50` to view startup errors
+
+**Example Configuration:**
+
+For systemd installations, add environment variables to the service:
+
+```bash
+# Edit systemd service
+sudo systemctl edit pulse
+
+# Add these lines:
+[Service]
+Environment="HTTPS_ENABLED=true"
+Environment="TLS_CERT_FILE=/etc/pulse/cert.pem"
+Environment="TLS_KEY_FILE=/etc/pulse/key.pem"
+
+# Reload and restart
+sudo systemctl daemon-reload
+sudo systemctl restart pulse
+```
+
+For Docker installations, pass environment variables and mount certificate files:
+
+```bash
+docker run -d \
+  --name pulse \
+  -p 7655:7655 \
+  -e HTTPS_ENABLED=true \
+  -e TLS_CERT_FILE=/data/cert.pem \
+  -e TLS_KEY_FILE=/data/key.pem \
+  -v /path/to/certs:/data \
+  -v pulse-data:/data \
+  rcourtman/pulse:latest
+```
 
 > **⚠️ UI Override Warning**: When configuration env vars are set (like `ALLOWED_ORIGINS`), the corresponding UI fields will be disabled with a warning message. Remove the env var and restart to enable UI configuration.
 
