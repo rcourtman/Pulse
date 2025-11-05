@@ -258,12 +258,15 @@ Create `/etc/pulse-sensor-proxy/config.yaml`:
 allowed_source_subnets:
   - "192.168.0.0/24"    # LAN subnet
   - "10.0.0.0/8"        # VPN subnet
+
+log_level: "info"       # Logging verbosity: trace, debug, info, warn, error, fatal, disabled
 ```
 
-Or use environment variable:
+Or use environment variables:
 ```bash
 # In /etc/default/pulse-sensor-proxy (loaded by systemd)
 PULSE_SENSOR_PROXY_ALLOWED_SUBNETS="192.168.0.0/24,10.0.0.0/8"
+PULSE_SENSOR_PROXY_LOG_LEVEL="info"  # Set logging verbosity
 ```
 
 **Auto-detection:**
@@ -670,6 +673,7 @@ allowed_source_subnets:
   - "192.168.0.0/24"
   - "10.0.0.0/8"
 metrics_address: "127.0.0.1:9127"
+log_level: "info"
 EOF
 
 # Validate YAML syntax
