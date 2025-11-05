@@ -198,6 +198,7 @@ type DockerHost struct {
 	AgentID           string                   `json:"agentId"`
 	Hostname          string                   `json:"hostname"`
 	DisplayName       string                   `json:"displayName"`
+	CustomDisplayName string                   `json:"customDisplayName,omitempty"` // User-defined custom name
 	MachineID         string                   `json:"machineId,omitempty"`
 	OS                string                   `json:"os,omitempty"`
 	KernelVersion     string                   `json:"kernelVersion,omitempty"`
@@ -1106,6 +1107,10 @@ func (s *State) UpsertDockerHost(host DockerHost) {
 	updated := false
 	for i, existing := range s.DockerHosts {
 		if existing.ID == host.ID {
+			// Preserve custom display name if it was set
+			if existing.CustomDisplayName != "" {
+				host.CustomDisplayName = existing.CustomDisplayName
+			}
 			s.DockerHosts[i] = host
 			updated = true
 			break
@@ -1203,6 +1208,23 @@ func (s *State) SetDockerHostCommand(hostID string, command *DockerHostCommandSt
 	for i, host := range s.DockerHosts {
 		if host.ID == hostID {
 			host.Command = command
+			s.DockerHosts[i] = host
+			s.LastUpdate = time.Now()
+			return host, true
+		}
+	}
+
+	return DockerHost{}, false
+}
+
+// SetDockerHostCustomDisplayName updates the custom display name for a docker host.
+func (s *State) SetDockerHostCustomDisplayName(hostID string, customName string) (DockerHost, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.DockerHosts {
+		if host.ID == hostID {
+			host.CustomDisplayName = customName
 			s.DockerHosts[i] = host
 			s.LastUpdate = time.Now()
 			return host, true

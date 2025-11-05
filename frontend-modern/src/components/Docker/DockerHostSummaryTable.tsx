@@ -37,6 +37,10 @@ const isHostOnline = (host: DockerHost) => {
   return status === 'online' || status === 'running' || status === 'healthy';
 };
 
+const getDisplayName = (host: DockerHost) => {
+  return host.customDisplayName || host.displayName || host.hostname || host.id;
+};
+
 export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (props) => {
   const [sortKey, setSortKey] = createSignal<SortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<SortDirection>('asc');
@@ -80,7 +84,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
       let value = 0;
       switch (key) {
         case 'name':
-          value = hostA.displayName.localeCompare(hostB.displayName);
+          value = getDisplayName(hostA).localeCompare(getDisplayName(hostB));
           break;
         case 'uptime':
           value = (a.uptimeSeconds || 0) - (b.uptimeSeconds || 0);
@@ -113,7 +117,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
       }
 
       if (value === 0) {
-        value = hostA.displayName.localeCompare(hostB.displayName);
+        value = getDisplayName(hostA).localeCompare(getDisplayName(hostB));
       }
 
       return dir === 'asc' ? value : -value;
@@ -247,9 +251,9 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                     <td class="pr-2 py-1 pl-3 align-middle">
                       <div class="flex flex-wrap items-center gap-1 sm:flex-nowrap sm:whitespace-nowrap sm:min-w-0">
                         <span class="font-medium text-[11px] text-gray-900 dark:text-gray-100 sm:truncate sm:max-w-[200px]">
-                          {summary.host.displayName}
+                          {getDisplayName(summary.host)}
                         </span>
-                        <Show when={summary.host.displayName !== summary.host.hostname}>
+                        <Show when={getDisplayName(summary.host) !== summary.host.hostname}>
                           <span class="hidden sm:inline text-[9px] text-gray-500 dark:text-gray-400 sm:whitespace-nowrap">
                             ({summary.host.hostname})
                           </span>

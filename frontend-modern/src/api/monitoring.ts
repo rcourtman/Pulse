@@ -148,6 +148,44 @@ export class MonitoringAPI {
     }
   }
 
+  static async setDockerHostDisplayName(hostId: string, displayName: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/display-name`;
+
+    const response = await apiFetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ displayName }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Docker host not found');
+      }
+
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_jsonErr) {
+            // ignore JSON parse errors, fallback to raw text
+          }
+        }
+      } catch (_err) {
+        // ignore read error, keep default message
+      }
+
+      throw new Error(message);
+    }
+  }
+
   static async allowDockerHostReenroll(hostId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/allow-reenroll`;
 

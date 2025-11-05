@@ -70,6 +70,9 @@ export const DockerAgents: Component = () => {
   const [tokenName, setTokenName] = createSignal('');
   const [commandQueuedTime, setCommandQueuedTime] = createSignal<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = createSignal(0);
+  const [editingHostId, setEditingHostId] = createSignal<string | null>(null);
+  const [editingDisplayName, setEditingDisplayName] = createSignal('');
+  const [savingDisplayName, setSavingDisplayName] = createSignal(false);
 
   const pulseUrl = () => getPulseBaseUrl();
 
@@ -81,7 +84,10 @@ export const DockerAgents: Component = () => {
     return (state.dockerHosts || []).find(host => host.id === id) ?? null;
   });
 
-  const getDisplayName = (host: DockerHost | { id: string; displayName?: string | null; hostname?: string | null }) => {
+  const getDisplayName = (host: DockerHost | { id: string; displayName?: string | null; hostname?: string | null; customDisplayName?: string | null }) => {
+    if ('customDisplayName' in host && host.customDisplayName) {
+      return host.customDisplayName;
+    }
     return host.displayName || host.hostname || host.id;
   };
 
@@ -515,6 +521,34 @@ WantedBy=multi-user.target`;
       notificationStore.error(message, 8000);
     } finally {
       setRemovingHostId(null);
+    }
+  };
+
+  const startEditingDisplayName = (host: DockerHost) => {
+    setEditingHostId(host.id);
+    setEditingDisplayName(host.customDisplayName || '');
+  };
+
+  const cancelEditingDisplayName = () => {
+    setEditingHostId(null);
+    setEditingDisplayName('');
+  };
+
+  const saveDisplayName = async (hostId: string, originalName: string) => {
+    const newName = editingDisplayName().trim();
+
+    setSavingDisplayName(true);
+    try {
+      await MonitoringAPI.setDockerHostDisplayName(hostId, newName);
+      notificationStore.success(`Updated display name for ${originalName}`, 3500);
+      setEditingHostId(null);
+      setEditingDisplayName('');
+    } catch (error) {
+      logger.error('Failed to update display name', error);
+      const message = error instanceof Error ? error.message : 'Failed to update display name';
+      notificationStore.error(message, 8000);
+    } finally {
+      setSavingDisplayName(false);
     }
   };
 
@@ -1312,7 +1346,71 @@ WantedBy=multi-user.target`;
                       return (
                         <tr class={`${isOnline ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
                           <td class="py-3 px-4 align-top">
-                            <div class="font-medium text-gray-900 dark:text-gray-100">{displayName}</div>
+                            <Show
+                              when={editingHostId() === host.id}
+                              fallback={
+                                <div class="flex items-center gap-2">
+                                  <div class="flex-1">
+                                    <div class="font-medium text-gray-900 dark:text-gray-100">{displayName}</div>
+                                    <Show when={host.customDisplayName && host.customDisplayName !== host.displayName}>
+                                      <div class="text-xs text-gray-400 dark:text-gray-500">
+                                        Original: {host.displayName || host.hostname}
+                                      </div>
+                                    </Show>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                    onClick={() => startEditingDisplayName(host)}
+                                    title="Edit display name"
+                                  >
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              }
+                            >
+                              <div class="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  class="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                  value={editingDisplayName()}
+                                  onInput={(e) => setEditingDisplayName(e.currentTarget.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      saveDisplayName(host.id, displayName);
+                                    } else if (e.key === 'Escape') {
+                                      cancelEditingDisplayName();
+                                    }
+                                  }}
+                                  placeholder="Custom display name"
+                                  disabled={savingDisplayName()}
+                                />
+                                <button
+                                  type="button"
+                                  class="text-green-600 hover:text-green-700 disabled:opacity-50"
+                                  onClick={() => saveDisplayName(host.id, displayName)}
+                                  disabled={savingDisplayName()}
+                                  title="Save"
+                                >
+                                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-50"
+                                  onClick={cancelEditingDisplayName}
+                                  disabled={savingDisplayName()}
+                                  title="Cancel"
+                                >
+                                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </Show>
                             <div class="text-xs text-gray-500 dark:text-gray-400">{host.hostname}</div>
                             <div class="mt-1 text-[10px] uppercase tracking-wide">
                               <span

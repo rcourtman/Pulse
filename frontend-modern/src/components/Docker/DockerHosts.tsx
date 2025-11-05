@@ -55,8 +55,8 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
   const sortedHosts = createMemo(() => {
     const hosts = props.hosts || [];
     return [...hosts].sort((a, b) => {
-      const aName = a.displayName || a.hostname || a.id || '';
-      const bName = b.displayName || b.hostname || b.id || '';
+      const aName = a.customDisplayName || a.displayName || a.hostname || a.id || '';
+      const bName = b.customDisplayName || b.displayName || b.hostname || b.id || '';
       return aName.localeCompare(bName);
     });
   });

@@ -1066,6 +1066,27 @@ func (m *Monitor) MarkDockerHostPendingUninstall(hostID string) (models.DockerHo
 	return host, nil
 }
 
+// SetDockerHostCustomDisplayName updates the custom display name for a docker host.
+func (m *Monitor) SetDockerHostCustomDisplayName(hostID string, customName string) (models.DockerHost, error) {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return models.DockerHost{}, fmt.Errorf("docker host id is required")
+	}
+
+	host, ok := m.state.SetDockerHostCustomDisplayName(hostID, strings.TrimSpace(customName))
+	if !ok {
+		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
+	}
+
+	log.Info().
+		Str("dockerHost", host.Hostname).
+		Str("dockerHostID", hostID).
+		Str("customDisplayName", customName).
+		Msg("Docker host custom display name updated")
+
+	return host, nil
+}
+
 // AllowDockerHostReenroll removes a host ID from the removal blocklist so it can report again.
 func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
 	hostID = strings.TrimSpace(hostID)

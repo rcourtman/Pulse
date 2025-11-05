@@ -113,6 +113,12 @@ func (h *DockerAgentHandlers) HandleDockerHostActions(w http.ResponseWriter, r *
 		return
 	}
 
+	// Check if this is a custom display name update request
+	if strings.HasSuffix(r.URL.Path, "/display-name") && r.Method == http.MethodPut {
+		h.HandleSetCustomDisplayName(w, r)
+		return
+	}
+
 	// Otherwise, handle as delete/hide request
 	if r.Method == http.MethodDelete {
 		h.HandleDeleteHost(w, r)
@@ -378,5 +384,49 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 		"message": "Docker host marked as pending uninstall",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host pending uninstall response")
+	}
+}
+
+// HandleSetCustomDisplayName updates the custom display name for a docker host.
+func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
+		return
+	}
+
+	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
+	trimmedPath = strings.TrimSuffix(trimmedPath, "/display-name")
+	hostID := strings.TrimSpace(trimmedPath)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		return
+	}
+
+	defer r.Body.Close()
+
+	var req struct {
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	customName := strings.TrimSpace(req.DisplayName)
+
+	host, err := h.monitor.SetDockerHostCustomDisplayName(hostID, customName)
+	if err != nil {
+		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
+		return
+	}
+
+	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success": true,
+		"hostId":  host.ID,
+		"message": "Docker host custom display name updated",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize docker host custom display name response")
 	}
 }

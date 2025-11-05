@@ -133,6 +133,7 @@ export interface DockerHost {
   agentId: string;
   hostname: string;
   displayName: string;
+  customDisplayName?: string;
   machineId?: string;
   os?: string;
   kernelVersion?: string;
