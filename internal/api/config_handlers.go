@@ -5878,7 +5878,9 @@ func (h *ConfigHandlers) getOrGenerateSSHKeys() SSHKeyPair {
 	// CRITICAL SECURITY CHECK: Never generate SSH keys in containers (unless dev mode)
 	// Container compromise = SSH key compromise = root access to Proxmox
 	devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
-	if system.InContainer() && !devModeAllowSSH {
+	isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
+
+	if isContainer && !devModeAllowSSH {
 		log.Error().Msg("SECURITY BLOCK: SSH key generation disabled in containerized deployments")
 		log.Error().Msg("For temperature monitoring in containers, deploy pulse-sensor-proxy on the Proxmox host")
 		log.Error().Msg("See: https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#critical-security-notice-for-container-deployments")
@@ -5886,7 +5888,7 @@ func (h *ConfigHandlers) getOrGenerateSSHKeys() SSHKeyPair {
 		return SSHKeyPair{}
 	}
 
-	if devModeAllowSSH && system.InContainer() {
+	if devModeAllowSSH && isContainer {
 		log.Warn().Msg("⚠️  DEV MODE: SSH key generation ENABLED in container - FOR TESTING ONLY")
 		log.Warn().Msg("⚠️  This grants root SSH access from container - NEVER use in production!")
 	}

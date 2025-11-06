@@ -359,6 +359,28 @@ You should see JSON output with temperature data.
 
 ## Troubleshooting
 
+### SSH Connection Attempts from Container ([preauth] Logs)
+
+**Symptom:** Proxmox host logs (`/var/log/auth.log`) show repeated SSH connection attempts from your Pulse container:
+```
+Connection closed by authenticating user root <container-ip> port <port> [preauth]
+```
+
+**This indicates a misconfiguration.** Containerized Pulse should communicate via the sensor proxy, not direct SSH.
+
+**Common causes:**
+- Dev mode enabled (`PULSE_DEV_ALLOW_CONTAINER_SSH=true` environment variable)
+- Sensor proxy not installed or socket not accessible
+- Legacy SSH keys from pre-v4.24.0 installations
+
+**Fix:**
+- **Docker:** Follow [Quick Start for Docker Deployments](#quick-start-for-docker-deployments) to install the proxy and add the bind mount
+- **LXC:** Run the setup script on your Proxmox host (see [Setup (Automatic)](#setup-automatic))
+- **Dev mode:** Remove `PULSE_DEV_ALLOW_CONTAINER_SSH=true` from your environment/docker-compose
+- **Verify:** Check Pulse logs for `Temperature proxy detected - using secure host-side bridge`
+
+Once the proxy is properly configured, these log entries will stop immediately. See [Container Security Considerations](#container-security-considerations) for why direct container SSH is blocked.
+
 ### No Temperature Data Shown
 
 **Check SSH access**:

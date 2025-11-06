@@ -114,10 +114,19 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		// SECURITY: Block SSH fallback when running in containers (unless dev mode)
 		// Container compromise = SSH key compromise = root access to infrastructure
 		devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
-		if system.InContainer() && !devModeAllowSSH {
-			log.Error().
+		isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
+
+		if isContainer && devModeAllowSSH {
+			// Log when dev override is active so operators understand the security posture
+			log.Info().
 				Str("node", nodeName).
-				Msg("SECURITY BLOCK: SSH temperature collection disabled in containers - deploy pulse-sensor-proxy")
+				Msg("Temperature collection using direct SSH (dev mode override active - not for production)")
+		}
+
+		if isContainer && !devModeAllowSSH {
+			log.Warn().
+				Str("node", nodeName).
+				Msg("Temperature collection disabled: containerized Pulse requires pulse-sensor-proxy. Mount /run/pulse-sensor-proxy or set PULSE_DEV_ALLOW_CONTAINER_SSH=true for development only")
 			return &models.Temperature{Available: false}, nil
 		}
 
