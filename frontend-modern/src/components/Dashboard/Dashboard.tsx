@@ -1011,12 +1011,9 @@ export function Dashboard(props: DashboardProps) {
                         </Show>
                         <For each={guests} fallback={<></>}>
                           {(guest) => {
-                            // Match backend ID generation logic: standalone nodes use "node-vmid", clusters use "instance-node-vmid"
+                            // Match backend ID generation logic: stable format is "instance-vmid"
                             const guestId =
-                              guest.id ||
-                              (guest.instance === guest.node
-                                ? `${guest.node}-${guest.vmid}`
-                                : `${guest.instance}-${guest.node}-${guest.vmid}`);
+                              guest.id || `${guest.instance}-${guest.vmid}`;
                             const metadata =
                               guestMetadata()[guestId] ||
                               guestMetadata()[`${guest.node}-${guest.vmid}`];

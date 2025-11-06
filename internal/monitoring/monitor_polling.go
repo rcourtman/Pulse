@@ -253,13 +253,9 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					tags = strings.Split(vm.Tags, ";")
 				}
 
-				// Create guest ID
-				var guestID string
-				if instanceName == n.Node {
-					guestID = fmt.Sprintf("%s-%d", n.Node, vm.VMID)
-				} else {
-					guestID = fmt.Sprintf("%s-%s-%d", instanceName, n.Node, vm.VMID)
-				}
+				// Create guest ID (stable across node migrations)
+				// Format: instance-VMID
+				guestID := fmt.Sprintf("%s-%d", instanceName, vm.VMID)
 
 				guestRaw := VMMemoryRaw{
 					ListingMem:    vm.Mem,
@@ -770,6 +766,11 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					modelVM.DiskWrite = 0
 				}
 
+				// Trigger guest metadata migration if old format exists
+				if m.guestMetadataStore != nil {
+					m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, n.Node, vm.VMID)
+				}
+
 				nodeVMs = append(nodeVMs, modelVM)
 
 				m.recordGuestSnapshot(instanceName, modelVM.Type, n.Node, vm.VMID, GuestMemorySnapshot{
@@ -929,13 +930,9 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					tags = strings.Split(container.Tags, ";")
 				}
 
-				// Create guest ID
-				var guestID string
-				if instanceName == n.Node {
-					guestID = fmt.Sprintf("%s-%d", n.Node, container.VMID)
-				} else {
-					guestID = fmt.Sprintf("%s-%s-%d", instanceName, n.Node, container.VMID)
-				}
+				// Create guest ID (stable across node migrations)
+				// Format: instance-VMID
+				guestID := fmt.Sprintf("%s-%d", instanceName, container.VMID)
 
 				// Calculate I/O rates
 				currentMetrics := IOMetrics{
@@ -1043,6 +1040,11 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					modelContainer.NetworkOut = 0
 					modelContainer.DiskRead = 0
 					modelContainer.DiskWrite = 0
+				}
+
+				// Trigger guest metadata migration if old format exists
+				if m.guestMetadataStore != nil {
+					m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, n.Node, int(container.VMID))
 				}
 
 				nodeContainers = append(nodeContainers, modelContainer)

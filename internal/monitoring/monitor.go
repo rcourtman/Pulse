@@ -442,6 +442,7 @@ type Monitor struct {
 	rng                        *rand.Rand
 	maxRetryAttempts           int
 	tempCollector              *TemperatureCollector // SSH-based temperature collector
+	guestMetadataStore         *config.GuestMetadataStore
 	mu                         sync.RWMutex
 	startTime                  time.Time
 	rateTracker                *RateTracker
@@ -3199,6 +3200,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		rng:                        rand.New(rand.NewSource(time.Now().UnixNano())),
 		maxRetryAttempts:           5,
 		tempCollector:              tempCollector,
+		guestMetadataStore:         config.NewGuestMetadataStore(cfg.DataPath),
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours

@@ -51,6 +51,85 @@ func (s *GuestMetadataStore) Get(guestID string) *GuestMetadata {
 	return nil
 }
 
+// GetWithLegacyMigration retrieves metadata for a guest, attempting legacy ID formats if needed
+// and migrating them to the new stable format. This should be called when full guest context
+// (node, instance, vmid) is available.
+func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node string, vmid int) *GuestMetadata {
+	s.mu.RLock()
+	meta, exists := s.metadata[guestID]
+	s.mu.RUnlock()
+
+	if exists {
+		return meta
+	}
+
+	// Try legacy formats and migrate if found
+	var legacyID string
+	var legacyMeta *GuestMetadata
+
+	// Try legacy format: instance-node-VMID
+	if instance != node {
+		legacyID = fmt.Sprintf("%s-%s-%d", instance, node, vmid)
+		s.mu.RLock()
+		legacyMeta = s.metadata[legacyID]
+		s.mu.RUnlock()
+
+		if legacyMeta != nil {
+			log.Info().
+				Str("legacyID", legacyID).
+				Str("newID", guestID).
+				Msg("Migrating guest metadata from legacy ID format")
+
+			s.mu.Lock()
+			// Move to new ID
+			s.metadata[guestID] = legacyMeta
+			legacyMeta.ID = guestID
+			delete(s.metadata, legacyID)
+			// Save asynchronously
+			go func() {
+				if err := s.save(); err != nil {
+					log.Error().Err(err).Msg("Failed to save guest metadata after migration")
+				}
+			}()
+			s.mu.Unlock()
+
+			return legacyMeta
+		}
+	}
+
+	// Try standalone format: node-VMID
+	if instance == node {
+		legacyID = fmt.Sprintf("%s-%d", node, vmid)
+		s.mu.RLock()
+		legacyMeta = s.metadata[legacyID]
+		s.mu.RUnlock()
+
+		if legacyMeta != nil {
+			log.Info().
+				Str("legacyID", legacyID).
+				Str("newID", guestID).
+				Msg("Migrating guest metadata from legacy standalone ID format")
+
+			s.mu.Lock()
+			// Move to new ID
+			s.metadata[guestID] = legacyMeta
+			legacyMeta.ID = guestID
+			delete(s.metadata, legacyID)
+			// Save asynchronously
+			go func() {
+				if err := s.save(); err != nil {
+					log.Error().Err(err).Msg("Failed to save guest metadata after migration")
+				}
+			}()
+			s.mu.Unlock()
+
+			return legacyMeta
+		}
+	}
+
+	return nil
+}
+
 // GetAll retrieves all guest metadata
 func (s *GuestMetadataStore) GetAll() map[string]*GuestMetadata {
 	s.mu.RLock()

@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -7494,7 +7495,72 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 	}
 
 	// Finally check guest-specific overrides (highest priority)
-	if override, exists := m.config.Overrides[guestID]; exists {
+	// First try the new stable ID format (instance-VMID)
+	override, exists := m.config.Overrides[guestID]
+
+	// If not found, try legacy ID formats for migration
+	if !exists {
+		var legacyID string
+		var node string
+		var vmid int
+		var instance string
+
+		// Extract node, vmid, and instance from the guest object
+		switch g := guest.(type) {
+		case models.VM:
+			node = g.Node
+			vmid = g.VMID
+			instance = g.Instance
+		case models.Container:
+			node = g.Node
+			vmid = g.VMID
+			instance = g.Instance
+		default:
+			// Not a VM or container, skip legacy migration
+			goto skipLegacyMigration
+		}
+
+		// Try legacy format: instance-node-VMID
+		if instance != node {
+			legacyID = fmt.Sprintf("%s-%s-%d", instance, node, vmid)
+			if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
+				log.Info().
+					Str("legacyID", legacyID).
+					Str("newID", guestID).
+					Msg("Migrating guest override from legacy ID format")
+
+				// Move to new ID
+				m.config.Overrides[guestID] = legacyOverride
+				delete(m.config.Overrides, legacyID)
+
+				// Config will be persisted on next save cycle
+				override = legacyOverride
+				exists = true
+			}
+		}
+
+		// If still not found, try standalone format: node-VMID
+		if !exists && instance == node {
+			legacyID = fmt.Sprintf("%s-%d", node, vmid)
+			if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
+				log.Info().
+					Str("legacyID", legacyID).
+					Str("newID", guestID).
+					Msg("Migrating guest override from legacy standalone ID format")
+
+				// Move to new ID
+				m.config.Overrides[guestID] = legacyOverride
+				delete(m.config.Overrides, legacyID)
+
+				// Config will be persisted on next save cycle
+				override = legacyOverride
+				exists = true
+			}
+		}
+	}
+
+skipLegacyMigration:
+	if exists {
 		// Apply the disabled flag if set
 		if override.Disabled {
 			thresholds.Disabled = true
@@ -7734,6 +7800,57 @@ func (m *Manager) LoadActiveAlerts() error {
 	seen := make(map[string]bool)
 
 	for _, alert := range alerts {
+		// Migrate legacy guest alert IDs (instance-node-VMID -> instance-VMID)
+		// Check if this is a guest-related alert by looking at common alert types
+		isGuestAlert := strings.Contains(alert.Type, "cpu") || strings.Contains(alert.Type, "memory") ||
+			strings.Contains(alert.Type, "disk") || strings.Contains(alert.Type, "network") ||
+			alert.Type == "guest-offline"
+		if isGuestAlert {
+			// Try to extract instance, node, and VMID from resource ID
+			// Legacy format: instance-node-VMID or node-VMID (standalone)
+			parts := strings.Split(alert.ResourceID, "-")
+
+			// Check if this looks like a legacy format (has node in the ID)
+			// We can detect this if we have Node field and it appears in the ResourceID
+			if alert.Node != "" && len(parts) >= 2 {
+				var newResourceID string
+				var vmidStr string
+
+				// Try to extract VMID (should be last part)
+				vmidStr = parts[len(parts)-1]
+				if _, err := strconv.Atoi(vmidStr); err == nil {
+					// VMID is valid, now check if we need to migrate
+					if len(parts) == 3 && alert.Instance != "" && alert.Instance != alert.Node {
+						// Format: instance-node-VMID -> instance-VMID
+						newResourceID = fmt.Sprintf("%s-%s", alert.Instance, vmidStr)
+					} else if len(parts) == 2 && alert.Instance == alert.Node {
+						// Format: node-VMID -> instance-VMID (standalone)
+						newResourceID = fmt.Sprintf("%s-%s", alert.Instance, vmidStr)
+					}
+
+					if newResourceID != "" && newResourceID != alert.ResourceID {
+						log.Info().
+							Str("oldID", alert.ResourceID).
+							Str("newID", newResourceID).
+							Str("alertType", alert.Type).
+							Msg("Migrating active alert from legacy guest ID format")
+
+						oldAlertID := alert.ID
+
+						// Update resource ID
+						alert.ResourceID = newResourceID
+
+						// Update alert ID (usually contains resource ID)
+						alert.ID = strings.Replace(alert.ID, alert.ResourceID, newResourceID, 1)
+
+						// Update seen map to use new ID
+						seen[alert.ID] = true
+						delete(seen, oldAlertID)
+					}
+				}
+			}
+		}
+
 		// Skip duplicates
 		if seen[alert.ID] {
 			duplicateCount++
