@@ -412,6 +412,23 @@ type pmgAnomalyTracker struct {
 //   - When both locks are needed, acquire m.mu first, then release it before acquiring resolvedMutex
 //
 // This ordering prevents deadlock scenarios where different goroutines acquire locks in different orders.
+
+// Metric hooks for integrating with Prometheus
+var (
+	recordAlertFired        func(*Alert)
+	recordAlertResolved     func(*Alert)
+	recordAlertSuppressed   func(string)
+	recordAlertAcknowledged func()
+)
+
+// SetMetricHooks registers callbacks for recording alert metrics
+func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(string), acknowledged func()) {
+	recordAlertFired = fired
+	recordAlertResolved = resolved
+	recordAlertSuppressed = suppressed
+	recordAlertAcknowledged = acknowledged
+}
+
 type Manager struct {
 	mu             sync.RWMutex
 	config         AlertConfig

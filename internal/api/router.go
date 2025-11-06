@@ -35,24 +35,25 @@ import (
 
 // Router handles HTTP routing
 type Router struct {
-	mux                   *http.ServeMux
-	config                *config.Config
-	monitor               *monitoring.Monitor
-	alertHandlers         *AlertHandlers
-	configHandlers        *ConfigHandlers
-	notificationHandlers  *NotificationHandlers
-	dockerAgentHandlers   *DockerAgentHandlers
-	hostAgentHandlers     *HostAgentHandlers
-	systemSettingsHandler *SystemSettingsHandler
-	wsHub                 *websocket.Hub
-	reloadFunc            func() error
-	updateManager         *updates.Manager
-	exportLimiter         *RateLimiter
-	persistence           *config.ConfigPersistence
-	oidcMu                sync.Mutex
-	oidcService           *OIDCService
-	wrapped               http.Handler
-	projectRoot           string
+	mux                      *http.ServeMux
+	config                   *config.Config
+	monitor                  *monitoring.Monitor
+	alertHandlers            *AlertHandlers
+	configHandlers           *ConfigHandlers
+	notificationHandlers     *NotificationHandlers
+	notificationQueueHandlers *NotificationQueueHandlers
+	dockerAgentHandlers      *DockerAgentHandlers
+	hostAgentHandlers        *HostAgentHandlers
+	systemSettingsHandler    *SystemSettingsHandler
+	wsHub                    *websocket.Hub
+	reloadFunc               func() error
+	updateManager            *updates.Manager
+	exportLimiter            *RateLimiter
+	persistence              *config.ConfigPersistence
+	oidcMu                   sync.Mutex
+	oidcService              *OIDCService
+	wrapped                  http.Handler
+	projectRoot              string
 	// Cached system settings to avoid loading from disk on every request
 	settingsMu           sync.RWMutex
 	cachedAllowEmbedding bool
@@ -144,6 +145,7 @@ func (r *Router) setupRoutes() {
 	// Create handlers
 	r.alertHandlers = NewAlertHandlers(r.monitor, r.wsHub)
 	r.notificationHandlers = NewNotificationHandlers(r.monitor)
+	r.notificationQueueHandlers = NewNotificationQueueHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	dockerMetadataHandler := NewDockerMetadataHandler(r.config.DataPath)
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
@@ -896,6 +898,36 @@ func (r *Router) setupRoutes() {
 
 	// Notification routes
 	r.mux.HandleFunc("/api/notifications/", RequireAdmin(r.config, r.notificationHandlers.HandleNotifications))
+
+	// Notification queue/DLQ routes
+	r.mux.HandleFunc("/api/notifications/dlq", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodGet {
+			r.notificationQueueHandlers.GetDLQ(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/notifications/queue/stats", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodGet {
+			r.notificationQueueHandlers.GetQueueStats(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/notifications/dlq/retry", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			r.notificationQueueHandlers.RetryDLQItem(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	r.mux.HandleFunc("/api/notifications/dlq/delete", RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost || req.Method == http.MethodDelete {
+			r.notificationQueueHandlers.DeleteDLQItem(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
 
 	// System settings and API token management
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor, r.reloadSystemSettings)

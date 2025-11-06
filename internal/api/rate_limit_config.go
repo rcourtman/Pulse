@@ -106,7 +106,8 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 	// Public endpoints (no auth required)
 	if strings.Contains(path, "/api/health") ||
 		strings.Contains(path, "/api/version") ||
-		strings.Contains(path, "/api/security/status") {
+		strings.Contains(path, "/api/security/status") ||
+		strings.Contains(path, "/metrics") {
 		return globalRateLimitConfig.PublicEndpoints
 	}
 

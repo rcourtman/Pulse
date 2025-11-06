@@ -12,9 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -139,6 +141,15 @@ func runServer() {
 	wsHub.SetStateGetter(func() interface{} {
 		return reloadableMonitor.GetState()
 	})
+
+	// Wire up Prometheus metrics for alert lifecycle
+	alerts.SetMetricHooks(
+		metrics.RecordAlertFired,
+		metrics.RecordAlertResolved,
+		metrics.RecordAlertSuppressed,
+		metrics.RecordAlertAcknowledged,
+	)
+	log.Info().Msg("Alert metrics hooks registered")
 
 	// Start monitoring
 	reloadableMonitor.Start(ctx)

@@ -120,6 +120,7 @@ type NotificationManager struct {
 	webhookHistory    []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
 	webhookRateLimits map[string]*webhookRateLimit // Track rate limits per webhook URL
 	appriseExec       appriseExecFunc
+	queue             *NotificationQueue // Persistent notification queue
 }
 
 type appriseExecFunc func(ctx context.Context, path string, args []string) ([]byte, error)
@@ -317,7 +318,15 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 	} else {
 		log.Info().Msg("NotificationManager initialized without public URL - webhook links may not work")
 	}
-	return &NotificationManager{
+
+	// Initialize persistent queue
+	queue, err := NewNotificationQueue("")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize notification queue, notifications will be in-memory only")
+		queue = nil
+	}
+
+	nm := &NotificationManager{
 		enabled:      true,
 		cooldown:     5 * time.Minute,
 		lastNotified: make(map[string]notificationRecord),
@@ -338,7 +347,15 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		webhookRateLimits: make(map[string]*webhookRateLimit),
 		publicURL:         cleanURL,
 		appriseExec:       defaultAppriseExec,
+		queue:             queue,
 	}
+
+	// Wire up queue processor if queue is available
+	if queue != nil {
+		queue.SetProcessor(nm.ProcessQueuedNotification)
+	}
+
+	return nm
 }
 
 // SetPublicURL updates the public URL used for webhook payloads.
@@ -600,6 +617,90 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	webhooks := copyWebhookConfigs(n.webhooks)
 	appriseConfig := copyAppriseConfig(n.appriseConfig)
 
+	// Use persistent queue if available, otherwise send directly
+	if n.queue != nil {
+		n.enqueueNotifications(emailConfig, webhooks, appriseConfig, alertsToSend)
+	} else {
+		n.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertsToSend)
+	}
+
+	// Update last notified time for all alerts
+	now := time.Now()
+	for _, alert := range alertsToSend {
+		n.lastNotified[alert.ID] = notificationRecord{
+			lastSent:   now,
+			alertStart: alert.StartTime,
+		}
+	}
+}
+
+// enqueueNotifications adds notifications to the persistent queue
+func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert) {
+	// Enqueue email notification
+	if emailConfig.Enabled {
+		configJSON, err := json.Marshal(emailConfig)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal email config for queue")
+		} else {
+			notif := &QueuedNotification{
+				Type:        "email",
+				Alerts:      alertsToSend,
+				Config:      configJSON,
+				MaxAttempts: 3,
+			}
+			if err := n.queue.Enqueue(notif); err != nil {
+				log.Error().Err(err).Msg("Failed to enqueue email notification")
+			} else {
+				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued email notification")
+			}
+		}
+	}
+
+	// Enqueue webhook notifications
+	for _, webhook := range webhooks {
+		if webhook.Enabled {
+			configJSON, err := json.Marshal(webhook)
+			if err != nil {
+				log.Error().Err(err).Str("webhookName", webhook.Name).Msg("Failed to marshal webhook config for queue")
+			} else {
+				notif := &QueuedNotification{
+					Type:        "webhook",
+					Alerts:      alertsToSend,
+					Config:      configJSON,
+					MaxAttempts: 3,
+				}
+				if err := n.queue.Enqueue(notif); err != nil {
+					log.Error().Err(err).Str("webhookName", webhook.Name).Msg("Failed to enqueue webhook notification")
+				} else {
+					log.Debug().Str("webhookName", webhook.Name).Int("alertCount", len(alertsToSend)).Msg("Enqueued webhook notification")
+				}
+			}
+		}
+	}
+
+	// Enqueue apprise notification
+	if appriseConfig.Enabled {
+		configJSON, err := json.Marshal(appriseConfig)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal apprise config for queue")
+		} else {
+			notif := &QueuedNotification{
+				Type:        "apprise",
+				Alerts:      alertsToSend,
+				Config:      configJSON,
+				MaxAttempts: 3,
+			}
+			if err := n.queue.Enqueue(notif); err != nil {
+				log.Error().Err(err).Msg("Failed to enqueue apprise notification")
+			} else {
+				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued apprise notification")
+			}
+		}
+	}
+}
+
+// sendNotificationsDirect sends notifications without using the queue (fallback)
+func (n *NotificationManager) sendNotificationsDirect(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert) {
 	// Send notifications using the captured snapshots outside the lock to avoid blocking writers
 	if emailConfig.Enabled {
 		log.Info().
@@ -624,15 +725,6 @@ func (n *NotificationManager) sendGroupedAlerts() {
 
 	if appriseConfig.Enabled {
 		go n.sendGroupedApprise(appriseConfig, alertsToSend)
-	}
-
-	// Update last notified time for all alerts
-	now := time.Now()
-	for _, alert := range alertsToSend {
-		n.lastNotified[alert.ID] = notificationRecord{
-			lastSent:   now,
-			alertStart: alert.StartTime,
-		}
 	}
 }
 
@@ -2146,10 +2238,60 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 	}
 }
 
+// GetQueue returns the notification queue (if available)
+func (n *NotificationManager) GetQueue() *NotificationQueue {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.queue
+}
+
+// ProcessQueuedNotification processes a notification from the persistent queue
+func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotification) error {
+	log.Debug().
+		Str("notificationID", notif.ID).
+		Str("type", notif.Type).
+		Int("alertCount", len(notif.Alerts)).
+		Msg("Processing queued notification")
+
+	switch notif.Type {
+	case "email":
+		var emailConfig EmailConfig
+		if err := json.Unmarshal(notif.Config, &emailConfig); err != nil {
+			return fmt.Errorf("failed to unmarshal email config: %w", err)
+		}
+		n.sendGroupedEmail(emailConfig, notif.Alerts)
+		return nil
+
+	case "webhook":
+		var webhookConfig WebhookConfig
+		if err := json.Unmarshal(notif.Config, &webhookConfig); err != nil {
+			return fmt.Errorf("failed to unmarshal webhook config: %w", err)
+		}
+		n.sendGroupedWebhook(webhookConfig, notif.Alerts)
+		return nil
+
+	case "apprise":
+		var appriseConfig AppriseConfig
+		if err := json.Unmarshal(notif.Config, &appriseConfig); err != nil {
+			return fmt.Errorf("failed to unmarshal apprise config: %w", err)
+		}
+		n.sendGroupedApprise(appriseConfig, notif.Alerts)
+		return nil
+
+	default:
+		return fmt.Errorf("unknown notification type: %s", notif.Type)
+	}
+}
+
 // Stop gracefully stops the notification manager
 func (n *NotificationManager) Stop() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
+	// Stop the notification queue if it exists
+	if n.queue != nil {
+		n.queue.Stop()
+	}
 
 	// Cancel any pending group timer
 	if n.groupTimer != nil {
