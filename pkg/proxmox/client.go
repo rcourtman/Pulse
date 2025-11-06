@@ -1780,25 +1780,64 @@ type VMMemInfo struct {
 	Shared    uint64 `json:"shared,omitempty"`
 }
 
+// VMAgentField handles the polymorphic agent field that changed in Proxmox 8.3+.
+// Older versions: integer (0 or 1)
+// Proxmox 8.3+: object {"enabled":1,"available":1} or similar
+type VMAgentField struct {
+	Value int
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to handle both int and object formats
+func (a *VMAgentField) UnmarshalJSON(data []byte) error {
+	// Try parsing as int first (older Proxmox versions)
+	var intValue int
+	if err := json.Unmarshal(data, &intValue); err == nil {
+		a.Value = intValue
+		return nil
+	}
+
+	// Try parsing as object (Proxmox 8.3+)
+	var objValue struct {
+		Enabled   int `json:"enabled"`
+		Available int `json:"available"`
+	}
+	if err := json.Unmarshal(data, &objValue); err == nil {
+		// Agent is considered enabled if either field is > 0
+		// Typically we want to check "available" for actual functionality
+		if objValue.Available > 0 {
+			a.Value = objValue.Available
+		} else if objValue.Enabled > 0 {
+			a.Value = objValue.Enabled
+		} else {
+			a.Value = 0
+		}
+		return nil
+	}
+
+	// If neither worked, default to 0 (agent disabled)
+	a.Value = 0
+	return nil
+}
+
 // VMStatus represents detailed VM status returned by Proxmox.
 type VMStatus struct {
-	Status     string     `json:"status"`
-	CPU        float64    `json:"cpu"`
-	CPUs       int        `json:"cpus"`
-	Mem        uint64     `json:"mem"`
-	MaxMem     uint64     `json:"maxmem"`
-	Balloon    uint64     `json:"balloon"`
-	BalloonMin uint64     `json:"balloon_min"`
-	FreeMem    uint64     `json:"freemem"`
-	MemInfo    *VMMemInfo `json:"meminfo,omitempty"`
-	Disk       uint64     `json:"disk"`
-	MaxDisk    uint64     `json:"maxdisk"`
-	DiskRead   uint64     `json:"diskread"`
-	DiskWrite  uint64     `json:"diskwrite"`
-	NetIn      uint64     `json:"netin"`
-	NetOut     uint64     `json:"netout"`
-	Uptime     uint64     `json:"uptime"`
-	Agent      int        `json:"agent"`
+	Status     string        `json:"status"`
+	CPU        float64       `json:"cpu"`
+	CPUs       int           `json:"cpus"`
+	Mem        uint64        `json:"mem"`
+	MaxMem     uint64        `json:"maxmem"`
+	Balloon    uint64        `json:"balloon"`
+	BalloonMin uint64        `json:"balloon_min"`
+	FreeMem    uint64        `json:"freemem"`
+	MemInfo    *VMMemInfo    `json:"meminfo,omitempty"`
+	Disk       uint64        `json:"disk"`
+	MaxDisk    uint64        `json:"maxdisk"`
+	DiskRead   uint64        `json:"diskread"`
+	DiskWrite  uint64        `json:"diskwrite"`
+	NetIn      uint64        `json:"netin"`
+	NetOut     uint64        `json:"netout"`
+	Uptime     uint64        `json:"uptime"`
+	Agent      VMAgentField  `json:"agent"`
 }
 
 // GetZFSPoolStatus gets the status of ZFS pools on a node

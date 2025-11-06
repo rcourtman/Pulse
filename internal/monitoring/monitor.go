@@ -2113,7 +2113,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		return nil, nil, "", "", ""
 	}
 
-	if vmStatus.Agent <= 0 {
+	if vmStatus.Agent.Value <= 0 {
 		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
 		return nil, nil, "", "", ""
 	}
@@ -6069,7 +6069,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					guestRaw.StatusFreeMem = detailedStatus.FreeMem
 					guestRaw.Balloon = detailedStatus.Balloon
 					guestRaw.BalloonMin = detailedStatus.BalloonMin
-					guestRaw.Agent = detailedStatus.Agent
+					guestRaw.Agent = detailedStatus.Agent.Value
 					memAvailable := uint64(0)
 					if detailedStatus.MemInfo != nil {
 						guestRaw.MemInfoUsed = detailedStatus.MemInfo.Used
@@ -6145,12 +6145,12 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 					// Always try to get filesystem info if agent is enabled
 					// Prefer guest agent data over cluster/resources data for accuracy
-					if detailedStatus.Agent > 0 {
+					if detailedStatus.Agent.Value > 0 {
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", res.Name).
 							Int("vmid", res.VMID).
-							Int("agent", detailedStatus.Agent).
+							Int("agent", detailedStatus.Agent.Value).
 							Uint64("current_disk", diskUsed).
 							Uint64("current_maxdisk", diskTotal).
 							Msg("Guest agent enabled, querying filesystem info for accurate disk usage")
@@ -6425,7 +6425,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							Str("instance", instanceName).
 							Str("vm", res.Name).
 							Int("vmid", res.VMID).
-							Int("agent", detailedStatus.Agent).
+							Int("agent", detailedStatus.Agent.Value).
 							Msg("VM does not have guest agent enabled in config")
 					}
 				} else {

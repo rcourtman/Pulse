@@ -1260,7 +1260,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 					Status: vm.Status,
 					Issue:  "Failed to get VM status: " + errStr,
 				})
-			} else if vmStatus != nil && vmStatus.Agent > 0 {
+			} else if vmStatus != nil && vmStatus.Agent.Value > 0 {
 				result.VMsWithAgent++
 
 				// Try to get filesystem info
@@ -1359,7 +1359,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 					"Verify the node is reachable and API token is valid",
 				)
 			}
-		} else if vmStatus == nil || vmStatus.Agent == 0 {
+		} else if vmStatus == nil || vmStatus.Agent.Value == 0 {
 			result.TestResult = "Guest agent not enabled in VM configuration"
 			result.Recommendations = append(result.Recommendations,
 				"Enable QEMU Guest Agent in VM Options",

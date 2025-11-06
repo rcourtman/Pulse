@@ -288,7 +288,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						guestRaw.StatusFreeMem = status.FreeMem
 						guestRaw.Balloon = status.Balloon
 						guestRaw.BalloonMin = status.BalloonMin
-						guestRaw.Agent = status.Agent
+						guestRaw.Agent = status.Agent.Value
 						memAvailable := uint64(0)
 						if status.MemInfo != nil {
 							guestRaw.MemInfoUsed = status.MemInfo.Used
@@ -465,14 +465,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
-							Int("agent", vmStatus.Agent).
+							Int("agent", vmStatus.Agent.Value).
 							Uint64("diskUsed", diskUsed).
 							Uint64("diskTotal", diskTotal).
 							Msg("VM has 0 disk usage, checking guest agent")
 					}
 
 					// Check if agent is enabled
-					if vmStatus.Agent == 0 {
+					if vmStatus.Agent.Value == 0 {
 						diskStatusReason = "agent-disabled"
 						if logging.IsLevelEnabled(zerolog.DebugLevel) {
 							log.Debug().
@@ -480,7 +480,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 								Str("vm", vm.Name).
 								Msg("Guest agent disabled in VM config")
 						}
-					} else if vmStatus.Agent > 0 || diskUsed == 0 {
+					} else if vmStatus.Agent.Value > 0 || diskUsed == 0 {
 						if logging.IsLevelEnabled(zerolog.DebugLevel) {
 							log.Debug().
 								Str("instance", instanceName).
