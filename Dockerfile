@@ -47,8 +47,10 @@ COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-m
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
     VERSION="v$(cat VERSION | tr -d '\n')" && \
+    BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
+    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
     CGO_ENABLED=0 GOOS=linux go build \
-      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
+      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
       -trimpath \
       -o pulse ./cmd/pulse
 
