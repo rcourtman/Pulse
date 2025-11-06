@@ -1783,16 +1783,8 @@ download_pulse() {
 
         install_additional_agent_binaries "$LATEST_RELEASE"
 
-        # Install Docker agent convenience script
-        mkdir -p "$INSTALL_DIR/scripts"
-        if [[ -f "$TEMP_EXTRACT/scripts/install-docker-agent.sh" ]]; then
-            cp "$TEMP_EXTRACT/scripts/install-docker-agent.sh" "$INSTALL_DIR/scripts/install-docker-agent.sh"
-            chmod 755 "$INSTALL_DIR/scripts/install-docker-agent.sh"
-            chown pulse:pulse "$INSTALL_DIR/scripts/install-docker-agent.sh"
-            print_success "Docker agent install script deployed"
-        else
-            print_warn "Docker agent install script not found in archive; skipping installation"
-        fi
+        # Install all agent scripts
+        deploy_agent_scripts "$TEMP_EXTRACT"
         
         chmod +x "$INSTALL_DIR/bin/pulse"
         chown -R pulse:pulse "$INSTALL_DIR"
@@ -1840,12 +1832,7 @@ download_pulse() {
 
                 install_additional_agent_binaries "$LATEST_RELEASE"
 
-                if [[ -f "$TEMP_EXTRACT2/scripts/install-docker-agent.sh" ]]; then
-                    mkdir -p "$INSTALL_DIR/scripts"
-                    cp "$TEMP_EXTRACT2/scripts/install-docker-agent.sh" "$INSTALL_DIR/scripts/install-docker-agent.sh"
-                    chmod 755 "$INSTALL_DIR/scripts/install-docker-agent.sh"
-                    chown pulse:pulse "$INSTALL_DIR/scripts/install-docker-agent.sh"
-                fi
+                deploy_agent_scripts "$TEMP_EXTRACT2"
                 
                 chmod +x "$INSTALL_DIR/bin/pulse"
                 chown -R pulse:pulse "$INSTALL_DIR"
@@ -1940,6 +1927,44 @@ install_additional_agent_binaries() {
 
     rm -f "$universal_tar"
     rm -rf "$temp_dir"
+}
+
+deploy_agent_scripts() {
+    local extract_dir="$1"
+
+    if [[ -z "$extract_dir" ]]; then
+        print_warn "No extraction directory provided for script deployment"
+        return
+    fi
+
+    mkdir -p "$INSTALL_DIR/scripts"
+
+    local scripts=(
+        "install-docker-agent.sh"
+        "install-container-agent.sh"
+        "install-host-agent.sh"
+        "install-host-agent.ps1"
+        "uninstall-host-agent.sh"
+        "uninstall-host-agent.ps1"
+        "install-sensor-proxy.sh"
+        "install-docker.sh"
+    )
+
+    local deployed=0
+    for script in "${scripts[@]}"; do
+        if [[ -f "$extract_dir/scripts/$script" ]]; then
+            cp "$extract_dir/scripts/$script" "$INSTALL_DIR/scripts/$script"
+            chmod 755 "$INSTALL_DIR/scripts/$script"
+            chown pulse:pulse "$INSTALL_DIR/scripts/$script"
+            deployed=$((deployed + 1))
+        fi
+    done
+
+    if [[ $deployed -gt 0 ]]; then
+        print_success "Deployed $deployed agent installation script(s)"
+    else
+        print_warn "No agent installation scripts found in archive"
+    fi
 }
 
 build_agent_binaries_from_source() {
