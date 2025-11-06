@@ -1355,6 +1355,23 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 		}
 
+		// Check for PMG alerts by Type
+		if alert.Type == "queue-depth" || alert.Type == "queue-deferred" || alert.Type == "queue-hold" || alert.Type == "message-age" {
+			// This is a PMG alert
+			if m.config.DisableAllPMG {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
+		}
+
+		// Check for Host alerts by resourceType
+		if resourceTypeMeta == "host" {
+			if m.config.DisableAllHosts {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
+		}
+
 		if alert.Type == "docker-host-offline" ||
 			strings.HasPrefix(alertID, "docker-container-health-") ||
 			strings.HasPrefix(alertID, "docker-container-state-") ||
@@ -1366,10 +1383,20 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		}
 
 		if resourceTypeMeta == "dockerhost" {
+			// Check if all Docker host alerts are disabled
+			if m.config.DisableAllDockerHosts {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 			// No threshold evaluation for Docker hosts (connectivity handled separately)
 			continue
 		}
 		if resourceTypeMeta == "docker container" {
+			// Check if all Docker container alerts are disabled
+			if m.config.DisableAllDockerContainers {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 			thresholds := m.config.GuestDefaults
 			if override, exists := m.config.Overrides[resourceID]; exists {
 				thresholds = m.applyThresholdOverride(thresholds, override)
@@ -1381,6 +1408,11 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		// We need to check what kind of resource this is
 		if threshold == nil && (alert.Instance == "Node" || alert.Instance == alert.Node) {
 			// This is a node alert
+			// Check if all node alerts are disabled
+			if m.config.DisableAllNodes {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 			thresholds := m.config.NodeDefaults
 			if override, exists := m.config.Overrides[resourceID]; exists {
 				thresholds = m.applyThresholdOverride(thresholds, override)
@@ -1388,6 +1420,11 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		} else if threshold == nil && (alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/")) {
 			// This is a storage alert
+			// Check if all storage alerts are disabled
+			if m.config.DisableAllStorage {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 			if override, exists := m.config.Overrides[resourceID]; exists && override.Usage != nil {
 				threshold = override.Usage
 			} else {
@@ -1395,6 +1432,11 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 		} else if threshold == nil && alert.Instance == "PBS" {
 			// This is a PBS alert
+			// Check if all PBS alerts are disabled
+			if m.config.DisableAllPBS {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 			thresholds := m.config.NodeDefaults
 			if override, exists := m.config.Overrides[resourceID]; exists {
 				if override.CPU != nil && metricType == "cpu" {
@@ -1410,6 +1452,11 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 
 		if threshold == nil {
 			// This is a guest (qemu/lxc) alert
+			// Check if all guest alerts are disabled
+			if m.config.DisableAllGuests {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 			// We need to evaluate custom rules, but we don't have the guest object here.
 			// For now, we'll mark these alerts for re-evaluation by the monitor.
 			// The next poll cycle will properly evaluate them with custom rules.
@@ -2096,6 +2143,32 @@ func (m *Manager) CheckNode(node models.Node) {
 	}
 	if m.config.DisableAllNodes {
 		m.mu.RUnlock()
+		// Clear any existing node alerts when all node alerts are disabled
+		m.mu.Lock()
+		// Clear offline tracking
+		delete(m.nodeOfflineCount, node.ID)
+		// Clear all possible node alert types
+		alertTypes := []string{"cpu", "memory", "disk", "temperature"}
+		for _, alertType := range alertTypes {
+			alertID := fmt.Sprintf("%s-%s", node.ID, alertType)
+			if _, exists := m.activeAlerts[alertID]; exists {
+				m.clearAlertNoLock(alertID)
+				log.Info().
+					Str("alertID", alertID).
+					Str("node", node.Name).
+					Msg("Cleared node alert - all node alerts disabled")
+			}
+		}
+		// Clear offline alert
+		offlineAlertID := fmt.Sprintf("node-offline-%s", node.ID)
+		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+			m.clearAlertNoLock(offlineAlertID)
+			log.Info().
+				Str("alertID", offlineAlertID).
+				Str("node", node.Name).
+				Msg("Cleared offline alert - all node alerts disabled")
+		}
+		m.mu.Unlock()
 		return
 	}
 	disableNodesOffline := m.config.DisableAllNodesOffline
@@ -2230,7 +2303,14 @@ func (m *Manager) CheckHost(host models.Host) {
 	override, hasOverride := m.config.Overrides[host.ID]
 	m.mu.RUnlock()
 
-	if !alertsEnabled || disableAllHosts {
+	if !alertsEnabled {
+		return
+	}
+
+	if disableAllHosts {
+		// Clear any existing host alerts when all host alerts are disabled
+		m.clearHostMetricAlerts(host.ID)
+		m.clearHostDiskAlerts(host.ID)
 		return
 	}
 
@@ -2515,6 +2595,38 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	}
 	if m.config.DisableAllPBS {
 		m.mu.RUnlock()
+		// Clear any existing PBS alerts when all PBS alerts are disabled
+		m.mu.Lock()
+		// Reset offline confirmation tracking
+		delete(m.offlineConfirmations, pbs.ID)
+		// Clear CPU alert
+		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
+		if _, exists := m.activeAlerts[cpuAlertID]; exists {
+			m.clearAlertNoLock(cpuAlertID)
+			log.Info().
+				Str("alertID", cpuAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared CPU alert - all PBS alerts disabled")
+		}
+		// Clear Memory alert
+		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
+		if _, exists := m.activeAlerts[memAlertID]; exists {
+			m.clearAlertNoLock(memAlertID)
+			log.Info().
+				Str("alertID", memAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared Memory alert - all PBS alerts disabled")
+		}
+		// Clear offline alert
+		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
+		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+			m.clearAlertNoLock(offlineAlertID)
+			log.Info().
+				Str("alertID", offlineAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared offline alert - all PBS alerts disabled")
+		}
+		m.mu.Unlock()
 		return
 	}
 
@@ -2607,6 +2719,32 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 	}
 	if m.config.DisableAllPMG {
 		m.mu.RUnlock()
+		// Clear any existing PMG alerts when all PMG alerts are disabled
+		m.mu.Lock()
+		// Reset offline confirmation tracking
+		delete(m.offlineConfirmations, pmg.ID)
+		// Clear all possible PMG alert types
+		alertTypes := []string{"queue-total", "queue-deferred", "queue-hold", "oldest-message"}
+		for _, alertType := range alertTypes {
+			alertID := fmt.Sprintf("%s-%s", pmg.ID, alertType)
+			if _, exists := m.activeAlerts[alertID]; exists {
+				m.clearAlertNoLock(alertID)
+				log.Info().
+					Str("alertID", alertID).
+					Str("pmg", pmg.Name).
+					Msg("Cleared PMG alert - all PMG alerts disabled")
+			}
+		}
+		// Clear offline alert
+		offlineAlertID := fmt.Sprintf("pmg-offline-%s", pmg.ID)
+		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+			m.clearAlertNoLock(offlineAlertID)
+			log.Info().
+				Str("alertID", offlineAlertID).
+				Str("pmg", pmg.Name).
+				Msg("Cleared offline alert - all PMG alerts disabled")
+		}
+		m.mu.Unlock()
 		return
 	}
 
@@ -3767,6 +3905,25 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	}
 	if m.config.DisableAllStorage {
 		m.mu.RUnlock()
+		// Clear any existing storage alerts when all storage alerts are disabled
+		m.mu.Lock()
+		usageAlertID := fmt.Sprintf("%s-usage", storage.ID)
+		if _, exists := m.activeAlerts[usageAlertID]; exists {
+			m.clearAlertNoLock(usageAlertID)
+			log.Info().
+				Str("alertID", usageAlertID).
+				Str("storage", storage.Name).
+				Msg("Cleared usage alert - all storage alerts disabled")
+		}
+		offlineAlertID := fmt.Sprintf("storage-offline-%s", storage.ID)
+		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+			m.clearAlertNoLock(offlineAlertID)
+			log.Info().
+				Str("alertID", offlineAlertID).
+				Str("storage", storage.Name).
+				Msg("Cleared offline alert - all storage alerts disabled")
+		}
+		m.mu.Unlock()
 		return
 	}
 

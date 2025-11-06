@@ -1655,3 +1655,120 @@ func TestCheckDiskHealthClearsExistingSamsung980Alerts(t *testing.T) {
 		t.Fatalf("expected existing Samsung 990 health alert to be cleared")
 	}
 }
+
+func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
+	m := NewManager()
+
+	storageID := "local-lvm"
+
+	// Start with configuration that allows storage alerts
+	initialConfig := AlertConfig{
+		Enabled:           true,
+		DisableAllStorage: false,
+		StorageDefault:    HysteresisThreshold{Trigger: 80, Clear: 75},
+		TimeThreshold:     0,
+		TimeThresholds:    map[string]int{},
+		NodeDefaults: ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
+		},
+		GuestDefaults: ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+		},
+		Overrides: make(map[string]ThresholdConfig),
+	}
+	m.UpdateConfig(initialConfig)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.config.ActivationState = ActivationActive
+	m.mu.Unlock()
+
+	var dispatched []*Alert
+	done := make(chan struct{}, 1)
+	var resolved []string
+	resolvedDone := make(chan struct{}, 1)
+	m.SetAlertCallback(func(alert *Alert) {
+		dispatched = append(dispatched, alert)
+		select {
+		case done <- struct{}{}:
+		default:
+		}
+	})
+	m.SetResolvedCallback(func(alertID string) {
+		resolved = append(resolved, alertID)
+		select {
+		case resolvedDone <- struct{}{}:
+		default:
+		}
+	})
+
+	storage := models.Storage{
+		ID:     storageID,
+		Name:   "local-lvm",
+		Usage:  90.0,
+		Status: "available",
+	}
+
+	// Initial check should trigger an alert
+	m.CheckStorage(storage)
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("did not receive initial alert dispatch")
+	}
+	if len(dispatched) != 1 {
+		t.Fatalf("expected 1 alert before disabling storage, got %d", len(dispatched))
+	}
+
+	// Apply config with DisableAllStorage enabled
+	disabledConfig := initialConfig
+	disabledConfig.DisableAllStorage = true
+	m.UpdateConfig(disabledConfig)
+	m.mu.Lock()
+	m.config.TimeThreshold = 0
+	m.config.TimeThresholds = map[string]int{}
+	m.config.ActivationState = ActivationActive
+	m.mu.Unlock()
+
+	// Clear dispatched slice to capture only post-disable notifications
+	dispatched = dispatched[:0]
+	done = make(chan struct{}, 1)
+
+	// Re-run CheckStorage with high usage; no alert should be dispatched
+	m.CheckStorage(storage)
+	select {
+	case <-done:
+		t.Fatalf("expected no alerts after disabling all storage, but callback fired")
+	case <-time.After(100 * time.Millisecond):
+		// No callback fired as expected
+	}
+
+	// Active alerts should be cleared by reevaluateActiveAlertsLocked
+	m.mu.RLock()
+	activeCount := len(m.activeAlerts)
+	m.mu.RUnlock()
+	if activeCount != 0 {
+		t.Fatalf("expected active alerts to be cleared after disabling all storage, got %d", activeCount)
+	}
+
+	// Resolved callback should have fired
+	select {
+	case <-resolvedDone:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("expected resolved callback to fire after disabling all storage")
+	}
+	expectedAlertID := fmt.Sprintf("%s-usage", storageID)
+	if len(resolved) != 1 || resolved[0] != expectedAlertID {
+		t.Fatalf("expected resolved callback for %s, got %v", expectedAlertID, resolved)
+	}
+
+	// Pending alert should be cleared
+	m.mu.RLock()
+	_, isPending := m.pendingAlerts[expectedAlertID]
+	m.mu.RUnlock()
+	if isPending {
+		t.Fatalf("expected pending alert entry to be cleared after disabling all storage")
+	}
+}
