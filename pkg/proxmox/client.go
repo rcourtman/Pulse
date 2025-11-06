@@ -467,6 +467,14 @@ type NodeRRDPoint struct {
 	MemAvailable *float64 `json:"memavailable,omitempty"`
 }
 
+// GuestRRDPoint represents a single RRD datapoint for a VM or LXC container.
+type GuestRRDPoint struct {
+	Time         int64    `json:"time"`
+	MaxMem       *float64 `json:"maxmem,omitempty"`
+	MemUsed      *float64 `json:"memused,omitempty"`
+	MemAvailable *float64 `json:"memavailable,omitempty"`
+}
+
 // NodeStatus represents detailed node status from /nodes/{node}/status endpoint
 // This endpoint provides real-time metrics that update every second
 type NodeStatus struct {
@@ -700,6 +708,44 @@ func (c *Client) GetNodeRRDData(ctx context.Context, node, timeframe, cf string,
 
 	var result struct {
 		Data []NodeRRDPoint `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetLXCRRDData retrieves RRD metrics for an LXC container.
+func (c *Client) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]GuestRRDPoint, error) {
+	if timeframe == "" {
+		timeframe = "hour"
+	}
+	if cf == "" {
+		cf = "AVERAGE"
+	}
+
+	params := url.Values{}
+	params.Set("timeframe", timeframe)
+	params.Set("cf", cf)
+	if len(ds) > 0 {
+		params.Set("ds", strings.Join(ds, ","))
+	}
+
+	path := fmt.Sprintf("/nodes/%s/lxc/%d/rrddata", url.PathEscape(node), vmid)
+	if query := params.Encode(); query != "" {
+		path = fmt.Sprintf("%s?%s", path, query)
+	}
+
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []GuestRRDPoint `json:"data"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

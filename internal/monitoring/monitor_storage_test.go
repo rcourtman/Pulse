@@ -30,6 +30,10 @@ func (f *fakeStorageClient) GetNodeRRDData(ctx context.Context, node string, tim
 	return nil, nil
 }
 
+func (f *fakeStorageClient) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	return nil, nil
+}
+
 func (f *fakeStorageClient) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
 	return nil, nil
 }

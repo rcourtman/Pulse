@@ -46,6 +46,7 @@ type PVEClientInterface interface {
 	GetNodes(ctx context.Context) ([]proxmox.Node, error)
 	GetNodeStatus(ctx context.Context, node string) (*proxmox.NodeStatus, error)
 	GetNodeRRDData(ctx context.Context, node string, timeframe string, cf string, ds []string) ([]proxmox.NodeRRDPoint, error)
+	GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error)
 	GetVMs(ctx context.Context, node string) ([]proxmox.VM, error)
 	GetContainers(ctx context.Context, node string) ([]proxmox.Container, error)
 	GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error)
@@ -6562,14 +6563,81 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			}
 
 			// Calculate I/O rates for container
+			sampleTime := time.Now()
 			currentMetrics := IOMetrics{
 				DiskRead:   int64(res.DiskRead),
 				DiskWrite:  int64(res.DiskWrite),
 				NetworkIn:  int64(res.NetIn),
 				NetworkOut: int64(res.NetOut),
-				Timestamp:  time.Now(),
+				Timestamp:  sampleTime,
 			}
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+
+			// Calculate cache-aware memory for LXC containers
+			// The cluster resources API returns mem from cgroup which includes cache/buffers (inflated).
+			// Try to get more accurate memory metrics from RRD data.
+			memTotal := res.MaxMem
+			memUsed := res.Mem
+			memorySource := "cluster-resources"
+			guestRaw := VMMemoryRaw{
+				ListingMem:    res.Mem,
+				ListingMaxMem: res.MaxMem,
+			}
+
+			// For running containers, try to get RRD data for cache-aware memory calculation
+			if res.Status == "running" {
+				rrdCtx, rrdCancel := context.WithTimeout(ctx, 5*time.Second)
+				rrdPoints, err := client.GetLXCRRDData(rrdCtx, res.Node, res.VMID, "hour", "AVERAGE", []string{"memavailable", "memused", "maxmem"})
+				rrdCancel()
+
+				if err == nil && len(rrdPoints) > 0 {
+					// Use the most recent RRD point
+					point := rrdPoints[len(rrdPoints)-1]
+
+					if point.MaxMem != nil && *point.MaxMem > 0 {
+						guestRaw.StatusMaxMem = uint64(*point.MaxMem)
+					}
+
+					// Prefer memavailable-based calculation (excludes cache/buffers)
+					if point.MemAvailable != nil && *point.MemAvailable > 0 {
+						memAvailable := uint64(*point.MemAvailable)
+						if memAvailable <= memTotal {
+							memUsed = memTotal - memAvailable
+							memorySource = "rrd-memavailable"
+							guestRaw.MemInfoAvailable = memAvailable
+							log.Debug().
+								Str("container", res.Name).
+								Str("node", res.Node).
+								Uint64("total", memTotal).
+								Uint64("available", memAvailable).
+								Uint64("used", memUsed).
+								Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
+								Msg("LXC memory: using RRD memavailable (excludes reclaimable cache)")
+						}
+					} else if point.MemUsed != nil && *point.MemUsed > 0 {
+						// Fall back to memused from RRD if available
+						memUsed = uint64(*point.MemUsed)
+						if memUsed <= memTotal {
+							memorySource = "rrd-memused"
+							guestRaw.MemInfoUsed = memUsed
+							log.Debug().
+								Str("container", res.Name).
+								Str("node", res.Node).
+								Uint64("total", memTotal).
+								Uint64("used", memUsed).
+								Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
+								Msg("LXC memory: using RRD memused (excludes reclaimable cache)")
+						}
+					}
+				} else if err != nil {
+					log.Debug().
+						Err(err).
+						Str("instance", instanceName).
+						Str("container", res.Name).
+						Int("vmid", res.VMID).
+						Msg("RRD memory data unavailable for LXC, using cluster resources value")
+				}
+			}
 
 			container := models.Container{
 				ID:       guestID,
@@ -6582,10 +6650,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				CPU:      safeFloat(res.CPU),
 				CPUs:     int(res.MaxCPU),
 				Memory: models.Memory{
-					Total: int64(res.MaxMem),
-					Used:  int64(res.Mem),
-					Free:  int64(res.MaxMem - res.Mem),
-					Usage: safePercentage(float64(res.Mem), float64(res.MaxMem)),
+					Total: int64(memTotal),
+					Used:  int64(memUsed),
+					Free:  int64(memTotal - memUsed),
+					Usage: safePercentage(float64(memUsed), float64(memTotal)),
 				},
 				Disk: models.Disk{
 					Total: int64(res.MaxDisk),
@@ -6622,6 +6690,15 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			m.enrichContainerMetadata(ctx, client, instanceName, res.Node, &container)
 
 			allContainers = append(allContainers, container)
+
+			m.recordGuestSnapshot(instanceName, container.Type, res.Node, res.VMID, GuestMemorySnapshot{
+				Name:         container.Name,
+				Status:       container.Status,
+				RetrievedAt:  sampleTime,
+				MemorySource: memorySource,
+				Memory:       container.Memory,
+				Raw:          guestRaw,
+			})
 
 			// For non-running containers, zero out resource usage metrics to prevent false alerts
 			// Proxmox may report stale or residual metrics for stopped containers

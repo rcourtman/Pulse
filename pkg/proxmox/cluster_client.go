@@ -792,6 +792,19 @@ func (cc *ClusterClient) GetNodeRRDData(ctx context.Context, node, timeframe, cf
 	return result, err
 }
 
+func (cc *ClusterClient) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]GuestRRDPoint, error) {
+	var result []GuestRRDPoint
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		points, err := client.GetLXCRRDData(ctx, node, vmid, timeframe, cf, ds)
+		if err != nil {
+			return err
+		}
+		result = points
+		return nil
+	})
+	return result, err
+}
+
 func (cc *ClusterClient) GetVMs(ctx context.Context, node string) ([]VM, error) {
 	var result []VM
 	err := cc.executeWithFailover(ctx, func(client *Client) error {
