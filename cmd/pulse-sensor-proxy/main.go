@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -369,6 +370,12 @@ func runProxy() {
 		Str("log_level", cfg.LogLevel).
 		Str("version", Version).
 		Msg("Starting pulse-sensor-proxy")
+
+	// Warn if running inside a container - this is an unsupported configuration
+	// Container environments cannot complete SSH workflows, causing [preauth] log floods
+	if system.InContainer() && os.Getenv("PULSE_SENSOR_PROXY_SUPPRESS_CONTAINER_WARNING") != "true" {
+		log.Warn().Msg("pulse-sensor-proxy is running inside a container - this is unsupported and will cause SSH [preauth] log floods. Install on the Proxmox host instead. See docs/TEMPERATURE_MONITORING.md for setup instructions. Set PULSE_SENSOR_PROXY_SUPPRESS_CONTAINER_WARNING=true to suppress this warning.")
+	}
 
 	knownHostsManager, err := knownhosts.NewManager(filepath.Join(sshKeyPath, "known_hosts"))
 	if err != nil {
