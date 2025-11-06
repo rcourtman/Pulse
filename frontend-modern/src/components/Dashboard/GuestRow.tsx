@@ -398,7 +398,7 @@ export function GuestRow(props: GuestRowProps) {
   // Get first cell styling
   const firstCellClass = createMemo(() => {
     const base =
-      'py-0.5 pr-2 whitespace-nowrap relative w-[160px] sm:w-[200px] lg:w-[240px] xl:w-[280px] 2xl:w-[340px]';
+      'py-0.5 pr-2 whitespace-nowrap relative w-[160px] sm:w-[200px] lg:w-[240px] xl:w-[280px]';
     const indent = props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT;
     return `${base} ${indent}`;
   });
@@ -534,7 +534,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Type */}
-      <td class="py-0.5 px-2 whitespace-nowrap w-[48px] sm:w-[56px] lg:w-[60px] xl:w-[64px] 2xl:w-[72px]">
+      <td class="py-0.5 px-2 whitespace-nowrap w-[48px] sm:w-[56px] lg:w-[60px] xl:w-[64px]">
         <div class="flex h-[24px] items-center">
           <span
             class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
@@ -549,13 +549,13 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* VMID */}
-      <td class="py-0.5 px-1.5 whitespace-nowrap w-[44px] sm:w-[52px] lg:w-[60px] xl:w-[68px] 2xl:w-[80px] text-sm text-gray-600 dark:text-gray-400 align-middle">
+      <td class="py-0.5 px-1.5 whitespace-nowrap w-[44px] sm:w-[52px] lg:w-[60px] xl:w-[68px] text-sm text-gray-600 dark:text-gray-400 align-middle">
         {props.guest.vmid}
       </td>
 
       {/* Uptime */}
       <td
-        class={`py-0.5 px-1.5 w-[60px] sm:w-[70px] lg:w-[80px] xl:w-[92px] 2xl:w-[112px] text-sm whitespace-nowrap align-middle ${
+        class={`py-0.5 px-1.5 w-[60px] sm:w-[70px] lg:w-[80px] xl:w-[92px] text-sm whitespace-nowrap align-middle ${
           props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
         }`}
       >
@@ -565,7 +565,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* CPU */}
-      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[180px]">
+      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px]">
         <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
           <MetricBar
             value={cpuPercent()}
@@ -581,7 +581,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Memory */}
-      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[180px]">
+      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px]">
         <div title={memoryTooltip() ?? undefined}>
           <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
             <MetricBar
@@ -595,7 +595,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Disk – surface usage even if guest is currently stopped so users can see last reported values */}
-      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[180px]">
+      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px]">
         <Show
           when={hasDiskUsage()}
           fallback={
@@ -618,24 +618,24 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Disk I/O */}
-      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[96px]">
+      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px]">
         <div class="flex h-[24px] items-center">
           <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
         </div>
       </td>
-      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[96px]">
+      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px]">
         <div class="flex h-[24px] items-center">
           <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
         </div>
       </td>
 
       {/* Network I/O */}
-      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[96px]">
+      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px]">
         <div class="flex h-[24px] items-center">
           <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
         </div>
       </td>
-      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[96px]">
+      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px]">
         <div class="flex h-[24px] items-center">
           <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
         </div>
