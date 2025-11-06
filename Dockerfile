@@ -183,10 +183,14 @@ RUN chmod +x /docker-entrypoint.sh
 # Provide installer scripts for HTTP download endpoints
 RUN mkdir -p /opt/pulse/scripts
 COPY scripts/install-docker-agent.sh /opt/pulse/scripts/install-docker-agent.sh
+COPY scripts/install-container-agent.sh /opt/pulse/scripts/install-container-agent.sh
 COPY scripts/install-host-agent.sh /opt/pulse/scripts/install-host-agent.sh
+COPY scripts/install-host-agent.ps1 /opt/pulse/scripts/install-host-agent.ps1
+COPY scripts/uninstall-host-agent.sh /opt/pulse/scripts/uninstall-host-agent.sh
+COPY scripts/uninstall-host-agent.ps1 /opt/pulse/scripts/uninstall-host-agent.ps1
 COPY scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-sensor-proxy.sh
 COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
-RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh /opt/pulse/scripts/install-host-agent.sh /opt/pulse/scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-docker.sh
+RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh /opt/pulse/scripts/install-container-agent.sh /opt/pulse/scripts/install-host-agent.sh /opt/pulse/scripts/install-host-agent.ps1 /opt/pulse/scripts/uninstall-host-agent.sh /opt/pulse/scripts/uninstall-host-agent.ps1 /opt/pulse/scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-docker.sh
 
 # Copy multi-arch docker-agent binaries for download endpoint
 RUN mkdir -p /opt/pulse/bin

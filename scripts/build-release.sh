@@ -93,7 +93,14 @@ for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$staging_dir/bin/pulse-host-agent"
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$staging_dir/bin/pulse-sensor-proxy"
     cp "scripts/install-docker-agent.sh" "$staging_dir/scripts/install-docker-agent.sh"
-    chmod 755 "$staging_dir/scripts/install-docker-agent.sh"
+    cp "scripts/install-container-agent.sh" "$staging_dir/scripts/install-container-agent.sh"
+    cp "scripts/install-host-agent.sh" "$staging_dir/scripts/install-host-agent.sh"
+    cp "scripts/install-host-agent.ps1" "$staging_dir/scripts/install-host-agent.ps1"
+    cp "scripts/uninstall-host-agent.sh" "$staging_dir/scripts/uninstall-host-agent.sh"
+    cp "scripts/uninstall-host-agent.ps1" "$staging_dir/scripts/uninstall-host-agent.ps1"
+    cp "scripts/install-sensor-proxy.sh" "$staging_dir/scripts/install-sensor-proxy.sh"
+    cp "scripts/install-docker.sh" "$staging_dir/scripts/install-docker.sh"
+    chmod 755 "$staging_dir/scripts/"*.sh "$staging_dir/scripts/"*.ps1
     echo "$VERSION" > "$staging_dir/VERSION"
     
     # Create tarball from staging directory
@@ -123,7 +130,14 @@ for build_name in "${!builds[@]}"; do
 done
 
 cp "scripts/install-docker-agent.sh" "$universal_dir/scripts/install-docker-agent.sh"
-chmod 755 "$universal_dir/scripts/install-docker-agent.sh"
+cp "scripts/install-container-agent.sh" "$universal_dir/scripts/install-container-agent.sh"
+cp "scripts/install-host-agent.sh" "$universal_dir/scripts/install-host-agent.sh"
+cp "scripts/install-host-agent.ps1" "$universal_dir/scripts/install-host-agent.ps1"
+cp "scripts/uninstall-host-agent.sh" "$universal_dir/scripts/uninstall-host-agent.sh"
+cp "scripts/uninstall-host-agent.ps1" "$universal_dir/scripts/uninstall-host-agent.ps1"
+cp "scripts/install-sensor-proxy.sh" "$universal_dir/scripts/install-sensor-proxy.sh"
+cp "scripts/install-docker.sh" "$universal_dir/scripts/install-docker.sh"
+chmod 755 "$universal_dir/scripts/"*.sh "$universal_dir/scripts/"*.ps1
 
 # Create a detection script that creates the pulse symlink based on architecture
 cat > "$universal_dir/bin/pulse" << 'EOF'
