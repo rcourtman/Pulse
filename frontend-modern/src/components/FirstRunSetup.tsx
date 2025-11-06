@@ -22,6 +22,9 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
   const [savedToken, setSavedToken] = createSignal('');
   const [copied, setCopied] = createSignal<'password' | 'token' | null>(null);
   const [themeMode, setThemeMode] = createSignal<'system' | 'light' | 'dark'>('system');
+  const [bootstrapToken, setBootstrapToken] = createSignal('');
+  const [isUnlocking, setIsUnlocking] = createSignal(false);
+  const [isUnlocked, setIsUnlocked] = createSignal(false);
 
   const applyTheme = (mode: 'system' | 'light' | 'dark') => {
     if (mode === 'light') {
@@ -77,6 +80,15 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
     return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
   };
 
+  const handleUnlock = () => {
+    if (!bootstrapToken().trim()) {
+      showError('Please enter the bootstrap token');
+      return;
+    }
+    // Simple client-side unlock - actual validation happens during setup
+    setIsUnlocked(true);
+  };
+
   const handleSetup = async () => {
     // Validate custom password if used
     if (useCustomPassword()) {
@@ -104,15 +116,23 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
     setApiClientToken(token);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+      // Include bootstrap token if we're in first-run setup (not force mode)
+      if (!props.force && bootstrapToken()) {
+        headers['X-Setup-Token'] = bootstrapToken().trim();
+      }
+
       const response = await fetch('/api/security/quick-setup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         credentials: 'include', // Include cookies for CSRF
         body: JSON.stringify({
           username: username(),
           password: finalPassword,
           apiToken: token,
           force: props.force ?? false,
+          setupToken: bootstrapToken().trim(), // Also include in body as fallback
         }),
       });
 
@@ -251,7 +271,78 @@ IMPORTANT: Keep these credentials secure!
         </div>
 
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden">
-          <Show when={!showCredentials()}>
+          {/* Bootstrap Token Unlock Screen */}
+          <Show when={!isUnlocked() && !showCredentials() && !props.force}>
+            <div class="p-8">
+              <SectionHeader
+                title="Unlock Setup Wizard"
+                size="lg"
+                class="mb-6"
+                titleClass="text-gray-800 dark:text-gray-100"
+              />
+
+              <div class="space-y-6">
+                {/* Instructions */}
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p class="text-sm text-blue-900 dark:text-blue-100 font-medium mb-2">
+                    To begin setup, retrieve the bootstrap token from your Pulse host:
+                  </p>
+                  <div class="space-y-2">
+                    <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
+                      <div class="text-blue-600 dark:text-blue-400 mb-1"># Standard installation:</div>
+                      cat /etc/pulse/.bootstrap_token
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
+                      <div class="text-blue-600 dark:text-blue-400 mb-1"># Docker/Helm:</div>
+                      cat /data/.bootstrap_token
+                    </div>
+                  </div>
+                </div>
+
+                {/* Token Input */}
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Bootstrap Token
+                  </label>
+                  <input
+                    type="text"
+                    value={bootstrapToken()}
+                    onInput={(e) => setBootstrapToken(e.currentTarget.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                    placeholder="Paste the token from your host"
+                    autofocus
+                  />
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    This one-time token ensures only someone with host access can configure Pulse
+                  </p>
+                </div>
+
+                {/* Security Note */}
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                    <span class="font-semibold text-gray-800 dark:text-gray-200">Why this step?</span>
+                    <br />
+                    The bootstrap token prevents unauthorized access to your unconfigured Pulse instance.
+                    It's automatically removed after you complete the setup wizard.
+                  </p>
+                </div>
+
+                {/* Unlock Button */}
+                <button
+                  type="button"
+                  onClick={handleUnlock}
+                  disabled={isUnlocking() || !bootstrapToken().trim()}
+                  class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
+                >
+                  {isUnlocking() ? 'Unlocking...' : 'Unlock Wizard'}
+                </button>
+              </div>
+            </div>
+          </Show>
+
+          {/* Setup Form - only shown after unlock or in force mode */}
+          <Show when={(isUnlocked() || props.force) && !showCredentials()}>
             <div class="p-8">
               <SectionHeader
                 title="Initial security setup"
