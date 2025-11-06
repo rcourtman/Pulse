@@ -139,12 +139,50 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 	}
 }
 
-// GetWebhooks returns all webhook configurations
+// GetWebhooks returns all webhook configurations with secrets masked
 func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Request) {
 	webhooks := h.monitor.GetNotificationManager().GetWebhooks()
 
+	// Mask sensitive fields in headers and customFields
+	maskedWebhooks := make([]map[string]interface{}, len(webhooks))
+	for i, webhook := range webhooks {
+		whMap := map[string]interface{}{
+			"id":      webhook.ID,
+			"name":    webhook.Name,
+			"url":     webhook.URL,
+			"method":  webhook.Method,
+			"enabled": webhook.Enabled,
+			"service": webhook.Service,
+		}
+
+		// Mask headers - only show keys, not values
+		if webhook.Headers != nil && len(webhook.Headers) > 0 {
+			maskedHeaders := make(map[string]string)
+			for key := range webhook.Headers {
+				maskedHeaders[key] = "***REDACTED***"
+			}
+			whMap["headers"] = maskedHeaders
+		}
+
+		// Mask custom fields - only show keys, not values
+		if webhook.CustomFields != nil && len(webhook.CustomFields) > 0 {
+			maskedFields := make(map[string]string)
+			for key := range webhook.CustomFields {
+				maskedFields[key] = "***REDACTED***"
+			}
+			whMap["customFields"] = maskedFields
+		}
+
+		// Include template if present
+		if webhook.Template != "" {
+			whMap["template"] = webhook.Template
+		}
+
+		maskedWebhooks[i] = whMap
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(webhooks)
+	json.NewEncoder(w).Encode(maskedWebhooks)
 }
 
 // CreateWebhook creates a new webhook
@@ -390,12 +428,52 @@ func (h *NotificationHandlers) GetWebhookTemplates(w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(templates)
 }
 
-// GetWebhookHistory returns recent webhook delivery history
+// GetWebhookHistory returns recent webhook delivery history with URLs redacted
 func (h *NotificationHandlers) GetWebhookHistory(w http.ResponseWriter, r *http.Request) {
 	history := h.monitor.GetNotificationManager().GetWebhookHistory()
 
+	// Redact secrets from URLs in history
+	for i := range history {
+		history[i].WebhookURL = redactSecretsFromURL(history[i].WebhookURL)
+		// Note: ResponseBody is not stored in WebhookDelivery struct
+		// Error messages are already limited in length
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(history)
+}
+
+// redactSecretsFromURL masks tokens and credentials in URLs
+func redactSecretsFromURL(urlStr string) string {
+	// Redact common patterns like:
+	// - /bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/sendMessage → /botXXX:REDACTED/sendMessage
+	// - ?token=abc123 → ?token=REDACTED
+	// - ?apikey=abc123 → ?apikey=REDACTED
+
+	// Redact Telegram bot tokens
+	if idx := strings.Index(urlStr, "/bot"); idx != -1 {
+		if endIdx := strings.Index(urlStr[idx:], "/"); endIdx != -1 {
+			urlStr = urlStr[:idx+4] + "REDACTED" + urlStr[idx+endIdx:]
+		}
+	}
+
+	// Redact query parameters with sensitive names
+	if idx := strings.Index(urlStr, "?"); idx != -1 {
+		sensitiveParams := []string{"token", "apikey", "api_key", "key", "secret", "password"}
+		for _, param := range sensitiveParams {
+			pattern := param + "="
+			if paramIdx := strings.Index(urlStr, pattern); paramIdx != -1 {
+				start := paramIdx + len(pattern)
+				end := start
+				for end < len(urlStr) && urlStr[end] != '&' && urlStr[end] != '#' {
+					end++
+				}
+				urlStr = urlStr[:start] + "REDACTED" + urlStr[end:]
+			}
+		}
+	}
+
+	return urlStr
 }
 
 // GetEmailProviders returns available email providers
@@ -522,6 +600,63 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(result)
 }
 
+// GetNotificationHealth returns health status of notification system
+func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *http.Request) {
+	// Get queue stats
+	queueStats := make(map[string]interface{})
+	if queue := h.monitor.GetNotificationManager().GetQueue(); queue != nil {
+		stats, err := queue.GetQueueStats()
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to get queue stats for health check")
+			queueStats["error"] = err.Error()
+			queueStats["healthy"] = false
+		} else {
+			queueStats = map[string]interface{}{
+				"pending": stats["pending"],
+				"sending": stats["sending"],
+				"sent":    stats["sent"],
+				"failed":  stats["failed"],
+				"dlq":     stats["dlq"],
+				"healthy": true,
+			}
+		}
+	} else {
+		queueStats["error"] = "queue not initialized"
+		queueStats["healthy"] = false
+	}
+
+	// Get config status
+	nm := h.monitor.GetNotificationManager()
+	emailCfg := nm.GetEmailConfig()
+	webhooks := nm.GetWebhooks()
+
+	health := map[string]interface{}{
+		"queue":     queueStats,
+		"email": map[string]interface{}{
+			"enabled":     emailCfg.Enabled,
+			"configured":  emailCfg.SMTPHost != "",
+		},
+		"webhooks": map[string]interface{}{
+			"total":   len(webhooks),
+			"enabled": countEnabledWebhooks(webhooks),
+		},
+		"overall_healthy": queueStats["healthy"] == true,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(health)
+}
+
+func countEnabledWebhooks(webhooks []notifications.WebhookConfig) int {
+	count := 0
+	for _, wh := range webhooks {
+		if wh.Enabled {
+			count++
+		}
+	}
+	return count
+}
+
 // HandleNotifications routes notification requests to appropriate handlers
 func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/notifications")
@@ -606,6 +741,11 @@ func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *htt
 			return
 		}
 		h.TestNotification(w, r)
+	case path == "/health" && r.Method == http.MethodGet:
+		if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+			return
+		}
+		h.GetNotificationHealth(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}

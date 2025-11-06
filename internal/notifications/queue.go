@@ -228,7 +228,7 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 	return nil
 }
 
-// UpdateStatus updates the status of a queued notification
+// UpdateStatus updates the status of a queued notification without incrementing attempts
 func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueStatus, errorMsg string) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
@@ -241,7 +241,7 @@ func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueSta
 
 	query := `
 		UPDATE notification_queue
-		SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?, attempts = attempts + 1
+		SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?
 		WHERE id = ?
 	`
 
@@ -255,6 +255,19 @@ func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueSta
 		return fmt.Errorf("notification not found: %s", id)
 	}
 
+	return nil
+}
+
+// IncrementAttempt increments the attempt counter for a notification
+func (nq *NotificationQueue) IncrementAttempt(id string) error {
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+
+	query := `UPDATE notification_queue SET attempts = attempts + 1 WHERE id = ?`
+	_, err := nq.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to increment attempt counter: %w", err)
+	}
 	return nil
 }
 
@@ -523,7 +536,13 @@ func (nq *NotificationQueue) processBatch() {
 
 // processNotification processes a single notification
 func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
-	// Update status to sending
+	// Increment attempt counter once at the start of processing
+	if err := nq.IncrementAttempt(notif.ID); err != nil {
+		log.Error().Err(err).Str("id", notif.ID).Msg("Failed to increment attempt counter")
+		return
+	}
+
+	// Update status to sending (without incrementing attempts again)
 	if err := nq.UpdateStatus(notif.ID, QueueStatusSending, ""); err != nil {
 		log.Error().Err(err).Str("id", notif.ID).Msg("Failed to update notification status to sending")
 		return

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -106,6 +107,7 @@ type webhookRateLimit struct {
 type NotificationManager struct {
 	mu                sync.RWMutex
 	emailConfig       EmailConfig
+	emailManager      *EnhancedEmailManager        // Shared email manager for rate limiting
 	webhooks          []WebhookConfig
 	appriseConfig     AppriseConfig
 	enabled           bool
@@ -388,6 +390,19 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.emailConfig = config
+
+	// Recreate email manager with new config to preserve rate limiting state
+	providerConfig := EmailProviderConfig{
+		EmailConfig:   config,
+		Provider:      "",
+		MaxRetries:    3,
+		RetryDelay:    5,
+		RateLimit:     60, // Default 60 emails/minute
+		StartTLS:      config.StartTLS,
+		SkipTLSVerify: false,
+		AuthRequired:  config.Username != "" && config.Password != "",
+	}
+	n.emailManager = NewEnhancedEmailManager(providerConfig)
 }
 
 // SetAppriseConfig updates Apprise configuration.
@@ -489,6 +504,13 @@ func (n *NotificationManager) GetEmailConfig() EmailConfig {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	return n.emailConfig
+}
+
+// GetQueue returns the notification queue
+func (n *NotificationManager) GetQueue() *NotificationQueue {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.queue
 }
 
 // SendAlert sends notifications for an alert
@@ -729,7 +751,7 @@ func (n *NotificationManager) sendNotificationsDirect(emailConfig EmailConfig, w
 }
 
 // sendGroupedEmail sends a grouped email notification
-func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*alerts.Alert) {
+func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*alerts.Alert) error {
 
 	// Don't check for recipients here - sendHTMLEmail handles empty recipients
 	// by using the From address as the recipient
@@ -738,23 +760,22 @@ func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*
 	subject, htmlBody, textBody := EmailTemplate(alertList, false)
 
 	// Send using HTML-aware method
-	n.sendHTMLEmail(subject, htmlBody, textBody, config)
+	return n.sendHTMLEmailWithError(subject, htmlBody, textBody, config)
 }
 
-func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList []*alerts.Alert) {
+func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList []*alerts.Alert) error {
 	if len(alertList) == 0 {
-		return
+		return fmt.Errorf("no alerts to send")
 	}
 
 	cfg := NormalizeAppriseConfig(config)
 	if !cfg.Enabled {
-		return
+		return fmt.Errorf("apprise not enabled")
 	}
 
 	title, body, notifyType := buildApprisePayload(alertList, n.publicURL)
 	if title == "" && body == "" {
-		log.Warn().Msg("Apprise notification skipped: failed to build payload")
-		return
+		return fmt.Errorf("failed to build apprise payload")
 	}
 
 	switch cfg.Mode {
@@ -765,6 +786,7 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 				Str("mode", string(cfg.Mode)).
 				Str("serverUrl", cfg.ServerURL).
 				Msg("Failed to send Apprise notification via API")
+			return fmt.Errorf("apprise HTTP send failed: %w", err)
 		}
 	default:
 		if err := n.sendAppriseViaCLI(cfg, title, body); err != nil {
@@ -774,8 +796,10 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 				Str("cliPath", cfg.CLIPath).
 				Strs("targets", cfg.Targets).
 				Msg("Failed to send Apprise notification")
+			return fmt.Errorf("apprise CLI send failed: %w", err)
 		}
 	}
+	return nil
 }
 
 func buildApprisePayload(alertList []*alerts.Alert, publicURL string) (string, string, string) {
@@ -994,37 +1018,46 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 			Msg("Using From address as recipient since To is empty")
 	}
 
-	// Create enhanced email configuration with proper STARTTLS support
-	enhancedConfig := EmailProviderConfig{
-		EmailConfig: EmailConfig{
-			From:     config.From,
-			To:       recipients,
-			SMTPHost: config.SMTPHost,
-			SMTPPort: config.SMTPPort,
-			Username: config.Username,
-			Password: config.Password,
-		},
-		Provider:      config.Provider,
-		StartTLS:      config.StartTLS, // Use the configured StartTLS setting
-		MaxRetries:    2,
-		RetryDelay:    3,
-		RateLimit:     60,
-		SkipTLSVerify: false,
-		AuthRequired:  config.Username != "" && config.Password != "",
-	}
+	// Use shared email manager for rate limiting, or create a new one if not available
+	n.mu.RLock()
+	manager := n.emailManager
+	n.mu.RUnlock()
 
-	// Use enhanced email manager for better compatibility
-	enhancedManager := NewEnhancedEmailManager(enhancedConfig)
+	if manager == nil {
+		// Create email manager if not yet initialized
+		enhancedConfig := EmailProviderConfig{
+			EmailConfig: EmailConfig{
+				From:     config.From,
+				To:       recipients,
+				SMTPHost: config.SMTPHost,
+				SMTPPort: config.SMTPPort,
+				Username: config.Username,
+				Password: config.Password,
+			},
+			Provider:      config.Provider,
+			StartTLS:      config.StartTLS,
+			MaxRetries:    2,
+			RetryDelay:    3,
+			RateLimit:     60,
+			SkipTLSVerify: false,
+			AuthRequired:  config.Username != "" && config.Password != "",
+		}
+		manager = NewEnhancedEmailManager(enhancedConfig)
+	} else {
+		// Update manager's config but preserve rate limiter
+		manager.config.EmailConfig.From = config.From
+		manager.config.EmailConfig.To = recipients
+	}
 
 	log.Info().
 		Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 		Str("from", config.From).
 		Strs("to", recipients).
 		Bool("hasAuth", config.Username != "" && config.Password != "").
-		Bool("startTLS", enhancedConfig.StartTLS).
+		Bool("startTLS", manager.config.StartTLS).
 		Msg("Attempting to send email via SMTP with enhanced support")
 
-	err := enhancedManager.SendEmailWithRetry(subject, htmlBody, textBody)
+	err := manager.SendEmailWithRetry(subject, htmlBody, textBody)
 
 	if err != nil {
 		log.Error().
@@ -1106,15 +1139,12 @@ func (n *NotificationManager) sendEmailWithContent(subject, body string, config 
 }
 
 // sendGroupedWebhook sends a grouped webhook notification
-func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertList []*alerts.Alert) {
+func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertList []*alerts.Alert) error {
 	var jsonData []byte
 	var err error
 
 	if len(alertList) == 0 {
-		log.Warn().
-			Str("webhook", webhook.Name).
-			Msg("Attempted to send grouped webhook with no alerts")
-		return
+		return fmt.Errorf("no alerts to send")
 	}
 
 	primaryAlert := alertList[0]
@@ -1215,7 +1245,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		if dataPtr, ok := ensureURLAndServiceData(); ok {
 			jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, *dataPtr, webhook.Service)
 		} else {
-			return
+			return fmt.Errorf("failed to prepare webhook URL and service data")
 		}
 		if err != nil {
 			log.Error().
@@ -1223,7 +1253,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				Str("webhook", webhook.Name).
 				Int("alertCount", len(alertList)).
 				Msg("Failed to generate grouped payload from custom template")
-			return
+			return fmt.Errorf("failed to generate payload from custom template: %w", err)
 		}
 	} else if webhook.Service != "" && webhook.Service != "generic" && len(alertList) > 0 {
 		// For service-specific webhooks, use the first alert with a note about others
@@ -1272,7 +1302,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			if dataPtr, ok := ensureURLAndServiceData(); ok {
 				jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, *dataPtr, webhook.Service)
 			} else {
-				return
+				return fmt.Errorf("failed to prepare webhook URL and service data")
 			}
 			if err != nil {
 				log.Error().
@@ -1280,7 +1310,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 					Str("webhook", webhook.Name).
 					Int("alertCount", len(alertList)).
 					Msg("Failed to generate payload for grouped alerts")
-				return
+				return fmt.Errorf("failed to generate payload for grouped alerts: %w", err)
 			}
 		} else {
 			// No template found, use generic payload
@@ -1292,7 +1322,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	// But ONLY if jsonData hasn't been set yet (from custom template)
 	if jsonData == nil && (webhook.Service == "" || webhook.Service == "generic") {
 		if _, ok := ensureURLAndServiceData(); !ok {
-			return
+			return fmt.Errorf("failed to prepare webhook URL and service data")
 		}
 
 		// Use generic payload for other services
@@ -1311,16 +1341,16 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				Str("webhook", webhook.Name).
 				Int("alertCount", len(alertList)).
 				Msg("Failed to marshal grouped webhook payload")
-			return
+			return fmt.Errorf("failed to marshal grouped webhook payload: %w", err)
 		}
 	}
 
 	if _, ok := ensureURLAndServiceData(); !ok {
-		return
+		return fmt.Errorf("failed to prepare webhook URL and service data")
 	}
 
 	// Send using same request logic
-	n.sendWebhookRequest(webhook, jsonData, "grouped")
+	return n.sendWebhookRequest(webhook, jsonData, "grouped")
 }
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits
@@ -1364,14 +1394,14 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 }
 
 // sendWebhookRequest sends the actual webhook request
-func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string) {
+func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string) error {
 	// Check rate limit before sending
 	if !n.checkWebhookRateLimit(webhook.URL) {
 		log.Warn().
 			Str("webhook", webhook.Name).
 			Str("url", webhook.URL).
 			Msg("Webhook request dropped due to rate limiting")
-		return
+		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
 	}
 
 	// Create request
@@ -1403,7 +1433,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("webhook", webhook.Name).
 			Str("type", alertType).
 			Msg("Failed to create webhook request")
-		return
+		return fmt.Errorf("failed to create webhook request: %w", err)
 	}
 
 	// Set headers
@@ -1445,7 +1475,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("webhook", webhook.Name).
 			Str("type", alertType).
 			Msg("Failed to send webhook")
-		return
+		return fmt.Errorf("failed to send webhook: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1459,7 +1489,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("webhook", webhook.Name).
 			Str("type", alertType).
 			Msg("Failed to read webhook response body")
-		return
+		return fmt.Errorf("failed to read webhook response: %w", err)
 	}
 
 	// Check if we hit the size limit
@@ -1489,6 +1519,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 				Str("response", responseBody).
 				Msg("Webhook response body")
 		}
+		return nil
 	} else {
 		log.Warn().
 			Str("webhook", webhook.Name).
@@ -1497,6 +1528,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Int("status", resp.StatusCode).
 			Str("response", responseBody).
 			Msg("Webhook returned non-success status")
+		return fmt.Errorf("webhook returned HTTP %d: %s", resp.StatusCode, responseBody)
 	}
 }
 
@@ -1918,15 +1950,18 @@ func ValidateWebhookURL(webhookURL string) error {
 		return fmt.Errorf("webhook URLs pointing to link-local addresses are not allowed")
 	}
 
-	// Block private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
-	// These are commonly used for internal services and pose SSRF risks
-	if strings.HasPrefix(host, "10.") ||
-		strings.HasPrefix(host, "192.168.") ||
-		(strings.HasPrefix(host, "172.") && isPrivateRange172(host)) {
-		// Log warning but allow (many legitimate webhook services run on private networks)
-		log.Warn().
-			Str("url", webhookURL).
-			Msg("Webhook URL points to private network - ensure this is intentional")
+	// Resolve hostname to IPs and check for private ranges (DNS rebinding protection)
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		// DNS resolution failed - reject for security
+		return fmt.Errorf("failed to resolve webhook hostname %s: %w (DNS resolution required for security)", host, err)
+	}
+
+	// Check all resolved IPs for private ranges
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			return fmt.Errorf("webhook URL resolves to private IP %s - private networks are not allowed for security", ip.String())
+		}
 	}
 
 	// Block common metadata service endpoints (cloud providers)
@@ -1950,6 +1985,32 @@ func ValidateWebhookURL(webhookURL string) error {
 	}
 
 	return nil
+}
+
+// isPrivateIP checks if an IP address is in a private range
+func isPrivateIP(ip net.IP) bool {
+	// Private IPv4 ranges
+	privateRanges := []string{
+		"10.0.0.0/8",      // RFC1918
+		"172.16.0.0/12",   // RFC1918
+		"192.168.0.0/16",  // RFC1918
+		"127.0.0.0/8",     // Loopback
+		"169.254.0.0/16",  // Link-local
+		"::1/128",         // IPv6 loopback
+		"fe80::/10",       // IPv6 link-local
+		"fc00::/7",        // IPv6 unique local
+	}
+
+	for _, cidr := range privateRanges {
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if ipnet.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // isNumericIP checks if a string is a numeric IP address
@@ -2238,13 +2299,6 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 	}
 }
 
-// GetQueue returns the notification queue (if available)
-func (n *NotificationManager) GetQueue() *NotificationQueue {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	return n.queue
-}
-
 // ProcessQueuedNotification processes a notification from the persistent queue
 func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotification) error {
 	log.Debug().
@@ -2259,24 +2313,21 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		if err := json.Unmarshal(notif.Config, &emailConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal email config: %w", err)
 		}
-		n.sendGroupedEmail(emailConfig, notif.Alerts)
-		return nil
+		return n.sendGroupedEmail(emailConfig, notif.Alerts)
 
 	case "webhook":
 		var webhookConfig WebhookConfig
 		if err := json.Unmarshal(notif.Config, &webhookConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal webhook config: %w", err)
 		}
-		n.sendGroupedWebhook(webhookConfig, notif.Alerts)
-		return nil
+		return n.sendGroupedWebhook(webhookConfig, notif.Alerts)
 
 	case "apprise":
 		var appriseConfig AppriseConfig
 		if err := json.Unmarshal(notif.Config, &appriseConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal apprise config: %w", err)
 		}
-		n.sendGroupedApprise(appriseConfig, notif.Alerts)
-		return nil
+		return n.sendGroupedApprise(appriseConfig, notif.Alerts)
 
 	default:
 		return fmt.Errorf("unknown notification type: %s", notif.Type)
