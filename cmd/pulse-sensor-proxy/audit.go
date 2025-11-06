@@ -47,18 +47,46 @@ type AuditEvent struct {
 }
 
 // newAuditLogger opens the audit log file and prepares hash chaining.
-func newAuditLogger(path string) (*auditLogger, error) {
+// If the file cannot be opened (e.g., read-only filesystem), it automatically
+// falls back to stderr which integrates with systemd journal.
+// This function always succeeds and returns a valid audit logger.
+func newAuditLogger(path string) *auditLogger {
+	// Try to open the audit log file
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o640)
+	var writer zerolog.Logger
+	var usedFallback bool
+
 	if err != nil {
-		return nil, err
+		// Fallback to stderr if file cannot be opened
+		log.Warn().
+			Err(err).
+			Str("path", path).
+			Msg("Cannot open audit log file, falling back to stderr (systemd journal)")
+
+		writer = zerolog.New(os.Stderr).With().Timestamp().Logger()
+		usedFallback = true
+		file = nil
+	} else {
+		writer = zerolog.New(file).With().Timestamp().Logger()
 	}
 
-	writer := zerolog.New(file).With().Timestamp().Logger()
+	// Log initialization event to standard logger (not to audit log itself)
+	if usedFallback {
+		log.Warn().
+			Str("path", path).
+			Str("mode", "stderr").
+			Msg("Audit logger initialized with stderr fallback due to filesystem constraints")
+	} else {
+		log.Info().
+			Str("path", path).
+			Str("mode", "file").
+			Msg("Audit logger initialized with file backend")
+	}
 
 	return &auditLogger{
 		file:   file,
 		logger: writer,
-	}, nil
+	}
 }
 
 // Close flushes and closes the audit log file.

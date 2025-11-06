@@ -18,10 +18,7 @@ func TestAuditLogValidationFailure(t *testing.T) {
     tmp.Close()
     defer os.Remove(path)
 
-    logger, err := newAuditLogger(path)
-    if err != nil {
-        t.Fatalf("newAuditLogger: %v", err)
-    }
+    logger := newAuditLogger(path)
 
     cred := &peerCredentials{uid: 1000, gid: 1000, pid: 4242}
     logger.LogValidationFailure("corr-123", cred, "remote", "get_temperature", []string{"node"}, "invalid_node")
@@ -35,16 +32,25 @@ func TestAuditLogValidationFailure(t *testing.T) {
 
     scanner := bufio.NewScanner(file)
     if !scanner.Scan() {
-        t.Fatalf("expected at least one audit entry")
+        t.Fatalf("expected at least one audit entry (file may be empty)")
     }
+
+    line := scanner.Bytes()
+    if len(line) == 0 {
+        t.Fatalf("empty line in audit log")
+    }
+
+    t.Logf("Audit log line: %s", string(line))
 
     var record auditRecord
-    if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
-        t.Fatalf("unmarshal: %v", err)
+    if err := json.Unmarshal(line, &record); err != nil {
+        t.Fatalf("unmarshal (line=%s): %v", string(line), err)
     }
 
+    t.Logf("Parsed record: %+v", record)
+
     if record["event_type"] != "command.validation_failed" {
-        t.Fatalf("unexpected event_type: %v", record["event_type"])
+        t.Fatalf("unexpected event_type: %v (full record: %+v)", record["event_type"], record)
     }
     if record["correlation_id"] != "corr-123" {
         t.Fatalf("unexpected correlation id: %v", record["correlation_id"])

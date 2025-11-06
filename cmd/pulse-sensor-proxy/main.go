@@ -354,10 +354,8 @@ func runProxy() {
 		auditPath = defaultAuditLogPath
 	}
 
-	auditLogger, err := newAuditLogger(auditPath)
-	if err != nil {
-		log.Fatal().Err(err).Str("path", auditPath).Msg("Failed to initialize audit logger")
-	}
+	// Initialize audit logger with automatic fallback to stderr if file is unavailable
+	auditLogger := newAuditLogger(auditPath)
 	defer auditLogger.Close()
 
 	// Initialize metrics
