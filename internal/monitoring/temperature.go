@@ -372,6 +372,14 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 				Msg("Detected AMD GPU temperature chip")
 			tc.parseGPUTemps(chipName, chipMap, temp)
 		}
+
+		// Handle NVIDIA GPU temperature sensors (nouveau driver)
+		if strings.Contains(chipLower, "nouveau") {
+			log.Debug().
+				Str("chip", chipName).
+				Msg("Detected NVIDIA GPU temperature chip (nouveau)")
+			tc.parseNouveauGPUTemps(chipName, chipMap, temp)
+		}
 	}
 
 	// If we got CPU temps, calculate max from cores if package not available
@@ -601,6 +609,42 @@ func (tc *TemperatureCollector) parseGPUTemps(chipName string, chipMap map[strin
 			Float64("junction", gpuTemp.Junction).
 			Float64("mem", gpuTemp.Mem).
 			Msg("Parsed GPU temperatures")
+	}
+}
+
+// parseNouveauGPUTemps extracts NVIDIA GPU temperature data from nouveau driver sensors
+func (tc *TemperatureCollector) parseNouveauGPUTemps(chipName string, chipMap map[string]interface{}, temp *models.Temperature) {
+	gpuTemp := models.GPUTemp{
+		Device: chipName,
+	}
+
+	// Nouveau driver typically exposes "GPU core" sensor
+	for sensorName, sensorData := range chipMap {
+		sensorMap, ok := sensorData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		sensorLower := strings.ToLower(sensorName)
+		tempVal := extractTempInput(sensorMap)
+
+		if math.IsNaN(tempVal) || tempVal <= 0 {
+			continue
+		}
+
+		// Nouveau typically has "GPU core" sensor - map to edge temperature
+		if strings.Contains(sensorLower, "gpu") || strings.Contains(sensorLower, "core") {
+			gpuTemp.Edge = tempVal
+		}
+	}
+
+	// Only add GPU entry if we got a valid temperature
+	if gpuTemp.Edge > 0 {
+		temp.GPU = append(temp.GPU, gpuTemp)
+		log.Debug().
+			Str("device", chipName).
+			Float64("edge", gpuTemp.Edge).
+			Msg("Parsed NVIDIA GPU (nouveau) temperature")
 	}
 }
 
