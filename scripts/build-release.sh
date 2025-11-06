@@ -247,6 +247,16 @@ for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$RELEASE_DIR/"
 done
 
+# Copy standalone pulse-host-agent binaries to release directory
+# These are needed for manual host-agent installation without a running Pulse server
+echo "Copying standalone pulse-host-agent binaries..."
+for build_name in "${!builds[@]}"; do
+    cp "$BUILD_DIR/pulse-host-agent-$build_name" "$RELEASE_DIR/"
+done
+
+# Also copy standalone macOS host-agent (not tarballed version)
+cp "$BUILD_DIR/pulse-host-agent-darwin-arm64" "$RELEASE_DIR/"
+
 # Optionally package Helm chart
 if [ "${SKIP_HELM_PACKAGE:-0}" != "1" ]; then
     if command -v helm >/dev/null 2>&1; then
@@ -267,7 +277,7 @@ cp install.sh "$RELEASE_DIR/"
 # Generate checksums (include tarballs, helm chart, standalone binaries, and install.sh)
 cd "$RELEASE_DIR"
 shopt -s nullglob
-checksum_files=( *.tar.gz pulse-sensor-proxy-* install.sh )
+checksum_files=( *.tar.gz pulse-sensor-proxy-* pulse-host-agent-* install.sh )
 if compgen -G "pulse-*.tgz" > /dev/null; then
     checksum_files+=( pulse-*.tgz )
 fi

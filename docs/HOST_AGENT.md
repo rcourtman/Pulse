@@ -74,14 +74,19 @@ Prefer to take full control or working in air-gapped environments? You can still
 #### Linux (systemd)
 
 ```bash
+# Download the binary for your architecture
 sudo curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/pulse-host-agent-linux-amd64 \
   -o /usr/local/bin/pulse-host-agent
 sudo chmod +x /usr/local/bin/pulse-host-agent
+
+# Run the agent
 sudo /usr/local/bin/pulse-host-agent \
   --url http://pulse.example.local:7655 \
   --token <api-token> \
   --interval 30s
 ```
+
+Available Linux architectures: `pulse-host-agent-linux-amd64`, `pulse-host-agent-linux-arm64`, `pulse-host-agent-linux-armv7`
 
 For persistence, drop a systemd unit (e.g. `/etc/systemd/system/pulse-host-agent.service`) referencing the same command and enable it with `systemctl enable --now pulse-host-agent`.
 
