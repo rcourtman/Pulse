@@ -2910,12 +2910,14 @@ func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Reque
 	}
 
 	if req.Passphrase == "" {
+		log.Warn().Msg("Export rejected: passphrase is required")
 		http.Error(w, "Passphrase is required", http.StatusBadRequest)
 		return
 	}
 
 	// Require strong passphrase (at least 12 characters)
 	if len(req.Passphrase) < 12 {
+		log.Warn().Int("length", len(req.Passphrase)).Msg("Export rejected: passphrase too short (minimum 12 characters)")
 		http.Error(w, "Passphrase must be at least 12 characters long", http.StatusBadRequest)
 		return
 	}
@@ -2947,11 +2949,13 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 	}
 
 	if req.Passphrase == "" {
+		log.Warn().Msg("Import rejected: passphrase is required")
 		http.Error(w, "Passphrase is required", http.StatusBadRequest)
 		return
 	}
 
 	if req.Data == "" {
+		log.Warn().Msg("Import rejected: encrypted data is required (ensure backup file has 'data' field)")
 		http.Error(w, "Import data is required", http.StatusBadRequest)
 		return
 	}

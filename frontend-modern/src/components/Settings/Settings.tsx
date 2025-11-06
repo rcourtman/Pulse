@@ -1902,10 +1902,14 @@ const Settings: Component<SettingsProps> = (props) => {
       return;
     }
 
-    // Just require a passphrase to be entered
-    const hasAuth = securityStatus()?.hasAuthentication;
-    if ((!hasAuth || useCustomPassphrase()) && !exportPassphrase()) {
-      showError('Please enter a passphrase');
+    // Backend requires at least 12 characters for encryption security
+    if (exportPassphrase().length < 12) {
+      const hasAuth = securityStatus()?.hasAuthentication;
+      showError(
+        hasAuth && !useCustomPassphrase()
+          ? 'Your password must be at least 12 characters. Please use a custom passphrase instead.'
+          : 'Passphrase must be at least 12 characters long',
+      );
       return;
     }
 
@@ -2029,6 +2033,21 @@ const Settings: Component<SettingsProps> = (props) => {
         return;
       }
 
+      // Support both formats:
+      // 1. New format: {status: "success", data: "base64string"}
+      // 2. Legacy/CLI format: raw base64 string or {data: "base64string"}
+      let encryptedData: string;
+      if (typeof exportData === 'string') {
+        // Raw base64 string from CLI export
+        encryptedData = exportData;
+      } else if (exportData.data) {
+        // Standard format with data field
+        encryptedData = exportData.data;
+      } else {
+        showError('Invalid backup file format. Expected encrypted data in "data" field.');
+        return;
+      }
+
       // Get CSRF token from cookie
       const csrfToken = document.cookie
         .split('; ')
@@ -2056,7 +2075,7 @@ const Settings: Component<SettingsProps> = (props) => {
         credentials: 'include', // Include cookies for session auth
         body: JSON.stringify({
           passphrase: importPassphrase(),
-          data: exportData.data,
+          data: encryptedData,
         }),
       });
 
