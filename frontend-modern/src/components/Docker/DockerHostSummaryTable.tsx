@@ -34,7 +34,7 @@ type SortDirection = 'asc' | 'desc';
 
 const isHostOnline = (host: DockerHost) => {
   const status = host.status?.toLowerCase() ?? '';
-  return status === 'online' || status === 'running' || status === 'healthy';
+  return status === 'online' || status === 'running' || status === 'healthy' || status === 'degraded';
 };
 
 const getDisplayName = (host: DockerHost) => {
