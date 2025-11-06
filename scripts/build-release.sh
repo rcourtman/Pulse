@@ -260,10 +260,14 @@ if [ "${SKIP_HELM_PACKAGE:-0}" != "1" ]; then
     fi
 fi
 
-# Generate checksums (include tarballs, helm chart, and standalone binaries)
+# Copy install.sh to release directory (required for GitHub releases)
+echo "Copying install.sh to release directory..."
+cp install.sh "$RELEASE_DIR/"
+
+# Generate checksums (include tarballs, helm chart, standalone binaries, and install.sh)
 cd "$RELEASE_DIR"
 shopt -s nullglob
-checksum_files=( *.tar.gz pulse-sensor-proxy-* )
+checksum_files=( *.tar.gz pulse-sensor-proxy-* install.sh )
 if compgen -G "pulse-*.tgz" > /dev/null; then
     checksum_files+=( pulse-*.tgz )
 fi
