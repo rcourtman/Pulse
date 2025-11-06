@@ -8,7 +8,7 @@
 
 Monitor your hybrid Proxmox and Docker estate from a single dashboard. Get instant alerts when nodes go down, containers misbehave, backups fail, or storage fills up. Supports email, Discord, Slack, Telegram, and more.
 
-**[Try the live demo →](https://demo.pulserelay.pro)** (read-only with mock data, login: `demo` / `changeme`)
+**[Try the live demo →](https://demo.pulserelay.pro)** (read-only with mock data, login: `demo` / `demo`)
 
 <img width="2872" height="1502" alt="image" src="https://github.com/user-attachments/assets/41ac125c-59e3-4bdc-bfd2-e300109aa1f7" />
 
