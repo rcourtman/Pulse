@@ -290,8 +290,9 @@ cp install.sh "$RELEASE_DIR/"
 
 # Generate checksums (include tarballs, helm chart, standalone binaries, and install.sh)
 cd "$RELEASE_DIR"
-shopt -s nullglob
-checksum_files=( *.tar.gz pulse-sensor-proxy-* pulse-host-agent-* install.sh )
+shopt -s nullglob extglob
+# Match tarballs, then standalone binaries (excluding .tar.gz and .sha256), then install.sh
+checksum_files=( *.tar.gz pulse-sensor-proxy-!(*.tar.gz|*.sha256) pulse-host-agent-!(*.tar.gz|*.sha256) install.sh )
 if compgen -G "pulse-*.tgz" > /dev/null; then
     checksum_files+=( pulse-*.tgz )
 fi
