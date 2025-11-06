@@ -1,4 +1,4 @@
-# Pulse v4.26.0
+# Pulse v4.26.1
 
 ## What's Changed
 ### New
@@ -28,27 +28,27 @@
 - **Binary upgrade on systemd hosts**
   ```bash
   sudo systemctl stop pulse
-  curl -fsSL https://github.com/rcourtman/Pulse/releases/download/v4.26.0/pulse-v4.26.0-linux-amd64.tar.gz \
+  curl -fsSL https://github.com/rcourtman/Pulse/releases/download/v4.26.1/pulse-v4.26.1-linux-amd64.tar.gz \
     | sudo tar -xz -C /opt/pulse --strip-components=1
   sudo systemctl start pulse
   ```
 - **Docker update**
   ```bash
-  docker pull rcourtman/pulse:v4.26.0
+  docker pull rcourtman/pulse:v4.26.1
   docker stop pulse || true
   docker rm pulse || true
-  docker run -d --name pulse --restart unless-stopped -p 7655:7655 rcourtman/pulse:v4.26.0
+  docker run -d --name pulse --restart unless-stopped -p 7655:7655 rcourtman/pulse:v4.26.1
   ```
 - **Helm upgrade**
   ```bash
   helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
-    --version 4.26.0 \
+    --version 4.26.1 \
     --namespace pulse --create-namespace
   ```
 
 ## Downloads
 - Multi-arch Linux tarballs (amd64/arm64/armv7)
 - Standalone sensor proxy binaries
-- Helm chart archive (pulse-4.26.0-helm.tgz)
+- Helm chart archive (pulse-4.26.1-helm.tgz)
 - SHA256 checksums (checksums.txt)
-- Docker tags: rcourtman/pulse:v4.26.0, :4.26, :4, :latest
+- Docker tags: rcourtman/pulse:v4.26.1, :4.26, :4, :latest
