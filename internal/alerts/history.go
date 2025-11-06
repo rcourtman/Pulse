@@ -167,36 +167,65 @@ func (hm *HistoryManager) loadHistory() error {
 	return nil
 }
 
-// saveHistory saves history to disk
+// saveHistory saves history to disk with retry logic
 func (hm *HistoryManager) saveHistory() error {
+	return hm.saveHistoryWithRetry(3)
+}
+
+// saveHistoryWithRetry saves history with exponential backoff retry
+func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	hm.mu.RLock()
 	snapshot := make([]HistoryEntry, len(hm.history))
 	copy(snapshot, hm.history)
 	hm.mu.RUnlock()
 
 	data, err := json.Marshal(snapshot)
-
 	if err != nil {
 		return fmt.Errorf("failed to marshal history: %w", err)
 	}
 
-	// Create backup of existing file
 	historyFile := hm.historyFile
 	backupFile := hm.backupFile
 
-	if _, err := os.Stat(historyFile); err == nil {
-		if err := os.Rename(historyFile, backupFile); err != nil {
-			log.Warn().Err(err).Msg("Failed to create backup file")
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Create backup of existing file before writing
+		if _, err := os.Stat(historyFile); err == nil {
+			if err := os.Rename(historyFile, backupFile); err != nil {
+				log.Warn().Err(err).Msg("Failed to create backup file")
+			}
 		}
+
+		// Write new file
+		if err := os.WriteFile(historyFile, data, 0644); err != nil {
+			lastErr = err
+			log.Warn().
+				Err(err).
+				Int("attempt", attempt).
+				Int("maxRetries", maxRetries).
+				Msg("Failed to write history file, will retry")
+
+			// Restore backup if write failed
+			if _, statErr := os.Stat(backupFile); statErr == nil {
+				if restoreErr := os.Rename(backupFile, historyFile); restoreErr != nil {
+					log.Error().Err(restoreErr).Msg("Failed to restore backup after write failure")
+				}
+			}
+
+			// Exponential backoff: 100ms, 200ms, 400ms
+			if attempt < maxRetries {
+				backoff := time.Duration(100*(1<<uint(attempt-1))) * time.Millisecond
+				time.Sleep(backoff)
+			}
+			continue
+		}
+
+		// Success
+		log.Debug().Int("entries", len(snapshot)).Msg("Saved alert history")
+		return nil
 	}
 
-	// Write new file
-	if err := os.WriteFile(historyFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to write history file: %w", err)
-	}
-
-	log.Debug().Int("entries", len(snapshot)).Msg("Saved alert history")
-	return nil
+	return fmt.Errorf("failed to write history file after %d attempts: %w", maxRetries, lastErr)
 }
 
 // startPeriodicSave starts the periodic save routine

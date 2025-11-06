@@ -269,11 +269,18 @@ func cloneMetadataValue(value interface{}) interface{} {
 type Hub struct {
 	clients        map[*Client]bool
 	broadcast      chan []byte
+	broadcastSeq   chan Message      // Sequenced broadcast channel for ordering
 	register       chan *Client
 	unregister     chan *Client
 	mu             sync.RWMutex
 	getState       func() interface{} // Function to get current state
 	allowedOrigins []string           // Allowed origins for CORS
+	// Broadcast coalescing fields
+	lastBroadcast   time.Time
+	coalesceWindow  time.Duration
+	coalescePending *Message
+	coalesceTimer   *time.Timer
+	coalesceMutex   sync.Mutex
 }
 
 // Message represents a WebSocket message
@@ -295,15 +302,20 @@ func NewHub(getState func() interface{}) *Hub {
 	return &Hub{
 		clients:        make(map[*Client]bool),
 		broadcast:      make(chan []byte, 256),
+		broadcastSeq:   make(chan Message, 256), // Buffered sequenced channel
 		register:       make(chan *Client),
 		unregister:     make(chan *Client),
 		getState:       getState,
 		allowedOrigins: []string{}, // Default to empty (will be set based on actual host)
+		coalesceWindow: 100 * time.Millisecond, // Coalesce rapid updates within 100ms
 	}
 }
 
 // Run starts the hub's main loop
 func (h *Hub) Run() {
+	// Start broadcast sequencer goroutine
+	go h.runBroadcastSequencer()
+
 	pingTicker := time.NewTicker(30 * time.Second)
 	defer pingTicker.Stop()
 
@@ -453,7 +465,61 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	go client.readPump()
 }
 
-// BroadcastState broadcasts state update to all clients
+// runBroadcastSequencer handles sequenced broadcasts with coalescing for rapid state updates
+func (h *Hub) runBroadcastSequencer() {
+	for msg := range h.broadcastSeq {
+		// Handle raw data (state) messages with coalescing
+		if msg.Type == "rawData" {
+			h.coalesceMutex.Lock()
+
+			// Cancel pending timer if exists
+			if h.coalesceTimer != nil {
+				h.coalesceTimer.Stop()
+			}
+
+			// Update pending message
+			h.coalescePending = &msg
+
+			// Set timer to send after coalesce window
+			h.coalesceTimer = time.AfterFunc(h.coalesceWindow, func() {
+				h.coalesceMutex.Lock()
+				if h.coalescePending != nil {
+					// Send the coalesced message
+					if data, err := json.Marshal(*h.coalescePending); err == nil {
+						h.mu.RLock()
+						for client := range h.clients {
+							select {
+							case client.send <- data:
+							default:
+								log.Warn().Str("client", client.id).Msg("Client send channel full, skipping coalesced message")
+							}
+						}
+						h.mu.RUnlock()
+					}
+					h.coalescePending = nil
+				}
+				h.coalesceMutex.Unlock()
+			})
+
+			h.coalesceMutex.Unlock()
+		} else {
+			// Non-state messages (alerts, etc.) - send immediately
+			if data, err := json.Marshal(msg); err == nil {
+				h.mu.RLock()
+				for client := range h.clients {
+					select {
+					case client.send <- data:
+					default:
+						log.Warn().Str("client", client.id).Msg("Client send channel full, skipping message")
+					}
+				}
+				h.mu.RUnlock()
+			}
+		}
+	}
+}
+
+// BroadcastState broadcasts state update to all clients via sequencer
 func (h *Hub) BroadcastState(state interface{}) {
 	// Debug log to track docker hosts
 	dockerHostsCount := -1
@@ -471,7 +537,13 @@ func (h *Hub) BroadcastState(state interface{}) {
 		Type: "rawData",
 		Data: state,
 	}
-	h.BroadcastMessage(msg)
+
+	// Send through sequencer for ordering and coalescing
+	select {
+	case h.broadcastSeq <- msg:
+	default:
+		log.Warn().Msg("Broadcast sequencer channel full, dropping state update")
+	}
 }
 
 // BroadcastAlert broadcasts alert to all clients

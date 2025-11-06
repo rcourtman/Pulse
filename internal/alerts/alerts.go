@@ -365,6 +365,15 @@ type AlertConfig struct {
 	TimeThreshold        int                       `json:"timeThreshold"`        // Legacy: Seconds that threshold must be exceeded before triggering
 	TimeThresholds       map[string]int            `json:"timeThresholds"`       // Per-type delays: guest, node, storage, pbs
 	MetricTimeThresholds map[string]map[string]int `json:"metricTimeThresholds"` // Optional per-metric delays keyed by resource type
+	// Alert TTL and auto-cleanup
+	MaxAlertAgeDays           int `json:"maxAlertAgeDays"`           // Maximum age for alerts before auto-cleanup (0 = disabled)
+	MaxAcknowledgedAgeDays    int `json:"maxAcknowledgedAgeDays"`    // Maximum age for acknowledged alerts (0 = disabled)
+	AutoAcknowledgeAfterHours int `json:"autoAcknowledgeAfterHours"` // Auto-acknowledge alerts after X hours (0 = disabled)
+	// Flapping detection
+	FlappingEnabled         bool `json:"flappingEnabled"`         // Enable flapping detection
+	FlappingWindowSeconds   int  `json:"flappingWindowSeconds"`   // Time window for counting state changes
+	FlappingThreshold       int  `json:"flappingThreshold"`       // Number of state changes to trigger flapping
+	FlappingCooldownMinutes int  `json:"flappingCooldownMinutes"` // Cooldown period after flapping detected
 }
 
 // pmgQuarantineSnapshot stores quarantine counts at a point in time for growth detection
@@ -460,6 +469,9 @@ type Manager struct {
 	pmgAnomalyTrackers map[string]*pmgAnomalyTracker // Track mail metrics for anomaly detection per PMG instance
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
 	ackState map[string]ackRecord
+	// Flapping detection tracking
+	flappingHistory map[string][]time.Time // Track state change times for flapping detection
+	flappingActive  map[string]bool        // Track which alerts are currently in flapping state
 }
 
 type ackRecord struct {
@@ -496,6 +508,8 @@ func NewManager() *Manager {
 		pmgQuarantineHistory:  make(map[string][]pmgQuarantineSnapshot),
 		pmgAnomalyTrackers:    make(map[string]*pmgAnomalyTracker),
 		ackState:              make(map[string]ackRecord),
+		flappingHistory:       make(map[string][]time.Time),
+		flappingActive:        make(map[string]bool),
 		config: AlertConfig{
 			Enabled:                true,
 			ActivationState:        ActivationPending,
@@ -608,6 +622,15 @@ func NewManager() *Manager {
 					ByGuest: false, // Don't group by guest by default
 				},
 			},
+			// Alert TTL defaults
+			MaxAlertAgeDays:           7,  // Auto-cleanup alerts older than 7 days
+			MaxAcknowledgedAgeDays:    1,  // Auto-cleanup acknowledged alerts older than 1 day
+			AutoAcknowledgeAfterHours: 24, // Auto-acknowledge alerts after 24 hours
+			// Flapping detection defaults
+			FlappingEnabled:         true, // Enable flapping detection
+			FlappingWindowSeconds:   300,  // 5 minute window
+			FlappingThreshold:       5,    // 5 state changes triggers flapping
+			FlappingCooldownMinutes: 15,   // 15 minute cooldown
 		},
 	}
 
@@ -710,8 +733,66 @@ func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
 
 // dispatchAlert delivers an alert to the configured callback, cloning it first to
 // prevent concurrent mutations from racing with consumers.
+// checkFlapping checks if an alert is flapping (changing state too rapidly)
+func (m *Manager) checkFlapping(alertID string) bool {
+	if !m.config.FlappingEnabled {
+		return false
+	}
+
+	now := time.Now()
+	windowDuration := time.Duration(m.config.FlappingWindowSeconds) * time.Second
+
+	// Record this state change
+	m.flappingHistory[alertID] = append(m.flappingHistory[alertID], now)
+
+	// Remove state changes outside the window
+	history := m.flappingHistory[alertID]
+	validHistory := []time.Time{}
+	for _, t := range history {
+		if now.Sub(t) <= windowDuration {
+			validHistory = append(validHistory, t)
+		}
+	}
+	m.flappingHistory[alertID] = validHistory
+
+	// Check if we've exceeded the threshold
+	if len(validHistory) >= m.config.FlappingThreshold {
+		// Mark as flapping
+		if !m.flappingActive[alertID] {
+			log.Warn().
+				Str("alertID", alertID).
+				Int("stateChanges", len(validHistory)).
+				Int("threshold", m.config.FlappingThreshold).
+				Int("windowSeconds", m.config.FlappingWindowSeconds).
+				Msg("Flapping detected - suppressing alert")
+
+			m.flappingActive[alertID] = true
+
+			// Set cooldown period
+			cooldownDuration := time.Duration(m.config.FlappingCooldownMinutes) * time.Minute
+			m.suppressedUntil[alertID] = now.Add(cooldownDuration)
+
+			// Record suppression metric
+			if recordAlertSuppressed != nil {
+				recordAlertSuppressed("flapping")
+			}
+		}
+		return true
+	}
+
+	return false
+}
+
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	if m.onAlert == nil || alert == nil {
+		return false
+	}
+
+	// Check for flapping
+	if m.checkFlapping(alert.ID) {
+		log.Debug().
+			Str("alertID", alert.ID).
+			Msg("Alert suppressed due to flapping")
 		return false
 	}
 
@@ -6932,7 +7013,56 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 
 	now := time.Now()
 
-	// Clean up acknowledged alerts
+	// Auto-acknowledge old alerts if configured
+	if m.config.AutoAcknowledgeAfterHours > 0 {
+		autoAckThreshold := time.Duration(m.config.AutoAcknowledgeAfterHours) * time.Hour
+		for id, alert := range m.activeAlerts {
+			if !alert.Acknowledged && now.Sub(alert.StartTime) > autoAckThreshold {
+				log.Info().
+					Str("alertID", id).
+					Dur("age", now.Sub(alert.StartTime)).
+					Msg("Auto-acknowledging old alert")
+				alert.Acknowledged = true
+				ackTime := now
+				alert.AckTime = &ackTime
+				alert.AckUser = "system-auto"
+
+				if recordAlertAcknowledged != nil {
+					recordAlertAcknowledged()
+				}
+			}
+		}
+	}
+
+	// Clean up acknowledged alerts based on TTL
+	if m.config.MaxAcknowledgedAgeDays > 0 {
+		acknowledgedTTL := time.Duration(m.config.MaxAcknowledgedAgeDays) * 24 * time.Hour
+		for id, alert := range m.activeAlerts {
+			if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > acknowledgedTTL {
+				log.Info().
+					Str("alertID", id).
+					Dur("age", now.Sub(*alert.AckTime)).
+					Msg("Cleaning up old acknowledged alert (TTL)")
+				m.removeActiveAlertNoLock(id)
+			}
+		}
+	}
+
+	// Clean up old unacknowledged alerts based on TTL
+	if m.config.MaxAlertAgeDays > 0 {
+		alertTTL := time.Duration(m.config.MaxAlertAgeDays) * 24 * time.Hour
+		for id, alert := range m.activeAlerts {
+			if !alert.Acknowledged && now.Sub(alert.StartTime) > alertTTL {
+				log.Info().
+					Str("alertID", id).
+					Dur("age", now.Sub(alert.StartTime)).
+					Msg("Cleaning up old unacknowledged alert (TTL)")
+				m.removeActiveAlertNoLock(id)
+			}
+		}
+	}
+
+	// Original cleanup for acknowledged alerts (fallback if TTL not configured)
 	for id, alert := range m.activeAlerts {
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > maxAge {
 			m.removeActiveAlertNoLock(id)
@@ -6996,6 +7126,21 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 				Str("resourceID", id).
 				Dur("age", now.Sub(pendingTime)).
 				Msg("Cleaned up stale pending alert entry")
+		}
+	}
+
+	// Clean up flapping history for resolved/inactive alerts
+	flappingCleanupAge := 1 * time.Hour
+	for alertID := range m.flappingHistory {
+		// If alert is no longer active and flapping cooldown has expired
+		if _, exists := m.activeAlerts[alertID]; !exists {
+			if suppressUntil, suppressed := m.suppressedUntil[alertID]; !suppressed || now.After(suppressUntil.Add(flappingCleanupAge)) {
+				delete(m.flappingHistory, alertID)
+				delete(m.flappingActive, alertID)
+				log.Debug().
+					Str("alertID", alertID).
+					Msg("Cleaned up flapping history for inactive alert")
+			}
 		}
 	}
 
