@@ -378,8 +378,9 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 		}
 	}
 
-	// Download URL
-	url := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%s/pulse-linux-%s", version, arch)
+	// Download URL - tarball with version in filename
+	tarballName := fmt.Sprintf("pulse-%s-linux-%s.tar.gz", version, arch)
+	url := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%s/%s", version, tarballName)
 
 	// Create temp file
 	tmpDir, err := os.MkdirTemp("", "pulse-rollback-*")
@@ -387,11 +388,10 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 		return "", err
 	}
 
-	localName := fmt.Sprintf("pulse-linux-%s", arch)
-	binaryPath := filepath.Join(tmpDir, localName)
+	tarballPath := filepath.Join(tmpDir, tarballName)
 
-	// Download binary
-	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", binaryPath, url)
+	// Download tarball
+	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", tarballPath, url)
 	if err := cmd.Run(); err != nil {
 		os.RemoveAll(tmpDir)
 		return "", fmt.Errorf("download failed: %w", err)
@@ -399,7 +399,7 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 
 	// Download checksum
 	checksumURL := url + ".sha256"
-	checksumPath := binaryPath + ".sha256"
+	checksumPath := tarballPath + ".sha256"
 	cmd = exec.CommandContext(ctx, "curl", "-fsSL", "-o", checksumPath, checksumURL)
 	if err := cmd.Run(); err != nil {
 		os.RemoveAll(tmpDir)
@@ -418,10 +418,10 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 		return "", fmt.Errorf("checksum file was empty")
 	}
 
-	file, err := os.Open(binaryPath)
+	file, err := os.Open(tarballPath)
 	if err != nil {
 		os.RemoveAll(tmpDir)
-		return "", fmt.Errorf("failed to open downloaded binary: %w", err)
+		return "", fmt.Errorf("failed to open downloaded tarball: %w", err)
 	}
 	defer file.Close()
 
@@ -434,15 +434,34 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 
 	if !strings.EqualFold(actualHash, expectedHash[0]) {
 		os.RemoveAll(tmpDir)
-		return "", fmt.Errorf("checksum verification failed for %s", localName)
+		return "", fmt.Errorf("checksum verification failed for %s", tarballName)
 	}
 
 	_ = os.Remove(checksumPath)
 
-	if err := os.Chmod(binaryPath, 0755); err != nil {
+	// Extract tarball to get the binary
+	extractDir := filepath.Join(tmpDir, "extracted")
+	if err := os.MkdirAll(extractDir, 0755); err != nil {
 		os.RemoveAll(tmpDir)
-		return "", err
+		return "", fmt.Errorf("failed to create extract directory: %w", err)
 	}
+
+	// Extract: tar -xzf tarball -C extractDir
+	cmd = exec.CommandContext(ctx, "tar", "-xzf", tarballPath, "-C", extractDir)
+	if err := cmd.Run(); err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("failed to extract tarball: %w", err)
+	}
+
+	// The binary is at extractDir/bin/pulse
+	binaryPath := filepath.Join(extractDir, "bin", "pulse")
+	if _, err := os.Stat(binaryPath); err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("binary not found in tarball at expected path: %w", err)
+	}
+
+	// Remove tarball to save space
+	_ = os.Remove(tarballPath)
 
 	return binaryPath, nil
 }

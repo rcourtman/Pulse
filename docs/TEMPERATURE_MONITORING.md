@@ -629,7 +629,7 @@ If you can't run the installer script, create the configuration manually:
 
 **1. Download binary:**
 ```bash
-curl -L https://github.com/rcourtman/Pulse/releases/download/v4.27.0/pulse-sensor-proxy-linux-amd64 \
+curl -L https://github.com/rcourtman/Pulse/releases/latest/download/pulse-sensor-proxy-linux-amd64 \
   -o /usr/local/bin/pulse-sensor-proxy
 chmod 0755 /usr/local/bin/pulse-sensor-proxy
 ```

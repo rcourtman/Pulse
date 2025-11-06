@@ -1014,7 +1014,7 @@ Response example (systemd deployment, v4.24.0+):
   "requiresRoot": true,
   "rollbackSupport": true,
   "estimatedTime": "2-3 minutes",
-  "downloadUrl": "https://github.com/rcourtman/Pulse/releases/download/v4.30.0/pulse-linux-amd64.tar.gz",
+  "downloadUrl": "https://github.com/rcourtman/Pulse/releases/download/v4.30.0/pulse-v4.30.0-linux-amd64.tar.gz",
   "instructions": "Run the installer script with --version flag",
   "prerequisites": ["systemd", "root access"],
   "steps": [
@@ -1030,7 +1030,7 @@ Kick off an update using the download URL returned by the release metadata. Puls
 POST /api/updates/apply
 Content-Type: application/json
 
-{ "downloadUrl": "https://github.com/rcourtman/Pulse/releases/download/v4.30.0/pulse-linux-amd64.tar.gz" }
+{ "downloadUrl": "https://github.com/rcourtman/Pulse/releases/download/v4.30.0/pulse-v4.30.0-linux-amd64.tar.gz" }
 ```
 
 Only deployments that can self-update (systemd, Proxmox VE appliance, AUR) will honour this call. Docker users should continue to pull a new image manually.
