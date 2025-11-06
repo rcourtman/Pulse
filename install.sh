@@ -2517,7 +2517,26 @@ print_completion() {
             echo "  Enable:     systemctl enable --now pulse-update.timer"
         fi
     fi
-    
+
+    # Show bootstrap token on fresh install
+    local DATA_DIR="${DATA_PATH:-/var/lib/pulse}"
+    local TOKEN_FILE="$DATA_DIR/.bootstrap_token"
+    if [[ -f "$TOKEN_FILE" ]]; then
+        BOOTSTRAP_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null | tr -d '\n')
+        if [[ -n "$BOOTSTRAP_TOKEN" ]]; then
+            echo
+            echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${YELLOW}║          BOOTSTRAP TOKEN REQUIRED FOR FIRST-TIME SETUP                ║${NC}"
+            echo -e "${YELLOW}╠═══════════════════════════════════════════════════════════════════════╣${NC}"
+            printf "${YELLOW}║${NC}  Token: ${GREEN}%-61s${YELLOW}║${NC}\n" "$BOOTSTRAP_TOKEN"
+            printf "${YELLOW}║${NC}  File:  %-61s${YELLOW}║${NC}\n" "$TOKEN_FILE"
+            echo -e "${YELLOW}╠═══════════════════════════════════════════════════════════════════════╣${NC}"
+            echo -e "${YELLOW}║${NC}  Copy this token and paste it into the unlock screen in your browser. ${YELLOW}║${NC}"
+            echo -e "${YELLOW}║${NC}  This token will be automatically deleted after successful setup.     ${YELLOW}║${NC}"
+            echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════════╝${NC}"
+        fi
+    fi
+
     echo
 }
 
