@@ -702,6 +702,111 @@ curl -X POST http://localhost:7655/api/notifications/webhooks/test \
   }'
 ```
 
+### Notification Queue & Dead Letter Queue (DLQ)
+
+Pulse includes a persistent notification queue with retry logic and a Dead Letter Queue for failed notifications. This ensures notification reliability and provides visibility into delivery failures.
+
+#### Queue Statistics
+Get current queue statistics including pending, processing, completed, and failed notification counts.
+
+```bash
+GET /api/notifications/queue/stats
+```
+
+**Response:**
+```json
+{
+  "pending": 3,
+  "processing": 1,
+  "completed": 245,
+  "failed": 2,
+  "dlq": 2,
+  "oldestPending": "2024-11-06T12:30:00Z",
+  "queueDepth": 4
+}
+```
+
+#### Get Dead Letter Queue
+Retrieve notifications that have exhausted all retry attempts. These require manual intervention.
+
+```bash
+GET /api/notifications/dlq?limit=100
+```
+
+**Query Parameters:**
+- `limit` (optional): Maximum number of DLQ items to return (default: 100, max: 1000)
+
+**Response:**
+```json
+[
+  {
+    "id": "email-1699283400000",
+    "type": "email",
+    "status": "dlq",
+    "alerts": [...],
+    "attempts": 3,
+    "maxAttempts": 3,
+    "lastAttempt": "2024-11-06T12:35:00Z",
+    "lastError": "SMTP connection timeout",
+    "createdAt": "2024-11-06T12:30:00Z"
+  }
+]
+```
+
+#### Retry DLQ Item
+Retry a failed notification from the Dead Letter Queue.
+
+```bash
+POST /api/notifications/dlq/retry
+Content-Type: application/json
+
+{
+  "id": "email-1699283400000"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Notification scheduled for retry",
+  "id": "email-1699283400000"
+}
+```
+
+#### Delete DLQ Item
+Permanently remove a notification from the Dead Letter Queue.
+
+```bash
+POST /api/notifications/dlq/delete
+Content-Type: application/json
+
+{
+  "id": "email-1699283400000"
+}
+```
+
+Or using DELETE method:
+```bash
+DELETE /api/notifications/dlq/delete
+Content-Type: application/json
+
+{
+  "id": "email-1699283400000"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "DLQ item deleted",
+  "id": "email-1699283400000"
+}
+```
+
+**Note:** All notification queue endpoints require admin authentication.
+
 
 ### Alert Management
 Comprehensive alert management system.
@@ -1133,6 +1238,104 @@ GET /simple-stats
 ```
 
 Returns simplified metrics without authentication requirements.
+
+## Prometheus Metrics
+
+Pulse exposes Prometheus-compatible metrics for monitoring the monitoring system itself. These metrics provide observability into alert system health, notification delivery, and queue performance.
+
+### Metrics Endpoint
+
+```bash
+GET /metrics
+```
+
+**Authentication:** None required (public endpoint)
+
+**Response Format:** Prometheus text exposition format
+
+### Available Metrics
+
+#### Alert Metrics
+
+- **`pulse_alerts_active`** (Gauge) - Number of currently active alerts
+  - Labels: `level` (info/warning/critical), `type` (cpu/memory/disk/etc)
+
+- **`pulse_alerts_fired_total`** (Counter) - Total number of alerts fired
+  - Labels: `level`, `type`
+
+- **`pulse_alerts_resolved_total`** (Counter) - Total number of alerts resolved
+  - Labels: `type`
+
+- **`pulse_alerts_acknowledged_total`** (Counter) - Total number of alerts acknowledged
+
+- **`pulse_alerts_suppressed_total`** (Counter) - Total number of alerts suppressed
+  - Labels: `reason` (quiet_hours/flapping/rate_limit)
+
+- **`pulse_alert_duration_seconds`** (Histogram) - Duration alerts remain active before resolution
+  - Labels: `type`
+
+#### Notification Metrics
+
+- **`pulse_notifications_sent_total`** (Counter) - Total notifications sent
+  - Labels: `method` (email/webhook/apprise), `status` (success/failed)
+
+- **`pulse_notification_queue_depth`** (Gauge) - Number of queued notifications
+  - Labels: `status` (pending/processing/dlq)
+
+- **`pulse_notification_dlq_total`** (Counter) - Total notifications moved to Dead Letter Queue
+
+- **`pulse_notification_retry_total`** (Counter) - Total notification retry attempts
+
+- **`pulse_notification_duration_seconds`** (Histogram) - Time to deliver notifications
+  - Labels: `method`
+
+#### Queue Metrics
+
+- **`pulse_queue_depth`** (Gauge) - Current queue depth by status
+  - Labels: `status`
+
+- **`pulse_queue_items_total`** (Counter) - Total items processed by queue
+  - Labels: `status` (completed/failed/dlq)
+
+- **`pulse_queue_processing_duration_seconds`** (Histogram) - Time to process queued items
+
+#### System Metrics
+
+- **`pulse_history_save_errors_total`** (Counter) - Total alert history save failures
+
+- **`pulse_history_save_retries_total`** (Counter) - Total history save retry attempts
+
+### Example Prometheus Configuration
+
+```yaml
+scrape_configs:
+  - job_name: 'pulse'
+    static_configs:
+      - targets: ['pulse.example.com:7655']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+```
+
+### Example PromQL Queries
+
+```promql
+# Alert rate per minute
+rate(pulse_alerts_fired_total[5m]) * 60
+
+# Notification success rate
+rate(pulse_notifications_sent_total{status="success"}[5m]) /
+rate(pulse_notifications_sent_total[5m])
+
+# DLQ growth rate
+rate(pulse_notification_dlq_total[1h])
+
+# Active alerts by severity
+sum by (level) (pulse_alerts_active)
+
+# Average notification delivery time
+rate(pulse_notification_duration_seconds_sum[5m]) /
+rate(pulse_notification_duration_seconds_count[5m])
+```
 
 ## Rate Limiting
 

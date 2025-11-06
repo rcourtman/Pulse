@@ -361,6 +361,46 @@ In the Alerts page, the "Global Defaults" row for each resource table shows an e
 | Temperature | 5+ minutes | Fans need time to ramp up; short spikes are normal |
 | Restart Count | 10-30 seconds | Container crashes need immediate attention |
 
+#### Alert Reliability Configuration
+
+Pulse includes advanced reliability features to prevent data loss and manage long-running alerts:
+
+**Alert TTL (Time-To-Live):**
+```json
+{
+  "maxAlertAgeDays": 7,
+  "maxAcknowledgedAgeDays": 1,
+  "autoAcknowledgeAfterHours": 24
+}
+```
+
+- **`maxAlertAgeDays`** (default: `7`): Automatically removes unacknowledged alerts older than this many days. Prevents memory leaks from persistent issues. Set to `0` to disable.
+- **`maxAcknowledgedAgeDays`** (default: `1`): Faster cleanup for acknowledged alerts since they've been reviewed. Set to `0` to disable.
+- **`autoAcknowledgeAfterHours`** (default: `24`): Automatically acknowledges alerts that remain active for this duration. Useful for expected long-running conditions. Set to `0` to disable.
+
+**Flapping Detection:**
+```json
+{
+  "flappingEnabled": true,
+  "flappingWindowSeconds": 300,
+  "flappingThreshold": 5,
+  "flappingCooldownMinutes": 15
+}
+```
+
+- **`flappingEnabled`** (default: `true`): Enable detection of rapidly oscillating alerts
+- **`flappingWindowSeconds`** (default: `300`): Time window (5 minutes) to track state changes
+- **`flappingThreshold`** (default: `5`): Number of state changes within the window to trigger suppression
+- **`flappingCooldownMinutes`** (default: `15`): How long to suppress a flapping alert
+
+When an alert flaps (rapid on/off cycling), Pulse automatically suppresses it to prevent notification storms. The suppression lasts for the cooldown period, after which the alert can fire normally again.
+
+**Common Flapping Scenarios:**
+- Network instability causing intermittent connectivity
+- Resource usage hovering around threshold (use hysteresis instead)
+- Misconfigured health checks with tight timing
+- Container restart loops (use Docker restart alerts instead)
+
 > Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.
 
 ### `pulse-sensor-proxy/config.yaml`
