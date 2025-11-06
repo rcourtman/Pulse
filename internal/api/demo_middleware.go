@@ -32,6 +32,20 @@ func DemoModeMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 			return
 		}
 
+		// Allow authentication endpoints (login is read-only - verifies credentials)
+		authPaths := []string{
+			"/api/login",
+			"/api/oidc/login",
+			"/api/oidc/callback",
+			"/api/logout",
+		}
+		for _, path := range authPaths {
+			if r.URL.Path == path {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		// Block all modification requests (POST, PUT, DELETE, PATCH)
 		log.Warn().
 			Str("method", r.Method).
