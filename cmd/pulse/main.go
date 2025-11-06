@@ -48,6 +48,8 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	// Add version command
 	rootCmd.AddCommand(versionCmd)
+	// Add bootstrap-token command
+	rootCmd.AddCommand(bootstrapTokenCmd)
 }
 
 var versionCmd = &cobra.Command{

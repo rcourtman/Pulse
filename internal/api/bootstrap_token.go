@@ -87,9 +87,16 @@ func (r *Router) initializeBootstrapToken() {
 	r.bootstrapTokenPath = path
 
 	if created {
-		log.Warn().
-			Str("token_path", path).
-			Msg("Bootstrap setup token generated; retrieve it from the host to complete initial authentication")
+		// Display token prominently for easy discovery
+		log.Warn().Msg("╔═══════════════════════════════════════════════════════════════════════╗")
+		log.Warn().Msg("║          BOOTSTRAP TOKEN REQUIRED FOR FIRST-TIME SETUP                ║")
+		log.Warn().Msg("╠═══════════════════════════════════════════════════════════════════════╣")
+		log.Warn().Msgf("║  Token: %-61s ║", token)
+		log.Warn().Msgf("║  File:  %-61s ║", path)
+		log.Warn().Msg("╠═══════════════════════════════════════════════════════════════════════╣")
+		log.Warn().Msg("║  Copy this token and paste it into the unlock screen in your browser. ║")
+		log.Warn().Msg("║  This token will be automatically deleted after successful setup.     ║")
+		log.Warn().Msg("╚═══════════════════════════════════════════════════════════════════════╝")
 	} else {
 		log.Info().
 			Str("token_path", path).

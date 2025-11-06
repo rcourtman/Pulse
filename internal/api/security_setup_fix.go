@@ -173,7 +173,12 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			}
 
 			if providedToken == "" {
-				http.Error(w, "Bootstrap setup token required", http.StatusUnauthorized)
+				errorMsg := fmt.Sprintf("Bootstrap setup token required. Retrieve it from the host:\n\n"+
+					"Docker: docker exec <container> cat /data/.bootstrap_token\n"+
+					"Docker: docker exec <container> /app/pulse bootstrap-token\n"+
+					"Bare metal: cat %s\n"+
+					"Bare metal: pulse bootstrap-token", r.bootstrapTokenPath)
+				http.Error(w, errorMsg, http.StatusUnauthorized)
 				return
 			}
 
@@ -181,7 +186,12 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 				log.Warn().
 					Str("ip", clientIP).
 					Msg("Rejected quick setup with invalid bootstrap token")
-				http.Error(w, "Invalid bootstrap setup token", http.StatusUnauthorized)
+				errorMsg := fmt.Sprintf("Invalid bootstrap setup token. Retrieve the correct token from the host:\n\n"+
+					"Docker: docker exec <container> cat /data/.bootstrap_token\n"+
+					"Docker: docker exec <container> /app/pulse bootstrap-token\n"+
+					"Bare metal: cat %s\n"+
+					"Bare metal: pulse bootstrap-token", r.bootstrapTokenPath)
+				http.Error(w, errorMsg, http.StatusUnauthorized)
 				return
 			}
 
