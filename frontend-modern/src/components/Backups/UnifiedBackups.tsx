@@ -1411,7 +1411,7 @@ const UnifiedBackups: Component = () => {
                 </div>
               </div>
             </div>
-            <div class="relative min-h-[8rem] sm:min-h-[12rem] bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
+            <div class="relative h-32 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
               <Show
                 when={chartData().data.length > 0}
                 fallback={
