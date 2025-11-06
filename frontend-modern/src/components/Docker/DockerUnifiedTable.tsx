@@ -887,7 +887,7 @@ const DockerContainerRow: Component<{
               fallback={
                 <div class="flex items-center gap-1.5 flex-1 min-w-0">
                   <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate cursor-text select-none"
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
                     style="cursor: text;"
                     title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
                     onClick={startEditingUrl}
@@ -998,7 +998,7 @@ const DockerContainerRow: Component<{
           </span>
         </td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
-          <span class="truncate" title={container.image}>
+          <span title={container.image}>
             {container.image || '—'}
           </span>
         </td>
@@ -1626,7 +1626,7 @@ const DockerServiceRow: Component<{
               fallback={
                 <div class="flex items-center gap-1.5 flex-1 min-w-0">
                   <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate cursor-text select-none"
+                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
                     style="cursor: text;"
                     title={`${serviceTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
                     onClick={startEditingUrl}
@@ -1723,7 +1723,7 @@ const DockerServiceRow: Component<{
           </span>
         </td>
         <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
-          <span class="truncate" title={service.image}>
+          <span title={service.image}>
             {service.image || '—'}
           </span>
         </td>

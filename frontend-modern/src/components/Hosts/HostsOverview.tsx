@@ -269,12 +269,12 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                         <div>
                                           <div class="flex items-center gap-2">
                                             {renderStatusIndicator(host.status)}
-                                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                               {host.displayName || host.hostname || host.id}
                                             </p>
                                           </div>
                                           <Show when={host.displayName && host.displayName !== host.hostname}>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                               {host.hostname}
                                             </p>
                                           </Show>

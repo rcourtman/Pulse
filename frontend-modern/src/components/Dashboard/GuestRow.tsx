@@ -425,7 +425,7 @@ export function GuestRow(props: GuestRowProps) {
             fallback={
               <div class="flex items-center gap-1.5 flex-1 min-w-0">
                 <span
-                  class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate cursor-text select-none"
+                  class="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-text select-none"
                   style="cursor: text;"
                   title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
                   onClick={startEditingUrl}
