@@ -1,0 +1,13 @@
+OpenAI Codex v0.55.0 (research preview)
+--------
+workdir: /opt/pulse
+model: gpt-5-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: auto
+session id: 019a5841-a30d-7f51-a957-771ff45a81db
+--------
+user
+What is 5+5?

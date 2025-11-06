@@ -46,8 +46,9 @@ COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-m
 # Build the binaries with embedded frontend
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    VERSION="v$(cat VERSION | tr -d '\n')" && \
     CGO_ENABLED=0 GOOS=linux go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
       -trimpath \
       -o pulse ./cmd/pulse
 
@@ -81,44 +82,48 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 # Build host-agent binaries for all platforms (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    VERSION="v$(cat VERSION | tr -d '\n')" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
       -o pulse-host-agent-linux-amd64 ./cmd/pulse-host-agent && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
       -o pulse-host-agent-linux-arm64 ./cmd/pulse-host-agent && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
       -o pulse-host-agent-linux-armv7 ./cmd/pulse-host-agent && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
       -o pulse-host-agent-darwin-amd64 ./cmd/pulse-host-agent && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
       -o pulse-host-agent-darwin-arm64 ./cmd/pulse-host-agent && \
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
       -o pulse-host-agent-windows-amd64.exe ./cmd/pulse-host-agent
 
 # Build pulse-sensor-proxy for all Linux architectures (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    VERSION="v$(cat VERSION | tr -d '\n')" && \
+    BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S') && \
+    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
       -trimpath \
       -o pulse-sensor-proxy-linux-amd64 ./cmd/pulse-sensor-proxy && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
       -trimpath \
       -o pulse-sensor-proxy-linux-arm64 ./cmd/pulse-sensor-proxy && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
-      -ldflags="-s -w" \
+      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
       -trimpath \
       -o pulse-sensor-proxy-linux-armv7 ./cmd/pulse-sensor-proxy && \
     cp pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy
