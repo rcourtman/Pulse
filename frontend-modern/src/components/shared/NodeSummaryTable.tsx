@@ -628,7 +628,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             online &&
                             isPVE &&
                             cpuTemperatureValue !== null &&
-                            (node!.temperature?.hasCPU ?? node!.temperature?.available) &&
+                            (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
                             isTemperatureMonitoringEnabled(node!)
                           }
                           fallback={
@@ -653,7 +653,10 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               typeof cpuMax === 'number' &&
                               cpuMax > 0;
 
-                            if (hasMinMax) {
+                            const gpus = temp?.gpu ?? [];
+                            const hasGPU = gpus.length > 0;
+
+                            if (hasMinMax || hasGPU) {
                               const min = Math.round(cpuMin);
                               const max = Math.round(cpuMax);
 
@@ -669,7 +672,22 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                     {value}°C
                                   </span>
                                   <span class="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs whitespace-nowrap bg-gray-900 dark:bg-gray-700 text-white rounded shadow-lg z-50 pointer-events-none">
-                                    <span class="text-gray-300">Range:</span> <span class={getTooltipColor(min)}>{min}</span>-<span class={getTooltipColor(max)}>{max}</span>°C
+                                    {hasMinMax && (
+                                      <div>
+                                        <span class="text-gray-300">CPU:</span> <span class={getTooltipColor(min)}>{min}</span>-<span class={getTooltipColor(max)}>{max}</span>°C
+                                      </div>
+                                    )}
+                                    {hasGPU && gpus.map((gpu) => {
+                                      const gpuTemp = gpu.edge ?? gpu.junction ?? gpu.mem ?? 0;
+                                      return (
+                                        <div>
+                                          <span class="text-gray-300">GPU:</span> <span class={getTooltipColor(gpuTemp)}>{Math.round(gpuTemp)}</span>°C
+                                          {gpu.edge && ` E:${Math.round(gpu.edge)}`}
+                                          {gpu.junction && ` J:${Math.round(gpu.junction)}`}
+                                          {gpu.mem && ` M:${Math.round(gpu.mem)}`}
+                                        </div>
+                                      );
+                                    })}
                                   </span>
                                 </span>
                               );

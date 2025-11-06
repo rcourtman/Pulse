@@ -364,6 +364,14 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 		if strings.Contains(chipName, "nvme") {
 			tc.parseNVMeTemps(chipName, chipMap, temp)
 		}
+
+		// Handle GPU temperature sensors
+		if strings.Contains(chipLower, "amdgpu") {
+			log.Debug().
+				Str("chip", chipName).
+				Msg("Detected AMD GPU temperature chip")
+			tc.parseGPUTemps(chipName, chipMap, temp)
+		}
 	}
 
 	// If we got CPU temps, calculate max from cores if package not available
@@ -379,9 +387,10 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 	// This prevents false negatives when sensors report 0°C during resets or temporarily
 	temp.HasCPU = foundCPUChip
 	temp.HasNVMe = len(temp.NVMe) > 0
+	temp.HasGPU = len(temp.GPU) > 0
 
 	// Available means any temperature data exists (backward compatibility)
-	temp.Available = temp.HasCPU || temp.HasNVMe
+	temp.Available = temp.HasCPU || temp.HasNVMe || temp.HasGPU
 
 	// Log summary of what was detected
 	if !foundCPUChip {
@@ -397,10 +406,12 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 		log.Debug().
 			Bool("hasCPU", temp.HasCPU).
 			Bool("hasNVMe", temp.HasNVMe).
+			Bool("hasGPU", temp.HasGPU).
 			Float64("cpuPackage", temp.CPUPackage).
 			Float64("cpuMax", temp.CPUMax).
 			Int("coreCount", len(temp.Cores)).
 			Int("nvmeCount", len(temp.NVMe)).
+			Int("gpuCount", len(temp.GPU)).
 			Msg("Temperature data parsed successfully")
 	}
 
@@ -548,6 +559,48 @@ func (tc *TemperatureCollector) parseNVMeTemps(chipName string, chipMap map[stri
 				break // Only one temp per NVMe device
 			}
 		}
+	}
+}
+
+// parseGPUTemps extracts GPU temperature data from a sensor chip
+func (tc *TemperatureCollector) parseGPUTemps(chipName string, chipMap map[string]interface{}, temp *models.Temperature) {
+	gpuTemp := models.GPUTemp{
+		Device: chipName,
+	}
+
+	// AMD GPU sensors typically have: edge, junction (hotspot), mem
+	for sensorName, sensorData := range chipMap {
+		sensorMap, ok := sensorData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		sensorLower := strings.ToLower(sensorName)
+		tempVal := extractTempInput(sensorMap)
+
+		if math.IsNaN(tempVal) || tempVal <= 0 {
+			continue
+		}
+
+		// Map sensor names to struct fields
+		if strings.Contains(sensorLower, "edge") {
+			gpuTemp.Edge = tempVal
+		} else if strings.Contains(sensorLower, "junction") || strings.Contains(sensorLower, "hotspot") {
+			gpuTemp.Junction = tempVal
+		} else if strings.Contains(sensorLower, "mem") {
+			gpuTemp.Mem = tempVal
+		}
+	}
+
+	// Only add GPU entry if we got at least one valid temperature
+	if gpuTemp.Edge > 0 || gpuTemp.Junction > 0 || gpuTemp.Mem > 0 {
+		temp.GPU = append(temp.GPU, gpuTemp)
+		log.Debug().
+			Str("device", chipName).
+			Float64("edge", gpuTemp.Edge).
+			Float64("junction", gpuTemp.Junction).
+			Float64("mem", gpuTemp.Mem).
+			Msg("Parsed GPU temperatures")
 	}
 }
 

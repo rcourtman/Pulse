@@ -752,9 +752,11 @@ export interface Temperature {
   minRecorded?: string; // When minimum temperature was recorded
   maxRecorded?: string; // When maximum temperature was recorded
   cores?: CoreTemp[]; // Individual core temperatures
+  gpu?: GPUTemp[]; // GPU temperatures
   nvme?: NVMeTemp[]; // NVMe drive temperatures
   available: boolean; // Whether any temperature data is available
   hasCPU?: boolean; // Whether CPU temperature data is available
+  hasGPU?: boolean; // Whether GPU temperature data is available
   hasNVMe?: boolean; // Whether NVMe temperature data is available
   lastUpdate: string; // When this data was collected
 }
@@ -762,6 +764,13 @@ export interface Temperature {
 export interface CoreTemp {
   core: number;
   temp: number;
+}
+
+export interface GPUTemp {
+  device: string; // GPU device identifier (e.g., "amdgpu-pci-0400")
+  edge?: number; // Edge temperature
+  junction?: number; // Junction/hotspot temperature
+  mem?: number; // Memory temperature
 }
 
 export interface NVMeTemp {

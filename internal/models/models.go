@@ -773,9 +773,11 @@ type Temperature struct {
 	MinRecorded  time.Time  `json:"minRecorded,omitempty"`  // When minimum temperature was recorded
 	MaxRecorded  time.Time  `json:"maxRecorded,omitempty"`  // When maximum temperature was recorded
 	Cores        []CoreTemp `json:"cores,omitempty"`        // Individual core temperatures
+	GPU          []GPUTemp  `json:"gpu,omitempty"`          // GPU temperatures
 	NVMe         []NVMeTemp `json:"nvme,omitempty"`         // NVMe drive temperatures
 	Available    bool       `json:"available"`              // Whether any temperature data is available
 	HasCPU       bool       `json:"hasCPU"`                 // Whether CPU temperature data is available
+	HasGPU       bool       `json:"hasGPU"`                 // Whether GPU temperature data is available
 	HasNVMe      bool       `json:"hasNVMe"`                // Whether NVMe temperature data is available
 	LastUpdate   time.Time  `json:"lastUpdate"`             // When this data was collected
 }
@@ -784,6 +786,14 @@ type Temperature struct {
 type CoreTemp struct {
 	Core int     `json:"core"`
 	Temp float64 `json:"temp"`
+}
+
+// GPUTemp represents a GPU temperature sensor
+type GPUTemp struct {
+	Device   string  `json:"device"`             // GPU device identifier (e.g., "amdgpu-pci-0400")
+	Edge     float64 `json:"edge,omitempty"`     // Edge temperature
+	Junction float64 `json:"junction,omitempty"` // Junction/hotspot temperature
+	Mem      float64 `json:"mem,omitempty"`      // Memory temperature
 }
 
 // NVMeTemp represents an NVMe drive temperature
