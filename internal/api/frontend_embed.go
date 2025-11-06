@@ -138,16 +138,18 @@ func serveFrontendHandler() http.HandlerFunc {
 				if err == nil {
 					// Detect content type
 					contentType := "application/octet-stream"
+					isImmutable := false
+
 					if strings.HasSuffix(lookupPath, ".html") {
 						contentType = "text/html; charset=utf-8"
 					} else if strings.HasSuffix(lookupPath, ".css") {
 						contentType = "text/css; charset=utf-8"
+						// CSS files with hashes are immutable (e.g., index-abc123.css)
+						isImmutable = strings.Contains(lookupPath, "-") && strings.Contains(lookupPath, ".css")
 					} else if strings.HasSuffix(lookupPath, ".js") {
 						contentType = "application/javascript; charset=utf-8"
-						// Add cache-busting headers for JS files to force reload
-						w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-						w.Header().Set("Pragma", "no-cache")
-						w.Header().Set("Expires", "0")
+						// JS files with hashes are immutable (e.g., index-BXHytNQV.js)
+						isImmutable = strings.Contains(lookupPath, "-") && strings.Contains(lookupPath, ".js")
 					} else if strings.HasSuffix(lookupPath, ".json") {
 						contentType = "application/json"
 					} else if strings.HasSuffix(lookupPath, ".svg") {
@@ -155,6 +157,17 @@ func serveFrontendHandler() http.HandlerFunc {
 					}
 
 					w.Header().Set("Content-Type", contentType)
+
+					// Hashed assets are immutable - cache aggressively
+					// Non-hashed assets should not be cached
+					if isImmutable {
+						w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					} else {
+						w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+						w.Header().Set("Pragma", "no-cache")
+						w.Header().Set("Expires", "0")
+					}
+
 					w.Write(content)
 					return
 				}
