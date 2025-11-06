@@ -270,6 +270,12 @@ fi
 if [ ${#checksum_files[@]} -eq 0 ]; then
     echo "Warning: no release artifacts found to checksum."
 else
+    # Generate individual .sha256 files for each asset (required by install.sh)
+    for file in "${checksum_files[@]}"; do
+        sha256sum "$file" | awk '{print $1}' > "${file}.sha256"
+    done
+
+    # Also generate combined checksums.txt for convenience
     sha256sum "${checksum_files[@]}" > checksums.txt
     if [ -n "${SIGNING_KEY_ID:-}" ]; then
         if command -v gpg >/dev/null 2>&1; then
