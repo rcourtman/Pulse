@@ -286,7 +286,7 @@ if [ ${#checksum_files[@]} -eq 0 ]; then
 else
     # Generate individual .sha256 files for each asset (required by install.sh)
     for file in "${checksum_files[@]}"; do
-        sha256sum "$file" | awk '{print $1}' > "${file}.sha256"
+        sha256sum "$file" > "${file}.sha256"
     done
 
     # Also generate combined checksums.txt for convenience
