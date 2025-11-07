@@ -19,6 +19,7 @@ type SessionStore struct {
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
+	stopOnce   sync.Once // Ensures Stop() can only close channel once
 }
 
 func sessionHash(token string) string {
@@ -76,9 +77,11 @@ func (s *SessionStore) backgroundWorker() {
 
 // Stop gracefully stops the session store
 func (s *SessionStore) Stop() {
-	s.saveTicker.Stop()
-	s.stopChan <- true
-	s.save()
+	s.stopOnce.Do(func() {
+		s.saveTicker.Stop()
+		close(s.stopChan) // Use close instead of send to signal all readers
+		s.save()
+	})
 }
 
 // CreateSession creates a new session

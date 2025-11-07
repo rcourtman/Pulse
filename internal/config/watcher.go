@@ -543,6 +543,16 @@ func (cw *ConfigWatcher) reloadMockConfig() {
 	// Trigger callback to restart backend if set
 	if callback != nil {
 		log.Info().Msg("Triggering backend restart due to mock.env change")
-		go callback()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Stack().
+						Msg("Recovered from panic in mock.env callback")
+				}
+			}()
+			callback()
+		}()
 	}
 }

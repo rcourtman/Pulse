@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1421,14 +1422,10 @@ func (c *ConfigPersistence) cleanupOldBackups(pattern string) {
 		files = append(files, fileInfo{path: match, modTime: info.ModTime()})
 	}
 
-	// Sort oldest first
-	for i := 0; i < len(files)-1; i++ {
-		for j := i + 1; j < len(files); j++ {
-			if files[i].modTime.After(files[j].modTime) {
-				files[i], files[j] = files[j], files[i]
-			}
-		}
-	}
+	// Sort oldest first using efficient sort
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].modTime.Before(files[j].modTime)
+	})
 
 	// Delete oldest backups (keep last 10)
 	toDelete := len(files) - maxBackups

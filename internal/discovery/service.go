@@ -168,10 +168,31 @@ func (s *Service) Start(ctx context.Context) {
 		Msg("Starting background discovery service")
 
 	// Do initial scan immediately
-	go s.performScan()
+	// Initial scan with panic recovery
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Stack().
+					Msg("Recovered from panic in initial discovery scan")
+			}
+		}()
+		s.performScan()
+	}()
 
-	// Start background scanning loop
-	go s.scanLoop()
+	// Start background scanning loop with panic recovery
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Stack().
+					Msg("Recovered from panic in discovery scan loop")
+			}
+		}()
+		s.scanLoop()
+	}()
 }
 
 // Stop stops the background discovery service
@@ -475,7 +496,17 @@ func (s *Service) ForceRefresh() {
 	}
 	s.mu.RUnlock()
 
-	go s.performScan()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Stack().
+					Msg("Recovered from panic in ForceRefresh scan")
+			}
+		}()
+		s.performScan()
+	}()
 }
 
 // SetInterval updates the scan interval
@@ -498,7 +529,17 @@ func (s *Service) SetSubnet(subnet string) {
 
 	// Trigger immediate rescan with new subnet if not already scanning
 	if !alreadyScanning {
-		go s.performScan()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Stack().
+						Msg("Recovered from panic in SetSubnet scan")
+				}
+			}()
+			s.performScan()
+		}()
 	} else {
 		log.Debug().Msg("Scan already in progress, new subnet will be used in next scan")
 	}
