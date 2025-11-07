@@ -640,6 +640,9 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 			"total":   len(webhooks),
 			"enabled": countEnabledWebhooks(webhooks),
 		},
+		"encryption": map[string]interface{}{
+			"enabled": h.monitor.GetConfigPersistence().IsEncryptionEnabled(),
+		},
 		"overall_healthy": queueStats["healthy"] == true,
 	}
 

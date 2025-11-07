@@ -1371,6 +1371,13 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 	return os.Rename(tempFile, envFile)
 }
 
+// IsEncryptionEnabled returns whether the config persistence has encryption enabled
+func (c *ConfigPersistence) IsEncryptionEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.crypto != nil
+}
+
 // cleanupOldBackups removes old backup files, keeping only the most recent N backups
 func (c *ConfigPersistence) cleanupOldBackups(pattern string) {
 	// Use filepath.Glob to find all backup files matching the pattern

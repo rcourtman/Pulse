@@ -238,6 +238,9 @@ export class NotificationsAPI {
       total: number;
       enabled: number;
     };
+    encryption: {
+      enabled: boolean;
+    };
     healthy: boolean;
   }> {
     return apiFetchJSON(`${this.baseUrl}/health`);
