@@ -235,7 +235,14 @@ chmod +x "$universal_dir/bin/pulse-host-agent"
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
 
-# Build host agent for macOS arm64
+# Build host agent for macOS
+echo "Building host agent for macOS amd64..."
+env GOOS=darwin GOARCH=amd64 go build \
+    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
+    -trimpath \
+    -o "$BUILD_DIR/pulse-host-agent-darwin-amd64" \
+    ./cmd/pulse-host-agent
+
 echo "Building host agent for macOS arm64..."
 env GOOS=darwin GOARCH=arm64 go build \
     -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
@@ -243,8 +250,26 @@ env GOOS=darwin GOARCH=arm64 go build \
     -o "$BUILD_DIR/pulse-host-agent-darwin-arm64" \
     ./cmd/pulse-host-agent
 
-# Package macOS host agent
+# Build host agent for Windows
+echo "Building host agent for Windows amd64..."
+env GOOS=windows GOARCH=amd64 go build \
+    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
+    -trimpath \
+    -o "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" \
+    ./cmd/pulse-host-agent
+
+echo "Building host agent for Windows arm64..."
+env GOOS=windows GOARCH=arm64 go build \
+    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
+    -trimpath \
+    -o "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" \
+    ./cmd/pulse-host-agent
+
+# Package standalone host agent binaries
+tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-amd64
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-arm64
+zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-host-agent-windows-amd64.exe"
+zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-host-agent-windows-arm64.exe"
 
 # Create universal tarball
 cd "$universal_dir"
@@ -268,8 +293,11 @@ for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$RELEASE_DIR/"
 done
 
-# Also copy standalone macOS host-agent (not tarballed version)
+# Also copy standalone macOS and Windows host-agent binaries
+cp "$BUILD_DIR/pulse-host-agent-darwin-amd64" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-host-agent-darwin-arm64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" "$RELEASE_DIR/"
 
 # Optionally package Helm chart
 if [ "${SKIP_HELM_PACKAGE:-0}" != "1" ]; then

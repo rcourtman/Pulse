@@ -72,8 +72,8 @@ success "All installer/uninstaller scripts present and executable"
 
 # Validate all required binaries exist and are non-empty
 info "Checking downloadable binaries in /opt/pulse/bin/..."
-docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-docker-agent pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 pulse-docker-agent-linux-armv7 pulse-host-agent-linux-amd64 pulse-host-agent-linux-arm64 pulse-host-agent-linux-armv7 pulse-host-agent-darwin-amd64 pulse-host-agent-darwin-arm64 pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 pulse-sensor-proxy pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy-linux-arm64 pulse-sensor-proxy-linux-armv7"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-host-agent-windows-amd64)" = "pulse-host-agent-windows-amd64.exe" ] || { echo "windows symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
-success "All downloadable binaries present (16 binaries + Windows symlink)"
+docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-docker-agent pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 pulse-docker-agent-linux-armv7 pulse-host-agent-linux-amd64 pulse-host-agent-linux-arm64 pulse-host-agent-linux-armv7 pulse-host-agent-darwin-amd64 pulse-host-agent-darwin-arm64 pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 pulse-sensor-proxy pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy-linux-arm64 pulse-sensor-proxy-linux-armv7"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-host-agent-windows-amd64)" = "pulse-host-agent-windows-amd64.exe" ] || { echo "windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-arm64)" = "pulse-host-agent-windows-arm64.exe" ] || { echo "windows arm64 symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
+success "All downloadable binaries present (18 binaries + 2 Windows symlinks)"
 
 # Validate version embedding in Docker image binaries
 info "Validating version embedding in Docker image binaries..."
@@ -191,8 +191,10 @@ if command -v file >/dev/null 2>&1; then
     file pulse-host-agent-linux-amd64 | grep -qF 'ELF 64-bit' | grep -qF 'x86-64' || warn "pulse-host-agent-linux-amd64 architecture check failed"
     file pulse-host-agent-linux-arm64 | grep -qF 'ELF 64-bit' | grep -qF 'aarch64' || warn "pulse-host-agent-linux-arm64 architecture check failed"
     file pulse-host-agent-linux-armv7 | grep -qF 'ELF 32-bit' | grep -qF 'ARM' || warn "pulse-host-agent-linux-armv7 architecture check failed"
+    file pulse-host-agent-darwin-amd64 | grep -qF 'Mach-O' | grep -qF 'x86_64' || warn "pulse-host-agent-darwin-amd64 architecture check failed"
     file pulse-host-agent-darwin-arm64 | grep -qF 'Mach-O' | grep -qF 'arm64' || warn "pulse-host-agent-darwin-arm64 architecture check failed"
-    file pulse-host-agent-windows-amd64.exe | grep -qF 'PE32+' || warn "pulse-host-agent-windows-amd64.exe architecture check failed"
+    file pulse-host-agent-windows-amd64.exe | grep -qF 'PE32+' | grep -qF 'x86-64' || warn "pulse-host-agent-windows-amd64.exe architecture check failed"
+    file pulse-host-agent-windows-arm64.exe | grep -qF 'PE32+' | grep -qF 'Aarch64' || warn "pulse-host-agent-windows-arm64.exe architecture check failed"
 
     success "Binary architectures validated"
 fi

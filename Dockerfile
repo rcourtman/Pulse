@@ -108,7 +108,11 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
       -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
-      -o pulse-host-agent-windows-amd64.exe ./cmd/pulse-host-agent
+      -o pulse-host-agent-windows-amd64.exe ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-host-agent-windows-arm64.exe ./cmd/pulse-host-agent
 
 # Build pulse-sensor-proxy for all Linux architectures (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
@@ -206,8 +210,10 @@ COPY --from=backend-builder /app/pulse-host-agent-linux-armv7 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-darwin-amd64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-darwin-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-windows-amd64.exe /opt/pulse/bin/
-# Create symlink for Windows without .exe extension
-RUN ln -s pulse-host-agent-windows-amd64.exe /opt/pulse/bin/pulse-host-agent-windows-amd64
+COPY --from=backend-builder /app/pulse-host-agent-windows-arm64.exe /opt/pulse/bin/
+# Create symlinks for Windows without .exe extension
+RUN ln -s pulse-host-agent-windows-amd64.exe /opt/pulse/bin/pulse-host-agent-windows-amd64 && \
+    ln -s pulse-host-agent-windows-arm64.exe /opt/pulse/bin/pulse-host-agent-windows-arm64
 
 # Copy multi-arch pulse-sensor-proxy binaries for download endpoint
 COPY --from=backend-builder /app/pulse-sensor-proxy-linux-amd64 /opt/pulse/bin/

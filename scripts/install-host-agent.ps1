@@ -131,7 +131,16 @@ Write-Host "  Install Path: $InstallPath"
 Write-Host ""
 
 # Determine architecture
-$arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
+$osArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+switch ($osArch) {
+    'Arm64' { $arch = 'arm64' }
+    'X64'   { $arch = 'amd64' }
+    'X86'   { $arch = '386' }
+    default {
+        Write-Error "Unsupported architecture: $osArch"
+        exit 1
+    }
+}
 $downloadUrl = "$PulseUrl/download/pulse-host-agent?platform=windows&arch=$arch"
 
 Write-Info "Downloading agent binary from $downloadUrl..."
