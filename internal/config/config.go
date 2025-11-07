@@ -414,13 +414,16 @@ type PVEInstance struct {
 
 // ClusterEndpoint represents a single node in a cluster
 type ClusterEndpoint struct {
-	NodeID   string    // Node ID in cluster
-	NodeName string    // Node name
-	Host     string    // Full URL (e.g., https://node1.lan:8006)
-	GuestURL string    // Optional guest-accessible URL (for navigation)
-	IP       string    // IP address
-	Online   bool      // Current online status
-	LastSeen time.Time // Last successful connection
+	NodeID           string     // Node ID in cluster
+	NodeName         string     // Node name
+	Host             string     // Full URL (e.g., https://node1.lan:8006)
+	GuestURL         string     // Optional guest-accessible URL (for navigation)
+	IP               string     // IP address
+	Online           bool       // Current online status from Proxmox
+	LastSeen         time.Time  // Last successful connection
+	PulseReachable   *bool      // Pulse's view: can Pulse reach this endpoint? nil = not yet checked
+	LastPulseCheck   *time.Time // Last time Pulse checked connectivity
+	PulseError       string     // Last error Pulse encountered connecting to this endpoint
 }
 
 // PBSInstance represents a Proxmox Backup Server connection

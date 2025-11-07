@@ -23,6 +23,19 @@ Pulse protects the initial Quick Security Setup screen with a one-time bootstrap
 | Docker container | `/data/.bootstrap_token` inside the container or the mounted host volume |
 | Helm / Kubernetes | The persistent volume mounted at `/data` |
 
+**For Proxmox Quick Install (LXC):**
+The installer creates an LXC container, so the token is inside the container, not on the PVE host. Use one of these commands from your Proxmox host:
+```bash
+# Enter the container interactively
+pct enter <ctid>
+cat /etc/pulse/.bootstrap_token
+
+# Or retrieve token directly
+pct exec <ctid> -- cat /etc/pulse/.bootstrap_token
+```
+The installer displays the container ID when installation completes.
+
+**For other deployments:**
 1. SSH to the host (or `docker exec` into the container).
 2. Display the token: `cat /etc/pulse/.bootstrap_token` (adjust the path per the table).
 3. When the UI prompts for setup, paste the token into the dialog or send it as the `X-Setup-Token` header for API calls.

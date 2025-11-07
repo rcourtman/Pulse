@@ -8,8 +8,11 @@ export interface ClusterEndpoint {
   Host: string;
   GuestURL?: string;
   IP: string;
-  Online: boolean;
+  Online: boolean; // Proxmox's view: is the node online in the cluster?
   LastSeen: string;
+  PulseReachable?: boolean | null; // Pulse's view: can Pulse reach this endpoint? null/undefined = not yet checked
+  LastPulseCheck?: string | null;
+  PulseError?: string; // Last error Pulse encountered connecting to this endpoint
 }
 
 export interface PVENodeConfig {

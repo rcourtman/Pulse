@@ -23,51 +23,75 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
 
 ## Quick Start for Docker Deployments
 
-**Running Pulse in Docker?** Follow these steps to enable temperature monitoring:
+**Running Pulse in Docker?** Temperature monitoring requires installing a small service on your Proxmox host that reads hardware sensors. The Pulse container connects to this service through a shared socket.
+
+**Why this is needed:** Docker containers cannot directly access hardware sensors. The proxy runs on your Proxmox host where it has access to sensor data, then shares that data with the Pulse container through a secure connection.
+
+Follow these steps to set it up:
 
 ### 1. Install the proxy on your Proxmox host
 
-SSH to your **Proxmox host** (not the Docker container) and run:
+SSH to your **Proxmox host** (not the Docker container) and run as root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
-  bash -s -- --standalone --pulse-server http://YOUR_PULSE_IP:7655
+sudo curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+  sudo bash -s -- --standalone --pulse-server http://192.168.1.100:7655
 ```
 
-Replace `YOUR_PULSE_IP` with your Pulse server's IP address.
+Replace `192.168.1.100:7655` with your Pulse server's actual IP address and port.
+
+The script will install and start the `pulse-sensor-proxy` service. You should see output confirming the installation succeeded.
 
 ### 2. Add bind mount to docker-compose.yml
 
-Add this volume to your Pulse container configuration:
+Edit your `docker-compose.yml` file and add the highlighted line to your Pulse service volumes:
 
 ```yaml
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    ports:
+      - "7655:7655"
+    volumes:
+      - pulse-data:/data
+      - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw  # Add this line
+
 volumes:
-  - pulse-data:/data
-  - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw  # Add this line
+  pulse-data:
 ```
+
+This connects the proxy socket from your host into the container so Pulse can communicate with it.
 
 ### 3. Restart Pulse container
 
 ```bash
-docker-compose down && docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
-### 4. Verify
+Note: If you're using older Docker Compose v1, use `docker-compose` (with hyphen) instead.
 
-Check Pulse UI for temperature data, or verify the setup:
+### 4. Verify the setup
 
+**Check proxy is running on your Proxmox host:**
 ```bash
-# Verify proxy is running on host
-systemctl status pulse-sensor-proxy
-
-# Verify socket is accessible in container
-docker exec pulse ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock
-
-# Check Pulse logs
-docker logs pulse | grep -i "temperature.*proxy"
+sudo systemctl status pulse-sensor-proxy
 ```
+
+You should see `active (running)` in green.
+
+**Check Pulse detected the proxy:**
+```bash
+docker logs pulse 2>&1 | grep -i "temperature.*proxy"
+```
+
+Replace `pulse` with your container name if different (check with `docker ps`).
 
 You should see: `Temperature proxy detected - using secure host-side bridge`
+
+**Check temperatures appear in the UI:**
+
+Open Pulse in your browser and check the node dashboard. CPU and drive temperatures should now be visible. If you still see blank temperature fields, proceed to troubleshooting below.
 
 **Having issues?** See [Troubleshooting](#troubleshooting) below.
 

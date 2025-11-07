@@ -6007,12 +6007,32 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			onlineNodes[node.Name] = node.Status == "online"
 		}
 
+		// Get Pulse connectivity status from ClusterClient if available
+		var pulseHealth map[string]proxmox.EndpointHealth
+		if clusterClient, ok := client.(*proxmox.ClusterClient); ok {
+			pulseHealth = clusterClient.GetHealthStatusWithErrors()
+		}
+
 		// Update the online status for each cluster endpoint
 		for i := range instanceCfg.ClusterEndpoints {
 			if online, exists := onlineNodes[instanceCfg.ClusterEndpoints[i].NodeName]; exists {
 				instanceCfg.ClusterEndpoints[i].Online = online
 				if online {
 					instanceCfg.ClusterEndpoints[i].LastSeen = time.Now()
+				}
+			}
+
+			// Update Pulse connectivity status
+			if pulseHealth != nil {
+				// Try to find the endpoint in the health map by matching the effective URL
+				endpointURL := clusterEndpointEffectiveURL(instanceCfg.ClusterEndpoints[i])
+				if health, exists := pulseHealth[endpointURL]; exists {
+					reachable := health.Healthy
+					instanceCfg.ClusterEndpoints[i].PulseReachable = &reachable
+					if !health.LastCheck.IsZero() {
+						instanceCfg.ClusterEndpoints[i].LastPulseCheck = &health.LastCheck
+					}
+					instanceCfg.ClusterEndpoints[i].PulseError = health.LastError
 				}
 			}
 		}

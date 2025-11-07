@@ -21,6 +21,7 @@ type ClusterClient struct {
 	endpoints       []string             // All available endpoints
 	nodeHealth      map[string]bool      // Track node health
 	lastHealthCheck map[string]time.Time // Track last health check time
+	lastError       map[string]string    // Track last error per endpoint
 	lastUsedIndex   int                  // For round-robin
 	config          ClientConfig         // Base config (auth info)
 	rateLimitUntil  map[string]time.Time // Cooldown window for rate-limited endpoints
@@ -51,6 +52,7 @@ func NewClusterClient(name string, config ClientConfig, endpoints []string) *Clu
 		endpoints:       endpoints,
 		nodeHealth:      make(map[string]bool),
 		lastHealthCheck: make(map[string]time.Time),
+		lastError:       make(map[string]string),
 		config:          config,
 		rateLimitUntil:  make(map[string]time.Time),
 	}
@@ -99,11 +101,13 @@ func (cc *ClusterClient) initialHealthCheck() {
 			if err != nil {
 				cc.mu.Lock()
 				cc.nodeHealth[ep] = false
+				cc.lastError[ep] = err.Error()
 				cc.lastHealthCheck[ep] = time.Now()
 				cc.mu.Unlock()
 				log.Info().
 					Str("cluster", cc.name).
 					Str("endpoint", ep).
+					Err(err).
 					Msg("Cluster endpoint marked unhealthy on initialization")
 				return
 			}
@@ -133,6 +137,8 @@ func (cc *ClusterClient) initialHealthCheck() {
 				fullClient, clientErr := NewClient(fullCfg)
 				if clientErr != nil {
 					cc.nodeHealth[ep] = false
+					cc.lastError[ep] = clientErr.Error()
+					cc.lastHealthCheck[ep] = time.Now()
 					log.Warn().
 						Str("cluster", cc.name).
 						Str("endpoint", ep).
@@ -140,6 +146,8 @@ func (cc *ClusterClient) initialHealthCheck() {
 						Msg("Failed to create full client after successful health check")
 				} else {
 					cc.nodeHealth[ep] = true
+					delete(cc.lastError, ep)
+					cc.lastHealthCheck[ep] = time.Now()
 					cc.clients[ep] = fullClient // Store the full client, not test client
 					if isVMSpecificError {
 						log.Debug().
@@ -156,13 +164,14 @@ func (cc *ClusterClient) initialHealthCheck() {
 			} else {
 				// Real connectivity issue
 				cc.nodeHealth[ep] = false
+				cc.lastError[ep] = err.Error()
+				cc.lastHealthCheck[ep] = time.Now()
 				log.Info().
 					Str("cluster", cc.name).
 					Str("endpoint", ep).
 					Err(err).
 					Msg("Cluster endpoint failed initial health check")
 			}
-			cc.lastHealthCheck[ep] = time.Now()
 			cc.mu.Unlock()
 		}(endpoint)
 	}
@@ -353,6 +362,11 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 
 // markUnhealthy marks an endpoint as unhealthy
 func (cc *ClusterClient) markUnhealthy(endpoint string) {
+	cc.markUnhealthyWithError(endpoint, "")
+}
+
+// markUnhealthyWithError marks an endpoint as unhealthy and captures the error
+func (cc *ClusterClient) markUnhealthyWithError(endpoint string, errMsg string) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 
@@ -360,9 +374,14 @@ func (cc *ClusterClient) markUnhealthy(endpoint string) {
 		log.Warn().
 			Str("cluster", cc.name).
 			Str("endpoint", endpoint).
+			Str("error", errMsg).
 			Msg("Marking cluster node as unhealthy")
 		cc.nodeHealth[endpoint] = false
 	}
+	if errMsg != "" {
+		cc.lastError[endpoint] = errMsg
+	}
+	cc.lastHealthCheck[endpoint] = time.Now()
 }
 
 // recoverUnhealthyNodes attempts to recover unhealthy nodes
@@ -456,6 +475,8 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 
 				cc.mu.Lock()
 				cc.nodeHealth[ep] = true
+				delete(cc.lastError, ep)
+				cc.lastHealthCheck[ep] = time.Now()
 				cc.clients[ep] = fullClient
 				cc.mu.Unlock()
 
@@ -624,7 +645,8 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		}
 
 		// Mark endpoint as unhealthy and try next
-		cc.markUnhealthy(clientEndpoint)
+		errMsg := err.Error()
+		cc.markUnhealthyWithError(clientEndpoint, errMsg)
 
 		log.Warn().
 			Str("cluster", cc.name).
@@ -730,6 +752,29 @@ func (cc *ClusterClient) GetHealthStatus() map[string]bool {
 	status := make(map[string]bool)
 	for endpoint, healthy := range cc.nodeHealth {
 		status[endpoint] = healthy
+	}
+	return status
+}
+
+// EndpointHealth contains health information for a single endpoint
+type EndpointHealth struct {
+	Healthy    bool
+	LastCheck  time.Time
+	LastError  string
+}
+
+// GetHealthStatusWithErrors returns detailed health status including error messages
+func (cc *ClusterClient) GetHealthStatusWithErrors() map[string]EndpointHealth {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	status := make(map[string]EndpointHealth)
+	for endpoint, healthy := range cc.nodeHealth {
+		status[endpoint] = EndpointHealth{
+			Healthy:   healthy,
+			LastCheck: cc.lastHealthCheck[endpoint],
+			LastError: cc.lastError[endpoint],
+		}
 	}
 	return status
 }

@@ -146,7 +146,8 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 
 		// Direct SSH (legacy method for non-containerized deployments)
 		// Try sensors first, fall back to Raspberry Pi method if that fails
-		output, err = tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null")
+		// sensors exits non-zero when optional subfeatures fail; "|| true" keeps the JSON for parsing (#600)
+		output, err = tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null || true")
 		if err != nil || strings.TrimSpace(output) == "" {
 			if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
 				return &models.Temperature{Available: false}, nil

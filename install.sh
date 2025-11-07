@@ -1442,7 +1442,10 @@ fi'; then
     echo "  Web UI:     http://${IP}:${frontend_port}"
     echo "  Container:  $CTID"
     echo
-    echo "  Commands:"
+    echo "  First-time setup:"
+    echo "    pct exec $CTID -- cat /etc/pulse/.bootstrap_token  # Get bootstrap token"
+    echo
+    echo "  Common commands:"
     echo "    pct enter $CTID              # Enter container"
     echo "    pct exec $CTID -- update     # Update Pulse"
     echo

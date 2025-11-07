@@ -148,22 +148,50 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                             </span>
                           </div>
                           <Show when={clusterEndpoints().length > 0}>
-                            <div class="flex flex-wrap gap-1">
+                            <div class="flex flex-col gap-2">
                               <For each={clusterEndpoints()}>
-                                {(endpoint) => (
-                                  <span
-                                    class={`inline-flex items-center gap-2 rounded border px-2 py-1 text-[0.7rem] ${
-                                      endpoint.Online
-                                        ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300'
-                                        : 'border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                                    }`}
-                                  >
-                                    <span class="font-medium">{endpoint.NodeName}</span>
-                                    <span class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                      {endpoint.IP}
-                                    </span>
-                                  </span>
-                                )}
+                                {(endpoint) => {
+                                  const pulseStatus = endpoint.PulseReachable === null || endpoint.PulseReachable === undefined
+                                    ? 'unknown'
+                                    : endpoint.PulseReachable
+                                    ? 'reachable'
+                                    : 'unreachable';
+
+                                  const statusColor = endpoint.Online && pulseStatus === 'reachable'
+                                    ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300'
+                                    : pulseStatus === 'unreachable'
+                                    ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+                                    : endpoint.Online
+                                    ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+                                    : 'border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400';
+
+                                  return (
+                                    <div class={`rounded border px-3 py-2 text-[0.7rem] ${statusColor}`}>
+                                      <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-semibold">{endpoint.NodeName}</span>
+                                        <span class="text-[0.65rem] opacity-75">{endpoint.IP}</span>
+                                      </div>
+                                      <div class="flex flex-col gap-0.5 text-[0.65rem] opacity-90">
+                                        <div class="flex items-center gap-1.5">
+                                          <span class="w-16 font-medium">Proxmox:</span>
+                                          <span>{endpoint.Online ? 'Online' : 'Offline'}</span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5">
+                                          <span class="w-16 font-medium">Pulse:</span>
+                                          <span>
+                                            {pulseStatus === 'reachable' ? 'Reachable' : pulseStatus === 'unreachable' ? 'Unreachable' : 'Checking...'}
+                                          </span>
+                                        </div>
+                                        <Show when={pulseStatus === 'unreachable' && endpoint.PulseError}>
+                                          <div class="mt-1 pt-1 border-t border-current/20">
+                                            <span class="font-medium">Error: </span>
+                                            <span class="opacity-80">{endpoint.PulseError}</span>
+                                          </div>
+                                        </Show>
+                                      </div>
+                                    </div>
+                                  );
+                                }}
                               </For>
                             </div>
                           </Show>
