@@ -1304,14 +1304,6 @@ func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Repor
 		}
 	}
 
-	if tokenID != "" {
-		for _, host := range hosts {
-			if strings.TrimSpace(host.TokenID) == tokenID {
-				return host, true
-			}
-		}
-	}
-
 	if machineID != "" && hostname != "" {
 		for _, host := range hosts {
 			if strings.TrimSpace(host.MachineID) == machineID && strings.TrimSpace(host.Hostname) == hostname {

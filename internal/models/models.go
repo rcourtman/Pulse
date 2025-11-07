@@ -1136,6 +1136,13 @@ func (s *State) UpsertDockerHost(host DockerHost) {
 			if existing.CustomDisplayName != "" {
 				host.CustomDisplayName = existing.CustomDisplayName
 			}
+			// Preserve Hidden and PendingUninstall flags
+			host.Hidden = existing.Hidden
+			host.PendingUninstall = existing.PendingUninstall
+			// Preserve Command if it exists
+			if existing.Command != nil {
+				host.Command = existing.Command
+			}
 			s.DockerHosts[i] = host
 			updated = true
 			break
