@@ -607,10 +607,13 @@ func (n *NotificationManager) CancelAlert(alertID string) {
 		n.groupTimer = nil
 	}
 
+	// Clean up cooldown record for resolved alert
+	delete(n.lastNotified, alertID)
+
 	log.Debug().
 		Str("alertID", alertID).
 		Int("remaining", len(n.pendingAlerts)).
-		Msg("Removed resolved alert from pending notifications")
+		Msg("Removed resolved alert from pending notifications and cooldown map")
 }
 
 // sendGroupedAlerts sends all pending alerts as a group
@@ -642,16 +645,16 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	// Use persistent queue if available, otherwise send directly
 	if n.queue != nil {
 		n.enqueueNotifications(emailConfig, webhooks, appriseConfig, alertsToSend)
+		// Note: Cooldown will be marked after successful dequeue and send
 	} else {
 		n.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertsToSend)
-	}
-
-	// Update last notified time for all alerts
-	now := time.Now()
-	for _, alert := range alertsToSend {
-		n.lastNotified[alert.ID] = notificationRecord{
-			lastSent:   now,
-			alertStart: alert.StartTime,
+		// For direct sends, mark cooldown immediately (fire-and-forget)
+		now := time.Now()
+		for _, alert := range alertsToSend {
+			n.lastNotified[alert.ID] = notificationRecord{
+				lastSent:   now,
+				alertStart: alert.StartTime,
+			}
 		}
 	}
 }
@@ -910,6 +913,15 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 	lowerURL := strings.ToLower(serverURL)
 	if !strings.HasPrefix(lowerURL, "http://") && !strings.HasPrefix(lowerURL, "https://") {
 		return fmt.Errorf("apprise server URL must start with http or https: %s", serverURL)
+	}
+
+	// Validate Apprise server URL to prevent SSRF
+	if err := ValidateWebhookURL(serverURL); err != nil {
+		log.Error().
+			Err(err).
+			Str("serverURL", serverURL).
+			Msg("Apprise server URL validation failed - possible SSRF attempt")
+		return fmt.Errorf("apprise server URL validation failed: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
@@ -1395,6 +1407,16 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 
 // sendWebhookRequest sends the actual webhook request
 func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string) error {
+	// Re-validate webhook URL to prevent DNS rebinding attacks
+	if err := ValidateWebhookURL(webhook.URL); err != nil {
+		log.Error().
+			Err(err).
+			Str("webhook", webhook.Name).
+			Str("url", webhook.URL).
+			Msg("Webhook URL validation failed at send time - possible DNS rebinding")
+		return fmt.Errorf("webhook URL validation failed: %w", err)
+	}
+
 	// Check rate limit before sending
 	if !n.checkWebhookRateLimit(webhook.URL) {
 		log.Warn().
@@ -1455,14 +1477,12 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 		}
 	}
 
-	// Debug log the payload for Telegram and Gotify webhooks
+	// Debug log for Telegram and Gotify webhooks (without secrets)
 	if webhook.Service == "telegram" || webhook.Service == "gotify" {
 		log.Debug().
 			Str("webhook", webhook.Name).
 			Str("service", webhook.Service).
-			Str("url", webhookURL).
-			Str("payload", string(jsonData)).
-			Msg("Sending webhook with payload")
+			Msg("Sending webhook")
 	}
 
 	// Send request with secure client
@@ -2307,31 +2327,47 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		Int("alertCount", len(notif.Alerts)).
 		Msg("Processing queued notification")
 
+	var err error
 	switch notif.Type {
 	case "email":
 		var emailConfig EmailConfig
-		if err := json.Unmarshal(notif.Config, &emailConfig); err != nil {
+		if err = json.Unmarshal(notif.Config, &emailConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal email config: %w", err)
 		}
-		return n.sendGroupedEmail(emailConfig, notif.Alerts)
+		err = n.sendGroupedEmail(emailConfig, notif.Alerts)
 
 	case "webhook":
 		var webhookConfig WebhookConfig
-		if err := json.Unmarshal(notif.Config, &webhookConfig); err != nil {
+		if err = json.Unmarshal(notif.Config, &webhookConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal webhook config: %w", err)
 		}
-		return n.sendGroupedWebhook(webhookConfig, notif.Alerts)
+		err = n.sendGroupedWebhook(webhookConfig, notif.Alerts)
 
 	case "apprise":
 		var appriseConfig AppriseConfig
-		if err := json.Unmarshal(notif.Config, &appriseConfig); err != nil {
+		if err = json.Unmarshal(notif.Config, &appriseConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal apprise config: %w", err)
 		}
-		return n.sendGroupedApprise(appriseConfig, notif.Alerts)
+		err = n.sendGroupedApprise(appriseConfig, notif.Alerts)
 
 	default:
 		return fmt.Errorf("unknown notification type: %s", notif.Type)
 	}
+
+	// Mark cooldown after successful send
+	if err == nil {
+		n.mu.Lock()
+		now := time.Now()
+		for _, alert := range notif.Alerts {
+			n.lastNotified[alert.ID] = notificationRecord{
+				lastSent:   now,
+				alertStart: alert.StartTime,
+			}
+		}
+		n.mu.Unlock()
+	}
+
+	return err
 }
 
 // Stop gracefully stops the notification manager

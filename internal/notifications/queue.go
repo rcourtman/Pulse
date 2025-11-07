@@ -63,6 +63,11 @@ func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
 		dataDir = filepath.Join(utils.GetDataDir(), "notifications")
 	}
 
+	// Ensure directory exists
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create notification queue directory: %w", err)
+	}
+
 	dbPath := filepath.Join(dataDir, "notification_queue.db")
 
 	db, err := sql.Open("sqlite3", dbPath)
