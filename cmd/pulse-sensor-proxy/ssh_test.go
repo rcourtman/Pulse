@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -134,5 +135,40 @@ func TestTempWrapperPrefersSensorsOutput(t *testing.T) {
 	trimmed := strings.TrimSpace(string(output))
 	if trimmed != jsonOutput {
 		t.Fatalf("expected wrapper to return sensors output %s, got %s", jsonOutput, trimmed)
+	}
+}
+
+func TestReadAllWithLimit(t *testing.T) {
+	reader := bytes.NewBufferString("abcdefg")
+	data, exceeded, err := readAllWithLimit(reader, 4)
+	if err != nil {
+		t.Fatalf("readAllWithLimit returned error: %v", err)
+	}
+	if string(data) != "abcd" {
+		t.Fatalf("expected truncated output 'abcd', got %q", string(data))
+	}
+	if !exceeded {
+		t.Fatalf("expected exceeded flag when data exceeds limit")
+	}
+
+	reader2 := bytes.NewBufferString("xyz")
+	data, exceeded, err = readAllWithLimit(reader2, 10)
+	if err != nil {
+		t.Fatalf("readAllWithLimit returned error: %v", err)
+	}
+	if string(data) != "xyz" {
+		t.Fatalf("expected full output 'xyz', got %q", string(data))
+	}
+	if exceeded {
+		t.Fatalf("did not expect exceeded flag for small output")
+	}
+
+	reader3 := bytes.NewBufferString("12345")
+	data, exceeded, err = readAllWithLimit(reader3, 0)
+	if err != nil {
+		t.Fatalf("readAllWithLimit returned error: %v", err)
+	}
+	if string(data) != "12345" || exceeded {
+		t.Fatalf("expected unlimited read to return full data without exceeding")
 	}
 }

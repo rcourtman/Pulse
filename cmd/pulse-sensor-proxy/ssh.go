@@ -1,16 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -42,10 +47,202 @@ exit 1
 `
 )
 
+const proxmoxClusterKnownHostsPath = "/etc/pve/priv/known_hosts"
+
 // execCommand executes a shell command and returns output
 func execCommand(cmd string) (string, error) {
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	return string(out), err
+}
+
+func execCommandWithLimits(cmd string, stdoutLimit, stderrLimit int64) (string, string, bool, bool, error) {
+	command := exec.Command("sh", "-c", cmd)
+
+	stdoutPipe, err := command.StdoutPipe()
+	if err != nil {
+		return "", "", false, false, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderrPipe, err := command.StderrPipe()
+	if err != nil {
+		return "", "", false, false, fmt.Errorf("stderr pipe: %w", err)
+	}
+
+	if err := command.Start(); err != nil {
+		return "", "", false, false, err
+	}
+
+	type pipeResult struct {
+		data     []byte
+		exceeded bool
+		err      error
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	stdoutCh := make(chan pipeResult, 1)
+	stderrCh := make(chan pipeResult, 1)
+
+	go func() {
+		defer wg.Done()
+		data, exceeded, readErr := readAllWithLimit(stdoutPipe, stdoutLimit)
+		stdoutCh <- pipeResult{data: data, exceeded: exceeded, err: readErr}
+	}()
+
+	go func() {
+		defer wg.Done()
+		data, exceeded, readErr := readAllWithLimit(stderrPipe, stderrLimit)
+		stderrCh <- pipeResult{data: data, exceeded: exceeded, err: readErr}
+	}()
+
+	var stdoutRes, stderrRes pipeResult
+	wgDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(wgDone)
+	}()
+
+	<-wgDone
+	stdoutRes = <-stdoutCh
+	stderrRes = <-stderrCh
+
+	waitErr := command.Wait()
+
+	if stdoutRes.err != nil {
+		return "", "", stdoutRes.exceeded, stderrRes.exceeded, fmt.Errorf("stdout read: %w", stdoutRes.err)
+	}
+	if stderrRes.err != nil {
+		return "", "", stdoutRes.exceeded, stderrRes.exceeded, fmt.Errorf("stderr read: %w", stderrRes.err)
+	}
+
+	if waitErr != nil {
+		return string(stdoutRes.data), string(stderrRes.data), stdoutRes.exceeded, stderrRes.exceeded, waitErr
+	}
+
+	return string(stdoutRes.data), string(stderrRes.data), stdoutRes.exceeded, stderrRes.exceeded, nil
+}
+
+func readAllWithLimit(r io.Reader, limit int64) ([]byte, bool, error) {
+	if limit <= 0 {
+		data, err := io.ReadAll(r)
+		return data, false, err
+	}
+
+	const chunkSize = 32 * 1024
+	buf := make([]byte, chunkSize)
+	var out bytes.Buffer
+	var total int64
+	exceeded := false
+
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			if total < limit {
+				remaining := limit - total
+				toWrite := n
+				if int64(n) > remaining {
+					toWrite = int(remaining)
+					exceeded = true
+				}
+				if toWrite > 0 {
+					if _, writeErr := out.Write(buf[:toWrite]); writeErr != nil {
+						return nil, exceeded, writeErr
+					}
+				}
+				if int64(n) > remaining {
+					exceeded = true
+				}
+			} else {
+				exceeded = true
+			}
+			total += int64(n)
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, exceeded, err
+		}
+	}
+
+	return out.Bytes(), exceeded, nil
+}
+
+func (p *Proxy) ensureHostKeyFromProxmox(ctx context.Context, node string) error {
+	if !isProxmoxHost() {
+		return fmt.Errorf("not running on Proxmox host")
+	}
+
+	entries, err := loadProxmoxHostKeys(node)
+	if err != nil {
+		return err
+	}
+
+	if err := p.knownHosts.EnsureWithEntries(ctx, node, 22, entries); err != nil {
+		return p.handleHostKeyEnsureError(node, err)
+	}
+
+	log.Debug().
+		Str("node", node).
+		Msg("Loaded host key from Proxmox cluster store")
+	return nil
+}
+
+func (p *Proxy) handleHostKeyEnsureError(node string, err error) error {
+	var changeErr *knownhosts.HostKeyChangeError
+	if errors.As(err, &changeErr) {
+		log.Error().
+			Str("node", node).
+			Str("host_spec", changeErr.Host).
+			Msg("Detected SSH host key change")
+		if p.metrics != nil {
+			p.metrics.recordHostKeyChange(node)
+		}
+	}
+	return err
+}
+
+func loadProxmoxHostKeys(host string) ([][]byte, error) {
+	file, err := os.Open(proxmoxClusterKnownHostsPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var entries [][]byte
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		if !knownhosts.HostFieldMatches(host, fields[0]) {
+			continue
+		}
+
+		comment := ""
+		if len(fields) > 3 {
+			comment = strings.Join(fields[3:], " ")
+		}
+		var entry string
+		if comment != "" {
+			entry = fmt.Sprintf("%s %s %s %s", host, fields[1], fields[2], comment)
+		} else {
+			entry = fmt.Sprintf("%s %s %s", host, fields[1], fields[2])
+		}
+		entries = append(entries, []byte(entry))
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("no Proxmox host keys found for %s in %s", host, proxmoxClusterKnownHostsPath)
+	}
+	return entries, nil
 }
 
 // getPublicKey reads the SSH public key from the default directory
@@ -87,7 +284,28 @@ func (p *Proxy) ensureHostKey(node string) error {
 	if p.knownHosts == nil {
 		return fmt.Errorf("host key manager not configured")
 	}
-	return p.knownHosts.Ensure(context.Background(), node)
+
+	ctx := context.Background()
+	if isProxmoxHost() {
+		if err := p.ensureHostKeyFromProxmox(ctx, node); err == nil {
+			return nil
+		} else {
+			if p.config.RequireProxmoxHostkeys {
+				return err
+			}
+			log.Warn().
+				Str("node", node).
+				Err(err).
+				Msg("Failed to load host key from Proxmox; falling back to ssh-keyscan")
+		}
+	} else if p.config.RequireProxmoxHostkeys {
+		return fmt.Errorf("require_proxmox_hostkeys enabled but not running on Proxmox host")
+	}
+
+	if err := p.knownHosts.Ensure(ctx, node); err != nil {
+		return p.handleHostKeyEnsureError(node, err)
+	}
+	return nil
 }
 
 func (p *Proxy) sshCommonOptions() string {
@@ -253,11 +471,27 @@ func (p *Proxy) testSSHConnection(nodeHost string) error {
 		nodeHost,
 	)
 
-	output, err := execCommand(cmd)
+	_, stderr, stdoutExceeded, stderrExceeded, err := execCommandWithLimits(cmd, p.maxSSHOutputBytes, p.maxSSHOutputBytes)
+	if stdoutExceeded {
+		log.Warn().Str("node", nodeHost).Int64("limit_bytes", p.maxSSHOutputBytes).Msg("SSH test output exceeded limit")
+		if p.metrics != nil {
+			p.metrics.recordSSHOutputOversized(nodeHost)
+		}
+		return fmt.Errorf("ssh test output exceeded %d bytes", p.maxSSHOutputBytes)
+	}
+
+	if stderrExceeded {
+		log.Warn().Str("node", nodeHost).Int64("limit_bytes", p.maxSSHOutputBytes).Msg("SSH test stderr exceeded limit")
+	}
+
 	if err != nil {
 		p.metrics.sshRequests.WithLabelValues(nodeLabel, "error").Inc()
 		p.metrics.sshLatency.WithLabelValues(nodeLabel).Observe(time.Since(startTime).Seconds())
-		return fmt.Errorf("SSH test failed: %w (output: %s)", err, output)
+		stderrMsg := strings.TrimSpace(stderr)
+		if stderrMsg != "" {
+			return fmt.Errorf("SSH test failed: %w (stderr: %s)", err, stderrMsg)
+		}
+		return fmt.Errorf("SSH test failed: %w", err)
 	}
 
 	// The forced command will run "sensors -j" instead of "echo test"
@@ -291,16 +525,34 @@ func (p *Proxy) getTemperatureViaSSH(nodeHost string) (string, error) {
 		nodeHost,
 	)
 
-	output, err := execCommand(cmd)
+	stdout, stderr, stdoutExceeded, stderrExceeded, err := execCommandWithLimits(cmd, p.maxSSHOutputBytes, p.maxSSHOutputBytes)
+	if stdoutExceeded {
+		log.Warn().Str("node", nodeHost).Int64("limit_bytes", p.maxSSHOutputBytes).Msg("SSH temperature output exceeded limit")
+		if p.metrics != nil {
+			p.metrics.recordSSHOutputOversized(nodeHost)
+		}
+		p.metrics.sshRequests.WithLabelValues(nodeLabel, "error").Inc()
+		p.metrics.sshLatency.WithLabelValues(nodeLabel).Observe(time.Since(startTime).Seconds())
+		return "", fmt.Errorf("ssh output exceeded %d bytes", p.maxSSHOutputBytes)
+	}
+
+	if stderrExceeded {
+		log.Warn().Str("node", nodeHost).Int64("limit_bytes", p.maxSSHOutputBytes).Msg("SSH temperature stderr exceeded limit")
+	}
+
 	if err != nil {
 		p.metrics.sshRequests.WithLabelValues(nodeLabel, "error").Inc()
 		p.metrics.sshLatency.WithLabelValues(nodeLabel).Observe(time.Since(startTime).Seconds())
+		stderrMsg := strings.TrimSpace(stderr)
+		if stderrMsg != "" {
+			return "", fmt.Errorf("failed to fetch temperatures: %w (stderr: %s)", err, stderrMsg)
+		}
 		return "", fmt.Errorf("failed to fetch temperatures: %w", err)
 	}
 
 	p.metrics.sshRequests.WithLabelValues(nodeLabel, "success").Inc()
 	p.metrics.sshLatency.WithLabelValues(nodeLabel).Observe(time.Since(startTime).Seconds())
-	return output, nil
+	return stdout, nil
 }
 
 // discoverClusterNodes discovers all nodes in the Proxmox cluster

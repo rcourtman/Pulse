@@ -23,16 +23,18 @@ type Manager interface {
 	// EnsureWithPort guarantees that the host key for the provided host:port exists
 	// in the managed known_hosts file.
 	EnsureWithPort(ctx context.Context, host string, port int) error
+	// EnsureWithEntries installs provided host key entries for the given host/port.
+	EnsureWithEntries(ctx context.Context, host string, port int, entries [][]byte) error
 	// Path returns the absolute path to the managed known_hosts file.
 	Path() string
 }
 
 type manager struct {
-	path            string
-	cache           map[string]struct{}
-	mu              sync.Mutex
-	keyscanFn       keyscanFunc
-	keyscanTimeout  time.Duration
+	path           string
+	cache          map[string]struct{}
+	mu             sync.Mutex
+	keyscanFn      keyscanFunc
+	keyscanTimeout time.Duration
 }
 
 type keyscanFunc func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error)
@@ -44,7 +46,24 @@ const (
 var (
 	// ErrNoHostKeys is returned when ssh-keyscan yields no usable entries.
 	ErrNoHostKeys = errors.New("knownhosts: no host keys discovered")
+	// ErrHostKeyChanged signals that a host key already exists with a different fingerprint.
+	ErrHostKeyChanged = errors.New("knownhosts: host key changed")
 )
+
+// HostKeyChangeError describes a detected host key mismatch.
+type HostKeyChangeError struct {
+	Host     string
+	Existing string
+	Provided string
+}
+
+func (e *HostKeyChangeError) Error() string {
+	return fmt.Sprintf("knownhosts: host key for %s changed", e.Host)
+}
+
+func (e *HostKeyChangeError) Unwrap() error {
+	return ErrHostKeyChanged
+}
 
 // Option allows customizing Manager construction.
 type Option func(*manager)
@@ -101,31 +120,16 @@ func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) err
 		port = 22 // Default to standard SSH port
 	}
 
-	cacheKey := fmt.Sprintf("%s:%d", host, port)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, ok := m.cache[cacheKey]; ok {
-		return nil
-	}
-
-	if err := m.ensureKnownHostsFile(); err != nil {
-		return err
-	}
-
-	// For non-standard ports, check for [host]:port format
 	hostSpec := host
 	if port != 22 {
 		hostSpec = fmt.Sprintf("[%s]:%d", host, port)
 	}
 
-	exists, err := hostKeyExists(m.path, hostSpec)
-	if err != nil {
-		return err
-	}
-	if exists {
-		m.cache[cacheKey] = struct{}{}
+	cacheKey := fmt.Sprintf("%s:%d", host, port)
+	m.mu.Lock()
+	_, cached := m.cache[cacheKey]
+	m.mu.Unlock()
+	if cached {
 		return nil
 	}
 
@@ -139,8 +143,64 @@ func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) err
 		return fmt.Errorf("%w for %s:%d", ErrNoHostKeys, host, port)
 	}
 
-	if err := appendHostKey(m.path, entries); err != nil {
+	return m.EnsureWithEntries(ctx, host, port, entries)
+}
+
+// EnsureWithEntries installs the provided host key entries for host:port.
+func (m *manager) EnsureWithEntries(ctx context.Context, host string, port int, entries [][]byte) error {
+	if strings.TrimSpace(host) == "" {
+		return fmt.Errorf("knownhosts: missing host")
+	}
+	if port <= 0 {
+		port = 22
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("knownhosts: no host key entries provided for %s", host)
+	}
+
+	cacheKey := fmt.Sprintf("%s:%d", host, port)
+	hostSpec := host
+	if port != 22 {
+		hostSpec = fmt.Sprintf("[%s]:%d", host, port)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if err := m.ensureKnownHostsFile(); err != nil {
 		return err
+	}
+
+	var toAppend [][]byte
+	for _, entry := range entries {
+		normalized, keyType, err := normalizeHostEntry(hostSpec, entry)
+		if err != nil {
+			return err
+		}
+
+		existing, err := findHostKeyLine(m.path, hostSpec, keyType)
+		if err != nil {
+			return err
+		}
+
+		if existing != "" {
+			if existing != string(normalized) {
+				return &HostKeyChangeError{
+					Host:     hostSpec,
+					Existing: existing,
+					Provided: string(normalized),
+				}
+			}
+			continue
+		}
+
+		toAppend = append(toAppend, normalized)
+	}
+
+	if len(toAppend) > 0 {
+		if err := appendHostKey(m.path, toAppend); err != nil {
+			return err
+		}
 	}
 
 	m.cache[cacheKey] = struct{}{}
@@ -225,6 +285,58 @@ func sanitizeKeyscanOutput(host string, raw []byte) [][]byte {
 	return entries
 }
 
+func normalizeHostEntry(host string, entry []byte) ([]byte, string, error) {
+	trimmed := strings.TrimSpace(string(entry))
+	fields := strings.Fields(trimmed)
+	if len(fields) < 3 {
+		return nil, "", fmt.Errorf("knownhosts: invalid host key entry for %s", host)
+	}
+
+	keyType := fields[1]
+	keyData := fields[2]
+	var comment string
+	if len(fields) > 3 {
+		comment = strings.Join(fields[3:], " ")
+	}
+
+	if comment != "" {
+		return []byte(fmt.Sprintf("%s %s %s %s", host, keyType, keyData, comment)), keyType, nil
+	}
+	return []byte(fmt.Sprintf("%s %s %s", host, keyType, keyData)), keyType, nil
+}
+
+func findHostKeyLine(path, host, keyType string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !hostLineMatches(host, line) {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		if keyType != "" && fields[1] != keyType {
+			continue
+		}
+		return strings.TrimSpace(line), nil
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	return "", nil
+}
+
 func hostLineMatches(host, line string) bool {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
@@ -251,6 +363,11 @@ func hostFieldMatches(host, field string) bool {
 		}
 	}
 	return false
+}
+
+// HostFieldMatches reports whether a known_hosts host field matches the provided host.
+func HostFieldMatches(host, field string) bool {
+	return hostFieldMatches(host, field)
 }
 
 func hostCandidates(part string) []string {

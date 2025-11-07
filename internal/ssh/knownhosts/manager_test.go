@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,7 +66,7 @@ other.com ssh-ed25519 CCCC
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	if want := "example.com ssh-ed25519 AAAA\nexample.com,192.0.2.10 ssh-rsa BBBB\n"; string(data) != want {
+	if want := "example.com ssh-ed25519 AAAA\nexample.com ssh-rsa BBBB\n"; string(data) != want {
 		t.Fatalf("unexpected known_hosts contents\nwant:\n%s\ngot:\n%s", want, data)
 	}
 }
@@ -129,5 +130,60 @@ func TestHostCandidates(t *testing.T) {
 				t.Fatalf("hostCandidates(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
 			}
 		}
+	}
+}
+
+func TestEnsureWithEntriesDetectsChange(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	entry := []byte("example.com ssh-ed25519 AAAA")
+	if err := mgr.EnsureWithEntries(context.Background(), "example.com", 22, [][]byte{entry}); err != nil {
+		t.Fatalf("EnsureWithEntries: %v", err)
+	}
+
+	// Same entry should be a no-op
+	if err := mgr.EnsureWithEntries(context.Background(), "example.com", 22, [][]byte{entry}); err != nil {
+		t.Fatalf("EnsureWithEntries repeat: %v", err)
+	}
+
+	// Different key should trigger change error
+	changeEntry := []byte("example.com ssh-ed25519 BBBB")
+	err = mgr.EnsureWithEntries(context.Background(), "example.com", 22, [][]byte{changeEntry})
+	var changeErr *HostKeyChangeError
+	if !errors.As(err, &changeErr) {
+		t.Fatalf("expected HostKeyChangeError, got %v", err)
+	}
+}
+
+func TestEnsureWithEntriesAppendsNewKeyTypes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := mgr.EnsureWithEntries(ctx, "example.com", 22, [][]byte{[]byte("example.com ssh-ed25519 AAAA")}); err != nil {
+		t.Fatalf("EnsureWithEntries ed25519: %v", err)
+	}
+	if err := mgr.EnsureWithEntries(ctx, "example.com", 22, [][]byte{[]byte("example.com ssh-rsa BBBB")}); err != nil {
+		t.Fatalf("EnsureWithEntries rsa: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	got := string(data)
+	if !strings.Contains(got, "ssh-ed25519 AAAA") || !strings.Contains(got, "ssh-rsa BBBB") {
+		t.Fatalf("expected both key types, got %s", got)
 	}
 }
