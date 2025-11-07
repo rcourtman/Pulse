@@ -18,18 +18,31 @@ type DockerMetadata struct {
 	Tags        []string `json:"tags"`        // Optional tags for categorization
 }
 
+// DockerHostMetadata holds additional metadata for a Docker host
+type DockerHostMetadata struct {
+	CustomDisplayName string `json:"customDisplayName,omitempty"` // User-defined custom display name
+}
+
+// dockerMetadataFile represents the on-disk format for Docker metadata
+type dockerMetadataFile struct {
+	Containers map[string]*DockerMetadata     `json:"containers,omitempty"` // Container/service metadata (legacy: may be top-level)
+	Hosts      map[string]*DockerHostMetadata `json:"hosts,omitempty"`      // Host-level metadata
+}
+
 // DockerMetadataStore manages Docker resource metadata
 type DockerMetadataStore struct {
-	mu       sync.RWMutex
-	metadata map[string]*DockerMetadata // keyed by resource ID
-	dataPath string
+	mu           sync.RWMutex
+	metadata     map[string]*DockerMetadata     // keyed by resource ID (containers/services)
+	hostMetadata map[string]*DockerHostMetadata // keyed by host ID
+	dataPath     string
 }
 
 // NewDockerMetadataStore creates a new metadata store
 func NewDockerMetadataStore(dataPath string) *DockerMetadataStore {
 	store := &DockerMetadataStore{
-		metadata: make(map[string]*DockerMetadata),
-		dataPath: dataPath,
+		metadata:     make(map[string]*DockerMetadata),
+		hostMetadata: make(map[string]*DockerHostMetadata),
+		dataPath:     dataPath,
 	}
 
 	// Load existing metadata
@@ -62,6 +75,46 @@ func (s *DockerMetadataStore) GetAll() map[string]*DockerMetadata {
 		result[k] = v
 	}
 	return result
+}
+
+// GetHostMetadata retrieves metadata for a Docker host
+func (s *DockerMetadataStore) GetHostMetadata(hostID string) *DockerHostMetadata {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if meta, exists := s.hostMetadata[hostID]; exists {
+		return meta
+	}
+	return nil
+}
+
+// GetAllHostMetadata retrieves all Docker host metadata
+func (s *DockerMetadataStore) GetAllHostMetadata() map[string]*DockerHostMetadata {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Return a copy to prevent external modifications
+	result := make(map[string]*DockerHostMetadata)
+	for k, v := range s.hostMetadata {
+		result[k] = v
+	}
+	return result
+}
+
+// SetHostMetadata updates or creates metadata for a Docker host
+func (s *DockerMetadataStore) SetHostMetadata(hostID string, meta *DockerHostMetadata) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if meta == nil || meta.CustomDisplayName == "" {
+		// If metadata is nil or custom display name is empty, delete the entry
+		delete(s.hostMetadata, hostID)
+	} else {
+		s.hostMetadata[hostID] = meta
+	}
+
+	// Save to disk
+	return s.save()
 }
 
 // Set updates or creates metadata for a Docker resource
@@ -136,11 +189,40 @@ func (s *DockerMetadataStore) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := json.Unmarshal(data, &s.metadata); err != nil {
+	// Try to load as versioned format first
+	var fileData dockerMetadataFile
+	if err := json.Unmarshal(data, &fileData); err != nil {
 		return fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 
-	log.Info().Int("count", len(s.metadata)).Msg("Loaded Docker metadata")
+	// Check if this is the new format (has "hosts" or "containers" keys)
+	if fileData.Hosts != nil || fileData.Containers != nil {
+		// New versioned format
+		if fileData.Containers != nil {
+			s.metadata = fileData.Containers
+		} else {
+			s.metadata = make(map[string]*DockerMetadata)
+		}
+		if fileData.Hosts != nil {
+			s.hostMetadata = fileData.Hosts
+		} else {
+			s.hostMetadata = make(map[string]*DockerHostMetadata)
+		}
+		log.Info().
+			Int("containerCount", len(s.metadata)).
+			Int("hostCount", len(s.hostMetadata)).
+			Msg("Loaded Docker metadata (versioned format)")
+	} else {
+		// Legacy format: top-level map is container metadata
+		if err := json.Unmarshal(data, &s.metadata); err != nil {
+			return fmt.Errorf("failed to unmarshal legacy metadata: %w", err)
+		}
+		s.hostMetadata = make(map[string]*DockerHostMetadata)
+		log.Info().
+			Int("containerCount", len(s.metadata)).
+			Msg("Loaded Docker metadata (legacy format)")
+	}
+
 	return nil
 }
 
@@ -150,7 +232,13 @@ func (s *DockerMetadataStore) save() error {
 
 	log.Debug().Str("path", filePath).Msg("Saving Docker metadata to disk")
 
-	data, err := json.Marshal(s.metadata)
+	// Use versioned format
+	fileData := dockerMetadataFile{
+		Containers: s.metadata,
+		Hosts:      s.hostMetadata,
+	}
+
+	data, err := json.Marshal(fileData)
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
@@ -171,7 +259,7 @@ func (s *DockerMetadataStore) save() error {
 		return fmt.Errorf("failed to rename metadata file: %w", err)
 	}
 
-	log.Debug().Str("path", filePath).Int("entries", len(s.metadata)).Msg("Docker metadata saved successfully")
+	log.Debug().Str("path", filePath).Int("containers", len(s.metadata)).Int("hosts", len(s.hostMetadata)).Msg("Docker metadata saved successfully")
 
 	return nil
 }

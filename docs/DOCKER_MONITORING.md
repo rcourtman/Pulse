@@ -257,9 +257,11 @@ Need the alerts but at a different tone? The same Containers tab exposes global 
 
 **Symptom:** The Docker tab switches between hosts instead of showing all of them simultaneously.
 
-**Cause:** Multiple agents using the same API token. Pulse matches incoming reports by agent ID first and falls back to the API token when IDs are missing or identical. Shared tokens make agents indistinguishable.
+**Cause:** Multiple agents using the same API token or identical agent IDs. Pulse matches incoming reports by agent ID first and falls back to the API token when IDs are missing or identical. Cloning a VM or LXC that already runs `pulse-docker-agent` copies the agent ID, so the two hosts replace each other even with different tokens.
 
-**Fix:** Create a dedicated API token for each Docker host in **Settings → API Tokens** and update the agents with their unique tokens. See the [Quick install section](#quick-install-from-your-pulse-server-recommended) for token setup details.
+**Fix:**
+- If agents share the same API token: Create a dedicated API token for each Docker host in **Settings → API Tokens** and update the agents with their unique tokens. See the [Quick install section](#quick-install-from-your-pulse-server-recommended) for token setup details.
+- If a cloned VM/LXC has a duplicate agent ID: Regenerate the machine ID on the clone by running `sudo rm /etc/machine-id /var/lib/dbus/machine-id && sudo systemd-machine-id-setup`, then restart `pulse-docker-agent`. Alternatively, set a unique `--agent-id` or `PULSE_AGENT_ID` environment variable when starting the agent.
 
 ### Agent rejected after host removal
 

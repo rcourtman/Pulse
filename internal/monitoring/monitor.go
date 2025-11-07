@@ -529,6 +529,7 @@ type Monitor struct {
 	maxRetryAttempts           int
 	tempCollector              *TemperatureCollector // SSH-based temperature collector
 	guestMetadataStore         *config.GuestMetadataStore
+	dockerMetadataStore        *config.DockerMetadataStore
 	mu                         sync.RWMutex
 	startTime                  time.Time
 	rateTracker                *RateTracker
@@ -1170,7 +1171,22 @@ func (m *Monitor) SetDockerHostCustomDisplayName(hostID string, customName strin
 		return models.DockerHost{}, fmt.Errorf("docker host id is required")
 	}
 
-	host, ok := m.state.SetDockerHostCustomDisplayName(hostID, strings.TrimSpace(customName))
+	customName = strings.TrimSpace(customName)
+
+	// Persist to Docker metadata store first
+	var hostMeta *config.DockerHostMetadata
+	if customName != "" {
+		hostMeta = &config.DockerHostMetadata{
+			CustomDisplayName: customName,
+		}
+	}
+	if err := m.dockerMetadataStore.SetHostMetadata(hostID, hostMeta); err != nil {
+		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to persist Docker host metadata")
+		return models.DockerHost{}, fmt.Errorf("failed to persist custom display name: %w", err)
+	}
+
+	// Update in-memory state
+	host, ok := m.state.SetDockerHostCustomDisplayName(hostID, customName)
 	if !ok {
 		return models.DockerHost{}, fmt.Errorf("docker host %q not found", hostID)
 	}
@@ -1836,6 +1852,13 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		host.TokenName = previous.TokenName
 		host.TokenHint = previous.TokenHint
 		host.TokenLastUsedAt = previous.TokenLastUsedAt
+	}
+
+	// Load custom display name from metadata store if not already set
+	if host.CustomDisplayName == "" {
+		if hostMeta := m.dockerMetadataStore.GetHostMetadata(identifier); hostMeta != nil {
+			host.CustomDisplayName = hostMeta.CustomDisplayName
+		}
 	}
 
 	m.state.UpsertDockerHost(host)
@@ -3432,6 +3455,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		maxRetryAttempts:           5,
 		tempCollector:              tempCollector,
 		guestMetadataStore:         config.NewGuestMetadataStore(cfg.DataPath),
+		dockerMetadataStore:        config.NewDockerMetadataStore(cfg.DataPath),
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
