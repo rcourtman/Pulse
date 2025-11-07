@@ -66,16 +66,41 @@ func extractPeerCredentials(conn net.Conn) (*peerCredentials, error) {
 func (p *Proxy) initAuthRules() error {
 	p.allowedPeerUIDs = make(map[uint32]struct{})
 	p.allowedPeerGIDs = make(map[uint32]struct{})
+	p.peerCapabilities = make(map[uint32]Capability)
+
+	addCapability := func(uid uint32, caps Capability) {
+		if caps == 0 {
+			caps = CapabilityRead
+		}
+		if existing, ok := p.peerCapabilities[uid]; ok {
+			p.peerCapabilities[uid] = existing | caps
+		} else {
+			p.peerCapabilities[uid] = caps
+		}
+	}
 
 	// Always allow root and the proxy's own user
 	p.allowedPeerUIDs[0] = struct{}{}
+	addCapability(0, capabilityLegacyAll)
 	p.allowedPeerUIDs[uint32(os.Getuid())] = struct{}{}
+	addCapability(uint32(os.Getuid()), capabilityLegacyAll)
 	p.allowedPeerGIDs[0] = struct{}{}
 	p.allowedPeerGIDs[uint32(os.Getgid())] = struct{}{}
+
+	if len(p.config.AllowedPeers) > 0 {
+		for _, peer := range p.config.AllowedPeers {
+			p.allowedPeerUIDs[peer.UID] = struct{}{}
+			addCapability(peer.UID, parseCapabilityList(peer.Capabilities))
+		}
+		log.Info().Int("peer_capability_entries", len(p.config.AllowedPeers)).Msg("Loaded capability entries for peers")
+	}
 
 	if len(p.config.AllowedPeerUIDs) > 0 {
 		for _, uid := range dedupeUint32(p.config.AllowedPeerUIDs) {
 			p.allowedPeerUIDs[uid] = struct{}{}
+			if _, ok := p.peerCapabilities[uid]; !ok {
+				addCapability(uid, capabilityLegacyAll)
+			}
 		}
 		log.Info().
 			Int("explicit_uid_allow_count", len(p.config.AllowedPeerUIDs)).
@@ -101,13 +126,9 @@ func (p *Proxy) initAuthRules() error {
 		users = []string{"root"}
 	}
 
-	uidRanges, err := loadSubIDRanges("/etc/subuid", users)
+	uidRanges, gidRanges, err := loadIDMappingRanges(users)
 	if err != nil {
-		return fmt.Errorf("loading subordinate UID ranges: %w", err)
-	}
-	gidRanges, err := loadSubIDRanges("/etc/subgid", users)
-	if err != nil {
-		return fmt.Errorf("loading subordinate GID ranges: %w", err)
+		return err
 	}
 
 	p.idMappedUIDRanges = uidRanges
@@ -128,17 +149,37 @@ func (p *Proxy) initAuthRules() error {
 	return nil
 }
 
-// authorizePeer verifies the peer credentials against configured allow lists
-func (p *Proxy) authorizePeer(cred *peerCredentials) error {
-	if _, ok := p.allowedPeerUIDs[cred.uid]; ok {
-		return nil
+// authorizePeer verifies the peer credentials against configured allow lists and returns capabilities.
+func (p *Proxy) authorizePeer(cred *peerCredentials) (Capability, error) {
+	if cred == nil {
+		return 0, fmt.Errorf("missing peer credentials")
+	}
+
+	if caps, ok := p.peerCapabilities[cred.uid]; ok {
+		log.Debug().
+			Uint32("uid", cred.uid).
+			Msg("Peer authorized via UID allow-list")
+		return caps, nil
+	}
+
+	if len(p.allowedPeerGIDs) > 0 {
+		if _, ok := p.allowedPeerGIDs[cred.gid]; ok {
+			log.Debug().
+				Uint32("gid", cred.gid).
+				Msg("Peer authorized via GID allow-list")
+			return capabilityLegacyAll, nil
+		}
 	}
 
 	if p.config.AllowIDMappedRoot && p.isIDMappedRoot(cred) {
-		return nil
+		log.Debug().
+			Uint32("uid", cred.uid).
+			Uint32("gid", cred.gid).
+			Msg("Peer authorized via ID-mapped root range")
+		return CapabilityRead, nil
 	}
 
-	return fmt.Errorf("unauthorized: uid=%d gid=%d", cred.uid, cred.gid)
+	return 0, fmt.Errorf("unauthorized: uid=%d gid=%d", cred.uid, cred.gid)
 }
 
 func (p *Proxy) isIDMappedRoot(cred *peerCredentials) bool {
@@ -252,4 +293,16 @@ func loadSubIDRanges(path string, users []string) ([]idRange, error) {
 	}
 
 	return ranges, nil
+}
+
+func loadIDMappingRanges(users []string) ([]idRange, []idRange, error) {
+	uidRanges, err := loadSubIDRanges("/etc/subuid", users)
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading subordinate UID ranges: %w", err)
+	}
+	gidRanges, err := loadSubIDRanges("/etc/subgid", users)
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading subordinate GID ranges: %w", err)
+	}
+	return uidRanges, gidRanges, nil
 }

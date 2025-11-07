@@ -1,15 +1,25 @@
 package main
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
 
-// peerID identifies a connecting principal (grouped by UID)
+// peerID identifies a connecting principal (grouped by UID or ID range)
 type peerID struct {
-	uid uint32
+	uid      uint32
+	uidRange *idRange
+}
+
+func (p peerID) String() string {
+	if p.uidRange != nil {
+		end := p.uidRange.start + p.uidRange.length - 1
+		return fmt.Sprintf("range:%d-%d", p.uidRange.start, end)
+	}
+	return fmt.Sprintf("uid:%d", p.uid)
 }
 
 // limiterEntry holds rate limiting and concurrency controls for a peer
@@ -30,15 +40,17 @@ type limiterPolicy struct {
 // rateLimiter manages per-peer rate limits and concurrency
 type rateLimiter struct {
 	mu        sync.Mutex
-	entries   map[peerID]*limiterEntry
+	entries   map[string]*limiterEntry
 	quitChan  chan struct{}
 	globalSem chan struct{}
 	policy    limiterPolicy
 	metrics   *ProxyMetrics
+	uidRanges []idRange
+	gidRanges []idRange
 }
 
 const (
-	defaultPerPeerBurst       = 5  // Allow burst of 5 requests for multi-node polling
+	defaultPerPeerBurst       = 5 // Allow burst of 5 requests for multi-node polling
 	defaultPerPeerConcurrency = 2
 	defaultGlobalConcurrency  = 8
 )
@@ -51,7 +63,7 @@ var (
 
 // newRateLimiter creates a new rate limiter with cleanup loop
 // If rateLimitCfg is provided, it overrides the default rate limit settings
-func newRateLimiter(metrics *ProxyMetrics, rateLimitCfg *RateLimitConfig) *rateLimiter {
+func newRateLimiter(metrics *ProxyMetrics, rateLimitCfg *RateLimitConfig, uidRanges, gidRanges []idRange) *rateLimiter {
 	// Use defaults
 	perPeerLimit := defaultPerPeerLimit
 	perPeerBurst := defaultPerPeerBurst
@@ -68,7 +80,7 @@ func newRateLimiter(metrics *ProxyMetrics, rateLimitCfg *RateLimitConfig) *rateL
 	}
 
 	rl := &rateLimiter{
-		entries:   make(map[peerID]*limiterEntry),
+		entries:   make(map[string]*limiterEntry),
 		quitChan:  make(chan struct{}),
 		globalSem: make(chan struct{}, defaultGlobalConcurrency),
 		policy: limiterPolicy{
@@ -78,7 +90,9 @@ func newRateLimiter(metrics *ProxyMetrics, rateLimitCfg *RateLimitConfig) *rateL
 			globalConcurrency:  defaultGlobalConcurrency,
 			penaltyDuration:    defaultPenaltyDuration,
 		},
-		metrics: metrics,
+		metrics:   metrics,
+		uidRanges: append([]idRange(nil), uidRanges...),
+		gidRanges: append([]idRange(nil), gidRanges...),
 	}
 	if rl.metrics != nil {
 		rl.metrics.setLimiterPeers(0)
@@ -90,14 +104,15 @@ func newRateLimiter(metrics *ProxyMetrics, rateLimitCfg *RateLimitConfig) *rateL
 // allow checks if a peer is allowed to make a request and reserves concurrency.
 // Returns a release function, rejection reason (if any), and whether the request is allowed.
 func (rl *rateLimiter) allow(id peerID) (release func(), reason string, allowed bool) {
+	key := id.String()
 	rl.mu.Lock()
-	entry := rl.entries[id]
+	entry := rl.entries[key]
 	if entry == nil {
 		entry = &limiterEntry{
 			limiter:   rate.NewLimiter(rl.policy.perPeerLimit, rl.policy.perPeerBurst),
 			semaphore: make(chan struct{}, rl.policy.perPeerConcurrency),
 		}
-		rl.entries[id] = entry
+		rl.entries[key] = entry
 		if rl.metrics != nil {
 			rl.metrics.setLimiterPeers(len(rl.entries))
 		}
@@ -107,7 +122,7 @@ func (rl *rateLimiter) allow(id peerID) (release func(), reason string, allowed 
 
 	// Check rate limit
 	if !entry.limiter.Allow() {
-		rl.recordRejection("rate")
+		rl.recordRejection("rate", key)
 		return nil, "rate", false
 	}
 
@@ -118,7 +133,7 @@ func (rl *rateLimiter) allow(id peerID) (release func(), reason string, allowed 
 			rl.metrics.incGlobalConcurrency()
 		}
 	default:
-		rl.recordRejection("global_concurrency")
+		rl.recordRejection("global_concurrency", key)
 		return nil, "global_concurrency", false
 	}
 
@@ -137,7 +152,7 @@ func (rl *rateLimiter) allow(id peerID) (release func(), reason string, allowed 
 		if rl.metrics != nil {
 			rl.metrics.decGlobalConcurrency()
 		}
-		rl.recordRejection("peer_concurrency")
+		rl.recordRejection("peer_concurrency", key)
 		return nil, "peer_concurrency", false
 	}
 }
@@ -150,9 +165,9 @@ func (rl *rateLimiter) cleanupLoop() {
 		select {
 		case <-ticker.C:
 			rl.mu.Lock()
-			for id, entry := range rl.entries {
+			for key, entry := range rl.entries {
 				if time.Since(entry.lastSeen) > 10*time.Minute {
-					delete(rl.entries, id)
+					delete(rl.entries, key)
 				}
 			}
 			if rl.metrics != nil {
@@ -170,20 +185,51 @@ func (rl *rateLimiter) shutdown() {
 	close(rl.quitChan)
 }
 
-func (rl *rateLimiter) penalize(id peerID, reason string) {
+func (rl *rateLimiter) penalize(peerLabel, reason string) {
 	if rl.policy.penaltyDuration <= 0 {
 		return
 	}
 	time.Sleep(rl.policy.penaltyDuration)
 	if rl.metrics != nil {
-		rl.metrics.recordPenalty(reason)
+		rl.metrics.recordPenalty(reason, peerLabel)
 	}
 }
 
-func (rl *rateLimiter) recordRejection(reason string) {
+func (rl *rateLimiter) recordRejection(reason, peerLabel string) {
 	if rl.metrics != nil {
-		rl.metrics.recordLimiterReject(reason)
+		rl.metrics.recordLimiterReject(reason, peerLabel)
 	}
+}
+
+func (rl *rateLimiter) identifyPeer(cred *peerCredentials) peerID {
+	if cred == nil {
+		return peerID{}
+	}
+	if rl == nil {
+		return peerID{uid: cred.uid}
+	}
+
+	if len(rl.uidRanges) == 0 || len(rl.gidRanges) == 0 {
+		return peerID{uid: cred.uid}
+	}
+
+	uidRange := findRange(rl.uidRanges, cred.uid)
+	gidRange := findRange(rl.gidRanges, cred.gid)
+
+	if uidRange != nil && gidRange != nil {
+		return peerID{uid: cred.uid, uidRange: uidRange}
+	}
+
+	return peerID{uid: cred.uid}
+}
+
+func findRange(ranges []idRange, value uint32) *idRange {
+	for i := range ranges {
+		if ranges[i].contains(value) {
+			return &ranges[i]
+		}
+	}
+	return nil
 }
 
 // nodeGate controls per-node concurrency for temperature requests
