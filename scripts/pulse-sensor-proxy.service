@@ -42,6 +42,13 @@ AmbientCapabilities=
 KeyringMode=private
 LimitNOFILE=1024
 
+# Additional hardening (post-audit)
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+ProtectHostname=true
+ProtectKernelLogs=true
+SystemCallArchitectures=native
+
 # Logging
 StandardOutput=journal
 StandardError=journal
