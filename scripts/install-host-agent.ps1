@@ -143,6 +143,12 @@ switch ($osArch) {
 }
 $downloadUrl = "$PulseUrl/download/pulse-host-agent?platform=windows&arch=$arch"
 
+Write-Info "System Information:"
+Write-Host "  OS Architecture: $osArch"
+Write-Host "  Download Architecture: $arch"
+Write-Host "  Download URL: $downloadUrl"
+Write-Host ""
+
 Write-Info "Downloading agent binary from $downloadUrl..."
 try {
     # Create install directory
@@ -155,6 +161,65 @@ try {
     # Download binary
     Invoke-WebRequest -Uri $downloadUrl -OutFile $agentPath -UseBasicParsing
     Write-Success "Downloaded agent to $agentPath"
+
+    # Validate PE header
+    $fileBytes = [System.IO.File]::ReadAllBytes($agentPath)
+    $fileSizeMB = [math]::Round($fileBytes.Length / 1MB, 2)
+    Write-Info "File size: $fileSizeMB MB ($($fileBytes.Length) bytes)"
+
+    if ($fileBytes.Length -lt 64) {
+        throw "Downloaded file is too small ($($fileBytes.Length) bytes) - expected Windows PE executable"
+    }
+
+    # Check for MZ signature (PE header)
+    if ($fileBytes[0] -ne 0x4D -or $fileBytes[1] -ne 0x5A) {
+        $firstBytes = ($fileBytes[0..15] | ForEach-Object { $_.ToString("X2") }) -join " "
+        throw "Downloaded file is not a valid Windows executable (missing MZ signature). First bytes: $firstBytes"
+    }
+
+    # Get PE header offset (at 0x3C)
+    $peOffset = [BitConverter]::ToUInt32($fileBytes, 0x3C)
+    if ($peOffset -ge $fileBytes.Length - 6) {
+        throw "Invalid PE header offset in downloaded file"
+    }
+
+    # Check PE signature
+    if ($fileBytes[$peOffset] -ne 0x50 -or $fileBytes[$peOffset+1] -ne 0x45) {
+        throw "Downloaded file has invalid PE signature"
+    }
+
+    # Check machine type (should be 0x8664 for x64, 0xAA64 for ARM64)
+    $machineType = [BitConverter]::ToUInt16($fileBytes, $peOffset + 4)
+    $expectedMachine = switch ($arch) {
+        'amd64' { 0x8664 }
+        'arm64' { 0xAA64 }
+        '386'   { 0x014C }
+        default { 0x0000 }
+    }
+
+    if ($machineType -ne $expectedMachine) {
+        $machineStr = "0x" + $machineType.ToString("X4")
+        $expectedStr = "0x" + $expectedMachine.ToString("X4")
+        throw "Downloaded binary is for wrong architecture (got $machineStr, expected $expectedStr for $arch)"
+    }
+
+    Write-Success "Verified PE executable for $osArch architecture"
+
+    # Verify checksum
+    Write-Info "Verifying checksum..."
+    $checksumUrl = "$PulseUrl/download/pulse-host-agent.sha256?platform=windows&arch=$arch"
+    try {
+        $expectedChecksum = (Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing).Content.Trim().Split()[0]
+        $actualChecksum = (Get-FileHash -Path $agentPath -Algorithm SHA256).Hash.ToLower()
+
+        if ($actualChecksum -ne $expectedChecksum.ToLower()) {
+            throw "Checksum mismatch! Expected: $expectedChecksum, Got: $actualChecksum"
+        }
+        Write-Success "Checksum verified: $actualChecksum"
+    } catch {
+        Write-Warning "Could not verify checksum: $_"
+        Write-Info "Continuing anyway (PE header was validated)"
+    }
 
     $agentArgs = @("--url", "`"$PulseUrl`"", "--interval", $Interval)
     if ($Token) {

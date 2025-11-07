@@ -3298,9 +3298,10 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
 
 	searchPaths := make([]string, 0, 12)
+	strictMode := platformParam != "" && archParam != ""
 
 	// Try platform-specific binary first
-	if platformParam != "" && archParam != "" {
+	if strictMode {
 		searchPaths = append(searchPaths,
 			filepath.Join("/opt/pulse/bin", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
 			filepath.Join("/opt/pulse", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
@@ -3308,7 +3309,7 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 		)
 	}
 
-	if platformParam != "" {
+	if platformParam != "" && !strictMode {
 		searchPaths = append(searchPaths,
 			filepath.Join("/opt/pulse/bin", "pulse-host-agent-"+platformParam),
 			filepath.Join("/opt/pulse", "pulse-host-agent-"+platformParam),
@@ -3316,12 +3317,14 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 		)
 	}
 
-	// Default locations (host architecture)
-	searchPaths = append(searchPaths,
-		filepath.Join("/opt/pulse/bin", "pulse-host-agent"),
-		"/opt/pulse/pulse-host-agent",
-		filepath.Join("/app", "pulse-host-agent"),
-	)
+	// Default locations (host architecture) - only when no platform/arch specified
+	if !strictMode && platformParam == "" {
+		searchPaths = append(searchPaths,
+			filepath.Join("/opt/pulse/bin", "pulse-host-agent"),
+			"/opt/pulse/pulse-host-agent",
+			filepath.Join("/app", "pulse-host-agent"),
+		)
+	}
 
 	for _, candidate := range searchPaths {
 		if candidate == "" {
