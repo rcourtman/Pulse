@@ -1499,7 +1499,7 @@ if ! command -v systemctl >/dev/null 2>&1; then
     exit 0
 fi
 
-if ! systemctl list-unit-files | grep -q "^${SERVICE}\\.service"; then
+if ! systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE}\\.service"; then
     if [[ -x "$INSTALLER" && -f "$CTID_FILE" ]]; then
         log "Service unit missing; attempting reinstall"
         bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
