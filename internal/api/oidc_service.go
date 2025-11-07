@@ -173,8 +173,9 @@ func (s *OIDCService) exchangeCode(ctx context.Context, code string, entry *oidc
 
 // oidcStateStore keeps short-lived authorization state tokens.
 type oidcStateStore struct {
-	mu      sync.RWMutex
-	entries map[string]*oidcStateEntry
+	mu          sync.RWMutex
+	entries     map[string]*oidcStateEntry
+	stopCleanup chan struct{}
 }
 
 type oidcStateEntry struct {
@@ -186,7 +187,45 @@ type oidcStateEntry struct {
 }
 
 func newOIDCStateStore() *oidcStateStore {
-	return &oidcStateStore{entries: make(map[string]*oidcStateEntry)}
+	s := &oidcStateStore{
+		entries:     make(map[string]*oidcStateEntry),
+		stopCleanup: make(chan struct{}),
+	}
+
+	// Start cleanup routine to prevent memory leak from abandoned OIDC flows
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				s.cleanup()
+			case <-s.stopCleanup:
+				return
+			}
+		}
+	}()
+
+	return s
+}
+
+// cleanup removes expired state entries
+func (s *oidcStateStore) cleanup() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	for state, entry := range s.entries {
+		if now.After(entry.ExpiresAt) {
+			delete(s.entries, state)
+		}
+	}
+}
+
+// Stop stops the cleanup routine
+func (s *oidcStateStore) Stop() {
+	close(s.stopCleanup)
 }
 
 func (s *oidcStateStore) Put(state string, entry *oidcStateEntry) {

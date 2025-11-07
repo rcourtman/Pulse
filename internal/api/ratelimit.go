@@ -7,17 +7,19 @@ import (
 )
 
 type RateLimiter struct {
-	attempts map[string][]time.Time
-	mu       sync.RWMutex
-	limit    int
-	window   time.Duration
+	attempts    map[string][]time.Time
+	mu          sync.RWMutex
+	limit       int
+	window      time.Duration
+	stopCleanup chan struct{}
 }
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
-		attempts: make(map[string][]time.Time),
-		limit:    limit,
-		window:   window,
+		attempts:    make(map[string][]time.Time),
+		limit:       limit,
+		window:      window,
+		stopCleanup: make(chan struct{}),
 	}
 
 	// Clean up old entries periodically
@@ -25,12 +27,22 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			rl.cleanup()
+		for {
+			select {
+			case <-ticker.C:
+				rl.cleanup()
+			case <-rl.stopCleanup:
+				return
+			}
 		}
 	}()
 
 	return rl
+}
+
+// Stop stops the cleanup routine
+func (rl *RateLimiter) Stop() {
+	close(rl.stopCleanup)
 }
 
 func (rl *RateLimiter) Allow(ip string) bool {

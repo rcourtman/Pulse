@@ -25,9 +25,10 @@ type RecoveryToken struct {
 
 // RecoveryTokenStore manages recovery tokens
 type RecoveryTokenStore struct {
-	tokens   map[string]*RecoveryToken
-	mu       sync.RWMutex
-	dataPath string
+	tokens      map[string]*RecoveryToken
+	mu          sync.RWMutex
+	dataPath    string
+	stopCleanup chan struct{}
 }
 
 var (
@@ -39,8 +40,9 @@ var (
 func InitRecoveryTokenStore(dataPath string) {
 	recoveryStoreOnce.Do(func() {
 		recoveryStore = &RecoveryTokenStore{
-			tokens:   make(map[string]*RecoveryToken),
-			dataPath: dataPath,
+			tokens:      make(map[string]*RecoveryToken),
+			dataPath:    dataPath,
+			stopCleanup: make(chan struct{}),
 		}
 		recoveryStore.load()
 
@@ -182,9 +184,20 @@ func (r *RecoveryTokenStore) cleanupRoutine() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		r.cleanup()
+	for {
+		select {
+		case <-ticker.C:
+			r.cleanup()
+		case <-r.stopCleanup:
+			log.Debug().Msg("Recovery token cleanup routine stopped")
+			return
+		}
 	}
+}
+
+// Stop stops the cleanup routine
+func (r *RecoveryTokenStore) Stop() {
+	close(r.stopCleanup)
 }
 
 // cleanup removes expired and used tokens
