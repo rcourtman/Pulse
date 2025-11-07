@@ -341,8 +341,12 @@ func (h *Hub) Run() {
 						Data: map[string]string{"message": "Connected to Pulse WebSocket"},
 					}
 					if data, err := json.Marshal(welcomeMsg); err == nil {
-						// Check if client is still registered before sending
-						if _, ok := h.clients[client]; ok {
+						// Check if client is still registered before sending (must hold lock)
+						h.mu.RLock()
+						_, stillRegistered := h.clients[client]
+						h.mu.RUnlock()
+
+						if stillRegistered {
 							log.Info().Str("client", client.id).Msg("Sending welcome message")
 							select {
 							case client.send <- data:
@@ -368,8 +372,12 @@ func (h *Hub) Run() {
 						Data: sanitizeData(stateData),
 					}
 					if data, err := json.Marshal(initialMsg); err == nil {
-						// Check if client is still registered before sending
-						if _, ok := h.clients[client]; ok {
+						// Check if client is still registered before sending (must hold lock)
+						h.mu.RLock()
+						_, stillRegistered := h.clients[client]
+						h.mu.RUnlock()
+
+						if stillRegistered {
 							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("Sending initial state to client")
 
 							select {

@@ -149,6 +149,15 @@ func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken str
 			// Need to upgrade to write lock to mark as used
 			r.mu.RUnlock()
 			r.mu.Lock()
+
+			// CRITICAL: Re-check token.Used after acquiring write lock
+			// Prevents replay attack where two concurrent requests both pass initial check
+			if token.Used {
+				r.mu.Unlock()
+				r.mu.RLock()
+				return false
+			}
+
 			token.Used = true
 			token.UsedAt = time.Now()
 			token.IP = ip

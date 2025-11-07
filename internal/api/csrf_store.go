@@ -25,9 +25,11 @@ type CSRFToken struct {
 type CSRFTokenStore struct {
 	tokens     map[string]*CSRFToken
 	mu         sync.RWMutex
+	saveMu     sync.Mutex  // Serializes disk writes to prevent save corruption
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
+	stopOnce   sync.Once   // Ensures Stop() can only close channel once
 }
 
 func csrfSessionKey(sessionID string) string {
@@ -99,9 +101,11 @@ func (c *CSRFTokenStore) backgroundWorker() {
 
 // Stop gracefully stops the CSRF store
 func (c *CSRFTokenStore) Stop() {
-	c.saveTicker.Stop()
-	c.stopChan <- true
-	c.save()
+	c.stopOnce.Do(func() {
+		c.saveTicker.Stop()
+		close(c.stopChan) // Close instead of send to signal all readers
+		c.save()
+	})
 }
 
 // GenerateCSRFToken creates a new CSRF token for a session
@@ -183,6 +187,10 @@ func (c *CSRFTokenStore) cleanup() {
 
 // save persists CSRF tokens to disk
 func (c *CSRFTokenStore) save() {
+	// Serialize all disk writes to prevent corruption
+	c.saveMu.Lock()
+	defer c.saveMu.Unlock()
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	c.saveUnsafe()
