@@ -272,6 +272,7 @@ type Hub struct {
 	broadcastSeq   chan Message      // Sequenced broadcast channel for ordering
 	register       chan *Client
 	unregister     chan *Client
+	stopChan       chan struct{}     // Signals shutdown
 	mu             sync.RWMutex
 	getState       func() interface{} // Function to get current state
 	allowedOrigins []string           // Allowed origins for CORS
@@ -305,6 +306,7 @@ func NewHub(getState func() interface{}) *Hub {
 		broadcastSeq:   make(chan Message, 256), // Buffered sequenced channel
 		register:       make(chan *Client),
 		unregister:     make(chan *Client),
+		stopChan:       make(chan struct{}),
 		getState:       getState,
 		allowedOrigins: []string{}, // Default to empty (will be set based on actual host)
 		coalesceWindow: 100 * time.Millisecond, // Coalesce rapid updates within 100ms
@@ -430,8 +432,24 @@ func (h *Hub) Run() {
 
 		case <-pingTicker.C:
 			h.sendPing()
+
+		case <-h.stopChan:
+			log.Info().Msg("WebSocket hub shutting down")
+			// Close all client connections
+			h.mu.Lock()
+			for client := range h.clients {
+				close(client.send)
+			}
+			h.clients = make(map[*Client]bool)
+			h.mu.Unlock()
+			return
 		}
 	}
+}
+
+// Stop gracefully shuts down the hub
+func (h *Hub) Stop() {
+	close(h.stopChan)
 }
 
 // HandleWebSocket handles WebSocket upgrade requests
@@ -475,54 +493,67 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // runBroadcastSequencer handles sequenced broadcasts with coalescing for rapid state updates
 func (h *Hub) runBroadcastSequencer() {
-	for msg := range h.broadcastSeq {
-		// Handle raw data (state) messages with coalescing
-		if msg.Type == "rawData" {
-			h.coalesceMutex.Lock()
+	for {
+		select {
+		case msg := <-h.broadcastSeq:
+			// Handle raw data (state) messages with coalescing
+			if msg.Type == "rawData" {
+				h.coalesceMutex.Lock()
 
+				// Cancel pending timer if exists
+				if h.coalesceTimer != nil {
+					h.coalesceTimer.Stop()
+				}
+
+				// Update pending message
+				h.coalescePending = &msg
+
+				// Set timer to send after coalesce window
+				h.coalesceTimer = time.AfterFunc(h.coalesceWindow, func() {
+					h.coalesceMutex.Lock()
+					if h.coalescePending != nil {
+						// Send the coalesced message
+						if data, err := json.Marshal(*h.coalescePending); err == nil {
+							h.mu.RLock()
+							for client := range h.clients {
+								select {
+								case client.send <- data:
+								default:
+									log.Warn().Str("client", client.id).Msg("Client send channel full, skipping coalesced message")
+								}
+							}
+							h.mu.RUnlock()
+						}
+						h.coalescePending = nil
+					}
+					h.coalesceMutex.Unlock()
+				})
+
+				h.coalesceMutex.Unlock()
+			} else {
+				// Non-state messages (alerts, etc.) - send immediately
+				if data, err := json.Marshal(msg); err == nil {
+					h.mu.RLock()
+					for client := range h.clients {
+						select {
+						case client.send <- data:
+						default:
+							log.Warn().Str("client", client.id).Msg("Client send channel full, skipping message")
+						}
+					}
+					h.mu.RUnlock()
+				}
+			}
+
+		case <-h.stopChan:
+			log.Debug().Msg("Broadcast sequencer shutting down")
 			// Cancel pending timer if exists
+			h.coalesceMutex.Lock()
 			if h.coalesceTimer != nil {
 				h.coalesceTimer.Stop()
 			}
-
-			// Update pending message
-			h.coalescePending = &msg
-
-			// Set timer to send after coalesce window
-			h.coalesceTimer = time.AfterFunc(h.coalesceWindow, func() {
-				h.coalesceMutex.Lock()
-				if h.coalescePending != nil {
-					// Send the coalesced message
-					if data, err := json.Marshal(*h.coalescePending); err == nil {
-						h.mu.RLock()
-						for client := range h.clients {
-							select {
-							case client.send <- data:
-							default:
-								log.Warn().Str("client", client.id).Msg("Client send channel full, skipping coalesced message")
-							}
-						}
-						h.mu.RUnlock()
-					}
-					h.coalescePending = nil
-				}
-				h.coalesceMutex.Unlock()
-			})
-
 			h.coalesceMutex.Unlock()
-		} else {
-			// Non-state messages (alerts, etc.) - send immediately
-			if data, err := json.Marshal(msg); err == nil {
-				h.mu.RLock()
-				for client := range h.clients {
-					select {
-					case client.send <- data:
-					default:
-						log.Warn().Str("client", client.id).Msg("Client send channel full, skipping message")
-					}
-				}
-				h.mu.RUnlock()
-			}
+			return
 		}
 	}
 }
