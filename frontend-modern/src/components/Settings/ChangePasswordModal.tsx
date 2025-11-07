@@ -31,8 +31,8 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
       return;
     }
 
-    if (newPassword().length < 8) {
-      setError('Password must be at least 8 characters');
+    if (newPassword().length < 12) {
+      setError('Password must be at least 12 characters');
       return;
     }
 
@@ -163,9 +163,9 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                   class={controlClass('shadow-sm')}
                   required
                   disabled={loading()}
-                  minLength={8}
+                  minLength={12}
                 />
-                <p class={`${formHelpText} mt-1`}>Minimum 8 characters</p>
+                <p class={`${formHelpText} mt-1`}>Minimum 12 characters</p>
               </div>
 
               <div class={formField}>

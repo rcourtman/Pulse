@@ -61,8 +61,8 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
   const setupSecurity = async () => {
     // Validate custom password if using
     if (useCustomPassword()) {
-      if (customPassword().length < 8) {
-        showError('Password must be at least 8 characters');
+      if (customPassword().length < 12) {
+        showError('Password must be at least 12 characters');
         return;
       }
       if (customPassword() !== confirmPassword()) {
@@ -267,7 +267,7 @@ Important:
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass()}>Password (min 8 characters)</label>
+                  <label class={labelClass()}>Password (min 12 characters)</label>
                   <input
                     type="password"
                     value={customPassword()}
