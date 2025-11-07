@@ -30,6 +30,7 @@ type HistoryEntry struct {
 // HistoryManager manages persistent alert history
 type HistoryManager struct {
 	mu           sync.RWMutex
+	saveMu       sync.Mutex // Serializes disk writes to prevent save race condition
 	dataDir      string
 	historyFile  string
 	backupFile   string
@@ -174,6 +175,10 @@ func (hm *HistoryManager) saveHistory() error {
 
 // saveHistoryWithRetry saves history with exponential backoff retry
 func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
+	// Serialize all disk writes to prevent concurrent saves from overwriting each other
+	hm.saveMu.Lock()
+	defer hm.saveMu.Unlock()
+
 	hm.mu.RLock()
 	snapshot := make([]HistoryEntry, len(hm.history))
 	copy(snapshot, hm.history)

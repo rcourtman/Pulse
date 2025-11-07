@@ -734,6 +734,8 @@ func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
 // dispatchAlert delivers an alert to the configured callback, cloning it first to
 // prevent concurrent mutations from racing with consumers.
 // checkFlapping checks if an alert is flapping (changing state too rapidly)
+// checkFlapping detects alert flapping and returns true if alert should be suppressed.
+// IMPORTANT: Caller MUST hold m.mu (writes to flappingHistory, flappingActive, suppressedUntil maps)
 func (m *Manager) checkFlapping(alertID string) bool {
 	if !m.config.FlappingEnabled {
 		return false
@@ -5483,15 +5485,16 @@ func (m *Manager) GetActiveAlerts() []Alert {
 // NotifyExistingAlert re-dispatches a notification for an existing active alert
 // Used when activation state changes from pending to active
 func (m *Manager) NotifyExistingAlert(alertID string) {
-	m.mu.RLock()
-	alert, exists := m.activeAlerts[alertID]
-	m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
+	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		return
 	}
 
-	// Dispatch notification for existing alert
+	// Dispatch notification for existing alert while holding lock
+	// dispatchAlert expects caller to hold m.mu for checkFlapping safety
 	m.dispatchAlert(alert, true)
 }
 
@@ -7311,6 +7314,44 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 				Msg("Cleaned up stale Docker restart tracking entry")
 		}
 	}
+
+	// Clean up stale PMG anomaly trackers (no samples in 24h)
+	// Prevents memory leak from decommissioned or transient PMG instances
+	staleTrackerAge := 24 * time.Hour
+	for pmgID, tracker := range m.pmgAnomalyTrackers {
+		if tracker != nil && !tracker.LastSampleTime.IsZero() {
+			if now.Sub(tracker.LastSampleTime) > staleTrackerAge {
+				delete(m.pmgAnomalyTrackers, pmgID)
+				log.Debug().
+					Str("pmgID", pmgID).
+					Time("lastSampleTime", tracker.LastSampleTime).
+					Msg("Cleaned up stale PMG anomaly tracker")
+			}
+		}
+	}
+
+	// Clean up stale PMG quarantine history (no recent snapshots in 7 days)
+	// Prevents memory leak from deleted PMG instances
+	staleHistoryAge := 7 * 24 * time.Hour
+	for pmgID, snapshots := range m.pmgQuarantineHistory {
+		// If no snapshots remain or last snapshot is very old
+		if len(snapshots) == 0 {
+			delete(m.pmgQuarantineHistory, pmgID)
+			log.Debug().
+				Str("pmgID", pmgID).
+				Msg("Cleaned up empty PMG quarantine history")
+			continue
+		}
+
+		lastSnapshot := snapshots[len(snapshots)-1]
+		if now.Sub(lastSnapshot.Timestamp) > staleHistoryAge {
+			delete(m.pmgQuarantineHistory, pmgID)
+			log.Debug().
+				Str("pmgID", pmgID).
+				Time("lastSnapshot", lastSnapshot.Timestamp).
+				Msg("Cleaned up stale PMG quarantine history")
+		}
+	}
 }
 
 // convertLegacyThreshold converts a legacy float64 threshold to HysteresisThreshold
@@ -8211,12 +8252,24 @@ func (m *Manager) LoadActiveAlerts() error {
 			// Use a goroutine and add a small delay to avoid notification spam on startup
 			alertCopy := alert.Clone()
 			go func(a *Alert) {
-				time.Sleep(10 * time.Second) // Wait for system to stabilize after restart
-				log.Info().
-					Str("alertID", a.ID).
-					Str("resource", a.ResourceName).
-					Msg("Attempting to send notification for restored critical alert")
-				m.dispatchAlert(a, false) // Use dispatchAlert to respect activation state and quiet hours
+				// Wait for system to stabilize or cancellation
+				select {
+				case <-time.After(10 * time.Second):
+					log.Info().
+						Str("alertID", a.ID).
+						Str("resource", a.ResourceName).
+						Msg("Attempting to send notification for restored critical alert")
+
+					// Acquire lock before calling dispatchAlert (it accesses maps)
+					m.mu.Lock()
+					m.dispatchAlert(a, false) // Use dispatchAlert to respect activation state and quiet hours
+					m.mu.Unlock()
+				case <-m.escalationStop:
+					log.Debug().
+						Str("alertID", a.ID).
+						Msg("Cancelled startup notification due to shutdown")
+					return
+				}
 			}(alertCopy)
 		}
 	}
