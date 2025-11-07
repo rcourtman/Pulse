@@ -466,6 +466,15 @@ func (s *Service) IsScanning() bool {
 
 // ForceRefresh triggers an immediate scan
 func (s *Service) ForceRefresh() {
+	// Check if scan is already in progress to prevent goroutine leak
+	s.mu.RLock()
+	if s.isScanning {
+		s.mu.RUnlock()
+		log.Debug().Msg("Scan already in progress, skipping ForceRefresh")
+		return
+	}
+	s.mu.RUnlock()
+
 	go s.performScan()
 }
 
@@ -480,12 +489,19 @@ func (s *Service) SetInterval(interval time.Duration) {
 // SetSubnet updates the subnet to scan
 func (s *Service) SetSubnet(subnet string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.subnet = subnet
+	// Check if scan is already in progress to prevent goroutine leak
+	alreadyScanning := s.isScanning
+	s.mu.Unlock()
+
 	log.Info().Str("subnet", subnet).Msg("Updated discovery subnet")
 
-	// Trigger immediate rescan with new subnet
-	go s.performScan()
+	// Trigger immediate rescan with new subnet if not already scanning
+	if !alreadyScanning {
+		go s.performScan()
+	} else {
+		log.Debug().Msg("Scan already in progress, new subnet will be used in next scan")
+	}
 }
 
 // GetStatus returns the current service status

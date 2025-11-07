@@ -23,6 +23,7 @@ type ConfigWatcher struct {
 	apiTokensPath        string
 	watcher              *fsnotify.Watcher
 	stopChan             chan struct{}
+	stopOnce             sync.Once // Ensures Stop() can only close channel once
 	lastModTime          time.Time
 	mockLastModTime      time.Time
 	apiTokensLastModTime time.Time
@@ -170,14 +171,11 @@ func (cw *ConfigWatcher) Start() error {
 
 // Stop stops the config watcher
 func (cw *ConfigWatcher) Stop() {
-	select {
-	case <-cw.stopChan:
-		// Already stopped
-		return
-	default:
+	// Use sync.Once to prevent double-close panic
+	cw.stopOnce.Do(func() {
 		close(cw.stopChan)
-	}
-	cw.watcher.Close()
+		cw.watcher.Close()
+	})
 }
 
 // ReloadConfig manually triggers a config reload (e.g., from SIGHUP)

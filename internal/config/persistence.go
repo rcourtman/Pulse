@@ -1174,23 +1174,37 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		}
 	}
 
-	// If any migrations were applied, save the updated configuration
-	if migrationApplied {
-		log.Info().Msg("Migrations applied, saving updated configuration")
-		// Need to unlock before saving to avoid deadlock
-		c.mu.RUnlock()
-		if err := c.SaveNodesConfig(config.PVEInstances, config.PBSInstances, config.PMGInstances); err != nil {
-			log.Error().Err(err).Msg("Failed to save configuration after migration")
-		}
-		c.mu.RLock()
-	}
-
 	log.Info().Str("file", c.nodesFile).
 		Int("pve", len(config.PVEInstances)).
 		Int("pbs", len(config.PBSInstances)).
 		Int("pmg", len(config.PMGInstances)).
 		Bool("encrypted", c.crypto != nil).
 		Msg("Nodes configuration loaded")
+
+	// If any migrations were applied, save the updated configuration after releasing the read lock
+	// This prevents unlock/relock race condition where another goroutine could modify config
+	// between unlock and relock, causing migrated data to be lost
+	if migrationApplied {
+		// Make copies while still holding read lock to ensure consistency
+		pveCopy := make([]PVEInstance, len(config.PVEInstances))
+		copy(pveCopy, config.PVEInstances)
+		pbsCopy := make([]PBSInstance, len(config.PBSInstances))
+		copy(pbsCopy, config.PBSInstances)
+		pmgCopy := make([]PMGInstance, len(config.PMGInstances))
+		copy(pmgCopy, config.PMGInstances)
+
+		// Release read lock before saving (SaveNodesConfig acquires write lock)
+		c.mu.RUnlock()
+
+		log.Info().Msg("Migrations applied, saving updated configuration")
+		if err := c.SaveNodesConfig(pveCopy, pbsCopy, pmgCopy); err != nil {
+			log.Error().Err(err).Msg("Failed to save configuration after migration")
+		}
+
+		// Don't reacquire lock - we're returning
+		return &config, nil
+	}
+
 	return &config, nil
 }
 
