@@ -16,19 +16,24 @@ const defaultMetricsAddr = "127.0.0.1:9127"
 
 // ProxyMetrics holds Prometheus metrics for the proxy
 type ProxyMetrics struct {
-	rpcRequests       *prometheus.CounterVec
-	rpcLatency        *prometheus.HistogramVec
-	sshRequests       *prometheus.CounterVec
-	sshLatency        *prometheus.HistogramVec
-	queueDepth        prometheus.Gauge
-	rateLimitHits     prometheus.Counter
-	limiterRejects    *prometheus.CounterVec
-	globalConcurrency prometheus.Gauge
-	limiterPenalties  *prometheus.CounterVec
-	limiterPeers      prometheus.Gauge
-	buildInfo         *prometheus.GaugeVec
-	server            *http.Server
-	registry          *prometheus.Registry
+	rpcRequests            *prometheus.CounterVec
+	rpcLatency             *prometheus.HistogramVec
+	sshRequests            *prometheus.CounterVec
+	sshLatency             *prometheus.HistogramVec
+	queueDepth             prometheus.Gauge
+	rateLimitHits          prometheus.Counter
+	limiterRejects         *prometheus.CounterVec
+	globalConcurrency      prometheus.Gauge
+	limiterPenalties       *prometheus.CounterVec
+	limiterPeers           prometheus.Gauge
+	nodeValidationFailures *prometheus.CounterVec
+	readTimeouts           prometheus.Counter
+	writeTimeouts          prometheus.Counter
+	hostKeyChanges         *prometheus.CounterVec
+	sshOutputOversized     *prometheus.CounterVec
+	buildInfo              *prometheus.GaugeVec
+	server                 *http.Server
+	registry               *prometheus.Registry
 }
 
 // NewProxyMetrics creates and registers all metrics
@@ -83,7 +88,7 @@ func NewProxyMetrics(version string) *ProxyMetrics {
 				Name: "pulse_proxy_limiter_rejections_total",
 				Help: "Limiter rejections by reason.",
 			},
-			[]string{"reason"},
+			[]string{"reason", "peer"},
 		),
 		globalConcurrency: prometheus.NewGauge(
 			prometheus.GaugeOpts{
@@ -96,13 +101,46 @@ func NewProxyMetrics(version string) *ProxyMetrics {
 				Name: "pulse_proxy_limiter_penalties_total",
 				Help: "Penalty sleeps applied after validation failures.",
 			},
-			[]string{"reason"},
+			[]string{"reason", "peer"},
 		),
 		limiterPeers: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "pulse_proxy_limiter_active_peers",
 				Help: "Number of peers tracked by the rate limiter.",
 			},
+		),
+		nodeValidationFailures: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "pulse_proxy_node_validation_failures_total",
+				Help: "Node validation failures by reason.",
+			},
+			[]string{"reason"},
+		),
+		readTimeouts: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "pulse_proxy_read_timeouts_total",
+				Help: "Number of socket read timeouts.",
+			},
+		),
+		writeTimeouts: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "pulse_proxy_write_timeouts_total",
+				Help: "Number of socket write timeouts.",
+			},
+		),
+		hostKeyChanges: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "pulse_proxy_hostkey_changes_total",
+				Help: "Detected SSH host key changes by node.",
+			},
+			[]string{"node"},
+		),
+		sshOutputOversized: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "pulse_proxy_ssh_output_oversized_total",
+				Help: "Number of SSH responses rejected for exceeding size limits.",
+			},
+			[]string{"node"},
 		),
 		buildInfo: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -125,6 +163,11 @@ func NewProxyMetrics(version string) *ProxyMetrics {
 		pm.globalConcurrency,
 		pm.limiterPenalties,
 		pm.limiterPeers,
+		pm.nodeValidationFailures,
+		pm.readTimeouts,
+		pm.writeTimeouts,
+		pm.hostKeyChanges,
+		pm.sshOutputOversized,
 		pm.buildInfo,
 	)
 
@@ -200,12 +243,53 @@ func sanitizeNodeLabel(node string) string {
 	return out
 }
 
-func (m *ProxyMetrics) recordLimiterReject(reason string) {
+func (m *ProxyMetrics) recordLimiterReject(reason, peer string) {
 	if m == nil {
 		return
 	}
 	m.rateLimitHits.Inc()
-	m.limiterRejects.WithLabelValues(reason).Inc()
+	m.limiterRejects.WithLabelValues(reason, peer).Inc()
+}
+
+func (m *ProxyMetrics) recordNodeValidationFailure(reason string) {
+	if m == nil {
+		return
+	}
+	m.nodeValidationFailures.WithLabelValues(reason).Inc()
+}
+
+func (m *ProxyMetrics) recordReadTimeout() {
+	if m == nil {
+		return
+	}
+	m.readTimeouts.Inc()
+}
+
+func (m *ProxyMetrics) recordWriteTimeout() {
+	if m == nil {
+		return
+	}
+	m.writeTimeouts.Inc()
+}
+
+func (m *ProxyMetrics) recordSSHOutputOversized(node string) {
+	if m == nil {
+		return
+	}
+	if node == "" {
+		node = "unknown"
+	}
+	m.sshOutputOversized.WithLabelValues(sanitizeNodeLabel(node)).Inc()
+}
+
+func (m *ProxyMetrics) recordHostKeyChange(node string) {
+	if m == nil {
+		return
+	}
+	if node == "" {
+		node = "unknown"
+	}
+	m.hostKeyChanges.WithLabelValues(sanitizeNodeLabel(node)).Inc()
 }
 
 func (m *ProxyMetrics) incGlobalConcurrency() {
@@ -222,11 +306,11 @@ func (m *ProxyMetrics) decGlobalConcurrency() {
 	m.globalConcurrency.Dec()
 }
 
-func (m *ProxyMetrics) recordPenalty(reason string) {
+func (m *ProxyMetrics) recordPenalty(reason, peer string) {
 	if m == nil {
 		return
 	}
-	m.limiterPenalties.WithLabelValues(reason).Inc()
+	m.limiterPenalties.WithLabelValues(reason, peer).Inc()
 }
 
 func (m *ProxyMetrics) setLimiterPeers(count int) {

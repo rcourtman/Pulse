@@ -10,9 +10,19 @@ allowed_source_subnets:
 
 # Peer Authorization
 # Specify which UIDs/GIDs are allowed to connect
+# A peer is authorized when its UID OR GID matches one of these entries
 # Required when running Pulse in a container (use mapped UID/GID from container)
-allowed_peer_uids: [100999]  # Container pulse user UID
-allowed_peer_gids: [100996]  # Container pulse group GID
+allowed_peer_uids: [100999]  # Legacy format; grants all capabilities unless overridden below
+allowed_peer_gids: [100996]
+
+# Preferred format with explicit capabilities (read, write, admin)
+allowed_peers:
+  - uid: 0
+    capabilities: [read, write, admin]  # Host root retains full control
+  - uid: 100999
+    capabilities: [read]  # Container peer limited to read-only RPCs
+
+require_proxmox_hostkeys: false  # Enforce Proxmox-known host keys before falling back to ssh-keyscan
 
 # ID-Mapped Root Authentication
 # Allow connections from ID-mapped root users (for LXC containers)
@@ -23,6 +33,9 @@ allowed_idmap_users:
 # Metrics Server
 # Address for Prometheus metrics endpoint
 metrics_address: "127.0.0.1:9127"
+
+# Limit SSH output size (bytes) when fetching temperatures
+max_ssh_output_bytes: 1048576  # 1 MiB
 
 # Rate Limiting (Optional)
 # Control how frequently peers can make requests to prevent abuse

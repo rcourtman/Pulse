@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -19,9 +20,16 @@ type RateLimitConfig struct {
 
 // Config holds proxy configuration
 type Config struct {
-	AllowedSourceSubnets []string `yaml:"allowed_source_subnets"`
-	MetricsAddress       string   `yaml:"metrics_address"`
-	LogLevel             string   `yaml:"log_level"`
+	AllowedSourceSubnets   []string      `yaml:"allowed_source_subnets"`
+	MetricsAddress         string        `yaml:"metrics_address"`
+	LogLevel               string        `yaml:"log_level"`
+	AllowedNodes           []string      `yaml:"allowed_nodes"`
+	StrictNodeValidation   bool          `yaml:"strict_node_validation"`
+	ReadTimeout            time.Duration `yaml:"read_timeout"`
+	WriteTimeout           time.Duration `yaml:"write_timeout"`
+	MaxSSHOutputBytes      int64         `yaml:"max_ssh_output_bytes"`
+	RequireProxmoxHostkeys bool          `yaml:"require_proxmox_hostkeys"`
+	AllowedPeers           []PeerConfig  `yaml:"allowed_peers"`
 
 	AllowIDMappedRoot bool     `yaml:"allow_idmapped_root"`
 	AllowedPeerUIDs   []uint32 `yaml:"allowed_peer_uids"`
@@ -31,12 +39,21 @@ type Config struct {
 	RateLimit *RateLimitConfig `yaml:"rate_limit,omitempty"`
 }
 
+// PeerConfig represents a peer entry with capabilities.
+type PeerConfig struct {
+	UID          uint32   `yaml:"uid"`
+	Capabilities []string `yaml:"capabilities"`
+}
+
 // loadConfig loads configuration from file and environment variables
 func loadConfig(configPath string) (*Config, error) {
 	cfg := &Config{
 		AllowIDMappedRoot: true,
 		AllowedIDMapUsers: []string{"root"},
 		LogLevel:          "info", // Default log level
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		MaxSSHOutputBytes: 1 * 1024 * 1024, // 1 MiB
 	}
 
 	// Try to load config file if it exists
@@ -58,6 +75,26 @@ func loadConfig(configPath string) (*Config, error) {
 		}
 	}
 
+	// Read timeout override
+	if envReadTimeout := os.Getenv("PULSE_SENSOR_PROXY_READ_TIMEOUT"); envReadTimeout != "" {
+		if parsed, err := time.ParseDuration(strings.TrimSpace(envReadTimeout)); err != nil {
+			log.Warn().Str("value", envReadTimeout).Err(err).Msg("Invalid PULSE_SENSOR_PROXY_READ_TIMEOUT value, ignoring")
+		} else {
+			cfg.ReadTimeout = parsed
+			log.Info().Dur("read_timeout", cfg.ReadTimeout).Msg("Configured read timeout from environment")
+		}
+	}
+
+	// Write timeout override
+	if envWriteTimeout := os.Getenv("PULSE_SENSOR_PROXY_WRITE_TIMEOUT"); envWriteTimeout != "" {
+		if parsed, err := time.ParseDuration(strings.TrimSpace(envWriteTimeout)); err != nil {
+			log.Warn().Str("value", envWriteTimeout).Err(err).Msg("Invalid PULSE_SENSOR_PROXY_WRITE_TIMEOUT value, ignoring")
+		} else {
+			cfg.WriteTimeout = parsed
+			log.Info().Dur("write_timeout", cfg.WriteTimeout).Msg("Configured write timeout from environment")
+		}
+	}
+
 	// Append from environment variable if set
 	if envSubnets := os.Getenv("PULSE_SENSOR_PROXY_ALLOWED_SUBNETS"); envSubnets != "" {
 		envList := strings.Split(envSubnets, ",")
@@ -65,6 +102,20 @@ func loadConfig(configPath string) (*Config, error) {
 		log.Info().
 			Int("env_subnet_count", len(envList)).
 			Msg("Appended subnets from environment variable")
+	}
+
+	// Ensure timeouts have sane defaults
+	if cfg.ReadTimeout <= 0 {
+		log.Warn().Dur("configured_value", cfg.ReadTimeout).Msg("Read timeout must be positive; using default 5s")
+		cfg.ReadTimeout = 5 * time.Second
+	}
+	if cfg.WriteTimeout <= 0 {
+		log.Warn().Dur("configured_value", cfg.WriteTimeout).Msg("Write timeout must be positive; using default 10s")
+		cfg.WriteTimeout = 10 * time.Second
+	}
+	if cfg.MaxSSHOutputBytes <= 0 {
+		log.Warn().Int64("configured_value", cfg.MaxSSHOutputBytes).Msg("max_ssh_output_bytes must be positive; using default 1MiB")
+		cfg.MaxSSHOutputBytes = 1 * 1024 * 1024
 	}
 
 	// Allow ID-mapped root override
@@ -123,6 +174,53 @@ func loadConfig(configPath string) (*Config, error) {
 			log.Info().
 				Int("env_gid_count", len(parsed)).
 				Msg("Appended allowed peer GIDs from environment")
+		}
+	}
+
+	// Allowed node overrides
+	if envNodes := os.Getenv("PULSE_SENSOR_PROXY_ALLOWED_NODES"); envNodes != "" {
+		envList := splitAndTrim(envNodes)
+		if len(envList) > 0 {
+			cfg.AllowedNodes = append(cfg.AllowedNodes, envList...)
+			log.Info().
+				Int("env_allowed_nodes", len(envList)).
+				Msg("Appended allowed nodes from environment")
+		}
+	}
+
+	// Strict node validation override
+	if envStrict := os.Getenv("PULSE_SENSOR_PROXY_STRICT_NODE_VALIDATION"); envStrict != "" {
+		parsed, err := parseBool(envStrict)
+		if err != nil {
+			log.Warn().
+				Str("value", envStrict).
+				Err(err).
+				Msg("Invalid PULSE_SENSOR_PROXY_STRICT_NODE_VALIDATION value, ignoring")
+		} else {
+			cfg.StrictNodeValidation = parsed
+			log.Info().
+				Bool("strict_node_validation", parsed).
+				Msg("Configured strict node validation from environment")
+		}
+	}
+
+	// SSH output limit override
+	if envMaxSSH := os.Getenv("PULSE_SENSOR_PROXY_MAX_SSH_OUTPUT_BYTES"); envMaxSSH != "" {
+		if parsed, err := strconv.ParseInt(strings.TrimSpace(envMaxSSH), 10, 64); err != nil {
+			log.Warn().Str("value", envMaxSSH).Err(err).Msg("Invalid PULSE_SENSOR_PROXY_MAX_SSH_OUTPUT_BYTES value, ignoring")
+		} else {
+			cfg.MaxSSHOutputBytes = parsed
+			log.Info().Int64("max_ssh_output_bytes", cfg.MaxSSHOutputBytes).Msg("Configured max SSH output bytes from environment")
+		}
+	}
+
+	// Require Proxmox host keys override
+	if envReq := os.Getenv("PULSE_SENSOR_PROXY_REQUIRE_PROXMOX_HOSTKEYS"); envReq != "" {
+		if parsed, err := parseBool(envReq); err != nil {
+			log.Warn().Str("value", envReq).Err(err).Msg("Invalid PULSE_SENSOR_PROXY_REQUIRE_PROXMOX_HOSTKEYS value, ignoring")
+		} else {
+			cfg.RequireProxmoxHostkeys = parsed
+			log.Info().Bool("require_proxmox_hostkeys", parsed).Msg("Configured Proxmox host key requirement from environment")
 		}
 	}
 

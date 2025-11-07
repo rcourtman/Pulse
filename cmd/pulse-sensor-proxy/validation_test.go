@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
+	"net"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSanitizeCorrelationID(t *testing.T) {
@@ -119,5 +122,99 @@ func TestValidateCommand(t *testing.T) {
 				t.Fatalf("unexpected error for %s %v: %v", tc.name, tc.args, err)
 			}
 		})
+	}
+}
+
+type stubResolver struct {
+	ips []net.IP
+	err error
+}
+
+func (s stubResolver) LookupIP(ctx context.Context, host string) ([]net.IP, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.ips, nil
+}
+
+func TestNodeValidatorAllowlistHost(t *testing.T) {
+	v := &nodeValidator{
+		allowHosts:   map[string]struct{}{"node-1": {}},
+		hasAllowlist: true,
+		resolver:     stubResolver{},
+	}
+
+	if err := v.Validate(context.Background(), "node-1"); err != nil {
+		t.Fatalf("expected node-1 to be permitted, got error: %v", err)
+	}
+
+	if err := v.Validate(context.Background(), "node-2"); err == nil {
+		t.Fatalf("expected node-2 to be rejected without allow-list entry")
+	}
+}
+
+func TestNodeValidatorAllowlistCIDRWithLookup(t *testing.T) {
+	_, network, _ := net.ParseCIDR("10.0.0.0/24")
+	v := &nodeValidator{
+		allowHosts:   make(map[string]struct{}),
+		allowCIDRs:   []*net.IPNet{network},
+		hasAllowlist: true,
+		resolver: stubResolver{
+			ips: []net.IP{net.ParseIP("10.0.0.5")},
+		},
+	}
+
+	if err := v.Validate(context.Background(), "worker.local"); err != nil {
+		t.Fatalf("expected worker.local to resolve into allowed CIDR: %v", err)
+	}
+}
+
+func TestNodeValidatorClusterCaching(t *testing.T) {
+	current := time.Now()
+	fetches := 0
+
+	v := &nodeValidator{
+		clusterEnabled: true,
+		clusterFetcher: func() ([]string, error) {
+			fetches++
+			return []string{"10.0.0.9"}, nil
+		},
+		cacheTTL: nodeValidatorCacheTTL,
+		clock: func() time.Time {
+			return current
+		},
+	}
+
+	if err := v.Validate(context.Background(), "10.0.0.9"); err != nil {
+		t.Fatalf("expected node to be allowed via cluster membership: %v", err)
+	}
+	if fetches != 1 {
+		t.Fatalf("expected initial cluster fetch, got %d", fetches)
+	}
+
+	current = current.Add(30 * time.Second)
+	if err := v.Validate(context.Background(), "10.0.0.9"); err != nil {
+		t.Fatalf("expected cached cluster membership to allow node: %v", err)
+	}
+	if fetches != 1 {
+		t.Fatalf("expected cache hit to avoid new fetch, got %d fetches", fetches)
+	}
+
+	current = current.Add(nodeValidatorCacheTTL + time.Second)
+	if err := v.Validate(context.Background(), "10.0.0.9"); err != nil {
+		t.Fatalf("expected refreshed cluster membership to allow node: %v", err)
+	}
+	if fetches != 2 {
+		t.Fatalf("expected cache expiry to trigger new fetch, got %d", fetches)
+	}
+}
+
+func TestNodeValidatorStrictNoSources(t *testing.T) {
+	v := &nodeValidator{
+		strict: true,
+	}
+
+	if err := v.Validate(context.Background(), "node-1"); err == nil {
+		t.Fatalf("expected strict mode without sources to reject nodes")
 	}
 }

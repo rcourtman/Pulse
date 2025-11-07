@@ -249,20 +249,25 @@ func lookupUserFromPasswd(username string) (*userSpec, error) {
 
 // Proxy manages the temperature monitoring proxy
 type Proxy struct {
-	socketPath  string
-	sshKeyPath  string
-	workDir     string
-	knownHosts  knownhosts.Manager
-	listener    net.Listener
-	rateLimiter *rateLimiter
-	nodeGate    *nodeGate
-	router      map[string]handlerFunc
-	config      *Config
-	metrics     *ProxyMetrics
-	audit       *auditLogger
+	socketPath        string
+	sshKeyPath        string
+	workDir           string
+	knownHosts        knownhosts.Manager
+	listener          net.Listener
+	rateLimiter       *rateLimiter
+	nodeGate          *nodeGate
+	router            map[string]handlerFunc
+	config            *Config
+	metrics           *ProxyMetrics
+	audit             *auditLogger
+	nodeValidator     *nodeValidator
+	readTimeout       time.Duration
+	writeTimeout      time.Duration
+	maxSSHOutputBytes int64
 
 	allowedPeerUIDs   map[uint32]struct{}
 	allowedPeerGIDs   map[uint32]struct{}
+	peerCapabilities  map[uint32]Capability
 	idMappedUIDRanges []idRange
 	idMappedGIDRanges []idRange
 }
@@ -362,6 +367,11 @@ func runProxy() {
 	// Initialize metrics
 	metrics := NewProxyMetrics(Version)
 
+	nodeValidator, err := newNodeValidator(cfg, metrics)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize node validator")
+	}
+
 	log.Info().
 		Str("socket", socketPath).
 		Str("ssh_key_dir", sshKeyPath).
@@ -383,14 +393,17 @@ func runProxy() {
 	}
 
 	proxy := &Proxy{
-		socketPath:  socketPath,
-		sshKeyPath:  sshKeyPath,
-		knownHosts:  knownHostsManager,
-		rateLimiter: newRateLimiter(metrics, cfg.RateLimit),
-		nodeGate:    newNodeGate(),
-		config:      cfg,
-		metrics:     metrics,
-		audit:       auditLogger,
+		socketPath:        socketPath,
+		sshKeyPath:        sshKeyPath,
+		knownHosts:        knownHostsManager,
+		nodeGate:          newNodeGate(),
+		config:            cfg,
+		metrics:           metrics,
+		audit:             auditLogger,
+		nodeValidator:     nodeValidator,
+		readTimeout:       cfg.ReadTimeout,
+		writeTimeout:      cfg.WriteTimeout,
+		maxSSHOutputBytes: cfg.MaxSSHOutputBytes,
 	}
 
 	if wd, err := os.Getwd(); err == nil {
@@ -400,6 +413,12 @@ func runProxy() {
 		proxy.workDir = defaultWorkDir()
 	}
 
+	if err := proxy.initAuthRules(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize authentication rules")
+	}
+
+	proxy.rateLimiter = newRateLimiter(metrics, cfg.RateLimit, proxy.idMappedUIDRanges, proxy.idMappedGIDRanges)
+
 	// Register RPC method handlers
 	proxy.router = map[string]handlerFunc{
 		RPCGetStatus:         proxy.handleGetStatusV2,
@@ -407,10 +426,6 @@ func runProxy() {
 		RPCRegisterNodes:     proxy.handleRegisterNodesV2,
 		RPCGetTemperature:    proxy.handleGetTemperatureV2,
 		RPCRequestCleanup:    proxy.handleRequestCleanup,
-	}
-
-	if err := proxy.initAuthRules(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize authentication rules")
 	}
 
 	if err := proxy.Start(); err != nil {
@@ -429,7 +444,9 @@ func runProxy() {
 	<-sigChan
 	log.Info().Msg("Shutting down proxy...")
 	proxy.Stop()
-	proxy.rateLimiter.shutdown()
+	if proxy.rateLimiter != nil {
+		proxy.rateLimiter.shutdown()
+	}
 	metrics.Shutdown(context.Background())
 	log.Info().Msg("Proxy stopped")
 }
@@ -518,8 +535,14 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Skip read deadline - it interferes with write operations on unix sockets
-	// Context timeout provides sufficient protection against hung connections
+	// Enforce read deadline to prevent hung connections
+	readDeadline := p.readTimeout
+	if readDeadline <= 0 {
+		readDeadline = 5 * time.Second
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(readDeadline)); err != nil {
+		log.Warn().Err(err).Msg("Failed to set read deadline")
+	}
 
 	// Extract and verify peer credentials
 	cred, err := extractPeerCredentials(conn)
@@ -532,7 +555,8 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 		return
 	}
 
-	if err := p.authorizePeer(cred); err != nil {
+	peerCaps, err := p.authorizePeer(cred)
+	if err != nil {
 		log.Warn().
 			Err(err).
 			Uint32("uid", cred.uid).
@@ -549,8 +573,15 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 		p.audit.LogConnectionAccepted("", cred, remoteAddr)
 	}
 
+	if p.rateLimiter == nil {
+		log.Error().Msg("Rate limiter not initialized; rejecting connection")
+		p.sendErrorV2(conn, "service unavailable", "")
+		return
+	}
+
 	// Check rate limit and concurrency
-	peer := peerID{uid: cred.uid}
+	peer := p.rateLimiter.identifyPeer(cred)
+	peerLabel := peer.String()
 	releaseLimiter, limitReason, allowed := p.rateLimiter.allow(peer)
 	if !allowed {
 		log.Warn().
@@ -575,7 +606,7 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 			releaseFn()
 			releaseFn = nil
 		}
-		p.rateLimiter.penalize(peer, reason)
+		p.rateLimiter.penalize(peerLabel, reason)
 	}
 
 	// Read request using newline-delimited framing
@@ -584,6 +615,21 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 
 	line, err := reader.ReadBytes('\n')
 	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			log.Warn().
+				Err(err).
+				Str("remote", remoteAddr).
+				Msg("Read timeout waiting for client request - slow client or attack")
+			if p.metrics != nil {
+				p.metrics.recordReadTimeout()
+			}
+			if p.audit != nil {
+				p.audit.LogValidationFailure("", cred, remoteAddr, "", nil, "read_timeout")
+			}
+			p.sendErrorV2(conn, "read timeout", "")
+			applyPenalty("read_timeout")
+			return
+		}
 		if errors.Is(err, bufio.ErrBufferFull) || limited.N <= 0 {
 			if p.audit != nil {
 				p.audit.LogValidationFailure("", cred, remoteAddr, "", nil, "payload_too_large")
@@ -606,6 +652,11 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 		p.sendErrorV2(conn, "failed to read request", "")
 		applyPenalty("read_error")
 		return
+	}
+
+	// Clear read deadline now that request payload has been received
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		log.Warn().Err(err).Msg("Failed to clear read deadline after request read")
 	}
 
 	// Trim whitespace and validate
@@ -655,29 +706,28 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 		}
 		resp.Error = "unknown method"
 		logger.Warn().Msg("Unknown method")
-		p.sendResponse(conn, resp)
+		p.sendResponse(conn, resp, p.writeTimeout)
 		applyPenalty("unknown_method")
 		return
 	}
 
 	// Check if method requires host-level privileges
 	if privilegedMethods[req.Method] {
-		// Privileged methods can only be called from host (not from containers)
-		if p.isIDMappedRoot(cred) {
-			resp.Error = "method requires host-level privileges"
+		if !peerCaps.Has(CapabilityAdmin) {
+			resp.Error = "method requires admin capability"
 			log.Warn().
 				Str("method", req.Method).
 				Uint32("uid", cred.uid).
 				Uint32("gid", cred.gid).
 				Uint32("pid", cred.pid).
 				Str("corr_id", req.CorrelationID).
-				Msg("SECURITY: Container attempted to call privileged method - access denied")
+				Msg("SECURITY: peer lacking admin capability attempted privileged method - access denied")
 			if p.audit != nil {
-				p.audit.LogValidationFailure(req.CorrelationID, cred, remoteAddr, req.Method, nil, "privileged_method_denied")
+				p.audit.LogValidationFailure(req.CorrelationID, cred, remoteAddr, req.Method, nil, "capability_denied")
 			}
-			p.sendResponse(conn, resp)
+			p.sendResponse(conn, resp, p.writeTimeout)
 			p.metrics.rpcRequests.WithLabelValues(req.Method, "unauthorized").Inc()
-			applyPenalty("privileged_method_denied")
+			applyPenalty("capability_denied")
 			return
 		}
 	}
@@ -695,10 +745,7 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 		}
 		resp.Error = err.Error()
 		logger.Warn().Err(err).Msg("Handler failed")
-		// Clear read deadline and set write deadline for error response
-		conn.SetReadDeadline(time.Time{})
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		p.sendResponse(conn, resp)
+		p.sendResponse(conn, resp, p.writeTimeout)
 		// Record failed request
 		p.metrics.rpcRequests.WithLabelValues(req.Method, "error").Inc()
 		p.metrics.rpcLatency.WithLabelValues(req.Method).Observe(time.Since(startTime).Seconds())
@@ -713,10 +760,7 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	}
 	logger.Info().Msg("Request completed")
 
-	// Clear read deadline and set write deadline for response
-	conn.SetReadDeadline(time.Time{})
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	p.sendResponse(conn, resp)
+	p.sendResponse(conn, resp, p.writeTimeout)
 
 	// Record successful request
 	p.metrics.rpcRequests.WithLabelValues(req.Method, "success").Inc()
@@ -729,8 +773,7 @@ func (p *Proxy) sendError(conn net.Conn, message string) {
 		Success: false,
 		Error:   message,
 	}
-	encoder := json.NewEncoder(conn)
-	encoder.Encode(resp)
+	p.sendResponse(conn, resp, p.writeTimeout)
 }
 
 // sendErrorV2 sends an error response with correlation ID
@@ -740,25 +783,34 @@ func (p *Proxy) sendErrorV2(conn net.Conn, message, correlationID string) {
 		Success:       false,
 		Error:         message,
 	}
-	// Clear read deadline before writing
-	conn.SetReadDeadline(time.Time{})
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	encoder := json.NewEncoder(conn)
-	encoder.Encode(resp)
+	p.sendResponse(conn, resp, p.writeTimeout)
 }
 
 // sendResponse sends an RPC response
-func (p *Proxy) sendResponse(conn net.Conn, resp RPCResponse) {
+func (p *Proxy) sendResponse(conn net.Conn, resp RPCResponse, writeTimeout time.Duration) {
 	// Clear read deadline before writing
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
 		log.Warn().Err(err).Msg("Failed to clear read deadline")
 	}
-	if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
-		log.Warn().Err(err).Msg("Failed to set write deadline")
+
+	if writeTimeout <= 0 {
+		writeTimeout = 10 * time.Second
 	}
+
+	if err := conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+		log.Warn().Err(err).Dur("write_timeout", writeTimeout).Msg("Failed to set write deadline")
+	}
+
 	encoder := json.NewEncoder(conn)
 	if err := encoder.Encode(resp); err != nil {
-		log.Error().Err(err).Msg("Failed to encode RPC response")
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			log.Warn().Err(err).Msg("Write timeout while sending RPC response")
+			if p.metrics != nil {
+				p.metrics.recordWriteTimeout()
+			}
+		} else {
+			log.Error().Err(err).Msg("Failed to encode RPC response")
+		}
 	}
 }
 
@@ -1099,6 +1151,13 @@ func (p *Proxy) handleGetTemperatureV2(ctx context.Context, req *RPCRequest, log
 	if err := validateNodeName(node); err != nil {
 		logger.Warn().Str("node", node).Msg("Invalid node name format")
 		return nil, fmt.Errorf("invalid node name")
+	}
+
+	if p.nodeValidator != nil {
+		if err := p.nodeValidator.Validate(ctx, node); err != nil {
+			logger.Warn().Err(err).Str("node", node).Msg("Node validation failed")
+			return nil, err
+		}
 	}
 
 	// Acquire per-node concurrency lock (prevents multiple simultaneous requests to same node)
