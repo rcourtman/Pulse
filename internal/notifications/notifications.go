@@ -618,6 +618,13 @@ func (n *NotificationManager) CancelAlert(alertID string) {
 	// Clean up cooldown record for resolved alert
 	delete(n.lastNotified, alertID)
 
+	// Cancel any queued notifications containing this alert
+	if n.queue != nil {
+		if err := n.queue.CancelByAlertIDs([]string{alertID}); err != nil {
+			log.Error().Err(err).Str("alertID", alertID).Msg("Failed to cancel queued notifications")
+		}
+	}
+
 	log.Debug().
 		Str("alertID", alertID).
 		Int("remaining", len(n.pendingAlerts)).
