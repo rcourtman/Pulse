@@ -14,7 +14,7 @@ func TestEnsureCreatesFileAndCaches(t *testing.T) {
 	path := filepath.Join(dir, "known_hosts")
 
 	var calls int
-	keyscan := func(ctx context.Context, host string, timeout time.Duration) ([]byte, error) {
+	keyscan := func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
 		calls++
 		return []byte(host + " ssh-ed25519 AAAA"), nil
 	}
@@ -44,7 +44,7 @@ func TestEnsureUsesSanitizedOutput(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "known_hosts")
 
-	keyscan := func(ctx context.Context, host string, timeout time.Duration) ([]byte, error) {
+	keyscan := func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
 		return []byte(`# comment
 example.com ssh-ed25519 AAAA
 example.com,192.0.2.10 ssh-rsa BBBB
@@ -74,7 +74,7 @@ func TestEnsureReturnsErrorWhenNoEntries(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "known_hosts")
 
-	mgr, err := NewManager(path, WithKeyscanFunc(func(ctx context.Context, host string, timeout time.Duration) ([]byte, error) {
+	mgr, err := NewManager(path, WithKeyscanFunc(func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
 		return []byte("|1|hash|salt ssh-ed25519 AAAA\n"), nil
 	}))
 	if err != nil {
@@ -91,7 +91,7 @@ func TestEnsureRespectsContextCancellation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "known_hosts")
 
-	keyscan := func(ctx context.Context, host string, timeout time.Duration) ([]byte, error) {
+	keyscan := func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
