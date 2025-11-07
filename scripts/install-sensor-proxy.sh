@@ -61,6 +61,7 @@ configure_local_authorized_key() {
 }
 
 BINARY_PATH="/usr/local/bin/pulse-sensor-proxy"
+WRAPPER_SCRIPT="/usr/local/bin/pulse-sensor-wrapper.sh"
 SERVICE_PATH="/etc/systemd/system/pulse-sensor-proxy.service"
 RUNTIME_DIR="/run/pulse-sensor-proxy"
 SOCKET_PATH="${RUNTIME_DIR}/pulse-sensor-proxy.sock"
@@ -783,6 +784,165 @@ fi
 
 print_info "Socket ready at $SOCKET_PATH"
 
+# Install sensor wrapper script for combined sensor and SMART data collection
+print_info "Installing sensor wrapper script..."
+cat > "$WRAPPER_SCRIPT" << 'WRAPPER_EOF'
+#!/bin/bash
+#
+# pulse-sensor-wrapper.sh
+# Combined sensor and SMART temperature collection for Pulse monitoring
+#
+# This script is deployed as the SSH forced command for the sensor proxy.
+# It collects CPU/GPU temps via sensors and disk temps via smartctl,
+# returning a unified JSON payload.
+
+set -euo pipefail
+
+# Configuration
+CACHE_DIR="/var/cache/pulse-sensor-proxy"
+SMART_CACHE_TTL=1800  # 30 minutes
+MAX_SMARTCTL_TIME=5   # seconds per disk
+
+# Ensure cache directory exists
+mkdir -p "$CACHE_DIR" 2>/dev/null || true
+
+# Function to get cached SMART data
+get_cached_smart() {
+    local cache_file="$CACHE_DIR/smart-temps.json"
+    local now=$(date +%s)
+
+    # Check if cache exists and is fresh
+    if [[ -f "$cache_file" ]]; then
+        local mtime=$(stat -c %Y "$cache_file" 2>/dev/null || echo 0)
+        local age=$((now - mtime))
+
+        if [[ $age -lt $SMART_CACHE_TTL ]]; then
+            cat "$cache_file"
+            return 0
+        fi
+    fi
+
+    # Cache miss or stale - return empty array and trigger background refresh
+    echo "[]"
+
+    # Trigger async refresh if not already running
+    if ! pgrep -f "pulse-sensor-wrapper-refresh" >/dev/null 2>&1; then
+        (refresh_smart_cache &)
+    fi
+
+    return 0
+}
+
+# Function to refresh SMART cache in background
+refresh_smart_cache() {
+    # Mark this process for detection
+    exec -a pulse-sensor-wrapper-refresh bash
+
+    local cache_file="$CACHE_DIR/smart-temps.json"
+    local temp_file="${cache_file}.tmp.$$"
+    local disks=()
+
+    # Find all physical disks (skip partitions, loop devices, etc.)
+    while IFS= read -r dev; do
+        [[ -b "$dev" ]] && disks+=("$dev")
+    done < <(lsblk -nd -o NAME,TYPE | awk '$2=="disk" {print "/dev/"$1}')
+
+    local results=()
+
+    for dev in "${disks[@]}"; do
+        # Use smartctl with standby check to avoid waking sleeping drives
+        # -n standby: skip if drive is in standby/sleep mode
+        # --json=o: output original smartctl JSON format
+        # timeout: prevent hanging on problematic drives
+
+        local output
+        if output=$(timeout ${MAX_SMARTCTL_TIME}s smartctl -n standby,after -A --json=o "$dev" 2>/dev/null); then
+            # Parse the JSON output
+            local temp=$(echo "$output" | jq -r '
+                .temperature.current //
+                (.ata_smart_attributes.table[] | select(.id == 194) | .raw.value) //
+                (.nvme_smart_health_information_log.temperature // empty)
+            ' 2>/dev/null)
+
+            local serial=$(echo "$output" | jq -r '.serial_number // empty' 2>/dev/null)
+            local wwn=$(echo "$output" | jq -r '.wwn.naa // .wwn.oui // empty' 2>/dev/null)
+            local model=$(echo "$output" | jq -r '.model_name // .model_family // empty' 2>/dev/null)
+            local transport=$(echo "$output" | jq -r '.device.type // empty' 2>/dev/null)
+
+            # Only include if we got a valid temperature
+            if [[ -n "$temp" && "$temp" != "null" && "$temp" =~ ^[0-9]+$ ]]; then
+                local entry=$(jq -n \
+                    --arg dev "$dev" \
+                    --arg serial "$serial" \
+                    --arg wwn "$wwn" \
+                    --arg model "$model" \
+                    --arg transport "$transport" \
+                    --argjson temp "$temp" \
+                    --arg updated "$(date -Iseconds)" \
+                    '{
+                        device: $dev,
+                        serial: $serial,
+                        wwn: $wwn,
+                        model: $model,
+                        type: $transport,
+                        temperature: $temp,
+                        lastUpdated: $updated,
+                        standbySkipped: false
+                    }')
+                results+=("$entry")
+            fi
+        elif echo "$output" | grep -q "standby"; then
+            # Drive is in standby - record it but don't wake it
+            local entry=$(jq -n \
+                --arg dev "$dev" \
+                --arg updated "$(date -Iseconds)" \
+                '{
+                    device: $dev,
+                    temperature: null,
+                    lastUpdated: $updated,
+                    standbySkipped: true
+                }')
+            results+=("$entry")
+        fi
+
+        # Small delay between disks to avoid saturating SATA controller
+        sleep 0.1
+    done
+
+    # Build final JSON array
+    if [[ ${#results[@]} -gt 0 ]]; then
+        local json=$(printf '%s\n' "${results[@]}" | jq -s '.')
+    else
+        local json="[]"
+    fi
+
+    # Atomic write to cache
+    echo "$json" > "$temp_file"
+    mv "$temp_file" "$cache_file"
+    chmod 644 "$cache_file" 2>/dev/null || true
+}
+
+# Main execution
+
+# Collect sensor data (CPU, GPU temps)
+sensors_data=$(sensors -j 2>/dev/null || echo '{}')
+
+# Get SMART data from cache
+smart_data=$(get_cached_smart)
+
+# Combine into unified payload
+jq -n \
+    --argjson sensors "$sensors_data" \
+    --argjson smart "$smart_data" \
+    '{
+        sensors: $sensors,
+        smart: $smart
+    }'
+WRAPPER_EOF
+
+chmod +x "$WRAPPER_SCRIPT"
+print_success "Sensor wrapper installed at $WRAPPER_SCRIPT"
+
 # Install cleanup system for automatic SSH key removal when nodes are deleted
 print_info "Installing cleanup system..."
 
@@ -1022,7 +1182,7 @@ if command -v pvecm >/dev/null 2>&1; then
         print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"
 
         # Configure SSH key with forced command restriction
-        FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+        FORCED_CMD='command="/usr/local/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
         AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
         # Track SSH key push results
@@ -1099,7 +1259,7 @@ if command -v pvecm >/dev/null 2>&1; then
         print_info "No cluster detected, configuring standalone node..."
 
         # Configure SSH key with forced command restriction
-        FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+        FORCED_CMD='command="/usr/local/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
         AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
         print_info "Authorizing proxy key on localhost..."
@@ -1113,7 +1273,7 @@ else
     print_info "Configuring SSH key for localhost..."
 
     # Configure localhost as fallback
-    FORCED_CMD='command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+    FORCED_CMD='command="/usr/local/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
     AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
     configure_local_authorized_key "$AUTH_LINE"

@@ -121,31 +121,104 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 		return disks
 	}
 
+	// Build temperature maps by node for both SMART and legacy NVMe data
+	smartTempsByNode := make(map[string][]models.DiskTemp)
 	nvmeTempsByNode := make(map[string][]models.NVMeTemp)
+
 	for _, node := range nodes {
-		if node.Temperature == nil || !node.Temperature.Available || len(node.Temperature.NVMe) == 0 {
+		if node.Temperature == nil || !node.Temperature.Available {
 			continue
 		}
 
-		temps := make([]models.NVMeTemp, len(node.Temperature.NVMe))
-		copy(temps, node.Temperature.NVMe)
-		sort.Slice(temps, func(i, j int) bool {
-			return temps[i].Device < temps[j].Device
-		})
+		// Collect SMART temps (preferred source)
+		if len(node.Temperature.SMART) > 0 {
+			temps := make([]models.DiskTemp, len(node.Temperature.SMART))
+			copy(temps, node.Temperature.SMART)
+			smartTempsByNode[node.Name] = temps
+		}
 
-		nvmeTempsByNode[node.Name] = temps
+		// Collect legacy NVMe temps as fallback
+		if len(node.Temperature.NVMe) > 0 {
+			temps := make([]models.NVMeTemp, len(node.Temperature.NVMe))
+			copy(temps, node.Temperature.NVMe)
+			sort.Slice(temps, func(i, j int) bool {
+				return temps[i].Device < temps[j].Device
+			})
+			nvmeTempsByNode[node.Name] = temps
+		}
 	}
 
-	if len(nvmeTempsByNode) == 0 {
+	if len(smartTempsByNode) == 0 && len(nvmeTempsByNode) == 0 {
 		return disks
 	}
 
 	updated := make([]models.PhysicalDisk, len(disks))
 	copy(updated, disks)
 
+	// Process SMART temperatures first (preferred method)
+	for i := range updated {
+		smartTemps, ok := smartTempsByNode[updated[i].Node]
+		if !ok || len(smartTemps) == 0 {
+			continue
+		}
+
+		// Try to match by WWN (most reliable)
+		if updated[i].WWN != "" {
+			for _, temp := range smartTemps {
+				if temp.WWN != "" && strings.EqualFold(temp.WWN, updated[i].WWN) {
+					if temp.Temperature > 0 && !temp.StandbySkipped {
+						updated[i].Temperature = temp.Temperature
+						log.Debug().
+							Str("disk", updated[i].DevPath).
+							Str("wwn", updated[i].WWN).
+							Int("temp", temp.Temperature).
+							Msg("Matched SMART temperature by WWN")
+					}
+					continue
+				}
+			}
+		}
+
+		// Fall back to serial number match (case-insensitive)
+		if updated[i].Serial != "" && updated[i].Temperature == 0 {
+			for _, temp := range smartTemps {
+				if temp.Serial != "" && strings.EqualFold(temp.Serial, updated[i].Serial) {
+					if temp.Temperature > 0 && !temp.StandbySkipped {
+						updated[i].Temperature = temp.Temperature
+						log.Debug().
+							Str("disk", updated[i].DevPath).
+							Str("serial", updated[i].Serial).
+							Int("temp", temp.Temperature).
+							Msg("Matched SMART temperature by serial")
+					}
+					continue
+				}
+			}
+		}
+
+		// Last resort: match by device path (normalized)
+		if updated[i].Temperature == 0 {
+			normalizedDevPath := strings.TrimPrefix(updated[i].DevPath, "/dev/")
+			for _, temp := range smartTemps {
+				normalizedTempDev := strings.TrimPrefix(temp.Device, "/dev/")
+				if normalizedTempDev == normalizedDevPath {
+					if temp.Temperature > 0 && !temp.StandbySkipped {
+						updated[i].Temperature = temp.Temperature
+						log.Debug().
+							Str("disk", updated[i].DevPath).
+							Int("temp", temp.Temperature).
+							Msg("Matched SMART temperature by device path")
+					}
+					break
+				}
+			}
+		}
+	}
+
+	// Process legacy NVMe temperatures for disks that didn't get SMART data
 	disksByNode := make(map[string][]int)
 	for i := range updated {
-		if strings.EqualFold(updated[i].Type, "nvme") {
+		if strings.EqualFold(updated[i].Type, "nvme") && updated[i].Temperature == 0 {
 			disksByNode[updated[i].Node] = append(disksByNode[updated[i].Node], i)
 		}
 	}
@@ -153,19 +226,12 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	for nodeName, diskIndexes := range disksByNode {
 		temps, ok := nvmeTempsByNode[nodeName]
 		if !ok || len(temps) == 0 {
-			for _, idx := range diskIndexes {
-				updated[idx].Temperature = 0
-			}
 			continue
 		}
 
 		sort.Slice(diskIndexes, func(i, j int) bool {
 			return updated[diskIndexes[i]].DevPath < updated[diskIndexes[j]].DevPath
 		})
-
-		for _, idx := range diskIndexes {
-			updated[idx].Temperature = 0
-		}
 
 		for idx, diskIdx := range diskIndexes {
 			if idx >= len(temps) {
@@ -178,6 +244,10 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 			}
 
 			updated[diskIdx].Temperature = int(math.Round(tempVal))
+			log.Debug().
+				Str("disk", updated[diskIdx].DevPath).
+				Int("temp", updated[diskIdx].Temperature).
+				Msg("Matched legacy NVMe temperature by index")
 		}
 	}
 
@@ -5787,6 +5857,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						DevPath:     disk.DevPath,
 						Model:       disk.Model,
 						Serial:      disk.Serial,
+						WWN:         disk.WWN,
 						Type:        disk.Type,
 						Size:        disk.Size,
 						Health:      disk.Health,

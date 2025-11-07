@@ -302,32 +302,41 @@ func (tc *TemperatureCollector) disableLegacySSHOnAuthFailure(err error, nodeNam
 	return true
 }
 
-// parseSensorsJSON parses the JSON output from `sensors -j`
+// parseSensorsJSON parses the JSON output from the sensor wrapper
 func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temperature, error) {
 	if strings.TrimSpace(jsonStr) == "" {
 		return nil, fmt.Errorf("empty sensors output")
 	}
 
-	// sensors -j output structure:
-	// {
-	//   "coretemp-isa-0000": {
-	//     "Package id 0": {"temp1_input": 45.0},
-	//     "Core 0": {"temp2_input": 43.0},
-	//     ...
-	//   },
-	//   "nvme-pci-0400": {
-	//     "Composite": {"temp1_input": 38.9}
-	//   }
-	// }
+	// Try to parse as wrapper format first: {sensors: {...}, smart: [...]}
+	// Fall back to legacy format for backward compatibility
+	var wrapperData struct {
+		Sensors map[string]interface{} `json:"sensors"`
+		SMART   []models.DiskTemp      `json:"smart"`
+	}
 
 	var sensorsData map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &sensorsData); err != nil {
-		return nil, fmt.Errorf("failed to parse sensors JSON: %w", err)
+	var smartData []models.DiskTemp
+
+	if err := json.Unmarshal([]byte(jsonStr), &wrapperData); err == nil && wrapperData.Sensors != nil {
+		// New wrapper format
+		sensorsData = wrapperData.Sensors
+		smartData = wrapperData.SMART
+		log.Debug().
+			Int("smartDisks", len(smartData)).
+			Msg("Parsed new wrapper format with SMART data")
+	} else {
+		// Legacy format: direct sensors -j output
+		if err := json.Unmarshal([]byte(jsonStr), &sensorsData); err != nil {
+			return nil, fmt.Errorf("failed to parse sensors JSON: %w", err)
+		}
+		log.Debug().Msg("Parsed legacy sensors format (no SMART data)")
 	}
 
 	temp := &models.Temperature{
 		Cores: []models.CoreTemp{},
 		NVMe:  []models.NVMeTemp{},
+		SMART: smartData,
 	}
 
 	foundCPUChip := false
@@ -405,9 +414,10 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 	temp.HasCPU = foundCPUChip
 	temp.HasNVMe = len(temp.NVMe) > 0
 	temp.HasGPU = len(temp.GPU) > 0
+	temp.HasSMART = len(temp.SMART) > 0
 
 	// Available means any temperature data exists (backward compatibility)
-	temp.Available = temp.HasCPU || temp.HasNVMe || temp.HasGPU
+	temp.Available = temp.HasCPU || temp.HasNVMe || temp.HasGPU || temp.HasSMART
 
 	// Log summary of what was detected
 	if !foundCPUChip {
@@ -424,11 +434,13 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 			Bool("hasCPU", temp.HasCPU).
 			Bool("hasNVMe", temp.HasNVMe).
 			Bool("hasGPU", temp.HasGPU).
+			Bool("hasSMART", temp.HasSMART).
 			Float64("cpuPackage", temp.CPUPackage).
 			Float64("cpuMax", temp.CPUMax).
 			Int("coreCount", len(temp.Cores)).
 			Int("nvmeCount", len(temp.NVMe)).
 			Int("gpuCount", len(temp.GPU)).
+			Int("smartCount", len(temp.SMART)).
 			Msg("Temperature data parsed successfully")
 	}
 

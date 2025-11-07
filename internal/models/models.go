@@ -491,6 +491,7 @@ type PhysicalDisk struct {
 	DevPath     string    `json:"devPath"` // /dev/nvme0n1, /dev/sda
 	Model       string    `json:"model"`
 	Serial      string    `json:"serial"`
+	WWN         string    `json:"wwn"`         // World Wide Name
 	Type        string    `json:"type"`        // nvme, sata, sas
 	Size        int64     `json:"size"`        // bytes
 	Health      string    `json:"health"`      // PASSED, FAILED, UNKNOWN
@@ -774,11 +775,13 @@ type Temperature struct {
 	MaxRecorded  time.Time  `json:"maxRecorded,omitempty"`  // When maximum temperature was recorded
 	Cores        []CoreTemp `json:"cores,omitempty"`        // Individual core temperatures
 	GPU          []GPUTemp  `json:"gpu,omitempty"`          // GPU temperatures
-	NVMe         []NVMeTemp `json:"nvme,omitempty"`         // NVMe drive temperatures
+	NVMe         []NVMeTemp `json:"nvme,omitempty"`         // NVMe drive temperatures (legacy, from sensor proxy)
+	SMART        []DiskTemp `json:"smart,omitempty"`        // Physical disk temperatures from SMART data
 	Available    bool       `json:"available"`              // Whether any temperature data is available
 	HasCPU       bool       `json:"hasCPU"`                 // Whether CPU temperature data is available
 	HasGPU       bool       `json:"hasGPU"`                 // Whether GPU temperature data is available
 	HasNVMe      bool       `json:"hasNVMe"`                // Whether NVMe temperature data is available
+	HasSMART     bool       `json:"hasSMART"`               // Whether SMART disk temperature data is available
 	LastUpdate   time.Time  `json:"lastUpdate"`             // When this data was collected
 }
 
@@ -800,6 +803,18 @@ type GPUTemp struct {
 type NVMeTemp struct {
 	Device string  `json:"device"`
 	Temp   float64 `json:"temp"`
+}
+
+// DiskTemp represents a physical disk temperature from SMART data
+type DiskTemp struct {
+	Device         string    `json:"device"`                   // Device path (e.g., /dev/sda)
+	Serial         string    `json:"serial,omitempty"`         // Disk serial number
+	WWN            string    `json:"wwn,omitempty"`            // World Wide Name
+	Model          string    `json:"model,omitempty"`          // Disk model
+	Type           string    `json:"type,omitempty"`           // Transport type (sata, sas, nvme)
+	Temperature    int       `json:"temperature"`              // Temperature in Celsius
+	LastUpdated    time.Time `json:"lastUpdated"`              // When this reading was taken
+	StandbySkipped bool      `json:"standbySkipped,omitempty"` // True if disk was in standby and not queried
 }
 
 // Metric represents a time-series metric
