@@ -2024,28 +2024,30 @@ const Settings: Component<SettingsProps> = (props) => {
 
     try {
       const fileContent = await importFile()!.text();
-      let exportData;
-      try {
-        exportData = JSON.parse(fileContent);
-      } catch (parseError) {
-        showError('Invalid JSON file format');
-        logger.error('JSON parse error', parseError);
-        return;
-      }
 
-      // Support both formats:
-      // 1. New format: {status: "success", data: "base64string"}
-      // 2. Legacy/CLI format: raw base64 string or {data: "base64string"}
+      // Support three formats:
+      // 1. UI export: {status: "success", data: "base64string"}
+      // 2. Legacy format: {data: "base64string"}
+      // 3. CLI export: raw base64 string (no JSON wrapper)
       let encryptedData: string;
-      if (typeof exportData === 'string') {
-        // Raw base64 string from CLI export
-        encryptedData = exportData;
-      } else if (exportData.data) {
-        // Standard format with data field
-        encryptedData = exportData.data;
-      } else {
-        showError('Invalid backup file format. Expected encrypted data in "data" field.');
-        return;
+
+      // Try to parse as JSON first
+      try {
+        const exportData = JSON.parse(fileContent);
+
+        if (typeof exportData === 'string') {
+          // Raw base64 string wrapped in JSON (edge case)
+          encryptedData = exportData;
+        } else if (exportData.data) {
+          // Standard format with data field
+          encryptedData = exportData.data;
+        } else {
+          showError('Invalid backup file format. Expected encrypted data in "data" field.');
+          return;
+        }
+      } catch (parseError) {
+        // Not JSON - treat entire contents as raw base64 from CLI export
+        encryptedData = fileContent.trim();
       }
 
       // Get CSRF token from cookie
