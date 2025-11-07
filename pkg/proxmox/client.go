@@ -1588,8 +1588,24 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 				if fs.Mountpoint == "/" {
 					fs.Disk = "root-filesystem"
 				} else {
-					// Use mountpoint as unique identifier
-					fs.Disk = fs.Mountpoint
+					// For Windows, normalize drive letters to prevent duplicate counting
+					// Windows guest agent can return multiple directory entries (C:\, C:\Users, C:\Windows)
+					// all on the same physical drive. Without disk[] metadata, we must deduplicate by drive letter.
+					isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
+					if isWindowsDrive {
+						// Use drive letter as identifier (e.g., "C:" for C:\, C:\Users, etc.)
+						driveLetter := strings.ToUpper(fs.Mountpoint[:2])
+						fs.Disk = driveLetter
+						log.Debug().
+							Str("node", node).
+							Int("vmid", vmid).
+							Str("mountpoint", fs.Mountpoint).
+							Str("synthesized_disk", driveLetter).
+							Msg("Synthesized Windows drive identifier from mountpoint")
+					} else {
+						// Use mountpoint as unique identifier for non-Windows paths
+						fs.Disk = fs.Mountpoint
+					}
 				}
 			}
 		}
