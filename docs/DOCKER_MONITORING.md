@@ -251,7 +251,23 @@ Need the alerts but at a different tone? The same Containers tab exposes global 
 - Ensure the Pulse API token has not expired or been regenerated.
 - If `pulse-docker-agent` reports `Cannot connect to the Docker daemon`, verify the socket path and permissions.
 - Check Pulse (`/containers` tab) for the latest heartbeat time. Hosts are marked offline if they stop reporting for >4× the configured interval.
-- Use the search box above the host grid to filter by host name, stack label, or container name. Restart loops surface in the “Issues” column and display the last five exit codes.
+- Use the search box above the host grid to filter by host name, stack label, or container name. Restart loops surface in the "Issues" column and display the last five exit codes.
+
+### Docker hosts cycling or appearing to replace each other
+
+**Symptom:** The Docker tab switches between hosts instead of showing all of them simultaneously.
+
+**Cause:** Multiple agents using the same API token. Pulse matches incoming reports by agent ID first and falls back to the API token when IDs are missing or identical. Shared tokens make agents indistinguishable.
+
+**Fix:** Create a dedicated API token for each Docker host in **Settings → API Tokens** and update the agents with their unique tokens. See the [Quick install section](#quick-install-from-your-pulse-server-recommended) for token setup details.
+
+### Agent rejected after host removal
+
+**Symptom:** Agent logs show `docker host was removed at <timestamp> and cannot report again`.
+
+**Cause:** The host was previously deleted from Pulse and remains on the removal blocklist.
+
+**Fix:** Open **Settings → Docker → Removed Hosts**, locate the entry, and click **Allow re-enroll**. Then restart the agent or rerun the install script. If the install script runs with a token that includes the `docker:manage` scope it will automatically clear the removal block.
 
 ## Removing the agent
 
