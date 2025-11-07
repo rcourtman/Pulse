@@ -121,8 +121,11 @@ type NotificationManager struct {
 	groupByGuest      bool
 	webhookHistory    []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
 	webhookRateLimits map[string]*webhookRateLimit // Track rate limits per webhook URL
+	webhookRateMu     sync.Mutex                   // Separate mutex for webhook rate limiting
 	appriseExec       appriseExecFunc
 	queue             *NotificationQueue // Persistent notification queue
+	webhookClient     *http.Client       // Shared HTTP client for webhooks
+	stopCleanup       chan struct{}      // Signal to stop cleanup goroutine
 }
 
 type appriseExecFunc func(ctx context.Context, path string, args []string) ([]byte, error)
@@ -350,12 +353,17 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		publicURL:         cleanURL,
 		appriseExec:       defaultAppriseExec,
 		queue:             queue,
+		webhookClient:     createSecureWebhookClient(WebhookTimeout),
+		stopCleanup:       make(chan struct{}),
 	}
 
 	// Wire up queue processor if queue is available
 	if queue != nil {
 		queue.SetProcessor(nm.ProcessQueuedNotification)
 	}
+
+	// Start periodic cleanup of old lastNotified entries (every 1 hour)
+	go nm.cleanupOldNotificationRecords()
 
 	return nm
 }
@@ -660,7 +668,10 @@ func (n *NotificationManager) sendGroupedAlerts() {
 }
 
 // enqueueNotifications adds notifications to the persistent queue
+// Falls back to direct sending if enqueue fails
 func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert) {
+	anyFailed := false
+
 	// Enqueue email notification
 	if emailConfig.Enabled {
 		configJSON, err := json.Marshal(emailConfig)
@@ -674,7 +685,9 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 				MaxAttempts: 3,
 			}
 			if err := n.queue.Enqueue(notif); err != nil {
-				log.Error().Err(err).Msg("Failed to enqueue email notification")
+				log.Error().Err(err).Msg("Failed to enqueue email notification - falling back to direct send")
+				anyFailed = true
+				go n.sendGroupedEmail(emailConfig, alertsToSend)
 			} else {
 				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued email notification")
 			}
@@ -695,7 +708,9 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 					MaxAttempts: 3,
 				}
 				if err := n.queue.Enqueue(notif); err != nil {
-					log.Error().Err(err).Str("webhookName", webhook.Name).Msg("Failed to enqueue webhook notification")
+					log.Error().Err(err).Str("webhookName", webhook.Name).Msg("Failed to enqueue webhook notification - falling back to direct send")
+					anyFailed = true
+					go n.sendGroupedWebhook(webhook, alertsToSend)
 				} else {
 					log.Debug().Str("webhookName", webhook.Name).Int("alertCount", len(alertsToSend)).Msg("Enqueued webhook notification")
 				}
@@ -716,11 +731,26 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 				MaxAttempts: 3,
 			}
 			if err := n.queue.Enqueue(notif); err != nil {
-				log.Error().Err(err).Msg("Failed to enqueue apprise notification")
+				log.Error().Err(err).Msg("Failed to enqueue apprise notification - falling back to direct send")
+				anyFailed = true
+				go n.sendGroupedApprise(appriseConfig, alertsToSend)
 			} else {
 				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued apprise notification")
 			}
 		}
+	}
+
+	// If any enqueue failed, mark cooldown immediately for fire-and-forget sends
+	if anyFailed {
+		n.mu.Lock()
+		now := time.Now()
+		for _, alert := range alertsToSend {
+			n.lastNotified[alert.ID] = notificationRecord{
+				lastSent:   now,
+				alertStart: alert.StartTime,
+			}
+		}
+		n.mu.Unlock()
 	}
 }
 
@@ -1367,8 +1397,8 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits
 func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
-	n.mu.Lock()
-	defer n.mu.Unlock()
+	n.webhookRateMu.Lock()
+	defer n.webhookRateMu.Unlock()
 
 	now := time.Now()
 	limit, exists := n.webhookRateLimits[webhookURL]
@@ -1485,10 +1515,8 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Msg("Sending webhook")
 	}
 
-	// Send request with secure client
-	client := createSecureWebhookClient(WebhookTimeout)
-
-	resp, err := client.Do(req)
+	// Send request with shared secure client
+	resp, err := n.webhookClient.Do(req)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -2370,10 +2398,48 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 	return err
 }
 
+// cleanupOldNotificationRecords periodically cleans up old entries from lastNotified map
+func (n *NotificationManager) cleanupOldNotificationRecords() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			n.mu.Lock()
+			now := time.Now()
+			cutoff := now.Add(-24 * time.Hour)
+			cleaned := 0
+
+			for alertID, record := range n.lastNotified {
+				// Remove entries older than 24 hours
+				if record.lastSent.Before(cutoff) {
+					delete(n.lastNotified, alertID)
+					cleaned++
+				}
+			}
+
+			if cleaned > 0 {
+				log.Debug().
+					Int("cleaned", cleaned).
+					Int("remaining", len(n.lastNotified)).
+					Msg("Cleaned up old notification cooldown records")
+			}
+			n.mu.Unlock()
+		case <-n.stopCleanup:
+			// Stop cleanup when manager is stopped
+			return
+		}
+	}
+}
+
 // Stop gracefully stops the notification manager
 func (n *NotificationManager) Stop() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
+	// Stop cleanup goroutine
+	close(n.stopCleanup)
 
 	// Stop the notification queue if it exists
 	if n.queue != nil {

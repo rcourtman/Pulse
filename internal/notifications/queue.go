@@ -55,6 +55,7 @@ type NotificationQueue struct {
 	cleanupTicker   *time.Ticker
 	notifyChan      chan struct{}                    // Signal when new notifications are added
 	processor       func(*QueuedNotification) error  // Notification processor function
+	workerSem       chan struct{}                    // Semaphore for limiting concurrent workers
 }
 
 // NewNotificationQueue creates a new persistent notification queue
@@ -98,6 +99,7 @@ func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
 		processorTicker: time.NewTicker(5 * time.Second),
 		cleanupTicker:   time.NewTicker(1 * time.Hour),
 		notifyChan:      make(chan struct{}, 100),
+		workerSem:       make(chan struct{}, 5), // Allow 5 concurrent workers
 	}
 
 	if err := nq.initSchema(); err != nil {
@@ -520,9 +522,9 @@ func (nq *NotificationQueue) SetProcessor(processor func(*QueuedNotification) er
 	nq.processor = processor
 }
 
-// processBatch processes a batch of pending notifications
+// processBatch processes a batch of pending notifications concurrently
 func (nq *NotificationQueue) processBatch() {
-	pending, err := nq.GetPending(10)
+	pending, err := nq.GetPending(20) // Increased batch size for concurrency
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get pending notifications")
 		return
@@ -534,9 +536,21 @@ func (nq *NotificationQueue) processBatch() {
 
 	log.Debug().Int("count", len(pending)).Msg("Processing notification batch")
 
+	// Process notifications concurrently with semaphore limiting
+	var wg sync.WaitGroup
 	for _, notif := range pending {
-		nq.processNotification(notif)
+		wg.Add(1)
+		go func(n *QueuedNotification) {
+			defer wg.Done()
+
+			// Acquire semaphore slot
+			nq.workerSem <- struct{}{}
+			defer func() { <-nq.workerSem }()
+
+			nq.processNotification(n)
+		}(notif)
 	}
+	wg.Wait()
 }
 
 // processNotification processes a single notification

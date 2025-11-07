@@ -71,7 +71,7 @@ export interface AppriseConfig {
 }
 
 export interface NotificationTestRequest {
-  type: 'email' | 'webhook';
+  type: 'email' | 'webhook' | 'apprise';
   config?: Record<string, unknown>; // Backend expects different format than frontend types
   webhookId?: string;
 }
@@ -196,5 +196,54 @@ export class NotificationsAPI {
       method: 'POST',
       body: JSON.stringify(webhook),
     });
+  }
+
+  // Queue and DLQ management
+  static async getQueueStats(): Promise<Record<string, number>> {
+    return apiFetchJSON(`${this.baseUrl}/queue/stats`);
+  }
+
+  static async getDLQ(limit = 100): Promise<unknown[]> {
+    return apiFetchJSON(`${this.baseUrl}/dlq?limit=${limit}`);
+  }
+
+  static async retryDLQItem(id: string): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/dlq/retry`, {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  static async deleteDLQItem(id: string): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/dlq/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+  }
+
+  static async getNotificationHealth(): Promise<{
+    queue?: {
+      healthy: boolean;
+      pending: number;
+      sending: number;
+      sent: number;
+      failed: number;
+      dlq: number;
+    };
+    email: {
+      enabled: boolean;
+      configured: boolean;
+    };
+    webhooks: {
+      total: number;
+      enabled: number;
+    };
+    healthy: boolean;
+  }> {
+    return apiFetchJSON(`${this.baseUrl}/health`);
+  }
+
+  static async getWebhookHistory(): Promise<unknown[]> {
+    return apiFetchJSON(`${this.baseUrl}/webhook-history`);
   }
 }

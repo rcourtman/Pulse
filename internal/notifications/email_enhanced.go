@@ -20,6 +20,7 @@ type EnhancedEmailManager struct {
 
 // RateLimiter implements a simple rate limiter
 type RateLimiter struct {
+	mu        sync.Mutex
 	rate      int
 	lastSent  time.Time
 	sentCount int
@@ -82,6 +83,9 @@ func (e *EnhancedEmailManager) checkRateLimit() error {
 	if e.config.RateLimit <= 0 {
 		return nil // No rate limit
 	}
+
+	e.rateLimit.mu.Lock()
+	defer e.rateLimit.mu.Unlock()
 
 	now := time.Now()
 	if now.Sub(e.rateLimit.lastSent) >= time.Minute {

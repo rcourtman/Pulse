@@ -207,15 +207,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
-			log.Debug().
-				Str("webhook", webhook.Name).
-				Int("attempt", attempt).
-				Int("maxRetries", maxRetries).
-				Dur("backoff", backoff).
-				Msg("Retrying webhook after backoff")
-			time.Sleep(backoff)
-
-			// Check for Retry-After header from previous response
+			// Check for Retry-After header from previous response (overrides backoff)
 			if lastResp != nil && lastResp.StatusCode == 429 {
 				if retryAfter := lastResp.Header.Get("Retry-After"); retryAfter != "" {
 					if seconds, err := strconv.Atoi(retryAfter); err == nil {
@@ -225,12 +217,30 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 							Dur("retryAfter", customBackoff).
 							Msg("Using Retry-After header for backoff")
 						time.Sleep(customBackoff)
-						backoff = customBackoff
+						backoff = customBackoff // Use this for next iteration
 					}
+				} else {
+					// No Retry-After, use exponential backoff
+					log.Debug().
+						Str("webhook", webhook.Name).
+						Int("attempt", attempt).
+						Int("maxRetries", maxRetries).
+						Dur("backoff", backoff).
+						Msg("Retrying webhook after backoff")
+					time.Sleep(backoff)
 				}
+			} else {
+				// Not a 429, use exponential backoff
+				log.Debug().
+					Str("webhook", webhook.Name).
+					Int("attempt", attempt).
+					Int("maxRetries", maxRetries).
+					Dur("backoff", backoff).
+					Msg("Retrying webhook after backoff")
+				time.Sleep(backoff)
 			}
 
-			// Exponential backoff
+			// Exponential backoff for next iteration
 			backoff *= 2
 			if backoff > WebhookMaxBackoff {
 				backoff = WebhookMaxBackoff
