@@ -2,11 +2,29 @@
 
 The Pulse host agent extends monitoring to standalone servers that do not expose
 Proxmox or Docker APIs. With it you can surface uptime, OS metadata, CPU load,
-memory/disk utilisation, and connection health for any Linux, macOS, or Windows
-machine alongside the rest of your infrastructure. Starting in v4.26.0 the
-installer handshakes with Pulse in real time so you can confirm registration
-from the UI and receive host-agent alerts alongside your existing
+memory/disk utilisation, temperature sensors, and connection health for any Linux,
+macOS, or Windows machine alongside the rest of your infrastructure. Starting in
+v4.26.0 the installer handshakes with Pulse in real time so you can confirm
+registration from the UI and receive host-agent alerts alongside your existing
 Docker/Proxmox notifications.
+
+## Temperature Monitoring
+
+The host agent automatically collects temperature data on Linux systems with lm-sensors installed:
+
+- **CPU Package Temperature**: Overall CPU temperature
+- **Per-Core Temperatures**: Individual CPU core readings
+- **NVMe Drive Temperatures**: SSD thermal data
+- **GPU Temperatures**: AMD and NVIDIA GPU sensors
+
+Temperature data appears in the **Servers** tab alongside other host metrics. This is particularly useful for monitoring Proxmox hosts when running Pulse in a VM (where the sensor proxy socket cannot cross VM boundaries).
+
+**Requirements:**
+- Linux operating system
+- lm-sensors package installed (`apt-get install lm-sensors`)
+- Sensors configured (`sensors-detect --auto`)
+
+Temperature collection is automatic and best-effort. If lm-sensors is not installed or sensors are unavailable, the agent continues reporting other metrics normally.
 
 ## Prerequisites
 

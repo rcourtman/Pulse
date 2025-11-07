@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
@@ -220,6 +221,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
 	}
 
+	// Collect temperature data (best effort - don't fail if unavailable)
+	sensorData := a.collectTemperatures(collectCtx)
+
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
@@ -248,7 +252,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		},
 		Disks:     append([]agentshost.Disk(nil), snapshot.Disks...),
 		Network:   append([]agentshost.NetworkInterface(nil), snapshot.Network...),
-		Sensors:   agentshost.Sensors{},
+		Sensors:   sensorData,
 		Tags:      append([]string(nil), a.cfg.Tags...),
 		Timestamp: time.Now().UTC(),
 	}
@@ -303,4 +307,65 @@ func isLoopback(flags []string) bool {
 		}
 	}
 	return false
+}
+
+// collectTemperatures attempts to collect temperature data from the local system.
+// Returns an empty Sensors struct if collection fails (best-effort).
+func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
+	// Only collect on Linux for now (lm-sensors is Linux-specific)
+	if a.platform != "linux" {
+		return agentshost.Sensors{}
+	}
+
+	// Collect sensor JSON output
+	jsonOutput, err := sensors.CollectLocal(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect sensor data (lm-sensors may not be installed)")
+		return agentshost.Sensors{}
+	}
+
+	// Parse the sensor output
+	tempData, err := sensors.Parse(jsonOutput)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to parse sensor data")
+		return agentshost.Sensors{}
+	}
+
+	if !tempData.Available {
+		a.logger.Debug().Msg("No temperature sensors available on this system")
+		return agentshost.Sensors{}
+	}
+
+	// Convert to host agent sensor format
+	result := agentshost.Sensors{
+		TemperatureCelsius: make(map[string]float64),
+	}
+
+	// Add CPU package temperature
+	if tempData.CPUPackage > 0 {
+		result.TemperatureCelsius["cpu_package"] = tempData.CPUPackage
+	}
+
+	// Add individual core temperatures
+	for coreName, temp := range tempData.Cores {
+		// Normalize core name (e.g., "Core 0" -> "cpu_core_0")
+		normalizedName := strings.ToLower(strings.ReplaceAll(coreName, " ", "_"))
+		result.TemperatureCelsius["cpu_"+normalizedName] = temp
+	}
+
+	// Add NVMe temperatures
+	for nvmeName, temp := range tempData.NVMe {
+		result.TemperatureCelsius[nvmeName] = temp
+	}
+
+	// Add GPU temperatures
+	for gpuName, temp := range tempData.GPU {
+		result.TemperatureCelsius[gpuName] = temp
+	}
+
+	a.logger.Debug().
+		Int("temperatureCount", len(result.TemperatureCelsius)).
+		Msg("Collected temperature data")
+
+	return result
 }

@@ -16,14 +16,40 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
 
 > **Important:** Temperature monitoring setup differs by deployment type:
 > - **LXC containers:** Fully automatic via the setup script (Settings → Nodes → Setup Script)
-> - **Docker containers:** Requires manual proxy installation (see below)
+> - **Docker containers:** Requires manual proxy installation (see below) OR use pulse-host-agent
+> - **Docker in VM:** Use pulse-host-agent on the Proxmox host (see [Docker in VM Setup](#docker-in-vm-setup))
 > - **Native installs:** Direct SSH, no proxy needed
 >
 > **For automation (Ansible/Terraform/etc.):** Jump to [Automation-Friendly Installation](#automation-friendly-installation)
 
+## Docker in VM Setup
+
+**Running Pulse in Docker inside a VM on Proxmox?** The proxy socket cannot cross VM boundaries, so use pulse-host-agent instead.
+
+pulse-host-agent runs natively on your Proxmox host and reports temperatures back to Pulse over HTTPS. This works across VM boundaries without requiring socket mounts or SSH configuration.
+
+**Setup steps:**
+
+1. Install lm-sensors on your Proxmox host (if not already installed):
+   ```bash
+   apt-get update && apt-get install -y lm-sensors
+   sensors-detect --auto
+   ```
+
+2. Install pulse-host-agent on your Proxmox host:
+   ```bash
+   # Generate an API token in Pulse (Settings → Security → API Tokens) with host-agent:report scope
+   curl -fsSL http://your-pulse-vm:7655/install-host-agent.sh | \
+     bash -s -- --url http://your-pulse-vm:7655 --token YOUR_API_TOKEN
+   ```
+
+3. Verify temperatures appear in Pulse UI under the Servers tab
+
+The host agent will report CPU, NVMe, and GPU temperatures alongside other system metrics. No proxy installation or socket mounting needed.
+
 ## Quick Start for Docker Deployments
 
-**Running Pulse in Docker?** Temperature monitoring requires installing a small service on your Proxmox host that reads hardware sensors. The Pulse container connects to this service through a shared socket.
+**Running Pulse in Docker directly on Proxmox?** Temperature monitoring requires installing a small service on your Proxmox host that reads hardware sensors. The Pulse container connects to this service through a shared socket.
 
 **Why this is needed:** Docker containers cannot directly access hardware sensors. The proxy runs on your Proxmox host where it has access to sensor data, then shares that data with the Pulse container through a secure connection.
 
