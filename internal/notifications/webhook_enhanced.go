@@ -194,6 +194,11 @@ func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, a
 }
 
 // sendWebhookWithRetry implements exponential backoff retry with enhanced error tracking
+// Note: When used with the persistent queue, retry behavior is layered:
+// - Transport retries (this function): up to RetryCount attempts with exponential backoff
+// - Queue retries: up to MaxAttempts (default 3) with exponential backoff
+// Total attempts = RetryCount * MaxAttempts (e.g., 3 * 3 = 9 HTTP calls for a single notification)
+// This ensures delivery even during transient failures at either layer.
 func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig, payload []byte) error {
 	maxRetries := webhook.RetryCount
 	if maxRetries <= 0 {

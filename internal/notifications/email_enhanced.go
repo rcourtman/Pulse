@@ -37,6 +37,11 @@ func NewEnhancedEmailManager(config EmailProviderConfig) *EnhancedEmailManager {
 }
 
 // SendEmailWithRetry sends email with retry logic
+// Note: When used with the persistent queue, retry behavior is layered:
+// - Transport retries (this function): up to MaxRetries attempts with RetryDelay between
+// - Queue retries: up to MaxAttempts (default 3) with exponential backoff
+// Total attempts = MaxRetries * MaxAttempts (e.g., 3 * 3 = 9 SMTP calls for a single notification)
+// This ensures delivery even during transient failures at either layer.
 func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody string) error {
 	var lastErr error
 
