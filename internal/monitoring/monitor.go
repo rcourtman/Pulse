@@ -1907,19 +1907,113 @@ const (
 	removedDockerHostsTTL = 24 * time.Hour // Clean up removed hosts tracking after 24 hours
 )
 
+// recoverFromPanic recovers from panics in monitoring goroutines and logs them.
+// This prevents a panic in one component from crashing the entire monitoring system.
+func recoverFromPanic(goroutineName string) {
+	if r := recover(); r != nil {
+		log.Error().
+			Str("goroutine", goroutineName).
+			Interface("panic", r).
+			Stack().
+			Msg("Recovered from panic in monitoring goroutine")
+	}
+}
+
 // cleanupRemovedDockerHosts removes entries from the removed hosts map that are older than 24 hours.
 func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
+	// Collect IDs to remove first to avoid holding lock during state update
+	var toRemove []string
+
+	m.mu.Lock()
+	for hostID, removedAt := range m.removedDockerHosts {
+		if now.Sub(removedAt) > removedDockerHostsTTL {
+			toRemove = append(toRemove, hostID)
+		}
+	}
+	m.mu.Unlock()
+
+	// Remove from state and map without holding both locks
+	for _, hostID := range toRemove {
+		m.state.RemoveRemovedDockerHost(hostID)
+
+		m.mu.Lock()
+		removedAt := m.removedDockerHosts[hostID]
+		delete(m.removedDockerHosts, hostID)
+		m.mu.Unlock()
+
+		log.Debug().
+			Str("dockerHostID", hostID).
+			Time("removedAt", removedAt).
+			Msg("Cleaned up old removed Docker host entry")
+	}
+}
+
+// cleanupGuestMetadataCache removes stale guest metadata entries.
+// Entries older than 2x the cache TTL (10 minutes) are removed to prevent unbounded growth
+// when VMs are deleted or moved.
+func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
+	const maxAge = 2 * guestMetadataCacheTTL // 10 minutes
+
+	m.guestMetadataMu.Lock()
+	defer m.guestMetadataMu.Unlock()
+
+	for key, entry := range m.guestMetadataCache {
+		if now.Sub(entry.fetchedAt) > maxAge {
+			delete(m.guestMetadataCache, key)
+			log.Debug().
+				Str("key", key).
+				Time("fetchedAt", entry.fetchedAt).
+				Msg("Cleaned up stale guest metadata cache entry")
+		}
+	}
+}
+
+// cleanupDiagnosticSnapshots removes stale diagnostic snapshots.
+// Snapshots older than 1 hour are removed to prevent unbounded growth
+// when nodes/VMs are deleted or reconfigured.
+func (m *Monitor) cleanupDiagnosticSnapshots(now time.Time) {
+	const maxAge = 1 * time.Hour
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for hostID, removedAt := range m.removedDockerHosts {
-		if now.Sub(removedAt) > removedDockerHostsTTL {
-			delete(m.removedDockerHosts, hostID)
-			m.state.RemoveRemovedDockerHost(hostID)
+	for key, snapshot := range m.nodeSnapshots {
+		if now.Sub(snapshot.RetrievedAt) > maxAge {
+			delete(m.nodeSnapshots, key)
 			log.Debug().
-				Str("dockerHostID", hostID).
-				Time("removedAt", removedAt).
-				Msg("Cleaned up old removed Docker host entry")
+				Str("key", key).
+				Time("retrievedAt", snapshot.RetrievedAt).
+				Msg("Cleaned up stale node snapshot")
+		}
+	}
+
+	for key, snapshot := range m.guestSnapshots {
+		if now.Sub(snapshot.RetrievedAt) > maxAge {
+			delete(m.guestSnapshots, key)
+			log.Debug().
+				Str("key", key).
+				Time("retrievedAt", snapshot.RetrievedAt).
+				Msg("Cleaned up stale guest snapshot")
+		}
+	}
+}
+
+// cleanupRRDCache removes stale RRD memory cache entries.
+// Entries older than 2x the cache TTL (1 minute) are removed to prevent unbounded growth
+// when nodes are removed from the cluster.
+func (m *Monitor) cleanupRRDCache(now time.Time) {
+	const maxAge = 2 * nodeRRDCacheTTL // 1 minute
+
+	m.rrdCacheMu.Lock()
+	defer m.rrdCacheMu.Unlock()
+
+	for key, entry := range m.nodeRRDMemCache {
+		if now.Sub(entry.fetchedAt) > maxAge {
+			delete(m.nodeRRDMemCache, key)
+			log.Debug().
+				Str("node", key).
+				Time("fetchedAt", entry.fetchedAt).
+				Msg("Cleaned up stale RRD cache entry")
 		}
 	}
 }
@@ -3718,6 +3812,9 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.evaluateDockerAgents(now)
 			m.evaluateHostAgents(now)
 			m.cleanupRemovedDockerHosts(now)
+			m.cleanupGuestMetadataCache(now)
+			m.cleanupDiagnosticSnapshots(now)
+			m.cleanupRRDCache(now)
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()
@@ -3751,6 +3848,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 // retryFailedConnections attempts to recreate clients that failed during initialization
 // This handles cases where Proxmox/network isn't ready when Pulse starts
 func (m *Monitor) retryFailedConnections(ctx context.Context) {
+	defer recoverFromPanic("retryFailedConnections")
+
 	// Retry schedule: 5s, 10s, 20s, 40s, 60s, then every 60s for up to 5 minutes total
 	retryDelays := []time.Duration{
 		5 * time.Second,
@@ -3920,6 +4019,8 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 // poll fetches data from all configured instances
 func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
+	defer recoverFromPanic("poll")
+
 	// Limit concurrent polls to 2 to prevent resource exhaustion
 	currentCount := atomic.AddInt32(&m.activePollCount, 1)
 	if currentCount > 2 {
@@ -4098,6 +4199,8 @@ func (m *Monitor) startTaskWorkers(ctx context.Context, workers int) {
 }
 
 func (m *Monitor) taskWorker(ctx context.Context, id int) {
+	defer recoverFromPanic(fmt.Sprintf("taskWorker-%d", id))
+
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
 		log.Debug().Int("worker", id).Msg("Task worker started")
 	}
@@ -4780,6 +4883,8 @@ func isTransientError(err error) bool {
 
 // pollPVEInstance polls a single PVE instance
 func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, client PVEClientInterface) {
+	defer recoverFromPanic(fmt.Sprintf("pollPVEInstance-%s", instanceName))
+
 	start := time.Now()
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
@@ -5938,6 +6043,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					pollErr = ctx.Err()
 					return
 				default:
+					// Set initial timestamp before starting goroutine (prevents concurrent starts)
 					m.mu.Lock()
 					m.lastPVEBackupPoll[instanceName] = newLast
 					m.mu.Unlock()
@@ -5950,8 +6056,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Dur("timeout", timeout).
 							Msg("Starting background backup/snapshot polling")
 
-						// Create a separate context with longer timeout for backup operations
-						backupCtx, cancel := context.WithTimeout(context.Background(), timeout)
+						// Use parent context for proper cancellation chain
+						backupCtx, cancel := context.WithTimeout(ctx, timeout)
 						defer cancel()
 
 						// Poll backup tasks
@@ -5969,7 +6075,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Dur("duration", duration).
 							Msg("Completed background backup/snapshot polling")
 
-						// Record actual completion time for interval scheduling
+						// Update timestamp after completion for accurate interval scheduling
 						m.mu.Lock()
 						m.lastPVEBackupPoll[inst] = time.Now()
 						m.mu.Unlock()
@@ -7055,6 +7161,8 @@ func copyFloatPointer(src *float64) *float64 {
 
 // pollPBSInstance polls a single PBS instance
 func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, client *pbs.Client) {
+	defer recoverFromPanic(fmt.Sprintf("pollPBSInstance-%s", instanceName))
+
 	start := time.Now()
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
@@ -7149,7 +7257,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
 		}
 
-		ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+		// Use parent context for proper cancellation chain
+		ctx2, cancel2 := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel2()
 		_, datastoreErr := client.GetDatastores(ctx2)
 		if datastoreErr == nil {
@@ -7313,10 +7422,13 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		} else {
 			now := time.Now()
 
-			m.mu.RLock()
+			m.mu.Lock()
 			lastPoll := m.lastPBSBackupPoll[instanceName]
+			if m.pbsBackupPollers == nil {
+				m.pbsBackupPollers = make(map[string]bool)
+			}
 			inProgress := m.pbsBackupPollers[instanceName]
-			m.mu.RUnlock()
+			m.mu.Unlock()
 
 			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
 			if !shouldPoll {
@@ -7334,12 +7446,14 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
 				copy(datastoreSnapshot, pbsInst.Datastores)
 
+				// Atomically check and set poller flag
 				m.mu.Lock()
-				if m.pbsBackupPollers == nil {
-					m.pbsBackupPollers = make(map[string]bool)
-				}
 				if m.pbsBackupPollers[instanceName] {
+					// Race: another goroutine started between our check and lock
 					m.mu.Unlock()
+					log.Debug().
+						Str("instance", instanceName).
+						Msg("PBS backup polling started by another goroutine")
 				} else {
 					m.pbsBackupPollers[instanceName] = true
 					m.lastPBSBackupPoll[instanceName] = newLast
@@ -7358,7 +7472,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 							Int("datastores", len(ds)).
 							Msg("Starting background PBS backup polling")
 
-						backupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+						// Use parent context for proper cancellation chain
+						backupCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 						defer cancel()
 
 						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
@@ -7380,6 +7495,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 // pollPMGInstance polls a single Proxmox Mail Gateway instance
 func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client *pmg.Client) {
+	defer recoverFromPanic(fmt.Sprintf("pollPMGInstance-%s", instanceName))
+
 	start := time.Now()
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
@@ -8782,6 +8899,8 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 // checkMockAlerts checks alerts for mock data
 func (m *Monitor) checkMockAlerts() {
+	defer recoverFromPanic("checkMockAlerts")
+
 	log.Info().Bool("mockEnabled", mock.IsMockEnabled()).Msg("checkMockAlerts called")
 	if !mock.IsMockEnabled() {
 		log.Info().Msg("Mock mode not enabled, skipping mock alert check")
