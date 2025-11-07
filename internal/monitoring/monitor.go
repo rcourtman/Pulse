@@ -351,13 +351,29 @@ func ensureClusterEndpointURL(raw string) string {
 	return "https://" + net.JoinHostPort(value, "8006")
 }
 
-func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint) string {
-	// Prefer IP address to avoid excessive DNS lookups
-	if endpoint.IP != "" {
-		return ensureClusterEndpointURL(endpoint.IP)
-	}
-	if endpoint.Host != "" {
-		return ensureClusterEndpointURL(endpoint.Host)
+func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool, hasFingerprint bool) string {
+	// When TLS hostname verification is required (VerifySSL=true and no fingerprint),
+	// prefer hostname over IP to ensure certificate CN/SAN validation works correctly.
+	// When TLS is not verified (VerifySSL=false) or a fingerprint is provided (which
+	// bypasses hostname checks), prefer IP to reduce DNS lookups (refs #620).
+	requiresHostnameForTLS := verifySSL && !hasFingerprint
+
+	if requiresHostnameForTLS {
+		// Prefer hostname for proper TLS certificate validation
+		if endpoint.Host != "" {
+			return ensureClusterEndpointURL(endpoint.Host)
+		}
+		if endpoint.IP != "" {
+			return ensureClusterEndpointURL(endpoint.IP)
+		}
+	} else {
+		// Prefer IP address to avoid excessive DNS lookups
+		if endpoint.IP != "" {
+			return ensureClusterEndpointURL(endpoint.IP)
+		}
+		if endpoint.Host != "" {
+			return ensureClusterEndpointURL(endpoint.Host)
+		}
 	}
 	return ""
 }
@@ -3546,7 +3562,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 				endpoints := make([]string, 0, len(pve.ClusterEndpoints))
 
 				for _, ep := range pve.ClusterEndpoints {
-					effectiveURL := clusterEndpointEffectiveURL(ep)
+					hasFingerprint := pve.Fingerprint != ""
+					effectiveURL := clusterEndpointEffectiveURL(ep, pve.VerifySSL, hasFingerprint)
 					if effectiveURL == "" {
 						log.Warn().
 							Str("node", ep.NodeName).
@@ -5139,9 +5156,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		connectionHost := instanceCfg.Host
 		guestURL := instanceCfg.GuestURL
 		if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
+			hasFingerprint := instanceCfg.Fingerprint != ""
 			for _, ep := range instanceCfg.ClusterEndpoints {
 				if strings.EqualFold(ep.NodeName, node.Node) {
-					if effective := clusterEndpointEffectiveURL(ep); effective != "" {
+					if effective := clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint); effective != "" {
 						connectionHost = effective
 					}
 					if ep.GuestURL != "" {
@@ -5598,9 +5616,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			sshHost := modelNode.Host
 
 			if modelNode.IsClusterMember && instanceCfg.IsCluster {
+				hasFingerprint := instanceCfg.Fingerprint != ""
 				for _, ep := range instanceCfg.ClusterEndpoints {
 					if strings.EqualFold(ep.NodeName, node.Node) {
-						if effective := clusterEndpointEffectiveURL(ep); effective != "" {
+						if effective := clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint); effective != "" {
 							sshHost = effective
 						}
 						break
@@ -6074,6 +6093,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 
 		// Update the online status for each cluster endpoint
+		hasFingerprint := instanceCfg.Fingerprint != ""
 		for i := range instanceCfg.ClusterEndpoints {
 			if online, exists := onlineNodes[instanceCfg.ClusterEndpoints[i].NodeName]; exists {
 				instanceCfg.ClusterEndpoints[i].Online = online
@@ -6085,7 +6105,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// Update Pulse connectivity status
 			if pulseHealth != nil {
 				// Try to find the endpoint in the health map by matching the effective URL
-				endpointURL := clusterEndpointEffectiveURL(instanceCfg.ClusterEndpoints[i])
+				endpointURL := clusterEndpointEffectiveURL(instanceCfg.ClusterEndpoints[i], instanceCfg.VerifySSL, hasFingerprint)
 				if health, exists := pulseHealth[endpointURL]; exists {
 					reachable := health.Healthy
 					instanceCfg.ClusterEndpoints[i].PulseReachable = &reachable
