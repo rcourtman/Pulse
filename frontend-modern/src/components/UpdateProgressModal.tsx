@@ -49,6 +49,28 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         currentStatus.status === 'idle' ||
         currentStatus.status === 'error'
       ) {
+        // If completed successfully, verify backend health and reload to get new version
+        if (currentStatus.status === 'completed' && !currentStatus.error) {
+          if (pollInterval) {
+            clearInterval(pollInterval);
+          }
+          // Verify backend is healthy and reload
+          try {
+            const healthCheck = await fetch('/api/health', { cache: 'no-store' });
+            if (healthCheck.ok) {
+              logger.info('Update completed, backend healthy, reloading...');
+              window.location.reload();
+              return;
+            }
+          } catch (error) {
+            logger.warn('Update completed but health check failed, assuming restart...', error);
+          }
+          // If health check failed, assume restart in progress
+          setIsRestarting(true);
+          startHealthCheckPolling();
+          return;
+        }
+
         setIsComplete(true);
         if (currentStatus.status === 'error' || currentStatus.error) {
           setHasError(true);
