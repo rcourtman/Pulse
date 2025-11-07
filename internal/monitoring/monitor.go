@@ -539,6 +539,7 @@ type Monitor struct {
 	rrdCacheMu                 sync.RWMutex // Protects RRD memavailable cache
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
+	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
@@ -993,6 +994,14 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 
 	m.mu.Lock()
 	m.removedDockerHosts[hostID] = removedAt
+	// Unbind the token so it can be reused with a different agent if needed
+	if host.TokenID != "" {
+		delete(m.dockerTokenBindings, host.TokenID)
+		log.Debug().
+			Str("tokenID", host.TokenID).
+			Str("dockerHostID", hostID).
+			Msg("Unbound Docker agent token from removed host")
+	}
 	if cmd, ok := m.dockerCommands[hostID]; ok {
 		delete(m.dockerCommandIndex, cmd.status.ID)
 	}
@@ -1517,6 +1526,56 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			Time("removedAt", removedAt).
 			Msg("Rejecting report from deliberately removed Docker host")
 		return models.DockerHost{}, fmt.Errorf("docker host %q was removed at %v and cannot report again", identifier, removedAt.Format(time.RFC3339))
+	}
+
+	// Enforce token uniqueness: each token can only be bound to one agent
+	if tokenRecord != nil && tokenRecord.ID != "" {
+		tokenID := strings.TrimSpace(tokenRecord.ID)
+		agentID := strings.TrimSpace(report.Agent.ID)
+		if agentID == "" {
+			agentID = identifier
+		}
+
+		m.mu.Lock()
+		if boundAgentID, exists := m.dockerTokenBindings[tokenID]; exists {
+			if boundAgentID != agentID {
+				m.mu.Unlock()
+				// Find the conflicting host to provide helpful error message
+				conflictingHostname := "unknown"
+				for _, host := range hostsSnapshot {
+					if host.AgentID == boundAgentID || host.ID == boundAgentID {
+						conflictingHostname = host.Hostname
+						if host.CustomDisplayName != "" {
+							conflictingHostname = host.CustomDisplayName
+						} else if host.DisplayName != "" {
+							conflictingHostname = host.DisplayName
+						}
+						break
+					}
+				}
+				tokenHint := tokenHintFromRecord(tokenRecord)
+				if tokenHint != "" {
+					tokenHint = " (" + tokenHint + ")"
+				}
+				log.Warn().
+					Str("tokenID", tokenID).
+					Str("tokenHint", tokenHint).
+					Str("reportingAgentID", agentID).
+					Str("boundAgentID", boundAgentID).
+					Str("conflictingHost", conflictingHostname).
+					Msg("Rejecting Docker report: token already bound to different agent")
+				return models.DockerHost{}, fmt.Errorf("API token%s is already in use by agent %q (host: %s). Each Docker agent must use a unique API token. Generate a new token for this agent", tokenHint, boundAgentID, conflictingHostname)
+			}
+		} else {
+			// First time seeing this token - bind it to this agent
+			m.dockerTokenBindings[tokenID] = agentID
+			log.Debug().
+				Str("tokenID", tokenID).
+				Str("agentID", agentID).
+				Str("hostname", report.Host.Hostname).
+				Msg("Bound Docker agent token to agent identity")
+		}
+		m.mu.Unlock()
 	}
 
 	hostname := strings.TrimSpace(report.Host.Hostname)
@@ -3376,6 +3435,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
+		dockerTokenBindings:        make(map[string]string),
 		dockerCommands:             make(map[string]*dockerHostCommand),
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),
