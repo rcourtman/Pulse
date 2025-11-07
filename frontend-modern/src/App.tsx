@@ -1127,7 +1127,7 @@ function AppLayout(props: {
       {/* Main Content */}
       <main
         id="main"
-        class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2"
+        class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr rounded-tl shadow mb-2"
       >
         <div class="pulse-panel">
           <Suspense fallback={<div class="p-6 text-sm text-gray-500 dark:text-gray-400">Loading view...</div>}>
