@@ -105,9 +105,15 @@ func (c *ConfigPersistence) endTransaction(tx *importTransaction) {
 	c.mu.Unlock()
 }
 
+// writeConfigFileLocked writes a config file, staging it in a transaction if one is active.
+// NOTE: Caller MUST hold c.mu lock (despite reading c.tx, which has separate synchronization)
 func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm os.FileMode) error {
-	if c.tx != nil {
-		return c.tx.StageFile(path, data, perm)
+	// Read transaction pointer - safe because caller holds c.mu
+	// Transaction field is only modified while holding c.mu in begin/endTransaction
+	tx := c.tx
+
+	if tx != nil {
+		return tx.StageFile(path, data, perm)
 	}
 
 	tmp := path + ".tmp"
