@@ -28,7 +28,7 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 
 - **Auto-Discovery**: Finds Proxmox nodes on your network, one-liner setup via generated scripts
 - **Cluster Support**: Configure one node, monitor entire cluster
-- **Enterprise Security**: 
+- **Enterprise Security**:
   - Credentials encrypted at rest, masked in logs, never sent to frontend
   - CSRF protection for all state-changing operations
   - Rate limiting (500 req/min general, 10 attempts/min for auth)
@@ -38,6 +38,12 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - API tokens stored securely with restricted file permissions
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
+  - **Hardened temperature proxy** ([2025-11-07 audit](docs/SECURITY_AUDIT_2025-11-07.md)):
+    - SSH keys isolated on host (never in containers)
+    - SSRF protection via node allowlists
+    - DoS-resistant with connection deadlines
+    - Container-aware rate limiting
+    - Capability-based authorization
 - Live monitoring of VMs, containers, nodes, storage
 - **Smart Alerts**: Email and webhooks (Discord, Slack, Telegram, Teams, ntfy.sh, Gotify)
   - Example: "VM 'webserver' is down on node 'pve1'"

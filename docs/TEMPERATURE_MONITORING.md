@@ -54,13 +54,15 @@ services:
       - "7655:7655"
     volumes:
       - pulse-data:/data
-      - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw  # Add this line
+      - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:ro  # Add this line (read-only)
 
 volumes:
   pulse-data:
 ```
 
 This connects the proxy socket from your host into the container so Pulse can communicate with it.
+
+> **Security Note:** The socket mount is read-only (`:ro`) to prevent compromised containers from tampering with the socket directory. The proxy enforces access control via SO_PEERCRED, so write access is not needed.
 
 ### 3. Restart Pulse container
 
@@ -702,8 +704,18 @@ The proxy reads `/etc/pulse-sensor-proxy/config.yaml` (optional):
 # Allowed UIDs that can connect to the socket (default: [0] = root only)
 allowed_peer_uids: [0, 1000]  # Allow root and UID 1000 (typical Docker)
 
-# Allowed GIDs that can connect to the socket
+# Allowed GIDs that can connect to the socket (peer is accepted when UID OR GID matches)
 allowed_peer_gids: [0]
+
+# Preferred capability-based allow-list (uids inherit read/write/admin as specified)
+allowed_peers:
+  - uid: 0
+    capabilities: [read, write, admin]
+  - uid: 1000
+    capabilities: [read]
+
+# Require host keys sourced from the Proxmox cluster known_hosts file (no ssh-keyscan fallback)
+require_proxmox_hostkeys: false
 
 # Allow ID-mapped root from LXC containers
 allow_idmapped_root: true
@@ -722,7 +734,12 @@ rate_limit:
 
 # Metrics endpoint (default: 127.0.0.1:9127)
 metrics_address: 127.0.0.1:9127  # or "disabled"
+
+# Maximum bytes accepted from SSH sensor output (default 1 MiB)
+max_ssh_output_bytes: 1048576
 ```
+
+`allowed_peers` lets you scope access: grant the container UID only `read` to limit it to temperature fetching, while host-side automation can receive `[read, write, admin]`. Legacy `allowed_peer_uids`/`gids` remain for backward compatibility and imply full capabilities.
 
 **Environment Variable Overrides:**
 

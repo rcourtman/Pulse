@@ -403,6 +403,16 @@ When an alert flaps (rapid on/off cycling), Pulse automatically suppresses it to
 
 > Tip: Back up `alerts.json` alongside `.env` during exports. Restoring it preserves all overrides, quiet-hour schedules, and webhook routing.
 
+**Capabilities**
+
+When using `allowed_peers`, assign the minimal capability set each UID needs:
+
+- `read`: access to `get_status`, `get_temperature`, and other read-only RPCs.
+- `write`: reserved for future mutating RPCs.
+- `admin`: required for privileged RPCs (`ensure_cluster_keys`, `register_nodes`, `request_cleanup`).
+
+Legacy `allowed_peer_uids`/`allowed_peer_gids` grant all three capabilities for backward compatibility. To keep a containerized Pulse deployment read-only, list its UID under `allowed_peers` with `capabilities: [read]` and remove it from the legacy lists.
+
 ### `pulse-sensor-proxy/config.yaml`
 
 The sensor proxy reads `/etc/pulse-sensor-proxy/config.yaml` (or the path supplied via `PULSE_SENSOR_PROXY_CONFIG`). Key fields:
@@ -410,10 +420,13 @@ The sensor proxy reads `/etc/pulse-sensor-proxy/config.yaml` (or the path suppli
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `allowed_source_subnets` | list(string) | auto-detected host CIDRs | Restrict which networks can reach the UNIX socket listener. |
-| `allowed_peer_uids` / `allowed_peer_gids` | list(uint32) | empty | Required when Pulse runs in a container; use mapped UID/GID. |
+| `allowed_peer_uids` / `allowed_peer_gids` | list(uint32) | empty | Legacy allow-lists. Peers matching these gain full capabilities (read/write/admin). |
+| `allowed_peers` | list(object) | empty | Preferred format for per-UID capability control. Each entry contains `uid` and `capabilities` (`read`, `write`, `admin`). |
 | `allow_idmapped_root` | bool | `true` | Governs acceptance of ID-mapped root callers. |
 | `allowed_idmap_users` | list(string) | `["root"]` | Restricts which ID-mapped usernames are accepted. |
 | `metrics_address` | string | `default` (maps to `127.0.0.1:9127`) | Set to `"disabled"` to turn metrics off. |
+| `max_ssh_output_bytes` | int | `1048576` (1 MiB) | Maximum stdout size accepted from remote sensors before aborting. |
+| `require_proxmox_hostkeys` | bool | `false` | When `true`, refuse new nodes unless their host keys come from the Proxmox cluster store (no ssh-keyscan fallback). |
 | `rate_limit.per_peer_interval_ms` | int | `1000` | Milliseconds between allowed RPCs per UID. Set `>=100` in production. |
 | `rate_limit.per_peer_burst` | int | `5` | Number of requests allowed in a burst; should meet or exceed node count. |
 
