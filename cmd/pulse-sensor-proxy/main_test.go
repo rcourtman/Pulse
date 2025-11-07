@@ -39,6 +39,7 @@ func TestPrivilegedMethodsBlocked(t *testing.T) {
 		config:            &Config{AllowIDMappedRoot: true},
 		allowedPeerUIDs:   map[uint32]struct{}{0: {}},
 		allowedPeerGIDs:   map[uint32]struct{}{0: {}},
+		peerCapabilities:  map[uint32]Capability{0: capabilityLegacyAll},
 		idMappedUIDRanges: []idRange{{start: 100000, length: 65536}},
 		idMappedGIDRanges: []idRange{{start: 100000, length: 65536}},
 	}
@@ -60,33 +61,26 @@ func TestPrivilegedMethodsBlocked(t *testing.T) {
 	// Test that containers ARE blocked from privileged methods
 	t.Run("ContainerBlockedFromPrivilegedMethods", func(t *testing.T) {
 		// Container should pass authentication
-		if err := p.authorizePeer(containerCreds); err != nil {
+		caps, err := p.authorizePeer(containerCreds)
+		if err != nil {
 			t.Fatalf("Container should pass authentication, got: %v", err)
 		}
 
-		// But should be identified as ID-mapped root
-		if !p.isIDMappedRoot(containerCreds) {
-			t.Fatal("Container credentials should be identified as ID-mapped root")
-		}
-
-		// Test all privileged methods are blocked for containers
-		for method := range privilegedMethods {
-			if !p.isIDMappedRoot(containerCreds) {
-				t.Errorf("Container should be blocked from %s", method)
-			}
+		if caps.Has(CapabilityAdmin) {
+			t.Fatal("Container should not have admin capability")
 		}
 	})
 
 	// Test that host CAN call privileged methods
 	t.Run("HostAllowedPrivilegedMethods", func(t *testing.T) {
 		// Host should pass authentication
-		if err := p.authorizePeer(hostCreds); err != nil {
+		caps, err := p.authorizePeer(hostCreds)
+		if err != nil {
 			t.Fatalf("Host should pass authentication, got: %v", err)
 		}
 
-		// Host should NOT be identified as ID-mapped root
-		if p.isIDMappedRoot(hostCreds) {
-			t.Fatal("Host credentials should NOT be identified as ID-mapped root")
+		if !caps.Has(CapabilityAdmin) {
+			t.Fatal("Host should have admin capability")
 		}
 	})
 }
@@ -177,6 +171,7 @@ func TestIDMappedRootDisabled(t *testing.T) {
 	p := &Proxy{
 		config:            &Config{AllowIDMappedRoot: false},
 		allowedPeerUIDs:   map[uint32]struct{}{0: {}},
+		peerCapabilities:  map[uint32]Capability{0: capabilityLegacyAll},
 		idMappedUIDRanges: []idRange{{start: 100000, length: 65536}},
 		idMappedGIDRanges: []idRange{{start: 100000, length: 65536}},
 	}
@@ -185,7 +180,7 @@ func TestIDMappedRootDisabled(t *testing.T) {
 	cred := &peerCredentials{uid: 110000, gid: 110000}
 
 	// Should fail authorization when AllowIDMappedRoot is false
-	if err := p.authorizePeer(cred); err == nil {
+	if _, err := p.authorizePeer(cred); err == nil {
 		t.Error("authorizePeer should fail for ID-mapped root when AllowIDMappedRoot is false")
 	}
 }
