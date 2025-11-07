@@ -11,7 +11,8 @@ services:
       - pulse-data:/data
       # Secure temperature monitoring via host-side proxy (requires setup - see docs)
       # Uncomment after installing pulse-sensor-proxy on host with --standalone flag
-      # - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw
+      # Mount is read-only (:ro) for security - proxy uses SO_PEERCRED for access control
+      # - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:ro
     environment:
       - TZ=${TZ:-UTC}
     healthcheck:
