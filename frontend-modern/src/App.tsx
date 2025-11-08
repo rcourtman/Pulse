@@ -40,6 +40,8 @@ import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
+import { UpdateProgressModal } from './components/UpdateProgressModal';
+import type { UpdateStatus } from './api/updates';
 
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
@@ -103,6 +105,60 @@ function HostsRoute() {
   const { state } = wsContext;
   return (
     <HostsOverview hosts={state.hosts ?? []} connectionHealth={state.connectionHealth ?? {}} />
+  );
+}
+
+// Helper to detect if an update is actively in progress (not just checking for updates)
+function isUpdateInProgress(status: string | undefined): boolean {
+  if (!status) return false;
+  const inProgressStates = ['downloading', 'verifying', 'extracting', 'installing', 'restarting'];
+  return inProgressStates.includes(status);
+}
+
+// Global update progress watcher - shows modal in ALL tabs when an update is running
+function GlobalUpdateProgressWatcher() {
+  const wsContext = useContext(WebSocketContext);
+  const navigate = useNavigate();
+  const [showProgressModal, setShowProgressModal] = createSignal(false);
+  const [hasAutoOpened, setHasAutoOpened] = createSignal(false);
+
+  // Watch for update progress events from WebSocket
+  createEffect(() => {
+    const progress = wsContext?.updateProgress?.() as UpdateStatus | null;
+
+    if (!progress) {
+      // Reset when no progress data
+      setHasAutoOpened(false);
+      return;
+    }
+
+    const inProgress = isUpdateInProgress(progress.status);
+
+    if (inProgress && !showProgressModal() && !hasAutoOpened()) {
+      // Update is starting - auto-open the modal in this tab
+      logger.info('Update in progress detected via WebSocket, showing progress modal', {
+        status: progress.status,
+        message: progress.message,
+      });
+      setShowProgressModal(true);
+      setHasAutoOpened(true);
+    } else if (!inProgress && hasAutoOpened()) {
+      // Update finished - allow the modal to be dismissed
+      setHasAutoOpened(false);
+    }
+  });
+
+  return (
+    <UpdateProgressModal
+      isOpen={showProgressModal()}
+      onClose={() => setShowProgressModal(false)}
+      onViewHistory={() => {
+        setShowProgressModal(false);
+        navigate('/settings/updates');
+      }}
+      connected={wsContext?.connected}
+      reconnecting={wsContext?.reconnecting}
+    />
   );
 }
 
@@ -644,6 +700,7 @@ function App() {
                   <SecurityWarning />
                   <DemoBanner />
                   <UpdateBanner />
+                  <GlobalUpdateProgressWatcher />
                   <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6">
                     <AppLayout
                       connected={connected}
