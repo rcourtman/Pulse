@@ -3946,7 +3946,7 @@ version_ge() {
         return $?
     fi
     if command -v sort >/dev/null 2>&1; then
-        [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
+        [ "$(printf '%%s\n%%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
         return $?
     fi
     [ "$1" = "$2" ]
@@ -4724,11 +4724,12 @@ fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"),
 			tokenName, pulseURL, pulseURL, pulseURL, serverHost, pulseURL,
 			pulseURL, serverHost, pulseURL, tokenName, pulseURL, pulseURL,
+			pulseURL, pulseURL,
 			pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
 			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
-			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
+			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
