@@ -169,12 +169,20 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     }
   });
 
-  onMount(() => {
+  // Start/stop polling based on modal visibility
+  createEffect(() => {
     if (props.isOpen) {
-      // Start polling immediately
+      // Start polling immediately when modal opens
       pollStatus();
       // Then poll every 2 seconds
       pollInterval = setInterval(pollStatus, 2000) as unknown as number;
+    } else {
+      // Stop polling when modal closes
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = undefined;
+      }
+      clearHealthCheckTimer();
     }
   });
 
