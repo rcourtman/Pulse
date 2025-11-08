@@ -102,6 +102,7 @@ type DockerHostFrontend struct {
 	AgentID           string                     `json:"agentId"`
 	Hostname          string                     `json:"hostname"`
 	DisplayName       string                     `json:"displayName"`
+	CustomDisplayName string                     `json:"customDisplayName,omitempty"`
 	MachineID         string                     `json:"machineId,omitempty"`
 	OS                string                     `json:"os,omitempty"`
 	KernelVersion     string                     `json:"kernelVersion,omitempty"`
