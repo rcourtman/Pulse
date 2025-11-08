@@ -180,7 +180,7 @@ Run `pulse-host-agent --help` for the full list.
 ## Viewing Hosts
 
 - **Settings → Agents → Host agents** lists every reporting host and provides ready-made install commands.
-- The **Servers** tab surfaces host telemetry alongside Proxmox/Docker data in the main dashboard.
+- The **Hosts** tab surfaces host telemetry alongside Proxmox/Docker data in the main dashboard.
 
 ### Checking installation status
 
