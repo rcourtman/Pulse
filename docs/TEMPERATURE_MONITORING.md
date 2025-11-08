@@ -43,7 +43,7 @@ pulse-host-agent runs natively on your Proxmox host and reports temperatures bac
      bash -s -- --url http://your-pulse-vm:7655 --token YOUR_API_TOKEN
    ```
 
-3. Verify temperatures appear in Pulse UI under the Servers tab
+3. Verify temperatures appear in Pulse UI under the Hosts tab
 
 The host agent will report CPU, NVMe, and GPU temperatures alongside other system metrics. No proxy installation or socket mounting needed.
 

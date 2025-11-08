@@ -17,7 +17,7 @@ The host agent automatically collects temperature data on Linux systems with lm-
 - **NVMe Drive Temperatures**: SSD thermal data
 - **GPU Temperatures**: AMD and NVIDIA GPU sensors
 
-Temperature data appears in the **Servers** tab alongside other host metrics. This is particularly useful for monitoring Proxmox hosts when running Pulse in a VM (where the sensor proxy socket cannot cross VM boundaries).
+Temperature data appears in the **Hosts** tab alongside other host metrics. This is particularly useful for monitoring Proxmox hosts when running Pulse in a VM (where the sensor proxy socket cannot cross VM boundaries).
 
 **Requirements:**
 - Linux operating system

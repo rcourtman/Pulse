@@ -313,7 +313,7 @@ func isLoopback(flags []string) bool {
 // Returns an empty Sensors struct if collection fails (best-effort).
 func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 	// Only collect on Linux for now (lm-sensors is Linux-specific)
-	if a.platform != "linux" {
+	if runtime.GOOS != "linux" {
 		return agentshost.Sensors{}
 	}
 
