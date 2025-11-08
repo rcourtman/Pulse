@@ -1924,10 +1924,12 @@ const Settings: Component<SettingsProps> = (props) => {
 
     try {
       // Get CSRF token from cookie
-      const csrfToken = document.cookie
+      const csrfCookie = document.cookie
         .split('; ')
-        .find((row) => row.startsWith('pulse_csrf='))
-        ?.split('=')[1];
+        .find((row) => row.startsWith('pulse_csrf='));
+      const csrfToken = csrfCookie
+        ? decodeURIComponent(csrfCookie.split('=').slice(1).join('='))
+        : undefined;
 
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
@@ -2051,10 +2053,12 @@ const Settings: Component<SettingsProps> = (props) => {
       }
 
       // Get CSRF token from cookie
-      const csrfToken = document.cookie
+      const csrfCookie = document.cookie
         .split('; ')
-        .find((row) => row.startsWith('pulse_csrf='))
-        ?.split('=')[1];
+        .find((row) => row.startsWith('pulse_csrf='));
+      const csrfToken = csrfCookie
+        ? decodeURIComponent(csrfCookie.split('=').slice(1).join('='))
+        : undefined;
 
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
