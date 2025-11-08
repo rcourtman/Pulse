@@ -825,8 +825,9 @@ get_cached_smart() {
     # Cache miss or stale - return empty array and trigger background refresh
     echo "[]"
 
-    # Trigger async refresh if not already running
-    if ! pgrep -f "pulse-sensor-wrapper-refresh" >/dev/null 2>&1; then
+    # Trigger async refresh if not already running (use lock file)
+    local lock_file="$CACHE_DIR/smart-refresh.lock"
+    if ! [ -f "$lock_file" ]; then
         (refresh_smart_cache &)
     fi
 
@@ -835,11 +836,14 @@ get_cached_smart() {
 
 # Function to refresh SMART cache in background
 refresh_smart_cache() {
-    # Mark this process for detection
-    exec -a pulse-sensor-wrapper-refresh bash
-
+    local lock_file="$CACHE_DIR/smart-refresh.lock"
     local cache_file="$CACHE_DIR/smart-temps.json"
     local temp_file="${cache_file}.tmp.$$"
+
+    # Create lock file and ensure cleanup on exit
+    touch "$lock_file" 2>/dev/null || return 1
+    trap "rm -f '$lock_file' '$temp_file'" EXIT
+
     local disks=()
 
     # Find all physical disks (skip partitions, loop devices, etc.)
@@ -856,7 +860,7 @@ refresh_smart_cache() {
         # timeout: prevent hanging on problematic drives
 
         local output
-        if output=$(timeout ${MAX_SMARTCTL_TIME}s smartctl -n standby,after -A --json=o "$dev" 2>/dev/null); then
+        if output=$(timeout ${MAX_SMARTCTL_TIME}s smartctl -n standby -A --json=o "$dev" 2>/dev/null); then
             # Parse the JSON output
             local temp=$(echo "$output" | jq -r '
                 .temperature.current //
