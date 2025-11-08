@@ -835,9 +835,6 @@ get_cached_smart() {
 
 # Function to refresh SMART cache in background
 refresh_smart_cache() {
-    # Mark this process for detection
-    exec -a pulse-sensor-wrapper-refresh bash
-
     local cache_file="$CACHE_DIR/smart-temps.json"
     local temp_file="${cache_file}.tmp.$$"
     local disks=()
@@ -856,7 +853,7 @@ refresh_smart_cache() {
         # timeout: prevent hanging on problematic drives
 
         local output
-        if output=$(timeout ${MAX_SMARTCTL_TIME}s smartctl -n standby,after -A --json=o "$dev" 2>/dev/null); then
+        if output=$(timeout ${MAX_SMARTCTL_TIME}s smartctl -n standby -A --json=o "$dev" 2>/dev/null); then
             # Parse the JSON output
             local temp=$(echo "$output" | jq -r '
                 .temperature.current //
