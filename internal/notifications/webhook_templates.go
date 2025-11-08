@@ -241,12 +241,12 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"user": "{{.CustomFields.user_token}}",
 				"title": "Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
 				"message": "{{.Message}}\n\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}",
-				"priority": {{if eq .Level "critical"}}1{{else if eq .Level "warning"}}0{{else}}-1{{end}},
-				"sound": "{{if eq .Level "critical"}}siren{{else if eq .Level "warning"}}tugboat{{else}}pushover{{end}}",
-				"device": "{{.ResourceName}}",
+				"priority": {{if .CustomFields.priority}}{{.CustomFields.priority}}{{else}}{{if eq .Level "critical"}}1{{else if eq .Level "warning"}}0{{else}}-1{{end}}{{end}},
+				"sound": "{{if .CustomFields.sound}}{{.CustomFields.sound}}{{else}}{{if eq .Level "critical"}}siren{{else if eq .Level "warning"}}tugboat{{else}}pushover{{end}}{{end}}",
+				"device": "{{if .CustomFields.device}}{{.CustomFields.device}}{{else}}{{.ResourceName}}{{end}}",
 				"timestamp": "{{.Timestamp}}"
 			}`,
-			Instructions: "1. Create an application at https://pushover.net/apps\n2. Copy your Application Token\n3. Get your User Key from your Pushover dashboard\n4. URL: https://api.pushover.net/1/messages.json\n5. Add custom fields:\n   • app_token: YOUR_APP_TOKEN\n   • user_token: YOUR_USER_KEY",
+			Instructions: "1. Create an application at https://pushover.net/apps\n2. Copy your Application Token\n3. Get your User Key from your Pushover dashboard\n4. URL: https://api.pushover.net/1/messages.json\n5. Add custom fields:\n   • app_token: YOUR_APP_TOKEN (required)\n   • user_token: YOUR_USER_KEY (required)\n   • sound: notification sound (optional, e.g., spacealarm, siren, tugboat)\n   • priority: -2 to 2 (optional, overrides level-based default)\n   • device: specific device name (optional, overrides ResourceName)",
 		},
 		{
 			Service:    "gotify",
