@@ -579,6 +579,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Error 500 with "No QEMU guest agent configured" means VM-specific issue, not node failure
 		// Error 500 with "QEMU guest agent is not running" means VM-specific issue, not node failure
 		// Error 500 with any "guest agent" message means VM-specific issue, not node failure
+		// Error 400 with "ds" parameter error means Proxmox 9.x doesn't support RRD data source filtering
 		// JSON unmarshal errors are data format issues, not connectivity problems
 		if strings.Contains(errStr, "595") ||
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
@@ -589,6 +590,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			strings.Contains(errStr, "guest agent") ||
 			(strings.Contains(errStr, "403") && (strings.Contains(errStr, "storage") || strings.Contains(errStr, "datastore"))) ||
 			strings.Contains(errStr, "permission denied") ||
+			(strings.Contains(errStr, "400") && strings.Contains(errStr, "\"ds\"") && strings.Contains(errStr, "property is not defined in schema")) ||
 			strings.Contains(errStr, "json: cannot unmarshal") ||
 			strings.Contains(errStr, "unexpected response format") {
 			// This is likely a node-specific failure, not an endpoint failure
