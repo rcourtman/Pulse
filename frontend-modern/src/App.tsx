@@ -121,8 +121,30 @@ function GlobalUpdateProgressWatcher() {
   const navigate = useNavigate();
   const [showProgressModal, setShowProgressModal] = createSignal(false);
   const [hasAutoOpened, setHasAutoOpened] = createSignal(false);
+  let pollInterval: number | undefined;
 
-  // Watch for update progress events from WebSocket
+  // Fallback polling in case WebSocket events are missed
+  const pollUpdateStatus = async () => {
+    try {
+      const status = await UpdatesAPI.getUpdateStatus();
+      const inProgress = isUpdateInProgress(status.status);
+
+      if (inProgress && !showProgressModal() && !hasAutoOpened()) {
+        logger.info('Update in progress detected via polling fallback, showing progress modal', {
+          status: status.status,
+          message: status.message,
+        });
+        setShowProgressModal(true);
+        setHasAutoOpened(true);
+      } else if (!inProgress && hasAutoOpened()) {
+        setHasAutoOpened(false);
+      }
+    } catch (error) {
+      // Silently ignore polling errors
+    }
+  };
+
+  // Watch for update progress events from WebSocket (primary mechanism)
   createEffect(() => {
     const progress = wsContext?.updateProgress?.() as UpdateStatus | null;
 
@@ -145,6 +167,18 @@ function GlobalUpdateProgressWatcher() {
     } else if (!inProgress && hasAutoOpened()) {
       // Update finished - allow the modal to be dismissed
       setHasAutoOpened(false);
+    }
+  });
+
+  // Start fallback polling on mount, stop on cleanup
+  onMount(() => {
+    // Poll every 5 seconds as a safety net
+    pollInterval = setInterval(pollUpdateStatus, 5000) as unknown as number;
+  });
+
+  onCleanup(() => {
+    if (pollInterval) {
+      clearInterval(pollInterval);
     }
   });
 

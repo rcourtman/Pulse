@@ -307,11 +307,21 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                     <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <div class="text-sm text-blue-800 dark:text-blue-200">
-                      <Show when={wsDisconnected()} fallback={
-                        <span>Pulse is restarting with the new version...</span>
-                      }>
-                        <span>Waiting for Pulse to complete restart. This page will reload automatically.</span>
+                    <div class="flex-1">
+                      <div class="text-sm text-blue-800 dark:text-blue-200">
+                        <Show when={wsDisconnected()} fallback={
+                          <span>Pulse is restarting with the new version...</span>
+                        }>
+                          <span>Waiting for Pulse to complete restart. This page will reload automatically.</span>
+                        </Show>
+                      </div>
+                      <Show when={wsDisconnected() && healthCheckAttempts > 5}>
+                        <button
+                          onClick={() => window.location.reload()}
+                          class="mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                        >
+                          Reload Now
+                        </button>
                       </Show>
                     </div>
                   </div>
