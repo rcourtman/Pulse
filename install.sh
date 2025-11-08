@@ -2335,29 +2335,60 @@ EOF
     fi
 }
 
+download_auto_update_script() {
+    local url="https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/pulse-auto-update.sh"
+    local dest="/usr/local/bin/pulse-auto-update.sh"
+    local attempts=0
+    local max_attempts=3
+    local connect_timeout=15
+    local max_time=60
+
+    while (( attempts < max_attempts )); do
+        ((attempts++))
+        local curl_status=0
+
+        if command -v timeout >/dev/null 2>&1; then
+            if timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
+                chmod +x "$dest"
+                return 0
+            else
+                curl_status=$?
+            fi
+        else
+            if curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
+                chmod +x "$dest"
+                return 0
+            else
+                curl_status=$?
+            fi
+        fi
+
+        print_warn "Auto-update download attempt $attempts/$max_attempts failed (curl exit code $curl_status)"
+        if (( attempts < max_attempts )); then
+            local wait_time=$((attempts * 3))
+            print_info "Retrying in ${wait_time}s..."
+            sleep "$wait_time"
+        fi
+    done
+
+    return 1
+}
+
 setup_auto_updates() {
     print_info "Setting up automatic updates..."
-    
+
     # Copy auto-update script if it exists in the release
     if [[ -f "$INSTALL_DIR/scripts/pulse-auto-update.sh" ]]; then
         cp "$INSTALL_DIR/scripts/pulse-auto-update.sh" /usr/local/bin/pulse-auto-update.sh
         chmod +x /usr/local/bin/pulse-auto-update.sh
     else
-        # Download from GitHub if not in release
         print_info "Downloading auto-update script..."
-        # Use timeout to prevent hanging
-        if command -v timeout >/dev/null 2>&1; then
-            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/pulse-auto-update.sh" -o /usr/local/bin/pulse-auto-update.sh; then
-                print_error "Failed to download auto-update script"
-                return 1
-            fi
-        else
-            if ! curl -fsSL --connect-timeout 5 --max-time 15 "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/pulse-auto-update.sh" -o /usr/local/bin/pulse-auto-update.sh; then
-                print_error "Failed to download auto-update script"
-                return 1
-            fi
+        if ! download_auto_update_script; then
+            print_warn "Could not download the auto-update helper after multiple attempts."
+            print_warn "Continuing without automatic updates. Re-run install.sh with --enable-auto-updates once connectivity is stable."
+            ENABLE_AUTO_UPDATES=false
+            return 0
         fi
-        chmod +x /usr/local/bin/pulse-auto-update.sh
     fi
     
     # Install systemd timer and service
