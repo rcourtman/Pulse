@@ -4285,7 +4285,7 @@ func (m *Manager) CheckBackups(
 	pbsBackups []models.PBSBackup,
 	pmgBackups []models.PMGBackup,
 	guestsByKey map[string]GuestLookup,
-	guestsByVMID map[string]GuestLookup,
+	guestsByVMID map[string][]GuestLookup,
 ) {
 	m.mu.RLock()
 	enabled := m.config.Enabled
@@ -4368,17 +4368,28 @@ func (m *Manager) CheckBackups(
 			continue
 		}
 
-		info, exists := guestsByVMID[backup.VMID]
+		guests, exists := guestsByVMID[backup.VMID]
+		var info GuestLookup
 		var key string
 		var displayName string
 		var instance string
 		var node string
 
-		if exists && info.Instance != "" && info.Node != "" {
-			key = BuildGuestKey(info.Instance, info.Node, info.VMID)
-			displayName = info.Name
-			instance = info.Instance
-			node = info.Node
+		if exists && len(guests) > 0 {
+			// If we have exactly one match, use it
+			// If we have multiple matches, use the first one (we can't disambiguate without PVE origin metadata)
+			info = guests[0]
+			if info.Instance != "" && info.Node != "" {
+				key = BuildGuestKey(info.Instance, info.Node, info.VMID)
+				displayName = info.Name
+				instance = info.Instance
+				node = info.Node
+			} else {
+				key = fmt.Sprintf("pbs:%s:%s:%s", backup.Instance, backup.BackupType, backup.VMID)
+				displayName = fmt.Sprintf("VMID %s", backup.VMID)
+				instance = fmt.Sprintf("PBS:%s", backup.Instance)
+				node = backup.Datastore
+			}
 		} else {
 			key = fmt.Sprintf("pbs:%s:%s:%s", backup.Instance, backup.BackupType, backup.VMID)
 			displayName = fmt.Sprintf("VMID %s", backup.VMID)

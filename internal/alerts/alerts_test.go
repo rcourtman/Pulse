@@ -790,8 +790,8 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 			VMID:     100,
 		},
 	}
-	guestsByVMID := map[string]GuestLookup{
-		"100": guestsByKey[key],
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {guestsByKey[key]},
 	}
 
 	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
@@ -843,7 +843,7 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 		},
 	}
 
-	m.CheckBackups(nil, pbsBackups, nil, map[string]GuestLookup{}, map[string]GuestLookup{})
+	m.CheckBackups(nil, pbsBackups, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
 
 	m.mu.RLock()
 	found := false
@@ -887,7 +887,7 @@ func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 		},
 	}
 
-	m.CheckBackups(nil, nil, pmgBackups, map[string]GuestLookup{}, map[string]GuestLookup{})
+	m.CheckBackups(nil, nil, pmgBackups, map[string]GuestLookup{}, map[string][]GuestLookup{})
 
 	m.mu.RLock()
 	found := false

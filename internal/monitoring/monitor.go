@@ -8330,7 +8330,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	if m.alertManager != nil {
 		snapshot := m.state.GetSnapshot()
-		guestsByKey, guestsByVMID := buildGuestLookups(snapshot)
+		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
 		pveStorage := snapshot.Backups.PVE.StorageBackups
 		if len(pveStorage) == 0 && len(snapshot.PVEBackups.StorageBackups) > 0 {
 			pveStorage = snapshot.PVEBackups.StorageBackups
@@ -8370,9 +8370,9 @@ func shouldPreservePBSBackups(datastoreCount, datastoreFetches int) bool {
 	return false
 }
 
-func buildGuestLookups(snapshot models.StateSnapshot) (map[string]alerts.GuestLookup, map[string]alerts.GuestLookup) {
+func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.GuestMetadataStore) (map[string]alerts.GuestLookup, map[string][]alerts.GuestLookup) {
 	byKey := make(map[string]alerts.GuestLookup)
-	byVMID := make(map[string]alerts.GuestLookup)
+	byVMID := make(map[string][]alerts.GuestLookup)
 
 	for _, vm := range snapshot.VMs {
 		info := alerts.GuestLookup{
@@ -8386,8 +8386,11 @@ func buildGuestLookups(snapshot models.StateSnapshot) (map[string]alerts.GuestLo
 		byKey[key] = info
 
 		vmidKey := fmt.Sprintf("%d", vm.VMID)
-		if _, exists := byVMID[vmidKey]; !exists {
-			byVMID[vmidKey] = info
+		byVMID[vmidKey] = append(byVMID[vmidKey], info)
+
+		// Persist last-known name and type for this guest
+		if metadataStore != nil && vm.Name != "" {
+			persistGuestIdentity(metadataStore, key, vm.Name, vm.Type)
 		}
 	}
 
@@ -8405,12 +8408,84 @@ func buildGuestLookups(snapshot models.StateSnapshot) (map[string]alerts.GuestLo
 		}
 
 		vmidKey := fmt.Sprintf("%d", ct.VMID)
-		if _, exists := byVMID[vmidKey]; !exists {
-			byVMID[vmidKey] = info
+		byVMID[vmidKey] = append(byVMID[vmidKey], info)
+
+		// Persist last-known name and type for this guest
+		if metadataStore != nil && ct.Name != "" {
+			persistGuestIdentity(metadataStore, key, ct.Name, ct.Type)
 		}
 	}
 
+	// Augment byVMID with persisted metadata for deleted guests
+	if metadataStore != nil {
+		enrichWithPersistedMetadata(metadataStore, byVMID)
+	}
+
 	return byKey, byVMID
+}
+
+// enrichWithPersistedMetadata adds entries from the metadata store for guests
+// that no longer exist in the live inventory but have persisted identity data
+func enrichWithPersistedMetadata(metadataStore *config.GuestMetadataStore, byVMID map[string][]alerts.GuestLookup) {
+	allMetadata := metadataStore.GetAll()
+	for guestKey, meta := range allMetadata {
+		if meta.LastKnownName == "" {
+			continue // No name persisted, skip
+		}
+
+		// Parse the guest key (format: instance:node:vmid)
+		// We need to extract instance, node, and vmid
+		var instance, node string
+		var vmid int
+		if _, err := fmt.Sscanf(guestKey, "%[^:]:%[^:]:%d", &instance, &node, &vmid); err != nil {
+			continue // Invalid key format
+		}
+
+		vmidKey := fmt.Sprintf("%d", vmid)
+
+		// Check if we already have a live entry for this exact guest
+		hasLiveEntry := false
+		for _, existing := range byVMID[vmidKey] {
+			if existing.Instance == instance && existing.Node == node && existing.VMID == vmid {
+				hasLiveEntry = true
+				break
+			}
+		}
+
+		// Only add persisted metadata if no live entry exists
+		if !hasLiveEntry {
+			byVMID[vmidKey] = append(byVMID[vmidKey], alerts.GuestLookup{
+				Name:     meta.LastKnownName,
+				Instance: instance,
+				Node:     node,
+				Type:     meta.LastKnownType,
+				VMID:     vmid,
+			})
+		}
+	}
+}
+
+// persistGuestIdentity updates the metadata store with the last-known name and type for a guest
+func persistGuestIdentity(metadataStore *config.GuestMetadataStore, guestKey, name, guestType string) {
+	existing := metadataStore.Get(guestKey)
+	if existing == nil {
+		existing = &config.GuestMetadata{
+			ID:   guestKey,
+			Tags: []string{},
+		}
+	}
+
+	// Only update if the name or type has changed
+	if existing.LastKnownName != name || existing.LastKnownType != guestType {
+		existing.LastKnownName = name
+		existing.LastKnownType = guestType
+		// Save asynchronously to avoid blocking the monitor
+		go func() {
+			if err := metadataStore.Set(guestKey, existing); err != nil {
+				log.Error().Err(err).Str("guestKey", guestKey).Msg("Failed to persist guest identity")
+			}
+		}()
+	}
 }
 
 func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Duration {
@@ -9067,7 +9142,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	if m.alertManager != nil {
 		snapshot := m.state.GetSnapshot()
-		guestsByKey, guestsByVMID := buildGuestLookups(snapshot)
+		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
 		pveStorage := snapshot.Backups.PVE.StorageBackups
 		if len(pveStorage) == 0 && len(snapshot.PVEBackups.StorageBackups) > 0 {
 			pveStorage = snapshot.PVEBackups.StorageBackups
@@ -9123,7 +9198,7 @@ func (m *Monitor) checkMockAlerts() {
 		Msg("Collecting resources for alert cleanup in mock mode")
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
 
-	guestsByKey, guestsByVMID := buildGuestLookups(state)
+	guestsByKey, guestsByVMID := buildGuestLookups(state, m.guestMetadataStore)
 	pveStorage := state.Backups.PVE.StorageBackups
 	if len(pveStorage) == 0 && len(state.PVEBackups.StorageBackups) > 0 {
 		pveStorage = state.PVEBackups.StorageBackups
