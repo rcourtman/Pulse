@@ -666,22 +666,22 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existi
 			}
 
 			// Build the host URL with proper port
-			// Prefer IP if available, otherwise use node name
-			nodeHost := clusterNode.IP
-			if nodeHost == "" {
-				nodeHost = clusterNode.Name
-			}
-			nodeHost = ensureHostHasPort(nodeHost, defaultPort)
-
+			// Store hostname in Host field (for TLS validation), IP separately
 			endpoint := config.ClusterEndpoint{
 				NodeID:   clusterNode.ID,
 				NodeName: clusterNode.Name,
-				Host:     schemePrefix + nodeHost,
 				GuestURL: findExistingGuestURL(clusterNode.Name, existingEndpoints),
 				Online:   clusterNode.Online == 1,
 				LastSeen: time.Now(),
 			}
 
+			// Populate Host field with hostname (if available) for TLS certificate validation
+			if clusterNode.Name != "" {
+				nodeHost := ensureHostHasPort(clusterNode.Name, defaultPort)
+				endpoint.Host = schemePrefix + nodeHost
+			}
+
+			// Populate IP field separately for DNS-free connections
 			if clusterNode.IP != "" {
 				endpoint.IP = clusterNode.IP
 			}
@@ -696,24 +696,25 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existi
 				Msg("All detected cluster nodes failed validation; falling back to cluster metadata")
 
 			for _, clusterNode := range unvalidatedNodes {
-				nodeHost := clusterNode.IP
-				if nodeHost == "" {
-					nodeHost = clusterNode.Name
-				}
-				if nodeHost == "" {
+				if clusterNode.Name == "" && clusterNode.IP == "" {
 					continue
 				}
-				nodeHost = ensureHostHasPort(nodeHost, defaultPort)
 
 				endpoint := config.ClusterEndpoint{
 					NodeID:   clusterNode.ID,
 					NodeName: clusterNode.Name,
-					Host:     schemePrefix + nodeHost,
 					GuestURL: findExistingGuestURL(clusterNode.Name, existingEndpoints),
 					Online:   clusterNode.Online == 1,
 					LastSeen: time.Now(),
 				}
 
+				// Populate Host field with hostname (if available) for TLS certificate validation
+				if clusterNode.Name != "" {
+					nodeHost := ensureHostHasPort(clusterNode.Name, defaultPort)
+					endpoint.Host = schemePrefix + nodeHost
+				}
+
+				// Populate IP field separately for DNS-free connections
 				if clusterNode.IP != "" {
 					endpoint.IP = clusterNode.IP
 				}
