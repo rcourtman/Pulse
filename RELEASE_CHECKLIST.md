@@ -32,18 +32,17 @@ This document defines what must be true for a successful Pulse release. You (AI)
 ### 4. Release Artifacts Built
 **Must be true:**
 - Build script (`./scripts/build-release.sh`) completes successfully
-- All 31 expected artifacts exist in `release/` directory:
-  - 4 main Pulse tarballs (amd64, arm64, armv7, universal) + 4 SHA256s
-  - 2 macOS host agent tarballs (amd64, arm64) + 2 SHA256s
-  - 2 Windows host agent zips (amd64, arm64) + 2 SHA256s
-  - 5 standalone host agent binary SHA256s
-  - 2 Windows exe SHA256s
-  - 3 sensor proxy binary SHA256s
-  - 1 Helm chart + SHA256
-  - 1 install.sh + SHA256
-  - 1 checksums.txt
-- File sizes are reasonable (tarballs ~3-17MB, universal ~47MB)
+- All artifacts created by build script exist in `release/` directory
+- Artifact types expected (verify these exist, list is not exhaustive):
+  - Main Pulse tarballs for all architectures + SHA256s
+  - Host agent packages (macOS, Windows, Linux) + SHA256s
+  - Sensor proxy binaries + SHA256s
+  - Helm chart + SHA256
+  - install.sh + SHA256
+  - checksums.txt
+- File sizes are reasonable (spot-check a few: tarballs typically 3-17MB, universal ~47MB)
 - checksums.txt contains valid SHA256 hashes
+- **Compare artifact count with recent successful releases** (v4.26.5, v4.27.0) to ensure nothing is missing
 
 ## Release Execution Requirements
 
@@ -117,10 +116,11 @@ Or choose architecture-specific:
 **Must be true:**
 - Release doesn't already exist (check first, handle conflicts)
 - **CRITICAL**: `checksums.txt` uploaded FIRST (prevents auto-update race condition #671)
-- All 31 artifacts uploaded to release
+- All artifacts from `release/` directory uploaded to GitHub release
 - Release marked as pre-release if RC version
 - Release notes attached
-- Asset count verified: exactly 31 files
+- **Asset count matches recent successful releases** (compare with v4.26.5, v4.27.0)
+  - If count differs, investigate: did build script change? Are files missing?
 - Download links work (spot-check at least one tarball)
 
 **Why checksums.txt must be first:**
@@ -182,7 +182,7 @@ If release contains breaking changes or affects v3 users:
 
 Before announcing release, verify:
 - [ ] Git tag exists and matches VERSION
-- [ ] GitHub release has exactly 31 assets
+- [ ] GitHub release asset count matches recent successful releases
 - [ ] checksums.txt was uploaded first (check asset upload timestamps if possible)
 - [ ] Docker images exist on Docker Hub with correct tags
 - [ ] Release notes follow template format
@@ -192,16 +192,21 @@ Before announcing release, verify:
 
 ## Important Context
 
-### Why 31 assets?
-Complete releases need binaries and checksums for:
-- Main Pulse server (4 packages)
-- Host agent (macOS, Windows, Linux standalone binaries)
-- Sensor proxy (Linux standalone binaries)
+### Why compare asset counts?
+Complete releases include binaries and checksums for:
+- Main Pulse server (multiple architectures)
+- Host agent (macOS, Windows, Linux)
+- Sensor proxy (Linux architectures)
 - Helm chart
 - Install script
 - Master checksums file
 
-Missing assets indicate incomplete release.
+Recent successful releases (v4.26.5, v4.27.0) have similar asset counts. Significant differences indicate:
+- Build script changed (new artifacts added)
+- Missing files (incomplete build)
+- Upload error (some files didn't make it to GitHub)
+
+Compare, investigate differences, don't just accept a hardcoded number.
 
 ### Why checksums.txt ordering matters?
 The auto-updater's first action is downloading checksums.txt to verify artifacts. If this file doesn't exist yet, the entire update fails. GitHub uploads assets sequentially, so checksums.txt must be first in the upload queue.
