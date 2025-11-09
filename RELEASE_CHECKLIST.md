@@ -1,78 +1,83 @@
-# Release Checklist for Pulse v4
+# Release Requirements for Pulse v4
 
-This checklist guides the release process for Pulse v4 (Go version). When asked to create a release, follow these steps in order.
+This document defines what must be true for a successful Pulse release. You (AI) are responsible for figuring out HOW to accomplish these requirements. Focus on outcomes, not specific commands.
 
-**IMPORTANT:** All "testing" in this checklist means Claude Code should manually verify things work correctly. We do NOT have automated test suites. Testing means Claude Code running commands to verify the build works, artifacts are valid, and releases are properly created.
+## Pre-Flight Requirements
 
-## Pre-Flight Checks
+### 1. Environment Ready
+**Must be true before starting:**
+- Working directory is on `main` branch with no uncommitted changes
+- Local main is up-to-date with remote (`git pull` successful)
+- GitHub CLI is authenticated and working
+- At least 500MB free disk space available
+- Go 1.21+ is installed
 
-### 1. Verify Prerequisites
-- [ ] Ensure you're on main branch: `git branch --show-current`
-- [ ] Check for uncommitted changes: `git status`
-- [ ] Pull latest changes: `git pull origin main`
-- [ ] Ensure gh CLI is authenticated: `gh auth status`
-- [ ] Check disk space for builds: `df -h` (need ~500MB free)
-- [ ] Verify Go is installed: `go version` (need 1.21+)
+### 2. Version Determined
+**Must be true:**
+- New version number decided (ask user if unclear)
+- Version doesn't conflict with existing releases
+- Version follows semantic versioning:
+  - **Minor bump** for new features (v4.26.x → v4.27.0)
+  - **Patch bump** for bug fixes only (v4.27.0 → v4.27.1)
+  - **RC format** for pre-releases (v4.27.0-rc.1)
+- VERSION file updated (without 'v' prefix: `4.27.0`)
+- Version change committed and pushed to main
 
-## Pre-Release Steps
+### 3. Build Validated
+**Must be true:**
+- Test build succeeds: binary compiles without errors
+- Binary is functional (can run `--help` or `--version`)
+- Binary size is reasonable (~10-15MB for main pulse binary)
 
-### 2. Determine Version Number
-- [ ] Check current version: `cat VERSION`
-- [ ] Check latest releases: `gh release list --repo rcourtman/Pulse --limit 5`
-- [ ] **CRITICAL**: Ensure version doesn't already exist
-- [ ] Ask user what version they want to release
-- [ ] Suggest next logical version based on:
-  - For stable releases: increment minor (e.g., v4.0.0 → v4.1.0)
-  - For patch releases: increment patch (e.g., v4.0.0 → v4.0.1)
-  - For RC releases: increment RC number (e.g., v4.0.0-rc.1 → v4.0.0-rc.2)
-  - For new RC series: start with -rc.1 (e.g., v4.1.0-rc.1)
+### 4. Release Artifacts Built
+**Must be true:**
+- Build script (`./scripts/build-release.sh`) completes successfully
+- All 31 expected artifacts exist in `release/` directory:
+  - 4 main Pulse tarballs (amd64, arm64, armv7, universal) + 4 SHA256s
+  - 2 macOS host agent tarballs (amd64, arm64) + 2 SHA256s
+  - 2 Windows host agent zips (amd64, arm64) + 2 SHA256s
+  - 5 standalone host agent binary SHA256s
+  - 2 Windows exe SHA256s
+  - 3 sensor proxy binary SHA256s
+  - 1 Helm chart + SHA256
+  - 1 install.sh + SHA256
+  - 1 checksums.txt
+- File sizes are reasonable (tarballs ~3-17MB, universal ~47MB)
+- checksums.txt contains valid SHA256 hashes
 
-### 3. Update Version
-- [ ] Update version in `VERSION` file (without 'v' prefix): `echo "4.0.0" > VERSION`
-- [ ] Commit the version change: `git commit -am "chore: bump version to v4.X.X"`
-- [ ] Push changes: `git push origin main`
+## Release Execution Requirements
 
-### 4. Test the Build (Claude Code Manual Testing)
-- [ ] **Claude Code: Manually test the build works**
-- [ ] Build test binary: `go build -o test-pulse ./cmd/pulse`
-- [ ] Verify binary runs without errors: `./test-pulse config --help`
-- [ ] Check binary size is reasonable: `ls -lh test-pulse` (should be ~10-15MB)
-- [ ] Clean up: `rm test-pulse`
-- [ ] **Note:** This means Claude Code should manually verify functionality, NOT run automated test suites
+### 5. Git Tagged
+**Must be true:**
+- Git tag created with 'v' prefix (e.g., `v4.27.0`)
+- Tag pushed to remote repository
+- Tag matches VERSION file content (minus 'v' prefix)
 
-### 5. Build Release Artifacts
-- [ ] Run build script: `./build-release.sh`
-- [ ] Verify all architecture files created:
-  - `release/pulse-v4.X.X-linux-amd64.tar.gz`
-  - `release/pulse-v4.X.X-linux-arm64.tar.gz`
-  - `release/pulse-v4.X.X-linux-armv7.tar.gz`
-  - `release/pulse-v4.X.X.tar.gz` (universal package)
-- [ ] Check file sizes are reasonable (~3-4MB each, ~10MB for universal)
-- [ ] Verify checksums file: `cat release/checksums.txt`
+### 6. Release Notes Prepared
+**Must be true:**
+- Release notes follow standard template format
+- Sections included: New Features, Bug Fixes, Improvements, Breaking Changes
+- Each item references issue numbers where applicable (#123)
+- No emoji in headers
+- Installation section includes Docker and Manual install instructions
+- Breaking Changes section present (say "None" if no breaking changes)
+- For RC releases: Include backup warning at the top
 
-## Release Steps
-
-### 6. Create Git Tag
-- [ ] Create tag: `git tag v4.X.X`
-- [ ] Push tag: `git push origin v4.X.X`
-
-### 7. Prepare Release Notes
-Use this EXACT template for consistency across all releases:
-
+**Template structure:**
 ```markdown
 ## What's Changed
 
 ### New Features
-- Brief description of new feature (#issue_number if applicable)
+- Description (#issue)
 
 ### Bug Fixes
-- Brief description of what was fixed (#issue_number)
+- Description (#issue)
 
 ### Improvements
-- Brief description of improvement
+- Description (#issue)
 
-### Breaking Changes (if any)
-- Description of breaking change and migration path
+### Breaking Changes
+None
 
 ## Installation
 
@@ -91,198 +96,162 @@ Or choose architecture-specific:
 - `pulse-vX.X.X-linux-armv7.tar.gz` - ARM 32-bit
 
 ## Notes
-- Any important notes or warnings
-- Migration instructions if needed
+- Important notes or migration instructions
 ```
 
-**IMPORTANT:**
-- Keep sections even if empty (e.g., "Breaking Changes" with "None" if no breaking changes)
-- Use issue numbers when applicable
-- Be concise - one line per item
-- NO emoji in headers (keep it professional)
-- Only mention specific version Docker tag (vX.X.X) and avoid listing all tag variants
+### 7. Docker Images Published
+**Must be true:**
+- Multi-architecture images built for: linux/amd64, linux/arm64, linux/arm/v7
+- Images tagged correctly:
+  - **For RC**: `vX.X.X` and `rc`
+  - **For stable**: `vX.X.X`, `X.X.X`, `X.X`, `X`, `latest`
+- Images pushed to Docker Hub (rcourtman/pulse)
+- Images verified on Docker Hub (can pull successfully)
 
-### 8. Build and Push Docker Images
+**Options for building (choose best available):**
+- Option A: docker-builder container via `ssh root@delly.lan "pct exec 135..."`
+- Option B: docker-builder container at 192.168.0.174
+- Option C: Local Docker with buildx (create multiarch builder if needed)
 
-**Option A: Using docker-builder container via pct exec (Preferred)**
-```bash
-# Clean clone and build - most reliable method
-ssh root@delly.lan "pct exec 135 -- bash -c 'cd /root && rm -rf Pulse && git clone https://github.com/rcourtman/Pulse.git && cd Pulse && docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t rcourtman/pulse:vX.X.X --push .'"
-```
+### 8. GitHub Release Created
+**Must be true:**
+- Release doesn't already exist (check first, handle conflicts)
+- **CRITICAL**: `checksums.txt` uploaded FIRST (prevents auto-update race condition #671)
+- All 31 artifacts uploaded to release
+- Release marked as pre-release if RC version
+- Release notes attached
+- Asset count verified: exactly 31 files
+- Download links work (spot-check at least one tarball)
 
-**Option B: Using docker-builder container (192.168.0.174)**
-```bash
-ssh root@192.168.0.174
-cd /root/Pulse
-git pull
-# Then run the docker buildx commands below
-```
+**Why checksums.txt must be first:**
+Auto-updater downloads checksums.txt immediately. If it's uploaded last, users who check for updates right after release will get "no checksum file found" errors.
 
-**Option C: Using local Docker with buildx**
-- [ ] Ensure Docker is logged in: `docker login`
-- [ ] Ensure buildx is available: `docker buildx ls`
-- [ ] If buildx shows 'inactive', create/start it: `docker buildx create --name multiarch --use`
-- [ ] Verify all Dockerfile paths are correct (check cmd/pulse vs cmd/pulse/)
-- [ ] Build multi-arch images:
-  ```bash
-  # For RC releases
-  docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 \
-    -t rcourtman/pulse:v4.X.X \
-    -t rcourtman/pulse:rc \
-    --push .
-  ```
-  ```bash
-  # For stable releases
-  docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 \
-    -t rcourtman/pulse:v4.X.X \
-    -t rcourtman/pulse:4.X.X \
-    -t rcourtman/pulse:4.X \
-    -t rcourtman/pulse:4 \
-    -t rcourtman/pulse:latest \
-    --push .
-  ```
-- [ ] Verify images on Docker Hub: https://hub.docker.com/r/rcourtman/pulse/tags
-- [ ] Test pull works: `docker pull rcourtman/pulse:v4.X.X`
+### 9. Installation Methods Verified
+**Must be true:**
+- Tarball is downloadable from GitHub releases
+- Docker image is pullable from Docker Hub
+- Verification doesn't require full installation, just confirm artifacts are accessible
 
-### 9. Create GitHub Release
-- [ ] **IMPORTANT: Check if release already exists**: `gh release view v4.X.X --repo rcourtman/Pulse 2>/dev/null`
-  - If exists, decide whether to:
-    - Update release notes: `gh release edit v4.X.X --repo rcourtman/Pulse --notes "..."`
-    - Delete and recreate: `gh release delete v4.X.X --repo rcourtman/Pulse --yes`
-    - Skip if already complete
-- [ ] **CRITICAL**: Upload checksums.txt FIRST to prevent update failures (related to #671)
-  - Users who check for updates immediately after release need checksums.txt
-  - If it's uploaded last, auto-updates will fail with "no checksum file found"
-- [ ] For RC/beta releases:
-  ```bash
-  gh release create v4.X.X \
-    --repo rcourtman/Pulse \
-    --prerelease \
-    --title "v4.X.X-rc.X" \
-    --notes-file release-notes.md \
-    release/checksums.txt release/*.tar.gz release/*.zip release/*.tgz release/*.sh release/*.sha256
-  ```
-- [ ] For stable releases:
-  ```bash
-  gh release create v4.X.X \
-    --repo rcourtman/Pulse \
-    --title "v4.X.X" \
-    --notes-file release-notes.md \
-    release/checksums.txt release/*.tar.gz release/*.zip release/*.tgz release/*.sh release/*.sha256
-  ```
-- [ ] Verify release was created with all ~30 artifacts (check asset count matches previous releases)
-- [ ] Check download links work
-- [ ] Share the release URL with the user
+## Post-Release Requirements
 
-## Post-Release Steps
+### 10. Documentation Updated (if needed)
+**Must be true:**
+- README.md reflects any new features or installation changes
+- No stale information about features removed
+- Version numbers updated if hard-coded anywhere
 
-### 10. Test Installation Methods (Claude Code Manual Verification)
-- [ ] **Claude Code: Verify release artifacts are downloadable**
-  ```bash
-  # Check that the release files can be downloaded
-  curl -I https://github.com/rcourtman/Pulse/releases/download/v4.X.X/pulse-v4.X.X.tar.gz
-  ```
-- [ ] **Claude Code: Test extraction of tarball**
-  ```bash
-  # Download and verify tarball contents
-  wget https://github.com/rcourtman/Pulse/releases/download/v4.X.X/pulse-v4.X.X.tar.gz
-  tar -tzf pulse-v4.X.X.tar.gz | head -20
-  ```
-- [ ] **Claude Code: Verify Docker image exists**
-  ```bash
-  # Check Docker Hub for the image (via curl or browser)
-  curl -s https://hub.docker.com/v2/repositories/rcourtman/pulse/tags/v4.X.X
-  ```
-- [ ] **Note:** Claude Code should manually verify these work, not necessarily run full installations
+### 11. Monitoring Begins
+**Must be true:**
+- GitHub issues checked for immediate problems
+- Ready to create hotfix release if critical issues reported
+- User informed that release is complete (provide release URL)
 
-### 11. Update Documentation
-- [ ] Update README.md if needed (installation instructions, features)
-- [ ] Ensure CLAUDE.md reflects any new development workflows
-- [ ] Check if any example configurations need updating
+### 12. Cleanup
+**Must be true:**
+- `release/` directory removed
+- `build/` directory cleaned
+- No leftover artifacts consuming disk space
 
-### 12. Monitor Release
-- [ ] Check GitHub issues for any immediate problems
-- [ ] Monitor for crash reports or installation issues
-- [ ] Be ready to create a patch release if critical issues found
+## Critical Constraints
 
-### 13. Clean Up
-- [ ] Remove release artifacts: `rm -rf release/`
-- [ ] Clean build directory: `rm -rf build/`
+### Version Format Rules
+- **VERSION file**: No 'v' prefix (e.g., `4.27.0`)
+- **Git tags**: Always 'v' prefix (e.g., `v4.27.0`)
+- **Filenames**: Include 'v' prefix (e.g., `pulse-v4.27.0-linux-amd64.tar.gz`)
+- **Docker tags**: No 'v' for version tags (`4.27.0`), include 'v' for specific version (`v4.27.0`)
 
-## Important Notes
+### Architecture Coverage
+Every release must support:
+- **amd64**: Intel/AMD 64-bit
+- **arm64**: ARM 64-bit (Raspberry Pi 4/5, modern ARM)
+- **armv7**: ARM 32-bit (older Raspberry Pi, some NAS)
+- **Universal package**: Auto-detects architecture at install time
 
-### Release Coordination
-- **Always check for existing releases** before creating new ones
-- **RC releases** should be marked as pre-release to prevent auto-updates
-- **If a release exists**, either update it or increment version
-- **Never assume** a version is available without checking
-
-### Version Management
-- **VERSION file** - Contains version without 'v' prefix (e.g., `4.0.0`)
-- **Git tags** - Always include 'v' prefix (e.g., `v4.0.0`)
-- **Release artifacts** - Include 'v' in filename (e.g., `pulse-v4.0.0.tar.gz`)
-
-### Architecture Support
-- **amd64** - Standard Intel/AMD 64-bit
-- **arm64** - 64-bit ARM (Raspberry Pi 4/5, modern ARM servers)
-- **armv7** - 32-bit ARM (older Raspberry Pi, some NAS devices)
-- **Universal package** - Contains all architectures with auto-detection
-
-### Release Types
-- **Stable** (v4.1.0) - Production ready, wide distribution
-- **Release Candidate** (v4.1.0-rc.1) - Testing phase, early adopters
-- **Patch** (v4.0.1) - Bug fixes only, no new features
+### Release Type Behavior
+- **Stable releases** (v4.X.X): Wide distribution, auto-updates enabled
+- **RC releases** (v4.X.X-rc.X): Mark as pre-release, prevents auto-updates
+- **Patch releases** (v4.X.1): Bug fixes only, no new features
 
 ### Migration Warnings
-- Always warn v3 users about manual migration requirement
-- v3 to v4 auto-update will break installations
-- Provide clear migration instructions in release notes
+If release contains breaking changes or affects v3 users:
+- Warn about migration requirements
+- Provide clear upgrade path
+- Document what will break if auto-updated
 
-## Quick Commands Reference
+## Validation Checklist
 
+Before announcing release, verify:
+- [ ] Git tag exists and matches VERSION
+- [ ] GitHub release has exactly 31 assets
+- [ ] checksums.txt was uploaded first (check asset upload timestamps if possible)
+- [ ] Docker images exist on Docker Hub with correct tags
+- [ ] Release notes follow template format
+- [ ] At least one tarball and Docker image are downloadable
+- [ ] Release marked as pre-release if RC
+- [ ] User provided with release URL
+
+## Important Context
+
+### Why 31 assets?
+Complete releases need binaries and checksums for:
+- Main Pulse server (4 packages)
+- Host agent (macOS, Windows, Linux standalone binaries)
+- Sensor proxy (Linux standalone binaries)
+- Helm chart
+- Install script
+- Master checksums file
+
+Missing assets indicate incomplete release.
+
+### Why checksums.txt ordering matters?
+The auto-updater's first action is downloading checksums.txt to verify artifacts. If this file doesn't exist yet, the entire update fails. GitHub uploads assets sequentially, so checksums.txt must be first in the upload queue.
+
+### Why verify before announcing?
+Once users are notified, they'll immediately start updating. Any missing artifacts or broken downloads create support burden and erode trust. Silent verification prevents public-facing failures.
+
+## Troubleshooting Guidance
+
+**If build fails:**
+- Check Go version (need 1.21+)
+- Verify frontend built (`ls frontend-modern/dist/`)
+- Check disk space
+- Clean and retry (`rm -rf build/ release/`)
+
+**If Docker push fails:**
+- Verify `docker login` succeeded
+- Check buildx is active (`docker buildx ls`)
+- Create multiarch builder if needed
+- Try remote builder if local fails
+
+**If GitHub release fails:**
+- Check `gh auth status`
+- Verify all artifacts exist in `release/`
+- Check for existing release (delete or skip)
+- Upload assets individually if batch fails
+
+**If version conflicts:**
+- Never reuse version numbers
+- Increment and try again
+- Delete bad tags if necessary
+
+## Quick Reference
+
+**Check if release exists:**
 ```bash
-# Check current version
-cat VERSION
-
-# List recent releases
-gh release list --repo rcourtman/Pulse --limit 5
-
-# Build all architectures
-./build-release.sh
-
-# Test specific architecture
-cd build && ./pulse-linux-amd64 --version
-
-# Create RC release
-gh release create v4.X.X-rc.X --repo rcourtman/Pulse --prerelease --title "v4.X.X-rc.X" --notes "Release notes here" release/*.tar.gz
-
-# Create stable release
-gh release create v4.X.X --repo rcourtman/Pulse --title "v4.X.X" --notes "Release notes here" release/*.tar.gz
-
-# Check release artifacts
-ls -lh release/
-
-# Build Docker images (RC)
-docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t rcourtman/pulse:v4.X.X -t rcourtman/pulse:rc --push .
-
-# Build Docker images (stable)
-docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t rcourtman/pulse:v4.X.X -t rcourtman/pulse:latest --push .
+gh release view v4.X.X --repo rcourtman/Pulse
 ```
 
-## Troubleshooting
+**Count release assets:**
+```bash
+gh release view v4.X.X --repo rcourtman/Pulse --json assets --jq '.assets | length'
+```
 
-### Build Failures
-- Ensure Go 1.21+ is installed
-- Check frontend was built: `ls frontend-modern/dist/`
-- Verify enough disk space
-- Try cleaning first: `rm -rf build/ release/`
+**Verify Docker image:**
+```bash
+docker pull rcourtman/pulse:v4.X.X
+```
 
-### Release Upload Issues
-- Check GitHub token is valid: `gh auth status`
-- Ensure all artifacts exist: `ls release/*.tar.gz`
-- Try uploading individually if batch fails
-
-### Version Confusion
-- VERSION file = no 'v' prefix
-- Git tags = with 'v' prefix
-- Keep everything else consistent with tags
+**List recent releases:**
+```bash
+gh release list --repo rcourtman/Pulse --limit 5
+```
