@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
@@ -224,6 +225,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect temperature data (best effort - don't fail if unavailable)
 	sensorData := a.collectTemperatures(collectCtx)
 
+	// Collect RAID array data (best effort - don't fail if unavailable)
+	raidData := a.collectRAIDArrays(collectCtx)
+
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
@@ -253,6 +257,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Disks:     append([]agentshost.Disk(nil), snapshot.Disks...),
 		Network:   append([]agentshost.NetworkInterface(nil), snapshot.Network...),
 		Sensors:   sensorData,
+		RAID:      raidData,
 		Tags:      append([]string(nil), a.cfg.Tags...),
 		Timestamp: time.Now().UTC(),
 	}
@@ -368,4 +373,27 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		Msg("Collected temperature data")
 
 	return result
+}
+
+// collectRAIDArrays attempts to collect mdadm RAID array information.
+// Returns an empty slice if collection fails (best-effort).
+func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
+	// Only collect on Linux (mdadm is Linux-specific)
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+
+	arrays, err := mdadm.CollectArrays(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect RAID array data (mdadm may not be installed)")
+		return nil
+	}
+
+	if len(arrays) > 0 {
+		a.logger.Debug().
+			Int("arrayCount", len(arrays)).
+			Msg("Collected RAID array data")
+	}
+
+	return arrays
 }

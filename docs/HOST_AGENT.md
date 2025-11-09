@@ -26,6 +26,28 @@ Temperature data appears in the **Hosts** tab alongside other host metrics. This
 
 Temperature collection is automatic and best-effort. If lm-sensors is not installed or sensors are unavailable, the agent continues reporting other metrics normally.
 
+## RAID Monitoring (mdadm)
+
+The host agent automatically collects mdadm RAID array information on Linux systems:
+
+- **Array Status**: Displays array state (clean, degraded, recovering, resyncing)
+- **Device Health**: Shows active, failed, and spare device counts
+- **Rebuild Progress**: Real-time rebuild or resync percentage and speed
+- **Automatic Alerting**: Critical alerts for degraded arrays, warnings during rebuilds
+
+RAID data appears in the **Hosts** tab when you expand a host's details. Each array shows its RAID level, current state, and device status. Color-coded indicators highlight:
+
+- **Green**: Healthy arrays (clean state, no failed devices)
+- **Amber**: Rebuilding or resyncing arrays
+- **Red**: Degraded arrays or arrays with failed devices
+
+**Requirements:**
+- Linux operating system
+- mdadm installed and configured
+- Root or sudo access for the host agent
+
+RAID monitoring is automatic and best-effort. If mdadm is not installed or no arrays are present, the agent continues reporting other metrics normally. Only Linux software RAID (mdadm) is supported; hardware RAID controllers are not monitored.
+
 ## Prerequisites
 
 - Pulse v4.26.0 or newer (host agent reporting shipped with `/api/agents/host/report`)

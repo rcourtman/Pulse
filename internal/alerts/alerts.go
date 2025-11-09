@@ -2276,6 +2276,13 @@ func sanitizeHostComponent(value string) string {
 	return sanitized
 }
 
+// sanitizeRAIDDevice sanitizes RAID device names for use in resource IDs.
+func sanitizeRAIDDevice(device string) string {
+	// Remove /dev/ prefix if present
+	device = strings.TrimPrefix(device, "/dev/")
+	return sanitizeHostComponent(device)
+}
+
 func hostDiskResourceID(host models.Host, disk models.Disk) (string, string) {
 	label := strings.TrimSpace(disk.Mountpoint)
 	if label == "" {
@@ -2396,6 +2403,125 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	m.cleanupHostDiskAlerts(host, seenDisks)
+
+	// Check RAID arrays for degraded or failed state
+	if len(host.RAID) > 0 {
+		for _, array := range host.RAID {
+			raidResourceID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
+			raidName := fmt.Sprintf("%s - %s (%s)", resourceName, array.Device, array.Level)
+
+			raidMetadata := cloneMetadata(baseMetadata)
+			raidMetadata["metric"] = "raid"
+			raidMetadata["raidDevice"] = array.Device
+			raidMetadata["raidLevel"] = array.Level
+			raidMetadata["raidState"] = array.State
+			raidMetadata["raidTotalDevices"] = array.TotalDevices
+			raidMetadata["raidActiveDevices"] = array.ActiveDevices
+			raidMetadata["raidFailedDevices"] = array.FailedDevices
+			raidMetadata["raidSpareDevices"] = array.SpareDevices
+			if array.UUID != "" {
+				raidMetadata["raidUUID"] = array.UUID
+			}
+			if array.RebuildPercent > 0 {
+				raidMetadata["raidRebuildPercent"] = array.RebuildPercent
+			}
+
+			// Check for degraded or failed arrays
+			isDegraded := strings.Contains(strings.ToLower(array.State), "degraded") || array.FailedDevices > 0
+			isRebuilding := strings.Contains(strings.ToLower(array.State), "recover") ||
+				strings.Contains(strings.ToLower(array.State), "resync") ||
+				array.RebuildPercent > 0
+
+			alertID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
+
+			if isDegraded {
+				// Critical alert for degraded arrays
+				msg := fmt.Sprintf("RAID array %s is degraded", array.Device)
+				if array.FailedDevices > 0 {
+					msg = fmt.Sprintf("RAID array %s has %d failed device(s)", array.Device, array.FailedDevices)
+				}
+
+				m.mu.Lock()
+				if _, exists := m.activeAlerts[alertID]; !exists {
+					alert := &Alert{
+						ID:           alertID,
+						Type:         "raid",
+						Level:        AlertLevelCritical,
+						ResourceID:   raidResourceID,
+						ResourceName: raidName,
+						Node:         nodeName,
+						Instance:     instanceName,
+						Message:      msg,
+						Value:        float64(array.FailedDevices),
+						Threshold:    0,
+						StartTime:    time.Now(),
+						LastSeen:     time.Now(),
+						Metadata:     raidMetadata,
+					}
+					m.preserveAlertState(alertID, alert)
+					m.activeAlerts[alertID] = alert
+					m.recentAlerts[alertID] = alert
+					m.historyManager.AddAlert(*alert)
+					m.dispatchAlert(alert, false)
+					m.mu.Unlock()
+
+					log.Error().
+						Str("host", resourceName).
+						Str("hostID", host.ID).
+						Str("raidDevice", array.Device).
+						Str("raidLevel", array.Level).
+						Int("failedDevices", array.FailedDevices).
+						Msg("CRITICAL: RAID array degraded")
+				} else {
+					m.mu.Unlock()
+				}
+			} else if isRebuilding {
+				// Warning alert for rebuilding arrays
+				msg := fmt.Sprintf("RAID array %s is rebuilding", array.Device)
+				if array.RebuildPercent > 0 {
+					msg = fmt.Sprintf("RAID array %s is rebuilding (%.1f%% complete)", array.Device, array.RebuildPercent)
+				}
+
+				m.mu.Lock()
+				if _, exists := m.activeAlerts[alertID]; !exists {
+					alert := &Alert{
+						ID:           alertID,
+						Type:         "raid",
+						Level:        AlertLevelWarning,
+						ResourceID:   raidResourceID,
+						ResourceName: raidName,
+						Node:         nodeName,
+						Instance:     instanceName,
+						Message:      msg,
+						Value:        array.RebuildPercent,
+						Threshold:    100,
+						StartTime:    time.Now(),
+						LastSeen:     time.Now(),
+						Metadata:     raidMetadata,
+					}
+					m.preserveAlertState(alertID, alert)
+					m.activeAlerts[alertID] = alert
+					m.recentAlerts[alertID] = alert
+					m.historyManager.AddAlert(*alert)
+					m.dispatchAlert(alert, false)
+					m.mu.Unlock()
+
+					log.Warn().
+						Str("host", resourceName).
+						Str("hostID", host.ID).
+						Str("raidDevice", array.Device).
+						Str("raidLevel", array.Level).
+						Float64("rebuildPercent", array.RebuildPercent).
+						Msg("WARNING: RAID array rebuilding")
+				} else {
+					m.mu.Unlock()
+				}
+			} else {
+				// Array is healthy, clear any existing alerts
+				m.clearAlert(alertID)
+			}
+		}
+	}
 }
 
 // HandleHostOnline clears offline tracking and alerts for a host agent.

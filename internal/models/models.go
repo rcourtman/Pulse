@@ -163,6 +163,7 @@ type Host struct {
 	Disks             []Disk                 `json:"disks,omitempty"`
 	NetworkInterfaces []HostNetworkInterface `json:"networkInterfaces,omitempty"`
 	Sensors           HostSensorSummary      `json:"sensors,omitempty"`
+	RAID              []HostRAIDArray        `json:"raid,omitempty"`
 	Status            string                 `json:"status"`
 	UptimeSeconds     int64                  `json:"uptimeSeconds,omitempty"`
 	IntervalSeconds   int                    `json:"intervalSeconds,omitempty"`
@@ -190,6 +191,30 @@ type HostSensorSummary struct {
 	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
 	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
 	Additional         map[string]float64 `json:"additional,omitempty"`
+}
+
+// HostRAIDArray represents an mdadm RAID array on a host.
+type HostRAIDArray struct {
+	Device         string           `json:"device"`
+	Name           string           `json:"name,omitempty"`
+	Level          string           `json:"level"`
+	State          string           `json:"state"`
+	TotalDevices   int              `json:"totalDevices"`
+	ActiveDevices  int              `json:"activeDevices"`
+	WorkingDevices int              `json:"workingDevices"`
+	FailedDevices  int              `json:"failedDevices"`
+	SpareDevices   int              `json:"spareDevices"`
+	UUID           string           `json:"uuid,omitempty"`
+	Devices        []HostRAIDDevice `json:"devices"`
+	RebuildPercent float64          `json:"rebuildPercent"`
+	RebuildSpeed   string           `json:"rebuildSpeed,omitempty"`
+}
+
+// HostRAIDDevice represents a device in a RAID array.
+type HostRAIDDevice struct {
+	Device string `json:"device"`
+	State  string `json:"state"`
+	Slot   int    `json:"slot"`
 }
 
 // DockerHost represents a Docker host reporting metrics via the external agent.

@@ -1997,6 +1997,33 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		})
 	}
 
+	raid := make([]models.HostRAIDArray, 0, len(report.RAID))
+	for _, array := range report.RAID {
+		devices := make([]models.HostRAIDDevice, 0, len(array.Devices))
+		for _, dev := range array.Devices {
+			devices = append(devices, models.HostRAIDDevice{
+				Device: dev.Device,
+				State:  dev.State,
+				Slot:   dev.Slot,
+			})
+		}
+		raid = append(raid, models.HostRAIDArray{
+			Device:         array.Device,
+			Name:           array.Name,
+			Level:          array.Level,
+			State:          array.State,
+			TotalDevices:   array.TotalDevices,
+			ActiveDevices:  array.ActiveDevices,
+			WorkingDevices: array.WorkingDevices,
+			FailedDevices:  array.FailedDevices,
+			SpareDevices:   array.SpareDevices,
+			UUID:           array.UUID,
+			Devices:        devices,
+			RebuildPercent: array.RebuildPercent,
+			RebuildSpeed:   array.RebuildSpeed,
+		})
+	}
+
 	host := models.Host{
 		ID:                identifier,
 		Hostname:          hostname,
@@ -2017,6 +2044,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),
 			Additional:         cloneStringFloatMap(report.Sensors.Additional),
 		},
+		RAID:            raid,
 		Status:          "online",
 		UptimeSeconds:   report.Host.UptimeSeconds,
 		IntervalSeconds: report.Agent.IntervalSeconds,
@@ -2033,6 +2061,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 	if len(host.NetworkInterfaces) == 0 {
 		host.NetworkInterfaces = nil
+	}
+	if len(host.RAID) == 0 {
+		host.RAID = nil
 	}
 
 	if tokenRecord != nil {

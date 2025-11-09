@@ -222,6 +222,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                   return (
                                     (host.disks && host.disks.length > 0) ||
                                     (host.networkInterfaces && host.networkInterfaces.length > 0) ||
+                                    (host.raid && host.raid.length > 0) ||
                                     host.loadAverage ||
                                     host.cpuCount ||
                                     host.kernelVersion ||
@@ -450,6 +451,59 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                                   </For>
                                                 </div>
                                               </div>
+                                            </Show>
+
+                                            {/* RAID Arrays */}
+                                            <Show when={host.raid && host.raid.length > 0}>
+                                              <For each={host.raid!}>
+                                                {(array) => {
+                                                  const isDegraded = () => array.state.toLowerCase().includes('degraded') || array.failedDevices > 0;
+                                                  const isRebuilding = () => array.state.toLowerCase().includes('recover') || array.state.toLowerCase().includes('resync') || array.rebuildPercent > 0;
+                                                  const isHealthy = () => !isDegraded() && !isRebuilding() && array.state.toLowerCase().includes('clean');
+
+                                                  const stateColor = () => {
+                                                    if (isDegraded()) return 'text-red-600 dark:text-red-400 font-semibold';
+                                                    if (isRebuilding()) return 'text-amber-600 dark:text-amber-400 font-semibold';
+                                                    if (isHealthy()) return 'text-green-600 dark:text-green-400';
+                                                    return 'text-gray-600 dark:text-gray-300';
+                                                  };
+
+                                                  return (
+                                                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                                                      <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                                                        RAID {array.level.replace('raid', '')} - {array.device}
+                                                      </div>
+                                                      <div class="mt-2 space-y-1 text-[11px]">
+                                                        <div class="flex items-center justify-between gap-2">
+                                                          <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
+                                                          <span class={stateColor()}>{array.state}</span>
+                                                        </div>
+                                                        <div class="flex items-center justify-between gap-2">
+                                                          <span class="font-medium text-gray-700 dark:text-gray-200">Devices</span>
+                                                          <span class="text-gray-600 dark:text-gray-300">
+                                                            {array.activeDevices}/{array.totalDevices}
+                                                            {array.failedDevices > 0 && <span class="text-red-600 dark:text-red-400"> ({array.failedDevices} failed)</span>}
+                                                          </span>
+                                                        </div>
+                                                        <Show when={isRebuilding() && array.rebuildPercent > 0}>
+                                                          <div class="flex items-center justify-between gap-2">
+                                                            <span class="font-medium text-gray-700 dark:text-gray-200">Rebuild</span>
+                                                            <span class="text-amber-600 dark:text-amber-400 font-medium">
+                                                              {array.rebuildPercent.toFixed(1)}%
+                                                            </span>
+                                                          </div>
+                                                          <Show when={array.rebuildSpeed}>
+                                                            <div class="flex items-center justify-between gap-2">
+                                                              <span class="font-medium text-gray-700 dark:text-gray-200">Speed</span>
+                                                              <span class="text-gray-600 dark:text-gray-300">{array.rebuildSpeed}</span>
+                                                            </div>
+                                                          </Show>
+                                                        </Show>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                }}
+                                              </For>
                                             </Show>
                                           </div>
                                         </td>

@@ -40,7 +40,7 @@ func InitializeRateLimiters() {
 		UpdateEndpoints: NewRateLimiter(20, 1*time.Minute), // 20 checks per minute
 
 		// WebSocket connections: per-connection limits
-		WebSocketEndpoints: NewRateLimiter(5, 1*time.Minute), // 5 new connections per minute
+		WebSocketEndpoints: NewRateLimiter(30, 1*time.Minute), // 30 new connections per minute
 
 		// General API: higher limits for normal operations
 		GeneralAPI: NewRateLimiter(500, 1*time.Minute), // 500 requests per minute

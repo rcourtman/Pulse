@@ -330,6 +330,7 @@ export interface Host {
   disks?: Disk[];
   networkInterfaces?: HostNetworkInterface[];
   sensors?: HostSensorSummary;
+  raid?: HostRAIDArray[];
   status: string;
   uptimeSeconds?: number;
   lastSeen: number;
@@ -357,6 +358,28 @@ export interface HostSensorSummary {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
   additional?: Record<string, number>;
+}
+
+export interface HostRAIDArray {
+  device: string;
+  name?: string;
+  level: string;
+  state: string;
+  totalDevices: number;
+  activeDevices: number;
+  workingDevices: number;
+  failedDevices: number;
+  spareDevices: number;
+  uuid?: string;
+  devices: HostRAIDDevice[];
+  rebuildPercent: number;
+  rebuildSpeed?: string;
+}
+
+export interface HostRAIDDevice {
+  device: string;
+  state: string;
+  slot: number;
 }
 
 export interface HostLookupResponse {
