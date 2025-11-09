@@ -95,7 +95,7 @@ The big expense isn’t infrastructure, it’s the AI tooling that helps keep up
 
 - `demo.pulserelay.pro` domain + cert: ~£10/year (about £0.80/month)
 - Hetzner VPS for the public demo: £6/month
-- Development tooling and services (AI-assisted issue triage, CI, automation): ~£200/month
+- Development tooling (AI-powered development, CI, automation): ~£200/month
 
 So keeping Pulse healthy costs about £206/month (~$260 USD) plus 10–15 hours of evenings each week. Sponsorships cover those bills and let me spend that time coding instead of freelancing. If Pulse saves you time, please consider helping keep it sustainable:
 
