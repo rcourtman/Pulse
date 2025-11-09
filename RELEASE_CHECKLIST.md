@@ -150,6 +150,9 @@ git pull
     - Update release notes: `gh release edit v4.X.X --repo rcourtman/Pulse --notes "..."`
     - Delete and recreate: `gh release delete v4.X.X --repo rcourtman/Pulse --yes`
     - Skip if already complete
+- [ ] **CRITICAL**: Upload checksums.txt FIRST to prevent update failures (related to #671)
+  - Users who check for updates immediately after release need checksums.txt
+  - If it's uploaded last, auto-updates will fail with "no checksum file found"
 - [ ] For RC/beta releases:
   ```bash
   gh release create v4.X.X \
@@ -157,7 +160,7 @@ git pull
     --prerelease \
     --title "v4.X.X-rc.X" \
     --notes-file release-notes.md \
-    release/*.tar.gz release/*.zip release/*.tgz release/*.sh release/*.txt release/*.sha256
+    release/checksums.txt release/*.tar.gz release/*.zip release/*.tgz release/*.sh release/*.sha256
   ```
 - [ ] For stable releases:
   ```bash
@@ -165,7 +168,7 @@ git pull
     --repo rcourtman/Pulse \
     --title "v4.X.X" \
     --notes-file release-notes.md \
-    release/*.tar.gz release/*.zip release/*.tgz release/*.sh release/*.txt release/*.sha256
+    release/checksums.txt release/*.tar.gz release/*.zip release/*.tgz release/*.sh release/*.sha256
   ```
 - [ ] Verify release was created with all ~30 artifacts (check asset count matches previous releases)
 - [ ] Check download links work
