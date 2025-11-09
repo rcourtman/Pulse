@@ -693,7 +693,13 @@ func buildTemperatureProxyDiagnostic(cfg *config.Config) *TemperatureProxyDiagno
 	if !diag.SocketFound {
 		appendNote("No proxy socket detected inside the container. Remove the affected node in Pulse, then re-add it using the installer script from Settings → Nodes to regenerate the mount (or rerun the host installer script if you prefer).")
 	} else if diag.SocketPath == "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock" {
-		appendNote("Proxy socket is exposed via /run. Remove and re-add this node with the Settings → Nodes installer script so the managed /mnt/pulse-proxy mount is applied (advanced: rerun the host installer script).")
+		// Only warn about /run mount in LXC containers where /mnt/pulse-proxy is preferred
+		// Docker deployments correctly use /run/pulse-sensor-proxy per docker-compose.yml
+		isDocker := os.Getenv("PULSE_DOCKER") == "true"
+		if !isDocker {
+			// In LXC, /run mount indicates legacy hand-crafted mount instead of managed mount
+			appendNote("Proxy socket is exposed via /run. Remove and re-add this node with the Settings → Nodes installer script so the managed /mnt/pulse-proxy mount is applied (advanced: rerun the host installer script).")
+		}
 	}
 
 	client := tempproxy.NewClient()
