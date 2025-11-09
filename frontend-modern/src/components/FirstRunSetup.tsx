@@ -320,9 +320,11 @@ IMPORTANT: Keep these credentials secure!
                   >
                     <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
                       <Show when={isDocker()}>
-                        <div class="text-blue-600 dark:text-blue-400 mb-1"># From Docker host:</div>
-                        docker exec pulse cat {bootstrapTokenPath()}
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or from inside container:</div>
+                        <div class="text-blue-600 dark:text-blue-400 mb-1"># From container host:</div>
+                        docker exec &lt;container-name&gt; cat {bootstrapTokenPath()}
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or kubectl for Kubernetes:</div>
+                        kubectl exec &lt;pod-name&gt; -- cat {bootstrapTokenPath()}
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or exec into the container:</div>
                       </Show>
                       cat {bootstrapTokenPath()}
                     </div>
