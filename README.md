@@ -91,9 +91,15 @@ Pulse is maintained by one person after work. [Sponsorships](https://github.com/
 
 ## Support Pulse Development
 
-Pulse runs nights and weekends. Sponsorships and Ko-fi tips pay for the demo server, CI minutes, and the time it takes to build new features or chase down bugs. If Pulse saves you time, please consider helping keep the lights on:
+The big expense isn’t infrastructure, it’s the AI tooling that helps keep up with bug reports and feature work. Monthly costs look like this:
 
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
+- `demo.pulserelay.pro` domain + cert: ~£10/year (about £0.80/month)
+- Hetzner VPS for the public demo: £6/month
+- AI API usage (issue triage, patch reviews, release prep): roughly £200/month
+
+So keeping Pulse healthy costs about £206/month (~$260 USD) plus 10–15 hours of evenings each week. Sponsorships cover those bills and let me spend that time coding instead of freelancing. If Pulse saves you time, please consider helping keep it sustainable:
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?label=Sponsor)](https://github.com/sponsors/rcourtman)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 **Not ready to sponsor?** Star the repo, share it with your homelab friends, or send a bug report—that feedback keeps the project moving.
