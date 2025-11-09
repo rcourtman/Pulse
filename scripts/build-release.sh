@@ -267,11 +267,19 @@ env GOOS=windows GOARCH=arm64 go build \
     -o "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" \
     ./cmd/pulse-host-agent
 
+echo "Building host agent for Windows 386..."
+env GOOS=windows GOARCH=386 go build \
+    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
+    -trimpath \
+    -o "$BUILD_DIR/pulse-host-agent-windows-386.exe" \
+    ./cmd/pulse-host-agent
+
 # Package standalone host agent binaries
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-amd64
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-arm64
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-host-agent-windows-amd64.exe"
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-host-agent-windows-arm64.exe"
+zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-host-agent-windows-386.exe"
 
 # Create universal tarball
 cd "$universal_dir"
@@ -300,6 +308,7 @@ cp "$BUILD_DIR/pulse-host-agent-darwin-amd64" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-host-agent-darwin-arm64" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-host-agent-windows-386.exe" "$RELEASE_DIR/"
 
 # Optionally package Helm chart
 if [ "${SKIP_HELM_PACKAGE:-0}" != "1" ]; then
