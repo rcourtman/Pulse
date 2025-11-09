@@ -148,7 +148,10 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 
 		authorized := recoveryAuthorized
 
-		if !authorized && (authConfigured || forceRequested) {
+		// Only require authentication if credentials are already configured.
+		// When DISABLE_AUTH is detected but no auth exists (upgrade path from legacy),
+		// allow bootstrap token flow instead of demanding credentials that don't exist.
+		if !authorized && authConfigured {
 			wrapped := &responseCapture{ResponseWriter: w}
 			if CheckAuth(r.config, wrapped, req) {
 				authorized = true
