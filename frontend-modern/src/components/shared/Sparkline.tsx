@@ -255,10 +255,10 @@ export const Sparkline: Component<SparklineProps> = (props) => {
   };
 
   return (
-    <div class="relative inline-block">
+    <div class="relative block w-full">
       <canvas
         ref={canvasRef}
-        class="inline-block cursor-crosshair"
+        class="block cursor-crosshair"
         style={{
           width: `${width()}px`,
           height: `${height()}px`,

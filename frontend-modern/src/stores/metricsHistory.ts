@@ -112,9 +112,18 @@ function saveToLocalStorage(): void {
 function loadFromLocalStorage(): void {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
+    if (!stored) {
+      logger.debug('[MetricsHistory] No stored data found');
+      return;
+    }
 
     const payload = JSON.parse(stored);
+
+    if (!payload || typeof payload !== 'object') {
+      logger.warn('[MetricsHistory] Invalid payload format, clearing');
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
 
     // Check version and age
     if (payload.version !== STORAGE_VERSION) {
