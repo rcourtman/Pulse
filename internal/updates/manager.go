@@ -234,14 +234,15 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 			return info, nil
 		}
 		// For other errors, return the error
-		m.updateStatus("error", 0, "Failed to check for updates")
+		m.updateStatus("error", 0, "Failed to check for updates", err)
 		return nil, err
 	}
 
 	latestVer, err := ParseVersion(release.TagName)
 	if err != nil {
-		m.updateStatus("error", 0, "Invalid latest version")
-		return nil, fmt.Errorf("failed to parse latest version: %w", err)
+		parseErr := fmt.Errorf("failed to parse latest version: %w", err)
+		m.updateStatus("error", 0, "Invalid latest version", parseErr)
+		return nil, parseErr
 	}
 
 	// Find download URL for current architecture
@@ -351,8 +352,9 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 			// Last resort: current directory
 			tempDir, err = os.MkdirTemp(".", "pulse-update-*")
 			if err != nil {
-				m.updateStatus("error", 10, "Failed to create temp directory")
-				return fmt.Errorf("failed to create temp directory in any location: %w", err)
+				tempErr := fmt.Errorf("failed to create temp directory in any location: %w", err)
+				m.updateStatus("error", 10, "Failed to create temp directory", tempErr)
+				return tempErr
 			}
 		}
 	}
@@ -361,15 +363,17 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	// Download update
 	tarballPath := filepath.Join(tempDir, "update.tar.gz")
 	if err := m.downloadFile(ctx, downloadURL, tarballPath); err != nil {
-		m.updateStatus("error", 20, "Failed to download update")
-		return fmt.Errorf("failed to download update: %w", err)
+		downloadErr := fmt.Errorf("failed to download update: %w", err)
+		m.updateStatus("error", 20, "Failed to download update", downloadErr)
+		return downloadErr
 	}
 
 	// Verify checksum if available
 	m.updateStatus("verifying", 30, "Verifying download...")
 	if err := m.verifyChecksum(ctx, downloadURL, tarballPath); err != nil {
-		m.updateStatus("error", 30, "Failed to verify update checksum")
-		return fmt.Errorf("checksum verification failed: %w", err)
+		checksumErr := fmt.Errorf("checksum verification failed: %w", err)
+		m.updateStatus("error", 30, "Failed to verify update checksum", checksumErr)
+		return checksumErr
 	}
 	log.Info().Msg("Checksum verification passed")
 
@@ -378,8 +382,9 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	// Extract tarball
 	extractDir := filepath.Join(tempDir, "extracted")
 	if err := m.extractTarball(tarballPath, extractDir); err != nil {
-		m.updateStatus("error", 40, "Failed to extract update")
-		return fmt.Errorf("failed to extract update: %w", err)
+		extractErr := fmt.Errorf("failed to extract update: %w", err)
+		m.updateStatus("error", 40, "Failed to extract update", extractErr)
+		return extractErr
 	}
 
 	m.updateStatus("backing-up", 60, "Creating backup...")
@@ -387,8 +392,9 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	// Create backup
 	backupPath, err := m.createBackup()
 	if err != nil {
-		m.updateStatus("error", 60, "Failed to create backup")
-		return fmt.Errorf("failed to create backup: %w", err)
+		backupErr := fmt.Errorf("failed to create backup: %w", err)
+		m.updateStatus("error", 60, "Failed to create backup", backupErr)
+		return backupErr
 	}
 	log.Info().Str("backup", backupPath).Msg("Created backup")
 
@@ -411,12 +417,13 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	log.Info().Msg("Applying update files")
 
 	if err := m.applyUpdateFiles(extractDir); err != nil {
-		m.updateStatus("error", 80, "Failed to apply update")
+		applyErr := fmt.Errorf("failed to apply update: %w", err)
+		m.updateStatus("error", 80, "Failed to apply update", applyErr)
 		// Attempt to restore backup
 		if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
 			log.Error().Err(restoreErr).Msg("Failed to restore backup")
 		}
-		return fmt.Errorf("failed to apply update: %w", err)
+		return applyErr
 	}
 
 	m.updateStatus("restarting", 95, "Restarting service...")
@@ -1047,13 +1054,17 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 }
 
 // updateStatus updates the current status
-func (m *Manager) updateStatus(status string, progress int, message string) {
+func (m *Manager) updateStatus(status string, progress int, message string, err ...error) {
 	m.statusMu.Lock()
 	m.status = UpdateStatus{
 		Status:    status,
 		Progress:  progress,
 		Message:   message,
 		UpdatedAt: time.Now().Format(time.RFC3339),
+	}
+	// If error provided, sanitize and add to status
+	if len(err) > 0 && err[0] != nil {
+		m.status.Error = sanitizeError(err[0])
 	}
 	statusCopy := m.status
 	m.statusMu.Unlock()
@@ -1063,6 +1074,23 @@ func (m *Manager) updateStatus(status string, progress int, message string) {
 	case m.progressChan <- statusCopy:
 	default:
 	}
+}
+
+// sanitizeError removes potentially sensitive information from error messages
+func sanitizeError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	errMsg := err.Error()
+
+	// Cap length to prevent extremely long error messages
+	maxLen := 500
+	if len(errMsg) > maxLen {
+		errMsg = errMsg[:maxLen] + "..."
+	}
+
+	return errMsg
 }
 
 // cleanupOldTempDirs removes old pulse-update-* temp directories from previous runs
