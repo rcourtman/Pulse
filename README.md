@@ -1,4 +1,6 @@
-# <img src="docs/images/pulse-logo.svg" alt="Pulse Logo" width="32" style="vertical-align: middle;" /> Pulse
+<h1 align="center">
+  <img src="docs/images/pulse-logo.svg" alt="Pulse Logo" width="32" style="vertical-align: middle;" /> Pulse
+</h1>
 
 [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
 [![Docker Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
