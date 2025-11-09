@@ -557,6 +557,7 @@ func (p *Proxy) getTemperatureViaSSH(nodeHost string) (string, error) {
 
 // discoverClusterNodes discovers all nodes in the Proxmox cluster
 // Returns IP addresses of cluster nodes
+// For standalone nodes (no cluster), returns the host's own addresses
 func discoverClusterNodes() ([]string, error) {
 	// Check if pvecm is available (only on Proxmox hosts)
 	if _, err := exec.LookPath("pvecm"); err != nil {
@@ -568,9 +569,21 @@ func discoverClusterNodes() ([]string, error) {
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		log.Warn().Str("stderr", stderr.String()).Msg("pvecm status failed")
-		return nil, fmt.Errorf("failed to get cluster status: %w (stderr: %s)", err, stderr.String())
+	err := cmd.Run()
+
+	// pvecm status exits with code 2 on standalone nodes (not in a cluster)
+	// Treat this as a valid case and discover local host addresses
+	if err != nil {
+		stderrStr := stderr.String()
+		// Check if this is the "not part of a cluster" error
+		if strings.Contains(stderrStr, "does not exist") ||
+			strings.Contains(stderrStr, "not part of a cluster") {
+			log.Info().Msg("Standalone Proxmox node detected (not in cluster) - discovering local host addresses")
+			return discoverLocalHostAddresses()
+		}
+		// For other errors, fail
+		log.Warn().Str("stderr", stderrStr).Msg("pvecm status failed")
+		return nil, fmt.Errorf("failed to get cluster status: %w (stderr: %s)", err, stderrStr)
 	}
 
 	// Parse output to extract IP addresses
@@ -605,6 +618,81 @@ func discoverClusterNodes() ([]string, error) {
 	}
 
 	return nodes, nil
+}
+
+// discoverLocalHostAddresses discovers all addresses of the local host
+// Used for standalone nodes that aren't part of a cluster
+func discoverLocalHostAddresses() ([]string, error) {
+	addresses := make(map[string]struct{})
+
+	// Get hostname and FQDN
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		addresses[strings.ToLower(hostname)] = struct{}{}
+
+		// Try to get FQDN
+		cmd := exec.Command("hostname", "-f")
+		if out, err := cmd.Output(); err == nil {
+			fqdn := strings.TrimSpace(string(out))
+			if fqdn != "" && fqdn != hostname {
+				addresses[strings.ToLower(fqdn)] = struct{}{}
+			}
+		}
+	}
+
+	// Get all non-loopback IP addresses using ip command
+	cmd := exec.Command("ip", "-o", "addr", "show")
+	out, err := cmd.Output()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get IP addresses via 'ip addr'")
+	} else {
+		// Parse output lines like:
+		// 2: eth0    inet 192.168.0.100/24 brd 192.168.0.255 scope global eth0
+		// 2: eth0    inet6 fe80::a00:27ff:fe4e:66a1/64 scope link
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) < 4 {
+				continue
+			}
+
+			// Field 2 is interface, field 3 is inet/inet6, field 4 is addr/prefix
+			if fields[2] != "inet" && fields[2] != "inet6" {
+				continue
+			}
+
+			// Split addr/prefix (e.g., "192.168.0.100/24")
+			addrWithPrefix := fields[3]
+			addr := strings.Split(addrWithPrefix, "/")[0]
+
+			// Skip loopback addresses
+			if strings.HasPrefix(addr, "127.") || addr == "::1" {
+				continue
+			}
+
+			// Skip link-local IPv6
+			if strings.HasPrefix(addr, "fe80:") {
+				continue
+			}
+
+			addresses[addr] = struct{}{}
+		}
+	}
+
+	// Convert map to slice
+	result := make([]string, 0, len(addresses))
+	for addr := range addresses {
+		result = append(result, addr)
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no local host addresses found")
+	}
+
+	log.Info().
+		Strs("addresses", result).
+		Msg("Discovered local host addresses for standalone node validation")
+
+	return result, nil
 }
 
 // isProxmoxHost checks if we're running on a Proxmox host

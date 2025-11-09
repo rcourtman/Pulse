@@ -39,7 +39,7 @@ const (
 	defaultConfigPath   = "/etc/pulse-sensor-proxy/config.yaml"
 	defaultAuditLogPath = "/var/log/pulse/sensor-proxy/audit.log"
 	maxRequestBytes     = 16 * 1024 // 16 KiB max request size
-	defaultRunAsUser    = "pulse-sensor"
+	defaultRunAsUser    = "pulse-sensor-proxy"
 )
 
 func defaultWorkDir() string {

@@ -1427,9 +1427,21 @@ fi'; then
                 # Clean up temporary binary if it was copied
                 [[ -f "$local_proxy_binary" ]] && rm -f "$local_proxy_binary"
             else
-                print_warn "Proxy installation failed - temperature monitoring will use fallback method"
-                print_info "Check logs: /tmp/proxy-install-${CTID}.log"
-                print_info "Or run manually: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+                # Proxy installation failed - this is a fatal error since user opted in
+                rm -f "$proxy_script"
+                echo
+                print_error "Temperature proxy installation failed"
+                echo
+                echo "Temperature monitoring was enabled but the proxy setup failed."
+                echo "Check logs: /tmp/proxy-install-${CTID}.log"
+                echo
+                echo "To fix, you can either:"
+                echo "  1. Fix the issue and run the proxy installer manually:"
+                echo "     curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+                echo
+                echo "  2. Re-run the Pulse installer and skip temperature monitoring when prompted"
+                echo
+                exit 1
             fi
             rm -f "$proxy_script"
         fi

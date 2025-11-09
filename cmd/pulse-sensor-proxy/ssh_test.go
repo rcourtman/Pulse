@@ -172,3 +172,34 @@ func TestReadAllWithLimit(t *testing.T) {
 		t.Fatalf("expected unlimited read to return full data without exceeding")
 	}
 }
+
+func TestDiscoverLocalHostAddresses(t *testing.T) {
+	// This test verifies that discoverLocalHostAddresses returns valid addresses
+	// It will vary by host but should always return at least hostname or IP addresses
+	addresses, err := discoverLocalHostAddresses()
+	if err != nil {
+		t.Fatalf("discoverLocalHostAddresses failed: %v", err)
+	}
+
+	if len(addresses) == 0 {
+		t.Fatal("expected at least one address from discoverLocalHostAddresses")
+	}
+
+	// Verify addresses are non-empty and don't contain loopback
+	for _, addr := range addresses {
+		if addr == "" {
+			t.Error("got empty address in results")
+		}
+		if addr == "127.0.0.1" || addr == "::1" {
+			t.Errorf("discoverLocalHostAddresses should not return loopback address: %s", addr)
+		}
+		if strings.HasPrefix(addr, "127.") {
+			t.Errorf("discoverLocalHostAddresses should not return loopback range: %s", addr)
+		}
+		if strings.HasPrefix(addr, "fe80:") {
+			t.Errorf("discoverLocalHostAddresses should not return link-local IPv6: %s", addr)
+		}
+	}
+
+	t.Logf("Discovered %d local addresses: %v", len(addresses), addresses)
+}
