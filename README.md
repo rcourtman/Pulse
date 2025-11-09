@@ -12,25 +12,45 @@ Monitor your hybrid Proxmox and Docker estate from a single dashboard. Get insta
 
 **[Try the live demo →](https://demo.pulserelay.pro)** (read-only with mock data, login: `demo` / `demo`)
 
-<img width="2872" height="1502" alt="image" src="https://github.com/user-attachments/assets/41ac125c-59e3-4bdc-bfd2-e300109aa1f7" />
+**[Full documentation →](docs/README.md)**
 
-## Support Pulse Development
+## Table of Contents
 
-Pulse is built by a solo developer in evenings and weekends. Your support helps:
-- Keep me motivated to add new features
-- Prioritize bug fixes and user requests
-- Ensure Pulse stays 100% free and open-source forever
+- [Why Pulse?](#why-pulse)
+- [Features](#features)
+- [Privacy](#privacy)
+- [Install Options](#install-options-overview)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Security](#security)
+- [Updates](#updates)
+- [API](#api)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Visual Tour](#visual-tour)
+- [Support Pulse Development](#support-pulse-development)
+- [Links](#links)
+- [License](#license)
 
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
+## Why Pulse?
 
-**Not ready to sponsor?** Star the project or share it with your homelab community!
+- **Who it’s for** – Homelab admins juggling multiple PVE nodes, sysadmins consolidating PBS/PMG telemetry, and MSPs watching mixed Proxmox + Docker estates who want a single pane with Proxmox-aware alerts.
+- **What it solves** – Pulse pulls together VE, PBS, PMG, host agents, and Docker metadata so you can see node health, backups, storage, and notifications without flipping between UIs. It discovers new nodes, enforces scoped credentials, and keeps secrets server-side.
+- **Where it fits** – Pulse complements the native Proxmox UI and tools like Zabbix/Netdata by focusing on cross-platform dashboards, webhook-rich alerting, and agent coverage. Keep using those tools for deep cluster admin or infrastructure metrics; add Pulse when you want shared alerting workflows, multi-site visibility, and Proxmox-fluent onboarding scripts.
+- **When to reach for Pulse**
+  - You need one dashboard for Proxmox VE, PBS, PMG, Docker, and standalone hosts.
+  - You want alert policies with hysteresis, webhooks, and scoped API tokens.
+  - You prefer onboarding scripts that apply least-privilege roles automatically.
+  - You’re supporting teams who read webhooks (Discord, Slack, Teams, etc.) instead of email-only notifications.
+
+<img width="2872" height="1502" alt="Pulse dashboard showing Proxmox cluster health, node metrics, and alert timeline" src="https://github.com/user-attachments/assets/41ac125c-59e3-4bdc-bfd2-e300109aa1f7" />
 
 ## Features
 
-- **Auto-Discovery**: Finds Proxmox nodes on your network, one-liner setup via generated scripts
+- **Auto-Discovery**: Infers subnets from local bridges/OVS, then scans those ranges (with a small RFC1918 `/24` fallback) to find Proxmox nodes; one-liner scripts onboard anything it finds
 - **Cluster Support**: Configure one node, monitor entire cluster
-- **Enterprise Security**:
+- **Security defaults**:
   - Credentials encrypted at rest, masked in logs, never sent to frontend
   - CSRF protection for all state-changing operations
   - Rate limiting (500 req/min general, 10 attempts/min for auth)
@@ -40,7 +60,7 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - API tokens stored securely with restricted file permissions
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
-  - **Hardened temperature proxy** ([2025-11-07 audit](docs/SECURITY_AUDIT_2025-11-07.md)):
+  - **Temperature proxy safety notes** ([2025-11-07 audit](docs/SECURITY_AUDIT_2025-11-07.md)):
     - SSH keys isolated on host (never in containers)
     - SSRF protection via node allowlists
     - DoS-resistant with connection deadlines
@@ -55,12 +75,12 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 - **Alert Timeline Analytics**: Rich history explorer with acknowledgement/clear markers, escalation breadcrumbs, and quick filters for noisy resources
 - **Ceph Awareness**: Surface Ceph health, pool utilisation, and daemon status automatically when Proxmox exposes Ceph-backed storage
 - Unified view of PBS backups, PVE backups, and snapshots
-- **Interactive Backup Explorer**: Cross-highlighted bar chart + grid with quick time-range pivots (24h/7d/30d/custom) and contextual tooltips for the busiest jobs
+- **Interactive Backup Explorer**: Cross-highlighted bar chart + grid with quick time-range pivots (7d/30d/90d/1y) and contextual tooltips for the busiest jobs
 - Proxmox Mail Gateway analytics: mail volume, spam/virus trends, quarantine health, and cluster node status
 - Optional Docker container monitoring via lightweight agent
 - Standalone host agent for Linux, macOS, and Windows servers to capture uptime, OS metadata, and capacity metrics
 - Config export/import with encryption and authentication
-- Automatic stable updates with safe rollback (opt-in)
+- Optional auto-updates with rollback helpers (systemd installs only; containers redeploy tags)
 - Dark/light themes, responsive design
 - Built with Go for minimal resource usage
 
@@ -76,6 +96,15 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 - Open source - verify it yourself
 
 Your infrastructure data is yours alone.
+
+## Install Options Overview
+
+| Method | Best For | Prerequisites | Quick Start Link |
+|--------|----------|---------------|------------------|
+| LXC installer (one-liner) | Proxmox users who want Pulse inside a managed container | Proxmox VE node with container storage, curl | `install.sh` script (see [Quick Start](#quick-start)) |
+| Docker container | Users standardizing on Docker/Podman or composing Pulse into existing stacks | Docker Engine or Podman, persistent volume | [Quick Start](#quick-start) / [Docker](#docker) |
+| Kubernetes/Helm | Clusters needing HA, ingress, GitOps | Kubernetes cluster with storage class + Helm 3 | [docs/KUBERNETES.md](docs/KUBERNETES.md) |
+| Bare metal/systemd | Minimal installs or environments without containers | Go-supported Linux host, systemd access | [docs/INSTALL.md](docs/INSTALL.md) and `scripts/build-release.sh` |
 
 ## Quick Start
 
@@ -109,7 +138,7 @@ helm install pulse oci://ghcr.io/rcourtman/pulse-chart \
 
 ### Updating
 
-**Automatic Updates (New!):** Enable during installation or via Settings UI to stay current automatically  
+**Automatic Updates (New!, systemd installs only):** Enable during installation or via Settings UI to stay current automatically  
 **Standard Install:** Re-run the installer  
 **Docker:** `docker pull rcourtman/pulse:latest` then recreate container
 
@@ -200,9 +229,11 @@ docker run -d \
 ### Network Discovery
 
 Pulse automatically discovers Proxmox nodes on your network! By default, it scans:
-- 192.168.0.0/16 (home networks)
-- 10.0.0.0/8 (private networks)
-- 172.16.0.0/12 (Docker/internal networks)
+- 192.168.1.0/24 (common home gateway range)
+- 192.168.0.0/24 (legacy home networks)
+- 192.168.2.0/24 (consumer mesh gear)
+- 10.0.0.0/24 (lab/private networks)
+- 172.16.0.0/24 (Docker/internal bridge defaults)
 
 To scan a custom subnet instead:
 ```bash
@@ -280,30 +311,31 @@ volumes:
 
 ## Security
 
-- **Authentication required** - Protects your Proxmox infrastructure credentials
-- **Quick setup wizard** - Secure your installation in under a minute
-- **Multiple auth methods**: Password authentication, API tokens, proxy auth (SSO), or combinations
-- **Proxy/SSO support** - Integrate with Authentik, Authelia, and other authentication proxies ([docs](docs/PROXY_AUTH.md))
+- **Authentication required** protects your Proxmox infrastructure credentials; the quick setup wizard locks down a new install in under a minute.
+- **Multiple auth methods**: Password authentication, API tokens, proxy auth (SSO), or combinations with Authentik/Authelia ([docs](docs/PROXY_AUTH.md)).
+- **Setup script authentication**:
+  - **Setup codes**: Temporary 6-character codes for manual setup (expire in 5 minutes)
+  - **API tokens**: Permanent tokens for automation and scripting
+  - Use setup codes when delegating access without exposing long-lived tokens; use scoped API tokens for automation.
 - **Enterprise-grade protection**:
-  - Credentials encrypted at rest (AES-256-GCM)
-  - CSRF tokens for state-changing operations
-  - Rate limiting and account lockout protection
+  - Credentials encrypted at rest (AES-256-GCM), masked in logs, and never sent to the frontend
+  - CSRF protection for all state-changing operations
+  - Rate limiting (500 req/min general, 10 attempts/min for auth) and account lockout after failed login attempts
   - Secure session management with HttpOnly cookies
   - bcrypt password hashing (cost 12) - passwords NEVER stored in plain text
   - API tokens stored securely with restricted file permissions
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
-- **Security by design**:
+- **Other safety notes**:
   - Frontend never receives node credentials
   - API tokens visible only to authenticated users
   - Export/import requires authentication when configured
 
-See [Security Documentation](docs/SECURITY.md) for details.
+See [Security Documentation](docs/SECURITY.md) and [security audits](docs/SECURITY_AUDIT_2025-11-07.md) for details.
 
-## Updating
+## Updates
 
-### Update Notifications
-Pulse checks for updates and displays notifications in the UI when new versions are available. For security reasons, updates must be installed manually using the appropriate method for your deployment.
+Pulse checks for updates, surfaces notifications in the UI, and always requires a deliberate update so you stay in control of maintenance windows. The optional auto-update timer/service applies only to systemd installs; Docker/Helm deployments continue to update by redeploying the desired image/tag manually.
 
 ### Manual Installation (systemd)
 ```bash
@@ -317,17 +349,23 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.8.0-rc.1
 ```
 
-### Docker Updates
+### Docker
 ```bash
 # Latest stable
 docker pull rcourtman/pulse:latest
 
+docker stop pulse
+docker rm pulse
+# Run docker run command again with your settings
+
 # Latest RC
 docker pull rcourtman/pulse:rc
 
-# Specific version
-docker pull rcourtman/pulse:v4.8.0-rc.1
+# Specific version (example: stable tag)
+docker pull rcourtman/pulse:v4.27.2
 ```
+
+The UI detects your deployment type and reminds you which command sequence to run when a new version is available.
 
 ## Configuration
 
@@ -348,10 +386,14 @@ For both modes, delivery targets accept any Apprise URL (Discord, Slack, email, 
 
 ### Configuration Files
 
-Pulse uses three separate configuration files with clear separation of concerns:
-- `.env` - Authentication credentials only
-- `system.json` - Application settings
-- `nodes.enc` - Encrypted node credentials
+Pulse persists different domains into dedicated files so secrets and policies stay isolated:
+- `.env` – Bootstrap authentication credentials created via the setup wizard.
+- `system.json` – Runtime settings (polling, discovery, updates, feature flags).
+- `nodes.enc` – Encrypted node credentials (AES-256-GCM).
+- `alerts.json` – Thresholds, overrides, quiet hours, escalation schedule.
+- `email.enc` / `webhooks.enc` / `apprise.enc` – Notification secrets per channel.
+- `oidc.enc` – OIDC client configuration when SSO is enabled.
+- `api_tokens.json` – Hashed API token metadata (scopes, hints, timestamps).
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed documentation on configuration structure and management.
 
@@ -438,25 +480,6 @@ pulse config export -o backup.enc
 pulse config import -i backup.enc
 ```
 
-## Updates
-
-Pulse shows when updates are available and provides deployment-specific instructions:
-
-### Docker
-```bash
-docker pull rcourtman/pulse:latest
-docker stop pulse
-docker rm pulse
-# Run docker run command again with your settings
-```
-
-### Manual Install
-```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
-```
-
-The UI will detect your deployment type and show the appropriate update method when a new version is available.
-
 ## API
 
 ```bash
@@ -539,19 +562,6 @@ journalctl -u pulse -f
 - [FAQ](docs/FAQ.md) - Common questions and troubleshooting
 - [Migration Guide](docs/MIGRATION.md) - Backup and migration procedures
 
-## Security
-
-- **Mandatory authentication** protects your infrastructure
-- Credentials stored encrypted (AES-256-GCM)
-- API token support for automation
-- Export/import requires authentication
-- **Setup script authentication**:
-  - **Setup codes**: Temporary 6-character codes for manual setup (expire in 5 minutes)
-  - **API tokens**: Permanent tokens for automation and scripting
-  - Use setup codes when giving access to others without sharing your API token
-  - Use API tokens for your own automation or trusted environments
-- [Security Details →](docs/SECURITY.md)
-
 ## Development
 
 ### Quick Start - Hot Reload (Recommended)
@@ -567,28 +577,21 @@ The backend now detects `FRONTEND_DEV_SERVER` and proxies requests straight to t
 
 ### Mock Mode - Develop Without Real Infrastructure
 
-Work on Pulse without needing Proxmox servers! Mock mode generates realistic test data and auto-reloads when toggled. The `mock.env` configuration file is **included in the repository**, so it works out of the box for all developers.
+Work on Pulse without needing Proxmox servers! Mock mode generates realistic test data and auto-reloads when toggled. The `mock.env` configuration file is **included in the repository**, and the helper script below switches the backend between synthetic data and your local dev config.
 
 ```bash
-# Enable mock mode with 7 nodes, ~90 guests
-npm run mock:on
-
-# Disable mock mode (use real infrastructure)
-npm run mock:off
-
-# Edit mock configuration
-npm run mock:edit
-
-# Create local overrides (not committed to git)
-cp mock.env mock.env.local
-# Edit mock.env.local with your personal preferences
-
-# Data directories are isolated automatically:
-# - Mock mode:   /opt/pulse/tmp/mock-data
-# - Production:  /etc/pulse
+./scripts/toggle-mock.sh on      # Enable mock mode (~7 nodes, ~90 guests)
+./scripts/toggle-mock.sh off     # Return to local/dev data
+./scripts/toggle-mock.sh status  # Show current mode + data dir
+./scripts/toggle-mock.sh edit    # Edit mock.env (node counts, randomness, etc.)
 ```
 
-**Backend auto-reloads when mock.env changes - no manual restarts!** The toggle scripts keep mock data isolated from `/etc/pulse` so your real credentials stay untouched.
+The script rewrites `mock.env`, restarts the Go backend, and flips `PULSE_DATA_DIR` so datasets stay isolated:
+
+- Mock mode: `/opt/pulse/tmp/mock-data`
+- Standard dev mode: `/opt/pulse/tmp/dev-config` (keeps `/etc/pulse` untouched)
+
+Create personal overrides with `cp mock.env mock.env.local` and rerun `toggle-mock.sh` to apply them.
 
 See [docs/development/MOCK_MODE.md](docs/development/MOCK_MODE.md) for full details.
 
@@ -638,6 +641,18 @@ See Pulse in action with our [complete screenshot gallery →](docs/SCREENSHOTS.
 |------------------|
 | ![Mobile](docs/images/08-mobile.png) |
 | *Fully responsive interface for monitoring on the go* |
+
+## Support Pulse Development
+
+Pulse is built by a solo developer in evenings and weekends. Your support helps:
+- Keep me motivated to add new features
+- Prioritize bug fixes and user requests
+- Ensure Pulse stays 100% free and open-source forever
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
+
+**Not ready to sponsor?** Star the project or share it with your homelab community!
 
 ## Links
 
