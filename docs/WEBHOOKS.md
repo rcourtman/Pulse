@@ -341,3 +341,33 @@ GET /api/notifications/webhooks
 - **Rotate webhook URLs periodically** if they contain embedded tokens
 - **Test webhooks carefully** to avoid sending test data to production channels
 - **Limit webhook permissions** in the receiving service where possible
+
+### Private IP Address Protection
+
+By default, Pulse blocks webhooks to private IP addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x) for security. This prevents potential SSRF (Server-Side Request Forgery) attacks.
+
+**For homelab deployments** where you need to send webhooks to internal services (like Traefik, Home Assistant, or local notification servers):
+
+1. Navigate to **Settings → System**
+2. Find the **Webhook Security** section
+3. Enter trusted CIDR ranges in **Allowed Private IP Ranges for Webhooks**
+   - Example: `192.168.1.0/24,10.0.0.0/8`
+   - Supports both CIDR notation and individual IPs
+4. Save settings
+
+**Important security notes:**
+- Leave empty to block all private IPs (default, most secure)
+- Only add networks you fully trust
+- Localhost (127.0.0.1), link-local (169.254.x.x), and cloud metadata services remain blocked even with an allowlist
+- Changes apply immediately to new webhook configurations
+- Existing webhooks are re-validated before each delivery
+
+**Example configurations:**
+```
+Single network:    192.168.1.0/24
+Multiple networks: 192.168.1.0/24,10.0.0.0/8
+Single IP:         192.168.1.100
+Mixed:             192.168.1.0/24,10.5.10.20
+```
+
+If you see an error like `"webhook URL resolves to private IP ... - private networks are not allowed"`, you need to configure the allowlist in System Settings.
