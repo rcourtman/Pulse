@@ -427,6 +427,14 @@ else
             BINARY_NAME="pulse-sensor-proxy-linux-armv7"
             ARCH_LABEL="linux-armv7"
             ;;
+        armv6l)
+            BINARY_NAME="pulse-sensor-proxy-linux-armv6"
+            ARCH_LABEL="linux-armv6"
+            ;;
+        i386|i686)
+            BINARY_NAME="pulse-sensor-proxy-linux-386"
+            ARCH_LABEL="linux-386"
+            ;;
         *)
             print_error "Unsupported architecture: $ARCH"
             exit 1

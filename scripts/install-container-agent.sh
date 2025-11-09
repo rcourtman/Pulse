@@ -451,6 +451,12 @@ determine_arch() {
     armv7l|armhf|armv7)
       DOWNLOAD_ARCH="linux-armv7"
       ;;
+    armv6l)
+      DOWNLOAD_ARCH="linux-armv6"
+      ;;
+    i386|i686)
+      DOWNLOAD_ARCH="linux-386"
+      ;;
     *)
       DOWNLOAD_ARCH=""
       ;;

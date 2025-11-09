@@ -253,6 +253,7 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		"amd64": "amd64",
 		"arm64": "arm64",
 		"arm":   "armv7",
+		"386":   "386",
 	}
 
 	targetArch, ok := archMap[arch]

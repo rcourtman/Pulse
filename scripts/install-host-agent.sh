@@ -213,6 +213,12 @@ case "$ARCH" in
     armv7l|armhf)
         ARCH="armv7"
         ;;
+    armv6l)
+        ARCH="armv6"
+        ;;
+    i386|i686)
+        ARCH="386"
+        ;;
     *)
         log_warn "Unknown architecture $ARCH, defaulting to amd64"
         ARCH="amd64"

@@ -3520,6 +3520,10 @@ func (r *Router) handleDownloadPulseSensorProxy(w http.ResponseWriter, req *http
 		filename = "pulse-sensor-proxy-linux-arm64"
 	case "linux-armv7", "armv7", "armhf":
 		filename = "pulse-sensor-proxy-linux-armv7"
+	case "linux-armv6", "armv6":
+		filename = "pulse-sensor-proxy-linux-armv6"
+	case "linux-386", "386", "i386", "i686":
+		filename = "pulse-sensor-proxy-linux-386"
 	default:
 		writeErrorResponse(w, http.StatusBadRequest, "unsupported_arch", fmt.Sprintf("Unsupported architecture: %s", arch), nil)
 		return
@@ -3702,6 +3706,10 @@ func normalizeDockerAgentArch(arch string) string {
 		return "linux-arm64"
 	case "linux-armv7", "armv7", "armv7l", "armhf":
 		return "linux-armv7"
+	case "linux-armv6", "armv6", "armv6l":
+		return "linux-armv6"
+	case "linux-386", "386", "i386", "i686":
+		return "linux-386"
 	default:
 		return ""
 	}

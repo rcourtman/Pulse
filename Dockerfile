@@ -70,14 +70,24 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
         -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
         -trimpath \
-        -o pulse-docker-agent-linux-armv7 ./cmd/pulse-docker-agent; \
+        -o pulse-docker-agent-linux-armv7 ./cmd/pulse-docker-agent && \
+      CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
+        -trimpath \
+        -o pulse-docker-agent-linux-armv6 ./cmd/pulse-docker-agent && \
+      CGO_ENABLED=0 GOOS=linux GOARCH=386 go build \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
+        -trimpath \
+        -o pulse-docker-agent-linux-386 ./cmd/pulse-docker-agent; \
     else \
       CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
         -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=${VERSION}" \
         -trimpath \
         -o pulse-docker-agent-linux-amd64 ./cmd/pulse-docker-agent && \
       cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 && \
-      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-armv7; \
+      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-armv7 && \
+      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-armv6 && \
+      cp pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-386; \
     fi && \
     cp pulse-docker-agent-linux-amd64 pulse-docker-agent
 
@@ -97,6 +107,14 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
       -o pulse-host-agent-linux-armv7 ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-host-agent-linux-armv6 ./cmd/pulse-host-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=386 go build \
+      -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-host-agent-linux-386 ./cmd/pulse-host-agent && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
       -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=${VERSION}" \
       -trimpath \
@@ -132,6 +150,14 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
       -trimpath \
       -o pulse-sensor-proxy-linux-armv7 ./cmd/pulse-sensor-proxy && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build \
+      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
+      -trimpath \
+      -o pulse-sensor-proxy-linux-armv6 ./cmd/pulse-sensor-proxy && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=386 go build \
+      -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
+      -trimpath \
+      -o pulse-sensor-proxy-linux-386 ./cmd/pulse-sensor-proxy && \
     cp pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
