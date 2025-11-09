@@ -1446,12 +1446,27 @@ fi
 
 # Configure Pulse backend environment override inside container
 print_info "Configuring Pulse to use proxy..."
-pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse.service.d"
-pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse.service.d/10-pulse-proxy.conf
+
+# Check if Pulse service exists in container before configuring
+if ! pct exec "$CTID" -- systemctl status pulse >/dev/null 2>&1; then
+    print_warn "Pulse service not found in container $CTID; skipping proxy configuration"
+    print_info "Install Pulse in the container first, then re-run this installer"
+else
+    pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse.service.d"
+    pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse.service.d/10-pulse-proxy.conf
 [Service]
 Environment=PULSE_SENSOR_PROXY_SOCKET=${MOUNT_TARGET}/pulse-sensor-proxy.sock
 EOF"
-pct exec "$CTID" -- systemctl daemon-reload || true
+    pct exec "$CTID" -- systemctl daemon-reload || true
+
+    # Restart Pulse service to apply the new environment variable
+    if pct exec "$CTID" -- systemctl is-active --quiet pulse 2>/dev/null; then
+        print_info "Restarting Pulse service to apply configuration..."
+        pct exec "$CTID" -- systemctl restart pulse
+        sleep 2
+        print_success "Pulse service restarted with proxy configuration"
+    fi
+fi
 
 # Test proxy status
 print_info "Testing proxy status..."
@@ -1584,7 +1599,7 @@ else
         echo ""
         echo "  volumes:"
         echo "    - pulse-data:/data"
-        echo "    - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw"
+        echo "    - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:ro"
         echo ""
         print_info "Then restart your Pulse container:"
         echo "  docker-compose down && docker-compose up -d"
