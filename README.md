@@ -1,3 +1,5 @@
+<img src="docs/images/pulse-logo.svg" alt="Pulse Logo" width="40" align="left" />
+
 # Pulse
 
 [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
