@@ -467,6 +467,12 @@ func (r *Router) setupRoutes() {
 				}
 			}
 
+			// Add bootstrap token location for first-run setup UI
+			if r.bootstrapTokenHash != "" {
+				status["bootstrapTokenPath"] = r.bootstrapTokenPath
+				status["isDocker"] = os.Getenv("PULSE_DOCKER") == "true"
+			}
+
 			if r.config.DisableAuthEnvDetected {
 				status["deprecatedDisableAuth"] = true
 				status["message"] = "DISABLE_AUTH is deprecated and no longer disables authentication. Remove the environment variable and restart Pulse to manage authentication from the UI."

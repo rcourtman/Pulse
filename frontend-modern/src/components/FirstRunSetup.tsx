@@ -25,6 +25,8 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
   const [bootstrapToken, setBootstrapToken] = createSignal('');
   const [isUnlocking, setIsUnlocking] = createSignal(false);
   const [isUnlocked, setIsUnlocked] = createSignal(false);
+  const [bootstrapTokenPath, setBootstrapTokenPath] = createSignal<string>('');
+  const [isDocker, setIsDocker] = createSignal<boolean>(false);
 
   const applyTheme = (mode: 'system' | 'light' | 'dark') => {
     if (mode === 'light') {
@@ -44,7 +46,7 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
     }
   };
 
-  onMount(() => {
+  onMount(async () => {
     // Check for saved theme preference
     const savedTheme = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
     if (savedTheme === 'false') {
@@ -61,6 +63,20 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
       } else {
         document.documentElement.classList.remove('dark');
       }
+    }
+
+    // Fetch bootstrap token path from API
+    try {
+      const response = await fetch('/api/security/status');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.bootstrapTokenPath) {
+          setBootstrapTokenPath(data.bootstrapTokenPath);
+          setIsDocker(data.isDocker || false);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch bootstrap token path:', error);
     }
   });
 
@@ -287,16 +303,30 @@ IMPORTANT: Keep these credentials secure!
                   <p class="text-sm text-blue-900 dark:text-blue-100 font-medium mb-2">
                     To begin setup, retrieve the bootstrap token from your Pulse host:
                   </p>
-                  <div class="space-y-2">
+                  <Show
+                    when={bootstrapTokenPath()}
+                    fallback={
+                      <div class="space-y-2">
+                        <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
+                          <div class="text-blue-600 dark:text-blue-400 mb-1"># Standard installation:</div>
+                          cat /etc/pulse/.bootstrap_token
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
+                          <div class="text-blue-600 dark:text-blue-400 mb-1"># Docker/Helm:</div>
+                          cat /data/.bootstrap_token
+                        </div>
+                      </div>
+                    }
+                  >
                     <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
-                      <div class="text-blue-600 dark:text-blue-400 mb-1"># Standard installation:</div>
-                      cat /etc/pulse/.bootstrap_token
+                      <Show when={isDocker()}>
+                        <div class="text-blue-600 dark:text-blue-400 mb-1"># From Docker host:</div>
+                        docker exec pulse cat {bootstrapTokenPath()}
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or from inside container:</div>
+                      </Show>
+                      cat {bootstrapTokenPath()}
                     </div>
-                    <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
-                      <div class="text-blue-600 dark:text-blue-400 mb-1"># Docker/Helm:</div>
-                      cat /data/.bootstrap_token
-                    </div>
-                  </div>
+                  </Show>
                 </div>
 
                 {/* Token Input */}
