@@ -24,12 +24,12 @@ after successful setup completion.`,
 
 func showBootstrapToken() {
 	// Determine data path (same logic as main server)
-	dataPath := os.Getenv("PULSE_DATA_PATH")
+	dataPath := os.Getenv("PULSE_DATA_DIR")
 	if dataPath == "" {
 		if os.Getenv("PULSE_DOCKER") == "true" {
 			dataPath = "/data"
 		} else {
-			dataPath = "/var/lib/pulse"
+			dataPath = "/etc/pulse"
 		}
 	}
 
