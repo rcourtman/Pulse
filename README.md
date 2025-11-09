@@ -12,6 +12,8 @@ Monitor your hybrid Proxmox and Docker estate from a single dashboard. Get insta
 
 **[Try the live demo →](https://demo.pulserelay.pro)** (read-only with mock data, login: `demo` / `demo`)
 
+Pulse is maintained by one person after work. [Sponsorships](https://github.com/sponsors/rcourtman) keep the servers online and free up time for bug fixes and new features.
+
 **[Full documentation →](docs/README.md)**
 
 ## Table of Contents
@@ -85,6 +87,15 @@ Monitor your hybrid Proxmox and Docker estate from a single dashboard. Get insta
 - Built with Go for minimal resource usage
 
 [Screenshots →](docs/SCREENSHOTS.md)
+
+## Support Pulse Development
+
+Pulse runs nights and weekends. Sponsorships and Ko-fi tips pay for the demo server, CI minutes, and the time it takes to build new features or chase down bugs. If Pulse saves you time, please consider helping keep the lights on:
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
+
+**Not ready to sponsor?** Star the repo, share it with your homelab friends, or send a bug report—that feedback keeps the project moving.
 
 ## Privacy
 
@@ -641,18 +652,6 @@ See Pulse in action with our [complete screenshot gallery →](docs/SCREENSHOTS.
 |------------------|
 | ![Mobile](docs/images/08-mobile.png) |
 | *Fully responsive interface for monitoring on the go* |
-
-## Support Pulse Development
-
-Pulse is built by a solo developer in evenings and weekends. Your support helps:
-- Keep me motivated to add new features
-- Prioritize bug fixes and user requests
-- Ensure Pulse stays 100% free and open-source forever
-
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
-
-**Not ready to sponsor?** Star the project or share it with your homelab community!
 
 ## Links
 
