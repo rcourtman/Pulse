@@ -388,7 +388,7 @@ const containerMatchesToken = (
 ) => {
   const state = toLower(container.state);
   const health = toLower(container.health);
-  const hostName = toLower(host.displayName ?? host.hostname ?? host.id);
+  const hostName = toLower(host.customDisplayName ?? host.displayName ?? host.hostname ?? host.id);
 
   if (token.key === 'name') {
     return (
@@ -469,7 +469,7 @@ const containerMatchesToken = (
 };
 
 const serviceMatchesToken = (token: SearchToken, host: DockerHost, service: DockerService) => {
-  const hostName = toLower(host.displayName ?? host.hostname ?? host.id);
+  const hostName = toLower(host.customDisplayName ?? host.displayName ?? host.hostname ?? host.id);
   const serviceName = toLower(service.name ?? service.id);
   const image = toLower(service.image);
 
@@ -546,7 +546,7 @@ const buildRowId = (host: DockerHost, row: DockerRow) => {
 const GROUPED_RESOURCE_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
 
 const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = (props) => {
-  const displayName = props.host.displayName || props.host.hostname || props.host.id;
+  const displayName = props.host.customDisplayName || props.host.displayName || props.host.hostname || props.host.id;
   return (
     <tr class="bg-gray-50 dark:bg-gray-900/40">
       <td colSpan={props.colspan} class="py-0.5 pr-2 pl-4">
@@ -1876,8 +1876,8 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
   const sortedHosts = createMemo(() => {
     const hosts = props.hosts || [];
     return [...hosts].sort((a, b) => {
-      const aName = a.displayName || a.hostname || a.id;
-      const bName = b.displayName || b.hostname || b.id;
+      const aName = a.customDisplayName || a.displayName || a.hostname || a.id;
+      const bName = b.customDisplayName || b.displayName || b.hostname || b.id;
       return aName.localeCompare(bName);
     });
   });
