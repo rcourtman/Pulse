@@ -907,12 +907,12 @@ export function Dashboard(props: DashboardProps) {
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" class="mb-4 overflow-hidden">
-            <ScrollableTable minWidth="760px">
-              <table class="w-full min-w-[760px] md:min-w-[900px] table-fixed border-collapse">
+            <ScrollableTable minWidth="750px">
+              <table class="w-full min-w-[750px] md:min-w-[840px] lg:min-w-[970px] table-fixed border-collapse">
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                     <th
-                      class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[160px] sm:w-[200px] lg:w-[240px] xl:w-[280px] 2xl:w-[380px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                      class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[140px] sm:w-[160px] lg:w-[180px] xl:w-[240px] 2xl:w-[380px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                       onClick={() => handleSort('name')}
                       onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                       tabindex="0"
@@ -922,37 +922,49 @@ export function Dashboard(props: DashboardProps) {
                       Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[48px] sm:w-[56px] lg:w-[60px] xl:w-[64px] 2xl:w-[87px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[52px] sm:w-[58px] lg:w-[64px] xl:w-[70px] 2xl:w-[87px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('type')}
+                      title="Type"
                     >
-                      Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                      <span class="hidden xl:inline">Type</span>
+                      <span class="xl:hidden" aria-label="Type">Typ</span>{' '}
+                      {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[44px] sm:w-[52px] lg:w-[60px] xl:w-[68px] 2xl:w-[92px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[50px] sm:w-[56px] lg:w-[62px] xl:w-[70px] 2xl:w-[92px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('vmid')}
+                      title="VM/Container ID"
                     >
-                      VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                      <span class="hidden xl:inline">VMID</span>
+                      <span class="xl:hidden" aria-label="VM ID">ID</span>{' '}
+                      {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[60px] sm:w-[70px] lg:w-[80px] xl:w-[92px] 2xl:w-[125px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[56px] sm:w-[64px] lg:w-[72px] xl:w-[84px] 2xl:w-[125px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('uptime')}
+                      title="Uptime"
                     >
-                      Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                      <span class="hidden lg:inline">Uptime</span>
+                      <span class="lg:hidden" aria-label="Uptime">Up</span>{' '}
+                      {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('cpu')}
                     >
                       CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('memory')}
+                      title="Memory"
                     >
-                      Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                      <span class="hidden lg:inline">Memory</span>
+                      <span class="lg:hidden" aria-label="Memory">Mem</span>{' '}
+                      {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('disk')}
                     >
                       Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
@@ -960,28 +972,37 @@ export function Dashboard(props: DashboardProps) {
                     <th
                       class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('diskRead')}
+                      title="Disk Read"
                     >
-                      Disk Read{' '}
+                      <span class="hidden lg:inline">Disk Read</span>
+                      <span class="lg:hidden" aria-label="Disk Read">D Rd</span>{' '}
                       {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
                       class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('diskWrite')}
+                      title="Disk Write"
                     >
-                      Disk Write{' '}
+                      <span class="hidden lg:inline">Disk Write</span>
+                      <span class="lg:hidden" aria-label="Disk Write">D Wr</span>{' '}
                       {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
                       class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('networkIn')}
+                      title="Network In"
                     >
-                      Net In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                      <span class="hidden lg:inline">Net In</span>
+                      <span class="lg:hidden" aria-label="Network In">N In</span>{' '}
+                      {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
                       class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('networkOut')}
+                      title="Network Out"
                     >
-                      Net Out{' '}
+                      <span class="hidden lg:inline">Net Out</span>
+                      <span class="lg:hidden" aria-label="Network Out">N Out</span>{' '}
                       {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                   </tr>

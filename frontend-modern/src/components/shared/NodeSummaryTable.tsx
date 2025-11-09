@@ -358,7 +358,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
               <th
-                class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-1/4 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 whitespace-nowrap"
                 onClick={() => handleSort('name')}
                 onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                 tabindex="0"
@@ -371,25 +371,25 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                 onClick={() => handleSort('uptime')}
               >
                 Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                 onClick={() => handleSort('cpu')}
               >
                 CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                 onClick={() => handleSort('memory')}
               >
                 Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
               <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                 onClick={() => handleSort('disk')}
               >
                 {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}{' '}
@@ -397,7 +397,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               </th>
               <Show when={hasAnyTemperatureData()}>
                 <th
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                   onClick={() => handleSort('temperature')}
                 >
                   Temp{' '}
@@ -407,7 +407,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               <For each={countColumns()}>
                 {(column) => (
                   <th
-                    class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-16 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                     onClick={() => handleSort(column.key)}
                   >
                     {column.header}{' '}

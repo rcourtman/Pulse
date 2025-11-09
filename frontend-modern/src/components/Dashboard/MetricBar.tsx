@@ -68,7 +68,20 @@ export function MetricBar(props: MetricBarProps) {
       fallback={
         // Original progress bar mode
         <div class="metric-text w-full h-6 flex items-center">
-          <div class="relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+          {/* On very small screens (< lg), show compact percentage with color indicator */}
+          <div class="lg:hidden relative w-full h-3.5 flex items-center justify-center rounded overflow-hidden bg-gray-100 dark:bg-gray-700">
+            {/* Slim color indicator bar */}
+            <div class={`absolute bottom-0 left-0 h-1 w-full ${progressColorClass()}`} />
+            <span class={`text-[10px] font-medium z-10 ${
+              getColor() === 'red' ? 'text-red-700 dark:text-red-300' :
+              getColor() === 'yellow' ? 'text-yellow-700 dark:text-yellow-300' :
+              'text-gray-800 dark:text-gray-100'
+            }`}>
+              {props.label}
+            </span>
+          </div>
+          {/* On larger screens (>= lg), show full progress bar */}
+          <div class="hidden lg:block relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
             <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
             <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
               <span class="flex items-center gap-1 whitespace-nowrap px-0.5">

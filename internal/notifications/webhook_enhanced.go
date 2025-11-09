@@ -487,6 +487,16 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	}
 	webhook.URL = renderedURL
 
+	// Validate webhook URL to prevent SSRF/DNS rebinding attacks (same validation as live sends)
+	if err := n.ValidateWebhookURL(webhook.URL); err != nil {
+		log.Error().
+			Err(err).
+			Str("webhook", webhook.Name).
+			Str("url", webhook.URL).
+			Msg("Webhook URL validation failed for test request")
+		return 0, "", fmt.Errorf("webhook URL validation failed: %w", err)
+	}
+
 	// For Telegram, extract chat_id from URL if present
 	if webhook.Service == "telegram" {
 		if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {

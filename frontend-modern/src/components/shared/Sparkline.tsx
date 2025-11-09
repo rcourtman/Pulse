@@ -6,6 +6,7 @@
  */
 
 import { onMount, onCleanup, createEffect, createSignal, Component, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import type { MetricSnapshot } from '@/stores/metricsHistory';
 import { scheduleSparkline } from '@/utils/canvasRenderQueue';
 
@@ -68,6 +69,16 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     return '#22c55e'; // green-500
   };
 
+  // Get color with opacity matching progress bars (60% for consistency)
+  const getColorWithOpacity = (value: number): string => {
+    const baseColor = getColor(value);
+    // Convert hex to rgba with 0.6 opacity (matching progress bar 60%)
+    const r = parseInt(baseColor.slice(1, 3), 16);
+    const g = parseInt(baseColor.slice(3, 5), 16);
+    const b = parseInt(baseColor.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, 0.85)`; // Slightly more opaque for visibility
+  };
+
   const drawSparkline = () => {
     if (!canvasRef) return;
 
@@ -110,6 +121,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     // Get latest value for color
     const latestValue = values[values.length - 1] || 0;
     const color = getColor(latestValue);
+    const colorWithOpacity = getColorWithOpacity(latestValue);
 
     // Find min/max for scaling
     const minValue = 0;  // Always anchor at 0
@@ -163,8 +175,8 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     ctx.closePath();
     ctx.fill();
 
-    // Draw line
-    ctx.strokeStyle = color;
+    // Draw line with opacity matching progress bars
+    ctx.strokeStyle = colorWithOpacity;
     ctx.lineWidth = 1.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -178,10 +190,10 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     });
     ctx.stroke();
 
-    // Draw current value dot
+    // Draw current value dot with opacity
     if (points.length > 0) {
       const lastPoint = points[points.length - 1];
-      ctx.fillStyle = color;
+      ctx.fillStyle = colorWithOpacity;
       ctx.beginPath();
       ctx.arc(lastPoint.x, lastPoint.y, 2, 0, Math.PI * 2);
       ctx.fill();
@@ -231,7 +243,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const value = values[nearestIndex];
     const timestamp = data[nearestIndex].timestamp;
 
-    // Calculate y position for visual indicator
+    // Calculate absolute viewport position for portal
     const minValue = 0;
     const maxValue = Math.max(100, ...values);
     const y = h - ((value - minValue) / (maxValue - minValue)) * h;
@@ -239,8 +251,8 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     setHoveredPoint({
       value,
       timestamp,
-      x: nearestIndex * xStep,
-      y: rect.top + y,
+      x: rect.left + nearestIndex * xStep,  // Absolute x position
+      y: rect.top - 45,  // Position above the sparkline (45px above top edge)
     });
   };
 
@@ -255,32 +267,38 @@ export const Sparkline: Component<SparklineProps> = (props) => {
   };
 
   return (
-    <div class="relative block w-full">
-      <canvas
-        ref={canvasRef}
-        class="block cursor-crosshair"
-        style={{
-          width: `${width()}px`,
-          height: `${height()}px`,
-        }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-      />
-      <Show when={hoveredPoint()}>
-        {(point) => (
-          <div
-            class="absolute z-50 pointer-events-none bg-gray-900 dark:bg-gray-800 text-white text-xs rounded px-2 py-1 shadow-lg border border-gray-700"
-            style={{
-              left: `${point().x}px`,
-              top: '-32px',
-              transform: 'translateX(-50%)',
-            }}
-          >
-            <div class="font-medium">{point().value.toFixed(1)}%</div>
-            <div class="text-gray-400 text-[10px]">{formatTime(point().timestamp)}</div>
-          </div>
-        )}
-      </Show>
-    </div>
+    <>
+      <div class="relative block w-full">
+        <canvas
+          ref={canvasRef}
+          class="block cursor-crosshair transition-opacity duration-150"
+          style={{
+            width: `${width()}px`,
+            height: `${height()}px`,
+            opacity: hoveredPoint() ? '1' : '0.7',
+          }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        />
+      </div>
+      <Portal>
+        <Show when={hoveredPoint()}>
+          {(point) => (
+            <div
+              class="fixed pointer-events-none bg-gray-900 dark:bg-gray-800 text-white text-xs rounded px-2 py-1 shadow-lg border border-gray-700"
+              style={{
+                left: `${point().x}px`,
+                top: `${point().y}px`,
+                transform: 'translateX(-50%)',
+                'z-index': '9999',
+              }}
+            >
+              <div class="font-medium">{point().value.toFixed(1)}%</div>
+              <div class="text-gray-400 text-[10px]">{formatTime(point().timestamp)}</div>
+            </div>
+          )}
+        </Show>
+      </Portal>
+    </>
   );
 };
