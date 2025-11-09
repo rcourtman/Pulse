@@ -1,6 +1,7 @@
 import { Component, Show, For, createSignal, createMemo, onMount, createEffect, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
+import { MetricsViewToggle } from '@/components/shared/MetricsViewToggle';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 
@@ -407,6 +408,9 @@ export const DockerFilter: Component<DockerFilterProps> = (props) => {
               </button>
             </div>
           </Show>
+
+          {/* Metrics View Toggle */}
+          <MetricsViewToggle />
 
           <Show when={hasActiveFilters()}>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" aria-hidden="true"></div>

@@ -6,6 +6,7 @@ import { renderDockerStatusBadge } from './DockerStatusBadge';
 import { resolveHostRuntime } from './runtimeDisplay';
 import { formatPercent, formatUptime } from '@/utils/format';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
+import { buildMetricKey } from '@/utils/metricsKeys';
 
 export interface DockerHostSummary {
   host: DockerHost;
@@ -139,7 +140,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
   return (
     <Card padding="none" class="mb-4 overflow-hidden">
       <ScrollableTable minWidth="720px" persistKey="docker-host-summary">
-        <table class="w-full border-collapse sm:whitespace-nowrap">
+        <table class="w-full table-fixed border-collapse sm:whitespace-nowrap">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
               <th
@@ -241,6 +242,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 const agentOutdated = isAgentOutdated(summary.host.agentVersion);
                 const runtimeInfo = resolveHostRuntime(summary.host);
                 const runtimeVersion = summary.host.runtimeVersion || summary.host.dockerVersion;
+                const metricsKey = buildMetricKey('dockerHost', summary.host.id);
 
                 return (
                   <tr
@@ -317,32 +319,39 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                       </div>
                     </td>
                     <td class="px-2 py-1 align-middle">
-                      <div class="flex justify-center items-center h-full w-full max-w-[180px] whitespace-nowrap">
+                      <div class="flex justify-center items-center h-full w-full min-w-[180px] max-w-[220px] whitespace-nowrap">
                         <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                          <MetricBar value={summary.cpuPercent} label={formatPercent(summary.cpuPercent)} type="cpu" />
+                          <MetricBar
+                            value={summary.cpuPercent}
+                            label={formatPercent(summary.cpuPercent)}
+                            type="cpu"
+                            resourceId={metricsKey}
+                          />
                         </Show>
                       </div>
                     </td>
                     <td class="px-2 py-1 align-middle">
-                      <div class="flex justify-center items-center h-full w-full max-w-[180px] whitespace-nowrap">
+                      <div class="flex justify-center items-center h-full w-full min-w-[180px] max-w-[220px] whitespace-nowrap">
                         <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
                           <MetricBar
                             value={summary.memoryPercent}
                             label={formatPercent(summary.memoryPercent)}
                             sublabel={summary.memoryLabel}
                             type="memory"
+                            resourceId={metricsKey}
                           />
                         </Show>
                       </div>
                     </td>
                     <td class="px-2 py-1 align-middle">
-                      <div class="flex justify-center items-center h-full whitespace-nowrap">
+                      <div class="flex justify-center items-center h-full min-w-[180px] max-w-[220px] whitespace-nowrap">
                         <Show when={summary.diskLabel} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
                           <MetricBar
                             value={summary.diskPercent}
                             label={formatPercent(summary.diskPercent)}
                             sublabel={summary.diskLabel}
                             type="disk"
+                            resourceId={metricsKey}
                           />
                         </Show>
                       </div>

@@ -10,6 +10,7 @@ import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import { resolveHostRuntime } from './runtimeDisplay';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
+import { buildMetricKey } from '@/utils/metricsKeys';
 
 const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
 const DEGRADED_HOST_STATUSES = new Set([
@@ -828,6 +829,7 @@ const DockerContainerRow: Component<{
 
   const cpuPercent = () => Math.max(0, Math.min(100, container.cpuPercent ?? 0));
   const memPercent = () => Math.max(0, Math.min(100, container.memoryPercent ?? 0));
+  const metricsKey = buildMetricKey('dockerContainer', container.id);
   const memUsageLabel = () => {
     if (!container.memoryUsageBytes) return undefined;
     const used = formatBytes(container.memoryUsageBytes, 0);
@@ -1007,15 +1009,20 @@ const DockerContainerRow: Component<{
             {statusLabel()}
           </span>
         </td>
-        <td class="px-2 py-0.5 min-w-[160px]">
+        <td class="px-2 py-0.5 min-w-[180px]">
           <Show
             when={isRunning() && container.cpuPercent && container.cpuPercent > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
           >
-            <MetricBar value={cpuPercent()} label={formatPercent(cpuPercent())} type="cpu" />
+            <MetricBar
+              value={cpuPercent()}
+              label={formatPercent(cpuPercent())}
+              type="cpu"
+              resourceId={metricsKey}
+            />
           </Show>
         </td>
-        <td class="px-2 py-0.5 min-w-[220px]">
+        <td class="px-2 py-0.5 min-w-[240px]">
           <Show
             when={isRunning() && container.memoryUsageBytes && container.memoryUsageBytes > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -1025,10 +1032,11 @@ const DockerContainerRow: Component<{
               label={formatPercent(memPercent())}
               type="memory"
               sublabel={memUsageLabel()}
+              resourceId={metricsKey}
             />
           </Show>
         </td>
-        <td class="px-2 py-0.5 min-w-[200px]">
+        <td class="px-2 py-0.5 min-w-[220px]">
           <Show when={hasDiskStats()} fallback={<span class="text-xs text-gray-400">—</span>}>
             <Show
               when={diskPercent() !== null}
@@ -1039,6 +1047,7 @@ const DockerContainerRow: Component<{
                 label={formatPercent(diskPercent() ?? 0)}
                 type="disk"
                 sublabel={diskSublabel() ?? diskUsageLabel()}
+                resourceId={metricsKey}
               />
             </Show>
           </Show>
@@ -1800,6 +1809,7 @@ const DockerServiceRow: Component<{
                             return label;
                           };
                           const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
+                          const taskMetricsKey = container?.id ? buildMetricKey('dockerContainer', container.id) : undefined;
                           const stateClass = () => {
                             if (state === 'running') {
                               return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
@@ -1837,12 +1847,22 @@ const DockerServiceRow: Component<{
                               </td>
                               <td class="py-1 px-2 w-[120px]">
                                 <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
-                                  <MetricBar value={Math.min(100, cpu)} label={formatPercent(cpu)} type="cpu" />
+                                  <MetricBar
+                                    value={Math.min(100, cpu)}
+                                    label={formatPercent(cpu)}
+                                    type="cpu"
+                                    resourceId={taskMetricsKey}
+                                  />
                                 </Show>
                               </td>
                               <td class="py-1 px-2 w-[140px]">
                                 <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
-                                  <MetricBar value={Math.min(100, mem)} label={formatPercent(mem)} type="memory" />
+                                  <MetricBar
+                                    value={Math.min(100, mem)}
+                                    label={formatPercent(mem)}
+                                    type="memory"
+                                    resourceId={taskMetricsKey}
+                                  />
                                 </Show>
                               </td>
                               <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">

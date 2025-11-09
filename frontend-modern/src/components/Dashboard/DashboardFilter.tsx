@@ -1,6 +1,7 @@
 import { Component, Show, For, createSignal, onMount, createEffect, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
+import { MetricsViewToggle } from '@/components/shared/MetricsViewToggle';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { createSearchHistoryManager } from '@/utils/searchHistory';
 
@@ -391,6 +392,11 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               List
             </button>
           </div>
+
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+
+          {/* Metrics View Toggle */}
+          <MetricsViewToggle />
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 

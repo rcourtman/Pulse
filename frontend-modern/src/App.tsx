@@ -34,6 +34,7 @@ import { DemoBanner } from './components/DemoBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
+import { startMetricsSampler } from './stores/metricsSampler';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import BellIcon from 'lucide-solid/icons/bell';
@@ -206,6 +207,11 @@ function App() {
     return store || getGlobalWebSocketStore();
   };
   const alertsActivation = useAlertsActivation();
+
+  // Start metrics sampler for sparklines
+  onMount(() => {
+    startMetricsSampler();
+  });
 
   let hasPreloadedRoutes = false;
   let hasFetchedVersionInfo = false;

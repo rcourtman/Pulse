@@ -8,6 +8,7 @@ import { Card } from '@/components/shared/Card';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { getCpuTemperature } from '@/utils/temperature';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { buildMetricKey } from '@/utils/metricsKeys';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -353,7 +354,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     <>
       <Card padding="none" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[600px] border-collapse">
+        <table class="w-full min-w-[600px] table-fixed border-collapse">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
               <th
@@ -442,6 +443,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const isSelected = () => props.selectedNode === nodeId;
                 // Use the full resource ID for alert matching
                 const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;
+                // Use namespaced metric key for sparklines
+                const metricsKey = buildMetricKey('node', resourceId);
                 const alertStyles = createMemo(() =>
                   getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
                 );
@@ -586,6 +589,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               : undefined
                           }
                           type="cpu"
+                          resourceId={metricsKey}
                         />
                       </Show>
                     </td>
@@ -605,6 +609,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                 : undefined
                           }
                           type="memory"
+                          resourceId={metricsKey}
                         />
                       </Show>
                     </td>
@@ -618,6 +623,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           label={formatPercent(diskPercentValue ?? 0)}
                           sublabel={diskSublabel}
                           type="disk"
+                          resourceId={metricsKey}
                         />
                       </Show>
                     </td>

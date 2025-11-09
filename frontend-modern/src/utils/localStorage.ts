@@ -105,4 +105,7 @@ export const STORAGE_KEYS = {
 
   // Alerts search
   ALERTS_SEARCH_HISTORY: 'alertsSearchHistory',
+
+  // Metrics display
+  METRICS_VIEW_MODE: 'metricsViewMode', // 'bars' | 'sparklines'
 } as const;

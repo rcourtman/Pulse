@@ -17,6 +17,8 @@ import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 import { notificationStore } from './notifications';
 import { eventBus } from './events';
 import { ALERTS_ACTIVATION_EVENT, isAlertsActivationEnabled } from '@/utils/alertsActivation';
+import { pruneMetricsByPrefix } from './metricsHistory';
+import { getMetricKeyPrefix } from '@/utils/metricsKeys';
 
 // Type-safe WebSocket store
 export function createWebSocketStore(url: string) {
@@ -335,6 +337,10 @@ export function createWebSocketStore(url: string) {
                 count: message.data.nodes?.length || 0,
               });
               setState('nodes', message.data.nodes);
+
+              // Lifecycle cleanup: remove metrics for nodes that disappeared
+              const currentIds = new Set(message.data.nodes?.map((n: any) => n.id).filter(Boolean) || []);
+              pruneMetricsByPrefix(getMetricKeyPrefix('node'), currentIds);
             }
             if (message.data.vms !== undefined) {
               // Transform tags from comma-separated strings to arrays
@@ -364,6 +370,10 @@ export function createWebSocketStore(url: string) {
                 };
               });
               setState('vms', transformedVMs);
+
+              // Lifecycle cleanup: remove metrics for VMs that disappeared
+              const vmIds = new Set(transformedVMs.map((vm: VM) => vm.id).filter(Boolean));
+              pruneMetricsByPrefix(getMetricKeyPrefix('vm'), vmIds);
             }
             if (message.data.containers !== undefined) {
               // Transform tags from comma-separated strings to arrays
@@ -393,6 +403,10 @@ export function createWebSocketStore(url: string) {
                 };
               });
               setState('containers', transformedContainers);
+
+              // Lifecycle cleanup: remove metrics for containers that disappeared
+              const containerIds = new Set(transformedContainers.map((c: Container) => c.id).filter(Boolean));
+              pruneMetricsByPrefix(getMetricKeyPrefix('container'), containerIds);
             }
             if (message.data.dockerHosts !== undefined && message.data.dockerHosts !== null) {
               // Only update if dockerHosts is present and not null
@@ -410,7 +424,19 @@ export function createWebSocketStore(url: string) {
                     logger.debug('[WebSocket] Updating dockerHosts', {
                       count: incomingHosts.length,
                     });
-                    setState('dockerHosts', mergeDockerHostRevocations(incomingHosts));
+                    const merged = mergeDockerHostRevocations(incomingHosts);
+                    setState('dockerHosts', merged);
+
+                    // Lifecycle cleanup for Docker hosts and containers
+                    const hostIds = new Set(merged.map((h: DockerHost) => h.id).filter(Boolean));
+                    const dockerContainerIds = new Set<string>();
+                    merged.forEach((h: DockerHost) => {
+                      h.containers?.forEach((c: any) => {
+                        if (c.id) dockerContainerIds.add(c.id);
+                      });
+                    });
+                    pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
+                    pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
                   } else {
                     logger.debug('[WebSocket] Skipping transient empty dockerHosts payload', {
                       streak: consecutiveEmptyDockerUpdates,
@@ -422,7 +448,19 @@ export function createWebSocketStore(url: string) {
                   logger.debug('[WebSocket] Updating dockerHosts', {
                     count: incomingHosts.length,
                   });
-                  setState('dockerHosts', mergeDockerHostRevocations(incomingHosts));
+                  const merged = mergeDockerHostRevocations(incomingHosts);
+                  setState('dockerHosts', merged);
+
+                  // Lifecycle cleanup: prune metrics for removed hosts/containers
+                  const hostIds = new Set(merged.map((h: DockerHost) => h.id).filter(Boolean));
+                  const dockerContainerIds = new Set<string>();
+                  merged.forEach((h: DockerHost) => {
+                    h.containers?.forEach((c: any) => {
+                      if (c.id) dockerContainerIds.add(c.id);
+                    });
+                  });
+                  pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
+                  pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
                 }
               } else {
                 logger.warn('[WebSocket] Received non-array dockerHosts payload', {

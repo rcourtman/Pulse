@@ -940,19 +940,19 @@ export function Dashboard(props: DashboardProps) {
                       Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('cpu')}
                     >
                       CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('memory')}
                     >
                       Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('disk')}
                     >
                       Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}

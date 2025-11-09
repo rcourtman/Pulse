@@ -9,6 +9,7 @@ import { isGuestRunning } from '@/utils/status';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
+import { buildMetricKey } from '@/utils/metricsKeys';
 
 type Guest = VM | Container;
 
@@ -62,6 +63,12 @@ export function GuestRow(props: GuestRowProps) {
   const initialGuestId = buildGuestId(props.guest);
   const guestId = createMemo(() => buildGuestId(props.guest));
   const isEditingUrl = createMemo(() => currentlyEditingGuestId() === guestId());
+
+  // Create namespaced metrics key
+  const metricsKey = createMemo(() => {
+    const kind = props.guest.type === 'qemu' ? 'vm' : 'container';
+    return buildMetricKey(kind, guestId());
+  });
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
@@ -565,7 +572,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* CPU */}
-      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[204px]">
+      <td class="py-0.5 px-2 w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px]">
         <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
           <MetricBar
             value={cpuPercent()}
@@ -576,12 +583,13 @@ export function GuestRow(props: GuestRowProps) {
                 : undefined
             }
             type="cpu"
+            resourceId={metricsKey()}
           />
         </Show>
       </td>
 
       {/* Memory */}
-      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[204px]">
+      <td class="py-0.5 px-2 w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px]">
         <div title={memoryTooltip() ?? undefined}>
           <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
             <MetricBar
@@ -589,13 +597,14 @@ export function GuestRow(props: GuestRowProps) {
               label={formatPercent(memPercent())}
               sublabel={memoryUsageLabel()}
               type="memory"
+              resourceId={metricsKey()}
             />
           </Show>
         </div>
       </td>
 
       {/* Disk – surface usage even if guest is currently stopped so users can see last reported values */}
-      <td class="py-0.5 px-2 w-[100px] sm:w-[110px] lg:w-[130px] xl:w-[150px] 2xl:w-[204px]">
+      <td class="py-0.5 px-2 w-[160px] sm:w-[170px] lg:w-[180px] xl:w-[190px] 2xl:w-[204px]">
         <Show
           when={hasDiskUsage()}
           fallback={
@@ -613,6 +622,7 @@ export function GuestRow(props: GuestRowProps) {
                 : undefined
             }
             type="disk"
+            resourceId={metricsKey()}
           />
         </Show>
       </td>
