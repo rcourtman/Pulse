@@ -46,6 +46,7 @@ export interface SystemConfig {
   discoverySubnet?: string; // Subnet to scan for discovery (default: 'auto')
   allowEmbedding?: boolean; // Allow iframe embedding
   allowedEmbedOrigins?: string; // Comma-separated list of allowed origins for embedding
+  webhookAllowedPrivateCIDRs?: string; // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
 }
 
 /**

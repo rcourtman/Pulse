@@ -16,6 +16,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -33,6 +34,7 @@ type SystemSettingsHandler struct {
 		StopDiscoveryService()
 		EnableTemperatureMonitoring()
 		DisableTemperatureMonitoring()
+		GetNotificationManager() *notifications.NotificationManager
 	}
 }
 
@@ -43,6 +45,7 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	StopDiscoveryService()
 	EnableTemperatureMonitoring()
 	DisableTemperatureMonitoring()
+	GetNotificationManager() *notifications.NotificationManager
 }, reloadSystemSettingsFunc func()) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
 		config:                   cfg,
@@ -60,6 +63,7 @@ func (h *SystemSettingsHandler) SetMonitor(m interface {
 	StopDiscoveryService()
 	EnableTemperatureMonitoring()
 	DisableTemperatureMonitoring()
+	GetNotificationManager() *notifications.NotificationManager
 }) {
 	h.monitor = m
 }
@@ -549,6 +553,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["allowedEmbedOrigins"]; ok {
 		settings.AllowedEmbedOrigins = updates.AllowedEmbedOrigins
 	}
+	// Allow configuring webhook private CIDR allowlist
+	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok {
+		settings.WebhookAllowedPrivateCIDRs = updates.WebhookAllowedPrivateCIDRs
+	}
 
 	// Boolean fields need special handling since false is a valid value
 	if _, ok := rawRequest["autoUpdateEnabled"]; ok {
@@ -653,6 +661,17 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			h.monitor.EnableTemperatureMonitoring()
 		} else if !settings.TemperatureMonitoringEnabled && prevTempEnabled {
 			h.monitor.DisableTemperatureMonitoring()
+		}
+	}
+
+	// Update webhook allowed private CIDRs if changed
+	if _, ok := rawRequest["webhookAllowedPrivateCIDRs"]; ok && h.monitor != nil {
+		if nm := h.monitor.GetNotificationManager(); nm != nil {
+			if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
+				log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs")
+				http.Error(w, fmt.Sprintf("Invalid webhook allowed private CIDRs: %v", err), http.StatusBadRequest)
+				return
+			}
 		}
 	}
 

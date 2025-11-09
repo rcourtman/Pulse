@@ -201,7 +201,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Validate webhook URL
-	if err := notifications.ValidateWebhookURL(webhook.URL); err != nil {
+	if err := h.monitor.GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -258,7 +258,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Validate webhook URL
-	if err := notifications.ValidateWebhookURL(webhook.URL); err != nil {
+	if err := h.monitor.GetNotificationManager().ValidateWebhookURL(webhook.URL); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
 		return
 	}

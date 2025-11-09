@@ -401,7 +401,7 @@ func (n *NotificationManager) sendWebhookOnceWithResponse(webhook EnhancedWebhoo
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
 
 	// Send request with secure client
-	client := createSecureWebhookClient(WebhookTimeout)
+	client := n.createSecureWebhookClient(WebhookTimeout)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -600,7 +600,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0 (Test)")
 
 	// Send with shorter timeout for testing
-	client := createSecureWebhookClient(WebhookTestTimeout)
+	client := n.createSecureWebhookClient(WebhookTestTimeout)
 
 	resp, err := client.Do(req)
 	if err != nil {

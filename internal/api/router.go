@@ -1172,6 +1172,15 @@ func (r *Router) reloadSystemSettings() {
 	if systemSettings, err := r.persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
 		r.cachedAllowEmbedding = systemSettings.AllowEmbedding
 		r.cachedAllowedOrigins = systemSettings.AllowedEmbedOrigins
+
+		// Update webhook allowed private CIDRs in notification manager
+		if r.monitor != nil {
+			if nm := r.monitor.GetNotificationManager(); nm != nil {
+				if err := nm.UpdateAllowedPrivateCIDRs(systemSettings.WebhookAllowedPrivateCIDRs); err != nil {
+					log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs during settings reload")
+				}
+			}
+		}
 	} else {
 		// On error, use safe defaults
 		r.cachedAllowEmbedding = false

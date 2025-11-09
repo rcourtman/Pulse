@@ -43,7 +43,7 @@ const (
 )
 
 // createSecureWebhookClient creates an HTTP client with security controls
-func createSecureWebhookClient(timeout time.Duration) *http.Client {
+func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *http.Client {
 	redirectCount := 0
 	return &http.Client{
 		Timeout: timeout,
@@ -57,7 +57,7 @@ func createSecureWebhookClient(timeout time.Duration) *http.Client {
 			newURL := req.URL.String()
 
 			// Prevent redirects to localhost or private networks (SSRF protection)
-			if err := ValidateWebhookURL(newURL); err != nil {
+			if err := n.ValidateWebhookURL(newURL); err != nil {
 				log.Warn().
 					Str("original", via[0].URL.String()).
 					Str("redirect", newURL).
@@ -126,6 +126,8 @@ type NotificationManager struct {
 	queue             *NotificationQueue // Persistent notification queue
 	webhookClient     *http.Client       // Shared HTTP client for webhooks
 	stopCleanup       chan struct{}      // Signal to stop cleanup goroutine
+	allowedPrivateNets []*net.IPNet      // Parsed CIDR ranges allowed for private webhook targets
+	allowedPrivateMu   sync.RWMutex      // Protects allowedPrivateNets
 }
 
 type appriseExecFunc func(ctx context.Context, path string, args []string) ([]byte, error)
@@ -353,9 +355,11 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		publicURL:         cleanURL,
 		appriseExec:       defaultAppriseExec,
 		queue:             queue,
-		webhookClient:     createSecureWebhookClient(WebhookTimeout),
 		stopCleanup:       make(chan struct{}),
 	}
+
+	// Create webhook client after NotificationManager is initialized
+	nm.webhookClient = nm.createSecureWebhookClient(WebhookTimeout)
 
 	// Wire up queue processor if queue is available
 	if queue != nil {
@@ -953,7 +957,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 	}
 
 	// Validate Apprise server URL to prevent SSRF
-	if err := ValidateWebhookURL(serverURL); err != nil {
+	if err := n.ValidateWebhookURL(serverURL); err != nil {
 		log.Error().
 			Err(err).
 			Str("serverURL", serverURL).
@@ -1445,7 +1449,7 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 // sendWebhookRequest sends the actual webhook request
 func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string) error {
 	// Re-validate webhook URL to prevent DNS rebinding attacks
-	if err := ValidateWebhookURL(webhook.URL); err != nil {
+	if err := n.ValidateWebhookURL(webhook.URL); err != nil {
 		log.Error().
 			Err(err).
 			Str("webhook", webhook.Name).
@@ -1974,7 +1978,7 @@ func isNumeric(s string) bool {
 }
 
 // ValidateWebhookURL validates that a webhook URL is safe and properly formed
-func ValidateWebhookURL(webhookURL string) error {
+func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 	if webhookURL == "" {
 		return fmt.Errorf("webhook URL cannot be empty")
 	}
@@ -2015,7 +2019,15 @@ func ValidateWebhookURL(webhookURL string) error {
 	// Check all resolved IPs for private ranges
 	for _, ip := range ips {
 		if isPrivateIP(ip) {
-			return fmt.Errorf("webhook URL resolves to private IP %s - private networks are not allowed for security", ip.String())
+			// Check if this private IP is in the allowlist
+			if n.isIPInAllowlist(ip) {
+				log.Debug().
+					Str("ip", ip.String()).
+					Str("url", webhookURL).
+					Msg("Webhook URL resolves to private IP in allowlist")
+			} else {
+				return fmt.Errorf("webhook URL resolves to private IP %s - private networks are not allowed for security (configure allowlist in System Settings)", ip.String())
+			}
 		}
 	}
 
@@ -2103,6 +2115,80 @@ func isPrivateRange172(host string) bool {
 	}
 
 	return second >= 16 && second <= 31
+}
+
+// UpdateAllowedPrivateCIDRs parses and updates the list of allowed private CIDR ranges for webhooks
+func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) error {
+	n.allowedPrivateMu.Lock()
+	defer n.allowedPrivateMu.Unlock()
+
+	// Clear existing allowlist
+	n.allowedPrivateNets = nil
+
+	// Empty string means no allowlist (block all private IPs)
+	if cidrsString == "" {
+		log.Info().Msg("Webhook private IP allowlist cleared - all private IPs blocked")
+		return nil
+	}
+
+	// Parse comma-separated CIDRs
+	cidrs := strings.Split(cidrsString, ",")
+	var parsedNets []*net.IPNet
+
+	for _, cidr := range cidrs {
+		cidr = strings.TrimSpace(cidr)
+		if cidr == "" {
+			continue
+		}
+
+		// Support bare IPs by adding /32 or /128
+		if !strings.Contains(cidr, "/") {
+			ip := net.ParseIP(cidr)
+			if ip == nil {
+				return fmt.Errorf("invalid IP address: %s", cidr)
+			}
+			if ip.To4() != nil {
+				cidr = cidr + "/32"
+			} else {
+				cidr = cidr + "/128"
+			}
+		}
+
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return fmt.Errorf("invalid CIDR range %s: %w", cidr, err)
+		}
+
+		parsedNets = append(parsedNets, ipNet)
+	}
+
+	n.allowedPrivateNets = parsedNets
+	log.Info().
+		Str("cidrs", cidrsString).
+		Int("count", len(parsedNets)).
+		Msg("Webhook private IP allowlist updated")
+
+	return nil
+}
+
+// isIPInAllowlist checks if an IP is in the configured allowlist
+func (n *NotificationManager) isIPInAllowlist(ip net.IP) bool {
+	n.allowedPrivateMu.RLock()
+	defer n.allowedPrivateMu.RUnlock()
+
+	// No allowlist means block all private IPs
+	if len(n.allowedPrivateNets) == 0 {
+		return false
+	}
+
+	// Check if IP is in any allowed range
+	for _, ipNet := range n.allowedPrivateNets {
+		if ipNet.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // addWebhookDelivery adds a webhook delivery record to the history
