@@ -54,48 +54,77 @@ This document defines what must be true for a successful Pulse release. You (AI)
 
 ### 6. Release Notes Prepared
 **Must be true:**
-- Release notes follow standard template format
-- Sections included: New Features, Bug Fixes, Improvements, Breaking Changes
-- Each item references issue numbers where applicable (#123)
+- Release notes follow standard template format (see below)
+- Sections included in order: New Features, Bug Fixes, Improvements, Breaking Changes
+- Each change is descriptive with context, not just "fix X" (explain impact)
+- Issue numbers referenced where applicable (#123)
 - No emoji in headers
-- Installation section includes Docker and Manual install instructions
+- Installation section includes all 4 methods: Quick Install, Docker, Manual Binary, Helm
+- Each installation method has complete, copy-pasteable commands
+- Downloads section lists what's available
 - Breaking Changes section present (say "None" if no breaking changes)
-- For RC releases: Include backup warning at the top
+- Notes section has key highlights or migration guidance
+- For RC releases: Include backup warning at the top of release notes
 
 **Template structure:**
 ```markdown
 ## What's Changed
 
 ### New Features
-- Description (#issue)
+- Brief but descriptive change with context (#issue)
 
 ### Bug Fixes
-- Description (#issue)
+- What was broken and how it's fixed (#issue)
 
 ### Improvements
-- Description (#issue)
+- Enhancement with user impact described (#issue)
 
 ### Breaking Changes
 None
 
 ## Installation
 
-### Docker
+**Quick Install (systemd / LXC / Proxmox VE):**
 ```bash
-docker pull rcourtman/pulse:vX.X.X
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
-### Manual Install
-Download the universal package that auto-detects your architecture:
-- `pulse-vX.X.X.tar.gz`
+**Docker:**
+```bash
+docker pull rcourtman/pulse:vX.X.X
+docker stop pulse && docker rm pulse
+docker run -d --name pulse \
+  --restart unless-stopped \
+  -p 7655:7655 -p 7656:7656 \
+  -v /opt/pulse/data:/data \
+  rcourtman/pulse:vX.X.X
+```
 
-Or choose architecture-specific:
-- `pulse-vX.X.X-linux-amd64.tar.gz` - Intel/AMD 64-bit
-- `pulse-vX.X.X-linux-arm64.tar.gz` - ARM 64-bit
-- `pulse-vX.X.X-linux-armv7.tar.gz` - ARM 32-bit
+**Manual Binary (amd64 example):**
+```bash
+curl -LO https://github.com/rcourtman/Pulse/releases/download/vX.X.X/pulse-vX.X.X-linux-amd64.tar.gz
+sudo systemctl stop pulse
+sudo tar -xzf pulse-vX.X.X-linux-amd64.tar.gz -C /usr/local/bin pulse
+sudo systemctl start pulse
+```
+
+**Helm:**
+```bash
+helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
+  --version X.X.X \
+  --namespace pulse \
+  --create-namespace
+```
+
+## Downloads
+- Universal tarball (auto-detects architecture): `pulse-vX.X.X.tar.gz`
+- Architecture-specific: `amd64`, `arm64`, `armv7`
+- Host agent packages: macOS, Windows, Linux
+- Helm chart: `pulse-X.X.X.tgz`
+- SHA256 checksums: `checksums.txt`
 
 ## Notes
-- Important notes or migration instructions
+- Key highlights, important warnings, or migration instructions
 ```
 
 ### 7. Docker Images Published
