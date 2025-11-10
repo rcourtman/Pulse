@@ -673,6 +673,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                   node: guest.node,
                   instance: guest.instance,
                   disabled: thresholds.disabled || false,
+                  disableConnectivity: thresholds.disableConnectivity || false,
                   poweredOffSeverity:
                     thresholds.poweredOffSeverity === 'critical'
                       ? 'critical'
