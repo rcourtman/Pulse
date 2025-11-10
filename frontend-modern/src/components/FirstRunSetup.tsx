@@ -326,6 +326,13 @@ IMPORTANT: Keep these credentials secure!
                         kubectl exec &lt;pod-name&gt; -- cat {bootstrapTokenPath()}
                         <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or exec into the container:</div>
                       </Show>
+                      <Show when={!isDocker() && bootstrapTokenPath() === '/etc/pulse/.bootstrap_token'}>
+                        <div class="text-blue-600 dark:text-blue-400 mb-1"># For Proxmox LXC, run from Proxmox host:</div>
+                        pct enter &lt;ctid&gt;
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or directly retrieve:</div>
+                        pct exec &lt;ctid&gt; -- cat {bootstrapTokenPath()}
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or from inside the container:</div>
+                      </Show>
                       cat {bootstrapTokenPath()}
                     </div>
                   </Show>
