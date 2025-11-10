@@ -137,7 +137,7 @@ helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
 - Images verified on Docker Hub (can pull successfully)
 
 **Options for building (choose best available):**
-- Option A: docker-builder container via `ssh root@delly.lan "pct exec 135..."`
+- Option A: docker-builder container via `ssh root@delly "pct exec 135..."`
 - Option B: docker-builder container at 192.168.0.174
 - Option C: Local Docker with buildx (create multiarch builder if needed)
 
