@@ -1407,8 +1407,9 @@ fi'; then
 
             # If building from source, copy the binary from the LXC instead of downloading
             local proxy_install_args=(--ctid "$CTID" --skip-restart)
+            local local_proxy_binary=""
             if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
-                local local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
+                local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
                 print_info "Copying locally-built pulse-sensor-proxy binary from container..."
                 if pct pull $CTID /opt/pulse/bin/pulse-sensor-proxy "$local_proxy_binary" 2>/dev/null; then
                     proxy_install_args=(--ctid "$CTID" --local-binary "$local_proxy_binary" --skip-restart)
