@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, createEffect } from 'solid-js';
+import { Component, Show, For, createSignal, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';

@@ -1,48 +1,127 @@
 name: Validate Release Assets
 
 on:
-  workflow_run:
-    workflows: ["Release"]
-    types: [completed]
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v4.29.0)'
+        required: true
+        type: string
+      version:
+        description: 'Version number without v prefix (e.g., 4.29.0)'
+        required: true
+        type: string
+      release_id:
+        description: 'GitHub release ID'
+        required: true
+        type: string
+      draft:
+        description: 'Whether the release is still a draft'
+        required: true
+        type: boolean
+      target_commitish:
+        description: 'Commit SHA associated with the release'
+        required: true
+        type: string
   release:
-    types: [edited]  # Still validate on manual edits
+    types: [edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v4.29.0)'
+        required: true
+        type: string
+      version:
+        description: 'Version number without v prefix (e.g., 4.29.0)'
+        required: true
+        type: string
+      release_id:
+        description: 'GitHub release ID'
+        required: true
+        type: string
+      draft:
+        description: 'Set to true to run against a draft release'
+        required: true
+        type: boolean
+      target_commitish:
+        description: 'Commit SHA associated with the release'
+        required: true
+        type: string
 
 jobs:
   validate:
-    # Only run for draft releases to act as a safety gate before publishing
-    if: github.event.release.draft == true
     runs-on: ubuntu-latest
-
     permissions:
-      contents: write  # Needed to delete assets and update release
-      issues: write    # Needed to add labels and comments
+      contents: write
+      issues: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
+      - name: Determine release context
+        id: context
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_RELEASE_ID: ${{ inputs.release_id }}
+          INPUT_DRAFT: ${{ inputs.draft }}
+          INPUT_COMMIT: ${{ inputs.target_commitish }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          # Remove 'v' prefix if present
-          VERSION="${TAG#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "Validating release: $TAG (version: $VERSION)"
+          python <<'PY' > context.env
+import json, os, sys
+
+event_name = os.environ.get("EVENT_NAME", "")
+result = {}
+
+if event_name == "release":
+    with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    release = data.get("release") or {}
+    result["tag"] = release.get("tag_name", "")
+    tag = result["tag"]
+    result["version"] = tag[1:] if tag.startswith("v") else tag
+    result["release_id"] = str(release.get("id", ""))
+    result["target_commitish"] = release.get("target_commitish", "")
+    result["draft"] = str(release.get("draft", False)).lower()
+else:
+    result["tag"] = os.environ.get("INPUT_TAG", "")
+    result["version"] = os.environ.get("INPUT_VERSION", "")
+    result["release_id"] = os.environ.get("INPUT_RELEASE_ID", "")
+    result["target_commitish"] = os.environ.get("INPUT_COMMIT", "")
+    draft_value = os.environ.get("INPUT_DRAFT", "false")
+    result["draft"] = str(draft_value).lower()
+
+if not result["tag"] or not result["release_id"]:
+    sys.stderr.write("::error::Release metadata is missing. Provide tag, version, release_id, and target_commitish.\n")
+    sys.exit(1)
+
+should_run = "true"
+if event_name == "release" and result["draft"] != "true":
+    should_run = "false"
+result["should_run"] = should_run
+
+for key, value in result.items():
+    print(f"{key}={value}")
+PY
+          cat context.env >> "$GITHUB_OUTPUT"
+          cat context.env
+
+      - name: Skip validation for published releases
+        if: steps.context.outputs.should_run != 'true'
+        run: echo "Release is already published; skipping validation checks."
 
       - name: Download all release assets
+        if: steps.context.outputs.should_run == 'true'
         id: download
         run: |
-          echo "Downloading all assets from release ${{ steps.version.outputs.tag }}..."
+          echo "Downloading all assets from release ${{ steps.context.outputs.tag }}..."
 
-          # Create release directory
           mkdir -p release
           cd release
 
-          # Get list of all assets for this release (using gh CLI to avoid token exposure)
-          ASSETS=$(gh api "repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets" \
-            --jq '.[].browser_download_url')
+          ASSETS=$(gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets" --jq '.[].browser_download_url')
 
           if [ -z "$ASSETS" ]; then
             echo "::error::No assets found in release"
@@ -54,13 +133,11 @@ jobs:
           echo "Found assets:"
           echo "$ASSETS"
 
-          # Download each asset
           echo "$ASSETS" | while read -r url; do
             if [ -n "$url" ]; then
               filename=$(basename "$url")
               echo "Downloading $filename..."
-              # Use gh CLI to download (avoids token exposure in logs)
-              gh release download "${{ github.event.release.tag_name }}" \
+              gh release download "${{ steps.context.outputs.tag }}" \
                 --pattern "$filename" --dir . --clobber
 
               if [ $? -eq 0 ]; then
@@ -77,15 +154,15 @@ jobs:
           ls -lh
 
       - name: Install Docker
-        run: |
-          # Docker is pre-installed on ubuntu-latest runners
-          docker --version
+        if: steps.context.outputs.should_run == 'true'
+        run: docker --version
 
       - name: Pull Docker image (if available)
+        if: steps.context.outputs.should_run == 'true'
         id: docker
         continue-on-error: true
         run: |
-          IMAGE="rcourtman/pulse:${{ steps.version.outputs.tag }}"
+          IMAGE="rcourtman/pulse:${{ steps.context.outputs.tag }}"
           echo "Attempting to pull Docker image: $IMAGE"
 
           if docker pull "$IMAGE" 2>/dev/null; then
@@ -99,44 +176,34 @@ jobs:
           fi
 
       - name: Run validation script
+        if: steps.context.outputs.should_run == 'true'
         id: validate
         run: |
-          set +e  # Don't exit on error, we want to capture the output
-
+          set +e
           echo "Running validation script..."
           chmod +x scripts/validate-release.sh
-
-          # Create output file for validation results
           OUTPUT_FILE=$(mktemp)
 
           if [ "${{ steps.docker.outputs.image_available }}" = "true" ]; then
-            # Full validation with Docker image
             echo "Running full validation (Docker + assets)..."
             scripts/validate-release.sh \
-              "${{ steps.version.outputs.version }}" \
+              "${{ steps.context.outputs.version }}" \
               "${{ steps.docker.outputs.image }}" \
               "release" 2>&1 | tee "$OUTPUT_FILE"
           else
-            # Modified validation script that skips Docker checks
             echo "Running assets-only validation (Docker image not available)..."
-
-            # We'll need to skip Docker validation - create a temporary modified script
-            # For now, we'll just run the script and let Docker validation fail
-            # A more robust solution would be to modify the script or create a separate assets-only version
             scripts/validate-release.sh \
-              "${{ steps.version.outputs.version }}" \
-              "rcourtman/pulse:${{ steps.version.outputs.tag }}" \
+              "${{ steps.context.outputs.version }}" \
+              "rcourtman/pulse:${{ steps.context.outputs.tag }}" \
               "release" 2>&1 | tee "$OUTPUT_FILE" || true
           fi
 
           VALIDATION_EXIT_CODE=$?
 
-          # Save output for later use in comments
           echo "VALIDATION_OUTPUT<<EOF" >> $GITHUB_OUTPUT
           cat "$OUTPUT_FILE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-          # Check validation result
           if [ $VALIDATION_EXIT_CODE -eq 0 ]; then
             echo "validation_passed=true" >> $GITHUB_OUTPUT
             echo "✅ Validation PASSED"
@@ -148,12 +215,12 @@ jobs:
           exit $VALIDATION_EXIT_CODE
 
       - name: Set commit status - Success
-        if: steps.validate.outputs.validation_passed == 'true'
+        if: steps.context.outputs.should_run == 'true' && steps.validate.outputs.validation_passed == 'true'
         run: |
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.event.release.target_commitish }}" \
+            "https://api.github.com/repos/${{ github.repository }}/statuses/${{ steps.context.outputs.target_commitish }}" \
             -d '{
               "state": "success",
               "target_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
@@ -162,19 +229,16 @@ jobs:
             }'
 
       - name: Update release body - Success
-        if: steps.validate.outputs.validation_passed == 'true'
+        if: steps.context.outputs.should_run == 'true' && steps.validate.outputs.validation_passed == 'true'
         run: |
           echo "✅ Validation passed - updating release description"
 
-          # Get current release body
           CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             | jq -r '.body // ""')
 
-          # Remove any existing validation status block
           CURRENT_BODY=$(echo "$CURRENT_BODY" | sed '/<!-- VALIDATION_STATUS_START -->/,/<!-- VALIDATION_STATUS_END -->/d')
 
-          # Create new validation status block using heredoc
           read -r -d '' VALIDATION_BLOCK <<'EOF' || true
           <!-- VALIDATION_STATUS_START -->
           ## ✅ Release Asset Validation: PASSED
@@ -194,29 +258,26 @@ jobs:
           <!-- VALIDATION_STATUS_END -->
           EOF
 
-          # Replace placeholders
           VALIDATION_BLOCK="${VALIDATION_BLOCK//TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//WORKFLOW_LINK_PLACEHOLDER/[${{ github.workflow }} #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})}"
 
-          # Combine validation block with original body
           NEW_BODY="$VALIDATION_BLOCK
 
           $CURRENT_BODY"
 
-          # Update release
           curl -X PATCH \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             -d "$(jq -n --arg body "$NEW_BODY" '{body: $body}')"
 
       - name: Set commit status - Failure
-        if: failure() || steps.validate.outputs.validation_passed == 'false'
+        if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
         run: |
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.event.release.target_commitish }}" \
+            "https://api.github.com/repos/${{ github.repository }}/statuses/${{ steps.context.outputs.target_commitish }}" \
             -d '{
               "state": "failure",
               "target_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
@@ -225,13 +286,12 @@ jobs:
             }'
 
       - name: Delete all release assets on failure
-        if: failure() || steps.validate.outputs.validation_passed == 'false'
+        if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
         run: |
           echo "❌ Validation failed - deleting all release assets"
 
-          # Delete all assets from the release
           ASSET_IDS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets" \
             | jq -r '.[].id')
 
           if [ -n "$ASSET_IDS" ]; then
@@ -241,12 +301,6 @@ jobs:
                 curl -X DELETE \
                   -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                   "https://api.github.com/repos/${{ github.repository }}/releases/assets/$asset_id"
-
-                if [ $? -eq 0 ]; then
-                  echo "✓ Deleted asset $asset_id"
-                else
-                  echo "⚠️  Failed to delete asset $asset_id"
-                fi
               fi
             done
             echo "✓ Asset deletion process completed"
@@ -255,19 +309,16 @@ jobs:
           fi
 
       - name: Update release body - Failure
-        if: failure() || steps.validate.outputs.validation_passed == 'false'
+        if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
         run: |
           echo "❌ Validation failed - updating release description"
 
-          # Get current release body
           CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             | jq -r '.body // ""')
 
-          # Remove any existing validation status block
           CURRENT_BODY=$(echo "$CURRENT_BODY" | sed '/<!-- VALIDATION_STATUS_START -->/,/<!-- VALIDATION_STATUS_END -->/d')
 
-          # Extract validation errors if available
           VALIDATION_OUTPUT="${{ steps.validate.outputs.VALIDATION_OUTPUT }}"
           if [ -n "$VALIDATION_OUTPUT" ]; then
             ERRORS=$(echo "$VALIDATION_OUTPUT" | grep -i '\[ERROR\]' | head -20 || echo "See workflow logs for details")
@@ -275,7 +326,6 @@ jobs:
             ERRORS="Validation script failed to run. Check workflow logs."
           fi
 
-          # Create new validation status block using heredoc
           read -r -d '' VALIDATION_BLOCK <<'EOF' || true
           <!-- VALIDATION_STATUS_START -->
           ## ❌ Release Asset Validation: FAILED
@@ -309,26 +359,23 @@ jobs:
           <!-- VALIDATION_STATUS_END -->
           EOF
 
-          # Replace placeholders
           VALIDATION_BLOCK="${VALIDATION_BLOCK//TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//WORKFLOW_LINK_PLACEHOLDER/[${{ github.workflow }} #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//WORKFLOW_URL_PLACEHOLDER/${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//ERRORS_PLACEHOLDER/$ERRORS}"
 
-          # Combine validation block with original body
           NEW_BODY="$VALIDATION_BLOCK
 
           $CURRENT_BODY"
 
-          # Update release
           curl -X PATCH \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             -d "$(jq -n --arg body "$NEW_BODY" '{body: $body}')"
 
       - name: Fail the workflow
-        if: failure() || steps.validate.outputs.validation_passed == 'false'
+        if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
         run: |
           echo "::error::Release asset validation failed. All assets have been deleted."
           exit 1

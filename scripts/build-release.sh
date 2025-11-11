@@ -335,7 +335,7 @@ else
     printf '%s\n' "$checksum_output" > checksums.txt
 
     # Emit per-file .sha256 artifacts for backward compatibility while legacy installers transition off them
-    while IFS= read -r checksum filename; do
+    while read -r checksum filename; do
         printf '%s  %s\n' "$checksum" "$filename" > "${filename}.sha256"
     done <<< "$checksum_output"
 
