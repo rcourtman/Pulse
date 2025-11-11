@@ -217,12 +217,12 @@ jobs:
 
           echo "Creating draft release for ${TAG}..."
 
-          # Use LLM-generated release notes
-          NOTES="${{ steps.generate_notes.outputs.RELEASE_NOTES }}"
-
-          # Write notes to file to avoid bash interpreting backticks as commands
+          # Write release notes directly from GitHub output to file
+          # This avoids bash interpreting backticks in the markdown
           NOTES_FILE=$(mktemp)
-          echo "$NOTES" > "$NOTES_FILE"
+          cat <<'NOTES_EOF' > "$NOTES_FILE"
+          ${{ steps.generate_notes.outputs.RELEASE_NOTES }}
+          NOTES_EOF
 
           # Create draft release with generated notes
           gh release create "${TAG}" \
