@@ -38,11 +38,11 @@ type QueuedNotification struct {
 	Attempts     int                     `json:"attempts"`
 	MaxAttempts  int                     `json:"maxAttempts"`
 	LastAttempt  *time.Time              `json:"lastAttempt,omitempty"`
-	LastError    string                  `json:"lastError,omitempty"`
+	LastError    *string                 `json:"lastError,omitempty"`
 	CreatedAt    time.Time               `json:"createdAt"`
 	NextRetryAt  *time.Time              `json:"nextRetryAt,omitempty"`
 	CompletedAt  *time.Time              `json:"completedAt,omitempty"`
-	PayloadBytes int                     `json:"payloadBytes,omitempty"`
+	PayloadBytes *int                    `json:"payloadBytes,omitempty"`
 }
 
 // NotificationQueue manages persistent notification delivery with retries and DLQ

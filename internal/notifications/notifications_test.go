@@ -199,7 +199,10 @@ func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
 }
 
 func TestSendGroupedAppriseHTTP(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
 	nm := NewNotificationManager("https://pulse.local")
+	defer nm.Stop()
 	nm.SetGroupingWindow(0)
 	nm.SetEmailConfig(EmailConfig{Enabled: false})
 
@@ -563,7 +566,10 @@ func TestSendTestNotificationApprise(t *testing.T) {
 }
 
 func TestSendTestNotificationAppriseHTTP(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
 	nm := NewNotificationManager("")
+	defer nm.Stop()
 	nm.SetEmailConfig(EmailConfig{Enabled: false})
 
 	type apprisePayload struct {

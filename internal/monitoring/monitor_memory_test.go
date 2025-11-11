@@ -193,6 +193,7 @@ func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 		lastAuthAttempt:      make(map[string]time.Time),
 	}
 	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
 
 	mon.pollPVEInstance(context.Background(), "test", client)
 

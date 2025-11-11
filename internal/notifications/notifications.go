@@ -1999,9 +1999,17 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 		return fmt.Errorf("webhook URL missing hostname")
 	}
 
-	// Block localhost and loopback addresses (SSRF protection)
+	// Block localhost and loopback addresses (SSRF protection) unless allowlisted
 	if host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasPrefix(host, "127.") {
-		return fmt.Errorf("webhook URLs pointing to localhost are not allowed for security reasons")
+		// Check if localhost is in the allowlist
+		localhostIP := net.ParseIP("127.0.0.1")
+		if !n.isIPInAllowlist(localhostIP) {
+			return fmt.Errorf("webhook URLs pointing to localhost are not allowed for security reasons")
+		}
+		log.Debug().
+			Str("host", host).
+			Str("url", webhookURL).
+			Msg("Localhost webhook URL allowed via allowlist")
 	}
 
 	// Block link-local addresses
