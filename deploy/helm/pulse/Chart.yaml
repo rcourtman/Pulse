@@ -19,3 +19,22 @@ annotations:
   org.opencontainers.image.source: https://github.com/rcourtman/Pulse
   org.opencontainers.image.description: Helm chart for deploying Pulse monitoring system
   org.opencontainers.image.licenses: MIT
+  artifacthub.io/changes: |
+    - kind: added
+      description: GitHub Pages Helm repository distribution (no authentication required)
+    - kind: added
+      description: values.schema.json for configuration validation
+    - kind: added
+      description: ServiceMonitor template for Prometheus integration
+    - kind: added
+      description: Automated chart documentation generation with helm-docs
+    - kind: added
+      description: Smoke tests with kind cluster deployment
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+    - name: Support
+      url: https://github.com/rcourtman/Pulse/discussions
+  artifacthub.io/maintainers: |
+    - name: rcourtman
+      email: pulse@rcourtman.dev
