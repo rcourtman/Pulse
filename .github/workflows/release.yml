@@ -244,6 +244,10 @@ jobs:
           echo "Uploading checksums.txt..."
           gh release upload "${TAG}" release/checksums.txt
 
+          # Upload individual .sha256 files for backward compatibility
+          echo "Uploading .sha256 checksum files..."
+          gh release upload "${TAG}" release/*.sha256
+
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
