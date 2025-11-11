@@ -156,6 +156,34 @@ jobs:
             exit 1
           }
 
+      - name: Generate release notes
+        id: generate_notes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "Generating release notes using LLM..."
+
+          # Find previous release tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "No previous tag found, using all commits"
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          echo "Comparing v${{ inputs.version }} with ${PREVIOUS_TAG}..."
+
+          # Generate notes and capture output
+          RELEASE_NOTES=$(./scripts/generate-release-notes.sh ${{ inputs.version }} "${PREVIOUS_TAG}" 2>&1 | sed -n '/^Generated release notes:/,/^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$/{ /^Generated release notes:/d; /^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$/d; p; }')
+
+          # Save to output (escape for GitHub Actions multiline)
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "✅ Release notes generated successfully"
+
       - name: Create draft release
         id: create_release
         env:
@@ -166,30 +194,14 @@ jobs:
 
           echo "Creating draft release for ${TAG}..."
 
-          # Create draft release with placeholder body
+          # Use LLM-generated release notes
+          NOTES="${{ steps.generate_notes.outputs.RELEASE_NOTES }}"
+
+          # Create draft release with generated notes
           gh release create "${TAG}" \
             --draft \
             --title "Pulse ${TAG}" \
-            --notes "Release ${TAG}
-
-          ## What's Changed
-
-          <!-- TODO: Add release notes before publishing -->
-
-          ## Installation
-
-          Quick install on Linux:
-          \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
-          \`\`\`
-
-          Or download platform-specific archives below.
-
-          ## Docker Images
-
-          Docker images are available for this release:
-          - \`rcourtman/pulse:${TAG}\`
-          - \`rcourtman/pulse-docker-agent:${TAG}\`"
+            --notes "$NOTES"
 
           echo "release_url=$(gh release view ${TAG} --json url -q .url)" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
