@@ -120,6 +120,9 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for tags
 
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
