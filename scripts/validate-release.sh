@@ -135,6 +135,8 @@ pushd "$RELEASE_DIR" >/dev/null
 
 # Validate all expected release assets exist
 info "Checking required release assets..."
+# NOTE: Standalone binaries are NOT in GitHub releases
+# They are only included in Docker images for /download/ endpoints
 required_assets=(
     "install.sh"
     "checksums.txt"
@@ -142,15 +144,18 @@ required_assets=(
     "pulse-v${PULSE_VERSION}-linux-amd64.tar.gz"
     "pulse-v${PULSE_VERSION}-linux-arm64.tar.gz"
     "pulse-v${PULSE_VERSION}-linux-armv7.tar.gz"
+    "pulse-v${PULSE_VERSION}-linux-armv6.tar.gz"
+    "pulse-v${PULSE_VERSION}-linux-386.tar.gz"
+    "pulse-host-agent-v${PULSE_VERSION}-darwin-amd64.tar.gz"
     "pulse-host-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz"
-    "pulse-host-agent-linux-amd64"
-    "pulse-host-agent-linux-arm64"
-    "pulse-host-agent-linux-armv7"
-    "pulse-host-agent-darwin-arm64"
-    "pulse-host-agent-windows-amd64.exe"
-    "pulse-sensor-proxy-linux-amd64"
-    "pulse-sensor-proxy-linux-arm64"
-    "pulse-sensor-proxy-linux-armv7"
+    "pulse-host-agent-v${PULSE_VERSION}-linux-amd64.tar.gz"
+    "pulse-host-agent-v${PULSE_VERSION}-linux-arm64.tar.gz"
+    "pulse-host-agent-v${PULSE_VERSION}-linux-armv7.tar.gz"
+    "pulse-host-agent-v${PULSE_VERSION}-linux-armv6.tar.gz"
+    "pulse-host-agent-v${PULSE_VERSION}-linux-386.tar.gz"
+    "pulse-host-agent-v${PULSE_VERSION}-windows-amd64.zip"
+    "pulse-host-agent-v${PULSE_VERSION}-windows-arm64.zip"
+    "pulse-host-agent-v${PULSE_VERSION}-windows-386.zip"
 )
 
 missing_count=0
@@ -194,46 +199,10 @@ success "Universal tarball validated"
 tar -tzf "pulse-host-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz" pulse-host-agent-darwin-arm64 >/dev/null 2>&1 || { error "macOS tarball validation failed"; exit 1; }
 success "macOS host-agent tarball validated"
 
-# Validate checksums exist for all distributable assets
+# Validate checksums.txt
 info "Validating checksums..."
-checksum_errors=0
-for asset in *.tar.gz *.zip *.tgz install.sh pulse-sensor-proxy-linux-* pulse-host-agent-linux-* pulse-host-agent-darwin-* pulse-host-agent-windows-*.exe; do
-    # Skip checksum files themselves
-    [[ "$asset" == *.sha256 ]] && continue
-
-    if [ ! -f "${asset}.sha256" ]; then
-        error "Missing checksum file: ${asset}.sha256"
-        checksum_errors=$((checksum_errors + 1))
-    else
-        # Verify checksum
-        sha256sum -c "${asset}.sha256" >/dev/null 2>&1 || { error "Checksum verification failed for $asset"; checksum_errors=$((checksum_errors + 1)); }
-    fi
-done
-
-if [ $checksum_errors -gt 0 ]; then
-    error "$checksum_errors checksum validation failures"
-    exit 1
-fi
-success "All individual checksums present and verified"
-
-# Validate combined checksums.txt
 sha256sum -c checksums.txt >/dev/null 2>&1 || { error "checksums.txt validation failed"; exit 1; }
 success "checksums.txt validated"
-
-# Validate architecture of standalone binaries (requires 'file' command)
-if command -v file >/dev/null 2>&1; then
-    info "Validating binary architectures..."
-
-    file pulse-host-agent-linux-amd64 | grep -qF 'ELF 64-bit' | grep -qF 'x86-64' || warn "pulse-host-agent-linux-amd64 architecture check failed"
-    file pulse-host-agent-linux-arm64 | grep -qF 'ELF 64-bit' | grep -qF 'aarch64' || warn "pulse-host-agent-linux-arm64 architecture check failed"
-    file pulse-host-agent-linux-armv7 | grep -qF 'ELF 32-bit' | grep -qF 'ARM' || warn "pulse-host-agent-linux-armv7 architecture check failed"
-    file pulse-host-agent-darwin-amd64 | grep -qF 'Mach-O' | grep -qF 'x86_64' || warn "pulse-host-agent-darwin-amd64 architecture check failed"
-    file pulse-host-agent-darwin-arm64 | grep -qF 'Mach-O' | grep -qF 'arm64' || warn "pulse-host-agent-darwin-arm64 architecture check failed"
-    file pulse-host-agent-windows-amd64.exe | grep -qF 'PE32+' | grep -qF 'x86-64' || warn "pulse-host-agent-windows-amd64.exe architecture check failed"
-    file pulse-host-agent-windows-arm64.exe | grep -qF 'PE32+' | grep -qF 'Aarch64' || warn "pulse-host-agent-windows-arm64.exe architecture check failed"
-
-    success "Binary architectures validated"
-fi
 
 popd >/dev/null
 
@@ -273,28 +242,8 @@ success "Extracted VERSION file: $PULSE_VERSION"
 
 echo ""
 
-#=============================================================================
-# STANDALONE BINARY VALIDATION
-#=============================================================================
-info "=== Standalone Binary Validation ==="
-
-info "Testing standalone binaries in release directory..."
-
-# Host agent
-"$RELEASE_DIR/pulse-host-agent-linux-amd64" --version 2>/dev/null | grep -Fx "$PULSE_TAG" >/dev/null || { error "Standalone host-agent version mismatch"; exit 1; }
-success "Standalone host-agent: $PULSE_TAG"
-
-# Sensor proxy
-"$RELEASE_DIR/pulse-sensor-proxy-linux-amd64" version 2>/dev/null | grep -Fx "pulse-sensor-proxy $PULSE_TAG" >/dev/null || { error "Standalone sensor-proxy version mismatch"; exit 1; }
-success "Standalone sensor-proxy: $PULSE_TAG"
-
-# Docker agent (built for all 3 architectures)
-for arch in linux-amd64 linux-arm64 linux-armv7; do
-    if [ -f "$RELEASE_DIR/pulse-docker-agent-$arch" ]; then
-        grep -aF "$PULSE_TAG" "$RELEASE_DIR/pulse-docker-agent-$arch" >/dev/null || { error "Standalone docker-agent-$arch version string not found"; exit 1; }
-    fi
-done
-success "Standalone docker-agent binaries contain: $PULSE_TAG"
+# NOTE: Standalone binary validation removed - they are NOT in GitHub releases
+# They are only included in Docker images for /download/ endpoints
 
 echo ""
 
