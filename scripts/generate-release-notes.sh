@@ -68,13 +68,13 @@ Generate release notes following this EXACT template format:
 ## What's Changed
 
 ### New Features
-[List new features as bullet points, each starting with "**Feature name**:" followed by description and commit hash in parentheses like (#abc123)]
+[List new features as bullet points, each starting with "**Feature name**:" followed by description and commit hash in parentheses like (abc123)]
 
 ### Bug Fixes
-[List bug fixes as bullet points, each starting with "**Component/area**:" followed by description and issue/commit reference like (#123) or (#abc123)]
+[List bug fixes as bullet points, each starting with "**Component/area**:" followed by description and issue/commit reference like (#123) for issues or (abc123) for commits]
 
 ### Improvements
-[List improvements/enhancements as bullet points, each starting with "**Component/area**:" followed by description]
+[List improvements/enhancements as bullet points, each starting with "**Component/area**:" followed by description and commit hash like (abc123)]
 
 ### Breaking Changes
 [List any breaking changes, or write "None" if there are none]
@@ -127,7 +127,9 @@ helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \\
 Guidelines:
 - Match the exact format and style of the template above
 - Use bold for feature/component names followed by colon
-- Include commit hashes in parentheses like (#abc123) or issue numbers like (#123)
+- Include commit hashes WITHOUT # symbol - just the hash like (abc123) not (#abc123)
+- GitHub will auto-link commit hashes when they appear in parentheses
+- For issue references, use # like (#123)
 - Focus on user-visible changes only
 - Use clear, non-technical language
 - Group related changes together logically
