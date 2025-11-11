@@ -220,11 +220,17 @@ jobs:
           # Use LLM-generated release notes
           NOTES="${{ steps.generate_notes.outputs.RELEASE_NOTES }}"
 
+          # Write notes to file to avoid bash interpreting backticks as commands
+          NOTES_FILE=$(mktemp)
+          echo "$NOTES" > "$NOTES_FILE"
+
           # Create draft release with generated notes
           gh release create "${TAG}" \
             --draft \
             --title "Pulse ${TAG}" \
-            --notes "$NOTES"
+            --notes-file "$NOTES_FILE"
+
+          rm -f "$NOTES_FILE"
 
           echo "release_url=$(gh release view ${TAG} --json url -q .url)" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
