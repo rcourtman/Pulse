@@ -3,9 +3,10 @@
 # Pulse Release Validation Script
 # Comprehensive artifact validation to prevent missing files/binaries in releases
 #
-# Usage: ./scripts/validate-release.sh <pulse-version> [image] [release-dir]
+# Usage: ./scripts/validate-release.sh <pulse-version> [image] [release-dir] [--skip-docker]
 # Example: ./scripts/validate-release.sh 4.26.2
 #          ./scripts/validate-release.sh 4.26.2 rcourtman/pulse:v4.26.2 release
+#          ./scripts/validate-release.sh 4.26.2 --skip-docker
 
 set -euo pipefail
 
@@ -33,17 +34,41 @@ warn() {
 }
 
 if [ $# -lt 1 ]; then
-    error "Usage: $0 <pulse-version> [image] [release-dir]"
+    error "Usage: $0 <pulse-version> [image] [release-dir] [--skip-docker]"
     exit 1
 fi
 
 PULSE_VERSION=$1
 PULSE_TAG="v${PULSE_VERSION}"
-IMAGE=${2:-"rcourtman/pulse:${PULSE_TAG}"}
-RELEASE_DIR=${3:-"release"}
+SKIP_DOCKER=false
+
+# Parse arguments
+shift
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --skip-docker)
+            SKIP_DOCKER=true
+            shift
+            ;;
+        *)
+            if [ -z "${IMAGE:-}" ]; then
+                IMAGE="$1"
+            elif [ -z "${RELEASE_DIR:-}" ]; then
+                RELEASE_DIR="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Set defaults
+IMAGE=${IMAGE:-"rcourtman/pulse:${PULSE_TAG}"}
+RELEASE_DIR=${RELEASE_DIR:-"release"}
 
 # Validate prerequisites
-command -v docker >/dev/null || { error "docker is required"; exit 1; }
+if [ "$SKIP_DOCKER" = false ]; then
+    command -v docker >/dev/null || { error "docker is required (use --skip-docker to skip Docker validation)"; exit 1; }
+fi
 [ -d "$RELEASE_DIR" ] || { error "release dir not found: $RELEASE_DIR"; exit 1; }
 
 # Create temp directory for extractions
@@ -58,43 +83,48 @@ echo ""
 #=============================================================================
 # DOCKER IMAGE VALIDATION
 #=============================================================================
-info "=== Docker Image Validation ==="
+if [ "$SKIP_DOCKER" = false ]; then
+    info "=== Docker Image Validation ==="
 
-# Validate VERSION file in container
-info "Checking VERSION file in Docker image..."
-docker run --rm --entrypoint /bin/sh -e EXPECTED_VERSION="$PULSE_VERSION" "$IMAGE" -c 'set -euo pipefail; actual=$(cat /VERSION | tr -d "\r\n"); [ "$actual" = "$EXPECTED_VERSION" ] || { echo "VERSION mismatch: expected=$EXPECTED_VERSION actual=$actual" >&2; exit 1; }' || { error "VERSION file mismatch in Docker image"; exit 1; }
-success "VERSION file correct: $PULSE_VERSION"
+    # Validate VERSION file in container
+    info "Checking VERSION file in Docker image..."
+    docker run --rm --entrypoint /bin/sh -e EXPECTED_VERSION="$PULSE_VERSION" "$IMAGE" -c 'set -euo pipefail; actual=$(cat /VERSION | tr -d "\r\n"); [ "$actual" = "$EXPECTED_VERSION" ] || { echo "VERSION mismatch: expected=$EXPECTED_VERSION actual=$actual" >&2; exit 1; }' || { error "VERSION file mismatch in Docker image"; exit 1; }
+    success "VERSION file correct: $PULSE_VERSION"
 
-# Validate all required scripts exist and are executable
-info "Checking installer/uninstaller scripts in /opt/pulse/scripts/..."
-docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/scripts; required="install-docker-agent.sh install-container-agent.sh install-host-agent.sh install-host-agent.ps1 uninstall-host-agent.sh uninstall-host-agent.ps1 install-sensor-proxy.sh install-docker.sh"; for f in $required; do [ -f "$f" ] || { echo "missing script $f" >&2; exit 1; }; case "$f" in *.sh|*.ps1) [ -x "$f" ] || { echo "$f not executable" >&2; exit 1; };; esac; done; echo "All scripts present and executable"' || { error "Script validation failed"; exit 1; }
-success "All installer/uninstaller scripts present and executable"
+    # Validate all required scripts exist and are executable
+    info "Checking installer/uninstaller scripts in /opt/pulse/scripts/..."
+    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/scripts; required="install-docker-agent.sh install-container-agent.sh install-host-agent.sh install-host-agent.ps1 uninstall-host-agent.sh uninstall-host-agent.ps1 install-sensor-proxy.sh install-docker.sh"; for f in $required; do [ -f "$f" ] || { echo "missing script $f" >&2; exit 1; }; case "$f" in *.sh|*.ps1) [ -x "$f" ] || { echo "$f not executable" >&2; exit 1; };; esac; done; echo "All scripts present and executable"' || { error "Script validation failed"; exit 1; }
+    success "All installer/uninstaller scripts present and executable"
 
-# Validate all required binaries exist and are non-empty
-info "Checking downloadable binaries in /opt/pulse/bin/..."
-docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-docker-agent pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 pulse-docker-agent-linux-armv7 pulse-docker-agent-linux-armv6 pulse-docker-agent-linux-386 pulse-host-agent-linux-amd64 pulse-host-agent-linux-arm64 pulse-host-agent-linux-armv7 pulse-host-agent-linux-armv6 pulse-host-agent-linux-386 pulse-host-agent-darwin-amd64 pulse-host-agent-darwin-arm64 pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 pulse-sensor-proxy pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy-linux-arm64 pulse-sensor-proxy-linux-armv7 pulse-sensor-proxy-linux-armv6 pulse-sensor-proxy-linux-386"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-host-agent-windows-amd64)" = "pulse-host-agent-windows-amd64.exe" ] || { echo "windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-arm64)" = "pulse-host-agent-windows-arm64.exe" ] || { echo "windows arm64 symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
-success "All downloadable binaries present (24 binaries + 2 Windows symlinks)"
+    # Validate all required binaries exist and are non-empty
+    info "Checking downloadable binaries in /opt/pulse/bin/..."
+    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-docker-agent pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 pulse-docker-agent-linux-armv7 pulse-docker-agent-linux-armv6 pulse-docker-agent-linux-386 pulse-host-agent-linux-amd64 pulse-host-agent-linux-arm64 pulse-host-agent-linux-armv7 pulse-host-agent-linux-armv6 pulse-host-agent-linux-386 pulse-host-agent-darwin-amd64 pulse-host-agent-darwin-arm64 pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 pulse-sensor-proxy pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy-linux-arm64 pulse-sensor-proxy-linux-armv7 pulse-sensor-proxy-linux-armv6 pulse-sensor-proxy-linux-386"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-host-agent-windows-amd64)" = "pulse-host-agent-windows-amd64.exe" ] || { echo "windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-arm64)" = "pulse-host-agent-windows-arm64.exe" ] || { echo "windows arm64 symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
+    success "All downloadable binaries present (24 binaries + 2 Windows symlinks)"
 
-# Validate version embedding in Docker image binaries
-info "Validating version embedding in Docker image binaries..."
+    # Validate version embedding in Docker image binaries
+    info "Validating version embedding in Docker image binaries..."
 
-# Pulse server binary
-docker run --rm --entrypoint /app/pulse "$IMAGE" version 2>/dev/null | grep -Fx "Pulse $PULSE_TAG" >/dev/null || { error "Pulse server version mismatch"; exit 1; }
-success "Pulse server version: $PULSE_TAG"
+    # Pulse server binary
+    docker run --rm --entrypoint /app/pulse "$IMAGE" version 2>/dev/null | grep -Fx "Pulse $PULSE_TAG" >/dev/null || { error "Pulse server version mismatch"; exit 1; }
+    success "Pulse server version: $PULSE_TAG"
 
-# Host agent binary
-docker run --rm --entrypoint /opt/pulse/bin/pulse-host-agent-linux-amd64 "$IMAGE" --version 2>/dev/null | grep -Fx "$PULSE_TAG" >/dev/null || { error "Host agent version mismatch"; exit 1; }
-success "Host agent version: $PULSE_TAG"
+    # Host agent binary
+    docker run --rm --entrypoint /opt/pulse/bin/pulse-host-agent-linux-amd64 "$IMAGE" --version 2>/dev/null | grep -Fx "$PULSE_TAG" >/dev/null || { error "Host agent version mismatch"; exit 1; }
+    success "Host agent version: $PULSE_TAG"
 
-# Sensor proxy binary
-docker run --rm --entrypoint /opt/pulse/bin/pulse-sensor-proxy-linux-amd64 "$IMAGE" version 2>/dev/null | grep -Fx "pulse-sensor-proxy $PULSE_TAG" >/dev/null || { error "Sensor proxy version mismatch"; exit 1; }
-success "Sensor proxy version: $PULSE_TAG"
+    # Sensor proxy binary
+    docker run --rm --entrypoint /opt/pulse/bin/pulse-sensor-proxy-linux-amd64 "$IMAGE" version 2>/dev/null | grep -Fx "pulse-sensor-proxy $PULSE_TAG" >/dev/null || { error "Sensor proxy version mismatch"; exit 1; }
+    success "Sensor proxy version: $PULSE_TAG"
 
-# Docker agent binary (no CLI flag, check binary strings)
-docker run --rm --entrypoint /bin/sh -e EXPECTED_TAG="$PULSE_TAG" "$IMAGE" -c 'set -euo pipefail; grep -aF "$EXPECTED_TAG" /opt/pulse/bin/pulse-docker-agent-linux-amd64 >/dev/null' || { error "Docker agent version string not found"; exit 1; }
-success "Docker agent version embedded: $PULSE_TAG"
+    # Docker agent binary (no CLI flag, check binary strings)
+    docker run --rm --entrypoint /bin/sh -e EXPECTED_TAG="$PULSE_TAG" "$IMAGE" -c 'set -euo pipefail; grep -aF "$EXPECTED_TAG" /opt/pulse/bin/pulse-docker-agent-linux-amd64 >/dev/null' || { error "Docker agent version string not found"; exit 1; }
+    success "Docker agent version embedded: $PULSE_TAG"
 
-echo ""
+    echo ""
+else
+    warn "=== Skipping Docker Image Validation (--skip-docker flag provided) ==="
+    echo ""
+fi
 
 #=============================================================================
 # RELEASE TARBALL VALIDATION
