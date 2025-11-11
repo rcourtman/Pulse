@@ -68,6 +68,8 @@ type Manager struct {
 	cacheTime     map[string]time.Time   // keyed by channel
 	cacheDuration time.Duration
 	progressChan  chan UpdateStatus
+	queue         *UpdateQueue
+	sseBroadcast  *SSEBroadcaster
 }
 
 // NewManager creates a new update manager
@@ -78,6 +80,8 @@ func NewManager(cfg *config.Config) *Manager {
 		cacheTime:     make(map[string]time.Time),
 		cacheDuration: 5 * time.Minute, // Cache update checks for 5 minutes
 		progressChan:  make(chan UpdateStatus, 100),
+		queue:         NewUpdateQueue(),
+		sseBroadcast:  NewSSEBroadcaster(),
 		status: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -86,6 +90,9 @@ func NewManager(cfg *config.Config) *Manager {
 
 	// Clean up old temp directories from previous failed/killed updates
 	go m.cleanupOldTempDirs()
+
+	// Start heartbeat for SSE connections (every 30 seconds)
+	go m.sseHeartbeatLoop()
 
 	return m
 }
@@ -98,6 +105,19 @@ func (m *Manager) GetProgressChannel() <-chan UpdateStatus {
 // Close closes the progress channel and cleans up resources
 func (m *Manager) Close() {
 	close(m.progressChan)
+	if m.sseBroadcast != nil {
+		m.sseBroadcast.Close()
+	}
+}
+
+// GetSSEBroadcaster returns the SSE broadcaster
+func (m *Manager) GetSSEBroadcaster() *SSEBroadcaster {
+	return m.sseBroadcast
+}
+
+// GetQueue returns the update queue
+func (m *Manager) GetQueue() *UpdateQueue {
+	return m.queue
 }
 
 // CheckForUpdates checks GitHub for available updates using saved config channel
@@ -331,6 +351,18 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 		return fmt.Errorf("manual migration required: Pulse v4 is a complete rewrite. Please create a fresh installation. See https://github.com/rcourtman/Pulse/releases/v4.0.0")
 	}
 
+	// Enqueue the update job
+	job, accepted := m.queue.Enqueue(downloadURL)
+	if !accepted {
+		return fmt.Errorf("update already in progress")
+	}
+
+	// Mark job as running
+	m.queue.MarkRunning(job.ID)
+
+	// Use job context instead of passed context
+	ctx = job.Context
+
 	m.updateStatus("downloading", 10, "Downloading update...")
 
 	// Create temp directory in a location we can write to
@@ -366,6 +398,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	if err := m.downloadFile(ctx, downloadURL, tarballPath); err != nil {
 		downloadErr := fmt.Errorf("failed to download update: %w", err)
 		m.updateStatus("error", 20, "Failed to download update", downloadErr)
+		m.queue.MarkCompleted(job.ID, downloadErr)
 		return downloadErr
 	}
 
@@ -374,6 +407,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	if err := m.verifyChecksum(ctx, downloadURL, tarballPath); err != nil {
 		checksumErr := fmt.Errorf("checksum verification failed: %w", err)
 		m.updateStatus("error", 30, "Failed to verify update checksum", checksumErr)
+		m.queue.MarkCompleted(job.ID, checksumErr)
 		return checksumErr
 	}
 	log.Info().Msg("Checksum verification passed")
@@ -385,6 +419,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	if err := m.extractTarball(tarballPath, extractDir); err != nil {
 		extractErr := fmt.Errorf("failed to extract update: %w", err)
 		m.updateStatus("error", 40, "Failed to extract update", extractErr)
+		m.queue.MarkCompleted(job.ID, extractErr)
 		return extractErr
 	}
 
@@ -395,6 +430,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	if err != nil {
 		backupErr := fmt.Errorf("failed to create backup: %w", err)
 		m.updateStatus("error", 60, "Failed to create backup", backupErr)
+		m.queue.MarkCompleted(job.ID, backupErr)
 		return backupErr
 	}
 	log.Info().Str("backup", backupPath).Msg("Created backup")
@@ -420,6 +456,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	if err := m.applyUpdateFiles(extractDir); err != nil {
 		applyErr := fmt.Errorf("failed to apply update: %w", err)
 		m.updateStatus("error", 80, "Failed to apply update", applyErr)
+		m.queue.MarkCompleted(job.ID, applyErr)
 		// Attempt to restore backup
 		if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
 			log.Error().Err(restoreErr).Msg("Failed to restore backup")
@@ -428,6 +465,9 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	}
 
 	m.updateStatus("restarting", 95, "Restarting service...")
+
+	// Mark job as completed
+	m.queue.MarkCompleted(job.ID, nil)
 
 	// Schedule a clean exit after a short delay - systemd will restart us
 	go func() {
@@ -1070,10 +1110,27 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 	statusCopy := m.status
 	m.statusMu.Unlock()
 
-	// Send to progress channel (non-blocking)
+	// Send to progress channel (non-blocking) for WebSocket compatibility
 	select {
 	case m.progressChan <- statusCopy:
 	default:
+	}
+
+	// Broadcast to SSE clients
+	if m.sseBroadcast != nil {
+		m.sseBroadcast.Broadcast(statusCopy)
+	}
+}
+
+// sseHeartbeatLoop sends periodic heartbeats to SSE clients
+func (m *Manager) sseHeartbeatLoop() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if m.sseBroadcast != nil {
+			m.sseBroadcast.SendHeartbeat()
+		}
 	}
 }
 

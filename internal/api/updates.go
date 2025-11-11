@@ -3,7 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
@@ -11,9 +15,11 @@ import (
 
 // UpdateHandlers handles update-related API requests
 type UpdateHandlers struct {
-	manager  *updates.Manager
-	history  *updates.UpdateHistory
-	registry *updates.UpdaterRegistry
+	manager          *updates.Manager
+	history          *updates.UpdateHistory
+	registry         *updates.UpdaterRegistry
+	statusRateLimits map[string]time.Time // IP -> last request time
+	statusMu         sync.RWMutex
 }
 
 // NewUpdateHandlers creates new update handlers
@@ -35,11 +41,17 @@ func NewUpdateHandlers(manager *updates.Manager, dataDir string) *UpdateHandlers
 	registry.Register("docker", updates.NewDockerUpdater())
 	registry.Register("aur", updates.NewAURUpdater())
 
-	return &UpdateHandlers{
-		manager:  manager,
-		history:  history,
-		registry: registry,
+	h := &UpdateHandlers{
+		manager:          manager,
+		history:          history,
+		registry:         registry,
+		statusRateLimits: make(map[string]time.Time),
 	}
+
+	// Start periodic cleanup of rate limit map
+	go h.cleanupRateLimits()
+
+	return h
 }
 
 // HandleCheckUpdates handles update check requests
@@ -104,19 +116,155 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// HandleUpdateStatus handles update status requests
+// HandleUpdateStatus handles update status requests with rate limiting
 func (h *UpdateHandlers) HandleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Extract client IP for rate limiting
+	clientIP := getClientIP(r)
+
+	// Check rate limit (5 seconds minimum between requests per client)
+	h.statusMu.Lock()
+	lastRequest, exists := h.statusRateLimits[clientIP]
+	now := time.Now()
+
+	if exists && now.Sub(lastRequest) < 5*time.Second {
+		// Rate limited - return cached status
+		h.statusMu.Unlock()
+
+		// Get cached status from SSE broadcaster (more recent than manager status)
+		cachedStatus, cacheTime := h.manager.GetSSEBroadcaster().GetCachedStatus()
+
+		// Add cache headers
+		w.Header().Set("X-Cache", "HIT")
+		w.Header().Set("X-Cache-Time", cacheTime.Format(time.RFC3339))
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(cachedStatus); err != nil {
+			log.Error().Err(err).Msg("Failed to encode cached update status")
+		}
+
+		log.Debug().
+			Str("client_ip", clientIP).
+			Dur("time_since_last", now.Sub(lastRequest)).
+			Msg("Update status request rate limited, returning cached status")
+
+		return
+	}
+
+	// Update last request time
+	h.statusRateLimits[clientIP] = now
+	h.statusMu.Unlock()
+
+	// Get fresh status
 	status := h.manager.GetStatus()
 
+	w.Header().Set("X-Cache", "MISS")
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(status); err != nil {
 		log.Error().Err(err).Msg("Failed to encode update status")
 	}
+}
+
+// HandleUpdateStream handles Server-Sent Events streaming of update progress
+func (h *UpdateHandlers) HandleUpdateStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Generate client ID
+	clientIP := getClientIP(r)
+	clientID := fmt.Sprintf("%s-%d", clientIP, time.Now().UnixNano())
+
+	// Register client with SSE broadcaster
+	broadcaster := h.manager.GetSSEBroadcaster()
+	client := broadcaster.AddClient(w, clientID)
+	if client == nil {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().
+		Str("client_id", clientID).
+		Str("client_ip", clientIP).
+		Msg("Update progress SSE stream started")
+
+	// Send initial connection message
+	fmt.Fprintf(w, ": connected\n\n")
+	client.Flusher.Flush()
+
+	// Wait for client disconnect or context cancellation
+	select {
+	case <-r.Context().Done():
+		log.Info().
+			Str("client_id", clientID).
+			Msg("Update progress SSE stream closed by client")
+	case <-client.Done:
+		log.Info().
+			Str("client_id", clientID).
+			Msg("Update progress SSE stream closed by server")
+	}
+
+	// Clean up
+	broadcaster.RemoveClient(clientID)
+}
+
+// cleanupRateLimits periodically cleans up old entries from the rate limit map
+func (h *UpdateHandlers) cleanupRateLimits() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		h.statusMu.Lock()
+
+		// Remove entries older than 10 minutes
+		for ip, lastTime := range h.statusRateLimits {
+			if now.Sub(lastTime) > 10*time.Minute {
+				delete(h.statusRateLimits, ip)
+			}
+		}
+
+		h.statusMu.Unlock()
+	}
+}
+
+// getClientIP extracts the client IP from the request
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header first
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		// Take the first IP if multiple are present
+		if ip := net.ParseIP(xff); ip != nil {
+			return xff
+		}
+	}
+
+	// Check X-Real-IP header
+	xri := r.Header.Get("X-Real-IP")
+	if xri != "" {
+		if ip := net.ParseIP(xri); ip != nil {
+			return xri
+		}
+	}
+
+	// Fall back to RemoteAddr
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+
+	return host
 }
 
 // HandleGetUpdatePlan returns update plan for current deployment
