@@ -1720,18 +1720,28 @@ download_pulse() {
             exit 1
         fi
 
-        # Download checksums file and verify
-        if ! wget -q --timeout=60 --tries=2 -O "/tmp/checksums.txt" "$CHECKSUMS_URL"; then
-            print_error "Failed to download checksums file for Pulse release"
-            print_info "Refusing to install without checksum verification"
-            exit 1
+        # Download and verify checksum (try new format first, fall back to old)
+        EXPECTED_CHECKSUM=""
+
+        # Try checksums.txt first (v4.29.0+)
+        if wget -q --timeout=60 --tries=2 -O "/tmp/checksums.txt" "$CHECKSUMS_URL" 2>/dev/null; then
+            EXPECTED_CHECKSUM=$(grep "${ARCHIVE_NAME}" /tmp/checksums.txt 2>/dev/null | awk '{print $1}')
+            rm -f /tmp/checksums.txt
         fi
 
-        # Extract the checksum for our specific archive
-        EXPECTED_CHECKSUM=$(grep "${ARCHIVE_NAME}" /tmp/checksums.txt | awk '{print $1}')
+        # Fall back to individual .sha256 file (v4.28.0 and earlier)
         if [ -z "$EXPECTED_CHECKSUM" ]; then
-            print_error "Checksum not found in checksums.txt for ${ARCHIVE_NAME}"
-            rm -f /tmp/checksums.txt
+            CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
+            if wget -q --timeout=60 --tries=2 -O "${ARCHIVE_PATH}.sha256" "$CHECKSUM_URL" 2>/dev/null; then
+                EXPECTED_CHECKSUM=$(awk '{print $1}' "${ARCHIVE_PATH}.sha256")
+                rm -f "${ARCHIVE_PATH}.sha256"
+            fi
+        fi
+
+        # If we still don't have a checksum, fail
+        if [ -z "$EXPECTED_CHECKSUM" ]; then
+            print_error "Failed to download checksum for Pulse release"
+            print_info "Refusing to install without checksum verification"
             exit 1
         fi
 
@@ -1741,10 +1751,8 @@ download_pulse() {
             print_error "Checksum verification failed for downloaded Pulse release"
             print_error "Expected: $EXPECTED_CHECKSUM"
             print_error "Got: $ACTUAL_CHECKSUM"
-            rm -f /tmp/checksums.txt
             exit 1
         fi
-        rm -f /tmp/checksums.txt
         
         # Extract to temporary directory first
         TEMP_EXTRACT="/tmp/pulse-extract-$$"
