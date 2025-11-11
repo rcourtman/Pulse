@@ -3,23 +3,37 @@ name: Update Demo Server
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy (e.g., v4.29.0)'
+        required: true
+        type: string
 
 jobs:
   update-demo:
-    # Only run for stable releases (not pre-releases)
-    if: github.event.release.prerelease == false
+    # Only run for stable releases (not pre-releases) or manual dispatch
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
     runs-on: ubuntu-latest
 
     steps:
       - name: Check release type
         run: |
-          echo "Release: ${{ github.event.release.tag_name }}"
-          echo "Prerelease: ${{ github.event.release.prerelease }}"
-          echo "Updating demo server to latest stable release..."
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual deployment triggered for: ${{ inputs.tag }}"
+          else
+            echo "Release: ${{ github.event.release.tag_name }}"
+            echo "Prerelease: ${{ github.event.release.prerelease }}"
+            echo "Updating demo server to latest stable release..."
+          fi
 
       - name: Wait for release assets
         run: |
-          TAG="${{ github.event.release.tag_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+          fi
           echo "Waiting for release assets to be available..."
 
           MAX_ATTEMPTS=30
