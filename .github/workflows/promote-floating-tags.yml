@@ -1,0 +1,100 @@
+name: Promote Floating Tags
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  promote-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      OWNER: ${{ github.repository_owner }}
+      TAG: ${{ github.event.release.tag_name }}
+      PRERELEASE: ${{ github.event.release.prerelease }}
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote Pulse server image tags
+        run: |
+          set -euo pipefail
+          TAG="${TAG}"
+          VERSION="${TAG#v}"
+          BASE_VERSION="${VERSION%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+          MINOR=${MINOR:-0}
+          MAJOR_MINOR="$MAJOR.$MINOR"
+
+          if [ "$PRERELEASE" = "true" ]; then
+            echo "Promoting prerelease tags for ${TAG}"
+            docker buildx imagetools create \
+              -t rcourtman/pulse:rc \
+              rcourtman/pulse:${TAG}
+            docker buildx imagetools create \
+              -t ghcr.io/${OWNER}/pulse:rc \
+              ghcr.io/${OWNER}/pulse:${TAG}
+          else
+            echo "Promoting stable tags for ${TAG}"
+            docker buildx imagetools create \
+              -t rcourtman/pulse:latest \
+              -t rcourtman/pulse:${MAJOR_MINOR} \
+              -t rcourtman/pulse:${MAJOR} \
+              rcourtman/pulse:${TAG}
+            docker buildx imagetools create \
+              -t ghcr.io/${OWNER}/pulse:latest \
+              -t ghcr.io/${OWNER}/pulse:${MAJOR_MINOR} \
+              -t ghcr.io/${OWNER}/pulse:${MAJOR} \
+              ghcr.io/${OWNER}/pulse:${TAG}
+          fi
+
+      - name: Promote Docker agent image tags
+        run: |
+          set -euo pipefail
+          TAG="${TAG}"
+          VERSION="${TAG#v}"
+          BASE_VERSION="${VERSION%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+          MINOR=${MINOR:-0}
+          MAJOR_MINOR="$MAJOR.$MINOR"
+
+          if [ "$PRERELEASE" = "true" ]; then
+            docker buildx imagetools create \
+              -t rcourtman/pulse-docker-agent:rc \
+              rcourtman/pulse-docker-agent:${TAG}
+            docker buildx imagetools create \
+              -t ghcr.io/${OWNER}/pulse-docker-agent:rc \
+              ghcr.io/${OWNER}/pulse-docker-agent:${TAG}
+          else
+            docker buildx imagetools create \
+              -t rcourtman/pulse-docker-agent:latest \
+              -t rcourtman/pulse-docker-agent:${MAJOR_MINOR} \
+              -t rcourtman/pulse-docker-agent:${MAJOR} \
+              rcourtman/pulse-docker-agent:${TAG}
+            docker buildx imagetools create \
+              -t ghcr.io/${OWNER}/pulse-docker-agent:latest \
+              -t ghcr.io/${OWNER}/pulse-docker-agent:${MAJOR_MINOR} \
+              -t ghcr.io/${OWNER}/pulse-docker-agent:${MAJOR} \
+              ghcr.io/${OWNER}/pulse-docker-agent:${TAG}
+          fi
+
+      - name: Promotion summary
+        run: |
+          if [ "$PRERELEASE" = "true" ]; then
+            echo "Updated rc tags to point to ${TAG} for both server and agent images."
+          else
+            echo "Updated latest/${MAJOR_MINOR}/${MAJOR} tags to point to ${TAG} for both server and agent images."
+          fi

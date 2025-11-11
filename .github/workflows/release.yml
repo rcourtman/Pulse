@@ -9,7 +9,100 @@ on:
         type: string
 
 jobs:
+  version_guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure VERSION matches requested release
+        run: |
+          FILE_VERSION=$(cat VERSION | tr -d '\n')
+          REQUESTED_VERSION="${{ inputs.version }}"
+          if [ "$FILE_VERSION" != "$REQUESTED_VERSION" ]; then
+            echo "::error::VERSION file ($FILE_VERSION) does not match requested version ($REQUESTED_VERSION)."
+            echo "Update the VERSION file and commit the change before running the release workflow."
+            exit 1
+          fi
+          echo "VERSION file matches requested release ($REQUESTED_VERSION)."
+
+  preflight-tests:
+    needs: version_guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend-modern ci
+
+      - name: Build frontend bundle for Go embed
+        run: |
+          npm --prefix frontend-modern run build
+          rm -rf internal/api/frontend-modern
+          mkdir -p internal/api/frontend-modern
+          cp -r frontend-modern/dist internal/api/frontend-modern/
+
+      - name: Lint frontend
+        run: npm --prefix frontend-modern run lint
+
+      - name: Install docker-compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run backend tests
+        run: go test ./...
+
+      - name: Prepare integration test dependencies
+        working-directory: tests/integration
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build Pulse for integration tests
+        run: make build
+
+      - name: Build Docker images for integration tests
+        run: |
+          docker build -t pulse-mock-github:test tests/integration/mock-github-server
+          docker build -t pulse:test -f Dockerfile .
+
+      - name: Run update integration smoke tests
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "false"
+          MOCK_NETWORK_ERROR: "false"
+          MOCK_RATE_LIMIT: "false"
+          MOCK_STALE_RELEASE: "false"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          # Allow services to settle before running Playwright
+          sleep 20
+          npx playwright test tests/01-happy-path.spec.ts tests/02-bad-checksums.spec.ts --reporter=list
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Cleanup integration environment
+        if: always()
+        working-directory: tests/integration
+        run: docker-compose -f docker-compose.test.yml down -v || true
+
   build-docker-images:
+    needs:
+      - version_guard
+      - preflight-tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -57,10 +150,10 @@ jobs:
           push: true
           provenance: false
           tags: |
-            rcourtman/pulse:latest
             rcourtman/pulse:${{ steps.set_version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse:latest
+            rcourtman/pulse:${{ inputs.version }}
             ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.set_version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse:${{ inputs.version }}
           labels: |
             org.opencontainers.image.title=Pulse
             org.opencontainers.image.description=Proxmox monitoring system
@@ -81,10 +174,10 @@ jobs:
           push: true
           provenance: false
           tags: |
-            rcourtman/pulse-docker-agent:latest
             rcourtman/pulse-docker-agent:${{ steps.set_version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest
+            rcourtman/pulse-docker-agent:${{ inputs.version }}
             ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.set_version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ inputs.version }}
           labels: |
             org.opencontainers.image.title=Pulse Docker Agent
             org.opencontainers.image.description=Docker container monitoring agent for Pulse
@@ -101,11 +194,11 @@ jobs:
           echo ""
           echo "Server images:"
           echo "  - rcourtman/pulse:${{ steps.set_version.outputs.tag }}"
-          echo "  - rcourtman/pulse:latest"
+          echo "  - rcourtman/pulse:${{ inputs.version }}"
           echo ""
           echo "Agent images:"
           echo "  - rcourtman/pulse-docker-agent:${{ steps.set_version.outputs.tag }}"
-          echo "  - rcourtman/pulse-docker-agent:latest"
+          echo "  - rcourtman/pulse-docker-agent:${{ inputs.version }}"
 
   create-release:
     needs: build-docker-images
@@ -113,6 +206,11 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+    outputs:
+      tag: ${{ steps.create_release.outputs.tag }}
+      release_id: ${{ steps.create_release.outputs.release_id }}
+      release_url: ${{ steps.create_release.outputs.release_url }}
+      target_commitish: ${{ steps.commit_metadata.outputs.commitish }}
 
     steps:
       - name: Checkout repository
@@ -122,6 +220,10 @@ jobs:
 
       - name: Fetch all tags
         run: git fetch --tags --force
+
+      - name: Capture commit metadata
+        id: commit_metadata
+        run: echo "commitish=$GITHUB_SHA" >> $GITHUB_OUTPUT
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -146,20 +248,6 @@ jobs:
         run: |
           echo "Building release v${{ inputs.version }}..."
           ./scripts/build-release.sh ${{ inputs.version }}
-
-      - name: Validate release artifacts
-        run: |
-          echo "Validating release v${{ inputs.version }}..."
-          # Note: Docker image validation is skipped in this workflow
-          # since we're only validating the built artifacts (tarballs, binaries, checksums)
-          # Docker images were built and validated in previous job
-
-          # Run validation with --skip-docker flag
-          ./scripts/validate-release.sh ${{ inputs.version }} --skip-docker || {
-            echo "❌ Release validation failed!"
-            echo "The workflow will now fail. No release will be created."
-            exit 1
-          }
 
       - name: Generate release notes
         id: generate_notes
@@ -233,6 +321,7 @@ jobs:
           rm -f "$NOTES_FILE"
 
           echo "release_url=$(gh release view ${TAG} --json url -q .url)" >> $GITHUB_OUTPUT
+          echo "release_id=$(gh release view ${TAG} --json id -q .id)" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       - name: Upload checksums.txt
@@ -287,7 +376,18 @@ jobs:
           echo "2. Update the release notes with changes since last release"
           echo "3. Publish the release manually when ready"
           echo ""
-          echo "All artifacts have been uploaded and validated."
+          echo "All artifacts have been uploaded."
           echo "Docker images are available at Docker Hub and GHCR."
-          echo "checksums.txt matches all uploaded binaries."
+          echo "Automated validation will now verify the release assets."
           echo ""
+
+  validate-release-assets:
+    needs: create-release
+    uses: ./.github/workflows/validate-release-assets.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.create-release.outputs.tag }}
+      version: ${{ inputs.version }}
+      release_id: ${{ needs.create-release.outputs.release_id }}
+      draft: true
+      target_commitish: ${{ needs.create-release.outputs.target_commitish }}
