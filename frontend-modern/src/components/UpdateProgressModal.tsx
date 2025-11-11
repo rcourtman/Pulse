@@ -16,15 +16,116 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   const [hasError, setHasError] = createSignal(false);
   const [isRestarting, setIsRestarting] = createSignal(false);
   const [wsDisconnected, setWsDisconnected] = createSignal(false);
+  const [usingSSE, setUsingSSE] = createSignal(false);
   let pollInterval: number | undefined;
   let healthCheckTimer: number | undefined;
   let healthCheckAttempts = 0;
+  let eventSource: EventSource | undefined;
 
   const clearHealthCheckTimer = () => {
     if (healthCheckTimer !== undefined) {
       clearTimeout(healthCheckTimer);
       healthCheckTimer = undefined;
     }
+  };
+
+  const closeSSE = () => {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = undefined;
+      setUsingSSE(false);
+      logger.info('SSE connection closed');
+    }
+  };
+
+  const setupSSE = () => {
+    // Close existing connection if any
+    closeSSE();
+
+    try {
+      // Create EventSource connection to SSE endpoint
+      eventSource = new EventSource('/api/updates/stream');
+      setUsingSSE(true);
+
+      eventSource.onopen = () => {
+        logger.info('SSE connection established');
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const updateStatus = JSON.parse(event.data) as UpdateStatus;
+          setStatus(updateStatus);
+
+          // Check if restarting
+          if (updateStatus.status === 'restarting') {
+            setIsRestarting(true);
+            closeSSE();
+            startHealthCheckPolling();
+            return;
+          }
+
+          // Check if complete or error
+          if (
+            updateStatus.status === 'completed' ||
+            updateStatus.status === 'idle' ||
+            updateStatus.status === 'error'
+          ) {
+            if (updateStatus.status === 'completed' && !updateStatus.error) {
+              closeSSE();
+              // Verify backend health and reload
+              fetch('/api/health', { cache: 'no-store' })
+                .then((healthCheck) => {
+                  if (healthCheck.ok) {
+                    logger.info('Update completed, backend healthy, reloading...');
+                    window.location.reload();
+                  } else {
+                    // Health check failed, assume restart in progress
+                    setIsRestarting(true);
+                    startHealthCheckPolling();
+                  }
+                })
+                .catch((error) => {
+                  logger.warn('Update completed but health check failed, assuming restart...', error);
+                  setIsRestarting(true);
+                  startHealthCheckPolling();
+                });
+              return;
+            }
+
+            setIsComplete(true);
+            if (updateStatus.status === 'error' || updateStatus.error) {
+              setHasError(true);
+            }
+            closeSSE();
+          }
+        } catch (error) {
+          logger.error('Failed to parse SSE update status', error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        logger.warn('SSE connection error, falling back to polling', error);
+        closeSSE();
+        // Fall back to polling
+        startPolling();
+      };
+    } catch (error) {
+      logger.error('Failed to setup SSE, falling back to polling', error);
+      closeSSE();
+      // Fall back to polling
+      startPolling();
+    }
+  };
+
+  const startPolling = () => {
+    // Don't start polling if already polling
+    if (pollInterval) {
+      return;
+    }
+
+    logger.info('Starting status polling (SSE not available)');
+    pollStatus();
+    pollInterval = setInterval(pollStatus, 2000) as unknown as number;
   };
 
   const pollStatus = async () => {
@@ -169,15 +270,14 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     }
   });
 
-  // Start/stop polling based on modal visibility
+  // Start/stop SSE or polling based on modal visibility
   createEffect(() => {
     if (props.isOpen) {
-      // Start polling immediately when modal opens
-      pollStatus();
-      // Then poll every 2 seconds
-      pollInterval = setInterval(pollStatus, 2000) as unknown as number;
+      // Try SSE first, will fall back to polling if it fails
+      setupSSE();
     } else {
-      // Stop polling when modal closes
+      // Stop everything when modal closes
+      closeSSE();
       if (pollInterval) {
         clearInterval(pollInterval);
         pollInterval = undefined;
@@ -187,6 +287,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   });
 
   onCleanup(() => {
+    closeSSE();
     if (pollInterval) {
       clearInterval(pollInterval);
     }
