@@ -63,34 +63,76 @@ Analyze the following ${COMMIT_COUNT} git commits and generate professional rele
 
 ${COMMIT_LOG}
 
-Generate release notes in this exact markdown format:
+Generate release notes following this EXACT template format:
 
 ## What's Changed
 
-[Organize changes into 3-5 categories like: New Features, Improvements, Bug Fixes, Docker/Agent Changes, Documentation, etc. Use bullet points with commit references.]
+### New Features
+[List new features as bullet points, each starting with "**Feature name**:" followed by description and commit hash in parentheses like (#abc123)]
+
+### Bug Fixes
+[List bug fixes as bullet points, each starting with "**Component/area**:" followed by description and issue/commit reference like (#123) or (#abc123)]
+
+### Improvements
+[List improvements/enhancements as bullet points, each starting with "**Component/area**:" followed by description]
+
+### Breaking Changes
+[List any breaking changes, or write "None" if there are none]
 
 ## Installation
 
-Quick install on Linux:
+**Quick Install (systemd / LXC / Proxmox VE):**
 \`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 \`\`\`
 
-Or download platform-specific archives below.
+**Docker:**
+\`\`\`bash
+docker pull rcourtman/pulse:v${VERSION}
+docker stop pulse && docker rm pulse
+docker run -d --name pulse \\
+  --restart unless-stopped \\
+  -p 7655:7655 -p 7656:7656 \\
+  -v /opt/pulse/data:/data \\
+  rcourtman/pulse:v${VERSION}
+\`\`\`
 
-## Docker Images
+**Manual Binary (amd64 example):**
+\`\`\`bash
+curl -LO https://github.com/rcourtman/Pulse/releases/download/v${VERSION}/pulse-v${VERSION}-linux-amd64.tar.gz
+sudo systemctl stop pulse
+sudo tar -xzf pulse-v${VERSION}-linux-amd64.tar.gz -C /usr/local/bin pulse
+sudo systemctl start pulse
+\`\`\`
 
-Docker images are available for this release:
-- \`rcourtman/pulse:v${VERSION}\`
-- \`rcourtman/pulse-docker-agent:v${VERSION}\`
+**Helm:**
+\`\`\`bash
+helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \\
+  --version ${VERSION} \\
+  --namespace pulse \\
+  --create-namespace
+\`\`\`
+
+## Downloads
+- Universal tarball (auto-detects architecture): \`pulse-v${VERSION}.tar.gz\`
+- Architecture-specific: \`amd64\`, \`arm64\`, \`armv7\`, \`armv6\`, \`386\`
+- Host agent packages: macOS (amd64/arm64), Windows (amd64/arm64/386), Linux (amd64/arm64/armv7/armv6/386)
+- Sensor proxy: Linux (amd64/arm64/armv7/armv6/386)
+- Helm chart: \`pulse-${VERSION}.tgz\`
+- SHA256 checksums: \`checksums.txt\`
+
+## Notes
+[Add 2-4 bullet points highlighting the most important changes, configuration notes, or upgrade considerations. Keep this section concise and actionable.]
 
 Guidelines:
-- Group related commits together
-- Focus on user-visible changes
+- Match the exact format and style of the template above
+- Use bold for feature/component names followed by colon
+- Include commit hashes in parentheses like (#abc123) or issue numbers like (#123)
+- Focus on user-visible changes only
 - Use clear, non-technical language
-- Skip internal refactoring unless it impacts users
-- Mention breaking changes prominently if any
-- Keep it concise but informative
+- Group related changes together logically
+- If there are no breaking changes, write "None" in that section
+- Keep the Notes section practical and actionable
 EOF
 
 # Call LLM API based on provider
