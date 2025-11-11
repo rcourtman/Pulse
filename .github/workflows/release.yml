@@ -164,11 +164,11 @@ jobs:
         run: |
           echo "Generating release notes using LLM..."
 
-          # Find previous release tag
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          # Find previous release tag (latest tag excluding current if it exists)
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^v${{ inputs.version }}$" | head -1)
 
           if [ -z "$PREVIOUS_TAG" ]; then
-            echo "No previous tag found, using all commits"
+            echo "No previous tag found, comparing with first commit"
             PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
 
