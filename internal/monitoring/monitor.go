@@ -879,15 +879,20 @@ const (
 	defaultGuestAgentVersionTimeout       = 10 * time.Second // GUEST_AGENT_VERSION_TIMEOUT
 	defaultGuestAgentRetries              = 1                // GUEST_AGENT_RETRIES (0 = no retry, 1 = one retry)
 	defaultGuestAgentRetryDelay           = 500 * time.Millisecond
+
+	// Skip OS info calls after this many consecutive failures to avoid triggering buggy guest agents (refs #692)
+	guestAgentOSInfoFailureThreshold = 3
 )
 
 type guestMetadataCacheEntry struct {
-	ipAddresses       []string
-	networkInterfaces []models.GuestNetworkInterface
-	osName            string
-	osVersion         string
-	agentVersion      string
-	fetchedAt         time.Time
+	ipAddresses         []string
+	networkInterfaces   []models.GuestNetworkInterface
+	osName              string
+	osVersion           string
+	agentVersion        string
+	fetchedAt           time.Time
+	osInfoFailureCount  int  // Track consecutive OS info failures
+	osInfoSkip          bool // Skip OS info calls after repeated failures (refs #692)
 }
 
 type taskOutcome struct {
@@ -2464,21 +2469,48 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	}
 
 	// OS info with configurable timeout and retry (refs #592)
-	agentInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentOSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
-		return client.GetVMAgentInfo(ctx, nodeName, vmid)
-	})
-	if err != nil {
+	// Skip OS info calls if we've seen repeated failures (refs #692 - OpenBSD qemu-ga issue)
+	osInfoFailureCount := cached.osInfoFailureCount
+	osInfoSkip := cached.osInfoSkip
+
+	if !osInfoSkip {
+		agentInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentOSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+			return client.GetVMAgentInfo(ctx, nodeName, vmid)
+		})
+		if err != nil {
+			osInfoFailureCount++
+			if osInfoFailureCount >= guestAgentOSInfoFailureThreshold {
+				osInfoSkip = true
+				log.Info().
+					Str("instance", instanceName).
+					Str("vm", vmName).
+					Int("vmid", vmid).
+					Int("failureCount", osInfoFailureCount).
+					Msg("Guest agent OS info consistently fails, skipping future calls to avoid triggering buggy guest agents")
+			} else {
+				log.Debug().
+					Str("instance", instanceName).
+					Str("vm", vmName).
+					Int("vmid", vmid).
+					Int("failureCount", osInfoFailureCount).
+					Err(err).
+					Msg("Guest agent OS info unavailable")
+			}
+		} else if agentInfo, ok := agentInfoRaw.(map[string]interface{}); ok && len(agentInfo) > 0 {
+			osName, osVersion = extractGuestOSInfo(agentInfo)
+			osInfoFailureCount = 0 // Reset on success
+			osInfoSkip = false
+		} else {
+			osName = ""
+			osVersion = ""
+		}
+	} else {
+		// Skipping OS info call due to repeated failures
 		log.Debug().
 			Str("instance", instanceName).
 			Str("vm", vmName).
 			Int("vmid", vmid).
-			Err(err).
-			Msg("Guest agent OS info unavailable")
-	} else if agentInfo, ok := agentInfoRaw.(map[string]interface{}); ok && len(agentInfo) > 0 {
-		osName, osVersion = extractGuestOSInfo(agentInfo)
-	} else {
-		osName = ""
-		osVersion = ""
+			Msg("Skipping guest agent OS info call (disabled after repeated failures)")
 	}
 
 	// Agent version with configurable timeout and retry (refs #592)
@@ -2499,12 +2531,14 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	}
 
 	entry := guestMetadataCacheEntry{
-		ipAddresses:       cloneStringSlice(ipAddresses),
-		networkInterfaces: cloneGuestNetworkInterfaces(networkIfaces),
-		osName:            osName,
-		osVersion:         osVersion,
-		agentVersion:      agentVersion,
-		fetchedAt:         time.Now(),
+		ipAddresses:        cloneStringSlice(ipAddresses),
+		networkInterfaces:  cloneGuestNetworkInterfaces(networkIfaces),
+		osName:             osName,
+		osVersion:          osVersion,
+		agentVersion:       agentVersion,
+		fetchedAt:          time.Now(),
+		osInfoFailureCount: osInfoFailureCount,
+		osInfoSkip:         osInfoSkip,
 	}
 
 	m.guestMetadataMu.Lock()
