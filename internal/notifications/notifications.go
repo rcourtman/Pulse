@@ -2537,15 +2537,25 @@ func (n *NotificationManager) cleanupOldNotificationRecords() {
 // Stop gracefully stops the notification manager
 func (n *NotificationManager) Stop() {
 	n.mu.Lock()
-	defer n.mu.Unlock()
 
 	// Stop cleanup goroutine
 	close(n.stopCleanup)
 
+	// Get queue reference before unlocking
+	queue := n.queue
+
+	// Unlock before stopping queue to avoid deadlock with queue workers
+	// that may need to acquire n.mu during ProcessQueuedNotification
+	n.mu.Unlock()
+
 	// Stop the notification queue if it exists
-	if n.queue != nil {
-		n.queue.Stop()
+	if queue != nil {
+		queue.Stop()
 	}
+
+	// Relock for remaining cleanup
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
 	// Cancel any pending group timer
 	if n.groupTimer != nil {
