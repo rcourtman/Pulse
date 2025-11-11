@@ -137,6 +137,7 @@ pushd "$RELEASE_DIR" >/dev/null
 info "Checking required release assets..."
 # NOTE: Standalone binaries are NOT in GitHub releases
 # They are only included in Docker images for /download/ endpoints
+# NOTE: Linux host-agent binaries are in the main pulse tarballs, not separate archives
 required_assets=(
     "install.sh"
     "checksums.txt"
@@ -148,11 +149,6 @@ required_assets=(
     "pulse-v${PULSE_VERSION}-linux-386.tar.gz"
     "pulse-host-agent-v${PULSE_VERSION}-darwin-amd64.tar.gz"
     "pulse-host-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz"
-    "pulse-host-agent-v${PULSE_VERSION}-linux-amd64.tar.gz"
-    "pulse-host-agent-v${PULSE_VERSION}-linux-arm64.tar.gz"
-    "pulse-host-agent-v${PULSE_VERSION}-linux-armv7.tar.gz"
-    "pulse-host-agent-v${PULSE_VERSION}-linux-armv6.tar.gz"
-    "pulse-host-agent-v${PULSE_VERSION}-linux-386.tar.gz"
     "pulse-host-agent-v${PULSE_VERSION}-windows-amd64.zip"
     "pulse-host-agent-v${PULSE_VERSION}-windows-arm64.zip"
     "pulse-host-agent-v${PULSE_VERSION}-windows-386.zip"
