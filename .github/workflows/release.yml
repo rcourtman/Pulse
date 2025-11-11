@@ -235,7 +235,7 @@ jobs:
           echo "release_url=$(gh release view ${TAG} --json url -q .url)" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      - name: Upload checksums.txt first
+      - name: Upload checksums.txt
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -243,10 +243,6 @@ jobs:
 
           echo "Uploading checksums.txt..."
           gh release upload "${TAG}" release/checksums.txt
-
-          # Also upload individual .sha256 files
-          echo "Uploading individual checksum files..."
-          gh release upload "${TAG}" release/*.sha256
 
       - name: Upload release assets
         env:
@@ -270,15 +266,6 @@ jobs:
 
           # Upload install.sh
           gh release upload "${TAG}" release/install.sh
-
-          # Upload standalone binaries (for direct download by installers)
-          echo "Uploading standalone binaries..."
-          # Upload binaries without .sha256 files (those were already uploaded)
-          for file in release/pulse-sensor-proxy-* release/pulse-host-agent-*; do
-            if [[ ! "$file" =~ \.sha256$ ]] && [[ ! "$file" =~ \.tar\.gz$ ]] && [[ ! "$file" =~ \.zip$ ]]; then
-              gh release upload "${TAG}" "$file"
-            fi
-          done
 
       - name: Output release information
         run: |
