@@ -61,6 +61,15 @@ jobs:
             rcourtman/pulse:${{ steps.set_version.outputs.tag }}
             ghcr.io/${{ github.repository_owner }}/pulse:latest
             ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.set_version.outputs.tag }}
+          labels: |
+            org.opencontainers.image.title=Pulse
+            org.opencontainers.image.description=Proxmox monitoring system
+            org.opencontainers.image.version=${{ steps.set_version.outputs.tag }}
+            org.opencontainers.image.created=${{ github.event.repository.updated_at }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=MIT
 
       - name: Build and push Docker agent image
         uses: docker/build-push-action@v6
@@ -76,6 +85,15 @@ jobs:
             rcourtman/pulse-docker-agent:${{ steps.set_version.outputs.tag }}
             ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest
             ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.set_version.outputs.tag }}
+          labels: |
+            org.opencontainers.image.title=Pulse Docker Agent
+            org.opencontainers.image.description=Docker container monitoring agent for Pulse
+            org.opencontainers.image.version=${{ steps.set_version.outputs.tag }}
+            org.opencontainers.image.created=${{ github.event.repository.updated_at }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=MIT
 
       - name: Output Docker image information
         run: |

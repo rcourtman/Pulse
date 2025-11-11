@@ -34,6 +34,20 @@ func (l stringFlagList) Values() []string {
 }
 
 func main() {
+	// Handle --version flag early before other config parsing
+	versionFlag := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" || arg == "-version" || arg == "version" {
+			versionFlag = true
+			break
+		}
+	}
+
+	if versionFlag {
+		fmt.Printf("pulse-docker-agent version %s\n", dockeragent.Version)
+		os.Exit(0)
+	}
+
 	cfg := loadConfig()
 
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
