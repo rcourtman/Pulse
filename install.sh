@@ -1725,7 +1725,7 @@ download_pulse() {
 
         # Try checksums.txt first (v4.29.0+)
         if wget -q --timeout=60 --tries=2 -O "/tmp/checksums.txt" "$CHECKSUMS_URL" 2>/dev/null; then
-            EXPECTED_CHECKSUM=$(grep "${ARCHIVE_NAME}" /tmp/checksums.txt 2>/dev/null | awk '{print $1}')
+            EXPECTED_CHECKSUM=$(grep -w "${ARCHIVE_NAME}" /tmp/checksums.txt 2>/dev/null | awk '{print $1}')
             rm -f /tmp/checksums.txt
         fi
 
