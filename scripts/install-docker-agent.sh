@@ -415,10 +415,52 @@ ensure_service_home() {
     chmod 750 "$SERVICE_HOME" >/dev/null 2>&1 || true
 }
 
+detect_snap_docker() {
+    SNAP_DOCKER_DETECTED="false"
+
+    # Check if the active docker binary resolves to a snap path
+    if command -v docker >/dev/null 2>&1; then
+        local docker_path
+        docker_path=$(readlink -f "$(command -v docker)" 2>/dev/null || echo "")
+        if [[ "$docker_path" == /snap/* ]] || [[ "$docker_path" == /var/lib/snapd/snap/* ]]; then
+            SNAP_DOCKER_DETECTED="true"
+        fi
+    fi
+}
+
 ensure_docker_group_membership() {
     SYSTEMD_SUPPLEMENTARY_GROUPS_LINE=""
     if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
         return
+    fi
+
+    # Detect Snap Docker installation
+    detect_snap_docker
+
+    # If docker group doesn't exist and Snap Docker is detected, create it
+    if ! getent group docker >/dev/null 2>&1; then
+        if [[ "$SNAP_DOCKER_DETECTED" == "true" ]]; then
+            log_info "Snap-installed Docker detected without docker group; creating system docker group"
+            if command -v addgroup >/dev/null 2>&1; then
+                if addgroup --system docker >/dev/null 2>&1; then
+                    log_success "Created docker system group for Snap Docker"
+                    SNAP_DOCKER_GROUP_CREATED="true"
+                else
+                    log_warn "Failed to create docker group; socket access may fail"
+                fi
+            elif command -v groupadd >/dev/null 2>&1; then
+                if groupadd -r docker >/dev/null 2>&1; then
+                    log_success "Created docker system group for Snap Docker"
+                    SNAP_DOCKER_GROUP_CREATED="true"
+                else
+                    log_warn "Failed to create docker group; socket access may fail"
+                fi
+            else
+                log_warn "Unable to create docker group; ensure $SERVICE_USER_ACTUAL can access /var/run/docker.sock"
+            fi
+        else
+            log_warn "docker group not found; ensure the agent user can access /var/run/docker.sock"
+        fi
     fi
 
     if getent group docker >/dev/null 2>&1; then
@@ -431,11 +473,29 @@ ensure_docker_group_membership() {
             else
                 log_warn "Unable to manage docker group membership; ensure $SERVICE_USER_ACTUAL can access /var/run/docker.sock"
             fi
+
+            # Verify group membership was actually applied
+            if ! id -nG "$SERVICE_USER_ACTUAL" 2>/dev/null | tr ' ' '\n' | grep -Fxq "docker"; then
+                log_warn "Failed to verify docker group membership for $SERVICE_USER_ACTUAL"
+                log_warn "Group changes may not have taken effect; socket access validation will catch this"
+            fi
         fi
 
         if id -nG "$SERVICE_USER_ACTUAL" 2>/dev/null | tr ' ' '\n' | grep -Fxq "docker"; then
             SYSTEMD_SUPPLEMENTARY_GROUPS_LINE="SupplementaryGroups=docker"
             log_success "Ensured docker group access for $SERVICE_USER_ACTUAL"
+
+            # If we created the group for Snap Docker, restart the snap to refresh socket ACLs
+            if [[ "$SNAP_DOCKER_DETECTED" == "true" && "$SNAP_DOCKER_GROUP_CREATED" == "true" ]]; then
+                if command -v snap >/dev/null 2>&1; then
+                    log_info "Restarting Snap Docker to apply group permissions"
+                    if snap restart docker >/dev/null 2>&1; then
+                        log_success "Snap Docker restarted successfully"
+                    else
+                        log_warn "Failed to restart Snap Docker; socket permissions may not apply until manual restart"
+                    fi
+                fi
+            fi
         else
             log_warn "Service user $SERVICE_USER_ACTUAL is not in docker group; ensure the Docker socket ACL grants access."
         fi
@@ -481,6 +541,19 @@ write_env_file() {
     log_success "Wrote environment file: $target"
 }
 
+detect_docker_socket_paths() {
+    DOCKER_SOCKET_PATHS="/var/run/docker.sock"
+
+    # If /var/run/docker.sock is a symlink, include the real path too
+    if [[ -L /var/run/docker.sock ]]; then
+        local target
+        target=$(readlink -f /var/run/docker.sock 2>/dev/null || echo "")
+        if [[ -n "$target" && "$target" != "/var/run/docker.sock" ]]; then
+            DOCKER_SOCKET_PATHS="/var/run/docker.sock $target"
+        fi
+    fi
+}
+
 configure_polkit_rule() {
     if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
         return
@@ -519,6 +592,76 @@ EOF
 
     mv "$tmp" "$rule_path"
     log_success "Configured polkit rule allowing $SERVICE_USER_ACTUAL to manage pulse-docker-agent service"
+}
+
+validate_docker_socket_access() {
+    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
+        return 0
+    fi
+
+    log_header 'Validating Docker socket access'
+
+    # Source the env file to test with the exact configuration the service will use
+    if [[ -f "$ENV_FILE" ]]; then
+        set -a
+        source "$ENV_FILE" 2>/dev/null || true
+        set +a
+    fi
+
+    # If we just restarted Snap Docker, give it a moment to come back up
+    if [[ "$SNAP_DOCKER_DETECTED" == "true" && "$SNAP_DOCKER_GROUP_CREATED" == "true" ]]; then
+        log_info "Waiting for Snap Docker to restart"
+        sleep 3
+    fi
+
+    # Build env prefix for sudo (portable across sudo variants)
+    local env_prefix=""
+    [[ -n "${DOCKER_HOST:-}" ]] && env_prefix+="DOCKER_HOST='$DOCKER_HOST' "
+    [[ -n "${PULSE_URL:-}" ]] && env_prefix+="PULSE_URL='$PULSE_URL' "
+    [[ -n "${PULSE_TOKEN:-}" ]] && env_prefix+="PULSE_TOKEN='$PULSE_TOKEN' "
+    [[ -n "${PULSE_TARGETS:-}" ]] && env_prefix+="PULSE_TARGETS='$PULSE_TARGETS' "
+
+    # Test socket access
+    local test_output
+    local test_exitcode
+    test_output=$(eval "env $env_prefix sudo -u $SERVICE_USER_ACTUAL docker version --format '{{.Server.Version}}'" 2>&1)
+    test_exitcode=$?
+
+    if [[ $test_exitcode -eq 0 ]]; then
+        log_success "Docker socket access confirmed for $SERVICE_USER_ACTUAL"
+        return 0
+    fi
+
+    # Validation failed
+    log_warn "Docker socket access test failed for $SERVICE_USER_ACTUAL"
+    echo "" >&2
+    echo "Validation output:" >&2
+    echo "$test_output" >&2
+    echo "" >&2
+
+    if [[ "$SNAP_DOCKER_DETECTED" == "true" ]]; then
+        echo "Snap-installed Docker detected. Common solutions:" >&2
+        echo "  1. Ensure the docker group exists: getent group docker" >&2
+        echo "  2. Ensure $SERVICE_USER_ACTUAL is in the docker group: id -nG $SERVICE_USER_ACTUAL" >&2
+        echo "  3. Check if Snap Docker is running: snap services docker.dockerd" >&2
+        echo "  4. Restart Snap Docker to refresh permissions: snap restart docker" >&2
+    else
+        echo "Common solutions:" >&2
+        echo "  1. Ensure $SERVICE_USER_ACTUAL is in the docker group: id -nG $SERVICE_USER_ACTUAL" >&2
+        echo "  2. Check Docker socket permissions: ls -la /var/run/docker.sock" >&2
+        echo "  3. Verify Docker is running: docker ps" >&2
+    fi
+    echo "" >&2
+
+    read -p "Continue with installation anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installation aborted. Fix socket access and re-run the installer." >&2
+        exit 1
+    fi
+
+    log_warn "Proceeding despite failed validation; service may not start correctly"
+    return 0
 }
 
 remove_polkit_rule() {
@@ -734,6 +877,9 @@ SERVICE_USER_CREATED="false"
 SERVICE_USER_AVAILABLE="true"
 DOCKER_GROUP_PRESENT="false"
 SYSTEMD_SUPPLEMENTARY_GROUPS_LINE=""
+SNAP_DOCKER_DETECTED="false"
+SNAP_DOCKER_GROUP_CREATED="false"
+DOCKER_SOCKET_PATHS="/var/run/docker.sock"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -1643,6 +1789,17 @@ ensure_service_home
 ensure_docker_group_membership
 write_env_file
 configure_polkit_rule
+detect_docker_socket_paths
+
+# Build ReadWritePaths line for systemd unit
+SYSTEMD_READ_WRITE_PATHS=""
+for socket_path in $DOCKER_SOCKET_PATHS; do
+    if [[ -n "$SYSTEMD_READ_WRITE_PATHS" ]]; then
+        SYSTEMD_READ_WRITE_PATHS="$SYSTEMD_READ_WRITE_PATHS $socket_path"
+    else
+        SYSTEMD_READ_WRITE_PATHS="$socket_path"
+    fi
+done
 
 # Create systemd service
 log_header 'Configuring systemd service'
@@ -1677,7 +1834,7 @@ ProtectKernelLogs=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-ReadWritePaths=/var/run/docker.sock
+ReadWritePaths=$SYSTEMD_READ_WRITE_PATHS
 ProtectHostname=yes
 ProtectClock=yes
 
@@ -1686,6 +1843,9 @@ WantedBy=multi-user.target
 EOF
 
 log_success "Wrote unit file: $SERVICE_PATH"
+
+# Validate socket access before starting the service
+validate_docker_socket_access
 
 # Reload systemd and start service
 log_info 'Starting service'
