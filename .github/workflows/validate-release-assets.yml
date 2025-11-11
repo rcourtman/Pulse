@@ -1,8 +1,11 @@
 name: Validate Release Assets
 
 on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   release:
-    types: [created, edited]
+    types: [edited]  # Still validate on manual edits
 
 jobs:
   validate:
@@ -37,10 +40,9 @@ jobs:
           mkdir -p release
           cd release
 
-          # Get list of all assets for this release
-          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets" \
-            | jq -r '.[].browser_download_url')
+          # Get list of all assets for this release (using gh CLI to avoid token exposure)
+          ASSETS=$(gh api "repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets" \
+            --jq '.[].browser_download_url')
 
           if [ -z "$ASSETS" ]; then
             echo "::error::No assets found in release"
@@ -57,9 +59,9 @@ jobs:
             if [ -n "$url" ]; then
               filename=$(basename "$url")
               echo "Downloading $filename..."
-              curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                -H "Accept: application/octet-stream" \
-                -o "$filename" "$url"
+              # Use gh CLI to download (avoids token exposure in logs)
+              gh release download "${{ github.event.release.tag_name }}" \
+                --pattern "$filename" --dir . --clobber
 
               if [ $? -eq 0 ]; then
                 echo "✓ Downloaded $filename ($(du -h "$filename" | cut -f1))"
