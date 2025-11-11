@@ -170,31 +170,31 @@ success "All ${#required_assets[@]} required release assets present"
 # Validate tarball contents
 info "Validating tarball contents..."
 for arch in linux-amd64 linux-arm64 linux-armv7; do
-    tar="pulse-v${PULSE_VERSION}-${arch}.tar.gz"
+    tar="$RELEASE_DIR/pulse-v${PULSE_VERSION}-${arch}.tar.gz"
 
     # Check binaries
-    tar -tzf "$tar" bin/pulse bin/pulse-docker-agent bin/pulse-host-agent bin/pulse-sensor-proxy >/dev/null 2>&1 || { error "$tar missing binaries"; exit 1; }
+    tar -tzf "$tar" bin/pulse bin/pulse-docker-agent bin/pulse-host-agent bin/pulse-sensor-proxy >/dev/null 2>&1 || { error "$(basename $tar) missing binaries"; exit 1; }
 
     # Check scripts
-    tar -tzf "$tar" scripts/install-docker-agent.sh scripts/install-container-agent.sh scripts/install-host-agent.sh scripts/install-host-agent.ps1 scripts/uninstall-host-agent.sh scripts/uninstall-host-agent.ps1 scripts/install-sensor-proxy.sh scripts/install-docker.sh >/dev/null 2>&1 || { error "$tar missing scripts"; exit 1; }
+    tar -tzf "$tar" scripts/install-docker-agent.sh scripts/install-container-agent.sh scripts/install-host-agent.sh scripts/install-host-agent.ps1 scripts/uninstall-host-agent.sh scripts/uninstall-host-agent.ps1 scripts/install-sensor-proxy.sh scripts/install-docker.sh >/dev/null 2>&1 || { error "$(basename $tar) missing scripts"; exit 1; }
 
     # Check VERSION file
-    tar -tzf "$tar" VERSION >/dev/null 2>&1 || { error "$tar missing VERSION file"; exit 1; }
+    tar -tzf "$tar" VERSION >/dev/null 2>&1 || { error "$(basename $tar) missing VERSION file"; exit 1; }
 done
 success "Platform-specific tarballs contain all required files"
 
 # Validate universal tarball
-tar -tzf "pulse-v${PULSE_VERSION}.tar.gz" VERSION >/dev/null 2>&1 || { error "Universal tarball missing VERSION file"; exit 1; }
+tar -tzf "$RELEASE_DIR/pulse-v${PULSE_VERSION}.tar.gz" VERSION >/dev/null 2>&1 || { error "Universal tarball missing VERSION file"; exit 1; }
 success "Universal tarball validated"
 
 # Validate macOS tarball
-tar -tzf "pulse-host-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz" pulse-host-agent-darwin-arm64 >/dev/null 2>&1 || { error "macOS tarball validation failed"; exit 1; }
+tar -tzf "$RELEASE_DIR/pulse-host-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz" pulse-host-agent-darwin-arm64 >/dev/null 2>&1 || { error "macOS tarball validation failed"; exit 1; }
 success "macOS host-agent tarball validated"
 
 # Validate checksums exist for all distributable assets
 info "Validating checksums..."
 checksum_errors=0
-for asset in *.tar.gz pulse-sensor-proxy-* pulse-host-agent-* install.sh; do
+for asset in $RELEASE_DIR/*.tar.gz $RELEASE_DIR/pulse-sensor-proxy-* $RELEASE_DIR/pulse-host-agent-* $RELEASE_DIR/install.sh; do
     if [ ! -f "${asset}.sha256" ]; then
         error "Missing checksum file: ${asset}.sha256"
         checksum_errors=$((checksum_errors + 1))
