@@ -142,12 +142,12 @@ docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --source
 
 # Alternative: Kubernetes (Helm)
-helm registry login ghcr.io
-helm install pulse oci://ghcr.io/rcourtman/pulse-chart \
-  --version $(curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/VERSION) \
+helm repo add pulse https://rcourtman.github.io/Pulse/
+helm install pulse pulse/pulse \
   --namespace pulse \
   --create-namespace
-# Replace the VERSION lookup with a specific release if you need to pin. For local development, see docs/KUBERNETES.md.
+# For specific version: add --version X.Y.Z
+# For local development, see docs/KUBERNETES.md.
 ```
 
 **Proxmox users**: The installer detects PVE hosts and automatically creates an optimized LXC container. Choose Quick mode for one-minute setup.
