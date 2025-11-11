@@ -1,20 +1,14 @@
-import { Show, createSignal, createEffect, For, useContext } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { Show, createSignal, createEffect, For } from 'solid-js';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
-import { UpdateProgressModal } from './UpdateProgressModal';
-import { WebSocketContext } from '@/App';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 
 export function UpdateBanner() {
-  const navigate = useNavigate();
-  const wsContext = useContext(WebSocketContext);
   const [isExpanded, setIsExpanded] = createSignal(false);
   const [updatePlan, setUpdatePlan] = createSignal<UpdatePlan | null>(null);
   const [showConfirmModal, setShowConfirmModal] = createSignal(false);
-  const [showProgressModal, setShowProgressModal] = createSignal(false);
   const [isApplying, setIsApplying] = createSignal(false);
   const [copiedIndex, setCopiedIndex] = createSignal<number | null>(null);
 
@@ -42,9 +36,8 @@ export function UpdateBanner() {
     setIsApplying(true);
     try {
       await UpdatesAPI.applyUpdate(info.downloadUrl);
-      // Close confirmation and show progress
+      // Close confirmation - GlobalUpdateProgressWatcher will auto-open the progress modal
       setShowConfirmModal(false);
-      setShowProgressModal(true);
     } catch (error) {
       logger.error('Failed to start update', error);
       alert('Failed to start update. Please try again.');
@@ -294,18 +287,6 @@ export function UpdateBanner() {
           rollbackSupport: false,
         }}
         isApplying={isApplying()}
-      />
-
-      {/* Update Progress Modal */}
-      <UpdateProgressModal
-        isOpen={showProgressModal()}
-        onClose={() => setShowProgressModal(false)}
-        onViewHistory={() => {
-          setShowProgressModal(false);
-          navigate('/settings/updates');
-        }}
-        connected={wsContext?.connected}
-        reconnecting={wsContext?.reconnecting}
       />
     </Show>
   );

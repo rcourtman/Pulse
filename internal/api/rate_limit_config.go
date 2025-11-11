@@ -36,8 +36,8 @@ func InitializeRateLimiters() {
 		// Recovery operations: extremely strict
 		RecoveryEndpoints: NewRateLimiter(3, 10*time.Minute), // 3 attempts per 10 minutes
 
-		// Update operations: moderate limits
-		UpdateEndpoints: NewRateLimiter(20, 1*time.Minute), // 20 checks per minute
+		// Update operations: allow frequent polling during updates
+		UpdateEndpoints: NewRateLimiter(60, 1*time.Minute), // 60 checks per minute (modal polls every 2s)
 
 		// WebSocket connections: per-connection limits
 		WebSocketEndpoints: NewRateLimiter(30, 1*time.Minute), // 30 new connections per minute
