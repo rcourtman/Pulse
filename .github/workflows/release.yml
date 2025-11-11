@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 4.28.1)'
+        required: true
+        type: string
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          # Install zip for Windows binaries
+          sudo apt-get update
+          sudo apt-get install -y zip
+
+          # Install Helm for chart packaging
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Build release artifacts
+        run: |
+          echo "Building release v${{ inputs.version }}..."
+          ./scripts/build-release.sh ${{ inputs.version }}
+
+      - name: Validate release artifacts
+        run: |
+          echo "Validating release v${{ inputs.version }}..."
+          # Note: Docker image validation is skipped in this workflow
+          # since we're only validating the built artifacts (tarballs, binaries, checksums)
+          # Docker images should be validated separately before release
+
+          # Run validation with --skip-docker flag
+          ./scripts/validate-release.sh ${{ inputs.version }} --skip-docker || {
+            echo "❌ Release validation failed!"
+            echo "The workflow will now fail. No release will be created."
+            exit 1
+          }
+
+      - name: Create draft release
+        id: create_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG="v${VERSION}"
+
+          echo "Creating draft release for ${TAG}..."
+
+          # Create draft release with placeholder body
+          gh release create "${TAG}" \
+            --draft \
+            --title "Pulse ${TAG}" \
+            --notes "Release ${TAG}
+
+          ## What's Changed
+
+          <!-- TODO: Add release notes before publishing -->
+
+          ## Installation
+
+          Quick install on Linux:
+          \`\`\`bash
+          curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+          \`\`\`
+
+          Or download platform-specific archives below."
+
+          echo "release_url=$(gh release view ${TAG} --json url -q .url)" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Upload checksums.txt first
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.create_release.outputs.tag }}"
+
+          echo "Uploading checksums.txt..."
+          gh release upload "${TAG}" release/checksums.txt
+
+          # Also upload individual .sha256 files
+          echo "Uploading individual checksum files..."
+          gh release upload "${TAG}" release/*.sha256
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.create_release.outputs.tag }}"
+
+          echo "Uploading release assets..."
+
+          # Upload tarballs
+          gh release upload "${TAG}" release/*.tar.gz
+
+          # Upload Windows zip files
+          gh release upload "${TAG}" release/*.zip
+
+          # Upload Helm chart if it exists
+          if ls release/*.tgz 1> /dev/null 2>&1; then
+            echo "Uploading Helm chart..."
+            gh release upload "${TAG}" release/*.tgz
+          fi
+
+          # Upload install.sh
+          gh release upload "${TAG}" release/install.sh
+
+          # Upload standalone binaries (for direct download by installers)
+          echo "Uploading standalone binaries..."
+          gh release upload "${TAG}" release/pulse-sensor-proxy-*
+          gh release upload "${TAG}" release/pulse-host-agent-*
+
+      - name: Output release information
+        run: |
+          echo "✅ Release draft created successfully!"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 Release: ${{ steps.create_release.outputs.tag }}"
+          echo "🔗 URL: ${{ steps.create_release.outputs.release_url }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "⚠️  IMPORTANT: This release is in DRAFT status"
+          echo ""
+          echo "Next steps:"
+          echo "1. Review the release at the URL above"
+          echo "2. Update the release notes with changes since last release"
+          echo "3. Publish the release manually when ready"
+          echo ""
+          echo "All artifacts have been uploaded and validated."
+          echo "checksums.txt matches all uploaded binaries."
+          echo ""
