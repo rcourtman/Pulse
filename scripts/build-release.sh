@@ -289,26 +289,9 @@ cd ../..
 # Cleanup
 rm -rf "$universal_dir"
 
-# Copy standalone pulse-sensor-proxy binaries to release directory
-# These are needed by install-sensor-proxy.sh installer script
-echo "Copying standalone pulse-sensor-proxy binaries..."
-for build_name in "${!builds[@]}"; do
-    cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$RELEASE_DIR/"
-done
-
-# Copy standalone pulse-host-agent binaries to release directory
-# These are needed for manual host-agent installation without a running Pulse server
-echo "Copying standalone pulse-host-agent binaries..."
-for build_name in "${!builds[@]}"; do
-    cp "$BUILD_DIR/pulse-host-agent-$build_name" "$RELEASE_DIR/"
-done
-
-# Also copy standalone macOS and Windows host-agent binaries
-cp "$BUILD_DIR/pulse-host-agent-darwin-amd64" "$RELEASE_DIR/"
-cp "$BUILD_DIR/pulse-host-agent-darwin-arm64" "$RELEASE_DIR/"
-cp "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" "$RELEASE_DIR/"
-cp "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" "$RELEASE_DIR/"
-cp "$BUILD_DIR/pulse-host-agent-windows-386.exe" "$RELEASE_DIR/"
+# NOTE: Standalone binaries are NOT copied to release directory
+# They are only included in Docker images for /download/ endpoints
+# Users should download versioned tarballs/zips from GitHub releases instead
 
 # Optionally package Helm chart
 if [ "${SKIP_HELM_PACKAGE:-0}" != "1" ]; then
@@ -327,24 +310,18 @@ fi
 echo "Copying install.sh to release directory..."
 cp install.sh "$RELEASE_DIR/"
 
-# Generate checksums (include tarballs, helm chart, standalone binaries, and install.sh)
+# Generate checksums (include tarballs, zip files, helm chart, and install.sh)
 cd "$RELEASE_DIR"
 shopt -s nullglob extglob
-# Match tarballs, then standalone binaries (excluding .tar.gz and .sha256), then install.sh
-checksum_files=( *.tar.gz pulse-sensor-proxy-!(*.tar.gz|*.sha256) pulse-host-agent-!(*.tar.gz|*.sha256) install.sh )
+# Match all tarballs, zip files, and install.sh
+checksum_files=( *.tar.gz *.zip install.sh )
 if compgen -G "pulse-*.tgz" > /dev/null; then
     checksum_files+=( pulse-*.tgz )
 fi
 if [ ${#checksum_files[@]} -eq 0 ]; then
     echo "Warning: no release artifacts found to checksum."
 else
-    # Generate individual .sha256 files for each asset (required by install.sh)
-    for file in "${checksum_files[@]}"; do
-        sha256sum "$file" > "${file}.sha256"
-    done
-
-    # Also generate combined checksums.txt for convenience
-    # Sort checksums by filename for deterministic output (prevents #671 checksum mismatches)
+    # Generate checksums.txt with sorted output for deterministic results (prevents #671 checksum mismatches)
     sha256sum "${checksum_files[@]}" | sort -k 2 > checksums.txt
     if [ -n "${SIGNING_KEY_ID:-}" ]; then
         if command -v gpg >/dev/null 2>&1; then
