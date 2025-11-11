@@ -14,10 +14,12 @@ func newTestMonitor(t *testing.T) *Monitor {
 	t.Helper()
 
 	return &Monitor{
-		state:              models.NewState(),
-		alertManager:       alerts.NewManager(),
-		removedDockerHosts: make(map[string]time.Time),
-		rateTracker:        NewRateTracker(),
+		state:                  models.NewState(),
+		alertManager:           alerts.NewManager(),
+		removedDockerHosts:     make(map[string]time.Time),
+		rateTracker:            NewRateTracker(),
+		dockerTokenBindings:    make(map[string]string),
+		dockerMetadataStore:    config.NewDockerMetadataStore(t.TempDir()),
 	}
 }
 
