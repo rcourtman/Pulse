@@ -344,7 +344,8 @@ else
     done
 
     # Also generate combined checksums.txt for convenience
-    sha256sum "${checksum_files[@]}" > checksums.txt
+    # Sort checksums by filename for deterministic output (prevents #671 checksum mismatches)
+    sha256sum "${checksum_files[@]}" | sort -k 2 > checksums.txt
     if [ -n "${SIGNING_KEY_ID:-}" ]; then
         if command -v gpg >/dev/null 2>&1; then
             echo "Signing checksums with GPG key ${SIGNING_KEY_ID}..."
