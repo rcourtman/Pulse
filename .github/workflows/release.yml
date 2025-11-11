@@ -232,8 +232,12 @@ jobs:
 
           # Upload standalone binaries (for direct download by installers)
           echo "Uploading standalone binaries..."
-          gh release upload "${TAG}" release/pulse-sensor-proxy-*
-          gh release upload "${TAG}" release/pulse-host-agent-*
+          # Upload binaries without .sha256 files (those were already uploaded)
+          for file in release/pulse-sensor-proxy-* release/pulse-host-agent-*; do
+            if [[ ! "$file" =~ \.sha256$ ]] && [[ ! "$file" =~ \.tar\.gz$ ]] && [[ ! "$file" =~ \.zip$ ]]; then
+              gh release upload "${TAG}" "$file"
+            fi
+          done
 
       - name: Output release information
         run: |
