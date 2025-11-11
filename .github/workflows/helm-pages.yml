@@ -42,6 +42,37 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Update Chart.yaml version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s/^version: .*/version: $VERSION/" deploy/helm/pulse/Chart.yaml
+          sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" deploy/helm/pulse/Chart.yaml
+
+          # Commit if changed (for manual workflow runs)
+          if ! git diff --quiet deploy/helm/pulse/Chart.yaml; then
+            git config user.name "$GITHUB_ACTOR"
+            git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+            git add deploy/helm/pulse/Chart.yaml
+            git commit -m "Auto-update Helm chart version to $VERSION"
+            git push
+          fi
+
+      - name: Validate Helm chart
+        run: |
+          # Strict linting
+          helm lint deploy/helm/pulse --strict
+
+          # Template validation with minimal values
+          helm template pulse deploy/helm/pulse --set persistence.enabled=false > /dev/null
+
+          # Template validation with common overrides
+          helm template pulse deploy/helm/pulse \
+            --set ingress.enabled=true \
+            --set ingress.hosts[0].host=pulse.example.com \
+            --set agent.enabled=true > /dev/null
+
+          echo "✓ Chart validation passed"
+
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.6.0
         with:
