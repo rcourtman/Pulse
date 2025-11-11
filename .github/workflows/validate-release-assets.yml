@@ -69,42 +69,42 @@ jobs:
           INPUT_DRAFT: ${{ inputs.draft }}
           INPUT_COMMIT: ${{ inputs.target_commitish }}
         run: |
-          python <<'PY' > context.env
-import json, os, sys
+          python3 <<'EOF' > context.env
+          import json, os, sys
 
-event_name = os.environ.get("EVENT_NAME", "")
-result = {}
+          event_name = os.environ.get("EVENT_NAME", "")
+          result = {}
 
-if event_name == "release":
-    with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as handle:
-        data = json.load(handle)
-    release = data.get("release") or {}
-    result["tag"] = release.get("tag_name", "")
-    tag = result["tag"]
-    result["version"] = tag[1:] if tag.startswith("v") else tag
-    result["release_id"] = str(release.get("id", ""))
-    result["target_commitish"] = release.get("target_commitish", "")
-    result["draft"] = str(release.get("draft", False)).lower()
-else:
-    result["tag"] = os.environ.get("INPUT_TAG", "")
-    result["version"] = os.environ.get("INPUT_VERSION", "")
-    result["release_id"] = os.environ.get("INPUT_RELEASE_ID", "")
-    result["target_commitish"] = os.environ.get("INPUT_COMMIT", "")
-    draft_value = os.environ.get("INPUT_DRAFT", "false")
-    result["draft"] = str(draft_value).lower()
+          if event_name == "release":
+              with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as handle:
+                  data = json.load(handle)
+              release = data.get("release") or {}
+              result["tag"] = release.get("tag_name", "")
+              tag = result["tag"]
+              result["version"] = tag[1:] if tag.startswith("v") else tag
+              result["release_id"] = str(release.get("id", ""))
+              result["target_commitish"] = release.get("target_commitish", "")
+              result["draft"] = str(release.get("draft", False)).lower()
+          else:
+              result["tag"] = os.environ.get("INPUT_TAG", "")
+              result["version"] = os.environ.get("INPUT_VERSION", "")
+              result["release_id"] = os.environ.get("INPUT_RELEASE_ID", "")
+              result["target_commitish"] = os.environ.get("INPUT_COMMIT", "")
+              draft_value = os.environ.get("INPUT_DRAFT", "false")
+              result["draft"] = str(draft_value).lower()
 
-if not result["tag"] or not result["release_id"]:
-    sys.stderr.write("::error::Release metadata is missing. Provide tag, version, release_id, and target_commitish.\n")
-    sys.exit(1)
+          if not result["tag"] or not result["release_id"]:
+              sys.stderr.write("::error::Release metadata is missing. Provide tag, version, release_id, and target_commitish.\n")
+              sys.exit(1)
 
-should_run = "true"
-if event_name == "release" and result["draft"] != "true":
-    should_run = "false"
-result["should_run"] = should_run
+          should_run = "true"
+          if event_name == "release" and result["draft"] != "true":
+              should_run = "false"
+          result["should_run"] = should_run
 
-for key, value in result.items():
-    print(f"{key}={value}")
-PY
+          for key, value in result.items():
+              print(f"{key}={value}")
+          EOF
           cat context.env >> "$GITHUB_OUTPUT"
           cat context.env
 
