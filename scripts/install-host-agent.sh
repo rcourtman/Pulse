@@ -386,8 +386,18 @@ else
     log_info "Checksum not available (server doesn't provide it yet)"
 fi
 
-sudo mv "$TEMP_BINARY" "$AGENT_PATH"
-sudo chmod +x "$AGENT_PATH"
+# Use install command instead of mv to ensure correct SELinux context
+# The install command creates a new file with the correct label for the target directory
+sudo install -m 0755 "$TEMP_BINARY" "$AGENT_PATH"
+rm -f "$TEMP_BINARY"
+
+# On SELinux systems, explicitly restore context to ensure policy compliance
+if command -v selinuxenabled &> /dev/null && selinuxenabled 2>/dev/null; then
+    if command -v restorecon &> /dev/null; then
+        sudo restorecon -F "$AGENT_PATH" 2>/dev/null || true
+    fi
+fi
+
 log_success "Agent binary installed to $AGENT_PATH"
 
 # Build reusable agent command strings
