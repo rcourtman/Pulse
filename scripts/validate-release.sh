@@ -200,6 +200,28 @@ info "Validating checksums..."
 sha256sum -c checksums.txt >/dev/null 2>&1 || { error "checksums.txt validation failed"; exit 1; }
 success "checksums.txt validated"
 
+# Validate individual .sha256 files exist and match checksums.txt
+info "Validating individual .sha256 files..."
+while IFS= read -r line; do
+    checksum=$(echo "$line" | awk '{print $1}')
+    filename=$(echo "$line" | awk '{print $2}')
+
+    # Check .sha256 file exists
+    if [ ! -f "${filename}.sha256" ]; then
+        error "Missing ${filename}.sha256"
+        exit 1
+    fi
+
+    # Check .sha256 file content matches checksums.txt
+    sha256_content=$(cat "${filename}.sha256")
+    expected_content="${checksum}  ${filename}"
+    if [ "$sha256_content" != "$expected_content" ]; then
+        error "${filename}.sha256 content mismatch"
+        exit 1
+    fi
+done < checksums.txt
+success "Individual .sha256 files validated"
+
 popd >/dev/null
 
 echo ""

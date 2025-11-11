@@ -321,8 +321,15 @@ fi
 if [ ${#checksum_files[@]} -eq 0 ]; then
     echo "Warning: no release artifacts found to checksum."
 else
-    # Generate checksums.txt with sorted output for deterministic results (prevents #671 checksum mismatches)
-    sha256sum "${checksum_files[@]}" | sort -k 2 > checksums.txt
+    # Generate checksums from a single sha256sum run for deterministic results (prevents #671 checksum mismatches)
+    checksum_output="$(sha256sum "${checksum_files[@]}" | sort -k 2)"
+    printf '%s\n' "$checksum_output" > checksums.txt
+
+    # Emit per-file .sha256 artifacts for backward compatibility while legacy installers transition off them
+    while IFS= read -r checksum filename; do
+        printf '%s  %s\n' "$checksum" "$filename" > "${filename}.sha256"
+    done <<< "$checksum_output"
+
     if [ -n "${SIGNING_KEY_ID:-}" ]; then
         if command -v gpg >/dev/null 2>&1; then
             echo "Signing checksums with GPG key ${SIGNING_KEY_ID}..."
