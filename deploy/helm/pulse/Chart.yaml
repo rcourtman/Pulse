@@ -15,3 +15,7 @@ sources:
 maintainers:
   - name: Pulse Maintainers
     email: pulse@rcourtman.dev
+annotations:
+  org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+  org.opencontainers.image.description: Helm chart for deploying Pulse monitoring system
+  org.opencontainers.image.licenses: MIT
