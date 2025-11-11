@@ -175,9 +175,20 @@ jobs:
           echo "Comparing v${{ inputs.version }} with ${PREVIOUS_TAG}..."
 
           # Generate notes - script writes output between separator lines
-          # We need to capture everything between the separators
           TEMP_OUTPUT=$(mktemp)
+
+          # Run script, capture exit code (don't fail immediately)
+          set +e
           ./scripts/generate-release-notes.sh ${{ inputs.version }} "${PREVIOUS_TAG}" > "$TEMP_OUTPUT" 2>&1
+          SCRIPT_EXIT=$?
+          set -e
+
+          if [ $SCRIPT_EXIT -ne 0 ]; then
+            echo "❌ Release notes generation failed:"
+            cat "$TEMP_OUTPUT"
+            rm -f "$TEMP_OUTPUT"
+            exit 1
+          fi
 
           # Extract notes between separator lines (everything between the two ━━━ lines)
           RELEASE_NOTES=$(awk '/^Generated release notes:/{flag=1;next}/^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$/{if(flag==1){flag=2}else if(flag==2){flag=3}}flag==2' "$TEMP_OUTPUT")
