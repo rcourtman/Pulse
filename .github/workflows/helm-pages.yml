@@ -31,6 +31,29 @@ jobs:
         with:
           version: v3.15.2
 
+      - name: Install helm-docs
+        run: |
+          cd /tmp
+          wget https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
+          tar -xzf helm-docs_1.14.2_Linux_x86_64.tar.gz
+          sudo mv helm-docs /usr/local/bin/
+          helm-docs --version
+
+      - name: Generate chart documentation
+        run: |
+          cd deploy/helm/pulse
+          helm-docs
+
+          # Commit if README changed
+          if ! git diff --quiet README.md; then
+            git config user.name "$GITHUB_ACTOR"
+            git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+            git add README.md
+            git commit -m "Auto-update Helm chart documentation"
+            git push
+          fi
+          cd ../../..
+
       - name: Determine chart version
         id: version
         run: |
@@ -72,6 +95,39 @@ jobs:
             --set agent.enabled=true > /dev/null
 
           echo "✓ Chart validation passed"
+
+      - name: Smoke test with kind
+        run: |
+          # Install kind
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+          # Create cluster
+          kind create cluster --name pulse-test --wait 5m
+
+          # Install chart
+          helm install pulse deploy/helm/pulse \
+            --set persistence.enabled=false \
+            --set server.secretEnv.create=true \
+            --set server.secretEnv.data.API_TOKENS=test-token \
+            --wait --timeout 3m
+
+          # Verify deployment
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=pulse --timeout=120s
+          kubectl get pods -l app.kubernetes.io/name=pulse
+
+          # Test upgrade
+          helm upgrade pulse deploy/helm/pulse \
+            --set persistence.enabled=false \
+            --set server.secretEnv.create=true \
+            --set server.secretEnv.data.API_TOKENS=test-token \
+            --wait --timeout 3m
+
+          # Cleanup
+          kind delete cluster --name pulse-test
+
+          echo "✓ Smoke test passed"
 
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.6.0
