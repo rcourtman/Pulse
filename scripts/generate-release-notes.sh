@@ -129,11 +129,14 @@ Guidelines:
 - Use bold for feature/component names followed by colon
 - Do NOT include commit hashes - they clutter the release notes
 - Only include issue references like (#123) if explicitly mentioned in commit messages
-- Focus on user-visible changes only
+- Focus ONLY on user-visible changes - exclude all development/infrastructure changes
+- EXCLUDE: CI/CD changes, release workflow improvements, build process changes, development tooling, testing infrastructure
+- EXCLUDE: Anything about "release notes generation", "automated release", "validation scripts", "GitHub workflows"
+- INCLUDE ONLY: Features users interact with, bug fixes users experience, performance improvements users notice
 - Use clear, non-technical language
 - Group related changes together logically
 - If there are no breaking changes, write "None" in that section
-- Keep the Notes section practical and actionable
+- Keep the Notes section practical and actionable for end users
 EOF
 
 # Call LLM API based on provider
