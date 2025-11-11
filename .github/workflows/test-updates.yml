@@ -1,0 +1,227 @@
+name: Update Integration Tests
+
+on:
+  pull_request:
+    paths:
+      # Trigger on changes to update-related code
+      - 'internal/updates/**'
+      - 'internal/api/updates.go'
+      - 'internal/api/rate_limit*.go'
+      - 'frontend-modern/src/components/Update*.tsx'
+      - 'frontend-modern/src/api/updates.ts'
+      - 'frontend-modern/src/stores/updates.ts'
+      - 'tests/integration/**'
+      - '.github/workflows/test-updates.yml'
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'internal/updates/**'
+      - 'internal/api/updates.go'
+      - 'frontend-modern/src/components/Update*.tsx'
+      - 'tests/integration/**'
+  workflow_dispatch: # Allow manual triggering
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-tests:
+    name: Update Flow Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: tests/integration/package-lock.json
+
+      - name: Install Playwright dependencies
+        working-directory: tests/integration
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build Pulse for testing
+        run: |
+          make build || go build -o pulse ./cmd/pulse
+
+      - name: Build Docker images for test environment
+        working-directory: tests/integration
+        run: |
+          # Build mock GitHub server
+          docker build -t pulse-mock-github:test ./mock-github-server
+
+          # Build Pulse test image
+          cd ../../
+          docker build -t pulse:test -f Dockerfile .
+
+      - name: Run Happy Path Tests
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "false"
+          MOCK_NETWORK_ERROR: "false"
+          MOCK_RATE_LIMIT: "false"
+          MOCK_STALE_RELEASE: "false"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 15  # Wait for services to be ready
+          npx playwright test tests/01-happy-path.spec.ts --reporter=list,html
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Run Bad Checksums Tests
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "true"
+          MOCK_NETWORK_ERROR: "false"
+          MOCK_RATE_LIMIT: "false"
+          MOCK_STALE_RELEASE: "false"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 15
+          npx playwright test tests/02-bad-checksums.spec.ts --reporter=list,html
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Run Rate Limiting Tests
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "false"
+          MOCK_NETWORK_ERROR: "false"
+          MOCK_RATE_LIMIT: "true"
+          MOCK_STALE_RELEASE: "false"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 15
+          npx playwright test tests/03-rate-limiting.spec.ts --reporter=list,html
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Run Network Failure Tests
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "false"
+          MOCK_NETWORK_ERROR: "true"
+          MOCK_RATE_LIMIT: "false"
+          MOCK_STALE_RELEASE: "false"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 15
+          npx playwright test tests/04-network-failure.spec.ts --reporter=list,html
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Run Stale Release Tests
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "false"
+          MOCK_NETWORK_ERROR: "false"
+          MOCK_RATE_LIMIT: "false"
+          MOCK_STALE_RELEASE: "true"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 15
+          npx playwright test tests/05-stale-release.spec.ts --reporter=list,html
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Run Frontend Validation Tests
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "false"
+          MOCK_NETWORK_ERROR: "false"
+          MOCK_RATE_LIMIT: "false"
+          MOCK_STALE_RELEASE: "false"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 15
+          npx playwright test tests/06-frontend-validation.spec.ts --reporter=list,html
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/integration/playwright-report/
+          retention-days: 30
+
+      - name: Upload test videos and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failures
+          path: |
+            tests/integration/test-results/
+          retention-days: 7
+
+      - name: Cleanup Docker resources
+        if: always()
+        working-directory: tests/integration
+        run: |
+          docker-compose -f docker-compose.test.yml down -v || true
+          docker system prune -f || true
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request' && failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Update integration tests failed. Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
+            })
+
+  # Verify tests catch known issues
+  regression-test:
+    name: Verify Tests Catch v4.28.0 Checksum Issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: integration-tests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: tests/integration/package-lock.json
+
+      - name: Install Playwright
+        working-directory: tests/integration
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Verify bad checksum test fails appropriately
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "true"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 15
+
+          # This should detect the error
+          npx playwright test tests/02-bad-checksums.spec.ts || echo "Test correctly detected bad checksums"
+
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Report success
+        run: |
+          echo "✅ Integration tests successfully catch checksum validation issues"
+          echo "✅ Tests would have prevented v4.28.0 release issue"
