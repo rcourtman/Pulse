@@ -35,8 +35,6 @@ func (f *fakeScanner) DiscoverServersWithCallbacks(ctx context.Context, subnet s
 }
 
 func TestPerformScanRecordsHistoryAndMetrics(t *testing.T) {
-	t.Parallel()
-
 	service := NewService(nil, time.Minute, "192.168.1.0/24", func() config.DiscoveryConfig {
 		cfg := config.DefaultDiscoveryConfig()
 		cfg.SubnetBlocklist = []string{"10.0.0.0/24", "172.16.0.0/24"}
@@ -103,8 +101,6 @@ func TestPerformScanRecordsHistoryAndMetrics(t *testing.T) {
 }
 
 func TestPerformScanRecordsPartialFailure(t *testing.T) {
-	t.Parallel()
-
 	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
 		cfg := config.DefaultDiscoveryConfig()
 		return cfg
