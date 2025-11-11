@@ -1693,7 +1693,7 @@ download_pulse() {
         # Download architecture-specific release
         ARCHIVE_NAME="pulse-${LATEST_RELEASE}-linux-${PULSE_ARCH}.tar.gz"
         DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/${ARCHIVE_NAME}"
-        CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
+        CHECKSUMS_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/checksums.txt"
         print_info "Downloading from: $DOWNLOAD_URL"
         
         # Detect and stop existing service BEFORE downloading (to free the binary)
@@ -1720,18 +1720,31 @@ download_pulse() {
             exit 1
         fi
 
-        # Download checksum and verify
-        if ! wget -q --timeout=60 --tries=2 -O "${ARCHIVE_PATH}.sha256" "$CHECKSUM_URL"; then
-            print_error "Failed to download checksum for Pulse release"
+        # Download checksums file and verify
+        if ! wget -q --timeout=60 --tries=2 -O "/tmp/checksums.txt" "$CHECKSUMS_URL"; then
+            print_error "Failed to download checksums file for Pulse release"
             print_info "Refusing to install without checksum verification"
             exit 1
         fi
 
-        if ! (cd /tmp && sha256sum -c "${ARCHIVE_NAME}.sha256" >/dev/null 2>&1); then
-            print_error "Checksum verification failed for downloaded Pulse release"
+        # Extract the checksum for our specific archive
+        EXPECTED_CHECKSUM=$(grep "${ARCHIVE_NAME}" /tmp/checksums.txt | awk '{print $1}')
+        if [ -z "$EXPECTED_CHECKSUM" ]; then
+            print_error "Checksum not found in checksums.txt for ${ARCHIVE_NAME}"
+            rm -f /tmp/checksums.txt
             exit 1
         fi
-        rm -f "${ARCHIVE_PATH}.sha256"
+
+        # Verify the downloaded archive
+        ACTUAL_CHECKSUM=$(sha256sum "${ARCHIVE_PATH}" | awk '{print $1}')
+        if [ "$ACTUAL_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
+            print_error "Checksum verification failed for downloaded Pulse release"
+            print_error "Expected: $EXPECTED_CHECKSUM"
+            print_error "Got: $ACTUAL_CHECKSUM"
+            rm -f /tmp/checksums.txt
+            exit 1
+        fi
+        rm -f /tmp/checksums.txt
         
         # Extract to temporary directory first
         TEMP_EXTRACT="/tmp/pulse-extract-$$"
