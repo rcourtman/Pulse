@@ -251,6 +251,11 @@ func TestSendGroupedAppriseHTTP(t *testing.T) {
 	}))
 	defer server.Close()
 
+	// Allow localhost for test server (SSRF protection normally blocks this)
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1"); err != nil {
+		t.Fatalf("failed to configure allowlist: %v", err)
+	}
+
 	nm.SetAppriseConfig(AppriseConfig{
 		Enabled:        true,
 		Mode:           AppriseModeHTTP,
@@ -591,6 +596,11 @@ func TestSendTestNotificationAppriseHTTP(t *testing.T) {
 		w.Write([]byte(`{"ok": true}`))
 	}))
 	defer server.Close()
+
+	// Allow localhost for test server (SSRF protection normally blocks this)
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1"); err != nil {
+		t.Fatalf("failed to configure allowlist: %v", err)
+	}
 
 	nm.SetAppriseConfig(AppriseConfig{
 		Enabled:        true,
