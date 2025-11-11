@@ -17,6 +17,40 @@ jobs:
           echo "Prerelease: ${{ github.event.release.prerelease }}"
           echo "Updating demo server to latest stable release..."
 
+      - name: Wait for release assets
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          echo "Waiting for release assets to be available..."
+
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            echo "Checking for assets (attempt $((ATTEMPT + 1))/$MAX_ATTEMPTS)..."
+
+            # Check if checksums.txt and linux-amd64 tarball exist
+            CHECKSUMS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://github.com/rcourtman/Pulse/releases/download/${TAG}/checksums.txt")
+            TARBALL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://github.com/rcourtman/Pulse/releases/download/${TAG}/pulse-${TAG}-linux-amd64.tar.gz")
+
+            echo "checksums.txt: $CHECKSUMS_STATUS, tarball: $TARBALL_STATUS"
+
+            if [ "$CHECKSUMS_STATUS" = "200" ] && [ "$TARBALL_STATUS" = "200" ]; then
+              echo "✅ Release assets are available!"
+              exit 0
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "Assets not ready yet, waiting 10 seconds..."
+              sleep 10
+            fi
+          done
+
+          echo "❌ Timeout waiting for release assets"
+          exit 1
+
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
