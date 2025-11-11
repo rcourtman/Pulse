@@ -572,13 +572,17 @@ func discoverClusterNodes() ([]string, error) {
 	err := cmd.Run()
 
 	// pvecm status exits with code 2 on standalone nodes (not in a cluster)
-	// Treat this as a valid case and discover local host addresses
+	// Also handle LXC containers where pvecm can't access corosync IPC
+	// Treat these as valid cases and discover local host addresses
 	if err != nil {
 		stderrStr := stderr.String()
-		// Check if this is the "not part of a cluster" error
+		// Check if this is a standalone node or LXC container
+		// - "does not exist" or "not part of a cluster": standalone node
+		// - "ipcc_send_rec": running in LXC container without corosync access
 		if strings.Contains(stderrStr, "does not exist") ||
-			strings.Contains(stderrStr, "not part of a cluster") {
-			log.Info().Msg("Standalone Proxmox node detected (not in cluster) - discovering local host addresses")
+			strings.Contains(stderrStr, "not part of a cluster") ||
+			strings.Contains(stderrStr, "ipcc_send_rec") {
+			log.Info().Msg("Standalone Proxmox node or LXC container detected - discovering local host addresses")
 			return discoverLocalHostAddresses()
 		}
 		// For other errors, fail
