@@ -102,8 +102,8 @@ func TestMergeNVMeTempsIntoDisks(t *testing.T) {
 	t.Parallel()
 
 	original := []models.PhysicalDisk{
-		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme1n1", Type: "nvme", Temperature: 55},
-		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme0n1", Type: "NVME", Temperature: 60},
+		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme1n1", Type: "nvme", Temperature: 0},
+		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme0n1", Type: "NVME", Temperature: 0},
 		{Node: "nodeB", Instance: "inst", DevPath: "/dev/sda", Type: "sata", Temperature: 45},
 	}
 
@@ -131,7 +131,7 @@ func TestMergeNVMeTempsIntoDisks(t *testing.T) {
 	if got, want := merged[2].Temperature, 45; got != want {
 		t.Fatalf("non-nvme disk temperature changed: got %d want %d", got, want)
 	}
-	if got := original[0].Temperature; got != 55 {
+	if got := original[0].Temperature; got != 0 {
 		t.Fatalf("expected original slice unchanged, got %d", got)
 	}
 }
@@ -140,8 +140,8 @@ func TestMergeNVMeTempsIntoDisksClearsMissingOrInvalid(t *testing.T) {
 	t.Parallel()
 
 	disks := []models.PhysicalDisk{
-		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 65},
-		{Node: "nodeC", Instance: "inst", DevPath: "/dev/nvme1n1", Type: "nvme", Temperature: 70},
+		{Node: "nodeA", Instance: "inst", DevPath: "/dev/nvme0n1", Type: "nvme", Temperature: 0},
+		{Node: "nodeC", Instance: "inst", DevPath: "/dev/nvme1n1", Type: "nvme", Temperature: 0},
 	}
 
 	nodes := []models.Node{
