@@ -1342,6 +1342,12 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		return nil
 	}
 
+	// Read the existing .env file content
+	existingContent, err := os.ReadFile(envFile)
+	if err != nil {
+		return err
+	}
+
 	// Read the existing .env file
 	file, err := os.Open(envFile)
 	if err != nil {
@@ -1377,10 +1383,18 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 
 	// Note: POLLING_INTERVAL is deprecated and no longer written
 
-	// Write the updated content back atomically
+	// Build the new content
 	content := strings.Join(lines, "\n")
 	if len(lines) > 0 && !strings.HasSuffix(content, "\n") {
 		content += "\n"
+	}
+
+	// Only write if content actually changed
+	// This prevents unnecessary .env rewrites that trigger the config watcher,
+	// which can cause API tokens to be overwritten (related to #685)
+	if string(existingContent) == content {
+		log.Debug().Str("file", envFile).Msg("Skipping .env update - content unchanged")
+		return nil
 	}
 
 	// Write to temp file first
