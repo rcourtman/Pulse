@@ -896,6 +896,11 @@ func Load() (*Config, error) {
 	if len(envTokens) > 0 {
 		cfg.EnvOverrides["API_TOKEN"] = true
 		cfg.EnvOverrides["API_TOKENS"] = true
+
+		// Track if we migrated any new tokens from env to persistence
+		migratedCount := 0
+		needsPersist := false
+
 		for _, tokenValue := range envTokens {
 			if tokenValue == "" {
 				continue
@@ -909,18 +914,18 @@ func Load() (*Config, error) {
 				hashed = auth.HashAPIToken(tokenValue)
 				prefix = tokenPrefix(tokenValue)
 				suffix = tokenSuffix(tokenValue)
-				log.Info().Msg("Auto-hashed plain text API token from environment variable")
-			} else {
-				log.Debug().Msg("Loaded pre-hashed API token from env var")
+				log.Debug().Msg("Auto-hashed plain text API token from environment variable")
 			}
 
+			// Check if this token already exists in api_tokens.json
 			if cfg.HasAPITokenHash(hashed) {
 				continue
 			}
 
+			// Migrate env token to api_tokens.json
 			record := APITokenRecord{
 				ID:        uuid.NewString(),
-				Name:      "Environment token",
+				Name:      "Migrated from .env (" + prefix + ")",
 				Hash:      hashed,
 				Prefix:    prefix,
 				Suffix:    suffix,
@@ -928,8 +933,22 @@ func Load() (*Config, error) {
 				Scopes:    []string{ScopeWildcard},
 			}
 			cfg.APITokens = append(cfg.APITokens, record)
+			migratedCount++
+			needsPersist = true
 		}
+
 		cfg.SortAPITokens()
+
+		// Persist migrated tokens to api_tokens.json
+		if needsPersist && persistence != nil {
+			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+				log.Error().Err(err).Msg("Failed to persist migrated API tokens from environment")
+			} else {
+				log.Warn().
+					Int("count", migratedCount).
+					Msg("Migrated API tokens from .env to api_tokens.json - API_TOKEN/API_TOKENS in .env are deprecated and will be ignored in future releases. Manage tokens via the UI instead.")
+			}
+		}
 	}
 
 	// Check if API token is enabled

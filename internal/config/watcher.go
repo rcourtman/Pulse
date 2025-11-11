@@ -335,7 +335,8 @@ func (cw *ConfigWatcher) reloadConfig() {
 		}
 	}
 
-	// Apply API tokens if present in .env (legacy support)
+	// Legacy env token support: only process if api_tokens.json is empty
+	// This prevents .env changes from overwriting UI-managed tokens (fixes #685)
 	rawTokens := make([]string, 0, 4)
 	if raw, ok := envMap["API_TOKENS"]; ok {
 		raw = strings.Trim(raw, "'\"")
@@ -347,17 +348,19 @@ func (cw *ConfigWatcher) reloadConfig() {
 					rawTokens = append(rawTokens, token)
 				}
 			}
-		} else {
-			// Explicit empty list clears tokens
-			rawTokens = []string{}
 		}
 	}
 	if raw, ok := envMap["API_TOKEN"]; ok {
 		raw = strings.Trim(raw, "'\"")
-		rawTokens = append(rawTokens, raw)
+		if raw != "" {
+			rawTokens = append(rawTokens, raw)
+		}
 	}
 
-	if len(rawTokens) > 0 {
+	// Only reload tokens from .env if NO tokens exist in api_tokens.json
+	// This makes api_tokens.json the authoritative source once it has records
+	if len(rawTokens) > 0 && len(cw.config.APITokens) == 0 {
+		log.Debug().Msg("No existing API tokens found - loading from .env (legacy)")
 		seen := make(map[string]struct{}, len(rawTokens))
 		newRecords := make([]APITokenRecord, 0, len(rawTokens))
 		for _, tokenValue := range rawTokens {
@@ -416,6 +419,8 @@ func (cw *ConfigWatcher) reloadConfig() {
 				}
 			}
 		}
+	} else if len(rawTokens) > 0 && len(cw.config.APITokens) > 0 {
+		log.Debug().Msg("Ignoring API_TOKEN/API_TOKENS from .env - api_tokens.json is authoritative")
 	}
 
 	// REMOVED: POLLING_INTERVAL from .env - now ONLY in system.json
