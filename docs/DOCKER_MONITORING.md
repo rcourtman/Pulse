@@ -271,6 +271,21 @@ Need the alerts but at a different tone? The same Containers tab exposes global 
 
 **Fix:** Open **Settings → Docker → Removed Hosts**, locate the entry, and click **Allow re-enroll**. Then restart the agent or rerun the install script. If the install script runs with a token that includes the `docker:manage` scope it will automatically clear the removal block.
 
+### Snap-installed Docker permission issues
+
+**Symptom:** Install script completes successfully but the agent service fails with `permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock`. The install script may have shown `[WARN] docker group not found`.
+
+**Cause:** Docker installed via Snap does not automatically create a system `docker` group, preventing the `pulse-docker` service user from accessing `/var/run/docker.sock`.
+
+**Fix:** The install script now automatically detects Snap Docker and creates the docker group when needed. If you previously installed with an older version of the script:
+
+1. Create the docker group: `sudo addgroup --system docker`
+2. Add the service user to the group: `sudo adduser pulse-docker docker`
+3. Restart Snap Docker to refresh socket ACLs: `sudo snap restart docker`
+4. Restart the agent service: `sudo systemctl restart pulse-docker-agent`
+
+Verify socket access with: `sudo -u pulse-docker docker version`
+
 ## Removing the agent
 
 Stop the systemd service or container and remove the binary. Pulse retains the last reported state until it ages out after a few minutes of inactivity.
