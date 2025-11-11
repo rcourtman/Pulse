@@ -174,8 +174,15 @@ jobs:
 
           echo "Comparing v${{ inputs.version }} with ${PREVIOUS_TAG}..."
 
-          # Generate notes and capture output
-          RELEASE_NOTES=$(./scripts/generate-release-notes.sh ${{ inputs.version }} "${PREVIOUS_TAG}" 2>&1 | sed -n '/^Generated release notes:/,/^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$/{ /^Generated release notes:/d; /^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$/d; p; }')
+          # Generate notes - script writes output between separator lines
+          # We need to capture everything between the separators
+          TEMP_OUTPUT=$(mktemp)
+          ./scripts/generate-release-notes.sh ${{ inputs.version }} "${PREVIOUS_TAG}" > "$TEMP_OUTPUT" 2>&1
+
+          # Extract notes between separator lines (everything between the two ━━━ lines)
+          RELEASE_NOTES=$(awk '/^Generated release notes:/{flag=1;next}/^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$/{if(flag==1){flag=2}else if(flag==2){flag=3}}flag==2' "$TEMP_OUTPUT")
+
+          rm -f "$TEMP_OUTPUT"
 
           # Save to output (escape for GitHub Actions multiline)
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
