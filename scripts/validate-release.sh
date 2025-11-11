@@ -172,19 +172,19 @@ info "Validating tarball contents..."
 for arch in linux-amd64 linux-arm64 linux-armv7; do
     tar="$RELEASE_DIR/pulse-v${PULSE_VERSION}-${arch}.tar.gz"
 
-    # Check binaries
-    tar -tzf "$tar" bin/pulse bin/pulse-docker-agent bin/pulse-host-agent bin/pulse-sensor-proxy >/dev/null 2>&1 || { error "$(basename $tar) missing binaries"; exit 1; }
+    # Check binaries (note: tarballs use ./  prefix)
+    tar -tzf "$tar" ./bin/pulse ./bin/pulse-docker-agent ./bin/pulse-host-agent ./bin/pulse-sensor-proxy >/dev/null 2>&1 || { error "$(basename $tar) missing binaries"; exit 1; }
 
     # Check scripts
-    tar -tzf "$tar" scripts/install-docker-agent.sh scripts/install-container-agent.sh scripts/install-host-agent.sh scripts/install-host-agent.ps1 scripts/uninstall-host-agent.sh scripts/uninstall-host-agent.ps1 scripts/install-sensor-proxy.sh scripts/install-docker.sh >/dev/null 2>&1 || { error "$(basename $tar) missing scripts"; exit 1; }
+    tar -tzf "$tar" ./scripts/install-docker-agent.sh ./scripts/install-container-agent.sh ./scripts/install-host-agent.sh ./scripts/install-host-agent.ps1 ./scripts/uninstall-host-agent.sh ./scripts/uninstall-host-agent.ps1 ./scripts/install-sensor-proxy.sh ./scripts/install-docker.sh >/dev/null 2>&1 || { error "$(basename $tar) missing scripts"; exit 1; }
 
     # Check VERSION file
-    tar -tzf "$tar" VERSION >/dev/null 2>&1 || { error "$(basename $tar) missing VERSION file"; exit 1; }
+    tar -tzf "$tar" ./VERSION >/dev/null 2>&1 || { error "$(basename $tar) missing VERSION file"; exit 1; }
 done
 success "Platform-specific tarballs contain all required files"
 
 # Validate universal tarball
-tar -tzf "$RELEASE_DIR/pulse-v${PULSE_VERSION}.tar.gz" VERSION >/dev/null 2>&1 || { error "Universal tarball missing VERSION file"; exit 1; }
+tar -tzf "$RELEASE_DIR/pulse-v${PULSE_VERSION}.tar.gz" ./VERSION >/dev/null 2>&1 || { error "Universal tarball missing VERSION file"; exit 1; }
 success "Universal tarball validated"
 
 # Validate macOS tarball
