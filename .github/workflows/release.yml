@@ -117,6 +117,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Set up Go
         uses: actions/setup-go@v5
