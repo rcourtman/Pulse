@@ -29,9 +29,9 @@ jobs:
             echo "Checking for assets (attempt $((ATTEMPT + 1))/$MAX_ATTEMPTS)..."
 
             # Check if checksums.txt and linux-amd64 tarball exist
-            CHECKSUMS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            CHECKSUMS_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" \
               "https://github.com/rcourtman/Pulse/releases/download/${TAG}/checksums.txt")
-            TARBALL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            TARBALL_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" \
               "https://github.com/rcourtman/Pulse/releases/download/${TAG}/pulse-${TAG}-linux-amd64.tar.gz")
 
             echo "checksums.txt: $CHECKSUMS_STATUS, tarball: $TARBALL_STATUS"
