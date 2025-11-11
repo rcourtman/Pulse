@@ -11,24 +11,31 @@ Deploy Pulse to Kubernetes with the bundled Helm chart under `deploy/helm/pulse`
 - An ingress controller (only if you plan to expose Pulse through an Ingress)
 - (Optional) A Docker-compatible runtime on the nodes where you expect to run the Docker agent; the agent talks to `/var/run/docker.sock`
 
-## Installing from GHCR (recommended)
+## Installing from Helm Repository (recommended)
 
-1. Authenticate against GHCR (one-time step on each machine):
+1. Add the Pulse Helm repository:
 
    ```bash
-   helm registry login ghcr.io
+   helm repo add pulse https://rcourtman.github.io/Pulse/
+   helm repo update pulse
    ```
 
-2. Install the chart published for the latest Pulse release (swap the inline `curl` command with a pinned version if you need to lock upgrades):
+2. Install the chart:
 
    ```bash
-   helm install pulse oci://ghcr.io/rcourtman/pulse-chart \
-     --version $(curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/VERSION) \
+   # Latest version
+   helm install pulse pulse/pulse \
+     --namespace pulse \
+     --create-namespace
+
+   # Or pin to specific version
+   helm install pulse pulse/pulse \
+     --version 4.28.0 \
      --namespace pulse \
      --create-namespace
    ```
 
-   The chart version tracks the Pulse release version. Check [GitHub Releases](https://github.com/rcourtman/Pulse/releases) or run `gh release list --limit 1` to find the newest tag if you prefer to specify it manually.
+   Check available versions: `helm search repo pulse/pulse --versions`
 
 3. Port-forward the service to finish the first-time security setup:
 
@@ -207,10 +214,63 @@ Notes:
 
 ## Upgrades and Removal
 
-- **Upgrade (GHCR):** `helm upgrade pulse oci://ghcr.io/rcourtman/pulse-chart --version <new-version> -n pulse -f <values.yaml>`
-- **Upgrade (source):** Re-run `helm upgrade --install pulse ./deploy/helm/pulse -f <values>` with updated overrides.
-- **Rollback:** `helm rollback pulse <revision>`
-- **Uninstall:** `helm uninstall pulse -n pulse` (PVCs remain unless you delete them manually)
+### Upgrading Pulse
+
+1. **Update the Helm repository:**
+
+   ```bash
+   helm repo update pulse
+   ```
+
+2. **Check available versions:**
+
+   ```bash
+   helm search repo pulse/pulse --versions
+   ```
+
+3. **Upgrade to latest:**
+
+   ```bash
+   helm upgrade pulse pulse/pulse -n pulse
+   ```
+
+4. **Or upgrade to specific version:**
+
+   ```bash
+   helm upgrade pulse pulse/pulse --version 4.28.0 -n pulse
+   ```
+
+5. **With custom values file:**
+
+   ```bash
+   helm upgrade pulse pulse/pulse -n pulse -f custom-values.yaml
+   ```
+
+### Rollback
+
+If an upgrade causes issues:
+
+```bash
+# List revisions
+helm history pulse -n pulse
+
+# Rollback to previous revision
+helm rollback pulse -n pulse
+
+# Or rollback to specific revision
+helm rollback pulse 3 -n pulse
+```
+
+### Uninstall
+
+```bash
+# Remove Pulse but keep PVCs
+helm uninstall pulse -n pulse
+
+# Remove everything including PVCs
+helm uninstall pulse -n pulse
+kubectl delete pvc -n pulse -l app.kubernetes.io/name=pulse
+```
 
 ### Post-Upgrade Verification (v4.25.0+)
 
