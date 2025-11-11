@@ -82,6 +82,14 @@ jobs:
           helm push dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz \
             oci://ghcr.io/${{ github.repository_owner }}/pulse-chart
 
+      - name: Make package public
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Set package visibility to public for anonymous pulls
+          gh api -X PATCH /user/packages/container/pulse-chart -f visibility=public || \
+          echo "Warning: Could not set package visibility. May need manual configuration."
+
       - name: Attach chart to release
         if: github.event_name == 'release'
         env:
