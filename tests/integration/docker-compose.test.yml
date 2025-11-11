@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Mock GitHub API server for controlled testing
+  mock-github:
+    build:
+      context: ./mock-github-server
+      dockerfile: Dockerfile
+    container_name: pulse-mock-github
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      # Control test scenarios via environment variables
+      - MOCK_CHECKSUM_ERROR=${MOCK_CHECKSUM_ERROR:-false}
+      - MOCK_NETWORK_ERROR=${MOCK_NETWORK_ERROR:-false}
+      - MOCK_RATE_LIMIT=${MOCK_RATE_LIMIT:-false}
+      - MOCK_STALE_RELEASE=${MOCK_STALE_RELEASE:-false}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - test-network
+
+  # Pulse server under test
+  pulse-test:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    container_name: pulse-test-server
+    ports:
+      - "7655:7655"
+    environment:
+      - TZ=UTC
+      # Point to mock GitHub server
+      - PULSE_UPDATE_SERVER=http://mock-github:8080
+      # Test database in memory
+      - PULSE_DATA_DIR=/tmp/pulse-test-data
+      # Enable debug logging
+      - PULSE_LOG_LEVEL=debug
+      # Mock mode for faster testing
+      - PULSE_MOCK_MODE=true
+    volumes:
+      - test-data:/tmp/pulse-test-data
+    depends_on:
+      mock-github:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7655/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - test-network
+
+volumes:
+  test-data:
+    driver: local
+
+networks:
+  test-network:
+    driver: bridge
