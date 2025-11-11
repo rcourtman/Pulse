@@ -98,8 +98,8 @@ if [ "$SKIP_DOCKER" = false ]; then
 
     # Validate all required binaries exist and are non-empty
     info "Checking downloadable binaries in /opt/pulse/bin/..."
-    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-docker-agent pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 pulse-docker-agent-linux-armv7 pulse-docker-agent-linux-armv6 pulse-docker-agent-linux-386 pulse-host-agent-linux-amd64 pulse-host-agent-linux-arm64 pulse-host-agent-linux-armv7 pulse-host-agent-linux-armv6 pulse-host-agent-linux-386 pulse-host-agent-darwin-amd64 pulse-host-agent-darwin-arm64 pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 pulse-sensor-proxy pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy-linux-arm64 pulse-sensor-proxy-linux-armv7 pulse-sensor-proxy-linux-armv6 pulse-sensor-proxy-linux-386"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-host-agent-windows-amd64)" = "pulse-host-agent-windows-amd64.exe" ] || { echo "windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-arm64)" = "pulse-host-agent-windows-arm64.exe" ] || { echo "windows arm64 symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
-    success "All downloadable binaries present (24 binaries + 2 Windows symlinks)"
+    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/bin; required="pulse pulse-docker-agent pulse-docker-agent-linux-amd64 pulse-docker-agent-linux-arm64 pulse-docker-agent-linux-armv7 pulse-docker-agent-linux-armv6 pulse-docker-agent-linux-386 pulse-host-agent-linux-amd64 pulse-host-agent-linux-arm64 pulse-host-agent-linux-armv7 pulse-host-agent-linux-armv6 pulse-host-agent-linux-386 pulse-host-agent-darwin-amd64 pulse-host-agent-darwin-arm64 pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 pulse-host-agent-windows-386.exe pulse-host-agent-windows-386 pulse-sensor-proxy pulse-sensor-proxy-linux-amd64 pulse-sensor-proxy-linux-arm64 pulse-sensor-proxy-linux-armv7 pulse-sensor-proxy-linux-armv6 pulse-sensor-proxy-linux-386"; for f in $required; do [ -e "$f" ] || { echo "missing binary $f" >&2; exit 1; }; [ -s "$f" ] || { echo "empty binary $f" >&2; exit 1; }; done; [ "$(readlink pulse-host-agent-windows-amd64)" = "pulse-host-agent-windows-amd64.exe" ] || { echo "windows amd64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-arm64)" = "pulse-host-agent-windows-arm64.exe" ] || { echo "windows arm64 symlink broken" >&2; exit 1; }; [ "$(readlink pulse-host-agent-windows-386)" = "pulse-host-agent-windows-386.exe" ] || { echo "windows 386 symlink broken" >&2; exit 1; }; echo "All binaries present"' || { error "Binary validation failed"; exit 1; }
+    success "All downloadable binaries present (26 binaries + 3 Windows symlinks)"
 
     # Validate version embedding in Docker image binaries
     info "Validating version embedding in Docker image binaries..."
@@ -189,7 +189,21 @@ success "Platform-specific tarballs contain all required files"
 
 # Validate universal tarball
 tar -tzf "pulse-v${PULSE_VERSION}.tar.gz" ./VERSION >/dev/null 2>&1 || { error "Universal tarball missing VERSION file"; exit 1; }
-success "Universal tarball validated"
+
+# Validate universal tarball contains Windows/macOS binaries for download endpoint
+info "Validating universal tarball contains Windows/macOS binaries..."
+for binary in \
+    ./bin/pulse-host-agent-darwin-amd64 \
+    ./bin/pulse-host-agent-darwin-arm64 \
+    ./bin/pulse-host-agent-windows-amd64.exe \
+    ./bin/pulse-host-agent-windows-arm64.exe \
+    ./bin/pulse-host-agent-windows-386.exe \
+    ./bin/pulse-host-agent-windows-amd64 \
+    ./bin/pulse-host-agent-windows-arm64 \
+    ./bin/pulse-host-agent-windows-386; do
+    tar -tzf "pulse-v${PULSE_VERSION}.tar.gz" "$binary" >/dev/null 2>&1 || { error "Universal tarball missing $binary"; exit 1; }
+done
+success "Universal tarball validated (includes Windows/macOS binaries)"
 
 # Validate macOS tarball
 tar -tzf "pulse-host-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz" pulse-host-agent-darwin-arm64 >/dev/null 2>&1 || { error "macOS tarball validation failed"; exit 1; }

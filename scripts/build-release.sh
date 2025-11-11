@@ -281,6 +281,19 @@ zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-host-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-host-agent-windows-386.exe"
 
+# Copy Windows and macOS binaries into universal tarball for /download/ endpoint
+echo "Adding Windows and macOS binaries to universal tarball..."
+cp "$BUILD_DIR/pulse-host-agent-darwin-amd64" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-host-agent-darwin-arm64" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-host-agent-windows-386.exe" "$universal_dir/bin/"
+
+# Create symlinks for Windows binaries without .exe extension (required for download endpoint)
+ln -s pulse-host-agent-windows-amd64.exe "$universal_dir/bin/pulse-host-agent-windows-amd64"
+ln -s pulse-host-agent-windows-arm64.exe "$universal_dir/bin/pulse-host-agent-windows-arm64"
+ln -s pulse-host-agent-windows-386.exe "$universal_dir/bin/pulse-host-agent-windows-386"
+
 # Create universal tarball
 cd "$universal_dir"
 tar -czf "../../$RELEASE_DIR/pulse-v${VERSION}.tar.gz" .
@@ -288,10 +301,6 @@ cd ../..
 
 # Cleanup
 rm -rf "$universal_dir"
-
-# NOTE: Standalone binaries are NOT copied to release directory
-# They are only included in Docker images for /download/ endpoints
-# Users should download versioned tarballs/zips from GitHub releases instead
 
 # Optionally package Helm chart
 if [ "${SKIP_HELM_PACKAGE:-0}" != "1" ]; then
