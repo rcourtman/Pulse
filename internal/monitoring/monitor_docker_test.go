@@ -13,7 +13,7 @@ import (
 func newTestMonitor(t *testing.T) *Monitor {
 	t.Helper()
 
-	return &Monitor{
+	m := &Monitor{
 		state:                  models.NewState(),
 		alertManager:           alerts.NewManager(),
 		removedDockerHosts:     make(map[string]time.Time),
@@ -21,6 +21,8 @@ func newTestMonitor(t *testing.T) *Monitor {
 		dockerTokenBindings:    make(map[string]string),
 		dockerMetadataStore:    config.NewDockerMetadataStore(t.TempDir()),
 	}
+	t.Cleanup(func() { m.alertManager.Stop() })
+	return m
 }
 
 func TestApplyDockerReportGeneratesUniqueIDsForCollidingHosts(t *testing.T) {

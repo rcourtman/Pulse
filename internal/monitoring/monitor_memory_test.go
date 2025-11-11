@@ -191,6 +191,7 @@ func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 		dlqInsightMap:        make(map[string]*dlqInsight),
 		authFailures:         make(map[string]int),
 		lastAuthAttempt:      make(map[string]time.Time),
+		nodeLastOnline:       make(map[string]time.Time),
 	}
 	defer mon.alertManager.Stop()
 	defer mon.notificationMgr.Stop()
