@@ -9,12 +9,92 @@ on:
         type: string
 
 jobs:
-  create-release:
+  build-docker-images:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.set_version.outputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set version output
+        id: set_version
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG="v${VERSION}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Building Docker images for ${TAG}..."
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Pulse server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: |
+            rcourtman/pulse:latest
+            rcourtman/pulse:${{ steps.set_version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse:latest
+            ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.set_version.outputs.tag }}
+
+      - name: Build and push Docker agent image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: agent_runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: |
+            rcourtman/pulse-docker-agent:latest
+            rcourtman/pulse-docker-agent:${{ steps.set_version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.set_version.outputs.tag }}
+
+      - name: Output Docker image information
+        run: |
+          echo "✅ Docker images built and pushed successfully!"
+          echo ""
+          echo "Server images:"
+          echo "  - rcourtman/pulse:${{ steps.set_version.outputs.tag }}"
+          echo "  - rcourtman/pulse:latest"
+          echo ""
+          echo "Agent images:"
+          echo "  - rcourtman/pulse-docker-agent:${{ steps.set_version.outputs.tag }}"
+          echo "  - rcourtman/pulse-docker-agent:latest"
+
+  create-release:
+    needs: build-docker-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
-    outputs:
-      tag: ${{ steps.create_release.outputs.tag }}
 
     steps:
       - name: Checkout repository
@@ -49,7 +129,7 @@ jobs:
           echo "Validating release v${{ inputs.version }}..."
           # Note: Docker image validation is skipped in this workflow
           # since we're only validating the built artifacts (tarballs, binaries, checksums)
-          # Docker images should be validated separately before release
+          # Docker images were built and validated in previous job
 
           # Run validation with --skip-docker flag
           ./scripts/validate-release.sh ${{ inputs.version }} --skip-docker || {
@@ -85,7 +165,13 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
           \`\`\`
 
-          Or download platform-specific archives below."
+          Or download platform-specific archives below.
+
+          ## Docker Images
+
+          Docker images are available for this release:
+          - \`rcourtman/pulse:${TAG}\`
+          - \`rcourtman/pulse-docker-agent:${TAG}\`"
 
           echo "release_url=$(gh release view ${TAG} --json url -q .url)" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
@@ -148,75 +234,6 @@ jobs:
           echo "3. Publish the release manually when ready"
           echo ""
           echo "All artifacts have been uploaded and validated."
+          echo "Docker images are available at Docker Hub and GHCR."
           echo "checksums.txt matches all uploaded binaries."
           echo ""
-
-  build-docker-images:
-    needs: create-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Pulse server image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          tags: |
-            rcourtman/pulse:latest
-            rcourtman/pulse:${{ needs.create-release.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse:latest
-            ghcr.io/${{ github.repository_owner }}/pulse:${{ needs.create-release.outputs.tag }}
-
-      - name: Build and push Docker agent image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: agent_runtime
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          tags: |
-            rcourtman/pulse-docker-agent:latest
-            rcourtman/pulse-docker-agent:${{ needs.create-release.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ needs.create-release.outputs.tag }}
-
-      - name: Output Docker image information
-        run: |
-          echo "✅ Docker images built and pushed successfully!"
-          echo ""
-          echo "Server images:"
-          echo "  - rcourtman/pulse:${{ needs.create-release.outputs.tag }}"
-          echo "  - rcourtman/pulse:latest"
-          echo ""
-          echo "Agent images:"
-          echo "  - rcourtman/pulse-docker-agent:${{ needs.create-release.outputs.tag }}"
-          echo "  - rcourtman/pulse-docker-agent:latest"
