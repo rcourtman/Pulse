@@ -142,7 +142,8 @@ func applyUpdate(t *testing.T, client *http.Client, baseURL, downloadURL string)
 	resp := doJSONRequest(t, client, "POST", baseURL+"/api/updates/apply", payload)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("apply update failed with status %s", resp.Status)
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("apply update failed with status %s: %s", resp.Status, string(body))
 	}
 }
 
@@ -199,6 +200,11 @@ func doRequest(t *testing.T, client *http.Client, method, endpoint string, body 
 	if len(contentType) > 0 && contentType[0] != "" {
 		req.Header.Set("Content-Type", contentType[0])
 	}
+	if client != nil && client.Jar != nil && methodRequiresCSRF(method) {
+		if token := csrfTokenForURL(client.Jar, req.URL); token != "" {
+			req.Header.Set("X-CSRF-Token", token)
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("request %s %s failed: %v", method, endpoint, err)
@@ -218,4 +224,25 @@ func getenvDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func methodRequiresCSRF(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return false
+	default:
+		return true
+	}
+}
+
+func csrfTokenForURL(jar http.CookieJar, target *url.URL) string {
+	if jar == nil || target == nil {
+		return ""
+	}
+	for _, c := range jar.Cookies(target) {
+		if c.Name == "pulse_csrf" && c.Value != "" {
+			return c.Value
+		}
+	}
+	return ""
 }
