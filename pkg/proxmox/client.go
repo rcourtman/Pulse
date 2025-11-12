@@ -1664,7 +1664,8 @@ func (c *Client) GetVMNetworkInterfaces(ctx context.Context, node string, vmid i
 
 // GetVMStatus returns detailed VM status including balloon info
 func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (*VMStatus, error) {
-	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/status/current", node, vmid))
+	// full=1 ensures Proxmox returns guest meminfo/agent data when available
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/status/current?full=1", node, vmid))
 	if err != nil {
 		return nil, err
 	}
