@@ -8245,12 +8245,14 @@ func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 
 	var allBackups []models.StorageBackup
-	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
-	hadSuccessfulNode := false          // Track if at least one node responded successfully
-	storagesWithBackup := 0             // Number of storages that should contain backups
-	contentSuccess := 0                 // Number of successful storage content fetches
-	contentFailures := 0                // Number of failed storage content fetches
-	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
+	seenVolids := make(map[string]bool)     // Track seen volume IDs to avoid duplicates
+	hadSuccessfulNode := false              // Track if at least one node responded successfully
+	storagesWithBackup := 0                 // Number of storages that should contain backups
+	contentSuccess := 0                     // Number of successful storage content fetches
+	contentFailures := 0                    // Number of failed storage content fetches
+	storageQueryErrors := 0                 // Number of nodes where storage list could not be queried
+	storagePreserveNeeded := map[string]struct{}{}
+	storageSuccess := map[string]struct{}{}
 
 	// Build guest lookup map to find actual node for each VMID
 	snapshot := m.state.GetSnapshot()
@@ -8269,6 +8271,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// For each node, get storage and check content
 	for _, node := range nodes {
 		if nodeEffectiveStatus[node.Node] != "online" {
+			for _, storageName := range storageNamesForNode(instanceName, node.Node, snapshot) {
+				storagePreserveNeeded[storageName] = struct{}{}
+			}
 			continue
 		}
 
@@ -8301,6 +8306,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("Failed to get storage for backups - skipping node")
+			for _, storageName := range storageNamesForNode(instanceName, node.Node, snapshot) {
+				storagePreserveNeeded[storageName] = struct{}{}
+			}
 			storageQueryErrors++
 			continue
 		}
@@ -8324,11 +8332,16 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					Str("node", node.Node).
 					Str("storage", storage.Storage).
 					Msg("Failed to get storage content")
+				if _, ok := storageSuccess[storage.Storage]; !ok {
+					storagePreserveNeeded[storage.Storage] = struct{}{}
+				}
 				contentFailures++
 				continue
 			}
 
 			contentSuccess++
+			storageSuccess[storage.Storage] = struct{}{}
+			delete(storagePreserveNeeded, storage.Storage)
 
 			// Convert to models
 			for _, content := range contents {
@@ -8411,6 +8424,14 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 	}
 
+	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, storagePreserveNeeded, allBackups)
+	if len(preservedStorages) > 0 {
+		log.Warn().
+			Str("instance", instanceName).
+			Strs("storages", preservedStorages).
+			Msg("Preserving previous storage backup data due to partial failures")
+	}
+
 	// Decide whether to keep existing backups when every query failed
 	if shouldPreserveBackups(len(nodes), hadSuccessfulNode, storagesWithBackup, contentSuccess) {
 		if len(nodes) > 0 && !hadSuccessfulNode {
@@ -8472,6 +8493,75 @@ func shouldPreservePBSBackups(datastoreCount, datastoreFetches int) bool {
 		return true
 	}
 	return false
+}
+
+func storageNamesForNode(instanceName, nodeName string, snapshot models.StateSnapshot) []string {
+	if nodeName == "" {
+		return nil
+	}
+
+	var storages []string
+	for _, storage := range snapshot.Storage {
+		if storage.Instance != instanceName {
+			continue
+		}
+		if storage.Name == "" {
+			continue
+		}
+		if !strings.Contains(storage.Content, "backup") {
+			continue
+		}
+		if storage.Node == nodeName {
+			storages = append(storages, storage.Name)
+			continue
+		}
+		for _, node := range storage.Nodes {
+			if node == nodeName {
+				storages = append(storages, storage.Name)
+				break
+			}
+		}
+	}
+
+	return storages
+}
+
+func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, storagesToPreserve map[string]struct{}, current []models.StorageBackup) ([]models.StorageBackup, []string) {
+	if len(storagesToPreserve) == 0 {
+		return current, nil
+	}
+
+	existing := make(map[string]struct{}, len(current))
+	for _, backup := range current {
+		existing[backup.ID] = struct{}{}
+	}
+
+	preserved := make(map[string]struct{})
+	for _, backup := range snapshot.PVEBackups.StorageBackups {
+		if backup.Instance != instanceName {
+			continue
+		}
+		if _, ok := storagesToPreserve[backup.Storage]; !ok {
+			continue
+		}
+		if _, duplicate := existing[backup.ID]; duplicate {
+			continue
+		}
+		current = append(current, backup)
+		existing[backup.ID] = struct{}{}
+		preserved[backup.Storage] = struct{}{}
+	}
+
+	if len(preserved) == 0 {
+		return current, nil
+	}
+
+	storages := make([]string, 0, len(preserved))
+	for storage := range preserved {
+		storages = append(storages, storage)
+	}
+	sort.Strings(storages)
+	return current, storages
 }
 
 func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.GuestMetadataStore) (map[string]alerts.GuestLookup, map[string][]alerts.GuestLookup) {
