@@ -3326,6 +3326,18 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 	platformParam := strings.TrimSpace(req.URL.Query().Get("platform"))
 	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
 
+	// Validate platform and arch to prevent path traversal attacks
+	// Only allow alphanumeric characters and hyphens
+	validPattern := regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
+	if platformParam != "" && !validPattern.MatchString(platformParam) {
+		http.Error(w, "Invalid platform parameter", http.StatusBadRequest)
+		return
+	}
+	if archParam != "" && !validPattern.MatchString(archParam) {
+		http.Error(w, "Invalid arch parameter", http.StatusBadRequest)
+		return
+	}
+
 	searchPaths := make([]string, 0, 12)
 	strictMode := platformParam != "" && archParam != ""
 
