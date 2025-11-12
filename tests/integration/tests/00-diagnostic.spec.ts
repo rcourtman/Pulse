@@ -6,8 +6,24 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Login Diagnostic', () => {
   test('diagnose login page and API access', async ({ page }) => {
-    // Enable console logging
-    page.on('console', msg => console.log('BROWSER CONSOLE:', msg.text()));
+    // Capture all console messages including errors
+    page.on('console', msg => {
+      const type = msg.type();
+      const text = msg.text();
+      if (type === 'error') {
+        console.log('BROWSER ERROR:', text);
+      } else if (type === 'warning') {
+        console.log('BROWSER WARNING:', text);
+      } else {
+        console.log('BROWSER CONSOLE:', text);
+      }
+    });
+
+    // Capture page errors
+    page.on('pageerror', err => {
+      console.log('PAGE ERROR:', err.message);
+      console.log('Stack:', err.stack);
+    });
 
     // Track network requests
     page.on('request', req => {
@@ -43,7 +59,11 @@ test.describe('Login Diagnostic', () => {
 
     // Check what's actually on the page
     const bodyText = await page.locator('body').textContent();
-    console.log('Page contains:', bodyText?.substring(0, 500));
+    console.log('Page text content:', bodyText?.substring(0, 500));
+
+    // Check the actual DOM structure
+    const bodyHTML = await page.locator('body').innerHTML();
+    console.log('Page HTML structure:', bodyHTML.substring(0, 1000));
 
     // Check for various elements
     const usernameField = page.locator('input[name="username"]');
