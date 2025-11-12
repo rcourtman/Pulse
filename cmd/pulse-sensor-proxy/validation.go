@@ -355,7 +355,7 @@ func (v *nodeValidator) Validate(ctx context.Context, node string) error {
 	}
 
 	if v.clusterEnabled {
-		allowed, err := v.matchesCluster(node)
+		allowed, err := v.matchesCluster(ctx, node)
 		if err != nil {
 			v.recordFailure(validationReasonClusterFailed)
 			return fmt.Errorf("failed to evaluate cluster membership: %w", err)
@@ -408,12 +408,16 @@ func (v *nodeValidator) matchesAllowlist(ctx context.Context, node string) (bool
 	return false, nil
 }
 
-func (v *nodeValidator) matchesCluster(node string) (bool, error) {
+func (v *nodeValidator) matchesCluster(ctx context.Context, node string) (bool, error) {
 	if v.clusterFetcher == nil {
 		return false, errors.New("cluster membership disabled")
 	}
 
-	members, err := v.getClusterMembers()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	members, err := v.getClusterMembers(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -427,7 +431,11 @@ func (v *nodeValidator) matchesCluster(node string) (bool, error) {
 	return ok, nil
 }
 
-func (v *nodeValidator) getClusterMembers() (map[string]struct{}, error) {
+func (v *nodeValidator) getClusterMembers(ctx context.Context) (map[string]struct{}, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	now := time.Now()
 	if v.clock != nil {
 		now = v.clock()
@@ -446,9 +454,44 @@ func (v *nodeValidator) getClusterMembers() (map[string]struct{}, error) {
 	}
 
 	result := make(map[string]struct{}, len(nodes))
+	resolvedHosts := make(map[string]struct{})
 	for _, node := range nodes {
 		if normalized := normalizeAllowlistEntry(node); normalized != "" {
 			result[normalized] = struct{}{}
+		}
+
+		host := stripNodeDelimiters(strings.TrimSpace(node))
+		if host == "" {
+			continue
+		}
+
+		if net.ParseIP(host) != nil {
+			continue
+		}
+
+		if _, seen := resolvedHosts[host]; seen {
+			continue
+		}
+		resolvedHosts[host] = struct{}{}
+
+		if v.resolver == nil {
+			continue
+		}
+
+		ips, err := v.resolver.LookupIP(ctx, host)
+		if err != nil {
+			log.Debug().
+				Str("host", host).
+				Err(err).
+				Msg("Failed to resolve cluster node hostname to IP")
+			continue
+		}
+
+		for _, ip := range ips {
+			if ip == nil {
+				continue
+			}
+			result[ip.String()] = struct{}{}
 		}
 	}
 

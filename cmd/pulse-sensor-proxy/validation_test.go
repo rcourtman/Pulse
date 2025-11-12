@@ -209,6 +209,22 @@ func TestNodeValidatorClusterCaching(t *testing.T) {
 	}
 }
 
+func TestNodeValidatorClusterResolvesHostIPs(t *testing.T) {
+	v := &nodeValidator{
+		clusterEnabled: true,
+		clusterFetcher: func() ([]string, error) {
+			return []string{"worker.local"}, nil
+		},
+		resolver: stubResolver{
+			ips: []net.IP{net.ParseIP("10.0.0.5")},
+		},
+	}
+
+	if err := v.Validate(context.Background(), "10.0.0.5"); err != nil {
+		t.Fatalf("expected cluster hostname resolution to permit node: %v", err)
+	}
+}
+
 func TestNodeValidatorStrictNoSources(t *testing.T) {
 	v := &nodeValidator{
 		strict: true,
