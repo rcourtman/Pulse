@@ -1625,21 +1625,30 @@ download_pulse() {
         fi
 
         # Get appropriate release based on channel (with timeout)
-        if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
-            # Get all releases and find the latest (including pre-releases)
-            # Use timeout command for extra protection against hanging
-            if command -v timeout >/dev/null 2>&1; then
-                LATEST_RELEASE=$(timeout 15 curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-            else
-                LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-            fi
+        # Both stable and RC channels now use /releases endpoint to handle draft releases
+        if command -v timeout >/dev/null 2>&1; then
+            RELEASES_JSON=$(timeout 15 curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null || true)
         else
-            # Get latest stable release only
-            # Use timeout command for extra protection against hanging
-            if command -v timeout >/dev/null 2>&1; then
-                LATEST_RELEASE=$(timeout 15 curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+            RELEASES_JSON=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null || true)
+        fi
+
+        if [[ -n "$RELEASES_JSON" ]]; then
+            if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
+                # RC channel: Get latest release (including pre-releases, but skip drafts)
+                if command -v jq >/dev/null 2>&1; then
+                    LATEST_RELEASE=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
+                else
+                    # Fallback without jq: grep for first non-draft tag_name
+                    LATEST_RELEASE=$(echo "$RELEASES_JSON" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+                fi
             else
-                LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+                # Stable channel: Get latest non-draft, non-prerelease
+                if command -v jq >/dev/null 2>&1; then
+                    LATEST_RELEASE=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.draft == false and .prerelease == false)][0].tag_name' 2>/dev/null || true)
+                else
+                    # Fallback without jq: filter out both draft and prerelease
+                    LATEST_RELEASE=$(echo "$RELEASES_JSON" | awk '/"draft": true/,/"tag_name":/ {next} /"prerelease": true/,/"tag_name":/ {next} /"tag_name":/ {print; exit}' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+                fi
             fi
         fi
 
@@ -1647,9 +1656,9 @@ download_pulse() {
         if [[ -z "$LATEST_RELEASE" ]]; then
             print_info "GitHub API unavailable, trying alternative method..."
             if command -v timeout >/dev/null 2>&1; then
-                LATEST_RELEASE=$(timeout 10 curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+                LATEST_RELEASE=$(timeout 10 curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:.*\/tag\/' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
             else
-                LATEST_RELEASE=$(curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+                LATEST_RELEASE=$(curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:.*\/tag\/' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
             fi
         fi
 
