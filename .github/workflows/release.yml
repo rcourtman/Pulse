@@ -137,6 +137,42 @@ jobs:
           echo "Testing login page loads:"
           curl -s http://localhost:7655/login | head -20
 
+          echo "Testing API access from Playwright context..."
+          cat > test-api-access.spec.ts <<'EOF'
+          import { test, expect } from '@playwright/test';
+
+          test('API is accessible from browser', async ({ page }) => {
+            console.log('Navigating to login page...');
+            await page.goto('http://localhost:7655/login');
+            console.log('Page loaded');
+
+            console.log('Fetching security status from browser context...');
+            const response = await page.evaluate(async () => {
+              try {
+                const res = await fetch('/api/security/status');
+                const data = await res.json();
+                return { ok: res.ok, status: res.status, data };
+              } catch (err) {
+                return { error: String(err) };
+              }
+            });
+            console.log('Security status from browser:', JSON.stringify(response, null, 2));
+
+            console.log('Checking for username field...');
+            const usernameField = page.locator('input[name="username"]');
+            const isVisible = await usernameField.isVisible({ timeout: 15000 }).catch(() => false);
+            console.log('Username field visible:', isVisible);
+
+            if (!isVisible) {
+              console.log('Taking screenshot of what IS visible...');
+              await page.screenshot({ path: '/tmp/login-page.png', fullPage: true });
+              const bodyText = await page.locator('body').textContent();
+              console.log('Page text content:', bodyText);
+            }
+          });
+          EOF
+          npx playwright test test-api-access.spec.ts --reporter=list || true
+
           echo "Running integration tests..."
           npx playwright test tests/01-happy-path.spec.ts tests/02-bad-checksums.spec.ts --reporter=list
           docker-compose -f docker-compose.test.yml down -v
