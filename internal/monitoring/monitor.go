@@ -1975,6 +1975,13 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	disks := make([]models.Disk, 0, len(report.Disks))
 	for _, disk := range report.Disks {
+		// Filter read-only filesystems for backward compatibility with older host agents
+		// that don't have the filter built in. Prevents false alerts for snap mounts,
+		// immutable OS images, etc. (issues #505, #690).
+		if shouldIgnoreReadOnlyFilesystem(disk.Type, uint64(disk.TotalBytes), uint64(disk.UsedBytes)) {
+			continue
+		}
+
 		usage := safeFloat(disk.Usage)
 		if usage <= 0 && disk.TotalBytes > 0 {
 			usage = safePercentage(float64(disk.UsedBytes), float64(disk.TotalBytes))

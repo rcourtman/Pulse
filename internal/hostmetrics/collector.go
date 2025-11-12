@@ -8,6 +8,7 @@ import (
 	"time"
 
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	gocpu "github.com/shirou/gopsutil/v4/cpu"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 	goload "github.com/shirou/gopsutil/v4/load"
@@ -111,6 +112,13 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 			continue
 		}
 		if usage.Total == 0 {
+			continue
+		}
+
+		// Skip read-only filesystems like squashfs (snap mounts), erofs, iso9660, etc.
+		// These are immutable and always report near-full usage, which causes false alerts.
+		// See issues #505 (Home Assistant OS) and #690 (Ubuntu snap mounts).
+		if fsfilters.ShouldIgnoreReadOnlyFilesystem(part.Fstype, usage.Total, usage.Used) {
 			continue
 		}
 
