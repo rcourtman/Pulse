@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -276,5 +277,43 @@ func TestConvertPoolInfoToModelNil(t *testing.T) {
 
 	if model := convertPoolInfoToModel(nil); model != nil {
 		t.Fatalf("expected nil result for nil input")
+	}
+}
+
+func TestIsGuestAgentOSInfoUnsupportedError(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil error", err: nil, want: false},
+		{name: "unrelated error", err: errors.New("guest agent timeout"), want: false},
+		{
+			name: "missing os-release path",
+			err:  errors.New(`API error 500: {"errors":{"message":"guest agent command failed: Failed to open file '/etc/os-release': No such file or directory"}}`),
+			want: true,
+		},
+		{
+			name: "missing usr lib os-release",
+			err:  errors.New("API error 500: guest agent command failed: Failed to open file '/usr/lib/os-release': No such file or directory"),
+			want: true,
+		},
+		{
+			name: "unsupported command",
+			err:  errors.New("API error 500: unsupported command: guest-get-osinfo"),
+			want: true,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isGuestAgentOSInfoUnsupportedError(tc.err); got != tc.want {
+				t.Fatalf("isGuestAgentOSInfoUnsupportedError(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }
