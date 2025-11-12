@@ -105,7 +105,27 @@ jobs:
             exit 1
           }
 
-          echo "All services healthy, running tests..."
+          echo "All services healthy, verifying port mapping..."
+          # Test that the host can actually reach the container through port mapping
+          for i in 1 2 3 4 5; do
+            if curl -f -s http://localhost:7655/api/health > /dev/null 2>&1; then
+              echo "Port mapping verified: Pulse server is reachable from host"
+              break
+            elif [ $i -eq 5 ]; then
+              echo "ERROR: Port mapping failed - cannot reach Pulse server from host"
+              echo "Container healthcheck passed, but host cannot connect via localhost:7655"
+              echo "Pulse server logs:"
+              docker logs pulse-test-server || true
+              echo "Mock GitHub logs:"
+              docker logs pulse-mock-github || true
+              exit 1
+            else
+              echo "Attempt $i: Server not yet reachable from host, waiting..."
+              sleep 2
+            fi
+          done
+
+          echo "Running integration tests..."
           npx playwright test tests/01-happy-path.spec.ts tests/02-bad-checksums.spec.ts --reporter=list
           docker-compose -f docker-compose.test.yml down -v
 
