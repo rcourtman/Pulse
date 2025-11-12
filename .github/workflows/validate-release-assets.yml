@@ -124,7 +124,8 @@ jobs:
           cd release
 
           # Get asset info (id and name) - API works with GITHUB_TOKEN for draft releases
-          ASSETS_JSON=$(gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets")
+          # Use --paginate to handle releases with >30 assets
+          ASSETS_JSON=$(gh api --paginate "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets")
 
           if [ "$(echo "$ASSETS_JSON" | jq '. | length')" -eq 0 ]; then
             echo "::error::No assets found in release"
@@ -222,8 +223,8 @@ jobs:
             echo "Running assets-only validation (Docker image not available)..."
             scripts/validate-release.sh \
               "${{ steps.context.outputs.version }}" \
-              "rcourtman/pulse:${{ steps.context.outputs.tag }}" \
-              "release" 2>&1 | tee "$OUTPUT_FILE" || true
+              --skip-docker \
+              "release" 2>&1 | tee "$OUTPUT_FILE"
           fi
 
           VALIDATION_EXIT_CODE=$?

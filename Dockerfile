@@ -226,17 +226,26 @@ COPY scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-sensor-proxy.sh
 COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
 RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh /opt/pulse/scripts/install-container-agent.sh /opt/pulse/scripts/install-host-agent.sh /opt/pulse/scripts/install-host-agent.ps1 /opt/pulse/scripts/uninstall-host-agent.sh /opt/pulse/scripts/uninstall-host-agent.ps1 /opt/pulse/scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-docker.sh
 
-# Copy multi-arch docker-agent binaries for download endpoint
+# Copy all binaries for download endpoint
 RUN mkdir -p /opt/pulse/bin
+
+# Main pulse server binary (for validation)
+COPY --from=backend-builder /app/pulse /opt/pulse/bin/pulse
+
+# Docker agent binaries (all architectures)
 COPY --from=backend-builder /app/pulse-docker-agent-linux-amd64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent-linux-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent-linux-armv7 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-docker-agent-linux-armv6 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-docker-agent-linux-386 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-docker-agent /opt/pulse/bin/pulse-docker-agent
 
-# Copy multi-arch host-agent binaries for download endpoint
+# Host agent binaries (all platforms and architectures)
 COPY --from=backend-builder /app/pulse-host-agent-linux-amd64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-linux-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-linux-armv7 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-linux-armv6 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-host-agent-linux-386 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-darwin-amd64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-darwin-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-host-agent-windows-amd64.exe /opt/pulse/bin/
@@ -247,10 +256,12 @@ RUN ln -s pulse-host-agent-windows-amd64.exe /opt/pulse/bin/pulse-host-agent-win
     ln -s pulse-host-agent-windows-arm64.exe /opt/pulse/bin/pulse-host-agent-windows-arm64 && \
     ln -s pulse-host-agent-windows-386.exe /opt/pulse/bin/pulse-host-agent-windows-386
 
-# Copy multi-arch pulse-sensor-proxy binaries for download endpoint
+# Sensor proxy binaries (all Linux architectures)
 COPY --from=backend-builder /app/pulse-sensor-proxy-linux-amd64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-sensor-proxy-linux-arm64 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-sensor-proxy-linux-armv7 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-sensor-proxy-linux-armv6 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-sensor-proxy-linux-386 /opt/pulse/bin/
 COPY --from=backend-builder /app/pulse-sensor-proxy /opt/pulse/bin/pulse-sensor-proxy
 
 # Create config directory
