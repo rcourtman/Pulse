@@ -107,7 +107,7 @@ func main() {
 	}
 
 	limiter := newRateLimiter()
-	baseURL := fmt.Sprintf("http://localhost:%s", port)
+	baseURL := getenvDefault("MOCK_BASE_URL", fmt.Sprintf("http://mock-github:%s", port))
 
 	// Environment-controlled behavior
 	checksumError := os.Getenv("MOCK_CHECKSUM_ERROR") == "true"
