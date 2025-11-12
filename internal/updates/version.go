@@ -120,9 +120,11 @@ func (v *Version) IsPrerelease() bool {
 
 // GetCurrentVersion gets the current running version
 func GetCurrentVersion() (*VersionInfo, error) {
+	allowDockerUpdates := dockerUpdatesAllowed()
+
 	buildInfo := func(raw string, build string, isDev bool) *VersionInfo {
 		normalized := normalizeVersionString(raw)
-		return &VersionInfo{
+		info := &VersionInfo{
 			Version:        normalized,
 			Build:          build,
 			Runtime:        "go",
@@ -132,6 +134,12 @@ func GetCurrentVersion() (*VersionInfo, error) {
 			IsSourceBuild:  isSourceBuildEnvironment(),
 			DeploymentType: GetDeploymentType(),
 		}
+
+		if allowDockerUpdates && info.IsDocker {
+			info.IsDocker = false
+		}
+
+		return info
 	}
 
 	if gitVersion, err := getGitVersion(); err == nil && gitVersion != "" {
@@ -271,6 +279,10 @@ func getGitVersion() (string, error) {
 
 // isDockerEnvironment checks if running in Docker
 func isDockerEnvironment() bool {
+	if dockerUpdatesAllowed() {
+		return false
+	}
+
 	// Check for Docker-specific files
 	if fileExists("/.dockerenv") {
 		return true
@@ -315,6 +327,10 @@ func fileExists(path string) bool {
 
 // GetDeploymentType determines how Pulse was deployed
 func GetDeploymentType() string {
+	if envBool("PULSE_MOCK_MODE") {
+		return "mock"
+	}
+
 	// Check if running in Docker
 	if isDockerEnvironment() {
 		return "docker"
@@ -356,6 +372,24 @@ func GetDeploymentType() string {
 	}
 
 	return "manual"
+}
+
+// dockerUpdatesAllowed returns true when Docker environments should expose update functionality.
+func dockerUpdatesAllowed() bool {
+	if envBool("PULSE_ALLOW_DOCKER_UPDATES") {
+		return true
+	}
+	return envBool("PULSE_MOCK_MODE")
+}
+
+func envBool(key string) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 // compareInts compares two integers

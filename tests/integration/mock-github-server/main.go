@@ -50,6 +50,13 @@ func newRateLimiter() *rateLimiter {
 	return rl
 }
 
+func getenvDefault(key, fallback string) string {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		return val
+	}
+	return fallback
+}
+
 func (rl *rateLimiter) cleanup() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -116,30 +123,35 @@ func main() {
 	tarballs := make(map[string][]byte)
 	checksums := make(map[string]string)
 
+	latestTag := getenvDefault("MOCK_LATEST_VERSION", "v99.0.0")
+	prevTag := getenvDefault("MOCK_PREVIOUS_VERSION", "v98.5.0")
+	rcTag := getenvDefault("MOCK_RC_VERSION", "v99.1.0-rc.1")
+
 	// Generate test releases
 	releases := []ReleaseInfo{
 		{
-			TagName:     "v4.28.1",
-			Name:        "Pulse v4.28.1",
+			TagName:     latestTag,
+			Name:        fmt.Sprintf("Pulse %s", latestTag),
 			Prerelease:  false,
 			PublishedAt: time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			TagName:     "v4.28.0",
-			Name:        "Pulse v4.28.0",
+			TagName:     prevTag,
+			Name:        fmt.Sprintf("Pulse %s", prevTag),
 			Prerelease:  false,
 			PublishedAt: time.Now().Add(-48 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			TagName:     "v4.29.0-rc.1",
-			Name:        "Pulse v4.29.0 RC1",
+			TagName:     rcTag,
+			Name:        fmt.Sprintf("Pulse %s", rcTag),
 			Prerelease:  true,
 			PublishedAt: time.Now().Add(-12 * time.Hour).Format(time.RFC3339),
 		},
 	}
 
 	// Generate tarballs and checksums for each release
-	for _, rel := range releases {
+	for i := range releases {
+		rel := &releases[i]
 		version := strings.TrimPrefix(rel.TagName, "v")
 		filename := fmt.Sprintf("pulse-%s-linux-amd64.tar.gz", version)
 

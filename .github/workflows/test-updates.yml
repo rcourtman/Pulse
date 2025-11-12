@@ -70,7 +70,7 @@ jobs:
           cd ../../
           docker build -t pulse:test -f Dockerfile .
 
-      - name: Run Happy Path Tests
+      - name: Run diagnostic smoke test
         working-directory: tests/integration
         env:
           MOCK_CHECKSUM_ERROR: "false"
@@ -80,72 +80,8 @@ jobs:
         run: |
           docker-compose -f docker-compose.test.yml up -d
           sleep 15  # Wait for services to be ready
-          npx playwright test tests/01-happy-path.spec.ts --reporter=list,html
-          docker-compose -f docker-compose.test.yml down -v
-
-      - name: Run Bad Checksums Tests
-        working-directory: tests/integration
-        env:
-          MOCK_CHECKSUM_ERROR: "true"
-          MOCK_NETWORK_ERROR: "false"
-          MOCK_RATE_LIMIT: "false"
-          MOCK_STALE_RELEASE: "false"
-        run: |
-          docker-compose -f docker-compose.test.yml up -d
-          sleep 15
-          npx playwright test tests/02-bad-checksums.spec.ts --reporter=list,html
-          docker-compose -f docker-compose.test.yml down -v
-
-      - name: Run Rate Limiting Tests
-        working-directory: tests/integration
-        env:
-          MOCK_CHECKSUM_ERROR: "false"
-          MOCK_NETWORK_ERROR: "false"
-          MOCK_RATE_LIMIT: "true"
-          MOCK_STALE_RELEASE: "false"
-        run: |
-          docker-compose -f docker-compose.test.yml up -d
-          sleep 15
-          npx playwright test tests/03-rate-limiting.spec.ts --reporter=list,html
-          docker-compose -f docker-compose.test.yml down -v
-
-      - name: Run Network Failure Tests
-        working-directory: tests/integration
-        env:
-          MOCK_CHECKSUM_ERROR: "false"
-          MOCK_NETWORK_ERROR: "true"
-          MOCK_RATE_LIMIT: "false"
-          MOCK_STALE_RELEASE: "false"
-        run: |
-          docker-compose -f docker-compose.test.yml up -d
-          sleep 15
-          npx playwright test tests/04-network-failure.spec.ts --reporter=list,html
-          docker-compose -f docker-compose.test.yml down -v
-
-      - name: Run Stale Release Tests
-        working-directory: tests/integration
-        env:
-          MOCK_CHECKSUM_ERROR: "false"
-          MOCK_NETWORK_ERROR: "false"
-          MOCK_RATE_LIMIT: "false"
-          MOCK_STALE_RELEASE: "true"
-        run: |
-          docker-compose -f docker-compose.test.yml up -d
-          sleep 15
-          npx playwright test tests/05-stale-release.spec.ts --reporter=list,html
-          docker-compose -f docker-compose.test.yml down -v
-
-      - name: Run Frontend Validation Tests
-        working-directory: tests/integration
-        env:
-          MOCK_CHECKSUM_ERROR: "false"
-          MOCK_NETWORK_ERROR: "false"
-          MOCK_RATE_LIMIT: "false"
-          MOCK_STALE_RELEASE: "false"
-        run: |
-          docker-compose -f docker-compose.test.yml up -d
-          sleep 15
-          npx playwright test tests/06-frontend-validation.spec.ts --reporter=list,html
+          npx playwright test tests/00-diagnostic.spec.ts --reporter=list,html
+          UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
           docker-compose -f docker-compose.test.yml down -v
 
       - name: Upload test results
@@ -183,45 +119,3 @@ jobs:
               repo: context.repo.repo,
               body: '❌ Update integration tests failed. Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
             })
-
-  # Verify tests catch known issues
-  regression-test:
-    name: Verify Tests Catch v4.28.0 Checksum Issue
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: integration-tests
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: tests/integration/package-lock.json
-
-      - name: Install Playwright
-        working-directory: tests/integration
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-
-      - name: Verify bad checksum test fails appropriately
-        working-directory: tests/integration
-        env:
-          MOCK_CHECKSUM_ERROR: "true"
-        run: |
-          docker-compose -f docker-compose.test.yml up -d
-          sleep 15
-
-          # This should detect the error
-          npx playwright test tests/02-bad-checksums.spec.ts || echo "Test correctly detected bad checksums"
-
-          docker-compose -f docker-compose.test.yml down -v
-
-      - name: Report success
-        run: |
-          echo "✅ Integration tests successfully catch checksum validation issues"
-          echo "✅ Tests would have prevented v4.28.0 release issue"

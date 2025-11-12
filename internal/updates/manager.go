@@ -471,11 +471,15 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	m.queue.MarkCompleted(job.ID, nil)
 
 	// Schedule a clean exit after a short delay - systemd will restart us
-	go func() {
-		time.Sleep(2 * time.Second)
-		log.Info().Msg("Exiting for restart after update")
-		os.Exit(0)
-	}()
+	if !dockerUpdatesAllowed() {
+		go func() {
+			time.Sleep(2 * time.Second)
+			log.Info().Msg("Exiting for restart after update")
+			os.Exit(0)
+		}()
+	} else {
+		log.Info().Msg("Skipping process exit after update (mock/CI mode)")
+	}
 
 	m.updateStatus("completed", 100, "Update completed, restarting...")
 	return nil

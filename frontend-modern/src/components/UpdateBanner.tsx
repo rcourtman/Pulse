@@ -68,6 +68,8 @@ export function UpdateBanner() {
         return 'Docker: pull latest image';
       case 'source':
         return 'Source: pull and rebuild';
+      case 'mock':
+        return 'Mock environment: updates run automatically for integration tests';
       default:
         return ''; // No message, just the version info
     }
