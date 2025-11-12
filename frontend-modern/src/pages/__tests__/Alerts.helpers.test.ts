@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALERT_TAB_SEGMENTS,
+  clampCooldownMinutes,
+  clampMaxAlertsPerHour,
   createDefaultCooldown,
   createDefaultEscalation,
   createDefaultGrouping,
   createDefaultQuietHours,
+  fallbackCooldownMinutes,
+  fallbackMaxAlertsPerHour,
   extractTriggerValues,
   getTriggerValue,
   normalizeMetricDelayMap,
@@ -132,6 +136,34 @@ describe('default schedule helpers', () => {
       enabled: false,
       levels: [],
     });
+  });
+});
+
+describe('cooldown sanitizers', () => {
+  it('clamps cooldown minutes into valid range', () => {
+    expect(clampCooldownMinutes(2)).toBe(5);
+    expect(clampCooldownMinutes(60)).toBe(60);
+    expect(clampCooldownMinutes(999)).toBe(120);
+    expect(clampCooldownMinutes(undefined)).toBe(5);
+  });
+
+  it('provides sensible fallback when enabling cooldown', () => {
+    expect(fallbackCooldownMinutes(0)).toBe(30);
+    expect(fallbackCooldownMinutes(undefined)).toBe(30);
+    expect(fallbackCooldownMinutes(2)).toBe(5);
+  });
+
+  it('clamps max alerts per hour', () => {
+    expect(clampMaxAlertsPerHour(0)).toBe(1);
+    expect(clampMaxAlertsPerHour(7)).toBe(7);
+    expect(clampMaxAlertsPerHour(40)).toBe(10);
+    expect(clampMaxAlertsPerHour(undefined)).toBe(1);
+  });
+
+  it('falls back to defaults for invalid max alerts values', () => {
+    expect(fallbackMaxAlertsPerHour(undefined)).toBe(3);
+    expect(fallbackMaxAlertsPerHour(0)).toBe(3);
+    expect(fallbackMaxAlertsPerHour(50)).toBe(10);
   });
 });
 

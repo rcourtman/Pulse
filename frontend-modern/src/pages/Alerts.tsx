@@ -210,6 +210,45 @@ interface EscalationConfig {
   levels: EscalationLevel[];
 }
 
+const COOLDOWN_MIN_MINUTES = 5;
+const COOLDOWN_MAX_MINUTES = 120;
+const COOLDOWN_DEFAULT_MINUTES = 30;
+const MAX_ALERTS_MIN = 1;
+const MAX_ALERTS_MAX = 10;
+const MAX_ALERTS_DEFAULT = 3;
+
+export const clampCooldownMinutes = (value?: number): number => {
+  const numericValue = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(numericValue)) {
+    return COOLDOWN_MIN_MINUTES;
+  }
+  return Math.min(COOLDOWN_MAX_MINUTES, Math.max(COOLDOWN_MIN_MINUTES, numericValue));
+};
+
+export const fallbackCooldownMinutes = (value?: number): number => {
+  const numericValue = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return COOLDOWN_DEFAULT_MINUTES;
+  }
+  return clampCooldownMinutes(numericValue);
+};
+
+export const clampMaxAlertsPerHour = (value?: number): number => {
+  const numericValue = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(numericValue)) {
+    return MAX_ALERTS_MIN;
+  }
+  return Math.min(MAX_ALERTS_MAX, Math.max(MAX_ALERTS_MIN, numericValue));
+};
+
+export const fallbackMaxAlertsPerHour = (value?: number): number => {
+  const numericValue = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return MAX_ALERTS_DEFAULT;
+  }
+  return clampMaxAlertsPerHour(numericValue);
+};
+
 const getLocalTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 export const createDefaultQuietHours = (): QuietHoursConfig => ({
@@ -235,8 +274,8 @@ export const createDefaultQuietHours = (): QuietHoursConfig => ({
 
 export const createDefaultCooldown = (): CooldownConfig => ({
   enabled: true,
-  minutes: 30,
-  maxAlerts: 3,
+  minutes: COOLDOWN_DEFAULT_MINUTES,
+  maxAlerts: MAX_ALERTS_DEFAULT,
 });
 
 export const createDefaultGrouping = (): GroupingConfig => ({
@@ -1010,10 +1049,12 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
         }
 
         if (config.schedule.cooldown !== undefined) {
+          const rawCooldown = config.schedule.cooldown;
+          const cooldownEnabled = rawCooldown > 0;
           setScheduleCooldown({
-            enabled: config.schedule.cooldown > 0,
-            minutes: config.schedule.cooldown,
-            maxAlerts: config.schedule.maxAlertsHour || 3,
+            enabled: cooldownEnabled,
+            minutes: cooldownEnabled ? clampCooldownMinutes(rawCooldown) : 0,
+            maxAlerts: fallbackMaxAlertsPerHour(config.schedule.maxAlertsHour),
           });
         }
 
@@ -1486,6 +1527,11 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       return;
                     }
 
+                    const normalizedCooldownMinutes = scheduleCooldown().enabled
+                      ? clampCooldownMinutes(scheduleCooldown().minutes)
+                      : 0;
+                    const normalizedMaxAlertsHour = clampMaxAlertsPerHour(scheduleCooldown().maxAlerts);
+
                     const alertConfig = {
                       enabled: true,
                       // Global disable flags per resource type
@@ -1565,12 +1611,12 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       overrides: rawOverridesConfig(),
                       schedule: {
                         quietHours: scheduleQuietHours(),
-                        cooldown: scheduleCooldown().enabled ? scheduleCooldown().minutes : 0,
+                        cooldown: normalizedCooldownMinutes,
                         groupingWindow:
                           scheduleGrouping().enabled && scheduleGrouping().window
                             ? scheduleGrouping().window * 60
                             : 30, // Convert minutes to seconds
-                        maxAlertsHour: scheduleCooldown().maxAlerts || 10,
+                        maxAlertsHour: normalizedMaxAlertsHour,
                         escalation: scheduleEscalation(),
                         grouping: {
                           enabled: scheduleGrouping().enabled,
@@ -3280,7 +3326,17 @@ function ScheduleTab(props: ScheduleTabProps) {
             <Toggle
               checked={cooldown().enabled}
               onChange={(e) => {
-                setCooldown({ ...cooldown(), enabled: e.currentTarget.checked });
+                const enabled = e.currentTarget.checked;
+                const current = cooldown();
+                const next: CooldownConfig = {
+                  ...current,
+                  enabled,
+                };
+                if (enabled) {
+                  next.minutes = fallbackCooldownMinutes(current.minutes);
+                  next.maxAlerts = fallbackMaxAlertsPerHour(current.maxAlerts);
+                }
+                setCooldown(next);
                 props.setHasUnsavedChanges(true);
               }}
               containerClass="sm:self-start"
@@ -3307,7 +3363,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                       max="120"
                       value={cooldown().minutes}
                       onChange={(e) => {
-                        setCooldown({ ...cooldown(), minutes: parseInt(e.currentTarget.value) });
+                        const value = parseInt(e.currentTarget.value, 10);
+                        setCooldown({
+                          ...cooldown(),
+                          minutes: Number.isNaN(value) ? cooldown().minutes : value,
+                        });
                         props.setHasUnsavedChanges(true);
                       }}
                       class={controlClass('pr-16')}
@@ -3332,7 +3392,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                       max="10"
                       value={cooldown().maxAlerts}
                       onChange={(e) => {
-                        setCooldown({ ...cooldown(), maxAlerts: parseInt(e.currentTarget.value) });
+                        const value = parseInt(e.currentTarget.value, 10);
+                        setCooldown({
+                          ...cooldown(),
+                          maxAlerts: Number.isNaN(value) ? cooldown().maxAlerts : value,
+                        });
                         props.setHasUnsavedChanges(true);
                       }}
                       class={controlClass('pr-16')}
