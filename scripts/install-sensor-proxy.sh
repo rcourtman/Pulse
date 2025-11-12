@@ -447,7 +447,7 @@ else
     LATEST_RELEASE_TAG=""
 
     fetch_latest_release_tag() {
-        local api_url="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+        local api_url="https://api.github.com/repos/$GITHUB_REPO/releases?per_page=25"
         local tmp_err
         tmp_err=$(mktemp)
         local response
@@ -463,10 +463,61 @@ else
             return 1
         fi
         rm -f "$tmp_err"
-        local tag
-        tag=$(echo "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+
+        local tag=""
+        if command -v python3 >/dev/null 2>&1; then
+            if ! tag=$(printf '%s' "$response" | python3 -c '
+import json
+import sys
+
+binary_name = sys.argv[1]
+arch_label = sys.argv[2]
+tar_suffix = arch_label or ""
+
+def has_sensor_assets(tag, assets):
+    names = {asset.get("name") for asset in assets if isinstance(asset, dict) and asset.get("name")}
+    if binary_name and binary_name in names:
+        return True
+    if tar_suffix:
+        tarball = f"pulse-{tag}-{tar_suffix}.tar.gz"
+        if tarball in names or f"{tarball}.sha256" in names:
+            return True
+    universal = f"pulse-{tag}.tar.gz"
+    if universal in names or f"{universal}.sha256" in names:
+        return True
+    return False
+
+try:
+    releases = json.load(sys.stdin)
+except json.JSONDecodeError:
+    sys.exit(1)
+
+for release in releases:
+    tag_name = (release.get("tag_name") or "").strip()
+    if not tag_name or tag_name.startswith("helm-chart"):
+        continue
+    assets = release.get("assets") or []
+    if has_sensor_assets(tag_name, assets):
+        sys.stdout.write(tag_name)
+        sys.exit(0)
+
+sys.exit(0)
+' "$BINARY_NAME" "$ARCH_LABEL"); then
+                print_warn "Failed to parse GitHub releases via python3; falling back to heuristic tag detection"
+                tag=""
+            fi
+        fi
+
         if [[ -z "$tag" ]]; then
-            print_warn "Could not parse latest release tag from GitHub response"
+            tag=$(printf '%s\n' "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | grep -Ev '^helm-chart-' | head -n 1 || true)
+        fi
+
+        if [[ -n "$tag" ]]; then
+            tag="${tag%%$'\n'*}"
+        fi
+
+        if [[ -z "$tag" ]]; then
+            print_warn "Could not determine latest GitHub release for pulse-sensor-proxy"
             return 1
         fi
         LATEST_RELEASE_TAG="$tag"
