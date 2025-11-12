@@ -107,6 +107,9 @@ func login(t *testing.T, client *http.Client, baseURL, username, password string
 	resp := doJSONRequest(t, client, "POST", baseURL+"/api/login", payload)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		if client != nil && client.Jar != nil {
+			clearCookies(client.Jar, resp.Request.URL)
+		}
 		t.Fatalf("login failed with status %s", resp.Status)
 	}
 }
@@ -203,6 +206,8 @@ func doRequest(t *testing.T, client *http.Client, method, endpoint string, body 
 	if client != nil && client.Jar != nil && methodRequiresCSRF(method) {
 		if token := csrfTokenForURL(client.Jar, req.URL); token != "" {
 			req.Header.Set("X-CSRF-Token", token)
+		} else {
+			req.Header.Del("X-CSRF-Token")
 		}
 	}
 	resp, err := client.Do(req)
@@ -245,4 +250,11 @@ func csrfTokenForURL(jar http.CookieJar, target *url.URL) string {
 		}
 	}
 	return ""
+}
+
+func clearCookies(jar http.CookieJar, target *url.URL) {
+	if jar == nil || target == nil {
+		return
+	}
+	jar.SetCookies(target, []*http.Cookie{})
 }
