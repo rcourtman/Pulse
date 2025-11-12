@@ -97,20 +97,13 @@ jobs:
               sys.stderr.write("::error::Release metadata is missing. Provide tag, version, release_id, and target_commitish.\n")
               sys.exit(1)
 
-          should_run = "true"
-          if event_name == "release" and result["draft"] != "true":
-              should_run = "false"
-          result["should_run"] = should_run
+          result["should_run"] = "true"
 
           for key, value in result.items():
               print(f"{key}={value}")
           EOF
           cat context.env >> "$GITHUB_OUTPUT"
           cat context.env
-
-      - name: Skip validation for published releases
-        if: steps.context.outputs.should_run != 'true'
-        run: echo "Release is already published; skipping validation checks."
 
       - name: Download all release assets
         if: steps.context.outputs.should_run == 'true'
@@ -262,6 +255,17 @@ jobs:
         run: |
           echo "✅ Validation passed - updating release description"
 
+          INITIAL_STATE="${{ steps.context.outputs.draft }}"
+          if [ "$INITIAL_STATE" = "true" ]; then
+              HEADER_LINE="## ✅ Release Asset Validation: PASSED"
+              STATUS_LINE="**Status**: Ready for publication ✅"
+              INTRO_LINE="All release assets have been validated successfully!"
+          else
+              HEADER_LINE="## ✅ Release Asset Validation (Post-Publish): PASSED"
+              STATUS_LINE="**Status**: Live release assets re-validated ✅"
+              INTRO_LINE="Assets were revalidated after publication due to a release edit."
+          fi
+
           CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             | jq -r '.body // ""')
@@ -270,11 +274,11 @@ jobs:
 
           read -r -d '' VALIDATION_BLOCK <<'EOF' || true
           <!-- VALIDATION_STATUS_START -->
-          ## ✅ Release Asset Validation: PASSED
+          HEADER_PLACEHOLDER
 
-          All release assets have been validated successfully!
+          INTRO_PLACEHOLDER
 
-          **Status**: Ready for publication ✅
+          STATUS_PLACEHOLDER
           **Validated**: TIMESTAMP_PLACEHOLDER
           **Workflow**: WORKFLOW_LINK_PLACEHOLDER
 
@@ -287,6 +291,9 @@ jobs:
           <!-- VALIDATION_STATUS_END -->
           EOF
 
+          VALIDATION_BLOCK="${VALIDATION_BLOCK//HEADER_PLACEHOLDER/$HEADER_LINE}"
+          VALIDATION_BLOCK="${VALIDATION_BLOCK//STATUS_PLACEHOLDER/$STATUS_LINE}"
+          VALIDATION_BLOCK="${VALIDATION_BLOCK//INTRO_PLACEHOLDER/$INTRO_LINE}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//WORKFLOW_LINK_PLACEHOLDER/[${{ github.workflow }} #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})}"
 
@@ -310,7 +317,7 @@ jobs:
             -d '{
               "state": "failure",
               "target_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-              "description": "Release asset validation failed - assets deleted",
+              "description": "Release asset validation failed",
               "context": "Release Asset Validation"
             }'
 
@@ -318,6 +325,18 @@ jobs:
         if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
         run: |
           echo "❌ Validation failed - deleting all release assets"
+
+          INITIAL_STATE="${{ steps.context.outputs.draft }}"
+          if [ "$INITIAL_STATE" != "true" ]; then
+            echo "Release was published; reverting to draft before deleting assets..."
+            curl -X PATCH \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
+              -d '{"draft": true}'
+            echo "Release marked as draft to block downloads during remediation."
+            sleep 5
+          fi
 
           ASSET_IDS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets" \
@@ -342,6 +361,17 @@ jobs:
         run: |
           echo "❌ Validation failed - updating release description"
 
+          INITIAL_STATE="${{ steps.context.outputs.draft }}"
+          if [ "$INITIAL_STATE" = "true" ]; then
+              HEADER_LINE="## ❌ Release Asset Validation: FAILED"
+              STATUS_LINE="**Status**: ⛔ Draft release blocked until validation passes"
+              INTRO_LINE="Release assets failed validation checks. All assets have been deleted to prevent publishing an invalid release."
+          else
+              HEADER_LINE="## ❌ Release Asset Validation (Post-Publish): FAILED"
+              STATUS_LINE="**Status**: ⛔ Release reverted to draft while assets are rebuilt"
+              INTRO_LINE="A published release edit introduced invalid assets. The release has been reverted to draft and assets were deleted to stop further downloads."
+          fi
+
           CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
             | jq -r '.body // ""')
@@ -357,11 +387,11 @@ jobs:
 
           read -r -d '' VALIDATION_BLOCK <<'EOF' || true
           <!-- VALIDATION_STATUS_START -->
-          ## ❌ Release Asset Validation: FAILED
+          HEADER_PLACEHOLDER
 
-          **Critical**: Release assets failed validation checks. All assets have been deleted to prevent publishing an invalid release.
+          INTRO_PLACEHOLDER
 
-          **Status**: ⛔ DO NOT PUBLISH until validation passes
+          STATUS_PLACEHOLDER
           **Failed**: TIMESTAMP_PLACEHOLDER
           **Workflow**: WORKFLOW_LINK_PLACEHOLDER
 
@@ -388,6 +418,9 @@ jobs:
           <!-- VALIDATION_STATUS_END -->
           EOF
 
+          VALIDATION_BLOCK="${VALIDATION_BLOCK//HEADER_PLACEHOLDER/$HEADER_LINE}"
+          VALIDATION_BLOCK="${VALIDATION_BLOCK//STATUS_PLACEHOLDER/$STATUS_LINE}"
+          VALIDATION_BLOCK="${VALIDATION_BLOCK//INTRO_PLACEHOLDER/$INTRO_LINE}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//WORKFLOW_LINK_PLACEHOLDER/[${{ github.workflow }} #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//WORKFLOW_URL_PLACEHOLDER/${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}}"
