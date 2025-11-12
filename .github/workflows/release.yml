@@ -128,10 +128,14 @@ jobs:
           echo "Diagnosing authentication configuration..."
           echo "Environment variables in container:"
           docker exec pulse-test-server env | grep PULSE_AUTH || echo "No PULSE_AUTH variables found"
-          echo "Security status endpoint:"
+          echo "Security status endpoint from host:"
           curl -s http://localhost:7655/api/security/status | jq . || echo "Failed to query security status"
+          echo "Security status endpoint from inside container:"
+          docker exec pulse-test-server wget -q -O- http://localhost:7655/api/security/status || echo "Failed from inside"
           echo "Container startup logs (looking for auth messages):"
           docker logs pulse-test-server 2>&1 | grep -i "auth\|overriding\|hashed" || echo "No auth-related messages in logs"
+          echo "Testing login page loads:"
+          curl -s http://localhost:7655/login | head -20
 
           echo "Running integration tests..."
           npx playwright test tests/01-happy-path.spec.ts tests/02-bad-checksums.spec.ts --reporter=list
