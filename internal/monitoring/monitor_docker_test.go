@@ -14,12 +14,12 @@ func newTestMonitor(t *testing.T) *Monitor {
 	t.Helper()
 
 	m := &Monitor{
-		state:                  models.NewState(),
-		alertManager:           alerts.NewManager(),
-		removedDockerHosts:     make(map[string]time.Time),
-		rateTracker:            NewRateTracker(),
-		dockerTokenBindings:    make(map[string]string),
-		dockerMetadataStore:    config.NewDockerMetadataStore(t.TempDir()),
+		state:               models.NewState(),
+		alertManager:        alerts.NewManager(),
+		removedDockerHosts:  make(map[string]time.Time),
+		rateTracker:         NewRateTracker(),
+		dockerTokenBindings: make(map[string]string),
+		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir()),
 	}
 	t.Cleanup(func() { m.alertManager.Stop() })
 	return m
@@ -111,6 +111,82 @@ func TestApplyDockerReportGeneratesUniqueIDsForCollidingHosts(t *testing.T) {
 	}
 	if len(found.Containers) != 2 {
 		t.Fatalf("expected host2 to have 2 containers after update, got %d", len(found.Containers))
+	}
+}
+
+func TestApplyDockerReportUsesTokenToDisambiguateAgentIDCollisions(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	baseReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "duplicate-agent",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:         "docker-one",
+			Name:             "Docker One",
+			MachineID:        "machine-A",
+			DockerVersion:    "26.0.0",
+			TotalCPU:         4,
+			TotalMemoryBytes: 16 << 30,
+			UptimeSeconds:    120,
+		},
+		Containers: []agentsdocker.Container{
+			{ID: "container-a", Name: "api"},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	tokenOne := &config.APITokenRecord{ID: "token-one", Name: "Token One"}
+	hostOne, err := monitor.ApplyDockerReport(baseReport, tokenOne)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport hostOne: %v", err)
+	}
+	if hostOne.ID == "" {
+		t.Fatal("expected hostOne to receive an identifier")
+	}
+
+	secondReport := baseReport
+	secondReport.Host.Hostname = "docker-two"
+	secondReport.Host.Name = "Docker Two"
+	secondReport.Host.MachineID = "machine-B"
+	secondReport.Containers = []agentsdocker.Container{
+		{ID: "container-b", Name: "db"},
+	}
+	secondReport.Timestamp = baseReport.Timestamp.Add(30 * time.Second)
+
+	tokenTwo := &config.APITokenRecord{ID: "token-two", Name: "Token Two"}
+	hostTwo, err := monitor.ApplyDockerReport(secondReport, tokenTwo)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport hostTwo: %v", err)
+	}
+
+	if hostTwo.ID == "" {
+		t.Fatal("expected hostTwo to receive an identifier")
+	}
+	if hostOne.ID == hostTwo.ID {
+		t.Fatalf("expected different identifiers for hosts sharing an agent ID, got %q", hostOne.ID)
+	}
+
+	hosts := monitor.state.GetDockerHosts()
+	if len(hosts) != 2 {
+		t.Fatalf("expected 2 hosts after two reports, got %d", len(hosts))
+	}
+
+	updatedReport := baseReport
+	updatedReport.Timestamp = baseReport.Timestamp.Add(60 * time.Second)
+	updatedReport.Containers = append(updatedReport.Containers, agentsdocker.Container{
+		ID:   "container-c",
+		Name: "cache",
+	})
+
+	updatedHostOne, err := monitor.ApplyDockerReport(updatedReport, tokenOne)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport hostOne update: %v", err)
+	}
+	if updatedHostOne.ID != hostOne.ID {
+		t.Fatalf("expected hostOne to retain identifier %q, got %q", hostOne.ID, updatedHostOne.ID)
 	}
 }
 

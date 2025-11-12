@@ -1344,7 +1344,12 @@ func findMatchingDockerHost(hosts []models.DockerHost, report agentsdocker.Repor
 
 	if agentID != "" {
 		for _, host := range hosts {
-			if strings.TrimSpace(host.AgentID) == agentID {
+			if strings.TrimSpace(host.AgentID) != agentID {
+				continue
+			}
+
+			existingToken := strings.TrimSpace(host.TokenID)
+			if tokenID == "" || existingToken == tokenID {
 				return host, true
 			}
 		}
@@ -8245,12 +8250,12 @@ func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 
 	var allBackups []models.StorageBackup
-	seenVolids := make(map[string]bool)     // Track seen volume IDs to avoid duplicates
-	hadSuccessfulNode := false              // Track if at least one node responded successfully
-	storagesWithBackup := 0                 // Number of storages that should contain backups
-	contentSuccess := 0                     // Number of successful storage content fetches
-	contentFailures := 0                    // Number of failed storage content fetches
-	storageQueryErrors := 0                 // Number of nodes where storage list could not be queried
+	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
+	hadSuccessfulNode := false          // Track if at least one node responded successfully
+	storagesWithBackup := 0             // Number of storages that should contain backups
+	contentSuccess := 0                 // Number of successful storage content fetches
+	contentFailures := 0                // Number of failed storage content fetches
+	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
 	storagePreserveNeeded := map[string]struct{}{}
 	storageSuccess := map[string]struct{}{}
 
