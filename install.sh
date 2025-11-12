@@ -36,6 +36,41 @@ DETECTED_CTID=""
 DEBIAN_TEMPLATE_FALLBACK="debian-12-standard_12.12-1_amd64.tar.zst"
 DEBIAN_TEMPLATE=""
 
+get_latest_release_from_redirect() {
+    # Follow the GitHub "latest" redirect and extract the tag in a way that
+    # tolerates intermediate redirects that omit /tag/ (issue #698).
+    local target_url="${1:-https://github.com/$GITHUB_REPO/releases/latest}"
+    local effective_url=""
+    local curl_cmd=(curl -fsSL --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "$target_url")
+
+    if command -v timeout >/dev/null 2>&1; then
+        effective_url=$(timeout 10 "${curl_cmd[@]}" 2>/dev/null || true)
+    else
+        effective_url=$("${curl_cmd[@]}" 2>/dev/null || true)
+    fi
+
+    # Strip stray carriage returns so string comparisons behave under set -u
+    effective_url="${effective_url//$'\r'/}"
+
+    if [[ -z "$effective_url" ]]; then
+        return 1
+    fi
+
+    local tag=""
+    if [[ "$effective_url" =~ /tag/([^/?#]+) ]]; then
+        tag="${BASH_REMATCH[1]}"
+    elif [[ "$effective_url" =~ /download/([^/?#]+)/ ]]; then
+        tag="${BASH_REMATCH[1]}"
+    fi
+
+    if [[ -z "$tag" ]]; then
+        return 1
+    fi
+
+    printf '%s\n' "$tag"
+    return 0
+}
+
 detect_lxc_ctid() {
     local ctid=""
 
@@ -1655,10 +1690,10 @@ download_pulse() {
         # Fallback: Try direct GitHub redirect if API fails
         if [[ -z "$LATEST_RELEASE" ]]; then
             print_info "GitHub API unavailable, trying alternative method..."
-            if command -v timeout >/dev/null 2>&1; then
-                LATEST_RELEASE=$(timeout 10 curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:.*\/tag\/' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
-            else
-                LATEST_RELEASE=$(curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:.*\/tag\/' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+            local redirect_version=""
+            redirect_version=$(get_latest_release_from_redirect 2>/dev/null || true)
+            if [[ -n "$redirect_version" ]]; then
+                LATEST_RELEASE="$redirect_version"
             fi
         fi
 
@@ -2797,10 +2832,10 @@ main() {
         # If rate limited or failed, try direct GitHub latest URL
         if [[ -z "$STABLE_VERSION" ]] || [[ "$STABLE_VERSION" == *"rate limit"* ]]; then
             # Use the GitHub latest release redirect to get version
-            if command -v timeout >/dev/null 2>&1; then
-                STABLE_VERSION=$(timeout 10 curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
-            else
-                STABLE_VERSION=$(curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+            local redirect_version=""
+            redirect_version=$(get_latest_release_from_redirect 2>/dev/null || true)
+            if [[ -n "$redirect_version" ]]; then
+                STABLE_VERSION="$redirect_version"
             fi
         fi
         
