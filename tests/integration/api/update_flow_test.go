@@ -181,7 +181,7 @@ func waitForCompletion(t *testing.T, client *http.Client, baseURL string, timeou
 		if time.Now().After(deadline) {
 			t.Fatalf("update did not complete within %s (last status: %+v)", timeout, status)
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

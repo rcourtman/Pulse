@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -58,7 +59,11 @@ type UpdateInfo struct {
 	Warning        string    `json:"warning,omitempty"`
 }
 
-var errGitHubRateLimited = errors.New("GitHub API rate limit exceeded")
+var (
+	errGitHubRateLimited = errors.New("GitHub API rate limit exceeded")
+	stageDelayOnce       sync.Once
+	stageDelayValue      time.Duration
+)
 
 // Manager handles update operations
 type Manager struct {
@@ -1137,6 +1142,10 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 	if m.sseBroadcast != nil {
 		m.sseBroadcast.Broadcast(statusCopy)
 	}
+
+	if delay := statusDelayForStage(status); delay > 0 {
+		time.Sleep(delay)
+	}
 }
 
 // sseHeartbeatLoop sends periodic heartbeats to SSE clients
@@ -1166,6 +1175,37 @@ func sanitizeError(err error) string {
 	}
 
 	return errMsg
+}
+
+func statusDelayForStage(status string) time.Duration {
+	delay := configuredStageDelay()
+	if delay == 0 {
+		return 0
+	}
+
+	switch status {
+	case "downloading", "verifying", "extracting", "backing-up", "applying":
+		return delay
+	default:
+		return 0
+	}
+}
+
+func configuredStageDelay() time.Duration {
+	stageDelayOnce.Do(func() {
+		value := strings.TrimSpace(os.Getenv("PULSE_UPDATE_STAGE_DELAY_MS"))
+		if value == "" {
+			return
+		}
+		ms, err := strconv.Atoi(value)
+		if err != nil || ms <= 0 {
+			log.Warn().Str("value", value).Msg("Invalid PULSE_UPDATE_STAGE_DELAY_MS, ignoring")
+			return
+		}
+		stageDelayValue = time.Duration(ms) * time.Millisecond
+	})
+
+	return stageDelayValue
 }
 
 // cleanupOldTempDirs removes old pulse-update-* temp directories from previous runs

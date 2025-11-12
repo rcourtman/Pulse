@@ -188,6 +188,13 @@ func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return hijacker.Hijack()
 }
 
+// Flush implements http.Flusher when the underlying writer supports it.
+func (rw *responseWriter) Flush() {
+	if flusher, ok := rw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 // NewAPIError creates a new API error
 func NewAPIError(statusCode int, code, message string) error {
 	return &APIError{

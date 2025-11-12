@@ -140,7 +140,7 @@ function GlobalUpdateProgressWatcher() {
       } else if (!inProgress && hasAutoOpened()) {
         setHasAutoOpened(false);
       }
-    } catch (error) {
+    } catch (_error) {
       // Silently ignore polling errors
     }
   };
