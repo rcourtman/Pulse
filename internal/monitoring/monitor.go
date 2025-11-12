@@ -569,19 +569,19 @@ type Monitor struct {
 	guestMetadataRetryBackoff  time.Duration
 	guestMetadataHoldDuration  time.Duration
 	// Configurable guest agent timeouts (refs #592)
-	guestAgentFSInfoTimeout   time.Duration
-	guestAgentNetworkTimeout  time.Duration
-	guestAgentOSInfoTimeout   time.Duration
-	guestAgentVersionTimeout  time.Duration
-	guestAgentRetries         int
-	executor                  PollExecutor
-	breakerBaseRetry           time.Duration
-	breakerMaxDelay            time.Duration
-	breakerHalfOpenWindow      time.Duration
-	instanceInfoCache          map[string]*instanceInfo
-	pollStatusMap              map[string]*pollStatus
-	dlqInsightMap              map[string]*dlqInsight
-	nodeLastOnline             map[string]time.Time // Track last time each node was seen online (for grace period)
+	guestAgentFSInfoTimeout  time.Duration
+	guestAgentNetworkTimeout time.Duration
+	guestAgentOSInfoTimeout  time.Duration
+	guestAgentVersionTimeout time.Duration
+	guestAgentRetries        int
+	executor                 PollExecutor
+	breakerBaseRetry         time.Duration
+	breakerMaxDelay          time.Duration
+	breakerHalfOpenWindow    time.Duration
+	instanceInfoCache        map[string]*instanceInfo
+	pollStatusMap            map[string]*pollStatus
+	dlqInsightMap            map[string]*dlqInsight
+	nodeLastOnline           map[string]time.Time // Track last time each node was seen online (for grace period)
 }
 
 type rrdMemCacheEntry struct {
@@ -873,26 +873,26 @@ const (
 
 	// Guest agent timeout defaults (configurable via environment variables)
 	// Increased from 3-5s to 10-15s to handle high-load environments better (refs #592)
-	defaultGuestAgentFSInfoTimeout        = 15 * time.Second // GUEST_AGENT_FSINFO_TIMEOUT
-	defaultGuestAgentNetworkTimeout       = 10 * time.Second // GUEST_AGENT_NETWORK_TIMEOUT
-	defaultGuestAgentOSInfoTimeout        = 10 * time.Second // GUEST_AGENT_OSINFO_TIMEOUT
-	defaultGuestAgentVersionTimeout       = 10 * time.Second // GUEST_AGENT_VERSION_TIMEOUT
-	defaultGuestAgentRetries              = 1                // GUEST_AGENT_RETRIES (0 = no retry, 1 = one retry)
-	defaultGuestAgentRetryDelay           = 500 * time.Millisecond
+	defaultGuestAgentFSInfoTimeout  = 15 * time.Second // GUEST_AGENT_FSINFO_TIMEOUT
+	defaultGuestAgentNetworkTimeout = 10 * time.Second // GUEST_AGENT_NETWORK_TIMEOUT
+	defaultGuestAgentOSInfoTimeout  = 10 * time.Second // GUEST_AGENT_OSINFO_TIMEOUT
+	defaultGuestAgentVersionTimeout = 10 * time.Second // GUEST_AGENT_VERSION_TIMEOUT
+	defaultGuestAgentRetries        = 1                // GUEST_AGENT_RETRIES (0 = no retry, 1 = one retry)
+	defaultGuestAgentRetryDelay     = 500 * time.Millisecond
 
 	// Skip OS info calls after this many consecutive failures to avoid triggering buggy guest agents (refs #692)
 	guestAgentOSInfoFailureThreshold = 3
 )
 
 type guestMetadataCacheEntry struct {
-	ipAddresses         []string
-	networkInterfaces   []models.GuestNetworkInterface
-	osName              string
-	osVersion           string
-	agentVersion        string
-	fetchedAt           time.Time
-	osInfoFailureCount  int  // Track consecutive OS info failures
-	osInfoSkip          bool // Skip OS info calls after repeated failures (refs #692)
+	ipAddresses        []string
+	networkInterfaces  []models.GuestNetworkInterface
+	osName             string
+	osVersion          string
+	agentVersion       string
+	fetchedAt          time.Time
+	osInfoFailureCount int  // Track consecutive OS info failures
+	osInfoSkip         bool // Skip OS info calls after repeated failures (refs #692)
 }
 
 type taskOutcome struct {
@@ -2485,23 +2485,34 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			return client.GetVMAgentInfo(ctx, nodeName, vmid)
 		})
 		if err != nil {
-			osInfoFailureCount++
-			if osInfoFailureCount >= guestAgentOSInfoFailureThreshold {
+			if isGuestAgentOSInfoUnsupportedError(err) {
 				osInfoSkip = true
-				log.Info().
+				osInfoFailureCount = guestAgentOSInfoFailureThreshold
+				log.Warn().
 					Str("instance", instanceName).
 					Str("vm", vmName).
 					Int("vmid", vmid).
-					Int("failureCount", osInfoFailureCount).
-					Msg("Guest agent OS info consistently fails, skipping future calls to avoid triggering buggy guest agents")
-			} else {
-				log.Debug().
-					Str("instance", instanceName).
-					Str("vm", vmName).
-					Int("vmid", vmid).
-					Int("failureCount", osInfoFailureCount).
 					Err(err).
-					Msg("Guest agent OS info unavailable")
+					Msg("Guest agent OS info unsupported (missing os-release). Skipping future calls to avoid qemu-ga issues (refs #692)")
+			} else {
+				osInfoFailureCount++
+				if osInfoFailureCount >= guestAgentOSInfoFailureThreshold {
+					osInfoSkip = true
+					log.Info().
+						Str("instance", instanceName).
+						Str("vm", vmName).
+						Int("vmid", vmid).
+						Int("failureCount", osInfoFailureCount).
+						Msg("Guest agent OS info consistently fails, skipping future calls to avoid triggering buggy guest agents")
+				} else {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", vmName).
+						Int("vmid", vmid).
+						Int("failureCount", osInfoFailureCount).
+						Err(err).
+						Msg("Guest agent OS info unavailable")
+				}
 			}
 		} else if agentInfo, ok := agentInfoRaw.(map[string]interface{}); ok && len(agentInfo) > 0 {
 			osName, osVersion = extractGuestOSInfo(agentInfo)
@@ -2718,6 +2729,27 @@ func extractGuestOSInfo(data map[string]interface{}) (string, string) {
 	}
 
 	return osName, osVersion
+}
+
+func isGuestAgentOSInfoUnsupportedError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+
+	// OpenBSD qemu-ga emits "Failed to open file '/etc/os-release'" (refs #692)
+	if strings.Contains(msg, "os-release") &&
+		(strings.Contains(msg, "failed to open file") || strings.Contains(msg, "no such file or directory")) {
+		return true
+	}
+
+	// Some Proxmox builds bubble up "unsupported command: guest-get-osinfo"
+	if strings.Contains(msg, "guest-get-osinfo") && strings.Contains(msg, "unsupported") {
+		return true
+	}
+
+	return false
 }
 
 func stringValue(val interface{}) string {
@@ -5325,10 +5357,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				Free:  int64(node.MaxDisk - node.Disk),
 				Usage: safePercentage(float64(node.Disk), float64(node.MaxDisk)),
 			},
-			Uptime:           int64(node.Uptime),
-			LoadAverage:      []float64{},
-			LastSeen:         time.Now(),
-			ConnectionHealth: connectionHealthStr, // Use the determined health status
+			Uptime:                       int64(node.Uptime),
+			LoadAverage:                  []float64{},
+			LastSeen:                     time.Now(),
+			ConnectionHealth:             connectionHealthStr, // Use the determined health status
 			IsClusterMember:              instanceCfg.IsCluster,
 			ClusterName:                  instanceCfg.ClusterName,
 			TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
@@ -7129,8 +7161,8 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// If we got ZERO resources but had resources before, and we have no node data,
 	// this likely means the cluster health check failed. Preserve everything.
 	if len(allVMs) == 0 && len(allContainers) == 0 &&
-	   (prevVMCount > 0 || prevContainerCount > 0) &&
-	   len(nodeEffectiveStatus) == 0 {
+		(prevVMCount > 0 || prevContainerCount > 0) &&
+		len(nodeEffectiveStatus) == 0 {
 		log.Warn().
 			Str("instance", instanceName).
 			Int("prevVMs", prevVMCount).
@@ -9096,9 +9128,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	log.Debug().Str("instance", instanceName).Msg("Polling PBS backups")
 
 	var allBackups []models.PBSBackup
-	datastoreCount := len(datastores)       // Number of datastores to query
-	datastoreFetches := 0                   // Number of successful datastore fetches
-	datastoreErrors := 0                    // Number of failed datastore fetches
+	datastoreCount := len(datastores) // Number of datastores to query
+	datastoreFetches := 0             // Number of successful datastore fetches
+	datastoreErrors := 0              // Number of failed datastore fetches
 
 	// Process each datastore
 	for _, ds := range datastores {
