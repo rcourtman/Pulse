@@ -38,6 +38,7 @@ type ReleaseInfo struct {
 	Name        string    `json:"name"`
 	Body        string    `json:"body"`
 	Prerelease  bool      `json:"prerelease"`
+	Draft       bool      `json:"draft"`
 	PublishedAt time.Time `json:"published_at"`
 	Assets      []struct {
 		Name               string `json:"name"`
@@ -595,6 +596,12 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		var newestStable *ReleaseInfo
 
 		for i := range releases {
+			// Skip draft releases
+			if releases[i].Draft {
+				log.Debug().Str("tag", releases[i].TagName).Msg("Skipping draft release")
+				continue
+			}
+
 			releaseVer, err := ParseVersion(releases[i].TagName)
 			if err != nil {
 				log.Debug().Str("tag", releases[i].TagName).Err(err).Msg("Failed to parse release version")
@@ -665,6 +672,12 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	} else {
 		// For stable channel: find latest non-prerelease
 		for i := range releases {
+			// Skip draft releases
+			if releases[i].Draft {
+				log.Debug().Str("tag", releases[i].TagName).Msg("Skipping draft release")
+				continue
+			}
+
 			if releases[i].Prerelease {
 				continue
 			}
