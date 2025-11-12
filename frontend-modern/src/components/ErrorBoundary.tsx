@@ -1,4 +1,4 @@
-import { Component, JSX, createSignal, ErrorBoundary as SolidErrorBoundary } from 'solid-js';
+import { Component, JSX, ErrorBoundary as SolidErrorBoundary } from 'solid-js';
 import { logError } from '@/utils/logger';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
@@ -9,8 +9,6 @@ interface ErrorBoundaryProps {
 }
 
 const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (props) => {
-  const [details, setDetails] = createSignal(false);
-
   return (
     <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <div class="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">

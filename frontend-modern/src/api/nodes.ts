@@ -40,6 +40,7 @@ export class NodesAPI {
     nodeCount?: number;
     clusterNodeCount?: number;
     datastoreCount?: number;
+    warnings?: string[];
   }> {
     return apiFetchJSON(`${this.baseUrl}/test-connection`, {
       method: 'POST',
@@ -51,6 +52,7 @@ export class NodesAPI {
     status: string;
     message?: string;
     latency?: number;
+    warnings?: string[];
   }> {
     return apiFetchJSON(`${this.baseUrl}/${nodeId}/test`, {
       method: 'POST',

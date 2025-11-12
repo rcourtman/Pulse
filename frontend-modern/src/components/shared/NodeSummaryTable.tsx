@@ -651,20 +651,20 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                   : 'text-green-600 dark:text-green-400';
 
                             const temp = node!.temperature;
-                            const cpuMin = temp?.cpuMin;
-                            const cpuMax = temp?.cpuMaxRecord;
-                            const hasMinMax =
-                              typeof cpuMin === 'number' &&
-                              cpuMin > 0 &&
-                              typeof cpuMax === 'number' &&
-                              cpuMax > 0;
+                            const cpuMinValue =
+                              typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
+                            const cpuMaxValue =
+                              typeof temp?.cpuMaxRecord === 'number' && temp.cpuMaxRecord > 0
+                                ? temp.cpuMaxRecord
+                                : null;
+                            const hasMinMax = cpuMinValue !== null && cpuMaxValue !== null;
 
                             const gpus = temp?.gpu ?? [];
                             const hasGPU = gpus.length > 0;
 
                             if (hasMinMax || hasGPU) {
-                              const min = Math.round(cpuMin);
-                              const max = Math.round(cpuMax);
+                              const min = Math.round(cpuMinValue!);
+                              const max = Math.round(cpuMaxValue!);
 
                               const getTooltipColor = (temp: number) => {
                                 if (temp >= 80) return 'text-red-400';

@@ -85,6 +85,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const [quickSetupCommand, setQuickSetupCommand] = createSignal('');
   const [quickSetupToken, setQuickSetupToken] = createSignal('');
   const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
+  const showTemperatureMonitoringSection = () =>
+    typeof props.temperatureMonitoringEnabled === 'boolean';
+  const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
   const quickSetupExpiryLabel = () => {
     const expiry = quickSetupExpiry();
     if (!expiry) {
@@ -1764,40 +1767,39 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         </div>
                       </div>
 
-                      <Show when={typeof props.temperatureMonitoringEnabled === 'boolean'}>
-                        {() => {
-                          const enabled = props.temperatureMonitoringEnabled ?? true;
-                          return (
-                            <div class="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
-                              <div class="flex items-start justify-between gap-3">
-                                <div>
-                                  <p class="font-medium text-gray-900 dark:text-gray-100">Temperature monitoring</p>
-                                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this node. Disable if you don't need temperature data or haven't deployed the proxy yet.
-                                  </p>
-                                </div>
-                                <TogglePrimitive
-                                  checked={enabled}
-                                  onChange={(event) => {
-                                    props.onToggleTemperatureMonitoring?.(event.currentTarget.checked);
-                                  }}
-                                  disabled={props.temperatureMonitoringLocked || props.savingTemperatureSetting}
-                                  ariaLabel={enabled ? 'Disable temperature monitoring' : 'Enable temperature monitoring'}
-                                />
-                              </div>
-                              <Show when={!enabled}>
-                                <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
-                                  Pulse will skip SSH temperature polling for this node. Existing dashboard readings will stop refreshing.
-                                </p>
-                              </Show>
-                              <Show when={props.temperatureMonitoringLocked}>
-                                <p class="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-                                  Locked by environment variables. Remove the override (ENABLE_TEMPERATURE_MONITORING) and restart Pulse to manage it in the UI.
-                                </p>
-                              </Show>
+                      <Show when={showTemperatureMonitoringSection()}>
+                        <div class="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                          <div class="flex items-start justify-between gap-3">
+                            <div>
+                              <p class="font-medium text-gray-900 dark:text-gray-100">Temperature monitoring</p>
+                              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this node. Disable if you don't need temperature data or haven't deployed the proxy yet.
+                              </p>
                             </div>
-                          );
-                        }}
+                            <TogglePrimitive
+                              checked={temperatureMonitoringEnabledValue()}
+                              onChange={(event) => {
+                                props.onToggleTemperatureMonitoring?.(event.currentTarget.checked);
+                              }}
+                              disabled={props.temperatureMonitoringLocked || props.savingTemperatureSetting}
+                              ariaLabel={
+                                temperatureMonitoringEnabledValue()
+                                  ? 'Disable temperature monitoring'
+                                  : 'Enable temperature monitoring'
+                              }
+                            />
+                          </div>
+                          <Show when={!temperatureMonitoringEnabledValue()}>
+                            <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
+                              Pulse will skip SSH temperature polling for this node. Existing dashboard readings will stop refreshing.
+                            </p>
+                          </Show>
+                          <Show when={props.temperatureMonitoringLocked}>
+                            <p class="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                              Locked by environment variables. Remove the override (ENABLE_TEMPERATURE_MONITORING) and restart Pulse to manage it in the UI.
+                            </p>
+                          </Show>
+                        </div>
                       </Show>
                     </div>
                   </Show>

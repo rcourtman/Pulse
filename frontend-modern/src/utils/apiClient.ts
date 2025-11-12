@@ -4,6 +4,8 @@
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
+const AUTH_STORAGE_KEY = STORAGE_KEYS.AUTH;
+
 const getSessionStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') {
     return undefined;
