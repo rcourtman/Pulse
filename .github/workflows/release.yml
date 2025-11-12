@@ -377,12 +377,46 @@ jobs:
           # The validation workflow needs the numeric ID for REST API calls
           # Note: /releases/tags/{tag} endpoint doesn't work for draft releases,
           # so we list all releases and filter by tag_name
-          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" | jq ".[] | select(.tag_name == \"${TAG}\")")
+          # The releases endpoint is eventually consistent, so retry until the release appears
+          echo "Waiting for release to appear in GitHub API..."
+          MAX_ATTEMPTS=10
+          ATTEMPT=1
+          RELEASE_JSON=""
+
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Looking for release ${TAG}..."
+            RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" --paginate | jq ".[] | select(.tag_name == \"${TAG}\")")
+
+            if [ -n "$RELEASE_JSON" ]; then
+              echo "✓ Found release in API"
+              break
+            fi
+
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "Release not indexed yet, waiting 2 seconds..."
+              sleep 2
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          if [ -z "$RELEASE_JSON" ]; then
+            echo "::error::Failed to find release ${TAG} in API after $MAX_ATTEMPTS attempts"
+            exit 1
+          fi
+
           RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
+
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "::error::Failed to extract release ID from API response"
+            exit 1
+          fi
 
           echo "release_url=$(echo "$RELEASE_JSON" | jq -r '.html_url')" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+          echo "✓ Release ID: ${RELEASE_ID}"
 
       - name: Upload checksums.txt
         env:
