@@ -1,5 +1,6 @@
-import { createSignal, Show, onMount, onCleanup, createEffect } from 'solid-js';
+import { createSignal, Show, onCleanup, createEffect } from 'solid-js';
 import { UpdatesAPI, type UpdateStatus } from '@/api/updates';
+import { apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
 interface UpdateProgressModalProps {
@@ -16,7 +17,6 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   const [hasError, setHasError] = createSignal(false);
   const [isRestarting, setIsRestarting] = createSignal(false);
   const [wsDisconnected, setWsDisconnected] = createSignal(false);
-  const [usingSSE, setUsingSSE] = createSignal(false);
   let pollInterval: number | undefined;
   let healthCheckTimer: number | undefined;
   let healthCheckAttempts = 0;
@@ -30,12 +30,12 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   };
 
   const closeSSE = () => {
-    if (eventSource) {
-      eventSource.close();
-      eventSource = undefined;
-      setUsingSSE(false);
-      logger.info('SSE connection closed');
+    if (!eventSource) {
+      return;
     }
+    eventSource.close();
+    eventSource = undefined;
+    logger.info('SSE connection closed');
   };
 
   const setupSSE = () => {
@@ -45,7 +45,6 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     try {
       // Create EventSource connection to SSE endpoint
       eventSource = new EventSource('/api/updates/stream');
-      setUsingSSE(true);
 
       eventSource.onopen = () => {
         logger.info('SSE connection established');
@@ -73,7 +72,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
             if (updateStatus.status === 'completed' && !updateStatus.error) {
               closeSSE();
               // Verify backend health and reload
-              fetch('/api/health', { cache: 'no-store' })
+              apiFetch('/api/health', { cache: 'no-store' })
                 .then((healthCheck) => {
                   if (healthCheck.ok) {
                     logger.info('Update completed, backend healthy, reloading...');
@@ -157,7 +156,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
           }
           // Verify backend is healthy and reload
           try {
-            const healthCheck = await fetch('/api/health', { cache: 'no-store' });
+            const healthCheck = await apiFetch('/api/health', { cache: 'no-store' });
             if (healthCheck.ok) {
               logger.info('Update completed, backend healthy, reloading...');
               window.location.reload();
@@ -214,7 +213,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       let isHealthy = false;
 
       try {
-        const response = await fetch('/api/health', { cache: 'no-store' });
+        const response = await apiFetch('/api/health', { cache: 'no-store' });
         if (response.ok) {
           isHealthy = true;
         }
@@ -258,7 +257,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       // Give it a moment for the backend to fully initialize
       setTimeout(async () => {
         try {
-          const response = await fetch('/api/health', { cache: 'no-store' });
+          const response = await apiFetch('/api/health', { cache: 'no-store' });
           if (response.ok) {
             logger.info('Backend healthy after websocket reconnect, reloading...');
             window.location.reload();

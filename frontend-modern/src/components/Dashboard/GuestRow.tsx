@@ -1,4 +1,4 @@
-import { createMemo, createSignal, createEffect, on, Show, For } from 'solid-js';
+import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { formatBytes, formatPercent, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
@@ -60,7 +60,6 @@ interface GuestRowProps {
 }
 
 export function GuestRow(props: GuestRowProps) {
-  const initialGuestId = buildGuestId(props.guest);
   const guestId = createMemo(() => buildGuestId(props.guest));
   const isEditingUrl = createMemo(() => currentlyEditingGuestId() === guestId());
 

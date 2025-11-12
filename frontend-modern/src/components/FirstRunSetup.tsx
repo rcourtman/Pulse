@@ -23,7 +23,6 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
   const [copied, setCopied] = createSignal<'password' | 'token' | null>(null);
   const [themeMode, setThemeMode] = createSignal<'system' | 'light' | 'dark'>('system');
   const [bootstrapToken, setBootstrapToken] = createSignal('');
-  const [isUnlocking, setIsUnlocking] = createSignal(false);
   const [isUnlocked, setIsUnlocked] = createSignal(false);
   const [bootstrapTokenPath, setBootstrapTokenPath] = createSignal<string>('');
   const [isDocker, setIsDocker] = createSignal<boolean>(false);
@@ -371,10 +370,10 @@ IMPORTANT: Keep these credentials secure!
                 <button
                   type="button"
                   onClick={handleUnlock}
-                  disabled={isUnlocking() || !bootstrapToken().trim()}
+                  disabled={!bootstrapToken().trim()}
                   class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
                 >
-                  {isUnlocking() ? 'Unlocking...' : 'Unlock Wizard'}
+                  Unlock Wizard
                 </button>
               </div>
             </div>

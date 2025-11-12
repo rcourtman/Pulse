@@ -5,7 +5,7 @@
  * Optimized for rendering many sparklines simultaneously in tables.
  */
 
-import { onMount, onCleanup, createEffect, createSignal, Component, Show } from 'solid-js';
+import { onCleanup, createEffect, createSignal, Component, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { MetricSnapshot } from '@/stores/metricsHistory';
 import { scheduleSparkline } from '@/utils/canvasRenderQueue';
@@ -202,12 +202,6 @@ export const Sparkline: Component<SparklineProps> = (props) => {
 
   // Redraw when data or dimensions change
   createEffect(() => {
-    // Capture current values to avoid stale closures
-    const currentData = props.data;
-    const currentWidth = width();
-    const currentHeight = height();
-    const currentMetric = props.metric;
-
     // Unregister previous draw callback if it exists
     if (unregister) {
       unregister();
@@ -230,7 +224,6 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const rect = canvasRef.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const w = width();
-    const h = height();
 
     const data = props.data;
     const values = data.map(d => d[props.metric]);
@@ -244,10 +237,6 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     const timestamp = data[nearestIndex].timestamp;
 
     // Calculate absolute viewport position for portal
-    const minValue = 0;
-    const maxValue = Math.max(100, ...values);
-    const y = h - ((value - minValue) / (maxValue - minValue)) * h;
-
     setHoveredPoint({
       value,
       timestamp,

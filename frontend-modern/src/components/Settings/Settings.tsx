@@ -9,7 +9,6 @@ import {
   onCleanup,
   on,
 } from 'solid-js';
-import type { JSX } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError, showWarning } from '@/utils/toast';
@@ -535,6 +534,14 @@ const Settings: Component<SettingsProps> = (props) => {
   const [showDeleteNodeModal, setShowDeleteNodeModal] = createSignal(false);
   const [nodePendingDelete, setNodePendingDelete] = createSignal<NodeConfigWithStatus | null>(null);
   const [deleteNodeLoading, setDeleteNodeLoading] = createSignal(false);
+  const isNodeModalVisible = (type: 'pve' | 'pbs' | 'pmg') =>
+    Boolean(showNodeModal() && currentNodeType() === type);
+  const resolveTemperatureMonitoringEnabled = (node?: NodeConfigWithStatus | null) => {
+    if (node && typeof node.temperatureMonitoringEnabled === 'boolean') {
+      return node.temperatureMonitoringEnabled;
+    }
+    return temperatureMonitoringEnabled();
+  };
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
   const [discoveryScanStatus, setDiscoveryScanStatus] = createSignal<DiscoveryScanStatus>({
     scanning: false,
@@ -6714,7 +6721,7 @@ const Settings: Component<SettingsProps> = (props) => {
       </Show>
 
       {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */}
-      <Show when={showNodeModal() && currentNodeType() === 'pve'}>
+      <Show when={isNodeModalVisible('pve')}>
         <NodeModal
           isOpen={true}
           resetKey={modalResetKey()}
@@ -6727,11 +6734,9 @@ const Settings: Component<SettingsProps> = (props) => {
           nodeType="pve"
           editingNode={editingNode()?.type === 'pve' ? (editingNode() ?? undefined) : undefined}
           securityStatus={securityStatus() ?? undefined}
-          temperatureMonitoringEnabled={
-            editingNode()?.temperatureMonitoringEnabled !== undefined
-              ? editingNode()!.temperatureMonitoringEnabled
-              : temperatureMonitoringEnabled()
-          }
+          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+            editingNode()?.type === 'pve' ? editingNode() : null,
+          )}
           temperatureMonitoringLocked={temperatureMonitoringLocked()}
           savingTemperatureSetting={savingTemperatureSetting()}
           onToggleTemperatureMonitoring={
@@ -6788,7 +6793,7 @@ const Settings: Component<SettingsProps> = (props) => {
       </Show>
 
       {/* PBS Node Modal - Separate instance to prevent contamination */}
-      <Show when={showNodeModal() && currentNodeType() === 'pbs'}>
+      <Show when={isNodeModalVisible('pbs')}>
         <NodeModal
           isOpen={true}
           resetKey={modalResetKey()}
@@ -6801,11 +6806,9 @@ const Settings: Component<SettingsProps> = (props) => {
           nodeType="pbs"
           editingNode={editingNode()?.type === 'pbs' ? (editingNode() ?? undefined) : undefined}
           securityStatus={securityStatus() ?? undefined}
-          temperatureMonitoringEnabled={
-            editingNode()?.temperatureMonitoringEnabled !== undefined
-              ? editingNode()!.temperatureMonitoringEnabled
-              : temperatureMonitoringEnabled()
-          }
+          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+            editingNode()?.type === 'pbs' ? editingNode() : null,
+          )}
           temperatureMonitoringLocked={temperatureMonitoringLocked()}
           savingTemperatureSetting={savingTemperatureSetting()}
           onToggleTemperatureMonitoring={
@@ -6861,7 +6864,7 @@ const Settings: Component<SettingsProps> = (props) => {
       </Show>
 
       {/* PMG Node Modal */}
-      <Show when={showNodeModal() && currentNodeType() === 'pmg'}>
+      <Show when={isNodeModalVisible('pmg')}>
         <NodeModal
           isOpen={true}
           resetKey={modalResetKey()}
@@ -6873,11 +6876,9 @@ const Settings: Component<SettingsProps> = (props) => {
           nodeType="pmg"
           editingNode={editingNode()?.type === 'pmg' ? (editingNode() ?? undefined) : undefined}
           securityStatus={securityStatus() ?? undefined}
-          temperatureMonitoringEnabled={
-            editingNode()?.temperatureMonitoringEnabled !== undefined
-              ? editingNode()!.temperatureMonitoringEnabled
-              : temperatureMonitoringEnabled()
-          }
+          temperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled(
+            editingNode()?.type === 'pmg' ? editingNode() : null,
+          )}
           temperatureMonitoringLocked={temperatureMonitoringLocked()}
           savingTemperatureSetting={savingTemperatureSetting()}
           onToggleTemperatureMonitoring={

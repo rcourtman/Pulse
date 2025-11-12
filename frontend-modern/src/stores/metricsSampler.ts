@@ -14,7 +14,6 @@ import { recordMetric } from './metricsHistory';
 import { getMetricsViewMode } from './metricsViewMode';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { logger } from '@/utils/logger';
-import type { Node, VM, Container, DockerHost } from '@/types/api';
 
 const SAMPLE_INTERVAL_MS = 30 * 1000; // 30 seconds
 
@@ -110,9 +109,9 @@ function sampleMetrics(): void {
 
           const contCpu = container.cpuPercent || 0;
           const contMem = container.memoryPercent || 0;
-          const contDisk = container.disk && container.disk.total > 0
-            ? (container.disk.used / container.disk.total) * 100
-            : 0;
+          const usableTotal = container.rootFilesystemBytes ?? 0;
+          const writable = container.writableLayerBytes ?? 0;
+          const contDisk = usableTotal > 0 ? (writable / usableTotal) * 100 : 0;
 
           const containerKey = buildMetricKey('dockerContainer', container.id);
           recordMetric(containerKey, contCpu, contMem, contDisk);
