@@ -9,6 +9,7 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
+      - MOCK_BASE_URL=http://mock-github:8080
       # Control test scenarios via environment variables
       - MOCK_CHECKSUM_ERROR=${MOCK_CHECKSUM_ERROR:-false}
       - MOCK_NETWORK_ERROR=${MOCK_NETWORK_ERROR:-false}
