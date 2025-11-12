@@ -1297,6 +1297,19 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 			// Also allow static assets without auth (JS, CSS, etc)
 			// These MUST be accessible for the login page to work
+			// Frontend routes (non-API, non-download) should also be public
+			// because authentication is handled by the frontend after page load
+			isFrontendRoute := !strings.HasPrefix(req.URL.Path, "/api/") &&
+				!strings.HasPrefix(req.URL.Path, "/ws") &&
+				!strings.HasPrefix(req.URL.Path, "/socket.io/") &&
+				!strings.HasPrefix(req.URL.Path, "/download/") &&
+				req.URL.Path != "/simple-stats" &&
+				req.URL.Path != "/install-docker-agent.sh" &&
+				req.URL.Path != "/install-container-agent.sh" &&
+				req.URL.Path != "/install-host-agent.sh" &&
+				req.URL.Path != "/install-host-agent.ps1" &&
+				req.URL.Path != "/uninstall-host-agent.ps1"
+
 			isStaticAsset := strings.HasPrefix(req.URL.Path, "/assets/") ||
 				strings.HasPrefix(req.URL.Path, "/@vite/") ||
 				strings.HasPrefix(req.URL.Path, "/@solid-refresh") ||
@@ -1314,7 +1327,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				strings.HasSuffix(req.URL.Path, ".mjs") ||
 				strings.HasSuffix(req.URL.Path, ".jsx")
 
-			isPublic := isStaticAsset
+			isPublic := isStaticAsset || isFrontendRoute
 			for _, path := range publicPaths {
 				if normalizedPath == path {
 					isPublic = true
