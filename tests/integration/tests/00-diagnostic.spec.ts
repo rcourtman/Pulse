@@ -94,6 +94,19 @@ test.describe('Login Diagnostic', () => {
     });
     console.log('Browser fetch result:', JSON.stringify(apiResponse, null, 2));
 
+    console.log('\n=== Checking if app attempted to mount ===');
+    const appState = await page.evaluate(() => {
+      const root = document.getElementById('root');
+      return {
+        rootExists: !!root,
+        rootChildren: root?.children.length || 0,
+        rootHTML: root?.innerHTML || '',
+        hasScriptTag: !!document.querySelector('script[src*="index"]'),
+        scriptLoaded: (window as any).__PULSE_APP_LOADED__ || false,
+      };
+    });
+    console.log('App mount state:', JSON.stringify(appState, null, 2));
+
     // This test always passes - it's just for diagnostics
     expect(true).toBe(true);
   });
