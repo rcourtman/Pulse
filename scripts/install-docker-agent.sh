@@ -624,8 +624,16 @@ validate_docker_socket_access() {
     # Test socket access
     local test_output
     local test_exitcode
+    local had_errexit=false
+    if [[ $- == *e* ]]; then
+        had_errexit=true
+        set +e
+    fi
     test_output=$(eval "env $env_prefix sudo -u $SERVICE_USER_ACTUAL docker version --format '{{.Server.Version}}'" 2>&1)
     test_exitcode=$?
+    if [[ "$had_errexit" == "true" ]]; then
+        set -e
+    fi
 
     if [[ $test_exitcode -eq 0 ]]; then
         log_success "Docker socket access confirmed for $SERVICE_USER_ACTUAL"
