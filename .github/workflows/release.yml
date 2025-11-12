@@ -366,10 +366,12 @@ jobs:
           NOTES_EOF
 
           # Create draft release with generated notes
+          # Use --target to specify commit so tag is created properly (not "untagged-...")
           gh release create "${TAG}" \
             --draft \
             --title "Pulse ${TAG}" \
-            --notes-file "$NOTES_FILE"
+            --notes-file "$NOTES_FILE" \
+            --target "${{ github.sha }}"
 
           rm -f "$NOTES_FILE"
 
