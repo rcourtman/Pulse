@@ -139,9 +139,10 @@ Guidelines:
 - Keep the Notes section practical and actionable for end users
 EOF
 
-# Call LLM API based on provider
-if [ "$LLM_PROVIDER" = "anthropic" ]; then
-    RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+# Helper to call Anthropic (returns notes via stdout)
+generate_with_anthropic() {
+    local response response_type content
+    response=$(curl -s https://api.anthropic.com/v1/messages \
       -H "Content-Type: application/json" \
       -H "x-api-key: ${ANTHROPIC_API_KEY}" \
       -H "anthropic-version: 2023-06-01" \
@@ -158,10 +159,32 @@ if [ "$LLM_PROVIDER" = "anthropic" ]; then
   ]
 }
 JSON
-)
-    RELEASE_NOTES=$(echo "$RESPONSE" | jq -r '.content[0].text')
-else
-    RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+) || {
+        echo "Anthropic API request failed" >&2
+        return 1
+    }
+
+    response_type=$(echo "$response" | jq -r '.type // empty')
+    if [ "$response_type" = "error" ]; then
+        local message
+        message=$(echo "$response" | jq -r '.error.message // "Unknown error"')
+        echo "Anthropic API error: $message" >&2
+        return 1
+    fi
+
+    content=$(echo "$response" | jq -r '.content[0].text // empty')
+    if [ -z "$content" ] || [ "$content" = "null" ]; then
+        echo "Anthropic API returned empty content: $response" >&2
+        return 1
+    fi
+
+    printf '%s' "$content"
+}
+
+# Helper to call OpenAI (returns notes via stdout)
+generate_with_openai() {
+    local response content error_msg
+    response=$(curl -s https://api.openai.com/v1/chat/completions \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer ${OPENAI_API_KEY}" \
       -d @- <<JSON
@@ -181,14 +204,47 @@ else
   "max_tokens": 2000
 }
 JSON
-)
-    RELEASE_NOTES=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
-fi
+) || {
+        echo "OpenAI API request failed" >&2
+        return 1
+    }
 
-if [ -z "$RELEASE_NOTES" ] || [ "$RELEASE_NOTES" = "null" ]; then
-    echo "Error: Failed to generate release notes"
-    echo "API Response: $RESPONSE"
-    exit 1
+    error_msg=$(echo "$response" | jq -r '.error.message? // empty')
+    if [ -n "$error_msg" ]; then
+        echo "OpenAI API error: $error_msg" >&2
+        return 1
+    fi
+
+    content=$(echo "$response" | jq -r '.choices[0].message.content // empty')
+    if [ -z "$content" ] || [ "$content" = "null" ]; then
+        echo "OpenAI API returned empty content: $response" >&2
+        return 1
+    fi
+
+    printf '%s' "$content"
+}
+
+# Call LLM API based on provider with graceful fallback
+RELEASE_NOTES=""
+if [ "$LLM_PROVIDER" = "anthropic" ]; then
+    if ! RELEASE_NOTES=$(generate_with_anthropic); then
+        if [ -n "${OPENAI_API_KEY:-}" ]; then
+            echo "Anthropic generation failed, falling back to OpenAI..." >&2
+            if ! RELEASE_NOTES=$(generate_with_openai); then
+                echo "Error: OpenAI fallback failed as well" >&2
+                exit 1
+            fi
+            LLM_PROVIDER="openai"
+        else
+            echo "Error: Failed to generate release notes via Anthropic and no OpenAI fallback is available" >&2
+            exit 1
+        fi
+    fi
+else
+    if ! RELEASE_NOTES=$(generate_with_openai); then
+        echo "Error: Failed to generate release notes via OpenAI" >&2
+        exit 1
+    fi
 fi
 
 # Output release notes
