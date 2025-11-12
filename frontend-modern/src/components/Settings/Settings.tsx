@@ -17,6 +17,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { getPulsePort, getPulseWebSocketUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import {
+  apiFetch,
   clearApiToken as clearApiClientToken,
   getApiToken as getApiClientToken,
   setApiToken as setApiClientToken,
@@ -794,7 +795,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const runDiagnostics = async () => {
     setRunningDiagnostics(true);
     try {
-      const response = await fetch('/api/diagnostics');
+      const response = await apiFetch('/api/diagnostics');
       const diag = await response.json();
       setDiagnosticsData(diag);
     } catch (err) {
@@ -809,7 +810,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (proxyActionLoading()) return;
     setProxyActionLoading('register-nodes');
     try {
-      const response = await fetch('/api/diagnostics/temperature-proxy/register-nodes', {
+      const response = await apiFetch('/api/diagnostics/temperature-proxy/register-nodes', {
         method: 'POST',
       });
       const data = await response.json().catch(() => null);
@@ -843,7 +844,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (dockerActionLoading()) return;
     setDockerActionLoading(hostId);
     try {
-      const response = await fetch('/api/diagnostics/docker/prepare-token', {
+      const response = await apiFetch('/api/diagnostics/docker/prepare-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hostId }),
