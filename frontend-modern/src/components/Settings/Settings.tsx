@@ -2061,7 +2061,7 @@ const Settings: Component<SettingsProps> = (props) => {
           showError('Invalid backup file format. Expected encrypted data in "data" field.');
           return;
         }
-      } catch (parseError) {
+      } catch (_parseError) {
         // Not JSON - treat entire contents as raw base64 from CLI export
         encryptedData = fileContent.trim();
       }

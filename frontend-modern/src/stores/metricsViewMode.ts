@@ -19,7 +19,7 @@ const getInitialViewMode = (): MetricsViewMode => {
     if (stored === 'sparklines' || stored === 'bars') {
       return stored;
     }
-  } catch (err) {
+  } catch (_err) {
     // Ignore localStorage errors
   }
 

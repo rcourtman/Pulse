@@ -57,6 +57,15 @@ func getenvDefault(key, fallback string) string {
 	return fallback
 }
 
+func isChecksumFilename(name string) bool {
+	switch strings.ToLower(name) {
+	case "checksums.txt", "sha256sums", "sha256sums.txt":
+		return true
+	default:
+		return false
+	}
+}
+
 func (rl *rateLimiter) cleanup() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -122,6 +131,7 @@ func main() {
 	// In-memory storage for tarballs and checksums
 	tarballs := make(map[string][]byte)
 	checksums := make(map[string]string)
+	checksumEntries := make(map[string][]string)
 
 	latestTag := getenvDefault("MOCK_LATEST_VERSION", "v99.0.0")
 	prevTag := getenvDefault("MOCK_PREVIOUS_VERSION", "v98.5.0")
@@ -169,6 +179,9 @@ func main() {
 		}
 
 		checksums[filename] = checksum
+		entry := fmt.Sprintf("%s  %s", checksum, filename)
+		checksumEntries[version] = append(checksumEntries[version], entry)
+		checksumEntries["v"+version] = append(checksumEntries["v"+version], entry)
 
 		// Add download URLs to release
 		rel.Assets = []struct {
@@ -242,27 +255,44 @@ func main() {
 		version := parts[0]
 		file := parts[1]
 
-		if file == "checksums.txt" {
+		if isChecksumFilename(file) {
 			// Generate checksums.txt
 			var buf bytes.Buffer
-			for fname, chksum := range checksums {
-				if strings.Contains(fname, version) {
-					buf.WriteString(fmt.Sprintf("%s  %s\n", chksum, fname))
+			entries, ok := checksumEntries[version]
+			if !ok {
+				trimmed := strings.TrimPrefix(version, "v")
+				entries = checksumEntries[trimmed]
+			}
+			if len(entries) == 0 {
+				w.WriteHeader(http.StatusNotFound)
+				log.Printf("No checksums found for version %s", version)
+				return
+			}
+			for _, line := range entries {
+				buf.WriteString(line)
+				if !strings.HasSuffix(line, "\n") {
+					buf.WriteByte('\n')
 				}
 			}
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write(buf.Bytes())
-			log.Printf("Served checksums for version %s", version)
+			log.Printf("Served checksums for version %s (requested %s)", version, file)
 			return
 		}
 
-		// Serve tarball
-		filename := fmt.Sprintf("pulse-%s-linux-amd64.tar.gz", version)
-		tarball, ok := tarballs[filename]
+		// Serve tarball (strictly match requested filename first)
+		tarball, ok := tarballs[file]
 		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-			log.Printf("Tarball not found: %s", filename)
-			return
+			// Fallback to canonical filename derived from version (without leading v)
+			trimmedVersion := strings.TrimPrefix(version, "v")
+			canonical := fmt.Sprintf("pulse-%s-linux-amd64.tar.gz", trimmedVersion)
+			tarball, ok = tarballs[canonical]
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				log.Printf("Tarball not found: %s (canonical %s)", file, canonical)
+				return
+			}
+			file = canonical
 		}
 
 		// Mark as stale if requested
@@ -274,7 +304,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Header().Set("Content-Length", strconv.Itoa(len(tarball)))
 		w.Write(tarball)
-		log.Printf("Served tarball: %s", filename)
+		log.Printf("Served tarball: %s (version %s)", file, version)
 	})
 
 	// Health check
