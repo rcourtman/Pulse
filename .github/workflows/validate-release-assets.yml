@@ -115,37 +115,41 @@ jobs:
       - name: Download all release assets
         if: steps.context.outputs.should_run == 'true'
         id: download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Downloading all assets from release ${{ steps.context.outputs.tag }}..."
 
           mkdir -p release
           cd release
 
-          ASSETS=$(gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets" --jq '.[].browser_download_url')
+          # Get asset info (id and name) - API works with GITHUB_TOKEN for draft releases
+          ASSETS_JSON=$(gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets")
 
-          if [ -z "$ASSETS" ]; then
+          if [ "$(echo "$ASSETS_JSON" | jq '. | length')" -eq 0 ]; then
             echo "::error::No assets found in release"
             echo "has_assets=false" >> $GITHUB_OUTPUT
             exit 1
           fi
 
           echo "has_assets=true" >> $GITHUB_OUTPUT
-          echo "Found assets:"
-          echo "$ASSETS"
+          echo "Found $(echo "$ASSETS_JSON" | jq '. | length') assets"
 
-          echo "$ASSETS" | while read -r url; do
-            if [ -n "$url" ]; then
-              filename=$(basename "$url")
-              echo "Downloading $filename..."
-              gh release download "${{ steps.context.outputs.tag }}" \
-                --pattern "$filename" --dir . --clobber
+          # Download each asset using the API (works with draft releases)
+          echo "$ASSETS_JSON" | jq -r '.[] | "\(.id) \(.name)"' | while read -r asset_id filename; do
+            echo "Downloading $filename (ID: $asset_id)..."
 
-              if [ $? -eq 0 ]; then
-                echo "✓ Downloaded $filename ($(du -h "$filename" | cut -f1))"
-              else
-                echo "::error::Failed to download $filename"
-                exit 1
-              fi
+            # Use GitHub API to download with authentication
+            curl -L -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/octet-stream" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/assets/$asset_id" \
+              -o "$filename"
+
+            if [ $? -eq 0 ] && [ -f "$filename" ]; then
+              echo "✓ Downloaded $filename ($(du -h "$filename" | cut -f1))"
+            else
+              echo "::error::Failed to download $filename"
+              exit 1
             fi
           done
 
