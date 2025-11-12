@@ -360,6 +360,11 @@ ensure_service_user() {
         else
             SERVICE_GROUP_ACTUAL="$(id -gn "$SERVICE_USER")"
         fi
+        local existing_home
+        existing_home=$(get_user_home_path "$SERVICE_USER")
+        if [[ -n "$existing_home" ]]; then
+            SERVICE_HOME="$existing_home"
+        fi
         return
     fi
 
@@ -385,6 +390,11 @@ ensure_service_user() {
             SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
         else
             SERVICE_GROUP_ACTUAL="$(id -gn "$SERVICE_USER")"
+        fi
+        local created_home
+        created_home=$(get_user_home_path "$SERVICE_USER")
+        if [[ -n "$created_home" ]]; then
+            SERVICE_HOME="$created_home"
         fi
         if [[ "$SERVICE_USER_CREATED" == "true" ]]; then
             log_success "Created service user: $SERVICE_USER"
@@ -413,6 +423,64 @@ ensure_service_home() {
 
     chown "$SERVICE_USER_ACTUAL":"$SERVICE_GROUP_ACTUAL" "$SERVICE_HOME" >/dev/null 2>&1 || true
     chmod 750 "$SERVICE_HOME" >/dev/null 2>&1 || true
+}
+
+get_user_home_path() {
+    local user="$1"
+    if [[ -z "$user" ]]; then
+        return
+    fi
+
+    local entry
+    entry=$(getent passwd "$user" 2>/dev/null || true)
+    if [[ -z "$entry" ]]; then
+        return
+    fi
+
+    local home_path
+    home_path=$(printf '%s\n' "$entry" | awk -F: '{print $6}')
+    if [[ -n "$home_path" ]]; then
+        printf '%s\n' "$home_path"
+    fi
+}
+
+ensure_snap_home_compatibility() {
+    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
+        return
+    fi
+
+    detect_snap_docker
+    if [[ "$SNAP_DOCKER_DETECTED" != "true" ]]; then
+        return
+    fi
+
+    local current_home
+    current_home=$(get_user_home_path "$SERVICE_USER_ACTUAL")
+    if [[ -z "$current_home" ]]; then
+        return
+    fi
+
+    if [[ "$current_home" == /home/* ]]; then
+        SERVICE_HOME="$current_home"
+        return
+    fi
+
+    local desired_home="/home/$SERVICE_USER_ACTUAL"
+    if ! command -v usermod >/dev/null 2>&1; then
+        log_warn "Snap Docker detected but usermod is unavailable to relocate $SERVICE_USER_ACTUAL."
+        log_warn "Refer to https://snapcraft.io/docs/home-outside-home to allow non-/home directories."
+        return
+    fi
+
+    log_info "Snap Docker detected; relocating $SERVICE_USER_ACTUAL home to $desired_home"
+    if usermod -d "$desired_home" -m "$SERVICE_USER_ACTUAL" >/dev/null 2>&1; then
+        SERVICE_HOME="$desired_home"
+        log_success "Moved $SERVICE_USER_ACTUAL home to $desired_home for Snap compatibility"
+        return
+    fi
+
+    log_warn "Failed to relocate $SERVICE_USER_ACTUAL home for Snap Docker."
+    log_warn "See https://snapcraft.io/docs/home-outside-home for manual remediation."
 }
 
 detect_snap_docker() {
@@ -652,7 +720,9 @@ validate_docker_socket_access() {
         echo "  1. Ensure the docker group exists: getent group docker" >&2
         echo "  2. Ensure $SERVICE_USER_ACTUAL is in the docker group: id -nG $SERVICE_USER_ACTUAL" >&2
         echo "  3. Check if Snap Docker is running: snap services docker.dockerd" >&2
-        echo "  4. Restart Snap Docker to refresh permissions: snap restart docker" >&2
+        echo "  4. Confirm the $SERVICE_USER_ACTUAL home lives under /home (snapd blocks other paths)" >&2
+        echo "     See https://snapcraft.io/docs/home-outside-home for alternate locations" >&2
+        echo "  5. Restart Snap Docker to refresh permissions: snap restart docker" >&2
     else
         echo "Common solutions:" >&2
         echo "  1. Ensure $SERVICE_USER_ACTUAL is in the docker group: id -nG $SERVICE_USER_ACTUAL" >&2
@@ -878,7 +948,9 @@ JOINED_TARGETS=""
 ORIGINAL_ARGS=("$@")
 SERVICE_USER="pulse-docker"
 SERVICE_GROUP="$SERVICE_USER"
-SERVICE_HOME="/var/lib/pulse-docker-agent"
+SERVICE_HOME_DEFAULT="/home/pulse-docker-agent"
+SERVICE_HOME_LEGACY="/var/lib/pulse-docker-agent"
+SERVICE_HOME="$SERVICE_HOME_DEFAULT"
 SERVICE_USER_ACTUAL="$SERVICE_USER"
 SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
 SERVICE_USER_CREATED="false"
@@ -1179,6 +1251,11 @@ fi
 if [ "$UNINSTALL" = true ]; then
     log_header "Pulse Docker Agent Uninstaller"
 
+    existing_service_home=$(get_user_home_path "$SERVICE_USER")
+    if [[ -n "$existing_service_home" ]]; then
+        SERVICE_HOME="$existing_service_home"
+    fi
+
     if command -v systemctl &> /dev/null; then
         log_info "Stopping pulse-docker-agent service"
         systemctl stop pulse-docker-agent 2>/dev/null || true
@@ -1227,9 +1304,13 @@ if [ "$UNINSTALL" = true ]; then
         else
             log_info "Agent log file already absent: $LOG_PATH"
         fi
-        if [[ -d "$SERVICE_HOME" ]]; then
+        if [[ -n "$SERVICE_HOME" && "$SERVICE_HOME" != "/" && -d "$SERVICE_HOME" ]]; then
             rm -rf "$SERVICE_HOME"
             log_success "Removed service home directory: $SERVICE_HOME"
+        fi
+        if [[ -n "$SERVICE_HOME_LEGACY" && "$SERVICE_HOME_LEGACY" != "$SERVICE_HOME" && -d "$SERVICE_HOME_LEGACY" ]]; then
+            rm -rf "$SERVICE_HOME_LEGACY"
+            log_success "Removed legacy service home directory: $SERVICE_HOME_LEGACY"
         fi
     elif [ -f "$LOG_PATH" ]; then
         log_info "Preserving agent log file at $LOG_PATH (use --purge to remove)"
@@ -1683,6 +1764,7 @@ EOF
 
         log_header 'Preparing service environment'
         ensure_service_user
+        ensure_snap_home_compatibility
         ensure_service_home
         ensure_docker_group_membership
         write_env_file
@@ -1793,6 +1875,7 @@ fi
 
 log_header 'Preparing service environment'
 ensure_service_user
+ensure_snap_home_compatibility
 ensure_service_home
 ensure_docker_group_membership
 write_env_file

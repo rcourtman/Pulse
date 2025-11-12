@@ -275,14 +275,24 @@ Need the alerts but at a different tone? The same Containers tab exposes global 
 
 **Symptom:** Install script completes successfully but the agent service fails with `permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock`. The install script may have shown `[WARN] docker group not found`.
 
-**Cause:** Docker installed via Snap does not automatically create a system `docker` group, preventing the `pulse-docker` service user from accessing `/var/run/docker.sock`.
+**Cause:** Docker installed via Snap does not automatically create a system `docker` group, and snapd refuses to run confined binaries for users whose home directory is outside `/home`. The legacy installer created `/var/lib/pulse-docker-agent`, so the `pulse-docker` user could not talk to the Snap-managed daemon.
 
-**Fix:** The install script now automatically detects Snap Docker and creates the docker group when needed. If you previously installed with an older version of the script:
+**Fix:** The install script now automatically detects Snap Docker, creates the `docker` group when needed, and relocates the `pulse-docker` home to `/home/pulse-docker-agent` so snapd allows socket access. If you previously installed with an older version of the script:
 
 1. Create the docker group: `sudo addgroup --system docker`
 2. Add the service user to the group: `sudo adduser pulse-docker docker`
-3. Restart Snap Docker to refresh socket ACLs: `sudo snap restart docker`
-4. Restart the agent service: `sudo systemctl restart pulse-docker-agent`
+3. Move the service home under `/home`: `sudo usermod -d /home/pulse-docker-agent -m pulse-docker`
+4. Restart Snap Docker to refresh socket ACLs: `sudo snap restart docker`
+5. Restart the agent service: `sudo systemctl restart pulse-docker-agent`
+
+If your distribution intentionally keeps system users outside `/home`, configure snapd to trust the legacy location instead:
+
+```
+sudo snap set system homedirs=/var/lib
+sudo snap get system homedirs     # verify
+```
+
+The snapcraft documentation at [Home directories outside of `/home`](https://snapcraft.io/docs/home-outside-home) covers additional options (bind mounts, multiple custom roots, etc.).
 
 Verify socket access with: `sudo -u pulse-docker docker version`
 
