@@ -282,6 +282,130 @@ print_warn() {
     echo -e "${YELLOW}[WARN] $1${NC}"
 }
 
+sensor_proxy_artifacts_present() {
+    local -a paths=(
+        "/etc/pulse-sensor-proxy"
+        "/var/lib/pulse-sensor-proxy"
+        "/run/pulse-sensor-proxy"
+        "/usr/local/bin/pulse-sensor-proxy"
+        "/usr/local/bin/pulse-sensor-wrapper.sh"
+        "/usr/local/bin/pulse-sensor-cleanup.sh"
+        "/usr/local/bin/pulse-sensor-proxy-selfheal.sh"
+        "/usr/local/share/pulse/install-sensor-proxy.sh"
+        "/etc/systemd/system/pulse-sensor-proxy.service"
+        "/etc/systemd/system/pulse-sensor-cleanup.service"
+        "/etc/systemd/system/pulse-sensor-cleanup.path"
+        "/etc/systemd/system/pulse-sensor-proxy-selfheal.service"
+        "/etc/systemd/system/pulse-sensor-proxy-selfheal.timer"
+        "/var/log/pulse/sensor-proxy"
+    )
+
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -e "$path" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+find_sensor_proxy_installer() {
+    local -a candidates=(
+        "/opt/pulse/scripts/install-sensor-proxy.sh"
+        "/usr/local/share/pulse/install-sensor-proxy.sh"
+    )
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [[ -f "$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+manual_sensor_proxy_cleanup() {
+    print_info "Falling back to manual pulse-sensor-proxy cleanup..."
+
+    if command -v systemctl >/dev/null 2>&1; then
+        local -a units=(
+            "pulse-sensor-proxy.service"
+            "pulse-sensor-cleanup.service"
+            "pulse-sensor-cleanup.path"
+            "pulse-sensor-proxy-selfheal.service"
+            "pulse-sensor-proxy-selfheal.timer"
+        )
+        local unit
+        for unit in "${units[@]}"; do
+            systemctl stop "$unit" 2>/dev/null || true
+            systemctl disable "$unit" 2>/dev/null || true
+        done
+        systemctl daemon-reload 2>/dev/null || true
+    fi
+
+    local -a files=(
+        "/usr/local/bin/pulse-sensor-proxy"
+        "/usr/local/bin/pulse-sensor-wrapper.sh"
+        "/usr/local/bin/pulse-sensor-cleanup.sh"
+        "/usr/local/bin/pulse-sensor-proxy-selfheal.sh"
+        "/usr/local/share/pulse/install-sensor-proxy.sh"
+        "/var/lib/pulse-sensor-proxy/cleanup-request.json"
+    )
+    local path
+    for path in "${files[@]}"; do
+        rm -f "$path" 2>/dev/null || true
+    done
+
+    local -a dirs=(
+        "/var/lib/pulse-sensor-proxy"
+        "/etc/pulse-sensor-proxy"
+        "/run/pulse-sensor-proxy"
+        "/var/log/pulse/sensor-proxy"
+    )
+    local dir
+    for dir in "${dirs[@]}"; do
+        rm -rf "$dir" 2>/dev/null || true
+    done
+
+    rmdir --ignore-fail-on-non-empty /usr/local/share/pulse 2>/dev/null || true
+
+    if [[ -f /root/.ssh/authorized_keys ]]; then
+        sed -i -e '/# pulse-managed-key$/d' -e '/# pulse-proxy-key$/d' /root/.ssh/authorized_keys 2>/dev/null || true
+    fi
+
+    if id -u pulse-sensor-proxy >/dev/null 2>&1; then
+        userdel --remove pulse-sensor-proxy 2>/dev/null || userdel pulse-sensor-proxy 2>/dev/null || true
+    fi
+    if getent group pulse-sensor-proxy >/dev/null 2>&1; then
+        groupdel pulse-sensor-proxy 2>/dev/null || true
+    fi
+
+    print_info "Manual pulse-sensor-proxy cleanup complete"
+}
+
+cleanup_sensor_proxy() {
+    if ! sensor_proxy_artifacts_present; then
+        return
+    fi
+
+    print_info "Detected pulse-sensor-proxy artifacts; attempting uninstall..."
+    local installer_path=""
+    if installer_path=$(find_sensor_proxy_installer 2>/dev/null); then
+        if bash "$installer_path" --uninstall --purge --quiet; then
+            print_success "pulse-sensor-proxy removed"
+            return
+        fi
+        print_warn "pulse-sensor-proxy installer reported errors; falling back to manual cleanup"
+    else
+        print_warn "install-sensor-proxy.sh not found; attempting manual cleanup"
+    fi
+
+    manual_sensor_proxy_cleanup
+}
+
 # Prompt user about proxy installation
 # Returns 0 if user wants proxy, 1 if not
 prompt_proxy_installation() {
@@ -3202,6 +3326,8 @@ uninstall_pulse() {
     print_header
     echo -e "\033[0;33mUninstalling Pulse...\033[0m"
     echo
+
+    cleanup_sensor_proxy
     
     # Detect service name
     local SERVICE_NAME=$(detect_service_name)
