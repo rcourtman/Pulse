@@ -3,9 +3,7 @@ version: '3.8'
 services:
   # Mock GitHub API server for controlled testing
   mock-github:
-    build:
-      context: ./mock-github-server
-      dockerfile: Dockerfile
+    image: pulse-mock-github:test
     container_name: pulse-mock-github
     ports:
       - "8080:8080"
@@ -27,9 +25,7 @@ services:
 
   # Pulse server under test
   pulse-test:
-    build:
-      context: ../../
-      dockerfile: Dockerfile
+    image: pulse:test
     container_name: pulse-test-server
     ports:
       - "7655:7655"
