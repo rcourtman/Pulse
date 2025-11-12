@@ -89,8 +89,23 @@ jobs:
           MOCK_STALE_RELEASE: "false"
         run: |
           docker-compose -f docker-compose.test.yml up -d
-          # Allow services to settle before running Playwright
-          sleep 20
+
+          # Wait for services to be healthy
+          echo "Waiting for mock-github to be healthy..."
+          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q "healthy"; do sleep 2; done' || {
+            echo "Mock GitHub failed to become healthy"
+            docker logs pulse-mock-github
+            exit 1
+          }
+
+          echo "Waiting for pulse-test-server to be healthy..."
+          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q "healthy"; do sleep 2; done' || {
+            echo "Pulse server failed to become healthy"
+            docker logs pulse-test-server
+            exit 1
+          }
+
+          echo "All services healthy, running tests..."
           npx playwright test tests/01-happy-path.spec.ts tests/02-bad-checksums.spec.ts --reporter=list
           docker-compose -f docker-compose.test.yml down -v
 
