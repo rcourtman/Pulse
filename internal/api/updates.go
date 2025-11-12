@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +42,9 @@ func NewUpdateHandlers(manager *updates.Manager, dataDir string) *UpdateHandlers
 	registry.Register("proxmoxve", updates.NewInstallShAdapter(history))
 	registry.Register("docker", updates.NewDockerUpdater())
 	registry.Register("aur", updates.NewAURUpdater())
+	if strings.EqualFold(os.Getenv("PULSE_MOCK_MODE"), "true") || strings.EqualFold(os.Getenv("PULSE_ALLOW_DOCKER_UPDATES"), "true") {
+		registry.Register("mock", updates.NewMockUpdater())
+	}
 
 	h := &UpdateHandlers{
 		manager:          manager,

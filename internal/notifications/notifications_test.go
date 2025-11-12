@@ -15,6 +15,11 @@ import (
 
 func flushPending(n *NotificationManager) {
 	n.mu.Lock()
+	if n.queue != nil {
+		// Tests don't rely on the persistent queue; shutting it down ensures sends happen synchronously.
+		_ = n.queue.Stop()
+		n.queue = nil
+	}
 	if n.groupTimer != nil {
 		n.groupTimer.Stop()
 		n.groupTimer = nil

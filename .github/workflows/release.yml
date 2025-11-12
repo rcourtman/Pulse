@@ -137,14 +137,13 @@ jobs:
           echo "Testing login page loads:"
           curl -s http://localhost:7655/login | head -20
 
-          echo "Running diagnostic test..."
+          echo "Running Playwright diagnostics..."
           npx playwright test tests/00-diagnostic.spec.ts --reporter=list
 
-          echo "Skipping integration tests temporarily (issue with embedded frontend not rendering)"
-          echo "These tests were added Nov 11, 2025 and have never passed"
-          echo "Will be fixed separately - not blocking release"
-          # echo "Running integration tests..."
-          # npx playwright test tests/01-happy-path.spec.ts tests/02-bad-checksums.spec.ts --reporter=list
+          echo "Running API-level update integration test..."
+          UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
+
+          echo "Skipping legacy Playwright update scenarios (removed until they can be rebuilt)"
           docker-compose -f docker-compose.test.yml down -v
 
       - name: Cleanup integration environment

@@ -1,0 +1,96 @@
+name: Release Dry Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: 'Optional note/reason for the dry run'
+        required: false
+        type: string
+
+jobs:
+  dry-run:
+    name: Preflight Release Checks (No Publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend-modern ci
+
+      - name: Build frontend bundle for Go embed
+        run: |
+          npm --prefix frontend-modern run build
+          rm -rf internal/api/frontend-modern
+          mkdir -p internal/api/frontend-modern
+          cp -r frontend-modern/dist internal/api/frontend-modern/
+
+      - name: Lint frontend
+        run: npm --prefix frontend-modern run lint
+
+      - name: Install docker-compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run backend tests
+        run: go test ./...
+
+      - name: Prepare integration test dependencies
+        working-directory: tests/integration
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build Pulse binaries for integration tests
+        run: make build
+
+      - name: Build Docker images for integration tests
+        run: |
+          docker build -t pulse-mock-github:test tests/integration/mock-github-server
+          docker build -t pulse:test -f Dockerfile .
+
+      - name: Run integration diagnostics
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "false"
+          MOCK_NETWORK_ERROR: "false"
+          MOCK_RATE_LIMIT: "false"
+          MOCK_STALE_RELEASE: "false"
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+
+          echo "Waiting for mock-github to be healthy..."
+          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q "healthy"; do sleep 2; done'
+
+          echo "Waiting for pulse-test-server to be healthy..."
+          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q "healthy"; do sleep 2; done'
+
+          echo "Verifying Pulse API is reachable..."
+          timeout 60 sh -c 'until curl -fsS http://localhost:7655/api/health > /dev/null; do sleep 2; done'
+
+          echo "Running Playwright diagnostics..."
+          npx playwright test tests/00-diagnostic.spec.ts --reporter=list
+
+          echo "Running API-level update integration test..."
+          UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
+
+          docker-compose -f docker-compose.test.yml down -v
+
+      - name: Cleanup integration environment
+        if: always()
+        working-directory: tests/integration
+        run: docker-compose -f docker-compose.test.yml down -v || true

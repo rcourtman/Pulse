@@ -27,27 +27,23 @@ test.describe('Login Diagnostic', () => {
 
     // Track network requests
     page.on('request', req => {
-      if (req.url().includes('/api/')) {
-        console.log('REQUEST:', req.method(), req.url());
-      }
+      console.log('REQUEST:', req.method(), req.url());
     });
 
     page.on('response', async res => {
-      if (res.url().includes('/api/')) {
-        console.log('RESPONSE:', res.status(), res.url());
-        if (res.url().includes('/api/security/status')) {
-          try {
-            const body = await res.json();
-            console.log('SECURITY STATUS RESPONSE:', JSON.stringify(body, null, 2));
-          } catch (e) {
-            console.log('Failed to parse response:', e);
-          }
+      console.log('RESPONSE:', res.status(), res.url());
+      if (res.url().includes('/api/security/status')) {
+        try {
+          const body = await res.json();
+          console.log('SECURITY STATUS RESPONSE:', JSON.stringify(body, null, 2));
+        } catch (e) {
+          console.log('Failed to parse response:', e);
         }
       }
     });
 
     console.log('\n=== Navigating to login page ===');
-    await page.goto('http://localhost:7655/login');
+    await page.goto('http://localhost:7655/');
     console.log('Page loaded');
 
     // Wait a bit for any async operations

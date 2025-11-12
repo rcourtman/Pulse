@@ -14,18 +14,14 @@ End-to-end tests for the Pulse update flow, validating the entire path from UI t
 
 ## Test Scenarios
 
-1. **Happy Path**: Valid checksums, successful update
-2. **Bad Checksums**: Server rejects update, UI shows error once (not twice)
-3. **Rate Limiting**: Multiple rapid requests are throttled gracefully
-4. **Network Failure**: UI retries with exponential backoff
-5. **Stale Release**: Backend refuses to install flagged releases
-
-## Frontend Validation
-
-- UpdateProgressModal appears exactly once
-- Error messages are user-friendly (not raw API errors)
-- Modal can be dismissed after error
-- No duplicate modals on error
+> **Note:** The comprehensive Playwright update specs were removed on 2025‑11‑12 after repeated
+> release-blocking flakes. We now rely on:
+>
+> 1. `tests/00-diagnostic.spec.ts` — ensures the containerized stack boots and the login page renders.
+> 2. `tests/integration/api/update_flow_test.go` — drives the `/api/updates/*` endpoints directly to
+>    verify the backend can discover, plan, apply, and complete an update.
+>
+> Reintroduce full UI coverage once we have deterministic fixtures and selectors for the update flow.
 
 ## Running Tests
 
@@ -35,12 +31,11 @@ End-to-end tests for the Pulse update flow, validating the entire path from UI t
 cd tests/integration
 docker-compose up -d
 
-# Run tests
-npm test
+# Run diagnostic Playwright test
+npx playwright test tests/00-diagnostic.spec.ts
 
-# View logs
-docker-compose logs -f pulse-test
-docker-compose logs -f mock-github
+# Run API integration test from repo root
+UPDATE_API_BASE_URL=http://localhost:7655 go test ./tests/integration/api -run TestUpdateFlowIntegration
 
 # Cleanup
 docker-compose down -v

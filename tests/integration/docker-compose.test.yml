@@ -39,6 +39,7 @@ services:
       - PULSE_LOG_LEVEL=debug
       # Mock mode for faster testing
       - PULSE_MOCK_MODE=true
+      - PULSE_ALLOW_DOCKER_UPDATES=true
       # Pre-configure authentication to bypass first-run setup
       - PULSE_AUTH_USER=admin
       - PULSE_AUTH_PASS=admin

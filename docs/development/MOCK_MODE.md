@@ -67,7 +67,13 @@ PULSE_MOCK_VMS_PER_NODE=5        # Average VM count per node
 PULSE_MOCK_LXCS_PER_NODE=8       # Average container count per node
 PULSE_MOCK_RANDOM_METRICS=true   # Toggle metric jitter
 PULSE_MOCK_STOPPED_PERCENT=20    # Percentage of guests stopped/offline
+PULSE_ALLOW_DOCKER_UPDATES=true  # Treat Docker builds as update-capable (skips restart)
 ```
+
+When `PULSE_ALLOW_DOCKER_UPDATES` (or `PULSE_MOCK_MODE`) is enabled the backend
+exposes the full update flow inside containers, fakes the deployment type to
+`mock`, and suppresses the automatic process exit that normally follows a
+successful upgrade. This is what the Playwright update suite uses inside CI.
 
 Create `mock.env.local` for personal tweaks that should not be committed:
 
@@ -103,4 +109,3 @@ defaults when none are present.
 
 For more advanced scenarios, inspect `scripts/hot-dev.sh` and the mock seeders
 under `internal/mock` for additional entry points.
-

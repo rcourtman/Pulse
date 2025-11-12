@@ -16,13 +16,14 @@ export const ADMIN_CREDENTIALS = {
  * Login as admin user
  */
 export async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/');
+  await page.waitForSelector('input[name="username"]', { state: 'visible' });
   await page.fill('input[name="username"]', ADMIN_CREDENTIALS.username);
   await page.fill('input[name="password"]', ADMIN_CREDENTIALS.password);
   await page.click('button[type="submit"]');
 
   // Wait for redirect to dashboard
-  await page.waitForURL(/\/(dashboard|nodes)/);
+  await page.waitForURL(/\/(dashboard|nodes|proxmox)/);
 }
 
 /**
@@ -31,8 +32,10 @@ export async function loginAsAdmin(page: Page) {
 export async function navigateToSettings(page: Page) {
   await page.goto('/settings');
 
-  // Wait for settings page to load
-  await expect(page.locator('h1, h2').filter({ hasText: /settings/i })).toBeVisible();
+  // Wait for settings UI scaffolding (nav rail) to render
+  await expect(
+    page.locator('[aria-label="Settings navigation"], [data-testid="settings-nav"]')
+  ).toBeVisible();
 }
 
 /**
