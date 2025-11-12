@@ -571,23 +571,27 @@ func discoverClusterNodes() ([]string, error) {
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 
-	// pvecm status exits with code 2 on standalone nodes (not in a cluster)
+	// pvecm status exits with code 2 or 255 on standalone nodes (not in a cluster)
 	// Also handle LXC containers where pvecm can't access corosync IPC
 	// Treat these as valid cases and discover local host addresses
 	if err != nil {
 		stderrStr := stderr.String()
+		stdoutStr := out.String()
+		combinedOutput := stderrStr + stdoutStr
+
 		// Check if this is a standalone node or LXC container
 		// - "does not exist" or "not part of a cluster": standalone node
 		// - "ipcc_send_rec": running in LXC container without corosync access
-		if strings.Contains(stderrStr, "does not exist") ||
-			strings.Contains(stderrStr, "not part of a cluster") ||
-			strings.Contains(stderrStr, "ipcc_send_rec") {
+		// Note: Some Proxmox versions write these messages to stdout, others to stderr
+		if strings.Contains(combinedOutput, "does not exist") ||
+			strings.Contains(combinedOutput, "not part of a cluster") ||
+			strings.Contains(combinedOutput, "ipcc_send_rec") {
 			log.Info().Msg("Standalone Proxmox node or LXC container detected - discovering local host addresses")
 			return discoverLocalHostAddresses()
 		}
 		// For other errors, fail
-		log.Warn().Str("stderr", stderrStr).Msg("pvecm status failed")
-		return nil, fmt.Errorf("failed to get cluster status: %w (stderr: %s)", err, stderrStr)
+		log.Warn().Str("stderr", stderrStr).Str("stdout", stdoutStr).Msg("pvecm status failed")
+		return nil, fmt.Errorf("failed to get cluster status: %w (stderr: %s, stdout: %s)", err, stderrStr, stdoutStr)
 	}
 
 	// Parse output to extract IP addresses
