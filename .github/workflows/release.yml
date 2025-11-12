@@ -373,8 +373,15 @@ jobs:
 
           rm -f "$NOTES_FILE"
 
-          echo "release_url=$(gh release view ${TAG} --json url -q .url)" >> $GITHUB_OUTPUT
-          echo "release_id=$(gh release view ${TAG} --json id -q .id)" >> $GITHUB_OUTPUT
+          # Get the numeric release ID from the REST API (not GraphQL node_id)
+          # The validation workflow needs the numeric ID for REST API calls
+          # Note: /releases/tags/{tag} endpoint doesn't work for draft releases,
+          # so we list all releases and filter by tag_name
+          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" | jq ".[] | select(.tag_name == \"${TAG}\")")
+          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
+
+          echo "release_url=$(echo "$RELEASE_JSON" | jq -r '.html_url')" >> $GITHUB_OUTPUT
+          echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       - name: Upload checksums.txt
