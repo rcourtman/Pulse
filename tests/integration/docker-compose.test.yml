@@ -37,14 +37,14 @@ services:
       - TZ=UTC
       # Point to mock GitHub server
       - PULSE_UPDATE_SERVER=http://mock-github:8080
-      # Test database in memory
-      - PULSE_DATA_DIR=/tmp/pulse-test-data
+      # Use /data which is already owned by pulse user via entrypoint
+      - PULSE_DATA_DIR=/data
       # Enable debug logging
       - PULSE_LOG_LEVEL=debug
       # Mock mode for faster testing
       - PULSE_MOCK_MODE=true
     volumes:
-      - test-data:/tmp/pulse-test-data
+      - test-data:/data
     depends_on:
       mock-github:
         condition: service_healthy
