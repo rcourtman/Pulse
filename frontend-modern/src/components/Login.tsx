@@ -518,7 +518,7 @@ const LoginForm: Component<{
                 class="ml-2 block text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
                 onClick={() => setRememberMe(!rememberMe())}
               >
-                Remember me for 30 days
+                Remember me
               </label>
             </div>
           </div>
