@@ -580,7 +580,7 @@ func (p *Proxy) getTemperatureViaSSH(ctx context.Context, nodeHost string) (stri
 	// For standalone nodes, avoid SSH and run sensors directly
 	if isLocalNode(nodeHost) {
 		log.Debug().Str("node", nodeHost).Msg("Self-monitoring detected, collecting temperatures locally")
-		return p.getTemperatureLocal()
+		return p.getTemperatureLocal(ctx)
 	}
 
 	privKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519")
@@ -1002,13 +1002,13 @@ func isLocalNode(nodeHost string) bool {
 }
 
 // getTemperatureLocal collects temperature data from the local machine
-func (p *Proxy) getTemperatureLocal() (string, error) {
-	// Run the same command that the wrapper script runs
-	cmd := exec.Command("sensors", "-j")
+func (p *Proxy) getTemperatureLocal(ctx context.Context) (string, error) {
+	// Run the same command that the wrapper script runs with context timeout
+	cmd := exec.CommandContext(ctx, "sensors", "-j")
 	output, err := cmd.Output()
 	if err != nil {
 		// Try without -j flag as fallback
-		cmd = exec.Command("sensors")
+		cmd = exec.CommandContext(ctx, "sensors")
 		output, err = cmd.Output()
 		if err != nil {
 			return "", fmt.Errorf("failed to run sensors: %w", err)
