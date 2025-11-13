@@ -7,6 +7,10 @@ on:
         description: 'Version number (e.g., 4.28.1)'
         required: true
         type: string
+      release_notes:
+        description: 'Release notes content (markdown). Provide final user-facing changelog before running.'
+        required: true
+        type: string
 
 jobs:
   version_guard:
@@ -301,68 +305,20 @@ jobs:
           echo "Building release v${{ inputs.version }}..."
           ./scripts/build-release.sh ${{ inputs.version }}
 
-      - name: Generate release notes
-        id: generate_notes
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          echo "Generating release notes using LLM..."
-
-          # Find previous release tag (simply get the latest tag)
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -1)
-
-          if [ -z "$PREVIOUS_TAG" ]; then
-            echo "No previous tag found, comparing with first commit"
-            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
-          fi
-
-          echo "Comparing v${{ inputs.version }} with ${PREVIOUS_TAG}..."
-
-          # Generate notes - script writes output between separator lines
-          TEMP_OUTPUT=$(mktemp)
-
-          # Run script, capture exit code (don't fail immediately)
-          set +e
-          ./scripts/generate-release-notes.sh ${{ inputs.version }} "${PREVIOUS_TAG}" > "$TEMP_OUTPUT" 2>&1
-          SCRIPT_EXIT=$?
-          set -e
-
-          if [ $SCRIPT_EXIT -ne 0 ]; then
-            echo "❌ Release notes generation failed:"
-            cat "$TEMP_OUTPUT"
-            rm -f "$TEMP_OUTPUT"
-            exit 1
-          fi
-
-          # Extract notes between separator lines (everything between the two ━━━ lines)
-          RELEASE_NOTES=$(awk '/^Generated release notes:/{flag=1;next}/^━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$/{if(flag==1){flag=2}else if(flag==2){flag=3}}flag==2' "$TEMP_OUTPUT")
-
-          rm -f "$TEMP_OUTPUT"
-
-          # Save to output (escape for GitHub Actions multiline)
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-          echo "✅ Release notes generated successfully"
-
       - name: Create draft release
         id: create_release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES_INPUT: ${{ inputs.release_notes }}
         run: |
           VERSION="${{ inputs.version }}"
           TAG="v${VERSION}"
 
           echo "Creating draft release for ${TAG}..."
 
-          # Write release notes directly from GitHub output to file
-          # This avoids bash interpreting backticks in the markdown
+          # Write provided release notes to a temp file (keeps formatting)
           NOTES_FILE=$(mktemp)
-          cat <<'NOTES_EOF' > "$NOTES_FILE"
-          ${{ steps.generate_notes.outputs.RELEASE_NOTES }}
-          NOTES_EOF
+          printf "%s\n" "$RELEASE_NOTES_INPUT" > "$NOTES_FILE"
 
           # Create draft release with generated notes
           # Use --target to specify commit so tag is created properly (not "untagged-...")
