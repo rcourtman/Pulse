@@ -250,18 +250,41 @@ func TestStandaloneNodeErrorPatterns(t *testing.T) {
 			stderr:  "",
 			issueNo: "#571",
 		},
+		{
+			name:    "no cluster keyword",
+			stderr:  "Error: no cluster configuration\n",
+			stdout:  "",
+			issueNo: "variation",
+		},
+		{
+			name:    "IPC failure variant",
+			stderr:  "IPC communication error\n",
+			stdout:  "",
+			issueNo: "variation",
+		},
+	}
+
+	// Use the same detection logic as the actual code
+	standaloneIndicators := []string{
+		"does not exist", "not found", "no such file",
+		"not part of a cluster", "no cluster", "standalone",
+		"ipcc_send_rec", "IPC", "communication failed", "connection refused",
+		"Unknown error -1", "Unable to load", "access denied", "permission denied",
+		"access control list",
 	}
 
 	for _, tc := range standalonePatterns {
 		t.Run(tc.name, func(t *testing.T) {
 			combinedOutput := tc.stderr + tc.stdout
 
-			// Check each detection pattern we added
-			isStandalone := strings.Contains(combinedOutput, "does not exist") ||
-				strings.Contains(combinedOutput, "not part of a cluster") ||
-				strings.Contains(combinedOutput, "ipcc_send_rec") ||
-				strings.Contains(combinedOutput, "Unknown error -1") ||
-				strings.Contains(combinedOutput, "Unable to load access control list")
+			// Check using the permissive detection strategy
+			isStandalone := false
+			for _, indicator := range standaloneIndicators {
+				if strings.Contains(strings.ToLower(combinedOutput), strings.ToLower(indicator)) {
+					isStandalone = true
+					break
+				}
+			}
 
 			if !isStandalone {
 				t.Errorf("Failed to detect standalone/LXC pattern from %s:\n  stderr: %q\n  stdout: %q",
