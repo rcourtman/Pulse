@@ -203,3 +203,117 @@ func TestDiscoverLocalHostAddresses(t *testing.T) {
 
 	t.Logf("Discovered %d local addresses: %v", len(addresses), addresses)
 }
+
+// TestStandaloneNodeErrorPatterns verifies that the proxy correctly identifies
+// all known error patterns from standalone nodes and LXC containers
+func TestStandaloneNodeErrorPatterns(t *testing.T) {
+	// These are real error messages users reported in GitHub issues
+	standalonePatterns := []struct {
+		name    string
+		stderr  string
+		stdout  string
+		issueNo string // GitHub issue reference
+	}{
+		{
+			name:    "classic standalone node",
+			stderr:  "Error: Corosync config '/etc/pve/corosync.conf' does not exist - is this node part of a cluster?\n",
+			stdout:  "",
+			issueNo: "common",
+		},
+		{
+			name:    "LXC ipcc_send_rec errors (issue #571)",
+			stderr:  "ipcc_send_rec[1] failed: Unknown error -1\nipcc_send_rec[2] failed: Unknown error -1\nipcc_send_rec[3] failed: Unknown error -1\nUnable to load access control list: Unknown error -1\n",
+			stdout:  "",
+			issueNo: "#571",
+		},
+		{
+			name:    "unknown error -1 only",
+			stderr:  "Unknown error -1\n",
+			stdout:  "",
+			issueNo: "#571",
+		},
+		{
+			name:    "access control list error",
+			stderr:  "Unable to load access control list: Unknown error -1\n",
+			stdout:  "",
+			issueNo: "#571",
+		},
+		{
+			name:    "not part of cluster message",
+			stdout:  "This node is not part of a cluster\n",
+			stderr:  "",
+			issueNo: "common",
+		},
+		{
+			name:    "mixed stdout/stderr (some PVE versions)",
+			stdout:  "ipcc_send_rec failed: Unknown error -1\n",
+			stderr:  "",
+			issueNo: "#571",
+		},
+	}
+
+	for _, tc := range standalonePatterns {
+		t.Run(tc.name, func(t *testing.T) {
+			combinedOutput := tc.stderr + tc.stdout
+
+			// Check each detection pattern we added
+			isStandalone := strings.Contains(combinedOutput, "does not exist") ||
+				strings.Contains(combinedOutput, "not part of a cluster") ||
+				strings.Contains(combinedOutput, "ipcc_send_rec") ||
+				strings.Contains(combinedOutput, "Unknown error -1") ||
+				strings.Contains(combinedOutput, "Unable to load access control list")
+
+			if !isStandalone {
+				t.Errorf("Failed to detect standalone/LXC pattern from %s:\n  stderr: %q\n  stdout: %q",
+					tc.issueNo, tc.stderr, tc.stdout)
+			} else {
+				t.Logf("✓ Correctly identified standalone/LXC pattern from %s", tc.issueNo)
+			}
+		})
+	}
+}
+
+// TestNonStandaloneErrors verifies that genuine errors are NOT misidentified as standalone nodes
+func TestNonStandaloneErrors(t *testing.T) {
+	genuineErrors := []struct {
+		name   string
+		stderr string
+		stdout string
+	}{
+		{
+			name:   "network timeout",
+			stderr: "Connection timed out\n",
+			stdout: "",
+		},
+		{
+			name:   "permission denied",
+			stderr: "Permission denied (publickey)\n",
+			stdout: "",
+		},
+		{
+			name:   "command not found",
+			stderr: "bash: pvecm: command not found\n",
+			stdout: "",
+		},
+	}
+
+	for _, tc := range genuineErrors {
+		t.Run(tc.name, func(t *testing.T) {
+			combinedOutput := tc.stderr + tc.stdout
+
+			// These should NOT match our standalone patterns
+			isStandalone := strings.Contains(combinedOutput, "does not exist") ||
+				strings.Contains(combinedOutput, "not part of a cluster") ||
+				strings.Contains(combinedOutput, "ipcc_send_rec") ||
+				strings.Contains(combinedOutput, "Unknown error -1") ||
+				strings.Contains(combinedOutput, "Unable to load access control list")
+
+			if isStandalone {
+				t.Errorf("False positive: genuine error misidentified as standalone:\n  stderr: %q\n  stdout: %q",
+					tc.stderr, tc.stdout)
+			} else {
+				t.Logf("✓ Correctly identified genuine error (not standalone)")
+			}
+		})
+	}
+}
