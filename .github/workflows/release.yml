@@ -1,6 +1,9 @@
 name: Release
-# Trigger: workflow_dispatch
+# Trigger: workflow_dispatch and tag push
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
@@ -23,8 +26,14 @@ jobs:
       - name: Extract version
         id: extract
         run: |
-          VERSION="${{ inputs.version }}"
-          TAG="v${VERSION}"
+          # Handle both tag push and workflow_dispatch
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="${{ inputs.version }}"
+            TAG="v${VERSION}"
+          fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}, Tag: ${TAG}"
@@ -318,11 +327,18 @@ jobs:
         run: |
           VERSION="${{ needs.extract-version.outputs.version }}"
 
-          echo "Using Claude-generated release notes from workflow input"
-
           # Save release notes to file
           NOTES_FILE=$(mktemp)
-          printf "%s\n" "$RELEASE_NOTES_INPUT" > "$NOTES_FILE"
+
+          if [ -n "$RELEASE_NOTES_INPUT" ]; then
+            echo "Using Claude-generated release notes from workflow input"
+            printf "%s\n" "$RELEASE_NOTES_INPUT" > "$NOTES_FILE"
+          else
+            echo "Tag-triggered release - using placeholder notes"
+            echo "Release $VERSION" > "$NOTES_FILE"
+            echo "" >> "$NOTES_FILE"
+            echo "See commit history for changes." >> "$NOTES_FILE"
+          fi
 
           # Add installation instructions
           cat >> "$NOTES_FILE" << EOF
