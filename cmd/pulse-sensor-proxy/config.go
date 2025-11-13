@@ -37,6 +37,13 @@ type Config struct {
 	AllowedIDMapUsers []string `yaml:"allowed_idmap_users"`
 
 	RateLimit *RateLimitConfig `yaml:"rate_limit,omitempty"`
+
+	// HTTP mode configuration
+	HTTPEnabled     bool   `yaml:"http_enabled"`      // Enable HTTP server mode
+	HTTPListenAddr  string `yaml:"http_listen_addr"`  // Address to listen on (e.g., ":8443")
+	HTTPTLSCertFile string `yaml:"http_tls_cert"`     // Path to TLS certificate
+	HTTPTLSKeyFile  string `yaml:"http_tls_key"`      // Path to TLS private key
+	HTTPAuthToken   string `yaml:"http_auth_token"`   // Bearer token for authentication
 }
 
 // PeerConfig represents a peer entry with capabilities.
@@ -270,6 +277,50 @@ func loadConfig(configPath string) (*Config, error) {
 	if envLogLevel := os.Getenv("PULSE_SENSOR_PROXY_LOG_LEVEL"); envLogLevel != "" {
 		cfg.LogLevel = strings.ToLower(strings.TrimSpace(envLogLevel))
 		log.Info().Str("log_level", cfg.LogLevel).Msg("Log level set from environment")
+	}
+
+	// HTTP mode configuration from environment variables
+	if envHTTPEnabled := os.Getenv("PULSE_SENSOR_PROXY_HTTP_ENABLED"); envHTTPEnabled != "" {
+		if parsed, err := parseBool(envHTTPEnabled); err != nil {
+			log.Warn().Str("value", envHTTPEnabled).Err(err).Msg("Invalid PULSE_SENSOR_PROXY_HTTP_ENABLED value, ignoring")
+		} else {
+			cfg.HTTPEnabled = parsed
+			log.Info().Bool("http_enabled", parsed).Msg("HTTP mode enabled from environment")
+		}
+	}
+
+	if envHTTPAddr := os.Getenv("PULSE_SENSOR_PROXY_HTTP_ADDR"); envHTTPAddr != "" {
+		cfg.HTTPListenAddr = strings.TrimSpace(envHTTPAddr)
+		log.Info().Str("http_addr", cfg.HTTPListenAddr).Msg("HTTP listen address set from environment")
+	}
+
+	if envHTTPCert := os.Getenv("PULSE_SENSOR_PROXY_HTTP_TLS_CERT"); envHTTPCert != "" {
+		cfg.HTTPTLSCertFile = strings.TrimSpace(envHTTPCert)
+		log.Info().Str("tls_cert", cfg.HTTPTLSCertFile).Msg("HTTP TLS cert path set from environment")
+	}
+
+	if envHTTPKey := os.Getenv("PULSE_SENSOR_PROXY_HTTP_TLS_KEY"); envHTTPKey != "" {
+		cfg.HTTPTLSKeyFile = strings.TrimSpace(envHTTPKey)
+		log.Info().Str("tls_key", cfg.HTTPTLSKeyFile).Msg("HTTP TLS key path set from environment")
+	}
+
+	if envHTTPToken := os.Getenv("PULSE_SENSOR_PROXY_HTTP_AUTH_TOKEN"); envHTTPToken != "" {
+		cfg.HTTPAuthToken = strings.TrimSpace(envHTTPToken)
+		log.Info().Msg("HTTP auth token set from environment")
+	}
+
+	// Validate HTTP configuration if enabled
+	if cfg.HTTPEnabled {
+		if cfg.HTTPListenAddr == "" {
+			cfg.HTTPListenAddr = ":8443" // Default port
+			log.Info().Str("http_addr", cfg.HTTPListenAddr).Msg("Using default HTTP listen address")
+		}
+		if cfg.HTTPAuthToken == "" {
+			return nil, fmt.Errorf("http_enabled=true requires http_auth_token to be configured")
+		}
+		if cfg.HTTPTLSCertFile == "" || cfg.HTTPTLSKeyFile == "" {
+			return nil, fmt.Errorf("http_enabled=true requires both http_tls_cert and http_tls_key")
+		}
 	}
 
 	return cfg, nil

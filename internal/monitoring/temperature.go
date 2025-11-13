@@ -91,13 +91,39 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 
 // CollectTemperature collects temperature data from a node via SSH
 func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost, nodeName string) (*models.Temperature, error) {
+	return tc.CollectTemperatureWithProxy(ctx, nodeHost, nodeName, "", "")
+}
+
+// CollectTemperatureWithProxy collects temperature data with optional HTTP proxy configuration
+func (tc *TemperatureCollector) CollectTemperatureWithProxy(ctx context.Context, nodeHost, nodeName, proxyURL, proxyToken string) (*models.Temperature, error) {
 	// Extract hostname/IP from the host URL (might be https://hostname:8006)
 	host := extractHostname(nodeHost)
 
 	var output string
 	var err error
 
-	// Use proxy if available, otherwise fall back to direct SSH
+	// Try HTTP proxy first if configured for this instance
+	if proxyURL != "" && proxyToken != "" {
+		httpClient := tempproxy.NewHTTPClient(proxyURL, proxyToken)
+		if httpClient.IsAvailable() {
+			output, err = httpClient.GetTemperature(host)
+			if err != nil {
+				log.Debug().
+					Str("node", nodeName).
+					Str("host", host).
+					Str("proxy_url", proxyURL).
+					Err(err).
+					Msg("Failed to collect temperature data via HTTP proxy")
+				// Don't fall back to socket/SSH for HTTP proxy failures
+				// If HTTP proxy is configured, it's the intended method
+				return &models.Temperature{Available: false}, nil
+			}
+			// HTTP proxy succeeded
+			goto parseOutput
+		}
+	}
+
+	// Use Unix socket proxy if available (local deployment)
 	if tc.isProxyEnabled() {
 		output, err = tc.proxyClient.GetTemperature(host)
 		if err != nil {
@@ -176,6 +202,7 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		}
 	}
 
+parseOutput:
 	// Parse sensors JSON output
 	temp, err := tc.parseSensorsJSON(output)
 	if err != nil {
