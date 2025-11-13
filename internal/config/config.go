@@ -406,6 +406,10 @@ type PVEInstance struct {
 	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
 	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
 
+	// Temperature proxy configuration (for external PVE hosts)
+	TemperatureProxyURL   string // Optional HTTPS URL to pulse-sensor-proxy (e.g., https://pve1.lan:8443)
+	TemperatureProxyToken string // Bearer token for proxy authentication
+
 	// Cluster support
 	IsCluster        bool              // True if this is a cluster
 	ClusterName      string            // Cluster name if applicable

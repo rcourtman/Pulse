@@ -5764,7 +5764,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				sshHost = node.Node
 			}
 
-			temp, err := m.tempCollector.CollectTemperature(tempCtx, sshHost, node.Node)
+			// Use HTTP proxy if configured for this instance, otherwise fall back to socket/SSH
+			temp, err := m.tempCollector.CollectTemperatureWithProxy(tempCtx, sshHost, node.Node, instanceCfg.TemperatureProxyURL, instanceCfg.TemperatureProxyToken)
 			tempCancel()
 
 			if err == nil && temp != nil && temp.Available {

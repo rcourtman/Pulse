@@ -316,3 +316,21 @@ func int64Ptr(v int64) *int64 {
 	value := v
 	return &value
 }
+
+// LogHTTPRequest logs HTTP requests for audit trail
+func (a *auditLogger) LogHTTPRequest(remoteAddr, method, path string, statusCode int, reason string) {
+	if a == nil {
+		return
+	}
+
+	event := AuditEvent{
+		EventType:  "http_request",
+		RemoteAddr: remoteAddr,
+		Command:    method,
+		Target:     path,
+		ExitCode:   &statusCode,
+		Reason:     reason,
+	}
+
+	a.log(&event)
+}

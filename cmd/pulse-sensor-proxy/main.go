@@ -432,6 +432,15 @@ func runProxy() {
 		log.Fatal().Err(err).Msg("Failed to start proxy")
 	}
 
+	// Start HTTP server if enabled
+	var httpServer *HTTPServer
+	if cfg.HTTPEnabled {
+		httpServer = NewHTTPServer(proxy, cfg)
+		if err := httpServer.Start(); err != nil {
+			log.Fatal().Err(err).Msg("Failed to start HTTP server")
+		}
+	}
+
 	// Start metrics server
 	if err := metrics.Start(cfg.MetricsAddress); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start metrics server")
@@ -443,6 +452,16 @@ func runProxy() {
 
 	<-sigChan
 	log.Info().Msg("Shutting down proxy...")
+
+	// Shutdown HTTP server if running
+	if httpServer != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := httpServer.Stop(shutdownCtx); err != nil {
+			log.Error().Err(err).Msg("Error shutting down HTTP server")
+		}
+	}
+
 	proxy.Stop()
 	if proxy.rateLimiter != nil {
 		proxy.rateLimiter.shutdown()

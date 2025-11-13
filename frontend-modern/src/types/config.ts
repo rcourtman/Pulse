@@ -66,6 +66,8 @@ export interface NodeInstance {
  */
 export interface PVENodeConfig extends NodeInstance {
   realm?: string; // Authentication realm (pam, pve, etc.)
+  temperatureProxyURL?: string; // Optional HTTPS URL to pulse-sensor-proxy
+  temperatureProxyToken?: string; // Bearer token for proxy authentication
 }
 
 /**
