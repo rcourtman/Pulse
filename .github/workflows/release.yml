@@ -1,5 +1,6 @@
 name: Release
 # Triggers: workflow_dispatch and tag push
+# Updated: 2025-11-13 to force re-indexing
 on:
   push:
     tags:
