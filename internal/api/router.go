@@ -1298,6 +1298,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/install/pulse-sensor-proxy",      // Temperature proxy binary fallback
 				"/api/install/install-docker.sh",       // Docker turnkey installer
 				"/api/system/proxy-public-key",         // Temperature proxy public key for setup script
+				"/api/temperature-proxy/register",      // Temperature proxy registration (called by installer)
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)

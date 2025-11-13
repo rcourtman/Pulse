@@ -26,7 +26,8 @@ func NewHTTPClient(baseURL, authToken string) *HTTPClient {
 		Timeout: defaultTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
+				MinVersion:         tls.VersionTLS12,
+				InsecureSkipVerify: true, // Accept self-signed certificates from sensor-proxy
 			},
 			MaxIdleConns:        10,
 			IdleConnTimeout:     90 * time.Second,
@@ -147,8 +148,8 @@ func (c *HTTPClient) GetTemperature(nodeHost string) (string, error) {
 
 		// Parse JSON response
 		var jsonResp struct {
-			Node        string      `json:"node"`
-			Temperature interface{} `json:"temperature"`
+			Node        string `json:"node"`
+			Temperature string `json:"temperature"`
 		}
 
 		if err := json.Unmarshal(body, &jsonResp); err != nil {
@@ -160,18 +161,8 @@ func (c *HTTPClient) GetTemperature(nodeHost string) (string, error) {
 			}
 		}
 
-		// Convert temperature data back to JSON string (matching socket interface)
-		tempJSON, err := json.Marshal(jsonResp.Temperature)
-		if err != nil {
-			return "", &ProxyError{
-				Type:      ErrorTypeTransport,
-				Message:   "failed to marshal temperature data",
-				Retryable: false,
-				Wrapped:   err,
-			}
-		}
-
-		return string(tempJSON), nil
+		// Temperature field is already a JSON string, return as-is
+		return jsonResp.Temperature, nil
 	}
 
 	// All retries exhausted

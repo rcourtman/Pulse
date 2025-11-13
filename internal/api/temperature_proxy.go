@@ -80,6 +80,13 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 	for i := range nodesConfig.PVEInstances {
 		instance := &nodesConfig.PVEInstances[i]
 
+		// Try to match by instance name
+		if strings.EqualFold(instance.Name, hostname) {
+			matchedInstance = instance
+			matchedIndex = i
+			break
+		}
+
 		// Try to match by hostname in the Host field or cluster endpoints
 		if strings.Contains(strings.ToLower(instance.Host), strings.ToLower(hostname)) {
 			matchedInstance = instance

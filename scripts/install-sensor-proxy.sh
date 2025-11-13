@@ -242,6 +242,34 @@ EOF
     rm -f "$SOCKET_PATH" 2>/dev/null || true
     rm -rf "$RUNTIME_DIR" 2>/dev/null || true
 
+    # Always remove HTTP secrets and TLS material (security best practice)
+    if [[ -f "/etc/pulse-sensor-proxy/.http-auth-token" ]]; then
+        rm -f "/etc/pulse-sensor-proxy/.http-auth-token"
+        print_success "Removed HTTP auth token"
+    fi
+    if [[ -d "/etc/pulse-sensor-proxy/tls" ]]; then
+        rm -rf "/etc/pulse-sensor-proxy/tls"
+        print_success "Removed TLS certificates"
+    fi
+
+    # Check for and remove LXC bind mounts on any containers
+    if command -v pct >/dev/null 2>&1; then
+        print_info "Checking for LXC bind mounts..."
+        # Find all containers with pulse-sensor-proxy bind mounts
+        for ctid in $(pct list | awk 'NR>1 {print $1}'); do
+            if grep -q "pulse-sensor-proxy" /etc/pve/lxc/${ctid}.conf 2>/dev/null; then
+                CONTAINER_NAME=$(pct list | awk -v id="$ctid" '$1==id {print $3}')
+                print_info "Found bind mount in container $ctid ($CONTAINER_NAME)"
+                if sed -i '/pulse-sensor-proxy/d' /etc/pve/lxc/${ctid}.conf 2>/dev/null; then
+                    print_success "Removed bind mount from container $ctid ($CONTAINER_NAME)"
+                    print_warn "Container restart required for change to take effect"
+                else
+                    print_warn "Failed to remove bind mount from container $ctid"
+                fi
+            fi
+        done
+    fi
+
     if [[ "$PURGE" == true ]]; then
         print_info "Purging Pulse sensor proxy state"
         rm -rf "$WORK_DIR" "$CONFIG_DIR" 2>/dev/null || true
@@ -363,6 +391,30 @@ fi
 if [[ -n "$PULSE_SERVER" ]]; then
     FALLBACK_BASE="${PULSE_SERVER}/api/install/pulse-sensor-proxy"
 fi
+
+# Preflight checks
+if [[ $EUID -ne 0 ]]; then
+   print_error "This script must be run as root"
+   print_error "Use: sudo $0 $*"
+   exit 1
+fi
+
+# Check required commands
+REQUIRED_CMDS="curl openssl systemctl useradd groupadd install chmod chown mkdir"
+if [[ "$HTTP_MODE" == true ]]; then
+    REQUIRED_CMDS="$REQUIRED_CMDS hostname awk"
+fi
+if [[ "$STANDALONE" == false ]]; then
+    REQUIRED_CMDS="$REQUIRED_CMDS pvecm"
+fi
+
+for cmd in $REQUIRED_CMDS; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        print_error "Required command not found: $cmd"
+        print_error "Please install it and try again"
+        exit 1
+    fi
+done
 
 # Check if running on Proxmox host (only required for LXC mode)
 if [[ "$STANDALONE" == false ]]; then
@@ -726,26 +778,59 @@ register_with_pulse() {
     local hostname="$2"
     local proxy_url="$3"
 
-    print_info "Registering temperature proxy with Pulse at $pulse_url..."
+    # Output to stderr so it doesn't interfere with command substitution
+    print_info "Registering temperature proxy with Pulse at $pulse_url..." >&2
 
-    # Build registration request
+    # Build registration request with retry logic
     local response
-    response=$(curl -f -s -X POST \
-        -H "Content-Type: application/json" \
-        -d "{\"hostname\":\"${hostname}\",\"proxy_url\":\"${proxy_url}\"}" \
-        "${pulse_url}/api/temperature-proxy/register" 2>&1)
+    local http_code
+    local attempt
+    local max_attempts=3
+    local register_url="${pulse_url}/api/temperature-proxy/register"
 
-    if [[ $? -ne 0 ]]; then
-        print_error "Failed to register with Pulse API"
-        print_error "Response: $response"
-        print_error ""
-        print_error "Troubleshooting:"
-        print_error "  1. Ensure Pulse server is running at $pulse_url"
-        print_error "  2. Ensure this PVE instance is already added to Pulse"
-        print_error "  3. Check hostname matches: $hostname"
-        print_error "  4. Verify firewall allows access to Pulse"
-        return 1
-    fi
+    for attempt in $(seq 1 $max_attempts); do
+        if [[ $attempt -gt 1 ]]; then
+            print_info "Retry attempt $attempt/$max_attempts..." >&2
+            sleep 2
+        fi
+
+        # Capture both HTTP code and response body
+        response=$(curl -w "\n%{http_code}" -f -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"hostname\":\"${hostname}\",\"proxy_url\":\"${proxy_url}\"}" \
+            "$register_url" 2>&1)
+
+        local curl_exit=$?
+        http_code=$(echo "$response" | tail -1)
+        response=$(echo "$response" | head -n -1)
+
+        if [[ $curl_exit -eq 0 ]]; then
+            break
+        fi
+
+        if [[ $attempt -eq $max_attempts ]]; then
+            print_error "Failed to register with Pulse API after $max_attempts attempts" >&2
+            print_error "" >&2
+            print_error "═══════════════════════════════════════════════════════" >&2
+            print_error "Registration Details:" >&2
+            print_error "═══════════════════════════════════════════════════════" >&2
+            print_error "URL: $register_url" >&2
+            print_error "HTTP Code: $http_code" >&2
+            print_error "Hostname: $hostname" >&2
+            print_error "Proxy URL: $proxy_url" >&2
+            print_error "Response: $response" >&2
+            print_error "" >&2
+            print_error "Troubleshooting:" >&2
+            print_error "  1. Ensure this PVE instance is added to Pulse first" >&2
+            print_error "  2. Verify hostname matches instance name: $hostname" >&2
+            print_error "  3. Check Pulse logs: docker logs pulse | tail -50" >&2
+            print_error "  4. Test registration manually:" >&2
+            print_error "     curl -X POST -H 'Content-Type: application/json' \\" >&2
+            print_error "       -d '{\"hostname\":\"${hostname}\",\"proxy_url\":\"${proxy_url}\"}' \\" >&2
+            print_error "       $register_url" >&2
+            return 1
+        fi
+    done
 
     # Parse token from response
     local token
@@ -762,15 +847,17 @@ register_with_pulse() {
     chmod 600 /etc/pulse-sensor-proxy/.http-auth-token
     chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/.http-auth-token
 
-    print_success "Registered successfully - token received"
+    # Output to stderr so it doesn't interfere with command substitution
+    print_success "Registered successfully - token received" >&2
 
     # Parse instance name from response for logging
     local instance_name
     instance_name=$(echo "$response" | grep -o '"pve_instance":"[^"]*"' | cut -d'"' -f4)
     if [[ -n "$instance_name" ]]; then
-        print_info "Linked to PVE instance: $instance_name"
+        print_info "Linked to PVE instance: $instance_name" >&2
     fi
 
+    # Return token for caller to use (stdout only)
     echo "$token"
 }
 
@@ -806,21 +893,109 @@ if [[ "$HTTP_MODE" == true ]]; then
         exit 1
     fi
 
+    # Test Pulse server reachability before proceeding
+    print_info "Testing connection to Pulse server..."
+    if ! curl -f -s -m 5 "${PULSE_SERVER}/api/health" >/dev/null 2>&1; then
+        print_error "Cannot reach Pulse server at: $PULSE_SERVER"
+        print_error ""
+        print_error "Troubleshooting:"
+        print_error "  1. Verify Pulse is running: docker ps | grep pulse"
+        print_error "  2. Check URL is correct (include protocol and port)"
+        print_error "  3. Test connectivity: curl -v ${PULSE_SERVER}/api/health"
+        print_error "  4. Check firewall allows access from this host"
+        print_error ""
+        print_error "Installation aborted to prevent incomplete setup"
+        exit 1
+    fi
+    print_success "Pulse server is reachable"
+
+    # Check if port is already in use
+    PORT_NUMBER="${HTTP_ADDR#:}"
+    if ss -ltn | grep -q ":${PORT_NUMBER} "; then
+        print_error "Port ${PORT_NUMBER} is already in use"
+        print_error ""
+        print_error "Currently using port ${PORT_NUMBER}:"
+        ss -ltnp | grep ":${PORT_NUMBER} " || true
+        print_error ""
+        print_error "Options:"
+        print_error "  1. Stop the conflicting service"
+        print_error "  2. Use a different port: --http-addr :PORT"
+        print_error "  3. If this is a previous sensor-proxy, uninstall first:"
+        print_error "     $0 --uninstall"
+        exit 1
+    fi
+
     # Setup TLS certificates
     setup_tls_certificates "" ""  # Empty params = auto-generate
 
-    # Determine proxy URL
-    PROXY_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-    PROXY_URL="https://${PROXY_HOSTNAME}${HTTP_ADDR}"
+    # Determine proxy URL - use IP address for reliable network access
+    PRIMARY_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    if [[ -z "$PRIMARY_IP" ]]; then
+        print_error "Failed to determine primary IP address"
+        print_error "Use --proxy-url to specify manually"
+        exit 1
+    fi
+
+    # Validate it's an IPv4 address (not IPv6)
+    if [[ ! "$PRIMARY_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        print_warn "Primary IP appears to be IPv6 or invalid: $PRIMARY_IP"
+        print_warn "Attempting to find first IPv4 address..."
+        PRIMARY_IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+        if [[ -z "$PRIMARY_IP" ]]; then
+            print_error "No IPv4 address found"
+            print_error "Use --proxy-url https://YOUR_IP${HTTP_ADDR} to specify manually"
+            exit 1
+        fi
+        print_info "Using IPv4 address: $PRIMARY_IP"
+    fi
+
+    # Warn if using loopback
+    if [[ "$PRIMARY_IP" == "127.0.0.1" ]]; then
+        print_warn "Primary IP is loopback (127.0.0.1)"
+        print_warn "Pulse will not be able to reach this proxy!"
+        print_error "Use --proxy-url https://YOUR_REAL_IP${HTTP_ADDR} to specify a reachable address"
+        exit 1
+    fi
+
+    PROXY_URL="https://${PRIMARY_IP}${HTTP_ADDR}"
     print_info "Proxy will be accessible at: $PROXY_URL"
 
     # Register with Pulse and get auth token
-    HTTP_AUTH_TOKEN=$(register_with_pulse "$PULSE_SERVER" "$PROXY_HOSTNAME" "$PROXY_URL")
+    # Use short hostname for registration matching (PVE cluster endpoints use short names)
+    SHORT_HOSTNAME=$(hostname -s 2>/dev/null || hostname | cut -d'.' -f1)
+    HTTP_AUTH_TOKEN=$(register_with_pulse "$PULSE_SERVER" "$SHORT_HOSTNAME" "$PROXY_URL")
     if [[ $? -ne 0 || -z "$HTTP_AUTH_TOKEN" ]]; then
         print_error "Failed to register with Pulse - aborting installation"
         print_error "Fix the issue and re-run the installer"
         exit 1
     fi
+
+    # Backup config before modifying
+    if [[ -f /etc/pulse-sensor-proxy/config.yaml ]]; then
+        BACKUP_CONFIG="/etc/pulse-sensor-proxy/config.yaml.backup.$(date +%s)"
+        cp /etc/pulse-sensor-proxy/config.yaml "$BACKUP_CONFIG"
+        print_info "Config backed up to: $BACKUP_CONFIG"
+
+        # Remove any existing HTTP configuration to prevent duplicates
+        if grep -q "^# HTTP Mode Configuration" /etc/pulse-sensor-proxy/config.yaml; then
+            print_info "Removing existing HTTP configuration..."
+            # Remove from "# HTTP Mode Configuration" to end of file
+            sed -i '/^# HTTP Mode Configuration/,$ d' /etc/pulse-sensor-proxy/config.yaml
+        fi
+    fi
+
+    # Extract Pulse server IP/hostname for allowed_source_subnets
+    # Remove protocol and port to get just the host
+    PULSE_HOST=$(echo "$PULSE_SERVER" | sed -E 's#^https?://##' | sed -E 's#:[0-9]+$##')
+
+    # Try to resolve to IP if it's a hostname
+    PULSE_IP=$(getent hosts "$PULSE_HOST" 2>/dev/null | awk '{print $1; exit}')
+    if [[ -z "$PULSE_IP" ]]; then
+        # Fallback: assume PULSE_HOST is already an IP or use it as-is
+        PULSE_IP="$PULSE_HOST"
+    fi
+
+    print_info "Pulse server detected at: $PULSE_IP"
 
     # Append HTTP configuration to config.yaml
     print_info "Configuring HTTP mode..."
@@ -832,6 +1007,10 @@ http_listen_addr: "$HTTP_ADDR"
 http_tls_cert: /etc/pulse-sensor-proxy/tls/server.crt
 http_tls_key: /etc/pulse-sensor-proxy/tls/server.key
 http_auth_token: "$HTTP_AUTH_TOKEN"
+
+# Allow HTTP connections from Pulse server only
+allowed_source_subnets:
+  - $PULSE_IP/32
 EOF
 
     print_success "HTTP mode configured successfully"
@@ -999,6 +1178,27 @@ fi
 if ! systemctl restart pulse-sensor-proxy.service; then
     print_error "Failed to start pulse-sensor-proxy service"
     print_error ""
+
+    # Attempt rollback if HTTP mode and we have a backup
+    if [[ "$HTTP_MODE" == true && -n "$BACKUP_CONFIG" && -f "$BACKUP_CONFIG" ]]; then
+        print_warn "Attempting to rollback to previous configuration..."
+        if cp "$BACKUP_CONFIG" /etc/pulse-sensor-proxy/config.yaml; then
+            print_info "Config restored from backup"
+            if systemctl restart pulse-sensor-proxy.service; then
+                print_success "Service restarted with previous configuration"
+                print_error ""
+                print_error "HTTP mode installation failed but previous config restored"
+                print_error "Temperature monitoring should still work via Unix socket"
+                print_error "Review the error above and fix before retrying"
+                exit 1
+            else
+                print_error "Rollback failed - service won't start even with old config"
+            fi
+        else
+            print_error "Failed to restore config from backup"
+        fi
+    fi
+
     print_error "═══════════════════════════════════════════════════════"
     print_error "Service Status:"
     print_error "═══════════════════════════════════════════════════════"
@@ -1016,6 +1216,7 @@ if ! systemctl restart pulse-sensor-proxy.service; then
     print_error "2. Permission errors: Check ownership of /var/lib/pulse-sensor-proxy"
     print_error "3. lm-sensors not installed: Run 'apt-get install lm-sensors && sensors-detect --auto'"
     print_error "4. Standalone node detection: If you see 'pvecm' errors, this is expected for non-clustered hosts"
+    print_error "5. Port already in use: Check 'ss -tlnp | grep ${HTTP_ADDR#:}'"
     print_error ""
     print_error "For more help: https://github.com/rcourtman/Pulse/blob/main/docs/TROUBLESHOOTING.md"
     exit 1
@@ -1055,6 +1256,33 @@ if [[ ! -S "$SOCKET_PATH" ]]; then
 fi
 
 print_info "Socket ready at $SOCKET_PATH"
+
+# Validate HTTP endpoint if HTTP mode is enabled
+if [[ "$HTTP_MODE" == true ]]; then
+    print_info "Validating HTTP endpoint..."
+
+    # Wait a moment for HTTP server to fully start
+    sleep 2
+
+    # Test HTTP endpoint
+    HTTP_CHECK_URL="https://${PRIMARY_IP}${HTTP_ADDR}/health"
+    if curl -f -s -k -m 5 \
+        -H "Authorization: Bearer ${HTTP_AUTH_TOKEN}" \
+        "$HTTP_CHECK_URL" >/dev/null 2>&1; then
+        print_success "HTTP endpoint validated successfully"
+    else
+        print_error "HTTP endpoint validation failed"
+        print_error "URL: $HTTP_CHECK_URL"
+        print_error ""
+        print_error "Troubleshooting:"
+        print_error "  1. Check if port ${HTTP_ADDR#:} is listening: ss -tlnp | grep ${HTTP_ADDR#:}"
+        print_error "  2. Check sensor-proxy logs: journalctl -u pulse-sensor-proxy -n 50"
+        print_error "  3. Test manually: curl -k -H 'Authorization: Bearer \$TOKEN' $HTTP_CHECK_URL"
+        print_error ""
+        print_warn "Service is running but HTTP endpoint may not be accessible"
+        print_warn "Temperature monitoring may not work properly"
+    fi
+fi
 
 # Install sensor wrapper script for combined sensor and SMART data collection
 print_info "Installing sensor wrapper script..."
@@ -1454,6 +1682,9 @@ if command -v pvecm >/dev/null 2>&1; then
     # Extract node IPs from pvecm status
     CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}' || true)
 
+    # Extract node names from pvecm nodes (for allowlist)
+    CLUSTER_NODE_NAMES=$(pvecm nodes 2>/dev/null | awk 'NR>2 {print $3}' || true)
+
     if [[ -n "$CLUSTER_NODES" ]]; then
         print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"
 
@@ -1539,8 +1770,12 @@ if command -v pvecm >/dev/null 2>&1; then
 # These nodes are allowed to request temperature data when cluster IPC validation is unavailable
 allowed_nodes:
 EOF
+        # Add both IPs and hostnames to allow-list
         for node_ip in $CLUSTER_NODES; do
             echo "  - $node_ip" >> /etc/pulse-sensor-proxy/config.yaml
+        done
+        for node_name in $CLUSTER_NODE_NAMES; do
+            echo "  - $node_name" >> /etc/pulse-sensor-proxy/config.yaml
         done
     else
         # No cluster found - configure standalone node
