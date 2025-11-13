@@ -31,7 +31,11 @@ jobs:
             TAG="${GITHUB_REF#refs/tags/}"
             VERSION="${TAG#v}"
           else
-            VERSION="${{ github.event.inputs.version }}"
+            VERSION=$(jq -r '.inputs.version // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
+            if [ -z "$VERSION" ]; then
+              echo "::error::workflow_dispatch must include a version input"
+              exit 1
+            fi
             TAG="v${VERSION}"
           fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
@@ -322,10 +326,9 @@ jobs:
 
       - name: Prepare release notes
         id: generate_notes
-        env:
-          RELEASE_NOTES_INPUT: ${{ github.event.inputs.release_notes || '' }}
         run: |
           VERSION="${{ needs.extract_version.outputs.version }}"
+          RELEASE_NOTES_INPUT=$(jq -r '.inputs.release_notes // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
 
           # Save release notes to file
           NOTES_FILE=$(mktemp)
