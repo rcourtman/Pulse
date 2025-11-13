@@ -1008,9 +1008,10 @@ http_tls_cert: /etc/pulse-sensor-proxy/tls/server.crt
 http_tls_key: /etc/pulse-sensor-proxy/tls/server.key
 http_auth_token: "$HTTP_AUTH_TOKEN"
 
-# Allow HTTP connections from Pulse server only
+# Allow HTTP connections from Pulse server and localhost (for self-monitoring)
 allowed_source_subnets:
   - $PULSE_IP/32
+  - 127.0.0.1/32
 EOF
 
     print_success "HTTP mode configured successfully"
