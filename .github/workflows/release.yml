@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v4.30.0) - only needed if tag push didnt trigger automatically'
+        required: true
+        type: string
 
 jobs:
   extract-version:
@@ -16,7 +22,13 @@ jobs:
       - name: Extract version from tag
         id: extract
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          # Handle both tag push and manual dispatch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
           VERSION="${TAG#v}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
