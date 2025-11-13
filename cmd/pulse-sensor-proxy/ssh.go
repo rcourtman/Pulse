@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -680,42 +681,64 @@ func discoverLocalHostAddresses() ([]string, error) {
 		}
 	}
 
-	// Get all non-loopback IP addresses using ip command
-	cmd := exec.Command("ip", "-o", "addr", "show")
-	out, err := cmd.Output()
+	// Get all non-loopback IP addresses using Go's native net.Interfaces API
+	// This is more reliable than shelling out to 'ip addr' and works even with strict systemd restrictions
+	ipCount := 0
+	interfaces, err := net.Interfaces()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to get IP addresses via 'ip addr'")
+		log.Warn().
+			Err(err).
+			Msg("Failed to enumerate network interfaces - temperature monitoring may require manual allowed_nodes configuration")
 	} else {
-		// Parse output lines like:
-		// 2: eth0    inet 192.168.0.100/24 brd 192.168.0.255 scope global eth0
-		// 2: eth0    inet6 fe80::a00:27ff:fe4e:66a1/64 scope link
-		lines := strings.Split(string(out), "\n")
-		for _, line := range lines {
-			fields := strings.Fields(line)
-			if len(fields) < 4 {
+		for _, iface := range interfaces {
+			// Skip loopback interfaces
+			if iface.Flags&net.FlagLoopback != 0 {
 				continue
 			}
 
-			// Field 2 is interface, field 3 is inet/inet6, field 4 is addr/prefix
-			if fields[2] != "inet" && fields[2] != "inet6" {
+			// Skip interfaces that are down
+			if iface.Flags&net.FlagUp == 0 {
 				continue
 			}
 
-			// Split addr/prefix (e.g., "192.168.0.100/24")
-			addrWithPrefix := fields[3]
-			addr := strings.Split(addrWithPrefix, "/")[0]
-
-			// Skip loopback addresses
-			if strings.HasPrefix(addr, "127.") || addr == "::1" {
+			addrs, err := iface.Addrs()
+			if err != nil {
+				log.Debug().
+					Err(err).
+					Str("interface", iface.Name).
+					Msg("Failed to get addresses for interface")
 				continue
 			}
 
-			// Skip link-local IPv6
-			if strings.HasPrefix(addr, "fe80:") {
-				continue
-			}
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				default:
+					continue
+				}
 
-			addresses[addr] = struct{}{}
+				// Skip loopback addresses
+				if ip.IsLoopback() {
+					continue
+				}
+
+				// Skip link-local IPv6 addresses
+				if ip.IsLinkLocalUnicast() {
+					continue
+				}
+
+				// Skip unspecified addresses
+				if ip.IsUnspecified() {
+					continue
+				}
+
+				addresses[ip.String()] = struct{}{}
+				ipCount++
+			}
 		}
 	}
 
@@ -729,9 +752,17 @@ func discoverLocalHostAddresses() ([]string, error) {
 		return nil, fmt.Errorf("no local host addresses found")
 	}
 
-	log.Info().
+	// Log helpful info about discovered addresses
+	logger := log.Info().
 		Strs("addresses", result).
-		Msg("Discovered local host addresses for standalone node validation")
+		Int("ip_count", ipCount).
+		Int("hostname_count", len(result)-ipCount)
+
+	if ipCount == 0 {
+		logger.Msg("WARNING: No IP addresses discovered for standalone node - only hostnames available. If temperature monitoring fails with 'node_not_cluster_member' errors, add the node's IP to allowed_nodes in /etc/pulse-sensor-proxy/config.yaml")
+	} else {
+		logger.Msg("Discovered local host addresses for standalone node validation")
+	}
 
 	return result, nil
 }

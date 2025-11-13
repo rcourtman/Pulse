@@ -726,7 +726,7 @@ ProcSubset=pid
 LockPersonality=true
 RemoveIPC=true
 RestrictSUIDSGID=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 RestrictNamespaces=true
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
@@ -786,7 +786,7 @@ ProcSubset=pid
 LockPersonality=true
 RemoveIPC=true
 RestrictSUIDSGID=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 RestrictNamespaces=true
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
@@ -1237,7 +1237,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 PrivateTmp=true
 RestrictSUIDSGID=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LimitNOFILE=1024
 
 [Install]
