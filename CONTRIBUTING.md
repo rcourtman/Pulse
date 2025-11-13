@@ -85,8 +85,7 @@ UI-heavy features.
 - Tests: `scripts/tests/run.sh` plus integration suites under
   `scripts/tests/integration/`
 
-Document rollout plans and kill switches in `docs/installer-v2-rollout.md` and
-`MIGRATION_SCAFFOLDING.md`.
+Document rollout plans and kill switches in `MIGRATION_SCAFFOLDING.md` so future contributors know how to disable risky changes.
 
 ---
 
@@ -136,4 +135,3 @@ before submitting large doc updates.
 
 Reviewers will focus on correctness, security, and upgrade paths, so call out
 anything unusual up front. Thanks again for contributing!
-
