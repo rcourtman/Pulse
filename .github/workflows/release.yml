@@ -342,17 +342,18 @@ jobs:
           echo "$GENERATED_NOTES" > "$NOTES_FILE"
 
           # Add installation instructions
-          cat >> "$NOTES_FILE" << 'EOF'
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          cat >> "$NOTES_FILE" << EOF
 
 ## Installation
 
 **Docker (recommended):**
-```bash
-docker pull rcourtman/pulse:${{ needs.extract-version.outputs.version }}
-```
+\`\`\`bash
+docker pull rcourtman/pulse:${VERSION}
+\`\`\`
 
 **Docker Compose:**
-Update your `docker-compose.yml` to use `rcourtman/pulse:${{ needs.extract-version.outputs.version }}`
+Update your \`docker-compose.yml\` to use \`rcourtman/pulse:${VERSION}\`
 
 See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for complete setup instructions.
 EOF
