@@ -61,8 +61,13 @@ else
 fi
 
 # Check 4: Up to date with remote
-if ! git fetch origin --dry-run 2>&1 | grep -q "up to date"; then
-  echo "⚠️  Warning: Remote has updates or local branch is ahead"
+git fetch origin --quiet
+LOCAL=$(git rev-parse @)
+REMOTE=$(git rev-parse @{u})
+
+if [ "$LOCAL" != "$REMOTE" ]; then
+  echo "⚠️  Warning: Local and remote branches have diverged"
+  git status -sb
   echo ""
   read -p "Continue anyway? [y/N] " -n 1 -r
   echo ""
