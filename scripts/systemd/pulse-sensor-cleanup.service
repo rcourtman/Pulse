@@ -24,7 +24,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 PrivateTmp=true
 RestrictSUIDSGID=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LimitNOFILE=1024
 
 [Install]
