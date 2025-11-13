@@ -47,8 +47,8 @@ if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
 elif [ -n "${OPENAI_API_KEY:-}" ]; then
     LLM_PROVIDER="openai"
 else
-    echo "Error: Either OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable must be set"
-    exit 1
+    echo "No LLM API keys detected – falling back to deterministic release notes."
+    LLM_PROVIDER="fallback"
 fi
 
 echo "Using LLM provider: ${LLM_PROVIDER}"
@@ -241,8 +241,22 @@ print_section() {
 
 # Deterministic fallback when no LLM providers are available
 generate_fallback_release_notes() {
+    local raw_subjects=()
+    mapfile -t raw_subjects < <(echo "$COMMIT_LOG" | sed 's/^[0-9a-f]\+ //')
+
     local subjects=()
-    mapfile -t subjects < <(echo "$COMMIT_LOG" | sed 's/^[0-9a-f]\+ //')
+    local subject lower
+    for subject in "${raw_subjects[@]}"; do
+        lower=$(echo "$subject" | tr '[:upper:]' '[:lower:]')
+        if [[ "$lower" =~ (release[[:space:]-]?notes|release[[:space:]-]?workflow|workflow|github|ci|lint|docs|documentation|helm|auto-update|mock|dry[[:space:]-]?run|test|integration|build|validation|telemetry|release[[:space:]-]?assets|fallback|prepare) ]]; then
+            continue
+        fi
+        subjects+=("$subject")
+    done
+
+    if [ ${#subjects[@]} -eq 0 ]; then
+        subjects=("${raw_subjects[@]}")
+    fi
 
     local features=()
     local bugs=()
@@ -302,20 +316,20 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 EOQI
         echo ""
         echo "**Docker:**"
-        cat <<EOQDock
+        cat <<'EOQDock'
 ```bash
 docker pull rcourtman/pulse:v${VERSION}
 docker stop pulse && docker rm pulse
-docker run -d --name pulse \\
-  --restart unless-stopped \\
-  -p 7655:7655 -p 7656:7656 \\
-  -v /opt/pulse/data:/data \\
+docker run -d --name pulse \
+  --restart unless-stopped \
+  -p 7655:7655 -p 7656:7656 \
+  -v /opt/pulse/data:/data \
   rcourtman/pulse:v${VERSION}
 ```
 EOQDock
         echo ""
         echo "**Manual Binary (amd64 example):**"
-        cat <<EOQMan
+        cat <<'EOQMan'
 ```bash
 curl -LO https://github.com/rcourtman/Pulse/releases/download/v${VERSION}/pulse-v${VERSION}-linux-amd64.tar.gz
 sudo systemctl stop pulse
@@ -325,11 +339,11 @@ sudo systemctl start pulse
 EOQMan
         echo ""
         echo "**Helm:**"
-        cat <<EOQHelm
+        cat <<'EOQHelm'
 ```bash
-helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \\
-  --version ${VERSION} \\
-  --namespace pulse \\
+helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart \
+  --version ${VERSION} \
+  --namespace pulse \
   --create-namespace
 ```
 EOQHelm
