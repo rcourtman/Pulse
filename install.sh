@@ -1583,7 +1583,50 @@ fi'; then
             fi
 
             if bash "$proxy_script" "${proxy_install_args[@]}" 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
-                print_info "Temperature proxy installed successfully"
+                print_info "Temperature proxy installation script completed"
+
+                # Verify proxy is actually working
+                echo
+                print_info "Verifying temperature proxy health..."
+                local proxy_health_ok=true
+
+                # Check 1: Service is running
+                if ! systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                    print_error "✗ Service not running"
+                    proxy_health_ok=false
+                else
+                    print_info "✓ Service running"
+                fi
+
+                # Check 2: Socket exists
+                if [[ ! -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]]; then
+                    print_error "✗ Socket not found at /run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+                    proxy_health_ok=false
+                else
+                    print_info "✓ Socket exists"
+                fi
+
+                # Check 3: Socket is accessible from container
+                if ! pct exec $CTID -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock 2>/dev/null; then
+                    print_error "✗ Socket not visible inside container at /mnt/pulse-proxy/pulse-sensor-proxy.sock"
+                    print_error "  Bind mount may not be configured correctly"
+                    proxy_health_ok=false
+                else
+                    print_info "✓ Socket accessible from container"
+                fi
+
+                if [[ "$proxy_health_ok" != "true" ]]; then
+                    echo
+                    print_error "Temperature proxy health check failed"
+                    print_error "See diagnostics above and logs: /tmp/proxy-install-${CTID}.log"
+                    print_error ""
+                    print_error "Check: systemctl status pulse-sensor-proxy"
+                    print_error "Check: journalctl -u pulse-sensor-proxy -n 50"
+                    echo
+                    exit 1
+                fi
+
+                print_success "Temperature proxy is healthy and ready"
                 # Clean up temporary binary if it was copied
                 [[ -f "$local_proxy_binary" ]] && rm -f "$local_proxy_binary"
             else

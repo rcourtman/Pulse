@@ -582,15 +582,20 @@ func discoverClusterNodes() ([]string, error) {
 		// Check if this is a standalone node or LXC container
 		// - "does not exist" or "not part of a cluster": standalone node
 		// - "ipcc_send_rec": running in LXC container without corosync access
+		// - "Unknown error -1": LXC container corosync communication failure
+		// - "Unable to load access control list": Permission/access issues in containers
 		// Note: Some Proxmox versions write these messages to stdout, others to stderr
 		if strings.Contains(combinedOutput, "does not exist") ||
 			strings.Contains(combinedOutput, "not part of a cluster") ||
-			strings.Contains(combinedOutput, "ipcc_send_rec") {
-			log.Info().Msg("Standalone Proxmox node or LXC container detected - discovering local host addresses")
+			strings.Contains(combinedOutput, "ipcc_send_rec") ||
+			strings.Contains(combinedOutput, "Unknown error -1") ||
+			strings.Contains(combinedOutput, "Unable to load access control list") {
+			// Log at INFO level since this is expected for standalone/container scenarios
+			log.Info().Msg("Standalone Proxmox node or LXC container detected - using localhost for temperature collection")
 			return discoverLocalHostAddresses()
 		}
-		// For other errors, fail
-		log.Warn().Str("stderr", stderrStr).Str("stdout", stdoutStr).Msg("pvecm status failed")
+		// For other unexpected errors, fail with details
+		log.Warn().Str("stderr", stderrStr).Str("stdout", stdoutStr).Msg("pvecm status failed with unexpected error")
 		return nil, fmt.Errorf("failed to get cluster status: %w (stderr: %s, stdout: %s)", err, stderrStr, stdoutStr)
 	}
 
