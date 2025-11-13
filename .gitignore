@@ -103,6 +103,7 @@ screenshots/
 .devdata/
 test-*.js
 test-*.sh
+!scripts/tests/test-sensor-proxy-http.sh
 test-*.html
 *.backup.*
 .env.dev

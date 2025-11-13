@@ -29,7 +29,12 @@ import APITokenManager from './APITokenManager';
 import { OIDCPanel } from './OIDCPanel';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
-import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTables';
+import {
+  PveNodesTable,
+  PbsNodesTable,
+  PmgNodesTable,
+  type TemperatureTransportInfo,
+} from './ConfiguredNodeTables';
 import { SettingsSectionNav } from './SettingsSectionNav';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
@@ -127,6 +132,13 @@ interface SystemDiagnostic {
   memoryMB: number;
 }
 
+interface TemperatureProxyHTTPStatus {
+  node: string;
+  url?: string;
+  reachable: boolean;
+  error?: string;
+}
+
 interface TemperatureProxyDiagnostic {
   legacySSHDetected: boolean;
   recommendProxyUpgrade: boolean;
@@ -141,6 +153,7 @@ interface TemperatureProxyDiagnostic {
   proxySshDirectory?: string;
   legacySshKeyCount?: number;
   notes?: string[];
+  httpProxies?: TemperatureProxyHTTPStatus[];
 }
 
 interface APITokenSummary {
@@ -799,12 +812,56 @@ const Settings: Component<SettingsProps> = (props) => {
     return `${Math.floor(seconds)}s`;
   };
 
+  const emitTemperatureProxyWarnings = (diag: DiagnosticsData | null) => {
+    if (!diag?.temperatureProxy?.httpProxies) {
+      return;
+    }
+    const failing = (diag.temperatureProxy.httpProxies as TemperatureProxyHTTPStatus[]).filter(
+      (proxy) => proxy && proxy.node && !proxy.reachable,
+    );
+    if (failing.length > 0) {
+      const nodes = failing.map((proxy) => proxy.node || 'Unknown').join(', ');
+      showWarning(`Pulse cannot reach HTTPS temperature proxy on: ${nodes}`);
+    }
+  };
+
+  const temperatureTransportInfo = createMemo<TemperatureTransportInfo | null>(() => {
+    const diag = diagnosticsData();
+    if (!diag?.temperatureProxy) {
+      return null;
+    }
+    const httpMap: TemperatureTransportInfo['httpMap'] = {};
+    const proxies = diag.temperatureProxy.httpProxies || [];
+    proxies.forEach((proxy) => {
+      if (!proxy || !proxy.node) {
+        return;
+      }
+      const key = proxy.node.trim().toLowerCase();
+      if (!key) {
+        return;
+      }
+      httpMap[key] = {
+        reachable: Boolean(proxy.reachable),
+        error: proxy.error || undefined,
+        url: proxy.url || undefined,
+      };
+    });
+    const socketStatus: TemperatureTransportInfo['socketStatus'] =
+      diag.temperatureProxy.socketFound && diag.temperatureProxy.proxyReachable
+        ? 'healthy'
+        : diag.temperatureProxy.socketFound
+        ? 'error'
+        : 'missing';
+    return { httpMap, socketStatus };
+  });
+
   const runDiagnostics = async () => {
     setRunningDiagnostics(true);
     try {
       const response = await apiFetch('/api/diagnostics');
       const diag = await response.json();
       setDiagnosticsData(diag);
+      emitTemperatureProxyWarnings(diag);
     } catch (err) {
       logger.error('Failed to fetch diagnostics', err);
       showError('Failed to run diagnostics');
@@ -2466,6 +2523,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               nodes={pveNodes()}
                               stateNodes={state.nodes ?? []}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
+                              temperatureTransports={temperatureTransportInfo()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
                                 setEditingNode(node);
@@ -5069,9 +5127,19 @@ const Settings: Component<SettingsProps> = (props) => {
                             <Show when={diagnosticsData()?.temperatureProxy}>
                               {(temp) => (
                                 <Card padding="sm">
-                                  <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                                    Temperature proxy
-                                  </h5>
+                                  <div class="flex items-center justify-between gap-3 mb-2">
+                                    <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                      Temperature proxy
+                                    </h5>
+                                    <a
+                                      href="https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md#transport-decision-matrix"
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      class="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 underline-offset-2 hover:underline"
+                                    >
+                                      Setup guide
+                                    </a>
+                                  </div>
                                   <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
                                     <div class="flex items-center justify-between">
                                       <span>Proxy socket</span>
@@ -5125,6 +5193,47 @@ const Settings: Component<SettingsProps> = (props) => {
                                       </div>
                                     </Show>
                                   </div>
+                                  <Show
+                                    when={
+                                      temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
+                                    }
+                                  >
+                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
+                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
+                                        HTTPS proxies
+                                      </div>
+                                      <For each={temp().httpProxies || []}>
+                                        {(proxy) => (
+                                          <div class="rounded border border-gray-200 dark:border-gray-700 px-2 py-1.5 space-y-1">
+                                            <div class="flex items-center justify-between">
+                                              <div>
+                                                <div class="font-medium text-gray-700 dark:text-gray-200">
+                                                  {proxy.node || 'Proxy'}
+                                                </div>
+                                                <Show when={proxy.url}>
+                                                  <div class="text-[0.65rem] text-gray-500 dark:text-gray-400 break-all">
+                                                    {proxy.url}
+                                                  </div>
+                                                </Show>
+                                              </div>
+                                              <span
+                                                class={`px-2 py-0.5 rounded text-white text-xs ${
+                                                  proxy.reachable ? 'bg-green-500' : 'bg-red-500'
+                                                }`}
+                                              >
+                                                {proxy.reachable ? 'Healthy' : 'Error'}
+                                              </span>
+                                            </div>
+                                            <Show when={!proxy.reachable && proxy.error}>
+                                              <div class="text-[0.65rem] text-red-500">
+                                                {proxy.error}
+                                              </div>
+                                            </Show>
+                                          </div>
+                                        )}
+                                      </For>
+                                    </div>
+                                  </Show>
                                   <div class="mt-3 flex flex-wrap gap-2">
                                     <button
                                       type="button"
@@ -5952,6 +6061,29 @@ const Settings: Component<SettingsProps> = (props) => {
                               }
                               if (Array.isArray(proxyDiag.notes)) {
                                 proxyDiag.notes = sanitizeNotesArray(proxyDiag.notes);
+                              }
+                              if (Array.isArray(proxyDiag.httpProxies)) {
+                                proxyDiag.httpProxies = (
+                                  proxyDiag.httpProxies as Array<Record<string, unknown>>
+                                ).map((entry, index: number) => {
+                                  const sanitizedEntry: TemperatureProxyHTTPStatus = {
+                                    node: sanitizeHostname(
+                                      typeof entry.node === 'string'
+                                        ? (entry.node as string)
+                                        : `http-proxy-${index + 1}`,
+                                    ),
+                                    reachable: Boolean(entry.reachable),
+                                  };
+                                  if (typeof entry.url === 'string') {
+                                    sanitizedEntry.url =
+                                      sanitizeText(entry.url as string) ?? (entry.url as string);
+                                  }
+                                  if (typeof entry.error === 'string') {
+                                    sanitizedEntry.error =
+                                      sanitizeText(entry.error as string) ?? (entry.error as string);
+                                  }
+                                  return sanitizedEntry;
+                                });
                               }
                             }
 

@@ -51,6 +51,10 @@ func (h *HTTPServer) Start() error {
 		MinVersion:               tls.VersionTLS12,
 		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
 		PreferServerCipherSuites: true,
+		// Force HTTP/1.1 because the Pulse backend HTTP client currently expects classic TLS/HTTP semantics.
+		// HTTP/2 responses from the proxy caused intermittent hangs/timeouts in the backend client,
+		// so we explicitly disable ALPN advertising h2 for now.
+		NextProtos: []string{"http/1.1"},
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -67,6 +71,8 @@ func (h *HTTPServer) Start() error {
 		WriteTimeout:   h.config.WriteTimeout,
 		IdleTimeout:    120 * time.Second,
 		MaxHeaderBytes: 1 << 20, // 1 MB
+		// Disable HTTP/2 upgrade paths until the backend client stack is hardened for it.
+		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
 	log.Info().

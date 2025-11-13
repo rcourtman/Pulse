@@ -7,16 +7,28 @@ type NodeConfigWithStatus = NodeConfig & {
   status: 'connected' | 'disconnected' | 'offline' | 'error' | 'pending';
 };
 
+export interface TemperatureTransportInfo {
+  httpMap: Record<string, { reachable: boolean; error?: string; url?: string }>;
+  socketStatus: 'healthy' | 'error' | 'missing';
+}
+
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
   stateNodes: { instance: string; status?: string; connectionHealth?: string }[];
   globalTemperatureMonitoringEnabled?: boolean;
+  temperatureTransports?: TemperatureTransportInfo | null;
   onTestConnection: (nodeId: string) => void;
   onEdit: (node: NodeConfigWithStatus) => void;
   onDelete: (node: NodeConfigWithStatus) => void;
 }
 
 type StatusMeta = { dotClass: string; label: string; labelClass: string };
+
+type TemperatureTransportBadge = {
+  label: string;
+  badgeClass: string;
+  description?: string;
+};
 
 const STATUS_META: Record<string, StatusMeta> = {
   online: {
@@ -44,6 +56,58 @@ const STATUS_META: Record<string, StatusMeta> = {
     label: 'Unknown',
     labelClass: 'text-gray-500 dark:text-gray-400',
   },
+};
+
+const resolveTemperatureTransport = (
+  node: NodeConfigWithStatus,
+  info: TemperatureTransportInfo | null | undefined,
+  globalEnabled: boolean,
+): TemperatureTransportBadge => {
+  const monitoringEnabled = isTemperatureMonitoringEnabled(node, globalEnabled);
+  if (!monitoringEnabled) {
+    return {
+      label: 'Temp disabled',
+      badgeClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
+    };
+  }
+
+  const key = (node.name || '').toLowerCase();
+  const httpEntry = info?.httpMap?.[key];
+  if (httpEntry) {
+    if (httpEntry.reachable) {
+      return {
+        label: 'HTTPS proxy',
+        badgeClass: 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300',
+        description: httpEntry.url,
+      };
+    }
+    return {
+      label: 'HTTPS error',
+      badgeClass: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+      description: httpEntry.error || 'Proxy unreachable',
+    };
+  }
+
+  if (info) {
+    if (info.socketStatus === 'healthy') {
+      return {
+        label: 'Socket proxy',
+        badgeClass: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
+      };
+    }
+    if (info.socketStatus === 'error') {
+      return {
+        label: 'Socket error',
+        badgeClass: 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
+        description: 'Proxy socket not responding',
+      };
+    }
+  }
+
+  return {
+    label: 'SSH fallback',
+    badgeClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
+  };
 };
 
 const isTemperatureMonitoringEnabled = (
@@ -123,6 +187,13 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
               );
               const clusterName = createMemo(() =>
                 'clusterName' in node && node.clusterName ? node.clusterName : 'Unknown',
+              );
+              const transportMeta = createMemo(() =>
+                resolveTemperatureTransport(
+                  node,
+                  props.temperatureTransports,
+                  props.globalTemperatureMonitoringEnabled ?? true,
+                ),
               );
               return (
                 <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
@@ -245,7 +316,19 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                             Temperature
                           </span>
                         )}
+                      <Show when={transportMeta()}>
+                        <span
+                          class={`text-xs px-2 py-1 rounded ${transportMeta().badgeClass}`}
+                        >
+                          {transportMeta().label}
+                        </span>
+                      </Show>
                     </div>
+                    <Show when={transportMeta()?.description}>
+                      <div class="mt-1 text-[0.65rem] text-gray-500 dark:text-gray-400">
+                        {transportMeta()?.description}
+                      </div>
+                    </Show>
                   </td>
                   <td class="align-top px-3 py-3 whitespace-nowrap">
                     <span class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}>
