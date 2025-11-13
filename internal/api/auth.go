@@ -122,6 +122,11 @@ func ValidateSession(token string) bool {
 	return GetSessionStore().ValidateSession(token)
 }
 
+// ValidateAndExtendSession validates a session and extends its expiration (sliding window)
+func ValidateAndExtendSession(token string) bool {
+	return GetSessionStore().ValidateAndExtendSession(token)
+}
+
 // CheckProxyAuth validates proxy authentication headers
 func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	// Check if proxy auth is configured
@@ -287,7 +292,8 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 	// Check session cookie (for WebSocket and UI)
 	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
-		if ValidateSession(cookie.Value) {
+		// Use ValidateAndExtendSession for sliding expiration
+		if ValidateAndExtendSession(cookie.Value) {
 			return true
 		} else {
 			// Debug logging for failed session validation

@@ -2021,8 +2021,9 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 
 	// Parse request
 	var loginReq struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		RememberMe bool   `json:"rememberMe"`
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&loginReq); err != nil {
@@ -2087,9 +2088,13 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		// Store session persistently
+		// Store session persistently with appropriate duration
 		userAgent := req.Header.Get("User-Agent")
-		GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP)
+		sessionDuration := 24 * time.Hour
+		if loginReq.RememberMe {
+			sessionDuration = 30 * 24 * time.Hour // 30 days
+		}
+		GetSessionStore().CreateSession(token, sessionDuration, userAgent, clientIP)
 
 		// Track session for user
 		TrackUserSession(loginReq.Username, token)
@@ -2100,6 +2105,9 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		// Get appropriate cookie settings based on proxy detection
 		isSecure, sameSitePolicy := getCookieSettings(req)
 
+		// Set cookie MaxAge to match session duration
+		cookieMaxAge := int(sessionDuration.Seconds())
+
 		// Set session cookie
 		http.SetCookie(w, &http.Cookie{
 			Name:     "pulse_session",
@@ -2108,7 +2116,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			HttpOnly: true,
 			Secure:   isSecure,
 			SameSite: sameSitePolicy,
-			MaxAge:   86400, // 24 hours
+			MaxAge:   cookieMaxAge,
 		})
 
 		// Set CSRF cookie (not HttpOnly so JS can read it)
@@ -2118,7 +2126,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			Path:     "/",
 			Secure:   isSecure,
 			SameSite: sameSitePolicy,
-			MaxAge:   86400, // 24 hours
+			MaxAge:   cookieMaxAge,
 		})
 
 		// Audit log successful login
