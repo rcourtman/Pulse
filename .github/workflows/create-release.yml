@@ -1,6 +1,9 @@
 name: Pulse Release Pipeline
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
@@ -13,7 +16,7 @@ on:
         type: string
 
 jobs:
-  extract-version:
+  extract_version:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -35,8 +38,8 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}, Tag: ${TAG}"
 
-  version-guard:
-    needs: extract-version
+  version_guard:
+    needs: extract_version
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -46,7 +49,7 @@ jobs:
       - name: Ensure VERSION file matches requested version
         run: |
           FILE_VERSION=$(cat VERSION | tr -d '\n')
-          REQUESTED_VERSION="${{ needs.extract-version.outputs.version }}"
+          REQUESTED_VERSION="${{ needs.extract_version.outputs.version }}"
           if [ "$FILE_VERSION" != "$REQUESTED_VERSION" ]; then
             echo "::error::VERSION file ($FILE_VERSION) does not match requested version ($REQUESTED_VERSION)."
             echo "The VERSION file must be updated and committed before running release."
@@ -54,8 +57,8 @@ jobs:
           fi
           echo "✓ VERSION file matches requested version ($REQUESTED_VERSION)"
 
-  preflight-tests:
-    needs: version-guard
+  preflight_tests:
+    needs: version_guard
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -172,11 +175,11 @@ jobs:
         working-directory: tests/integration
         run: docker-compose -f docker-compose.test.yml down -v || true
 
-  build-docker-images:
+  build_docker_images:
     needs:
-      - extract-version
-      - version-guard
-      - preflight-tests
+      - extract_version
+      - version_guard
+      - preflight_tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -216,16 +219,16 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
           tags: |
-            rcourtman/pulse:${{ needs.extract-version.outputs.tag }}
-            rcourtman/pulse:${{ needs.extract-version.outputs.version }}
+            rcourtman/pulse:${{ needs.extract_version.outputs.tag }}
+            rcourtman/pulse:${{ needs.extract_version.outputs.version }}
             rcourtman/pulse:latest
-            ghcr.io/${{ github.repository_owner }}/pulse:${{ needs.extract-version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse:${{ needs.extract-version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/pulse:${{ needs.extract_version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse:${{ needs.extract_version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/pulse:latest
           labels: |
             org.opencontainers.image.title=Pulse
             org.opencontainers.image.description=Proxmox monitoring system
-            org.opencontainers.image.version=${{ needs.extract-version.outputs.tag }}
+            org.opencontainers.image.version=${{ needs.extract_version.outputs.tag }}
             org.opencontainers.image.created=${{ github.event.repository.updated_at }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -244,16 +247,16 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache,mode=max
           tags: |
-            rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.tag }}
-            rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.version }}
+            rcourtman/pulse-docker-agent:${{ needs.extract_version.outputs.tag }}
+            rcourtman/pulse-docker-agent:${{ needs.extract_version.outputs.version }}
             rcourtman/pulse-docker-agent:latest
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ needs.extract-version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ needs.extract-version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ needs.extract_version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ needs.extract_version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest
           labels: |
             org.opencontainers.image.title=Pulse Docker Agent
             org.opencontainers.image.description=Docker container monitoring agent for Pulse
-            org.opencontainers.image.version=${{ needs.extract-version.outputs.tag }}
+            org.opencontainers.image.version=${{ needs.extract_version.outputs.tag }}
             org.opencontainers.image.created=${{ github.event.repository.updated_at }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -265,19 +268,19 @@ jobs:
           echo "✅ Docker images built and pushed successfully!"
           echo ""
           echo "Server images:"
-          echo "  - rcourtman/pulse:${{ needs.extract-version.outputs.tag }}"
-          echo "  - rcourtman/pulse:${{ needs.extract-version.outputs.version }}"
+          echo "  - rcourtman/pulse:${{ needs.extract_version.outputs.tag }}"
+          echo "  - rcourtman/pulse:${{ needs.extract_version.outputs.version }}"
           echo "  - rcourtman/pulse:latest"
           echo ""
           echo "Agent images:"
-          echo "  - rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.tag }}"
-          echo "  - rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.version }}"
+          echo "  - rcourtman/pulse-docker-agent:${{ needs.extract_version.outputs.tag }}"
+          echo "  - rcourtman/pulse-docker-agent:${{ needs.extract_version.outputs.version }}"
           echo "  - rcourtman/pulse-docker-agent:latest"
 
-  create-release:
+  create_release:
     needs:
-      - extract-version
-      - build-docker-images
+      - extract_version
+      - build_docker_images
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -314,15 +317,15 @@ jobs:
 
       - name: Build release artifacts
         run: |
-          echo "Building release ${{ needs.extract-version.outputs.tag }}..."
-          ./scripts/build-release.sh ${{ needs.extract-version.outputs.version }}
+          echo "Building release ${{ needs.extract_version.outputs.tag }}..."
+          ./scripts/build-release.sh ${{ needs.extract_version.outputs.version }}
 
       - name: Prepare release notes
         id: generate_notes
         env:
           RELEASE_NOTES_INPUT: ${{ inputs.release_notes }}
         run: |
-          VERSION="${{ needs.extract-version.outputs.version }}"
+          VERSION="${{ needs.extract_version.outputs.version }}"
 
           # Save release notes to file
           NOTES_FILE=$(mktemp)
@@ -363,7 +366,7 @@ EOF
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.extract-version.outputs.tag }}"
+          TAG="${{ needs.extract_version.outputs.tag }}"
           NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
 
           echo "Creating draft release for ${TAG}..."
@@ -421,7 +424,7 @@ EOF
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.extract-version.outputs.tag }}"
+          TAG="${{ needs.extract_version.outputs.tag }}"
 
           echo "Uploading checksums.txt..."
           gh release upload "${TAG}" release/checksums.txt
@@ -434,7 +437,7 @@ EOF
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ needs.extract-version.outputs.tag }}"
+          TAG="${{ needs.extract_version.outputs.tag }}"
 
           echo "Uploading release assets..."
 
@@ -458,7 +461,7 @@ EOF
           echo "✅ Release draft created successfully!"
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📦 Release: ${{ needs.extract-version.outputs.tag }}"
+          echo "📦 Release: ${{ needs.extract_version.outputs.tag }}"
           echo "🔗 URL: ${{ steps.create_release.outputs.release_url }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
@@ -473,15 +476,15 @@ EOF
           echo "Docker images are available at Docker Hub and GHCR."
           echo ""
 
-  validate-release-assets:
+  validate_release_assets:
     needs:
-      - extract-version
-      - create-release
+      - extract_version
+      - create_release
     uses: ./.github/workflows/validate-release-assets.yml
     secrets: inherit
     with:
-      tag: ${{ needs.extract-version.outputs.tag }}
-      version: ${{ needs.extract-version.outputs.version }}
-      release_id: ${{ needs.create-release.outputs.release_id }}
+      tag: ${{ needs.extract_version.outputs.tag }}
+      version: ${{ needs.extract_version.outputs.version }}
+      release_id: ${{ needs.create_release.outputs.release_id }}
       draft: true
-      target_commitish: ${{ needs.create-release.outputs.target_commitish }}
+      target_commitish: ${{ needs.create_release.outputs.target_commitish }}
