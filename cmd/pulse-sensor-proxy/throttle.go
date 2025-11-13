@@ -50,13 +50,13 @@ type rateLimiter struct {
 }
 
 const (
-	defaultPerPeerBurst       = 5 // Allow burst of 5 requests for multi-node polling
+	defaultPerPeerBurst       = 10 // Allow burst of 10 requests for multi-node polling with retries
 	defaultPerPeerConcurrency = 2
 	defaultGlobalConcurrency  = 8
 )
 
 var (
-	defaultPerPeerRateInterval = 1 * time.Second // 1 qps (60/min) - supports 5-10 node deployments
+	defaultPerPeerRateInterval = 500 * time.Millisecond // 2 qps (120/min) - supports larger deployments
 	defaultPenaltyDuration     = 2 * time.Second
 	defaultPerPeerLimit        = rate.Every(defaultPerPeerRateInterval)
 )
