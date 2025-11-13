@@ -12,4 +12,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Echo test
-        run: echo "Test workflow triggered with input: ${{ inputs.test_input }}"
+        run: |
+          echo "Test workflow triggered with input: ${{ inputs.test_input }}"

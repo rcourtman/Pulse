@@ -346,20 +346,20 @@ jobs:
           fi
 
           # Add installation instructions
-          cat >> "$NOTES_FILE" << EOF
-
-## Installation
-
-**Docker (recommended):**
-\`\`\`bash
-docker pull rcourtman/pulse:${VERSION}
-\`\`\`
-
-**Docker Compose:**
-Update your \`docker-compose.yml\` to use \`rcourtman/pulse:${VERSION}\`
-
-See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for complete setup instructions.
-EOF
+          {
+            echo ""
+            echo "## Installation"
+            echo ""
+            echo "**Docker (recommended):**"
+            echo '```bash'
+            echo "docker pull rcourtman/pulse:${VERSION}"
+            echo '```'
+            echo ""
+            echo "**Docker Compose:**"
+            echo "Update your \`docker-compose.yml\` to use \`rcourtman/pulse:${VERSION}\`"
+            echo ""
+            echo "See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for complete setup instructions."
+          } >> "$NOTES_FILE"
 
           echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
 
