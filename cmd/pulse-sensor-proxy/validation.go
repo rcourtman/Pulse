@@ -358,13 +358,14 @@ func (v *nodeValidator) Validate(ctx context.Context, node string) error {
 		allowed, err := v.matchesCluster(ctx, node)
 		if err != nil {
 			// Cluster query failed (e.g., IPC permission denied, running in LXC)
-			// Fall through to permissive mode rather than blocking all requests
+			// Fall back to localhost-only validation instead of permissive mode
 			v.recordFailure(validationReasonClusterFailed)
 			log.Warn().
 				Err(err).
 				Str("node", node).
-				Msg("SECURITY: Cluster validation unavailable - allowing all nodes. Configure allowed_nodes in config to restrict access.")
-			// Fall through to permissive mode below
+				Msg("SECURITY: Cluster validation unavailable - falling back to localhost-only validation. Configure allowed_nodes for cluster-wide access.")
+			// Attempt to validate against localhost addresses
+			return v.validateAsLocalhost(ctx, node)
 		} else if !allowed {
 			return v.deny(node, validationReasonNotClusterMember)
 		} else {
@@ -377,6 +378,41 @@ func (v *nodeValidator) Validate(ctx context.Context, node string) error {
 	}
 
 	return nil
+}
+
+func (v *nodeValidator) validateAsLocalhost(ctx context.Context, node string) error {
+	// When cluster validation is unavailable, only allow access to localhost
+	// This maintains security while allowing self-monitoring
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Try to discover local host addresses
+	localAddrs, err := discoverLocalHostAddresses()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to discover local host addresses for fallback validation")
+		// If we can't even discover localhost, deny access
+		return v.deny(node, validationReasonClusterFailed)
+	}
+
+	// Check if the requested node matches any local address
+	normalized := normalizeAllowlistEntry(node)
+	if normalized == "" {
+		normalized = strings.ToLower(strings.TrimSpace(node))
+	}
+
+	for _, localAddr := range localAddrs {
+		if strings.EqualFold(localAddr, normalized) {
+			log.Debug().
+				Str("node", node).
+				Str("matched_local", localAddr).
+				Msg("Node validated as localhost (cluster validation unavailable)")
+			return nil
+		}
+	}
+
+	// Node doesn't match any local address - deny
+	return v.deny(node, "node_not_localhost")
 }
 
 func (v *nodeValidator) matchesAllowlist(ctx context.Context, node string) (bool, error) {
