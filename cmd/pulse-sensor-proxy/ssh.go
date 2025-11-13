@@ -690,6 +690,13 @@ func discoverLocalHostAddresses() ([]string, error) {
 	ipCount := 0
 	interfaces, err := net.Interfaces()
 	if err != nil {
+		// Check if this is an AF_NETLINK restriction error from systemd
+		if strings.Contains(err.Error(), "netlinkrib") || strings.Contains(err.Error(), "address family not supported") {
+			log.Warn().
+				Err(err).
+				Msg("AF_NETLINK restricted by systemd - falling back to 'ip addr' command. Update systemd unit to add AF_NETLINK to RestrictAddressFamilies.")
+			return discoverLocalHostAddressesFallback()
+		}
 		log.Warn().
 			Err(err).
 			Msg("Failed to enumerate network interfaces - temperature monitoring may require manual allowed_nodes configuration")
@@ -766,6 +773,87 @@ func discoverLocalHostAddresses() ([]string, error) {
 		logger.Msg("WARNING: No IP addresses discovered for standalone node - only hostnames available. If temperature monitoring fails with 'node_not_cluster_member' errors, add the node's IP to allowed_nodes in /etc/pulse-sensor-proxy/config.yaml")
 	} else {
 		logger.Msg("Discovered local host addresses for standalone node validation")
+	}
+
+	return result, nil
+}
+
+// discoverLocalHostAddressesFallback uses 'ip addr' command when AF_NETLINK is restricted
+func discoverLocalHostAddressesFallback() ([]string, error) {
+	addresses := make(map[string]struct{})
+
+	// Get hostname and FQDN (same as native version)
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		addresses[strings.ToLower(hostname)] = struct{}{}
+		cmd := exec.Command("hostname", "-f")
+		if out, err := cmd.Output(); err == nil {
+			fqdn := strings.TrimSpace(string(out))
+			if fqdn != "" && fqdn != hostname {
+				addresses[strings.ToLower(fqdn)] = struct{}{}
+			}
+		}
+	}
+
+	// Use 'ip addr' to get IP addresses
+	cmd := exec.Command("ip", "addr", "show")
+	out, err := cmd.Output()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to run 'ip addr' command")
+		// Return at least the hostname
+		result := make([]string, 0, len(addresses))
+		for addr := range addresses {
+			result = append(result, addr)
+		}
+		return result, nil
+	}
+
+	// Parse 'ip addr' output for inet/inet6 lines
+	// Example: "    inet 192.168.0.5/24 brd 192.168.0.255 scope global eno1"
+	ipCount := 0
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "inet ") && !strings.HasPrefix(line, "inet6 ") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		// Second field is the IP/CIDR (e.g., "192.168.0.5/24")
+		ipCIDR := fields[1]
+		ipStr, _, _ := strings.Cut(ipCIDR, "/")
+
+		ip := net.ParseIP(ipStr)
+		if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+			continue
+		}
+
+		addresses[ip.String()] = struct{}{}
+		ipCount++
+	}
+
+	result := make([]string, 0, len(addresses))
+	for addr := range addresses {
+		result = append(result, addr)
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no local host addresses found")
+	}
+
+	// Log helpful info about discovered addresses
+	logger := log.Info().
+		Strs("addresses", result).
+		Int("ip_count", ipCount).
+		Int("hostname_count", len(result)-ipCount)
+
+	if ipCount == 0 {
+		logger.Msg("WARNING: No IP addresses discovered via 'ip addr' fallback - only hostnames available. Temperature monitoring may require manual allowed_nodes configuration.")
+	} else {
+		logger.Msg("Discovered local host addresses via 'ip addr' fallback (systemd unit needs AF_NETLINK update)")
 	}
 
 	return result, nil
