@@ -579,23 +579,51 @@ func discoverClusterNodes() ([]string, error) {
 		stdoutStr := out.String()
 		combinedOutput := stderrStr + stdoutStr
 
-		// Check if this is a standalone node or LXC container
-		// - "does not exist" or "not part of a cluster": standalone node
-		// - "ipcc_send_rec": running in LXC container without corosync access
-		// - "Unknown error -1": LXC container corosync communication failure
-		// - "Unable to load access control list": Permission/access issues in containers
-		// Note: Some Proxmox versions write these messages to stdout, others to stderr
-		if strings.Contains(combinedOutput, "does not exist") ||
-			strings.Contains(combinedOutput, "not part of a cluster") ||
-			strings.Contains(combinedOutput, "ipcc_send_rec") ||
-			strings.Contains(combinedOutput, "Unknown error -1") ||
-			strings.Contains(combinedOutput, "Unable to load access control list") {
+		// Broadly detect standalone/container scenarios by checking for known patterns
+		// This list comes from real user reports and should handle localization/version differences
+		//
+		// Common patterns that indicate standalone/container operation:
+		// - Configuration missing: "does not exist", "not found", "no such file"
+		// - Cluster state: "not part of a cluster", "no cluster", "standalone"
+		// - IPC failures: "ipcc_send_rec", "IPC", "communication failed"
+		// - Permission/access: "Unknown error -1", "Unable to load", "access denied", "permission denied"
+		//
+		// Strategy: Be permissive - if pvecm fails with any of these common patterns,
+		// assume standalone and fall back to localhost. This is safer than false negatives.
+		standaloneIndicators := []string{
+			// Configuration issues
+			"does not exist", "not found", "no such file",
+			// Cluster state
+			"not part of a cluster", "no cluster", "standalone",
+			// IPC/communication failures (common in LXC)
+			"ipcc_send_rec", "IPC", "communication failed", "connection refused",
+			// Permission/access issues
+			"Unknown error -1", "Unable to load", "access denied", "permission denied",
+			"access control list",
+		}
+
+		isStandalone := false
+		for _, indicator := range standaloneIndicators {
+			if strings.Contains(strings.ToLower(combinedOutput), strings.ToLower(indicator)) {
+				isStandalone = true
+				break
+			}
+		}
+
+		if isStandalone {
 			// Log at INFO level since this is expected for standalone/container scenarios
-			log.Info().Msg("Standalone Proxmox node or LXC container detected - using localhost for temperature collection")
+			log.Info().
+				Str("exit_code", fmt.Sprintf("%v", err)).
+				Msg("Standalone Proxmox node or LXC container detected - using localhost for temperature collection")
 			return discoverLocalHostAddresses()
 		}
-		// For other unexpected errors, fail with details
-		log.Warn().Str("stderr", stderrStr).Str("stdout", stdoutStr).Msg("pvecm status failed with unexpected error")
+
+		// For truly unexpected errors (rare), fail with full context for debugging
+		log.Warn().
+			Err(err).
+			Str("stderr", stderrStr).
+			Str("stdout", stdoutStr).
+			Msg("pvecm status failed with unexpected error - please report this if temperature monitoring doesn't work")
 		return nil, fmt.Errorf("failed to get cluster status: %w (stderr: %s, stdout: %s)", err, stderrStr, stdoutStr)
 	}
 

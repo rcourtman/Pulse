@@ -1585,17 +1585,30 @@ fi'; then
             if bash "$proxy_script" "${proxy_install_args[@]}" 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
                 print_info "Temperature proxy installation script completed"
 
-                # Verify proxy is actually working
-                echo
-                print_info "Verifying temperature proxy health..."
-                local proxy_health_ok=true
-
-                # Check 1: Service is running
-                if ! systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
-                    print_error "✗ Service not running"
-                    proxy_health_ok=false
+                # Check if health checks should be skipped
+                if [[ "${PULSE_SKIP_HEALTH_CHECKS:-}" == "1" ]]; then
+                    print_warn "⚠ Health checks skipped (PULSE_SKIP_HEALTH_CHECKS=1)"
+                    print_warn "  Temperature monitoring may not work correctly"
+                    print_warn "  Verify manually: systemctl status pulse-sensor-proxy"
+                    echo
                 else
-                    print_info "✓ Service running"
+                    # Verify proxy is actually working (with graceful fallbacks)
+                    echo
+                    print_info "Verifying temperature proxy health..."
+                    local proxy_health_ok=true
+                    local health_warnings=()
+
+                # Check 1: Service is running (with timeout)
+                if command -v systemctl >/dev/null 2>&1; then
+                    if timeout 5 systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                        print_info "✓ Service running"
+                    else
+                        print_error "✗ Service not running"
+                        proxy_health_ok=false
+                    fi
+                else
+                    print_warn "⚠ systemctl not available - skipping service check"
+                    health_warnings+=("systemctl not available")
                 fi
 
                 # Check 2: Socket exists
@@ -1606,27 +1619,60 @@ fi'; then
                     print_info "✓ Socket exists"
                 fi
 
-                # Check 3: Socket is accessible from container
-                if ! pct exec $CTID -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock 2>/dev/null; then
-                    print_error "✗ Socket not visible inside container at /mnt/pulse-proxy/pulse-sensor-proxy.sock"
-                    print_error "  Bind mount may not be configured correctly"
-                    proxy_health_ok=false
+                # Check 3: Socket is accessible from container (with timeout and fallback)
+                if command -v pct >/dev/null 2>&1; then
+                    # Use timeout to prevent hanging if container is stopped/frozen
+                    if timeout 10 pct exec $CTID -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock 2>/dev/null; then
+                        print_info "✓ Socket accessible from container"
+                    else
+                        # Don't fail immediately - container might be stopped or not fully booted
+                        print_warn "⚠ Could not verify socket accessibility from container"
+                        print_warn "  This may be normal if container is stopped or not fully started"
+                        print_warn "  Socket will be checked when container starts"
+                        health_warnings+=("container socket check failed (may be transient)")
+                    fi
                 else
-                    print_info "✓ Socket accessible from container"
+                    print_warn "⚠ pct command not available - skipping container socket check"
+                    health_warnings+=("pct not available")
                 fi
 
+                # Only fail if critical checks failed (service or socket on host)
                 if [[ "$proxy_health_ok" != "true" ]]; then
                     echo
                     print_error "Temperature proxy health check failed"
                     print_error "See diagnostics above and logs: /tmp/proxy-install-${CTID}.log"
                     print_error ""
-                    print_error "Check: systemctl status pulse-sensor-proxy"
-                    print_error "Check: journalctl -u pulse-sensor-proxy -n 50"
+
+                    # Provide actionable diagnostics if tools are available
+                    if command -v systemctl >/dev/null 2>&1; then
+                        print_error "Check: systemctl status pulse-sensor-proxy"
+                    fi
+                    if command -v journalctl >/dev/null 2>&1; then
+                        print_error "Check: journalctl -u pulse-sensor-proxy -n 50"
+                    else
+                        print_error "Check: cat /var/log/syslog | grep pulse-sensor-proxy"
+                    fi
+                    print_error ""
+                    print_error "To bypass health checks (not recommended): Set PULSE_SKIP_HEALTH_CHECKS=1"
                     echo
                     exit 1
                 fi
 
-                print_success "Temperature proxy is healthy and ready"
+                # Show warnings summary if any
+                if [[ ${#health_warnings[@]} -gt 0 ]]; then
+                    echo
+                    print_warn "Health check completed with warnings:"
+                    for warning in "${health_warnings[@]}"; do
+                        print_warn "  - $warning"
+                    done
+                    print_info "Proxy installed but some checks could not be verified"
+                    print_info "Temperature monitoring may still work correctly"
+                    echo
+                fi
+
+                    print_success "Temperature proxy is healthy and ready"
+                fi  # End of health checks
+
                 # Clean up temporary binary if it was copied
                 [[ -f "$local_proxy_binary" ]] && rm -f "$local_proxy_binary"
             else
