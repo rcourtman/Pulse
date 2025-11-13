@@ -1010,8 +1010,10 @@ func (p *Proxy) handleGetTemperature(req RPCRequest) RPCResponse {
 		}
 	}
 
-	// Fetch temperature data
-	tempData, err := p.getTemperatureViaSSH(node)
+	// Fetch temperature data with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	tempData, err := p.getTemperatureViaSSH(ctx, node)
 	if err != nil {
 		return RPCResponse{
 			Success: false,
@@ -1185,8 +1187,10 @@ func (p *Proxy) handleGetTemperatureV2(ctx context.Context, req *RPCRequest, log
 
 	logger.Debug().Str("node", node).Msg("Fetching temperature via SSH")
 
-	// Fetch temperature data
-	tempData, err := p.getTemperatureViaSSH(node)
+	// Fetch temperature data with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	tempData, err := p.getTemperatureViaSSH(ctx, node)
 	if err != nil {
 		logger.Warn().Err(err).Str("node", node).Msg("Failed to get temperatures")
 		return nil, fmt.Errorf("failed to get temperatures: %w", err)
