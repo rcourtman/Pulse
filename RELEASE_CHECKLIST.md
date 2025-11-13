@@ -1,1 +1,0 @@
-/home/pulse/.pulse-dev/RELEASE_CHECKLIST.md
