@@ -1,5 +1,5 @@
 name: Pulse Release Pipeline
-# Triggers: workflow_dispatch only
+
 on:
   workflow_dispatch:
     inputs:
