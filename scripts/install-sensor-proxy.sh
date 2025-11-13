@@ -289,6 +289,8 @@ LOCAL_BINARY=""
 QUIET=false
 PULSE_SERVER=""
 STANDALONE=false
+HTTP_MODE=false
+HTTP_ADDR=":8443"
 FALLBACK_BASE="${PULSE_SENSOR_PROXY_FALLBACK_URL:-}"
 SKIP_RESTART=false
 UNINSTALL=false
@@ -319,6 +321,14 @@ while [[ $# -gt 0 ]]; do
         --standalone)
             STANDALONE=true
             shift
+            ;;
+        --http-mode)
+            HTTP_MODE=true
+            shift
+            ;;
+        --http-addr)
+            HTTP_ADDR="$2"
+            shift 2
             ;;
         --skip-restart)
             SKIP_RESTART=true
@@ -658,6 +668,112 @@ if [[ -n "$CTID" ]]; then
     chmod 0644 "$CTID_FILE"
 fi
 
+# HTTP Mode Setup Functions
+setup_tls_certificates() {
+    local cert_path="$1"
+    local key_path="$2"
+
+    # Create TLS directory
+    install -d -o root -g pulse-sensor-proxy -m 0750 /etc/pulse-sensor-proxy/tls
+
+    if [[ -n "$cert_path" && -n "$key_path" ]]; then
+        # Use provided certificates
+        print_info "Using provided TLS certificates..."
+        cp "$cert_path" /etc/pulse-sensor-proxy/tls/server.crt
+        cp "$key_path" /etc/pulse-sensor-proxy/tls/server.key
+        chmod 640 /etc/pulse-sensor-proxy/tls/server.crt
+        chmod 640 /etc/pulse-sensor-proxy/tls/server.key
+        chown root:pulse-sensor-proxy /etc/pulse-sensor-proxy/tls/server.crt
+        chown root:pulse-sensor-proxy /etc/pulse-sensor-proxy/tls/server.key
+    else
+        # Generate self-signed certificate
+        print_info "Generating self-signed TLS certificate..."
+
+        # Get hostname and IPs for SAN
+        HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+        IP_ADDRESSES=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' | head -5)
+
+        # Build SAN list
+        SAN="DNS:${HOSTNAME},DNS:localhost"
+        for ip in $IP_ADDRESSES; do
+            SAN="${SAN},IP:${ip}"
+        done
+
+        # Generate 4096-bit RSA key and self-signed cert valid for 10 years
+        openssl req -newkey rsa:4096 -nodes -x509 -days 3650 \
+            -subj "/CN=${HOSTNAME}/O=Pulse Sensor Proxy" \
+            -addext "subjectAltName=${SAN}" \
+            -keyout /etc/pulse-sensor-proxy/tls/server.key \
+            -out /etc/pulse-sensor-proxy/tls/server.crt \
+            2>/dev/null || {
+                print_error "Failed to generate TLS certificate"
+                exit 1
+            }
+
+        chmod 640 /etc/pulse-sensor-proxy/tls/server.key
+        chmod 640 /etc/pulse-sensor-proxy/tls/server.crt
+        chown root:pulse-sensor-proxy /etc/pulse-sensor-proxy/tls/server.key
+        chown root:pulse-sensor-proxy /etc/pulse-sensor-proxy/tls/server.crt
+
+        # Log certificate fingerprint for audit
+        CERT_FINGERPRINT=$(openssl x509 -in /etc/pulse-sensor-proxy/tls/server.crt -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+        print_success "TLS certificate generated (SHA256: ${CERT_FINGERPRINT})"
+    fi
+}
+
+register_with_pulse() {
+    local pulse_url="$1"
+    local hostname="$2"
+    local proxy_url="$3"
+
+    print_info "Registering temperature proxy with Pulse at $pulse_url..."
+
+    # Build registration request
+    local response
+    response=$(curl -f -s -X POST \
+        -H "Content-Type: application/json" \
+        -d "{\"hostname\":\"${hostname}\",\"proxy_url\":\"${proxy_url}\"}" \
+        "${pulse_url}/api/temperature-proxy/register" 2>&1)
+
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to register with Pulse API"
+        print_error "Response: $response"
+        print_error ""
+        print_error "Troubleshooting:"
+        print_error "  1. Ensure Pulse server is running at $pulse_url"
+        print_error "  2. Ensure this PVE instance is already added to Pulse"
+        print_error "  3. Check hostname matches: $hostname"
+        print_error "  4. Verify firewall allows access to Pulse"
+        return 1
+    fi
+
+    # Parse token from response
+    local token
+    token=$(echo "$response" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+    if [[ -z "$token" ]]; then
+        print_error "Registration succeeded but no token received"
+        print_error "Response: $response"
+        return 1
+    fi
+
+    # Store token
+    echo "$token" > /etc/pulse-sensor-proxy/.http-auth-token
+    chmod 600 /etc/pulse-sensor-proxy/.http-auth-token
+    chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/.http-auth-token
+
+    print_success "Registered successfully - token received"
+
+    # Parse instance name from response for logging
+    local instance_name
+    instance_name=$(echo "$response" | grep -o '"pve_instance":"[^"]*"' | cut -d'"' -f4)
+    if [[ -n "$instance_name" ]]; then
+        print_info "Linked to PVE instance: $instance_name"
+    fi
+
+    echo "$token"
+}
+
 # Create config file with ACL for Docker containers (standalone mode)
 if [[ "$STANDALONE" == true ]]; then
     print_info "Creating config file with Docker container ACL..."
@@ -673,6 +789,57 @@ allowed_idmap_users:
 EOF
     chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/config.yaml
     chmod 0644 /etc/pulse-sensor-proxy/config.yaml
+fi
+
+# HTTP Mode Configuration
+if [[ "$HTTP_MODE" == true ]]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  HTTP Mode Setup (External PVE Host)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Validate required parameters
+    if [[ -z "$PULSE_SERVER" ]]; then
+        print_error "HTTP mode requires --pulse-server parameter"
+        print_error "Example: --pulse-server https://pulse.example.com:7655"
+        exit 1
+    fi
+
+    # Setup TLS certificates
+    setup_tls_certificates "" ""  # Empty params = auto-generate
+
+    # Determine proxy URL
+    PROXY_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+    PROXY_URL="https://${PROXY_HOSTNAME}${HTTP_ADDR}"
+    print_info "Proxy will be accessible at: $PROXY_URL"
+
+    # Register with Pulse and get auth token
+    HTTP_AUTH_TOKEN=$(register_with_pulse "$PULSE_SERVER" "$PROXY_HOSTNAME" "$PROXY_URL")
+    if [[ $? -ne 0 || -z "$HTTP_AUTH_TOKEN" ]]; then
+        print_error "Failed to register with Pulse - aborting installation"
+        print_error "Fix the issue and re-run the installer"
+        exit 1
+    fi
+
+    # Append HTTP configuration to config.yaml
+    print_info "Configuring HTTP mode..."
+    cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
+
+# HTTP Mode Configuration (External PVE Host)
+http_enabled: true
+http_listen_addr: "$HTTP_ADDR"
+http_tls_cert: /etc/pulse-sensor-proxy/tls/server.crt
+http_tls_key: /etc/pulse-sensor-proxy/tls/server.key
+http_auth_token: "$HTTP_AUTH_TOKEN"
+EOF
+
+    print_success "HTTP mode configured successfully"
+    echo ""
+    print_info "Firewall configuration required:"
+    print_info "  Allow inbound TCP connections on port ${HTTP_ADDR#:} from Pulse server"
+    print_info "  Command: ufw allow from <pulse-server-ip> to any port ${HTTP_ADDR#:}"
+    echo ""
 fi
 
 # Stop existing service if running (for upgrades)
@@ -803,6 +970,16 @@ SyslogIdentifier=pulse-sensor-proxy
 [Install]
 WantedBy=multi-user.target
 EOF
+fi
+
+# Add HTTP mode paths to service file if needed
+if [[ "$HTTP_MODE" == true ]]; then
+    print_info "Updating service file for HTTP mode..."
+
+    # Add ReadOnlyPaths for TLS directory (after ReadWritePaths line)
+    sed -i '/^ReadWritePaths=\/var\/lib\/pulse-sensor-proxy/a ReadOnlyPaths=/etc/pulse-sensor-proxy/tls' "$SERVICE_PATH"
+
+    print_success "Service file updated for HTTP mode"
 fi
 
 # Reload systemd and start service
