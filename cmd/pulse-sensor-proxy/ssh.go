@@ -56,6 +56,74 @@ func execCommand(cmd string) (string, error) {
 	return string(out), err
 }
 
+// execCommandWithLimitsContext runs a shell command with output limits and context cancellation
+func execCommandWithLimitsContext(ctx context.Context, cmd string, stdoutLimit, stderrLimit int64) (string, string, bool, bool, error) {
+	command := exec.CommandContext(ctx, "sh", "-c", cmd)
+
+	stdoutPipe, err := command.StdoutPipe()
+	if err != nil {
+		return "", "", false, false, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderrPipe, err := command.StderrPipe()
+	if err != nil {
+		return "", "", false, false, fmt.Errorf("stderr pipe: %w", err)
+	}
+
+	if err := command.Start(); err != nil {
+		return "", "", false, false, err
+	}
+
+	type pipeResult struct {
+		data     []byte
+		exceeded bool
+		err      error
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	stdoutCh := make(chan pipeResult, 1)
+	stderrCh := make(chan pipeResult, 1)
+
+	go func() {
+		defer wg.Done()
+		data, exceeded, readErr := readAllWithLimit(stdoutPipe, stdoutLimit)
+		stdoutCh <- pipeResult{data: data, exceeded: exceeded, err: readErr}
+	}()
+
+	go func() {
+		defer wg.Done()
+		data, exceeded, readErr := readAllWithLimit(stderrPipe, stderrLimit)
+		stderrCh <- pipeResult{data: data, exceeded: exceeded, err: readErr}
+	}()
+
+	var stdoutRes, stderrRes pipeResult
+	wgDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(wgDone)
+	}()
+
+	<-wgDone
+	stdoutRes = <-stdoutCh
+	stderrRes = <-stderrCh
+
+	waitErr := command.Wait()
+
+	if stdoutRes.err != nil {
+		return "", "", stdoutRes.exceeded, stderrRes.exceeded, fmt.Errorf("stdout read: %w", stdoutRes.err)
+	}
+	if stderrRes.err != nil {
+		return "", "", stdoutRes.exceeded, stderrRes.exceeded, fmt.Errorf("stderr read: %w", stderrRes.err)
+	}
+
+	if waitErr != nil {
+		return string(stdoutRes.data), string(stderrRes.data), stdoutRes.exceeded, stderrRes.exceeded, waitErr
+	}
+
+	return string(stdoutRes.data), string(stderrRes.data), stdoutRes.exceeded, stderrRes.exceeded, nil
+}
+
 func execCommandWithLimits(cmd string, stdoutLimit, stderrLimit int64) (string, string, bool, bool, error) {
 	command := exec.Command("sh", "-c", cmd)
 
@@ -504,7 +572,7 @@ func (p *Proxy) testSSHConnection(nodeHost string) error {
 }
 
 // getTemperatureViaSSH fetches temperature data from a node
-func (p *Proxy) getTemperatureViaSSH(nodeHost string) (string, error) {
+func (p *Proxy) getTemperatureViaSSH(ctx context.Context, nodeHost string) (string, error) {
 	startTime := time.Now()
 	nodeLabel := sanitizeNodeLabel(nodeHost)
 
@@ -533,7 +601,7 @@ func (p *Proxy) getTemperatureViaSSH(nodeHost string) (string, error) {
 		nodeHost,
 	)
 
-	stdout, stderr, stdoutExceeded, stderrExceeded, err := execCommandWithLimits(cmd, p.maxSSHOutputBytes, p.maxSSHOutputBytes)
+	stdout, stderr, stdoutExceeded, stderrExceeded, err := execCommandWithLimitsContext(ctx, cmd, p.maxSSHOutputBytes, p.maxSSHOutputBytes)
 	if stdoutExceeded {
 		log.Warn().Str("node", nodeHost).Int64("limit_bytes", p.maxSSHOutputBytes).Msg("SSH temperature output exceeded limit")
 		if p.metrics != nil {

@@ -281,9 +281,13 @@ func (h *HTTPServer) handleTemperature(w http.ResponseWriter, r *http.Request) {
 	releaseNode := h.proxy.nodeGate.acquire(nodeName)
 	defer releaseNode()
 
-	// Fetch temperature data via SSH
+	// Fetch temperature data via SSH with context timeout
+	// Use a shorter timeout than the HTTP client to ensure we respond before client timeout
+	sshCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
 	log.Debug().Str("node", nodeName).Msg("Fetching temperature via SSH (HTTP request)")
-	tempData, err := h.proxy.getTemperatureViaSSH(nodeName)
+	tempData, err := h.proxy.getTemperatureViaSSH(sshCtx, nodeName)
 	if err != nil {
 		log.Warn().Err(err).Str("node", nodeName).Msg("Failed to get temperatures via SSH")
 		h.sendJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get temperatures: %v", err))

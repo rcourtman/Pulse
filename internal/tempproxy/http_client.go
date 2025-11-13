@@ -149,7 +149,7 @@ func (c *HTTPClient) GetTemperature(nodeHost string) (string, error) {
 		// Parse JSON response
 		var jsonResp struct {
 			Node        string `json:"node"`
-			Temperature string `json:"temperature"`
+			Temperature string `json:"temperature"` // This is a JSON-encoded string
 		}
 
 		if err := json.Unmarshal(body, &jsonResp); err != nil {
@@ -161,7 +161,8 @@ func (c *HTTPClient) GetTemperature(nodeHost string) (string, error) {
 			}
 		}
 
-		// Temperature field is already a JSON string, return as-is
+		// The temperature field contains JSON-encoded sensor data as a string
+		// Return it as-is since the caller expects raw JSON
 		return jsonResp.Temperature, nil
 	}
 
