@@ -312,37 +312,46 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ needs.extract-version.outputs.tag }}"
+          VERSION="${{ needs.extract-version.outputs.version }}"
 
           echo "Generating release notes for ${TAG}..."
 
-          # Get previous tag
-          PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "^${TAG}$" | tail -1)
+          # Check if tag has an annotation (release notes from Claude)
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' "${TAG}")
 
-          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$TAG" ]; then
-            echo "No previous tag found, using initial commit"
-            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          NOTES_FILE=$(mktemp)
+
+          if [ -n "$TAG_MESSAGE" ] && [ "$TAG_MESSAGE" != "" ]; then
+            echo "Using release notes from tag annotation"
+            echo "$TAG_MESSAGE" > "$NOTES_FILE"
+          else
+            echo "No tag annotation found, generating release notes from commits..."
+
+            # Get previous tag
+            PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "^${TAG}$" | tail -1)
+
+            if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$TAG" ]; then
+              echo "No previous tag found, using initial commit"
+              PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+            fi
+
+            echo "Previous release: ${PREV_TAG}"
+
+            # Use GitHub's API to generate release notes
+            NOTES_JSON=$(gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="${TAG}" \
+              -f target_commitish="${{ github.sha }}" \
+              -f previous_tag_name="${PREV_TAG}")
+
+            # Extract the generated body
+            GENERATED_NOTES=$(echo "$NOTES_JSON" | jq -r '.body')
+            echo "$GENERATED_NOTES" > "$NOTES_FILE"
           fi
 
-          echo "Previous release: ${PREV_TAG}"
-
-          # Use GitHub's API to generate release notes
-          NOTES_JSON=$(gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/releases/generate-notes" \
-            -f tag_name="${TAG}" \
-            -f target_commitish="${{ github.sha }}" \
-            -f previous_tag_name="${PREV_TAG}")
-
-          # Extract the generated body
-          GENERATED_NOTES=$(echo "$NOTES_JSON" | jq -r '.body')
-
-          # Save to file for the release
-          NOTES_FILE=$(mktemp)
-          echo "$GENERATED_NOTES" > "$NOTES_FILE"
-
           # Add installation instructions
-          VERSION="${{ needs.extract-version.outputs.version }}"
           cat >> "$NOTES_FILE" << EOF
 
 ## Installation
