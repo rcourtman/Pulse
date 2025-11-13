@@ -58,8 +58,7 @@ checks in the tracking issue.
 - Refresh quick-start snippets in `README.md`.
 - Note behavioural changes in `docs/RELEASE_NOTES.md` under the relevant
   version once the rollout ships.
-- For script contributors, update `docs/CONTRIBUTING-SCRIPTS.md` and
-  `docs/script-library-guide.md` with new patterns.
+- Keep `docs/script-library-guide.md` aligned with any new patterns so future tweaks stay consistent with the rollout plan.
 
 ---
 
@@ -94,4 +93,3 @@ the v1 flag available for at least one stable release.
 
 Keeping this playbook up to date ensures future installer iterations follow the
 same predictable rollout process and reduces duplicate tribal knowledge.
-

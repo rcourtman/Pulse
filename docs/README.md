@@ -48,7 +48,6 @@ section groups related guides so you can jump straight to the material you need.
 ## Development & Contribution
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) – Repository-wide contribution guide.
-- [CONTRIBUTING-SCRIPTS.md](CONTRIBUTING-SCRIPTS.md) – Expectations for installer contributors.
 - [script-library-guide.md](script-library-guide.md) – Working with shared Bash modules.
 - [installer-v2-rollout.md](installer-v2-rollout.md) – Process for shipping major installer updates.
 - [development/MOCK_MODE.md](development/MOCK_MODE.md) – Using mock data while developing.
@@ -56,4 +55,3 @@ section groups related guides so you can jump straight to the material you need.
 
 Have an idea for a new guide? Update this index when you add documentation so
 discoverability stays high.
-
