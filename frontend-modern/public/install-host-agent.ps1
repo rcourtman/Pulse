@@ -17,22 +17,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ANSI color codes for output
-$Red = "`e[31m"
-$Green = "`e[32m"
-$Yellow = "`e[33m"
-$Blue = "`e[34m"
-$Reset = "`e[0m"
+function Write-PulseMessage {
+    param(
+        [string]$Label,
+        [string]$Message,
+        [ConsoleColor]$Color
+    )
 
-function Write-Color {
-    param([string]$Color, [string]$Message)
-    Write-Host "${Color}${Message}${Reset}"
+    if ($Label) {
+        Write-Host ("[{0}] {1}" -f $Label, $Message) -ForegroundColor $Color
+    } else {
+        Write-Host $Message -ForegroundColor $Color
+    }
 }
 
-function Write-Success { param([string]$msg) Write-Color $Green "✓ $msg" }
-function Write-Error { param([string]$msg) Write-Color $Red "✗ $msg" }
-function Write-Info { param([string]$msg) Write-Color $Blue "ℹ $msg" }
-function Write-Warning { param([string]$msg) Write-Color $Yellow "⚠ $msg" }
+function PulseSuccess { param([string]$msg) Write-PulseMessage -Label 'OK' -Message $msg -Color 'Green' }
+function PulseError { param([string]$msg) Write-PulseMessage -Label 'FAIL' -Message $msg -Color 'Red' }
+function PulseInfo { param([string]$msg) Write-PulseMessage -Label 'INFO' -Message $msg -Color 'Cyan' }
+function PulseWarn { param([string]$msg) Write-PulseMessage -Label 'WARN' -Message $msg -Color 'Yellow' }
 
 function Write-InstallerEvent {
     param(
@@ -47,7 +49,7 @@ function Write-InstallerEvent {
     try {
         Write-EventLog -LogName Application -Source $SourceName -EventId $EventId -EntryType $EntryType -Message $Message
     } catch {
-        Write-Warning "Unable to write installer event log entry: $_"
+        PulseWarn "Unable to write installer event log entry: $_"
     }
 }
 
@@ -92,16 +94,17 @@ function Test-AgentRegistration {
 }
 
 Write-Host ""
-Write-Color $Blue "═══════════════════════════════════════════════════════════"
-Write-Color $Blue "  Pulse Host Agent - Windows Installation"
-Write-Color $Blue "═══════════════════════════════════════════════════════════"
+$banner = "=" * 59
+Write-Host $banner -ForegroundColor Cyan
+Write-Host "  Pulse Host Agent - Windows Installation" -ForegroundColor Cyan
+Write-Host $banner -ForegroundColor Cyan
 Write-Host ""
 
 # Check if running as Administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Error "This script must be run as Administrator"
-    Write-Info "Right-click PowerShell and select 'Run as Administrator'"
+    PulseError "This script must be run as Administrator"
+    PulseInfo "Right-click PowerShell and select 'Run as Administrator'"
     exit 1
 }
 
@@ -112,7 +115,7 @@ if (-not $PulseUrl) {
 $PulseUrl = $PulseUrl.TrimEnd('/')
 
 if (-not $Token) {
-    Write-Warning "No API token provided - agent will attempt to connect without authentication"
+    PulseWarn "No API token provided - agent will attempt to connect without authentication"
     $response = Read-Host "Continue without token? (y/N)"
     if ($response -ne 'y' -and $response -ne 'Y') {
         $Token = Read-Host "Enter API token"
@@ -123,7 +126,7 @@ if (-not $Interval) {
     $Interval = "30s"
 }
 
-Write-Info "Configuration:"
+PulseInfo "Configuration:"
 Write-Host "  Pulse URL: $PulseUrl"
 Write-Host "  Token: $(if ($Token) { '***' + $Token.Substring([Math]::Max(0, $Token.Length - 4)) } else { 'none' })"
 Write-Host "  Interval: $Interval"
@@ -137,13 +140,19 @@ switch ($osArch) {
     'X64'   { $arch = 'amd64' }
     'X86'   { $arch = '386' }
     default {
-        Write-Error "Unsupported architecture: $osArch"
+        PulseError "Unsupported architecture: $osArch"
         exit 1
     }
 }
 $downloadUrl = "$PulseUrl/download/pulse-host-agent?platform=windows&arch=$arch"
 
-Write-Info "Downloading agent binary from $downloadUrl..."
+PulseInfo "System Information:"
+Write-Host "  OS Architecture: $osArch"
+Write-Host "  Download Architecture: $arch"
+Write-Host "  Download URL: $downloadUrl"
+Write-Host ""
+
+PulseInfo "Downloading agent binary from $downloadUrl..."
 try {
     # Create install directory
     if (-not (Test-Path $InstallPath)) {
@@ -154,7 +163,66 @@ try {
 
     # Download binary
     Invoke-WebRequest -Uri $downloadUrl -OutFile $agentPath -UseBasicParsing
-    Write-Success "Downloaded agent to $agentPath"
+    PulseSuccess "Downloaded agent to $agentPath"
+
+    # Validate PE header
+    $fileBytes = [System.IO.File]::ReadAllBytes($agentPath)
+    $fileSizeMB = [math]::Round($fileBytes.Length / 1MB, 2)
+    PulseInfo "File size: $fileSizeMB MB ($($fileBytes.Length) bytes)"
+
+    if ($fileBytes.Length -lt 64) {
+        throw "Downloaded file is too small ($($fileBytes.Length) bytes) - expected Windows PE executable"
+    }
+
+    # Check for MZ signature (PE header)
+    if ($fileBytes[0] -ne 0x4D -or $fileBytes[1] -ne 0x5A) {
+        $firstBytes = ($fileBytes[0..15] | ForEach-Object { $_.ToString("X2") }) -join " "
+        throw "Downloaded file is not a valid Windows executable (missing MZ signature). First bytes: $firstBytes"
+    }
+
+    # Get PE header offset (at 0x3C)
+    $peOffset = [BitConverter]::ToUInt32($fileBytes, 0x3C)
+    if ($peOffset -ge $fileBytes.Length - 6) {
+        throw "Invalid PE header offset in downloaded file"
+    }
+
+    # Check PE signature
+    if ($fileBytes[$peOffset] -ne 0x50 -or $fileBytes[$peOffset+1] -ne 0x45) {
+        throw "Downloaded file has invalid PE signature"
+    }
+
+    # Check machine type (should be 0x8664 for x64, 0xAA64 for ARM64)
+    $machineType = [BitConverter]::ToUInt16($fileBytes, $peOffset + 4)
+    $expectedMachine = switch ($arch) {
+        'amd64' { 0x8664 }
+        'arm64' { 0xAA64 }
+        '386'   { 0x014C }
+        default { 0x0000 }
+    }
+
+    if ($machineType -ne $expectedMachine) {
+        $machineStr = "0x" + $machineType.ToString("X4")
+        $expectedStr = "0x" + $expectedMachine.ToString("X4")
+        throw "Downloaded binary is for wrong architecture (got $machineStr, expected $expectedStr for $arch)"
+    }
+
+    PulseSuccess "Verified PE executable for $osArch architecture"
+
+    # Verify checksum
+    PulseInfo "Verifying checksum..."
+    $checksumUrl = "$PulseUrl/download/pulse-host-agent.sha256?platform=windows&arch=$arch"
+    try {
+        $expectedChecksum = (Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing).Content.Trim().Split()[0]
+        $actualChecksum = (Get-FileHash -Path $agentPath -Algorithm SHA256).Hash.ToLower()
+
+        if ($actualChecksum -ne $expectedChecksum.ToLower()) {
+            throw "Checksum mismatch! Expected: $expectedChecksum, Got: $actualChecksum"
+        }
+        PulseSuccess "Checksum verified: $actualChecksum"
+    } catch {
+        PulseWarn "Could not verify checksum: $_"
+        PulseInfo "Continuing anyway (PE header was validated)"
+    }
 
     $agentArgs = @("--url", "`"$PulseUrl`"", "--interval", $Interval)
     if ($Token) {
@@ -163,7 +231,7 @@ try {
     $serviceBinaryPath = "`"$agentPath`" $($agentArgs -join ' ')"
     $manualCommand = "& `"$agentPath`" $($agentArgs -join ' ')"
 } catch {
-    Write-Error "Failed to download agent: $_"
+    PulseError "Failed to download agent: $_"
     exit 1
 }
 
@@ -178,23 +246,23 @@ if ($Token) {
 }
 
 $config | ConvertTo-Json | Set-Content $configPath
-Write-Success "Created configuration at $configPath"
+PulseSuccess "Created configuration at $configPath"
 
 # Stop existing service if running
 $serviceName = "PulseHostAgent"
 $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if ($existingService) {
-    Write-Info "Stopping existing service..."
+    PulseInfo "Stopping existing service..."
     Stop-Service -Name $serviceName -Force
-    Write-Success "Stopped existing service"
+    PulseSuccess "Stopped existing service"
 }
 
 if (-not $NoService) {
-    Write-Info "Installing native Windows service with built-in service support..."
+    PulseInfo "Installing native Windows service with built-in service support..."
 
     try {
         if ($existingService) {
-            Write-Info "Removing existing service..."
+            PulseInfo "Removing existing service..."
             sc.exe delete $serviceName | Out-Null
             Start-Sleep -Seconds 2
         }
@@ -206,73 +274,73 @@ if (-not $NoService) {
                     -Description "Monitors system metrics and reports to Pulse monitoring server" `
                     -StartupType Automatic | Out-Null
 
-        Write-Success "Created Windows service '$serviceName'"
+        PulseSuccess "Created Windows service '$serviceName'"
 
         # Register Windows Event Log source
         try {
             if (-not ([System.Diagnostics.EventLog]::SourceExists($serviceName))) {
                 New-EventLog -LogName Application -Source $serviceName
-                Write-Success "Registered Event Log source"
+                PulseSuccess "Registered Event Log source"
             }
         } catch {
-            Write-Warning "Could not register Event Log source (not critical): $_"
+            PulseWarn "Could not register Event Log source (not critical): $_"
         }
 
         Write-InstallerEvent -SourceName $serviceName -Message "Pulse Host Agent installer registered service version $(Get-Item $agentPath).VersionInfo.FileVersion" -EventId 1000
 
         # Configure service recovery options (restart on failure)
         sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
-        Write-Success "Configured automatic restart on failure"
+        PulseSuccess "Configured automatic restart on failure"
 
         # Start the service
-        Write-Info "Starting service..."
+        PulseInfo "Starting service..."
         Start-Service -Name $serviceName
         Start-Sleep -Seconds 3
 
         $status = (Get-Service -Name $serviceName).Status
         if ($status -eq 'Running') {
-            Write-Success "Service started successfully!"
+            PulseSuccess "Service started successfully!"
 
-            Write-Info "Waiting 10 seconds to validate agent reporting..."
+            PulseInfo "Waiting 10 seconds to validate agent reporting..."
             Start-Sleep -Seconds 10
 
             $hostname = $env:COMPUTERNAME
             $lookupHost = Test-AgentRegistration -PulseUrl $PulseUrl -Hostname $hostname -Token $Token
             if ($lookupHost) {
-                Write-Success "Agent successfully registered with Pulse (host '$hostname')."
+                PulseSuccess "Agent successfully registered with Pulse (host '$hostname')."
                 if ($lookupHost.status) {
                     $lastSeen = $lookupHost.lastSeen
                     if ($lastSeen -is [DateTime]) {
                         $lastSeen = $lastSeen.ToString("u")
                     }
-                    Write-Info ("Pulse reports status: {0} (last seen {1})" -f $lookupHost.status, $lastSeen)
+                    PulseInfo ("Pulse reports status: {0} (last seen {1})" -f $lookupHost.status, $lastSeen)
                 }
-                Write-Info "Check your Pulse dashboard - this host should appear shortly."
+                PulseInfo "Check your Pulse dashboard - this host should appear shortly."
                 $statusForLog = if ($lookupHost.status) { $lookupHost.status } else { 'unknown' }
                 Write-InstallerEvent -SourceName $serviceName -Message "Installer verified host '$hostname' reporting to Pulse (status: $statusForLog)." -EventId 1010
             } elseif ($Token) {
-                Write-Warning "Agent is running but the lookup endpoint has not confirmed registration yet."
-                Write-Info "It may take another moment for metrics to appear in the dashboard."
+                PulseWarn "Agent is running but the lookup endpoint has not confirmed registration yet."
+                PulseInfo "It may take another moment for metrics to appear in the dashboard."
                 Write-InstallerEvent -SourceName $serviceName -Message "Installer could not yet confirm host '$hostname' registration with Pulse." -EntryType Warning -EventId 1011
             } else {
-                Write-Info "Registration check skipped (no API token available)."
+                PulseInfo "Registration check skipped (no API token available)."
                 Write-InstallerEvent -SourceName $serviceName -Message "Installer skipped registration lookup (no API token provided)." -EventId 1012
             }
 
             $recentLogs = Get-RecentAgentEvents -ProviderName $serviceName -Max 5
             if ($recentLogs) {
-                Write-Info "Recent service events:"
+                PulseInfo "Recent service events:"
                 $recentLogs | Select-Object -First 3 | ForEach-Object {
                     $time = $_.TimeCreated
                     if (-not $time) { $time = $_.TimeGenerated }
                     Write-Host ("    [{0}] {1}" -f $time.ToString("u"), $_.Message)
                 }
             } else {
-                Write-Warning "No recent Application log entries were found for $serviceName."
+                PulseWarn "No recent Application log entries were found for $serviceName."
             }
         } else {
-            Write-Warning "Service status: $status"
-            Write-Info "Checking service logs..."
+            PulseWarn "Service status: $status"
+            PulseInfo "Checking service logs..."
             $recentLogs = Get-RecentAgentEvents -ProviderName $serviceName -Max 5
             if ($recentLogs) {
                 $recentLogs | ForEach-Object {
@@ -281,32 +349,33 @@ if (-not $NoService) {
                     Write-Host ("    [{0}] {1}" -f $time.ToString("u"), $_.Message)
                 }
             } else {
-                Write-Warning "No Application log entries were found for $serviceName."
+                PulseWarn "No Application log entries were found for $serviceName."
             }
         }
 
     } catch {
-        Write-Error "Failed to create/start service: $_"
-        Write-Info "You can start the agent manually with:"
+        PulseError "Failed to create/start service: $_"
+        PulseInfo "You can start the agent manually with:"
         Write-Host "  $manualCommand"
         Write-Host ""
-        Write-Info "Or check Windows Event Viewer (Application log) for error details."
+        PulseInfo "Or check Windows Event Viewer (Application log) for error details."
         exit 1
     }
 } else {
-    Write-Info "Skipping service installation (--NoService flag)"
+    PulseInfo "Skipping service installation (--NoService flag)"
     Write-Host ""
-    Write-Info "To start the agent manually:"
+    PulseInfo "To start the agent manually:"
     Write-Host "  $manualCommand"
 }
 
 Write-Host ""
-Write-Color $Green "═══════════════════════════════════════════════════════════"
-Write-Success "Installation complete!"
-Write-Color $Green "═══════════════════════════════════════════════════════════"
+$successBanner = "=" * 59
+Write-Host $successBanner -ForegroundColor Green
+PulseSuccess "Installation complete!"
+Write-Host $successBanner -ForegroundColor Green
 Write-Host ""
 
-Write-Info "Service Management Commands:"
+PulseInfo "Service Management Commands:"
 Write-Host "  Start:   Start-Service -Name PulseHostAgent"
 Write-Host "  Stop:    Stop-Service -Name PulseHostAgent"
 Write-Host "  Restart: Restart-Service -Name PulseHostAgent"
@@ -315,10 +384,10 @@ Write-Host "  Remove:  sc.exe delete PulseHostAgent"
 Write-Host "  Logs:    Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='PulseHostAgent'} -MaxEvents 50"
 Write-Host ""
 
-Write-Info "Files installed:"
+PulseInfo "Files installed:"
 Write-Host "  Binary: $agentPath"
 Write-Host "  Config: $configPath"
 Write-Host ""
 
-Write-Info "The agent is now reporting to: $PulseUrl"
+PulseInfo "The agent is now reporting to: $PulseUrl"
 Write-Host ""
