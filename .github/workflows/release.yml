@@ -1,13 +1,10 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Tag to release (e.g., v4.30.0) - only needed if tag push didnt trigger automatically'
+      version:
+        description: 'Version number (e.g., 4.30.0)'
         required: true
         type: string
 
@@ -19,20 +16,14 @@ jobs:
       version: ${{ steps.extract.outputs.version }}
       tag: ${{ steps.extract.outputs.tag }}
     steps:
-      - name: Extract version from tag
+      - name: Extract version
         id: extract
         run: |
-          # Handle both tag push and manual dispatch
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-
-          VERSION="${TAG#v}"
+          VERSION="${{ inputs.version }}"
+          TAG="v${VERSION}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Extracted version: ${VERSION} from tag: ${TAG}"
+          echo "Version: ${VERSION}, Tag: ${TAG}"
 
   version-guard:
     needs: extract-version
@@ -41,17 +32,31 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to check tags
 
-      - name: Ensure VERSION file matches tag
+      - name: Ensure VERSION file matches requested version
         run: |
           FILE_VERSION=$(cat VERSION | tr -d '\n')
-          TAG_VERSION="${{ needs.extract-version.outputs.version }}"
-          if [ "$FILE_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::VERSION file ($FILE_VERSION) does not match tag version ($TAG_VERSION)."
-            echo "The VERSION file must be updated and committed before pushing the tag."
+          REQUESTED_VERSION="${{ needs.extract-version.outputs.version }}"
+          if [ "$FILE_VERSION" != "$REQUESTED_VERSION" ]; then
+            echo "::error::VERSION file ($FILE_VERSION) does not match requested version ($REQUESTED_VERSION)."
+            echo "The VERSION file must be updated and committed before running release."
             exit 1
           fi
-          echo "✓ VERSION file matches tag ($TAG_VERSION)"
+          echo "✓ VERSION file matches requested version ($REQUESTED_VERSION)"
+
+      - name: Check if tag already exists
+        run: |
+          TAG="${{ needs.extract-version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "✓ Tag $TAG already exists (will use existing tag annotation)"
+          else
+            echo "::error::Tag $TAG does not exist. Please create an annotated tag with release notes first:"
+            echo "::error::  git tag -a $TAG -F /tmp/release_notes_${{ needs.extract-version.outputs.version }}.md"
+            echo "::error::  git push origin $TAG"
+            exit 1
+          fi
 
   preflight-tests:
     needs: version-guard
