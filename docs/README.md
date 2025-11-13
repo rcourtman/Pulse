@@ -49,7 +49,6 @@ section groups related guides so you can jump straight to the material you need.
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) – Repository-wide contribution guide.
 - [script-library-guide.md](script-library-guide.md) – Working with shared Bash modules.
-- [installer-v2-rollout.md](installer-v2-rollout.md) – Process for shipping major installer updates.
 - [development/MOCK_MODE.md](development/MOCK_MODE.md) – Using mock data while developing.
 - [MIGRATION_SCAFFOLDING.md](../MIGRATION_SCAFFOLDING.md) – Tracking temporary migration code.
 
