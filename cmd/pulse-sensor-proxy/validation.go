@@ -357,13 +357,19 @@ func (v *nodeValidator) Validate(ctx context.Context, node string) error {
 	if v.clusterEnabled {
 		allowed, err := v.matchesCluster(ctx, node)
 		if err != nil {
+			// Cluster query failed (e.g., IPC permission denied, running in LXC)
+			// Fall through to permissive mode rather than blocking all requests
 			v.recordFailure(validationReasonClusterFailed)
-			return fmt.Errorf("failed to evaluate cluster membership: %w", err)
-		}
-		if !allowed {
+			log.Debug().
+				Err(err).
+				Str("node", node).
+				Msg("Cluster validation unavailable, allowing request (consider configuring allowed_nodes for security)")
+			// Fall through to permissive mode below
+		} else if !allowed {
 			return v.deny(node, validationReasonNotClusterMember)
+		} else {
+			return nil
 		}
-		return nil
 	}
 
 	if v.strict {
