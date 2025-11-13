@@ -324,7 +324,7 @@ func newNodeValidator(cfg *Config, metrics *ProxyMetrics) (*nodeValidator, error
 		if v.strict {
 			log.Warn().Msg("strict_node_validation enabled but no allowlist or cluster context is available")
 		} else {
-			log.Info().Msg("Node validator running in permissive mode (no allowlist or cluster context)")
+			log.Warn().Msg("SECURITY: Node validator running in permissive mode (no allowlist or cluster context) - all nodes allowed. Configure allowed_nodes to restrict access.")
 		}
 	}
 
@@ -360,10 +360,10 @@ func (v *nodeValidator) Validate(ctx context.Context, node string) error {
 			// Cluster query failed (e.g., IPC permission denied, running in LXC)
 			// Fall through to permissive mode rather than blocking all requests
 			v.recordFailure(validationReasonClusterFailed)
-			log.Debug().
+			log.Warn().
 				Err(err).
 				Str("node", node).
-				Msg("Cluster validation unavailable, allowing request (consider configuring allowed_nodes for security)")
+				Msg("SECURITY: Cluster validation unavailable - allowing all nodes. Configure allowed_nodes in config to restrict access.")
 			// Fall through to permissive mode below
 		} else if !allowed {
 			return v.deny(node, validationReasonNotClusterMember)
