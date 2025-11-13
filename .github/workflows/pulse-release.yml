@@ -1,9 +1,6 @@
 name: Pulse Release Pipeline
-# Triggers: workflow_dispatch and tag push
+# Triggers: workflow_dispatch only
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
