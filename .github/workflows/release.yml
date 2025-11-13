@@ -53,6 +53,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
 
       - name: Install frontend dependencies
         run: npm --prefix frontend-modern ci
@@ -76,9 +78,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: true
 
       - name: Run backend tests
         run: go test ./...
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/integration/package-lock.json') }}
 
       - name: Prepare integration test dependencies
         working-directory: tests/integration
@@ -139,21 +148,6 @@ jobs:
             fi
           done
 
-          echo "Diagnosing authentication configuration..."
-          echo "Environment variables in container:"
-          docker exec pulse-test-server env | grep PULSE_AUTH || echo "No PULSE_AUTH variables found"
-          echo "Security status endpoint from host:"
-          curl -s http://localhost:7655/api/security/status | jq . || echo "Failed to query security status"
-          echo "Security status endpoint from inside container:"
-          docker exec pulse-test-server wget -q -O- http://localhost:7655/api/security/status || echo "Failed from inside"
-          echo "Container startup logs (looking for auth messages):"
-          docker logs pulse-test-server 2>&1 | grep -i "auth\|overriding\|hashed" || echo "No auth-related messages in logs"
-          echo "Testing login page loads:"
-          curl -s http://localhost:7655/login | head -20
-
-          echo "Running Playwright diagnostics..."
-          npx playwright test tests/00-diagnostic.spec.ts --reporter=list
-
           echo "Running API-level update integration test..."
           UPDATE_API_BASE_URL=http://localhost:7655 go test ../../tests/integration/api -run TestUpdateFlowIntegration -count=1
 
@@ -206,6 +200,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
           tags: |
             rcourtman/pulse:${{ needs.extract-version.outputs.tag }}
             rcourtman/pulse:${{ needs.extract-version.outputs.version }}
@@ -232,6 +228,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache,mode=max
           tags: |
             rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.tag }}
             rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.version }}
