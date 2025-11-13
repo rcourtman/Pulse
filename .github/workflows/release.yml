@@ -1,5 +1,5 @@
 name: Release
-# Trigger: workflow_dispatch and tag push
+# Triggers: workflow_dispatch and tag push
 on:
   push:
     tags:
