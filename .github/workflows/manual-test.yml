@@ -1,0 +1,15 @@
+name: Manual Test Workflow
+on:
+  workflow_dispatch:
+    inputs:
+      test_input:
+        description: 'Test input'
+        required: false
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo test
+        run: echo "Test workflow triggered with input: ${{ inputs.test_input }}"
