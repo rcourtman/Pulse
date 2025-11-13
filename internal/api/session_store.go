@@ -28,19 +28,21 @@ func sessionHash(token string) string {
 }
 
 type sessionPersisted struct {
-	Key       string    `json:"key"`
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
-	UserAgent string    `json:"user_agent,omitempty"`
-	IP        string    `json:"ip,omitempty"`
+	Key              string        `json:"key"`
+	ExpiresAt        time.Time     `json:"expires_at"`
+	CreatedAt        time.Time     `json:"created_at"`
+	UserAgent        string        `json:"user_agent,omitempty"`
+	IP               string        `json:"ip,omitempty"`
+	OriginalDuration time.Duration `json:"original_duration,omitempty"`
 }
 
 // SessionData represents a user session
 type SessionData struct {
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
-	UserAgent string    `json:"user_agent,omitempty"`
-	IP        string    `json:"ip,omitempty"`
+	ExpiresAt        time.Time     `json:"expires_at"`
+	CreatedAt        time.Time     `json:"created_at"`
+	UserAgent        string        `json:"user_agent,omitempty"`
+	IP               string        `json:"ip,omitempty"`
+	OriginalDuration time.Duration `json:"original_duration,omitempty"` // Track original duration for sliding expiration
 }
 
 // NewSessionStore creates a new persistent session store
@@ -91,10 +93,11 @@ func (s *SessionStore) CreateSession(token string, duration time.Duration, userA
 
 	key := sessionHash(token)
 	s.sessions[key] = &SessionData{
-		ExpiresAt: time.Now().Add(duration),
-		CreatedAt: time.Now(),
-		UserAgent: userAgent,
-		IP:        ip,
+		ExpiresAt:        time.Now().Add(duration),
+		CreatedAt:        time.Now(),
+		UserAgent:        userAgent,
+		IP:               ip,
+		OriginalDuration: duration,
 	}
 
 	// Save immediately for important operations
@@ -112,6 +115,31 @@ func (s *SessionStore) ValidateSession(token string) bool {
 	}
 
 	return time.Now().Before(session.ExpiresAt)
+}
+
+// ValidateAndExtendSession checks if a session is valid and extends it (sliding expiration)
+func (s *SessionStore) ValidateAndExtendSession(token string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	session, exists := s.sessions[key]
+	if !exists {
+		return false
+	}
+
+	now := time.Now()
+	if now.After(session.ExpiresAt) {
+		return false
+	}
+
+	// Extend session using the original duration (sliding window)
+	if session.OriginalDuration > 0 {
+		session.ExpiresAt = now.Add(session.OriginalDuration)
+		// Note: We don't save immediately for performance, background worker will save periodically
+	}
+
+	return true
 }
 
 // ExtendSession extends the expiration of a session
@@ -182,11 +210,12 @@ func (s *SessionStore) saveUnsafe() {
 	persisted := make([]sessionPersisted, 0, len(s.sessions))
 	for key, session := range s.sessions {
 		persisted = append(persisted, sessionPersisted{
-			Key:       key,
-			ExpiresAt: session.ExpiresAt,
-			CreatedAt: session.CreatedAt,
-			UserAgent: session.UserAgent,
-			IP:        session.IP,
+			Key:              key,
+			ExpiresAt:        session.ExpiresAt,
+			CreatedAt:        session.CreatedAt,
+			UserAgent:        session.UserAgent,
+			IP:               session.IP,
+			OriginalDuration: session.OriginalDuration,
 		})
 	}
 
@@ -234,10 +263,11 @@ func (s *SessionStore) load() {
 				continue
 			}
 			s.sessions[entry.Key] = &SessionData{
-				ExpiresAt: entry.ExpiresAt,
-				CreatedAt: entry.CreatedAt,
-				UserAgent: entry.UserAgent,
-				IP:        entry.IP,
+				ExpiresAt:        entry.ExpiresAt,
+				CreatedAt:        entry.CreatedAt,
+				UserAgent:        entry.UserAgent,
+				IP:               entry.IP,
+				OriginalDuration: entry.OriginalDuration,
 			}
 		}
 		log.Info().Int("loaded", len(s.sessions)).Int("total", len(persisted)).Msg("Sessions loaded from disk (hashed format)")

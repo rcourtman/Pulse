@@ -25,6 +25,7 @@ interface SecurityStatus {
 export const Login: Component<LoginProps> = (props) => {
   const [username, setUsername] = createSignal('');
   const [password, setPassword] = createSignal('');
+  const [rememberMe, setRememberMe] = createSignal(false);
   const [error, setError] = createSignal('');
   const [loading, setLoading] = createSignal(false);
   const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(null);
@@ -183,6 +184,7 @@ export const Login: Component<LoginProps> = (props) => {
         body: JSON.stringify({
           username: username(),
           password: password(),
+          rememberMe: rememberMe(),
         }),
         credentials: 'include', // Important for session cookie
       });
@@ -294,6 +296,8 @@ export const Login: Component<LoginProps> = (props) => {
               setUsername,
               password,
               setPassword,
+              rememberMe,
+              setRememberMe,
               error,
               loading,
               handleSubmit,
@@ -332,6 +336,8 @@ const LoginForm: Component<{
   setUsername: (v: string) => void;
   password: () => string;
   setPassword: (v: string) => void;
+  rememberMe: () => boolean;
+  setRememberMe: (v: boolean) => void;
   error: () => string;
   loading: () => boolean;
   handleSubmit: (e: Event) => void;
@@ -346,6 +352,8 @@ const LoginForm: Component<{
     setUsername,
     password,
     setPassword,
+    rememberMe,
+    setRememberMe,
     error,
     loading,
     handleSubmit,
@@ -433,7 +441,6 @@ const LoginForm: Component<{
               </p>
             </div>
           </Show>
-          <input type="hidden" name="remember" value="true" />
           <div class="space-y-4">
             <div class="relative">
               <label for="username" class="sr-only">
@@ -496,6 +503,23 @@ const LoginForm: Component<{
                 value={password()}
                 onInput={(e) => setPassword(e.currentTarget.value)}
               />
+            </div>
+            <div class="flex items-center">
+              <input
+                id="remember-me"
+                name="remember-me"
+                type="checkbox"
+                checked={rememberMe()}
+                onChange={(e) => setRememberMe(e.currentTarget.checked)}
+                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer dark:border-gray-600 dark:bg-gray-700"
+              />
+              <label
+                for="remember-me"
+                class="ml-2 block text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+                onClick={() => setRememberMe(!rememberMe())}
+              >
+                Remember me for 30 days
+              </label>
             </div>
           </div>
 
