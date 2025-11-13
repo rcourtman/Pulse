@@ -1,38 +1,48 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version number (e.g., 4.28.1)'
-        required: true
-        type: string
-      release_notes:
-        description: 'Release notes content (markdown). Provide final user-facing changelog before running.'
-        required: true
-        type: string
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
-  version_guard:
+  extract-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      tag: ${{ steps.extract.outputs.tag }}
+    steps:
+      - name: Extract version from tag
+        id: extract
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Extracted version: ${VERSION} from tag: ${TAG}"
+
+  version-guard:
+    needs: extract-version
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Ensure VERSION matches requested release
+      - name: Ensure VERSION file matches tag
         run: |
           FILE_VERSION=$(cat VERSION | tr -d '\n')
-          REQUESTED_VERSION="${{ inputs.version }}"
-          if [ "$FILE_VERSION" != "$REQUESTED_VERSION" ]; then
-            echo "::error::VERSION file ($FILE_VERSION) does not match requested version ($REQUESTED_VERSION)."
-            echo "Update the VERSION file and commit the change before running the release workflow."
+          TAG_VERSION="${{ needs.extract-version.outputs.version }}"
+          if [ "$FILE_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::VERSION file ($FILE_VERSION) does not match tag version ($TAG_VERSION)."
+            echo "The VERSION file must be updated and committed before pushing the tag."
             exit 1
           fi
-          echo "VERSION file matches requested release ($REQUESTED_VERSION)."
+          echo "✓ VERSION file matches tag ($TAG_VERSION)"
 
   preflight-tests:
-    needs: version_guard
+    needs: version-guard
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -157,27 +167,18 @@ jobs:
 
   build-docker-images:
     needs:
-      - version_guard
+      - extract-version
+      - version-guard
       - preflight-tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
       packages: write
-    outputs:
-      tag: ${{ steps.set_version.outputs.tag }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set version output
-        id: set_version
-        run: |
-          VERSION="${{ inputs.version }}"
-          TAG="v${VERSION}"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "Building Docker images for ${TAG}..."
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -206,14 +207,16 @@ jobs:
           push: true
           provenance: false
           tags: |
-            rcourtman/pulse:${{ steps.set_version.outputs.tag }}
-            rcourtman/pulse:${{ inputs.version }}
-            ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.set_version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse:${{ inputs.version }}
+            rcourtman/pulse:${{ needs.extract-version.outputs.tag }}
+            rcourtman/pulse:${{ needs.extract-version.outputs.version }}
+            rcourtman/pulse:latest
+            ghcr.io/${{ github.repository_owner }}/pulse:${{ needs.extract-version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse:${{ needs.extract-version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/pulse:latest
           labels: |
             org.opencontainers.image.title=Pulse
             org.opencontainers.image.description=Proxmox monitoring system
-            org.opencontainers.image.version=${{ steps.set_version.outputs.tag }}
+            org.opencontainers.image.version=${{ needs.extract-version.outputs.tag }}
             org.opencontainers.image.created=${{ github.event.repository.updated_at }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -230,14 +233,16 @@ jobs:
           push: true
           provenance: false
           tags: |
-            rcourtman/pulse-docker-agent:${{ steps.set_version.outputs.tag }}
-            rcourtman/pulse-docker-agent:${{ inputs.version }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.set_version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ inputs.version }}
+            rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.tag }}
+            rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.version }}
+            rcourtman/pulse-docker-agent:latest
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ needs.extract-version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ needs.extract-version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest
           labels: |
             org.opencontainers.image.title=Pulse Docker Agent
             org.opencontainers.image.description=Docker container monitoring agent for Pulse
-            org.opencontainers.image.version=${{ steps.set_version.outputs.tag }}
+            org.opencontainers.image.version=${{ needs.extract-version.outputs.tag }}
             org.opencontainers.image.created=${{ github.event.repository.updated_at }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -249,37 +254,33 @@ jobs:
           echo "✅ Docker images built and pushed successfully!"
           echo ""
           echo "Server images:"
-          echo "  - rcourtman/pulse:${{ steps.set_version.outputs.tag }}"
-          echo "  - rcourtman/pulse:${{ inputs.version }}"
+          echo "  - rcourtman/pulse:${{ needs.extract-version.outputs.tag }}"
+          echo "  - rcourtman/pulse:${{ needs.extract-version.outputs.version }}"
+          echo "  - rcourtman/pulse:latest"
           echo ""
           echo "Agent images:"
-          echo "  - rcourtman/pulse-docker-agent:${{ steps.set_version.outputs.tag }}"
-          echo "  - rcourtman/pulse-docker-agent:${{ inputs.version }}"
+          echo "  - rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.tag }}"
+          echo "  - rcourtman/pulse-docker-agent:${{ needs.extract-version.outputs.version }}"
+          echo "  - rcourtman/pulse-docker-agent:latest"
 
   create-release:
-    needs: build-docker-images
+    needs:
+      - extract-version
+      - build-docker-images
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
     outputs:
-      tag: ${{ steps.create_release.outputs.tag }}
       release_id: ${{ steps.create_release.outputs.release_id }}
       release_url: ${{ steps.create_release.outputs.release_url }}
-      target_commitish: ${{ steps.commit_metadata.outputs.commitish }}
+      target_commitish: ${{ github.sha }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for tags
-
-      - name: Fetch all tags
-        run: git fetch --tags --force
-
-      - name: Capture commit metadata
-        id: commit_metadata
-        run: echo "commitish=$GITHUB_SHA" >> $GITHUB_OUTPUT
+          fetch-depth: 0  # Fetch all history for changelog generation
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -302,39 +303,85 @@ jobs:
 
       - name: Build release artifacts
         run: |
-          echo "Building release v${{ inputs.version }}..."
-          ./scripts/build-release.sh ${{ inputs.version }}
+          echo "Building release ${{ needs.extract-version.outputs.tag }}..."
+          ./scripts/build-release.sh ${{ needs.extract-version.outputs.version }}
+
+      - name: Generate release notes
+        id: generate_notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.extract-version.outputs.tag }}"
+
+          echo "Generating release notes for ${TAG}..."
+
+          # Get previous tag
+          PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "^${TAG}$" | tail -1)
+
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$TAG" ]; then
+            echo "No previous tag found, using initial commit"
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          echo "Previous release: ${PREV_TAG}"
+
+          # Use GitHub's API to generate release notes
+          NOTES_JSON=$(gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="${TAG}" \
+            -f target_commitish="${{ github.sha }}" \
+            -f previous_tag_name="${PREV_TAG}")
+
+          # Extract the generated body
+          GENERATED_NOTES=$(echo "$NOTES_JSON" | jq -r '.body')
+
+          # Save to file for the release
+          NOTES_FILE=$(mktemp)
+          echo "$GENERATED_NOTES" > "$NOTES_FILE"
+
+          # Add installation instructions
+          cat >> "$NOTES_FILE" << 'EOF'
+
+## Installation
+
+**Docker (recommended):**
+```bash
+docker pull rcourtman/pulse:${{ needs.extract-version.outputs.version }}
+```
+
+**Docker Compose:**
+Update your `docker-compose.yml` to use `rcourtman/pulse:${{ needs.extract-version.outputs.version }}`
+
+See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for complete setup instructions.
+EOF
+
+          echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
+
+          echo "Generated release notes:"
+          cat "$NOTES_FILE"
 
       - name: Create draft release
         id: create_release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_NOTES_INPUT: ${{ inputs.release_notes }}
         run: |
-          VERSION="${{ inputs.version }}"
-          TAG="v${VERSION}"
+          TAG="${{ needs.extract-version.outputs.tag }}"
+          NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
 
           echo "Creating draft release for ${TAG}..."
 
-          # Write provided release notes to a temp file (keeps formatting)
-          NOTES_FILE=$(mktemp)
-          printf "%s\n" "$RELEASE_NOTES_INPUT" > "$NOTES_FILE"
-
-          # Create draft release with generated notes
-          # Use --target to specify commit so tag is created properly (not "untagged-...")
+          # Tag already exists (pushed by user), so don't create it
+          # Just create the release pointing to the existing tag
           gh release create "${TAG}" \
             --draft \
             --title "Pulse ${TAG}" \
-            --notes-file "$NOTES_FILE" \
-            --target "${{ github.sha }}"
+            --notes-file "$NOTES_FILE"
 
           rm -f "$NOTES_FILE"
 
-          # Get the numeric release ID from the REST API (not GraphQL node_id)
-          # The validation workflow needs the numeric ID for REST API calls
-          # Note: /releases/tags/{tag} endpoint doesn't work for draft releases,
-          # so we list all releases and filter by tag_name
-          # The releases endpoint is eventually consistent, so retry until the release appears
+          # Get the release ID
           echo "Waiting for release to appear in GitHub API..."
           MAX_ATTEMPTS=10
           ATTEMPT=1
@@ -371,7 +418,6 @@ jobs:
 
           echo "release_url=$(echo "$RELEASE_JSON" | jq -r '.html_url')" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
           echo "✓ Release ID: ${RELEASE_ID}"
 
@@ -379,7 +425,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ steps.create_release.outputs.tag }}"
+          TAG="${{ needs.extract-version.outputs.tag }}"
 
           echo "Uploading checksums.txt..."
           gh release upload "${TAG}" release/checksums.txt
@@ -392,7 +438,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ steps.create_release.outputs.tag }}"
+          TAG="${{ needs.extract-version.outputs.tag }}"
 
           echo "Uploading release assets..."
 
@@ -416,31 +462,30 @@ jobs:
           echo "✅ Release draft created successfully!"
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📦 Release: ${{ steps.create_release.outputs.tag }}"
+          echo "📦 Release: ${{ needs.extract-version.outputs.tag }}"
           echo "🔗 URL: ${{ steps.create_release.outputs.release_url }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           echo "⚠️  IMPORTANT: This release is in DRAFT status"
           echo ""
           echo "Next steps:"
-          echo "1. Review the release at the URL above"
-          echo "2. Update the release notes with changes since last release"
-          echo "3. Publish the release manually when ready"
+          echo "1. Review the automatically generated release notes"
+          echo "2. Edit and categorize changes as needed"
+          echo "3. Publish the release when ready"
           echo ""
           echo "All artifacts have been uploaded."
           echo "Docker images are available at Docker Hub and GHCR."
           echo ""
-          echo "✅ Release workflow completed successfully!"
-          echo "Review the draft release and publish when ready."
-          echo ""
 
   validate-release-assets:
-    needs: create-release
+    needs:
+      - extract-version
+      - create-release
     uses: ./.github/workflows/validate-release-assets.yml
     secrets: inherit
     with:
-      tag: ${{ needs.create-release.outputs.tag }}
-      version: ${{ inputs.version }}
+      tag: ${{ needs.extract-version.outputs.tag }}
+      version: ${{ needs.extract-version.outputs.version }}
       release_id: ${{ needs.create-release.outputs.release_id }}
       draft: true
       target_commitish: ${{ needs.create-release.outputs.target_commitish }}
