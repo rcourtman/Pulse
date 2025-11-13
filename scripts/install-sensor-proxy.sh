@@ -1353,6 +1353,18 @@ if command -v pvecm >/dev/null 2>&1; then
             configure_local_authorized_key "$AUTH_LINE"
             ((SSH_SUCCESS_COUNT+=1))
         fi
+
+        # Add discovered cluster nodes to config file for allowlist validation
+        print_info "Updating proxy configuration with discovered cluster nodes..."
+        cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
+
+# Cluster nodes (auto-discovered during installation)
+# These nodes are allowed to request temperature data when cluster IPC validation is unavailable
+allowed_nodes:
+EOF
+        for node_ip in $CLUSTER_NODES; do
+            echo "  - $node_ip" >> /etc/pulse-sensor-proxy/config.yaml
+        done
     else
         # No cluster found - configure standalone node
         print_info "No cluster detected, configuring standalone node..."
@@ -1365,6 +1377,22 @@ if command -v pvecm >/dev/null 2>&1; then
         configure_local_authorized_key "$AUTH_LINE"
         print_info ""
         print_info "Standalone node configuration complete"
+
+        # Add localhost to config file for allowlist validation
+        print_info "Updating proxy configuration for standalone mode..."
+        LOCAL_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || echo "127.0.0.1")
+        cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
+
+# Standalone node configuration (auto-configured during installation)
+# Allow localhost access for self-monitoring
+allowed_nodes:
+EOF
+        for local_ip in $LOCAL_IPS; do
+            echo "  - $local_ip" >> /etc/pulse-sensor-proxy/config.yaml
+        done
+        # Always include localhost variants
+        echo "  - 127.0.0.1" >> /etc/pulse-sensor-proxy/config.yaml
+        echo "  - localhost" >> /etc/pulse-sensor-proxy/config.yaml
     fi
 else
     # Proxmox host but pvecm not available (shouldn't happen, but handle it)
@@ -1376,6 +1404,22 @@ else
     AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
     configure_local_authorized_key "$AUTH_LINE"
+
+    # Add localhost to config file for allowlist validation
+    print_info "Updating proxy configuration for localhost fallback..."
+    LOCAL_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || echo "127.0.0.1")
+    cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
+
+# Localhost fallback configuration (pvecm unavailable)
+# Allow localhost access for self-monitoring
+allowed_nodes:
+EOF
+    for local_ip in $LOCAL_IPS; do
+        echo "  - $local_ip" >> /etc/pulse-sensor-proxy/config.yaml
+    done
+    # Always include localhost variants
+    echo "  - 127.0.0.1" >> /etc/pulse-sensor-proxy/config.yaml
+    echo "  - localhost" >> /etc/pulse-sensor-proxy/config.yaml
 fi
 
 # Container-specific configuration (skip for standalone mode)
