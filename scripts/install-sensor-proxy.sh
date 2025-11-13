@@ -821,8 +821,26 @@ fi
 
 if ! systemctl restart pulse-sensor-proxy.service; then
     print_error "Failed to start pulse-sensor-proxy service"
-    print_error "Check service logs:"
-    journalctl -u pulse-sensor-proxy -n 20 --no-pager
+    print_error ""
+    print_error "═══════════════════════════════════════════════════════"
+    print_error "Service Status:"
+    print_error "═══════════════════════════════════════════════════════"
+    systemctl status pulse-sensor-proxy --no-pager --lines=0 2>&1 || true
+    print_error ""
+    print_error "═══════════════════════════════════════════════════════"
+    print_error "Recent Logs (last 40 lines):"
+    print_error "═══════════════════════════════════════════════════════"
+    journalctl -u pulse-sensor-proxy -n 40 --no-pager 2>&1 || true
+    print_error ""
+    print_error "═══════════════════════════════════════════════════════"
+    print_error "Common Issues:"
+    print_error "═══════════════════════════════════════════════════════"
+    print_error "1. Missing user: Run 'useradd --system --no-create-home --group pulse-sensor-proxy'"
+    print_error "2. Permission errors: Check ownership of /var/lib/pulse-sensor-proxy"
+    print_error "3. lm-sensors not installed: Run 'apt-get install lm-sensors && sensors-detect --auto'"
+    print_error "4. Standalone node detection: If you see 'pvecm' errors, this is expected for non-clustered hosts"
+    print_error ""
+    print_error "For more help: https://github.com/rcourtman/Pulse/blob/main/docs/TROUBLESHOOTING.md"
     exit 1
 fi
 
@@ -836,8 +854,26 @@ for i in {1..10}; do
 done
 
 if [[ ! -S "$SOCKET_PATH" ]]; then
-    print_error "Socket did not appear after 10 seconds"
-    print_info "Check service status: systemctl status pulse-sensor-proxy"
+    print_error "Socket did not appear at $SOCKET_PATH after 10 seconds"
+    print_error ""
+    print_error "═══════════════════════════════════════════════════════"
+    print_error "Diagnostics:"
+    print_error "═══════════════════════════════════════════════════════"
+    print_error "Service Status:"
+    systemctl status pulse-sensor-proxy --no-pager 2>&1 || true
+    print_error ""
+    print_error "Socket Directory Permissions:"
+    ls -la /run/pulse-sensor-proxy/ 2>&1 || echo "Directory does not exist"
+    print_error ""
+    print_error "Recent Logs:"
+    journalctl -u pulse-sensor-proxy -n 20 --no-pager 2>&1 || true
+    print_error ""
+    print_error "Common Causes:"
+    print_error "  • Service failed to start (check logs above)"
+    print_error "  • RuntimeDirectory permissions issue"
+    print_error "  • Systemd socket creation failed"
+    print_error ""
+    print_error "Try: systemctl restart pulse-sensor-proxy && watch -n 0.5 'ls -la /run/pulse-sensor-proxy/'"
     exit 1
 fi
 
