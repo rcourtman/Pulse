@@ -306,50 +306,29 @@ jobs:
           echo "Building release ${{ needs.extract-version.outputs.tag }}..."
           ./scripts/build-release.sh ${{ needs.extract-version.outputs.version }}
 
-      - name: Generate release notes
+      - name: Extract release notes from tag annotation
         id: generate_notes
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ needs.extract-version.outputs.tag }}"
           VERSION="${{ needs.extract-version.outputs.version }}"
 
-          echo "Generating release notes for ${TAG}..."
+          echo "Reading release notes from tag annotation..."
 
           # Check if tag has an annotation (release notes from Claude)
           TAG_MESSAGE=$(git tag -l --format='%(contents)' "${TAG}")
 
-          NOTES_FILE=$(mktemp)
-
-          if [ -n "$TAG_MESSAGE" ] && [ "$TAG_MESSAGE" != "" ]; then
-            echo "Using release notes from tag annotation"
-            echo "$TAG_MESSAGE" > "$NOTES_FILE"
-          else
-            echo "No tag annotation found, generating release notes from commits..."
-
-            # Get previous tag
-            PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "^${TAG}$" | tail -1)
-
-            if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$TAG" ]; then
-              echo "No previous tag found, using initial commit"
-              PREV_TAG=$(git rev-list --max-parents=0 HEAD)
-            fi
-
-            echo "Previous release: ${PREV_TAG}"
-
-            # Use GitHub's API to generate release notes
-            NOTES_JSON=$(gh api \
-              --method POST \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${{ github.repository }}/releases/generate-notes" \
-              -f tag_name="${TAG}" \
-              -f target_commitish="${{ github.sha }}" \
-              -f previous_tag_name="${PREV_TAG}")
-
-            # Extract the generated body
-            GENERATED_NOTES=$(echo "$NOTES_JSON" | jq -r '.body')
-            echo "$GENERATED_NOTES" > "$NOTES_FILE"
+          if [ -z "$TAG_MESSAGE" ] || [ "$TAG_MESSAGE" = "" ]; then
+            echo "::error::Tag ${TAG} has no annotation. Release notes must be provided by Claude."
+            echo "::error::Tags must be created with: git tag -a ${TAG} -F /tmp/release_notes_${VERSION}.md"
+            echo "::error::This ensures Claude writes user-focused, semantic changelog instead of raw commits."
+            exit 1
           fi
+
+          echo "✓ Found release notes in tag annotation"
+
+          # Save tag annotation to file
+          NOTES_FILE=$(mktemp)
+          echo "$TAG_MESSAGE" > "$NOTES_FILE"
 
           # Add installation instructions
           cat >> "$NOTES_FILE" << EOF
@@ -369,7 +348,7 @@ EOF
 
           echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
 
-          echo "Generated release notes:"
+          echo "Release notes content:"
           cat "$NOTES_FILE"
 
       - name: Create draft release
