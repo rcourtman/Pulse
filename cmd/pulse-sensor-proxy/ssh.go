@@ -580,27 +580,31 @@ func discoverClusterNodes() ([]string, error) {
 		stdoutStr := out.String()
 		combinedOutput := stderrStr + stdoutStr
 
-		// Broadly detect standalone/container scenarios by checking for known patterns
-		// This list comes from real user reports and should handle localization/version differences
-		//
-		// Common patterns that indicate standalone/container operation:
-		// - Configuration missing: "does not exist", "not found", "no such file"
-		// - Cluster state: "not part of a cluster", "no cluster", "standalone"
-		// - IPC failures: "ipcc_send_rec", "IPC", "communication failed"
-		// - Permission/access: "Unknown error -1", "Unable to load", "access denied", "permission denied"
-		//
-		// Strategy: Be permissive - if pvecm fails with any of these common patterns,
-		// assume standalone and fall back to localhost. This is safer than false negatives.
+		// First check for IPC/permission errors - these indicate a cluster exists but we can't access it
+		// These should NOT be treated as standalone mode
+		ipcErrorIndicators := []string{
+			"ipcc_send_rec",
+			"Unable to load access control list",
+			"access control list",
+		}
+
+		for _, indicator := range ipcErrorIndicators {
+			if strings.Contains(combinedOutput, indicator) {
+				log.Warn().
+					Str("stderr", stderrStr).
+					Msg("Cannot access Proxmox cluster IPC - cluster validation disabled. Add nodes to allowed_nodes in config if needed.")
+				// Return error to disable cluster validation rather than falling back to incorrect standalone mode
+				return nil, fmt.Errorf("pvecm cluster IPC access denied (check systemd restrictions or run outside container): %s", stderrStr)
+			}
+		}
+
+		// Now check for true standalone/no-cluster patterns
+		// These indicate the node genuinely isn't part of a cluster
 		standaloneIndicators := []string{
-			// Configuration issues
+			// Configuration missing
 			"does not exist", "not found", "no such file",
 			// Cluster state
 			"not part of a cluster", "no cluster", "standalone",
-			// IPC/communication failures (common in LXC)
-			"ipcc_send_rec", "IPC", "communication failed", "connection refused",
-			// Permission/access issues
-			"Unknown error -1", "Unable to load", "access denied", "permission denied",
-			"access control list",
 		}
 
 		isStandalone := false
@@ -612,10 +616,10 @@ func discoverClusterNodes() ([]string, error) {
 		}
 
 		if isStandalone {
-			// Log at INFO level since this is expected for standalone/container scenarios
+			// Log at INFO level since this is expected for standalone scenarios
 			log.Info().
 				Str("exit_code", fmt.Sprintf("%v", err)).
-				Msg("Standalone Proxmox node or LXC container detected - using localhost for temperature collection")
+				Msg("Standalone Proxmox node detected - discovering local host addresses for validation")
 			return discoverLocalHostAddresses()
 		}
 
