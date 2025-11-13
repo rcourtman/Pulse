@@ -31,7 +31,7 @@ jobs:
             TAG="${GITHUB_REF#refs/tags/}"
             VERSION="${TAG#v}"
           else
-            VERSION="${{ inputs.version }}"
+            VERSION="${{ github.event.inputs.version }}"
             TAG="v${VERSION}"
           fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
@@ -323,7 +323,7 @@ jobs:
       - name: Prepare release notes
         id: generate_notes
         env:
-          RELEASE_NOTES_INPUT: ${{ inputs.release_notes }}
+          RELEASE_NOTES_INPUT: ${{ github.event.inputs.release_notes || '' }}
         run: |
           VERSION="${{ needs.extract_version.outputs.version }}"
 
