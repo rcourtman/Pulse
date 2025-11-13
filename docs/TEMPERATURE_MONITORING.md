@@ -14,13 +14,24 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
 
 ## Deployment-Specific Setup
 
-> **Important:** Temperature monitoring setup differs by deployment type:
-> - **LXC containers:** Fully automatic via the setup script (Settings → Nodes → Setup Script)
-> - **Docker containers:** Requires manual proxy installation (see below) OR use pulse-host-agent
-> - **Docker in VM:** Use pulse-host-agent on the Proxmox host (see [Docker in VM Setup](#docker-in-vm-setup))
-> - **Native installs:** Direct SSH, no proxy needed
+> **Important:** Pick the transport that matches your deployment:
+> - **Pulse running inside a container (Docker/LXC):** Use the Unix-socket path (bind mount `/run/pulse-sensor-proxy`) so SSH keys never leave the host. Details in [Quick Start for Docker Deployments](#quick-start-for-docker-deployments).
+> - **Pulse talking to remote Proxmox hosts / standalone nodes:** Install `pulse-sensor-proxy` directly on each host with `--standalone --http-mode` so Pulse reaches it over HTTPS 8443. See [HTTP Mode for Remote Hosts](#http-mode-for-remote-hosts).
+> - **Docker-in-VM / “Pulse can’t see the host sensors”:** Use `pulse-host-agent`.
+> - **Native installs:** Direct SSH works, but the proxy/host-agent options are preferred for key isolation.
 >
-> **For automation (Ansible/Terraform/etc.):** Jump to [Automation-Friendly Installation](#automation-friendly-installation)
+> **Automation users:** both installers (`install-sensor-proxy.sh` and `install-host-agent.sh`) accept non-interactive flags; jump to [Automation-Friendly Installation](#automation-friendly-installation) for samples.
+
+### Transport decision matrix
+
+| Pulse Deployment | Recommended Transport | Why |
+|------------------|----------------------|-----|
+| Pulse in Docker/LXC on the Proxmox host | Unix socket via `/run/pulse-sensor-proxy` bind mount | Keeps SSH keys on the host, enforces SO\_PEERCRED auth, no network exposure |
+| Pulse in Docker inside a VM | `pulse-host-agent` on the Proxmox host | VM can’t mount the host socket, host agent reports over HTTPS instead |
+| Pulse (any host) monitoring additional Proxmox nodes on the LAN | `install-sensor-proxy.sh --standalone --http-mode` on each node | Lets each node host its own proxy so Pulse reaches it over HTTPS 8443 |
+| Bare-metal Pulse install on the same Proxmox host | Either socket or HTTP works; socket is simpler | You already have direct filesystem access; the installer auto-configures the socket |
+
+Use the socket path wherever Pulse is containerised. Use HTTP mode when the sensors live on machines Pulse cannot mount directly.
 
 ## Docker in VM Setup
 
@@ -122,6 +133,33 @@ You should see: `Temperature proxy detected - using secure host-side bridge`
 Open Pulse in your browser and check the node dashboard. CPU and drive temperatures should now be visible. If you still see blank temperature fields, proceed to troubleshooting below.
 
 **Having issues?** See [Troubleshooting](#troubleshooting) below.
+
+## HTTP Mode for Remote Hosts
+
+When Pulse cannot share the `/run/pulse-sensor-proxy` socket (for example, you run Pulse on one host but want temperatures from other Proxmox nodes), install the proxy directly on each target host and expose it over HTTPS 8443.
+
+1. **Install the proxy in HTTP mode** on each Proxmox node:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+     sudo bash -s -- --standalone --http-mode --pulse-server http://192.168.0.123:7655
+   ```
+   Replace the Pulse URL with the server that should receive temperatures. The installer:
+   - Generates a TLS certificate (`/etc/pulse-sensor-proxy/tls/`)
+   - Registers with Pulse and writes the proxy URL/token into `nodes.enc`
+   - Starts `pulse-sensor-proxy.service` listening on `https://<node>:8443`
+
+2. **Allow Pulse to reach port 8443** (host firewall, VLAN ACLs, etc.). Only Pulse needs access; the installer’s service file restricts the listener to HTTPS with bearer auth.
+
+3. **Verify the endpoint manually** (optional but recommended):
+   ```bash
+   TOKEN=$(sudo cat /etc/pulse-sensor-proxy/.http-auth-token)
+   curl -k -H "Authorization: Bearer ${TOKEN}" "https://node.example:8443/temps?node=shortname"
+   ```
+   You should receive JSON with the `sensors` payload.
+
+4. **Restart Pulse** (or wait for config reload) so it notices the new proxy URL/token. Pulse will automatically try HTTP first for nodes with `TemperatureProxyURL` configured, then fall back to the Unix socket (if mounted) and finally SSH.
+
+This HTTP path complements the socket path—you can run both simultaneously. Containerised Pulse stacks still need the socket for their own host, while HTTP mode covers every additional Proxmox node on the LAN or across sites.
 
 ---
 

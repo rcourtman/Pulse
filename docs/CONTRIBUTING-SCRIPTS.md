@@ -23,6 +23,7 @@
 ## Testing Checklist
 
 - `scripts/tests/run.sh`
+- `scripts/tests/test-sensor-proxy-http.sh` (requires Docker; validates uninstall → HTTP install cycle)
 - Relevant `scripts/tests/integration/*` scripts (add new ones if needed)
 - Manual `--dry-run` invocation of the script when feasible
 - Bundle validation: `bash -n dist/<script>.sh` and `dist/<script>.sh --dry-run`

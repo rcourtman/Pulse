@@ -234,17 +234,25 @@ type SystemDiagnostic struct {
 
 // TemperatureProxyDiagnostic summarizes proxy detection state
 type TemperatureProxyDiagnostic struct {
-	SocketFound          bool     `json:"socketFound"`
-	SocketPath           string   `json:"socketPath,omitempty"`
-	SocketPermissions    string   `json:"socketPermissions,omitempty"`
-	SocketOwner          string   `json:"socketOwner,omitempty"`
-	SocketGroup          string   `json:"socketGroup,omitempty"`
-	ProxyReachable       bool     `json:"proxyReachable"`
-	ProxyVersion         string   `json:"proxyVersion,omitempty"`
-	ProxyPublicKeySHA256 string   `json:"proxyPublicKeySha256,omitempty"`
-	ProxySSHDirectory    string   `json:"proxySshDirectory,omitempty"`
-	LegacySSHKeyCount    int      `json:"legacySshKeyCount,omitempty"`
-	Notes                []string `json:"notes,omitempty"`
+	SocketFound          bool                         `json:"socketFound"`
+	SocketPath           string                       `json:"socketPath,omitempty"`
+	SocketPermissions    string                       `json:"socketPermissions,omitempty"`
+	SocketOwner          string                       `json:"socketOwner,omitempty"`
+	SocketGroup          string                       `json:"socketGroup,omitempty"`
+	ProxyReachable       bool                         `json:"proxyReachable"`
+	ProxyVersion         string                       `json:"proxyVersion,omitempty"`
+	ProxyPublicKeySHA256 string                       `json:"proxyPublicKeySha256,omitempty"`
+	ProxySSHDirectory    string                       `json:"proxySshDirectory,omitempty"`
+	LegacySSHKeyCount    int                          `json:"legacySshKeyCount,omitempty"`
+	Notes                []string                     `json:"notes,omitempty"`
+	HTTPProxies          []TemperatureProxyHTTPStatus `json:"httpProxies,omitempty"`
+}
+
+type TemperatureProxyHTTPStatus struct {
+	Node      string `json:"node"`
+	URL       string `json:"url"`
+	Reachable bool   `json:"reachable"`
+	Error     string `json:"error,omitempty"`
 }
 
 // APITokenDiagnostic reports on the state of the multi-token authentication system.
@@ -740,6 +748,32 @@ func buildTemperatureProxyDiagnostic(cfg *config.Config) *TemperatureProxyDiagno
 		} else if count > 0 {
 			diag.LegacySSHKeyCount = count
 			appendNote(fmt.Sprintf("Found %d SSH key(s) inside the Pulse data directory. Remove them after migrating to the secure proxy.", count))
+		}
+
+		for _, inst := range cfg.PVEInstances {
+			url := strings.TrimSpace(inst.TemperatureProxyURL)
+			if url == "" {
+				continue
+			}
+
+			status := TemperatureProxyHTTPStatus{
+				Node: strings.TrimSpace(inst.Name),
+				URL:  url,
+			}
+
+			token := strings.TrimSpace(inst.TemperatureProxyToken)
+			if token == "" {
+				status.Error = "missing authentication token"
+			} else {
+				client := tempproxy.NewHTTPClient(url, token)
+				if err := client.HealthCheck(); err != nil {
+					status.Error = err.Error()
+				} else {
+					status.Reachable = true
+				}
+			}
+
+			diag.HTTPProxies = append(diag.HTTPProxies, status)
 		}
 	}
 

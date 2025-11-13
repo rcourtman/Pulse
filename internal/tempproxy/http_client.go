@@ -177,3 +177,50 @@ func (c *HTTPClient) GetTemperature(nodeHost string) (string, error) {
 		Retryable: false,
 	}
 }
+
+// HealthCheck calls the proxy /health endpoint to verify connectivity.
+func (c *HTTPClient) HealthCheck() error {
+	if !c.IsAvailable() {
+		return &ProxyError{
+			Type:      ErrorTypeTransport,
+			Message:   "HTTP proxy not configured",
+			Retryable: false,
+		}
+	}
+
+	reqURL := fmt.Sprintf("%s/health", c.baseURL)
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	if err != nil {
+		return &ProxyError{
+			Type:      ErrorTypeTransport,
+			Message:   "failed to create HTTP request",
+			Retryable: false,
+			Wrapped:   err,
+		}
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authToken))
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return &ProxyError{
+			Type:      ErrorTypeTransport,
+			Message:   "HTTP request failed",
+			Retryable: true,
+			Wrapped:   err,
+		}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return &ProxyError{
+			Type:      ErrorTypeTransport,
+			Message:   fmt.Sprintf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body))),
+			Retryable: resp.StatusCode >= 500,
+		}
+	}
+
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return nil
+}
