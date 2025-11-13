@@ -508,6 +508,13 @@ func (p *Proxy) getTemperatureViaSSH(nodeHost string) (string, error) {
 	startTime := time.Now()
 	nodeLabel := sanitizeNodeLabel(nodeHost)
 
+	// Check if we're requesting the local node (self-monitoring)
+	// For standalone nodes, avoid SSH and run sensors directly
+	if isLocalNode(nodeHost) {
+		log.Debug().Str("node", nodeHost).Msg("Self-monitoring detected, collecting temperatures locally")
+		return p.getTemperatureLocal()
+	}
+
 	privKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519")
 	if err := p.ensureHostKey(nodeHost); err != nil {
 		p.metrics.sshRequests.WithLabelValues(nodeLabel, "error").Inc()
@@ -870,4 +877,82 @@ func isProxmoxHost() bool {
 		return true
 	}
 	return false
+}
+
+// isLocalNode checks if the requested node is the local machine
+func isLocalNode(nodeHost string) bool {
+	// Get local hostname (short)
+	hostname, err := os.Hostname()
+	if err == nil {
+		// Match short hostname
+		if strings.EqualFold(nodeHost, hostname) {
+			return true
+		}
+		// Match FQDN if nodeHost contains dots
+		if strings.Contains(nodeHost, ".") {
+			cmd := exec.Command("hostname", "-f")
+			if output, err := cmd.Output(); err == nil {
+				fqdn := strings.TrimSpace(string(output))
+				if strings.EqualFold(nodeHost, fqdn) {
+					return true
+				}
+			}
+		}
+	}
+
+	// Check if nodeHost is a local IP address
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return false
+	}
+
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip != nil && ip.String() == nodeHost {
+				return true
+			}
+		}
+	}
+
+	// Check special cases
+	if nodeHost == "localhost" || nodeHost == "127.0.0.1" || nodeHost == "::1" {
+		return true
+	}
+
+	return false
+}
+
+// getTemperatureLocal collects temperature data from the local machine
+func (p *Proxy) getTemperatureLocal() (string, error) {
+	// Run the same command that the wrapper script runs
+	cmd := exec.Command("sensors", "-j")
+	output, err := cmd.Output()
+	if err != nil {
+		// Try without -j flag as fallback
+		cmd = exec.Command("sensors")
+		output, err = cmd.Output()
+		if err != nil {
+			return "", fmt.Errorf("failed to run sensors: %w", err)
+		}
+		// Return empty JSON object for non-JSON output
+		return "{}", nil
+	}
+
+	result := strings.TrimSpace(string(output))
+	if result == "" {
+		return "{}", nil
+	}
+
+	return result, nil
 }

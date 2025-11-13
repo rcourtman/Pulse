@@ -106,7 +106,8 @@ func (tc *TemperatureCollector) CollectTemperatureWithProxy(ctx context.Context,
 	if proxyURL != "" && proxyToken != "" {
 		httpClient := tempproxy.NewHTTPClient(proxyURL, proxyToken)
 		if httpClient.IsAvailable() {
-			output, err = httpClient.GetTemperature(host)
+			// Use nodeName for HTTP proxy (sensor-proxy needs short hostname, not IP)
+			output, err = httpClient.GetTemperature(nodeName)
 			if err != nil {
 				log.Debug().
 					Str("node", nodeName).

@@ -61,7 +61,7 @@ func (h *HTTPServer) Start() error {
 
 	h.server = &http.Server{
 		Addr:           h.config.HTTPListenAddr,
-		Handler:        h.rateLimitMiddleware(h.authMiddleware(mux)),
+		Handler:        h.sourceIPMiddleware(h.rateLimitMiddleware(h.authMiddleware(mux))),
 		TLSConfig:      tlsConfig,
 		ReadTimeout:    h.config.ReadTimeout,
 		WriteTimeout:   h.config.WriteTimeout,
@@ -126,6 +126,56 @@ func (h *HTTPServer) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Token valid, proceed to next handler
+		next.ServeHTTP(w, r)
+	})
+}
+
+// sourceIPMiddleware enforces allowed_source_subnets restrictions
+func (h *HTTPServer) sourceIPMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract client IP
+		clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			clientIP = r.RemoteAddr
+		}
+
+		// Parse client IP
+		ip := net.ParseIP(clientIP)
+		if ip == nil {
+			log.Warn().Str("remote_addr", r.RemoteAddr).Msg("Failed to parse client IP")
+			h.sendJSONError(w, http.StatusForbidden, "invalid source IP")
+			if h.proxy.audit != nil {
+				h.proxy.audit.LogHTTPRequest(r.RemoteAddr, r.Method, r.URL.Path, http.StatusForbidden, "invalid_source_ip")
+			}
+			return
+		}
+
+		// Check if IP is in allowed subnets
+		allowed := false
+		for _, subnetStr := range h.config.AllowedSourceSubnets {
+			_, subnet, err := net.ParseCIDR(subnetStr)
+			if err != nil {
+				continue
+			}
+			if subnet.Contains(ip) {
+				allowed = true
+				break
+			}
+		}
+
+		if !allowed {
+			log.Warn().
+				Str("client_ip", clientIP).
+				Str("path", r.URL.Path).
+				Msg("HTTP request from unauthorized source IP")
+			h.sendJSONError(w, http.StatusForbidden, "source IP not allowed")
+			if h.proxy.audit != nil {
+				h.proxy.audit.LogHTTPRequest(r.RemoteAddr, r.Method, r.URL.Path, http.StatusForbidden, "source_ip_not_allowed")
+			}
+			return
+		}
+
+		// IP is allowed, proceed to next handler
 		next.ServeHTTP(w, r)
 	})
 }
