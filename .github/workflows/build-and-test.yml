@@ -37,7 +37,7 @@ jobs:
 
       - name: Frontend unit tests
         working-directory: frontend-modern
-        run: npm run test -- --runInBand
+        run: npm run test
 
       - name: Type-check frontend
         working-directory: frontend-modern
