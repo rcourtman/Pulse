@@ -30,6 +30,7 @@ Pulse is maintained by one person after work. [Sponsorships](https://github.com/
 - [API](#api)
 - [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
+- [Operations Runbooks](#operations-runbooks)
 - [Development](#development)
 - [Visual Tour](#visual-tour)
 - [Support Pulse Development](#support-pulse-development)
@@ -579,6 +580,12 @@ journalctl -u pulse -f
 - [Security](docs/SECURITY.md) - Security features and best practices
 - [FAQ](docs/FAQ.md) - Common questions and troubleshooting
 - [Migration Guide](docs/MIGRATION.md) - Backup and migration procedures
+
+## Operations Runbooks
+
+- [Sensor proxy audit log rotation](docs/operations/audit-log-rotation.md) – Safely rotate append-only logs and verify poller health.
+- [Adaptive polling rollout](docs/operations/ADAPTIVE_POLLING_ROLLOUT.md) – Enable/disable the adaptive scheduler with guardrails.
+- [Automatic update management](docs/operations/auto-update.md) – Control the `pulse-update` timer/service, trigger manual runs, and roll back safely.
 
 ## Development
 
