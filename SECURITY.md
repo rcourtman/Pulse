@@ -38,34 +38,14 @@ environment where `PULSE_DOCKER=true`/`/.dockerenv` is detected.
 
 #### Migration Path (Production)
 
-1. **Deploy `pulse-sensor-proxy` on each Proxmox host**
+1. **Install the sensor proxy on the Proxmox host that runs Pulse**
    ```bash
-   curl -o /usr/local/bin/pulse-sensor-proxy \
-     https://github.com/rcourtman/pulse/releases/latest/download/pulse-sensor-proxy
-   chmod +x /usr/local/bin/pulse-sensor-proxy
+   curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+     bash -s -- --ctid <pulse-lxc-id> --pulse-server https://pulse.example.com:7655
    ```
-2. **Create a systemd unit** (`/etc/systemd/system/pulse-sensor-proxy.service`)
-   ```ini
-   [Unit]
-   Description=Pulse Temperature Sensor Proxy
-   After=network.target
-
-   [Service]
-   Type=simple
-   User=root
-   ExecStart=/usr/local/bin/pulse-sensor-proxy
-   Restart=on-failure
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-3. **Enable and start the service**
-   ```bash
-   systemctl daemon-reload
-   systemctl enable --now pulse-sensor-proxy
-   ```
-4. **Restart the Pulse container** so it binds to the proxy socket. The
-   container will automatically fall back to socket-based temperature polling.
+   - For Docker or standalone hosts where Pulse cannot mount the socket (or when collecting temps from *other* nodes), run the installer with `--standalone --http-mode` so each host exposes its own HTTPS endpoint on port 8443.
+2. **Let the installer manage the hardened systemd unit** – it creates the dedicated `pulse-sensor-proxy` user, installs TLS material, and restarts the service safely.
+3. **Restart the Pulse container** so it binds to `/run/pulse-sensor-proxy` (for local temps) and registers the HTTPS proxy (for remote temps). The backend automatically prefers the HTTPS proxy, then the socket, and never stores SSH keys in the container.
 
 #### Removing Old SSH Keys
 
@@ -85,9 +65,9 @@ docker exec pulse rm -rf /home/pulse/.ssh/id_ed25519*
 ┌─────────────────────────────────────┐
 │  Proxmox Host                       │
 │  ┌───────────────────────────────┐  │
-│  │  pulse-sensor-proxy (root)    │  │
+│  │  pulse-sensor-proxy (svc user)│  │
 │  │  · Runs sensors -j            │  │
-│  │  · Exposes Unix socket only   │  │
+│  │  · Exposes Unix socket + TLS  │  │
 │  └───────────────────────────────┘  │
 │            │                         │
 │            │ /run/pulse-sensor-proxy.sock
