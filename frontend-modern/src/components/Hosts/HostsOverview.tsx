@@ -9,6 +9,8 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { HostsFilter } from './HostsFilter';
 import { useWebSocket } from '@/App';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getHostStatusIndicator } from '@/utils/status';
 
 // Global drawer state to persist across re-renders
 const drawerState = new Map<string, boolean>();
@@ -17,22 +19,6 @@ interface HostsOverviewProps {
   hosts: Host[];
   connectionHealth: Record<string, boolean>;
 }
-
-const renderStatusIndicator = (status: string | undefined) => {
-  const normalized = (status || 'offline').toLowerCase();
-
-  const indicatorStyles: Record<string, string> = {
-    online: 'bg-green-500',
-    degraded: 'bg-amber-500',
-    offline: 'bg-red-500',
-  };
-
-  const style = indicatorStyles[normalized] || indicatorStyles.offline;
-
-  return (
-    <div class={`h-2 w-2 rounded-full ${style}`} title={normalized.charAt(0).toUpperCase() + normalized.slice(1)} />
-  );
-};
 
 export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const navigate = useNavigate();
@@ -213,6 +199,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                 const memPercent = () => host.memory?.usage ?? 0;
                                 const memUsed = () => formatBytes(host.memory?.used ?? 0, 0);
                                 const memTotal = () => formatBytes(host.memory?.total ?? 0, 0);
+                                const hostStatus = createMemo(() => getHostStatusIndicator(host));
 
                                 // Drawer state
                                 const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(host.id) ?? false);
@@ -269,7 +256,12 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                       <td class="pl-4 pr-2 py-2">
                                         <div>
                                           <div class="flex items-center gap-2">
-                                            {renderStatusIndicator(host.status)}
+                                            <StatusDot
+                                              variant={hostStatus().variant}
+                                              title={hostStatus().label}
+                                              ariaLabel={hostStatus().label}
+                                              size="xs"
+                                            />
                                             <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                               {host.displayName || host.hostname || host.id}
                                             </p>

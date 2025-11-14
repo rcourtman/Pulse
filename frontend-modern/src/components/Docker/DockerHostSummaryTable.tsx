@@ -7,6 +7,8 @@ import { resolveHostRuntime } from './runtimeDisplay';
 import { formatPercent, formatUptime } from '@/utils/format';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { buildMetricKey } from '@/utils/metricsKeys';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getDockerHostStatusIndicator } from '@/utils/status';
 
 export interface DockerHostSummary {
   host: DockerHost;
@@ -243,6 +245,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 const runtimeInfo = resolveHostRuntime(summary.host);
                 const runtimeVersion = summary.host.runtimeVersion || summary.host.dockerVersion;
                 const metricsKey = buildMetricKey('dockerHost', summary.host.id);
+                const hostStatus = createMemo(() => getDockerHostStatusIndicator(summary.host));
 
                 return (
                   <tr
@@ -251,7 +254,13 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                     onClick={() => props.onSelect(summary.host.id)}
                   >
                     <td class="pr-2 py-1 pl-3 align-middle">
-                      <div class="flex flex-wrap items-center gap-1 sm:flex-nowrap sm:whitespace-nowrap sm:min-w-0">
+                      <div class="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:whitespace-nowrap sm:min-w-0">
+                        <StatusDot
+                          variant={hostStatus().variant}
+                          title={hostStatus().label}
+                          ariaLabel={hostStatus().label}
+                          size="xs"
+                        />
                         <span class="font-medium text-[11px] text-gray-900 dark:text-gray-100 sm:truncate sm:max-w-[200px]">
                           {getDisplayName(summary.host)}
                         </span>

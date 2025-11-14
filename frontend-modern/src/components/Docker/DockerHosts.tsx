@@ -13,16 +13,7 @@ import { formatBytes, formatRelativeTime } from '@/utils/format';
 import { DockerMetadataAPI, type DockerMetadata } from '@/api/dockerMetadata';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-
-const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
-const DEGRADED_HOST_STATUSES = new Set([
-  'degraded',
-  'warning',
-  'maintenance',
-  'partial',
-  'initializing',
-  'unknown',
-]);
+import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 
 type DockerMetadataRecord = Record<string, DockerMetadata>;
 
@@ -224,10 +215,8 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
     if (status === 'all') return true;
     const normalized = host.status?.toLowerCase() ?? '';
     if (status === 'online') return normalized === 'online';
-    if (status === 'offline') return OFFLINE_HOST_STATUSES.has(normalized);
-    if (status === 'degraded') {
-      return DEGRADED_HOST_STATUSES.has(normalized) || normalized === 'degraded';
-    }
+    if (status === 'offline') return OFFLINE_HEALTH_STATUSES.has(normalized);
+    if (status === 'degraded') return DEGRADED_HEALTH_STATUSES.has(normalized);
     return true;
   };
 

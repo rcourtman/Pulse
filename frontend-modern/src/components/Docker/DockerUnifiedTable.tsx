@@ -11,27 +11,16 @@ import { resolveHostRuntime } from './runtimeDisplay';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import { buildMetricKey } from '@/utils/metricsKeys';
-
-const OFFLINE_HOST_STATUSES = new Set(['offline', 'error', 'unreachable', 'down', 'disconnected']);
-const DEGRADED_HOST_STATUSES = new Set([
-  'degraded',
-  'warning',
-  'maintenance',
-  'partial',
-  'initializing',
-  'unknown',
-]);
-
-const STOPPED_CONTAINER_STATES = new Set(['exited', 'stopped', 'created', 'paused']);
-const ERROR_CONTAINER_STATES = new Set([
-  'restarting',
-  'dead',
-  'removing',
-  'failed',
-  'error',
-  'oomkilled',
-  'unhealthy',
-]);
+import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  DEGRADED_HEALTH_STATUSES,
+  ERROR_CONTAINER_STATES,
+  OFFLINE_HEALTH_STATUSES,
+  STOPPED_CONTAINER_STATES,
+  getDockerContainerStatusIndicator,
+  getDockerHostStatusIndicator,
+  getDockerServiceStatusIndicator,
+} from '@/utils/status';
 
 const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
   switch (type) {
@@ -347,10 +336,10 @@ const hostMatchesFilter = (filter: StatsFilter, host: DockerHost) => {
   if (!filter || filter.type !== 'host-status') return true;
   const status = toLower(host.status);
   if (filter.value === 'offline') {
-    return OFFLINE_HOST_STATUSES.has(status);
+    return OFFLINE_HEALTH_STATUSES.has(status);
   }
   if (filter.value === 'degraded') {
-    return DEGRADED_HOST_STATUSES.has(status) || status === 'degraded';
+    return DEGRADED_HEALTH_STATUSES.has(status);
   }
   if (filter.value === 'online') {
     return status === 'online';
@@ -548,10 +537,21 @@ const GROUPED_RESOURCE_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
 
 const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = (props) => {
   const displayName = props.host.customDisplayName || props.host.displayName || props.host.hostname || props.host.id;
+  const hostStatus = () => getDockerHostStatusIndicator(props.host);
+  const isOnline = () => hostStatus().variant === 'success';
   return (
     <tr class="bg-gray-50 dark:bg-gray-900/40">
       <td colSpan={props.colspan} class="py-0.5 pr-2 pl-4">
-        <div class="flex flex-nowrap items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700 dark:text-slate-100">
+        <div
+          class={`flex flex-nowrap items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700 dark:text-slate-100 ${isOnline() ? '' : 'opacity-60'}`}
+          title={hostStatus().label}
+        >
+          <StatusDot
+            variant={hostStatus().variant}
+            title={hostStatus().label}
+            ariaLabel={hostStatus().label}
+            size="xs"
+          />
           <span>{displayName}</span>
           <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
             <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
@@ -858,6 +858,7 @@ const DockerContainerRow: Component<{
     }
     return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
   };
+  const containerStatusIndicator = createMemo(() => getDockerContainerStatusIndicator(container));
 
   const statusLabel = () => {
     if (health()) {
@@ -883,108 +884,116 @@ const DockerContainerRow: Component<{
       >
         <td class={`${GROUPED_RESOURCE_INDENT} pr-2 py-0.5`}>
           <div class="flex items-center gap-1.5 min-w-0">
-            {/* Name - show input when editing, otherwise show name with optional link */}
-            <Show
-              when={isEditingUrl()}
-              fallback={
-                <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                  <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
-                    style="cursor: text;"
-                    title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                    onClick={startEditingUrl}
-                    data-resource-name-editable
-                  >
-                    {container.name || container.id}
-                  </span>
-                  <Show when={podName()}>
-                    {(name) => (
-                      <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                        Pod: {name()}
-                        <Show when={isPodInfra()}>
-                          <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200">
-                            infra
-                          </span>
-                        </Show>
-                      </span>
-                    )}
-                  </Show>
-                  <Show when={customUrl()}>
-                    <a
-                      href={customUrl()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                      title="Open in new tab"
-                      onClick={(event) => event.stopPropagation()}
+            <StatusDot
+              variant={containerStatusIndicator().variant}
+              title={statusLabel()}
+              ariaLabel={containerStatusIndicator().label}
+              size="xs"
+            />
+            <div class="flex-1 min-w-0">
+              {/* Name - show input when editing, otherwise show name with optional link */}
+              <Show
+                when={isEditingUrl()}
+                fallback={
+                  <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span
+                      class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
+                      style="cursor: text;"
+                      title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                      onClick={startEditingUrl}
+                      data-resource-name-editable
                     >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                      {container.name || container.id}
+                    </span>
+                    <Show when={podName()}>
+                      {(name) => (
+                        <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                          Pod: {name()}
+                          <Show when={isPodInfra()}>
+                            <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200">
+                              infra
+                            </span>
+                          </Show>
+                        </span>
+                      )}
+                    </Show>
+                    <Show when={customUrl()}>
+                      <a
+                        href={customUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                        title="Open in new tab"
+                        onClick={(event) => event.stopPropagation()}
                       >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
-                    </a>
-                  </Show>
-                </div>
-              }
-            >
-              <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-                <input
-                  ref={urlInputRef}
-                  type="text"
-                  value={editingUrlValue()}
-                  data-resource-id={resourceId()}
-                  onInput={(e) => {
-                    dockerEditingValues.set(resourceId(), e.currentTarget.value);
-                    setDockerEditingValuesVersion(v => v + 1);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                      </a>
+                    </Show>
+                  </div>
+                }
+              >
+                <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                  <input
+                    ref={urlInputRef}
+                    type="text"
+                    value={editingUrlValue()}
+                    data-resource-id={resourceId()}
+                    onInput={(e) => {
+                      dockerEditingValues.set(resourceId(), e.currentTarget.value);
+                      setDockerEditingValuesVersion(v => v + 1);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveUrl();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelEditingUrl();
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="https://example.com:8080"
+                    class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    data-url-editor-button
+                    onClick={(e) => {
+                      e.stopPropagation();
                       saveUrl();
-                    } else if (e.key === 'Escape') {
-                      e.preventDefault();
-                      cancelEditingUrl();
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  placeholder="https://example.com:8080"
-                  class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  data-url-editor-button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    saveUrl();
-                  }}
-                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  title="Save (or press Enter)"
-                >
-                  ✓
-                </button>
-                <button
-                  type="button"
-                  data-url-editor-button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteUrl();
-                  }}
-                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                  title="Delete URL"
-                >
-                  ✕
-                </button>
-              </div>
-            </Show>
+                    }}
+                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    title="Save (or press Enter)"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    data-url-editor-button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteUrl();
+                    }}
+                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    title="Delete URL"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </Show>
+            </div>
           </div>
         </td>
         <td class="px-2 py-0.5">
@@ -1607,6 +1616,7 @@ const DockerServiceRow: Component<{
     const running = service.runningTasks ?? 0;
     return desired > 0 && running >= desired;
   };
+  const serviceStatusIndicator = createMemo(() => getDockerServiceStatusIndicator(service));
 
   const serviceTitle = () => {
     const primary = service.name || service.id || 'Service';
@@ -1629,101 +1639,109 @@ const DockerServiceRow: Component<{
       >
         <td class={`${GROUPED_RESOURCE_INDENT} pr-2 py-0.5`}>
           <div class="flex items-center gap-1.5 min-w-0">
-            {/* Name - show input when editing, otherwise show name with optional link */}
-            <Show
-              when={isEditingUrl()}
-              fallback={
-                <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                  <span
-                    class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
-                    style="cursor: text;"
-                    title={`${serviceTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                    onClick={startEditingUrl}
-                    data-resource-name-editable
-                  >
-                    {service.name || service.id || 'Service'}
-                  </span>
-                  <Show when={customUrl()}>
-                    <a
-                      href={customUrl()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                      title="Open in new tab"
-                      onClick={(event) => event.stopPropagation()}
+            <StatusDot
+              variant={serviceStatusIndicator().variant}
+              title={badge.label}
+              ariaLabel={serviceStatusIndicator().label}
+              size="xs"
+            />
+            <div class="flex-1 min-w-0">
+              {/* Name - show input when editing, otherwise show name with optional link */}
+              <Show
+                when={isEditingUrl()}
+                fallback={
+                  <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span
+                      class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
+                      style="cursor: text;"
+                      title={`${serviceTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                      onClick={startEditingUrl}
+                      data-resource-name-editable
                     >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
-                    </a>
-                  </Show>
-                  <Show when={service.stack && !isEditingUrl()}>
-                    <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
-                      Stack: {service.stack}
+                      {service.name || service.id || 'Service'}
                     </span>
-                  </Show>
-                </div>
-              }
-            >
-              <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-                <input
-                  ref={urlInputRef}
-                  type="text"
-                  value={editingUrlValue()}
-                  data-resource-id={resourceId()}
-                  onInput={(e) => {
-                    dockerEditingValues.set(resourceId(), e.currentTarget.value);
-                    setDockerEditingValuesVersion(v => v + 1);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
+                    <Show when={customUrl()}>
+                      <a
+                        href={customUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                        title="Open in new tab"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                      </a>
+                    </Show>
+                    <Show when={service.stack && !isEditingUrl()}>
+                      <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
+                        Stack: {service.stack}
+                      </span>
+                    </Show>
+                  </div>
+                }
+              >
+                <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                  <input
+                    ref={urlInputRef}
+                    type="text"
+                    value={editingUrlValue()}
+                    data-resource-id={resourceId()}
+                    onInput={(e) => {
+                      dockerEditingValues.set(resourceId(), e.currentTarget.value);
+                      setDockerEditingValuesVersion(v => v + 1);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveUrl();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelEditingUrl();
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="https://example.com:8080"
+                    class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    data-url-editor-button
+                    onClick={(e) => {
+                      e.stopPropagation();
                       saveUrl();
-                    } else if (e.key === 'Escape') {
-                      e.preventDefault();
-                      cancelEditingUrl();
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  placeholder="https://example.com:8080"
-                  class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  data-url-editor-button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    saveUrl();
-                  }}
-                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  title="Save (or press Enter)"
-                >
-                  ✓
-                </button>
-                <button
-                  type="button"
-                  data-url-editor-button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteUrl();
-                  }}
-                  class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                  title="Delete URL"
-                >
-                  ✕
-                </button>
-              </div>
-            </Show>
+                    }}
+                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    title="Save (or press Enter)"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    data-url-editor-button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteUrl();
+                    }}
+                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    title="Delete URL"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </Show>
+            </div>
           </div>
         </td>
         <td class="px-2 py-0.5">

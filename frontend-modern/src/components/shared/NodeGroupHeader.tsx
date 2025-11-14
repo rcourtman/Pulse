@@ -1,6 +1,8 @@
 import { Component, Show } from 'solid-js';
 import type { Node } from '@/types/api';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getNodeStatusIndicator } from '@/utils/status';
 
 interface NodeGroupHeaderProps {
   node: Node;
@@ -8,7 +10,8 @@ interface NodeGroupHeaderProps {
 }
 
 export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
-  const isOnline = () => props.node.status === 'online' && (props.node.uptime || 0) > 0;
+  const nodeStatus = () => getNodeStatusIndicator(props.node);
+  const isOnline = () => nodeStatus().variant === 'success';
   const nodeUrl = () => props.node.guestURL || props.node.host || `https://${props.node.name}:8006`;
   const displayName = () => getNodeDisplayName(props.node);
   const showActualName = () => hasAlternateDisplayName(props.node);
@@ -20,11 +23,15 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
         class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
       >
         <div
-          class={`flex flex-wrap items-center gap-3 ${
-            isOnline() ? '' : 'opacity-60'
-          }`}
-          title={isOnline() ? 'Online' : 'Offline'}
+          class={`flex flex-wrap items-center gap-3 ${isOnline() ? '' : 'opacity-60'}`}
+          title={nodeStatus().label}
         >
+          <StatusDot
+            variant={nodeStatus().variant}
+            title={nodeStatus().label}
+            ariaLabel={nodeStatus().label}
+            size="xs"
+          />
           <a
             href={nodeUrl()}
             target="_blank"
