@@ -586,6 +586,7 @@ journalctl -u pulse -f
 - [Sensor proxy audit log rotation](docs/operations/audit-log-rotation.md) – Safely rotate append-only logs and verify poller health.
 - [Adaptive polling rollout](docs/operations/ADAPTIVE_POLLING_ROLLOUT.md) – Enable/disable the adaptive scheduler with guardrails.
 - [Automatic update management](docs/operations/auto-update.md) – Control the `pulse-update` timer/service, trigger manual runs, and roll back safely.
+- [Sensor proxy log forwarding](docs/operations/sensor-proxy-log-forwarding.md) – Ship audit/proxy logs to your SIEM via rsyslog + RELP.
 
 ## Development
 

@@ -82,7 +82,9 @@ all HTTP access attempts to the audit log.
 
 Follow `docs/operations/audit-log-rotation.md` for rotation (remove `+a`,
 truncate, restart service, reapply `+a`). Also consider forwarding with
-`scripts/setup-log-forwarding.sh` so audit data lands in your SIEM.
+`scripts/setup-log-forwarding.sh`; see
+`docs/operations/sensor-proxy-log-forwarding.md` for RELP/TLS forwarding
+instructions and verification steps.
 
 ## Metrics & Monitoring
 
