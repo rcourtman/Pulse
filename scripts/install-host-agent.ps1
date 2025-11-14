@@ -93,6 +93,68 @@ function Test-AgentRegistration {
     }
 }
 
+function Resolve-PulseArchitectureCandidate {
+    param(
+        [string]$CandidateValue
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CandidateValue)) {
+        return $null
+    }
+
+    $normalized = $CandidateValue.Trim()
+    $upper = $normalized.ToUpperInvariant()
+
+    if ($upper -match 'ARM64|AARCH64') {
+        return [pscustomobject]@{ OsLabel = 'Arm64'; DownloadArch = 'arm64' }
+    }
+
+    if ($upper -match 'AMD64|X64|64-BIT') {
+        return [pscustomobject]@{ OsLabel = 'X64'; DownloadArch = 'amd64' }
+    }
+
+    if ($upper -match 'X86|I386|IA32|32-BIT') {
+        return [pscustomobject]@{ OsLabel = 'X86'; DownloadArch = '386' }
+    }
+
+    return $null
+}
+
+function Get-PulseArchitecture {
+    $candidateSources = @(
+        { [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture },
+        { [System.Runtime.InteropServices.RuntimeInformation,mscorlib]::OSArchitecture },
+        { (Get-CimInstance -ClassName Win32_OperatingSystem -Property OSArchitecture -ErrorAction Stop).OSArchitecture },
+        { (Get-WmiObject -Class Win32_OperatingSystem -ErrorAction Stop).OSArchitecture },
+        { $env:PROCESSOR_ARCHITEW6432 },
+        { $env:PROCESSOR_ARCHITECTURE }
+    )
+
+    foreach ($source in $candidateSources) {
+        try {
+            $value = & $source
+        } catch {
+            continue
+        }
+
+        if (-not $value) {
+            continue
+        }
+
+        $valueString = $value.ToString()
+        $resolved = Resolve-PulseArchitectureCandidate -CandidateValue $valueString
+        if ($resolved) {
+            return [pscustomobject]@{
+                OsLabel = $resolved.OsLabel
+                DownloadArch = $resolved.DownloadArch
+                RawValue = $valueString.Trim()
+            }
+        }
+    }
+
+    return $null
+}
+
 Write-Host ""
 $banner = "=" * 59
 Write-Host $banner -ForegroundColor Cyan
@@ -133,21 +195,23 @@ Write-Host "  Interval: $Interval"
 Write-Host "  Install Path: $InstallPath"
 Write-Host ""
 
-# Determine architecture
-$osArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-switch ($osArch) {
-    'Arm64' { $arch = 'arm64' }
-    'X64'   { $arch = 'amd64' }
-    'X86'   { $arch = '386' }
-    default {
-        PulseError "Unsupported architecture: $osArch"
-        exit 1
-    }
+# Determine architecture (support both legacy Windows PowerShell and pwsh)
+$archInfo = Get-PulseArchitecture
+if (-not $archInfo) {
+    PulseError "Unable to determine operating system architecture"
+    exit 1
 }
+$osArch = $archInfo.OsLabel
+$arch = $archInfo.DownloadArch
+$rawArchValue = $archInfo.RawValue
 $downloadUrl = "$PulseUrl/download/pulse-host-agent?platform=windows&arch=$arch"
 
 PulseInfo "System Information:"
-Write-Host "  OS Architecture: $osArch"
+if ($rawArchValue -and $rawArchValue -ne $osArch) {
+    Write-Host "  OS Architecture: $osArch (reported as '$rawArchValue')"
+} else {
+    Write-Host "  OS Architecture: $osArch"
+}
 Write-Host "  Download Architecture: $arch"
 Write-Host "  Download URL: $downloadUrl"
 Write-Host ""
