@@ -999,18 +999,23 @@ register_with_pulse() {
     echo "$token"
 }
 
-# Create config file with ACL for Docker containers (standalone mode)
-if [[ "$STANDALONE" == true ]]; then
-    print_info "Creating config file with Docker container ACL..."
+# Create base config file if it doesn't exist
+if [[ ! -f /etc/pulse-sensor-proxy/config.yaml ]]; then
+    print_info "Creating base configuration file..."
     cat > /etc/pulse-sensor-proxy/config.yaml << 'EOF'
 # Pulse Temperature Proxy Configuration
-# Allow Docker containers (UID 1000) to connect
 allowed_peer_uids: [1000]
 
 # Allow ID-mapped root (LXC containers with sub-UID mapping)
 allow_idmapped_root: true
 allowed_idmap_users:
   - root
+
+metrics_address: "127.0.0.1:9127"
+
+rate_limit:
+  per_peer_interval_ms: 333
+  per_peer_burst: 10
 EOF
     chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/config.yaml
     chmod 0644 /etc/pulse-sensor-proxy/config.yaml
