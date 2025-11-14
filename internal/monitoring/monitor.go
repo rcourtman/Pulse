@@ -41,6 +41,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	defaultTaskTimeout = 90 * time.Second
+	minTaskTimeout     = 30 * time.Second
+	maxTaskTimeout     = 3 * time.Minute
+)
+
 // PVEClientInterface defines the interface for PVE clients (both regular and cluster)
 type PVEClientInterface interface {
 	GetNodes(ctx context.Context) ([]proxmox.Node, error)
@@ -520,6 +526,7 @@ type Monitor struct {
 	scheduler                  *AdaptiveScheduler
 	stalenessTracker           *StalenessTracker
 	taskQueue                  *TaskQueue
+	pollTimeout                time.Duration
 	circuitBreakers            map[string]*circuitBreaker
 	deadLetterQueue            *TaskQueue
 	failureCounts              map[string]int
@@ -3555,6 +3562,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		scheduler:                  scheduler,
 		stalenessTracker:           stalenessTracker,
 		taskQueue:                  taskQueue,
+		pollTimeout:                derivePollTimeout(cfg),
 		deadLetterQueue:            deadLetterQueue,
 		circuitBreakers:            breakers,
 		failureCounts:              failureCounts,
@@ -4492,6 +4500,31 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 	}
 }
 
+func derivePollTimeout(cfg *config.Config) time.Duration {
+	timeout := defaultTaskTimeout
+	if cfg != nil && cfg.ConnectionTimeout > 0 {
+		timeout = cfg.ConnectionTimeout * 2
+	}
+	if timeout < minTaskTimeout {
+		timeout = minTaskTimeout
+	}
+	if timeout > maxTaskTimeout {
+		timeout = maxTaskTimeout
+	}
+	return timeout
+}
+
+func (m *Monitor) taskExecutionTimeout(instanceType InstanceType) time.Duration {
+	if m == nil {
+		return defaultTaskTimeout
+	}
+	timeout := m.pollTimeout
+	if timeout <= 0 {
+		timeout = defaultTaskTimeout
+	}
+	return timeout
+}
+
 func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) {
 	if !m.allowExecution(task) {
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
@@ -4562,7 +4595,23 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 		return
 	}
 
-	executor.Execute(ctx, pollTask)
+	taskCtx := ctx
+	var cancel context.CancelFunc
+	timeout := m.taskExecutionTimeout(task.InstanceType)
+	if timeout > 0 {
+		taskCtx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	executor.Execute(taskCtx, pollTask)
+
+	if timeout > 0 && stderrors.Is(taskCtx.Err(), context.DeadlineExceeded) {
+		log.Warn().
+			Str("instance", task.InstanceName).
+			Str("type", string(task.InstanceType)).
+			Dur("timeout", timeout).
+			Msg("Polling task timed out; rescheduling with fresh worker")
+	}
 }
 
 func (m *Monitor) rescheduleTask(task ScheduledTask) {
