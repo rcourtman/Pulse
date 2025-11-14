@@ -2,7 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
 [![Docker Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
-[![License](https://img.shields.io/github/license/rcourtman/Pulse)](LICENSE)
+[![License](https://img.shields.io/github/license/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/blob/main/LICENSE)
 
 **Real-time monitoring for Proxmox VE, Proxmox Mail Gateway, PBS, and Docker infrastructure with alerts and webhooks.**
 

@@ -37,6 +37,11 @@ section groups related guides so you can jump straight to the material you need.
 - [PROXY_AUTH.md](PROXY_AUTH.md) – Authenticating via Authentik, Authelia, etc.
 - [TEMPERATURE_MONITORING_SECURITY.md](TEMPERATURE_MONITORING_SECURITY.md) – Legacy SSH considerations.
 
+## Operations Runbooks
+
+- [operations/audit-log-rotation.md](operations/audit-log-rotation.md) – Rotate sensor proxy audit logs safely.
+- [operations/ADAPTIVE_POLLING_ROLLOUT.md](operations/ADAPTIVE_POLLING_ROLLOUT.md) – Step-by-step adaptive polling rollout guide.
+
 ## Reference
 
 - [API.md](API.md) – REST API overview with examples.
