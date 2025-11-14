@@ -85,6 +85,7 @@ GITHUB_REPO="rcourtman/Pulse"
 LATEST_RELEASE_TAG=""
 REQUESTED_VERSION=""
 INSTALLER_CACHE_REASON=""
+DEFER_SOCKET_VERIFICATION=false
 
 cleanup_local_authorized_keys() {
     local auth_keys_file="/root/.ssh/authorized_keys"
@@ -1347,6 +1348,29 @@ fi
 
 print_info "Socket ready at $SOCKET_PATH"
 
+# If socket verification was deferred because the runtime directory was
+# missing earlier, test the container mount now that the proxy is running.
+if [[ "$STANDALONE" == false && "$DEFER_SOCKET_VERIFICATION" = true ]]; then
+    print_info "Validating container socket visibility now that host proxy is running..."
+    if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
+        print_info "✓ Secure socket communication ready"
+        DEFER_SOCKET_VERIFICATION=false
+        [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
+    else
+        print_error "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+        print_error "Bind mount exists but container still cannot access the proxy socket"
+        print_error "This usually indicates the container needs a restart or the mount failed to attach"
+
+        if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
+            print_warn "Rolling back container configuration changes..."
+            cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG"
+            rm -f "$LXC_CONFIG_BACKUP"
+            print_info "Container configuration restored to previous state"
+        fi
+        exit 1
+    fi
+fi
+
 # Validate HTTP endpoint if HTTP mode is enabled
 if [[ "$HTTP_MODE" == true ]]; then
     print_info "Validating HTTP endpoint..."
@@ -2049,31 +2073,33 @@ if [[ "$HOTPLUG_FAILED" = true && "$CT_RUNNING" = true ]]; then
     print_warn "Please restart container and verify socket manually:"
     print_warn "  pct stop $CTID && sleep 2 && pct start $CTID"
     print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
-    # Keep backup in this case since we can't verify
-    [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
 elif [[ "$SKIP_RESTART" = true && "$CT_RUNNING" = false ]]; then
     print_warn "Socket verification deferred. Start container $CTID and run:"
     print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
-    [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
 else
-    print_info "Verifying secure communication channel..."
-    if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
-        print_info "✓ Secure socket communication ready"
-        # Clean up backup since verification succeeded
-        [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
+    if [[ ! -S "$SOCKET_PATH" ]]; then
+        print_warn "Host proxy socket not available yet; deferring container verification until service starts."
+        DEFER_SOCKET_VERIFICATION=true
     else
-        print_error "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
-        print_error "Mount configuration verified but socket not accessible in container"
-        print_error "This indicates a mount or restart issue"
+        print_info "Verifying secure communication channel..."
+        if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
+            print_info "✓ Secure socket communication ready"
+            # Clean up backup since verification succeeded
+            [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
+        else
+            print_error "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+            print_error "Mount configuration verified but socket not accessible in container"
+            print_error "This indicates a mount or restart issue"
 
-        # Rollback container config changes
-        if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
-            print_warn "Rolling back container configuration changes..."
-            cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG"
-            rm -f "$LXC_CONFIG_BACKUP"
-            print_info "Container configuration restored to previous state"
+            # Rollback container config changes
+            if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
+                print_warn "Rolling back container configuration changes..."
+                cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG"
+                rm -f "$LXC_CONFIG_BACKUP"
+                print_info "Container configuration restored to previous state"
+            fi
+            exit 1
         fi
-        exit 1
     fi
 fi
 
