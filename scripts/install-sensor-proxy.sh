@@ -72,6 +72,9 @@ update_allowed_nodes() {
     local tmp_config
     tmp_config=$(mktemp)
 
+    # Ensure temp file is cleaned up on exit (success or failure)
+    trap "rm -f '$tmp_config'" RETURN
+
     # Remove any existing allowed_nodes section (including the YAML key and all list items)
     # This handles multi-line allowed_nodes blocks and associated comment headers
     if [[ -f "$config_file" ]]; then
@@ -138,7 +141,14 @@ update_allowed_nodes() {
     } >> "$tmp_config"
 
     # Replace original file
-    mv "$tmp_config" "$config_file"
+    if ! mv "$tmp_config" "$config_file"; then
+        echo "ERROR: Failed to update $config_file - check permissions" >&2
+        return 1
+    fi
+
+    # Ensure proper permissions
+    chmod 0644 "$config_file" 2>/dev/null || true
+    chown pulse-sensor-proxy:pulse-sensor-proxy "$config_file" 2>/dev/null || true
 }
 
 BINARY_PATH="/usr/local/bin/pulse-sensor-proxy"
