@@ -5796,16 +5796,41 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// Determine SSH hostname to use (most robust approach):
 			// Prefer the resolved host for this node, with cluster overrides when available.
 			sshHost := modelNode.Host
+			foundNodeEndpoint := false
 
 			if modelNode.IsClusterMember && instanceCfg.IsCluster {
+				// For cluster members, wait until we have validated endpoints
+				// This prevents collecting wrong temperature data during initialization
+				if len(instanceCfg.ClusterEndpoints) == 0 {
+					tempCancel()
+					log.Debug().
+						Str("node", node.Node).
+						Str("instance", instanceCfg.Name).
+						Msg("Skipping temperature collection - cluster endpoints not yet validated")
+					continue
+				}
+
 				hasFingerprint := instanceCfg.Fingerprint != ""
 				for _, ep := range instanceCfg.ClusterEndpoints {
 					if strings.EqualFold(ep.NodeName, node.Node) {
 						if effective := clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint); effective != "" {
 							sshHost = effective
+							foundNodeEndpoint = true
 						}
 						break
 					}
+				}
+
+				// If this node is a cluster member but we didn't find its specific endpoint,
+				// skip temperature collection to avoid using wrong endpoint
+				if !foundNodeEndpoint {
+					tempCancel()
+					log.Debug().
+						Str("node", node.Node).
+						Str("instance", instanceCfg.Name).
+						Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
+						Msg("Skipping temperature collection - node endpoint not found in cluster metadata")
+					continue
 				}
 			}
 
