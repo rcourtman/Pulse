@@ -120,13 +120,11 @@ update_allowed_nodes() {
             }
         ' "$config_file" > "$tmp_config"
 
-        # Preserve file permissions
+        # Preserve file permissions (but defer ownership change until after all writes)
         chmod --reference="$config_file" "$tmp_config" 2>/dev/null || chmod 0644 "$tmp_config"
-        chown --reference="$config_file" "$tmp_config" 2>/dev/null || true
     else
         touch "$tmp_config"
         chmod 0644 "$tmp_config"
-        chown pulse-sensor-proxy:pulse-sensor-proxy "$tmp_config" 2>/dev/null || true
     fi
 
     # Append new allowed_nodes section
