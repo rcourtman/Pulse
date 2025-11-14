@@ -73,15 +73,48 @@ update_allowed_nodes() {
     tmp_config=$(mktemp)
 
     # Remove any existing allowed_nodes section (including the YAML key and all list items)
-    # This handles multi-line allowed_nodes blocks by removing from "allowed_nodes:" through the next non-indented line
+    # This handles multi-line allowed_nodes blocks and associated comment headers
     if [[ -f "$config_file" ]]; then
         awk '
-            /^allowed_nodes:/ { in_section=1; next }
-            in_section && /^[^ \t#]/ { in_section=0 }
-            in_section && /^[ \t]*#/ { next }
-            in_section && /^[ \t]*-/ { next }
-            in_section && /^[ \t]*$/ { next }
-            !in_section { print }
+            # When we hit allowed_nodes, mark section start and clear pending comments
+            /^allowed_nodes:/ {
+                in_section=1
+                delete pending_lines
+                pending_count=0
+                next
+            }
+
+            # Inside section: skip all content until we hit a non-indented, non-comment line
+            in_section && /^[^ \t#]/ {
+                in_section=0
+                # Fall through to print this line
+            }
+            in_section {
+                next
+            }
+
+            # Outside section: buffer comment lines (they might belong to allowed_nodes)
+            !in_section && /^[ \t]*#/ {
+                pending_lines[pending_count++] = $0
+                next
+            }
+
+            # Outside section: non-comment line - flush pending comments and print
+            !in_section {
+                for (i = 0; i < pending_count; i++) {
+                    print pending_lines[i]
+                }
+                delete pending_lines
+                pending_count = 0
+                print
+            }
+
+            # At end of file, flush any remaining pending comments
+            END {
+                for (i = 0; i < pending_count; i++) {
+                    print pending_lines[i]
+                }
+            }
         ' "$config_file" > "$tmp_config"
 
         # Preserve file permissions
