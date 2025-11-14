@@ -485,7 +485,7 @@ journalctl -u pulse-update
 ### Configuration
 Set `autoUpdateEnabled: true` in system.json or toggle in Settings UI.
 
-**Note**: Docker installations do not support automatic updates (use Docker's update mechanisms instead).
+**Note**: Docker installations do not support automatic updates (use Docker's update mechanisms instead). Operational procedures live in [operations/auto-update.md](operations/auto-update.md).
 
 ### Update Backups & History (v4.24.0+)
 

@@ -41,6 +41,7 @@ section groups related guides so you can jump straight to the material you need.
 
 - [operations/audit-log-rotation.md](operations/audit-log-rotation.md) – Rotate sensor proxy audit logs safely.
 - [operations/ADAPTIVE_POLLING_ROLLOUT.md](operations/ADAPTIVE_POLLING_ROLLOUT.md) – Step-by-step adaptive polling rollout guide.
+- [operations/auto-update.md](operations/auto-update.md) – Manage the automatic update timer/service.
 
 ## Reference
 
