@@ -366,7 +366,7 @@ type NodeConfigRequest struct {
 	Type                         string `json:"type"` // "pve", "pbs", or "pmg"
 	Name                         string `json:"name"`
 	Host                         string `json:"host"`
-	GuestURL                     string `json:"guestURL,omitempty"`                     // Optional guest-accessible URL (for navigation)
+	GuestURL                     string `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
 	User                         string `json:"user,omitempty"`
 	Password                     string `json:"password,omitempty"`
 	TokenName                    string `json:"tokenName,omitempty"`
@@ -392,36 +392,36 @@ type NodeConfigRequest struct {
 
 // NodeResponse represents a node in API responses
 type NodeResponse struct {
-	ID                   string                   `json:"id"`
-	Type                 string                   `json:"type"`
-	Name                 string                   `json:"name"`
-	Host                 string                   `json:"host"`
-	GuestURL             string                   `json:"guestURL,omitempty"`
-	User                 string                   `json:"user,omitempty"`
-	HasPassword          bool                     `json:"hasPassword"`
-	TokenName            string                   `json:"tokenName,omitempty"`
-	HasToken             bool                     `json:"hasToken"`
-	Fingerprint          string                   `json:"fingerprint,omitempty"`
-	VerifySSL            bool                     `json:"verifySSL"`
-	MonitorVMs           bool                     `json:"monitorVMs,omitempty"`
-	MonitorContainers    bool                     `json:"monitorContainers,omitempty"`
-	MonitorStorage       bool                     `json:"monitorStorage,omitempty"`
+	ID                           string                   `json:"id"`
+	Type                         string                   `json:"type"`
+	Name                         string                   `json:"name"`
+	Host                         string                   `json:"host"`
+	GuestURL                     string                   `json:"guestURL,omitempty"`
+	User                         string                   `json:"user,omitempty"`
+	HasPassword                  bool                     `json:"hasPassword"`
+	TokenName                    string                   `json:"tokenName,omitempty"`
+	HasToken                     bool                     `json:"hasToken"`
+	Fingerprint                  string                   `json:"fingerprint,omitempty"`
+	VerifySSL                    bool                     `json:"verifySSL"`
+	MonitorVMs                   bool                     `json:"monitorVMs,omitempty"`
+	MonitorContainers            bool                     `json:"monitorContainers,omitempty"`
+	MonitorStorage               bool                     `json:"monitorStorage,omitempty"`
 	MonitorBackups               bool                     `json:"monitorBackups,omitempty"`
 	MonitorPhysicalDisks         *bool                    `json:"monitorPhysicalDisks,omitempty"`
 	TemperatureMonitoringEnabled *bool                    `json:"temperatureMonitoringEnabled,omitempty"`
 	MonitorDatastores            bool                     `json:"monitorDatastores,omitempty"`
-	MonitorSyncJobs      bool                     `json:"monitorSyncJobs,omitempty"`
-	MonitorVerifyJobs    bool                     `json:"monitorVerifyJobs,omitempty"`
-	MonitorPruneJobs     bool                     `json:"monitorPruneJobs,omitempty"`
-	MonitorGarbageJobs   bool                     `json:"monitorGarbageJobs,omitempty"`
-	MonitorMailStats     bool                     `json:"monitorMailStats,omitempty"`
-	MonitorQueues        bool                     `json:"monitorQueues,omitempty"`
-	MonitorQuarantine    bool                     `json:"monitorQuarantine,omitempty"`
-	MonitorDomainStats   bool                     `json:"monitorDomainStats,omitempty"`
-	Status               string                   `json:"status"` // "connected", "disconnected", "error"
-	IsCluster            bool                     `json:"isCluster,omitempty"`
-	ClusterName          string                   `json:"clusterName,omitempty"`
-	ClusterEndpoints     []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
+	MonitorSyncJobs              bool                     `json:"monitorSyncJobs,omitempty"`
+	MonitorVerifyJobs            bool                     `json:"monitorVerifyJobs,omitempty"`
+	MonitorPruneJobs             bool                     `json:"monitorPruneJobs,omitempty"`
+	MonitorGarbageJobs           bool                     `json:"monitorGarbageJobs,omitempty"`
+	MonitorMailStats             bool                     `json:"monitorMailStats,omitempty"`
+	MonitorQueues                bool                     `json:"monitorQueues,omitempty"`
+	MonitorQuarantine            bool                     `json:"monitorQuarantine,omitempty"`
+	MonitorDomainStats           bool                     `json:"monitorDomainStats,omitempty"`
+	Status                       string                   `json:"status"` // "connected", "disconnected", "error"
+	IsCluster                    bool                     `json:"isCluster,omitempty"`
+	ClusterName                  string                   `json:"clusterName,omitempty"`
+	ClusterEndpoints             []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
 }
 
 // deriveSchemeAndPort infers the scheme (without ://) and port from a base host URL.
@@ -1202,24 +1202,24 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 
 		pve := config.PVEInstance{
-			Name:                             req.Name,
-			Host:                             host, // Use normalized host
-			GuestURL:                         req.GuestURL,
-			User:                             req.User,
-			Password:                         req.Password,
-			TokenName:                        req.TokenName,
-			TokenValue:                       req.TokenValue,
-			Fingerprint:                      req.Fingerprint,
-			VerifySSL:                        verifySSL,
-			MonitorVMs:                       monitorVMs,
-			MonitorContainers:                monitorContainers,
-			MonitorStorage:                   monitorStorage,
-			MonitorBackups:                   monitorBackups,
-			MonitorPhysicalDisks:             req.MonitorPhysicalDisks,
-			TemperatureMonitoringEnabled:     req.TemperatureMonitoringEnabled,
-			IsCluster:                        isCluster,
-			ClusterName:                      clusterName,
-			ClusterEndpoints:                 clusterEndpoints,
+			Name:                         req.Name,
+			Host:                         host, // Use normalized host
+			GuestURL:                     req.GuestURL,
+			User:                         req.User,
+			Password:                     req.Password,
+			TokenName:                    req.TokenName,
+			TokenValue:                   req.TokenValue,
+			Fingerprint:                  req.Fingerprint,
+			VerifySSL:                    verifySSL,
+			MonitorVMs:                   monitorVMs,
+			MonitorContainers:            monitorContainers,
+			MonitorStorage:               monitorStorage,
+			MonitorBackups:               monitorBackups,
+			MonitorPhysicalDisks:         req.MonitorPhysicalDisks,
+			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
+			IsCluster:                    isCluster,
+			ClusterName:                  clusterName,
+			ClusterEndpoints:             clusterEndpoints,
 		}
 		h.config.PVEInstances = append(h.config.PVEInstances, pve)
 
@@ -4009,7 +4009,7 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
         echo "    Temperature proxy requires Pulse $MIN_PROXY_VERSION or later."
         TEMP_MONITORING_AVAILABLE=false
     # Allow dev/main builds (they have latest code)
-    elif [[ "$PULSE_VERSION" =~ ^(0\.0\.0-main|dev|main) ]]; then
+    elif [[ "$PULSE_VERSION" =~ ^(0\.0\.0-main|0\.0\.0-|dev|main) || "$PULSE_VERSION" =~ -dirty$ ]]; then
         # Dev/main builds have proxy support - skip version check
         :
     elif ! version_ge "$PULSE_VERSION" "$MIN_PROXY_VERSION"; then
