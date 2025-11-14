@@ -130,15 +130,18 @@ systemctl status pulse-update.timer         # Check status
 # Via Settings UI
 # Navigate to Settings → System → Enable "Automatic Updates"
 ```
+> The timer only runs when `autoUpdateEnabled` is `true` in `/var/lib/pulse/system.json`. Toggling the UI switch updates that flag automatically.
 
 #### How It Works
-- Checks daily between 2-6 AM (randomized to avoid server load)
-- Only installs stable releases (never release candidates)
-- Creates backup before updating
-- Automatically rolls back if update fails
-- Logs all activity to systemd journal
-- Adaptive monitoring ships with circuit breakers, staleness tracking, and richer poll metrics, and the bundled Helm chart mirrors these defaults for Kubernetes clusters.
-- Rollback history is retained in Settings → System → Updates; use the **Restore previous version** button if the latest build regresses.
+- Runs daily between 02:00–06:00 local time with a random jitter (systemd timer)
+- Installs **stable tags only** (release candidates are skipped)
+- Creates a configuration backup and records `backup_path` inside update history
+- Automatically rolls back and restores the backup if the upgrade fails
+- Logs to `journalctl -u pulse-update` **and** `/var/log/pulse/update-*.log`
+- Records every attempt in **Settings → System → Updates** and `/api/updates/history`
+- Requires `autoUpdateEnabled: true`; otherwise the service exits immediately
+
+Need deeper operational guidance? See [operations/auto-update.md](operations/auto-update.md) for the full runbook (manual triggers, rollback steps, troubleshooting).
 
 #### View Update Logs
 ```bash

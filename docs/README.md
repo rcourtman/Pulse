@@ -29,6 +29,7 @@ section groups related guides so you can jump straight to the material you need.
 - [monitoring/](monitoring/) – Adaptive polling and Prometheus metric references.
 - [WEBHOOKS.md](WEBHOOKS.md) – Notification providers and payload templates.
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) – Deep dive into common operational issues.
+- [../cmd/pulse-sensor-proxy/README.md](../cmd/pulse-sensor-proxy/README.md) – Host-side sensor proxy installation and operations guide.
 
 ## Security
 
