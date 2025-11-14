@@ -425,6 +425,10 @@ The sensor proxy reads `/etc/pulse-sensor-proxy/config.yaml` (or the path suppli
 | `allow_idmapped_root` | bool | `true` | Governs acceptance of ID-mapped root callers. |
 | `allowed_idmap_users` | list(string) | `["root"]` | Restricts which ID-mapped usernames are accepted. |
 | `metrics_address` | string | `default` (maps to `127.0.0.1:9127`) | Set to `"disabled"` to turn metrics off. |
+| `http_enabled` | bool | `false` | Enables the HTTPS listener (`pulse-sensor-proxy --http-mode`). Required for remote nodes. |
+| `http_listen_addr` | string | `:8443` | Bind address for the HTTPS server. Use `0.0.0.0:8443` to listen on all interfaces. |
+| `http_tls_cert` / `http_tls_key` | string | empty | Absolute paths to the TLS certificate and private key used by the HTTPS listener. |
+| `http_auth_token` | string | empty | Bearer token the Pulse server must present in the `Authorization` header. Generate 32+ random bytes. |
 | `max_ssh_output_bytes` | int | `1048576` (1 MiB) | Maximum stdout size accepted from remote sensors before aborting. |
 | `require_proxmox_hostkeys` | bool | `false` | When `true`, refuse new nodes unless their host keys come from the Proxmox cluster store (no ssh-keyscan fallback). |
 | `rate_limit.per_peer_interval_ms` | int | `1000` | Milliseconds between allowed RPCs per UID. Set `>=100` in production. |
@@ -436,6 +440,16 @@ rate_limit:
   per_peer_interval_ms: 500   # 2 rps
   per_peer_burst: 10          # allow 10-node sweep
 ```
+
+All HTTP settings can also be supplied via environment variables for ephemeral deployments:
+
+| Environment variable | Mirrors config key |
+| --- | --- |
+| `PULSE_SENSOR_PROXY_HTTP_ENABLED` | `http_enabled` |
+| `PULSE_SENSOR_PROXY_HTTP_ADDR` | `http_listen_addr` |
+| `PULSE_SENSOR_PROXY_HTTP_TLS_CERT` | `http_tls_cert` |
+| `PULSE_SENSOR_PROXY_HTTP_TLS_KEY` | `http_tls_key` |
+| `PULSE_SENSOR_PROXY_HTTP_AUTH_TOKEN` | `http_auth_token` |
 
 ---
 
