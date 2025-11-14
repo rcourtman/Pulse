@@ -49,4 +49,4 @@ podman run --seccomp-profile /opt/pulse/security/seccomp/pulse-sensor-proxy.json
 
 ## Operational Notes
 - Use `journalctl -t auditbeat -g pulse-sensor-proxy` or `aa-status` to confirm profile status.
-- Pair with network ACLs (see `docs/security/pulse-sensor-proxy-network.md`) and log shipping (`scripts/setup-log-forwarding.sh`).
+- Pair with network ACLs (see `docs/security/pulse-sensor-proxy-network.md`) and log shipping via [`scripts/setup-log-forwarding.sh` + the RELP runbook](../operations/sensor-proxy-log-forwarding.md).

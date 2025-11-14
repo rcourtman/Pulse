@@ -243,6 +243,10 @@ journalctl -u pulse-sensor-proxy -f
 journalctl -u pulse-backend -f
 ```
 
+Want off-host retention? Forward `audit.log` and `proxy.log` using
+[`scripts/setup-log-forwarding.sh`](operations/sensor-proxy-log-forwarding.md)
+so events land in your SIEM with RELP + TLS.
+
 **Audit rotation**: Use the steps in [operations/audit-log-rotation.md](operations/audit-log-rotation.md) to rotate `/var/log/pulse/sensor-proxy/audit.log`. After each rotation, restart the proxy and confirm temperature pollers are healthy in `/api/monitoring/scheduler/health` (closed breakers, no DLQ entries).
 
 ### Security Events to Monitor
