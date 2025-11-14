@@ -33,3 +33,17 @@ func parseCapabilityList(values []string) Capability {
 	}
 	return caps
 }
+
+func capabilityNames(c Capability) []string {
+	names := make([]string, 0, 3)
+	if c.Has(CapabilityRead) {
+		names = append(names, "read")
+	}
+	if c.Has(CapabilityWrite) {
+		names = append(names, "write")
+	}
+	if c.Has(CapabilityAdmin) {
+		names = append(names, "admin")
+	}
+	return names
+}

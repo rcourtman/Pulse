@@ -152,6 +152,7 @@ interface TemperatureProxyDiagnostic {
   proxyPublicKeySha256?: string;
   proxySshDirectory?: string;
   legacySshKeyCount?: number;
+  proxyCapabilities?: string[];
   notes?: string[];
   httpProxies?: TemperatureProxyHTTPStatus[];
 }
@@ -855,6 +856,16 @@ const Settings: Component<SettingsProps> = (props) => {
     return { httpMap, socketStatus };
   });
 
+  const proxyNodeChecksSupported = createMemo(() => {
+    const caps = diagnosticsData()?.temperatureProxy?.proxyCapabilities;
+    if (!caps || caps.length === 0) {
+      return true;
+    }
+    return caps.some(
+      (cap) => typeof cap === 'string' && cap.trim().toLowerCase() === 'admin',
+    );
+  });
+
   const runDiagnostics = async () => {
     setRunningDiagnostics(true);
     try {
@@ -880,8 +891,14 @@ const Settings: Component<SettingsProps> = (props) => {
       const data = await response.json().catch(() => null);
       if (!response.ok || !data || data.success !== true) {
         const message =
-          data && typeof data.message === 'string' ? data.message : 'Failed to query proxy nodes';
-        showError(message);
+          (data && typeof data.error === 'string' && data.error) ||
+          (data && typeof data.message === 'string' && data.message) ||
+          'Failed to query proxy nodes';
+        if (response.status === 403) {
+          showWarning(message);
+        } else {
+          showError(message);
+        }
         return;
       }
 
@@ -5234,22 +5251,34 @@ const Settings: Component<SettingsProps> = (props) => {
                                       </For>
                                     </div>
                                   </Show>
-                                  <div class="mt-3 flex flex-wrap gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (!proxyActionLoading()) {
-                                          void handleRegisterProxyNodes();
-                                        }
-                                      }}
-                                      disabled={proxyActionLoading() !== null}
-                                      class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                      {proxyActionLoading() === 'register-nodes'
-                                        ? 'Checking nodes...'
-                                        : 'Check proxy nodes'}
-                                    </button>
-                                  </div>
+                                  <Show
+                                    when={proxyNodeChecksSupported()}
+                                    fallback={
+                                      <div class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                                        Check proxy nodes is only available when the proxy socket
+                                        grants admin access. Run this diagnostic on the Proxmox host
+                                        or reinstall pulse-sensor-proxy in HTTP mode to manage nodes
+                                        remotely.
+                                      </div>
+                                    }
+                                  >
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (!proxyActionLoading()) {
+                                            void handleRegisterProxyNodes();
+                                          }
+                                        }}
+                                        disabled={proxyActionLoading() !== null}
+                                        class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {proxyActionLoading() === 'register-nodes'
+                                          ? 'Checking nodes...'
+                                          : 'Check proxy nodes'}
+                                      </button>
+                                    </div>
+                                  </Show>
                                   <Show
                                     when={
                                       proxyRegisterSummary() && proxyRegisterSummary()!.length > 0

@@ -28,12 +28,12 @@ const (
 type ErrorType int
 
 const (
-	ErrorTypeUnknown ErrorType = iota
-	ErrorTypeTransport // Socket connection/communication failures
-	ErrorTypeAuth      // Authorization failures
-	ErrorTypeSSH       // SSH connectivity issues
-	ErrorTypeSensor    // Sensor command failures
-	ErrorTypeTimeout   // Operation timeout
+	ErrorTypeUnknown   ErrorType = iota
+	ErrorTypeTransport           // Socket connection/communication failures
+	ErrorTypeAuth                // Authorization failures
+	ErrorTypeSSH                 // SSH connectivity issues
+	ErrorTypeSensor              // Sensor command failures
+	ErrorTypeTimeout             // Operation timeout
 )
 
 // ProxyError wraps errors with classification
@@ -136,7 +136,7 @@ func classifyError(err error, respError string) *ProxyError {
 		}
 
 		// Authorization errors - never retry
-		if respError == "unauthorized" || respError == "method requires host-level privileges" {
+		if respError == "unauthorized" || respError == "method requires host-level privileges" || respError == "method requires admin capability" || contains(respError, "admin capability") {
 			return &ProxyError{
 				Type:      ErrorTypeAuth,
 				Message:   respError,
@@ -370,6 +370,9 @@ func (c *Client) RegisterNodes() ([]map[string]interface{}, error) {
 	}
 
 	if !resp.Success {
+		if proxyErr := classifyError(nil, resp.Error); proxyErr != nil {
+			return nil, proxyErr
+		}
 		return nil, fmt.Errorf("proxy error: %s", resp.Error)
 	}
 

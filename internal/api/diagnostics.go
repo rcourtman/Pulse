@@ -244,6 +244,7 @@ type TemperatureProxyDiagnostic struct {
 	ProxyPublicKeySHA256 string                       `json:"proxyPublicKeySha256,omitempty"`
 	ProxySSHDirectory    string                       `json:"proxySshDirectory,omitempty"`
 	LegacySSHKeyCount    int                          `json:"legacySshKeyCount,omitempty"`
+	ProxyCapabilities    []string                     `json:"proxyCapabilities,omitempty"`
 	Notes                []string                     `json:"notes,omitempty"`
 	HTTPProxies          []TemperatureProxyHTTPStatus `json:"httpProxies,omitempty"`
 }
@@ -727,6 +728,14 @@ func buildTemperatureProxyDiagnostic(cfg *config.Config) *TemperatureProxyDiagno
 					diag.ProxyPublicKeySHA256 = fingerprint
 				} else {
 					appendNote(fmt.Sprintf("Unable to fingerprint proxy public key: %v", err))
+				}
+			}
+			if rawCaps, ok := status["capabilities"]; ok {
+				if caps := interfaceToStringSlice(rawCaps); len(caps) > 0 {
+					diag.ProxyCapabilities = caps
+					if !containsFold(caps, "admin") {
+						appendNote("Proxy socket is running in read-only mode, so 'Check proxy nodes' must be run from the Proxmox host or via an HTTP-mode proxy.")
+					}
 				}
 			}
 		}
@@ -1605,4 +1614,37 @@ func contains(slice []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func containsFold(slice []string, candidate string) bool {
+	target := strings.ToLower(strings.TrimSpace(candidate))
+	if target == "" {
+		return false
+	}
+
+	for _, s := range slice {
+		if strings.ToLower(strings.TrimSpace(s)) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func interfaceToStringSlice(value interface{}) []string {
+	switch v := value.(type) {
+	case []string:
+		out := make([]string, len(v))
+		copy(out, v)
+		return out
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			if str, ok := item.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
 }
