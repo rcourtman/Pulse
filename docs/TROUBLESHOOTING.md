@@ -177,6 +177,23 @@ systemctl status pulse 2>/dev/null \
   || systemctl status pulse-hot-dev
 ```
 
+### Automatic Update Failures
+
+- **Timer never runs** – Ensure both the UI toggle (**Settings → System → Updates → Automatic Updates**) and `pulse-update.timer` are enabled. The timer exits immediately if `autoUpdateEnabled:false` in `/var/lib/pulse/system.json`. Run:
+  ```bash
+  systemctl status pulse-update.timer --no-pager
+  jq '.autoUpdateEnabled' /var/lib/pulse/system.json
+  ```
+- **Update stuck or failed** – Tail the journal and inspect the most recent history entry:
+  ```bash
+  journalctl -u pulse-update -n 50
+  curl -s http://localhost:7655/api/updates/history?limit=1 | jq '.entries[0]'
+  ```
+  Grab the `log_path` from the entry (defaults to `/var/log/pulse/update-*.log`) for full stack traces.
+- **Need to retry or roll back** – Start `pulse-update.service` manually after fixing the root cause, or redeploy the previous release/restore the recorded `backup_path`.
+
+See the full runbook in [operations/auto-update.md](operations/auto-update.md) for manual trigger steps, observability checklist, and rollback procedures.
+
 ### Notification Issues
 
 #### Emails not sending
