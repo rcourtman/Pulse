@@ -81,6 +81,10 @@ SELFHEAL_SCRIPT="/usr/local/bin/pulse-sensor-proxy-selfheal.sh"
 SELFHEAL_SERVICE_UNIT="/etc/systemd/system/pulse-sensor-proxy-selfheal.service"
 SELFHEAL_TIMER_UNIT="/etc/systemd/system/pulse-sensor-proxy-selfheal.timer"
 SCRIPT_SOURCE="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]:-$0}")"
+GITHUB_REPO="rcourtman/Pulse"
+LATEST_RELEASE_TAG=""
+REQUESTED_VERSION=""
+INSTALLER_CACHE_REASON=""
 
 cleanup_local_authorized_keys() {
     local auth_keys_file="/root/.ssh/authorized_keys"
@@ -147,6 +151,92 @@ cleanup_cluster_authorized_keys_manual() {
     done
 
     cleanup_local_authorized_keys
+}
+
+determine_installer_ref() {
+    if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "latest" && "$REQUESTED_VERSION" != "main" ]]; then
+        printf '%s' "$REQUESTED_VERSION"
+        return 0
+    fi
+
+    if [[ -n "$LATEST_RELEASE_TAG" ]]; then
+        printf '%s' "$LATEST_RELEASE_TAG"
+        return 0
+    fi
+
+    if [[ "$REQUESTED_VERSION" == "main" ]]; then
+        printf 'main'
+        return 0
+    fi
+
+    printf 'main'
+}
+
+cache_installer_for_self_heal() {
+    INSTALLER_CACHE_REASON=""
+    install -d "$SHARE_DIR"
+
+    local source_issue=""
+    if [[ -n "$SCRIPT_SOURCE" && -f "$SCRIPT_SOURCE" ]]; then
+        if install -m 0755 "$SCRIPT_SOURCE" "$STORED_INSTALLER"; then
+            return 0
+        fi
+        source_issue="failed to copy ${SCRIPT_SOURCE}"
+    else
+        source_issue="no readable source"
+    fi
+
+    local repo="${GITHUB_REPO:-rcourtman/Pulse}"
+    local ref
+    ref="$(determine_installer_ref)"
+    [[ -z "$ref" ]] && ref="main"
+
+    local candidate_urls=()
+    if [[ "$ref" != "main" ]]; then
+        candidate_urls+=("https://github.com/${repo}/releases/download/${ref}/install-sensor-proxy.sh")
+    fi
+    candidate_urls+=("https://raw.githubusercontent.com/${repo}/${ref}/scripts/install-sensor-proxy.sh")
+
+    local tmp_file
+    tmp_file=$(mktemp)
+    local tmp_err
+    tmp_err=$(mktemp)
+    local last_error=""
+
+    for url in "${candidate_urls[@]}"; do
+        if curl --fail --silent --location --connect-timeout 10 --max-time 60 "$url" -o "$tmp_file" 2>"$tmp_err"; then
+            if install -m 0755 "$tmp_file" "$STORED_INSTALLER"; then
+                rm -f "$tmp_file" "$tmp_err"
+                if [[ "$QUIET" != true ]]; then
+                    print_info "Cached installer script for self-heal from ${url}"
+                fi
+                return 0
+            fi
+            last_error="failed to write cached installer to ${STORED_INSTALLER}"
+            break
+        fi
+
+        if [[ -s "$tmp_err" ]]; then
+            last_error="$(cat "$tmp_err")"
+        else
+            last_error="HTTP error"
+        fi
+        : >"$tmp_err"
+    done
+
+    rm -f "$tmp_file" "$tmp_err"
+
+    if [[ -n "$source_issue" && -n "$last_error" ]]; then
+        INSTALLER_CACHE_REASON="${source_issue}; download failed (${last_error})"
+    elif [[ -n "$source_issue" ]]; then
+        INSTALLER_CACHE_REASON="$source_issue"
+    elif [[ -n "$last_error" ]]; then
+        INSTALLER_CACHE_REASON="download failed (${last_error})"
+    else
+        INSTALLER_CACHE_REASON="unknown failure"
+    fi
+
+    return 1
 }
 
 perform_uninstall() {
@@ -387,6 +477,8 @@ if [[ "$UNINSTALL" == true ]]; then
     exit 0
 fi
 
+REQUESTED_VERSION="${VERSION:-latest}"
+
 # If --pulse-server was provided, use it as the fallback base
 if [[ -n "$PULSE_SERVER" ]]; then
     FALLBACK_BASE="${PULSE_SERVER}/api/install/pulse-sensor-proxy"
@@ -503,10 +595,8 @@ else
             ;;
     esac
 
-    GITHUB_REPO="rcourtman/Pulse"
     DOWNLOAD_SUCCESS=false
     ATTEMPTED_SOURCES=()
-    LATEST_RELEASE_TAG=""
 
     fetch_latest_release_tag() {
         local api_url="https://api.github.com/repos/$GITHUB_REPO/releases?per_page=25"
@@ -638,7 +728,6 @@ sys.exit(0)
         return 1
     }
 
-    REQUESTED_VERSION="${VERSION:-latest}"
     if [[ "$REQUESTED_VERSION" == "latest" || "$REQUESTED_VERSION" == "main" || -z "$REQUESTED_VERSION" ]]; then
         if fetch_latest_release_tag; then
             attempt_github_asset_or_tarball "$LATEST_RELEASE_TAG" || true
@@ -2045,12 +2134,12 @@ fi  # End of container-specific configuration
 
 # Install self-heal safeguards to keep proxy available
 print_info "Configuring self-heal safeguards..."
-if [[ -n "$SCRIPT_SOURCE" && -f "$SCRIPT_SOURCE" ]]; then
-    install -d "$SHARE_DIR"
-    cp "$SCRIPT_SOURCE" "$STORED_INSTALLER"
-    chmod 0755 "$STORED_INSTALLER"
-else
-    print_warn "Unable to cache installer script for self-heal (source path unavailable)"
+if ! cache_installer_for_self_heal; then
+    if [[ -n "$INSTALLER_CACHE_REASON" ]]; then
+        print_warn "Unable to cache installer script for self-heal (${INSTALLER_CACHE_REASON})"
+    else
+        print_warn "Unable to cache installer script for self-heal"
+    fi
 fi
 
 cat > "$SELFHEAL_SCRIPT" <<'EOF'
