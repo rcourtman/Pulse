@@ -149,8 +149,17 @@ update_allowed_nodes() {
     chown pulse-sensor-proxy:pulse-sensor-proxy "$config_file" 2>/dev/null || true
 }
 
-BINARY_PATH="/usr/local/bin/pulse-sensor-proxy"
-WRAPPER_SCRIPT="/usr/local/bin/pulse-sensor-wrapper.sh"
+# Installation root - writable location that works on read-only /usr systems
+INSTALL_ROOT="/opt/pulse/sensor-proxy"
+
+# Binaries and scripts (in writable location)
+BINARY_PATH="${INSTALL_ROOT}/bin/pulse-sensor-proxy"
+WRAPPER_SCRIPT="${INSTALL_ROOT}/bin/pulse-sensor-wrapper.sh"
+CLEANUP_SCRIPT_PATH="${INSTALL_ROOT}/bin/pulse-sensor-cleanup.sh"
+SELFHEAL_SCRIPT="${INSTALL_ROOT}/bin/pulse-sensor-proxy-selfheal.sh"
+STORED_INSTALLER="${INSTALL_ROOT}/install-sensor-proxy.sh"
+
+# System configuration (standard locations)
 SERVICE_PATH="/etc/systemd/system/pulse-sensor-proxy.service"
 RUNTIME_DIR="/run/pulse-sensor-proxy"
 SOCKET_PATH="${RUNTIME_DIR}/pulse-sensor-proxy.sock"
@@ -158,15 +167,11 @@ WORK_DIR="/var/lib/pulse-sensor-proxy"
 SSH_DIR="${WORK_DIR}/ssh"
 CONFIG_DIR="/etc/pulse-sensor-proxy"
 CTID_FILE="${CONFIG_DIR}/ctid"
-CLEANUP_SCRIPT_PATH="/usr/local/bin/pulse-sensor-cleanup.sh"
 CLEANUP_PATH_UNIT="/etc/systemd/system/pulse-sensor-cleanup.path"
 CLEANUP_SERVICE_UNIT="/etc/systemd/system/pulse-sensor-cleanup.service"
 CLEANUP_REQUEST_PATH="${WORK_DIR}/cleanup-request.json"
 SERVICE_USER="pulse-sensor-proxy"
 LOG_DIR="/var/log/pulse/sensor-proxy"
-SHARE_DIR="/usr/local/share/pulse"
-STORED_INSTALLER="${SHARE_DIR}/install-sensor-proxy.sh"
-SELFHEAL_SCRIPT="/usr/local/bin/pulse-sensor-proxy-selfheal.sh"
 SELFHEAL_SERVICE_UNIT="/etc/systemd/system/pulse-sensor-proxy-selfheal.service"
 SELFHEAL_TIMER_UNIT="/etc/systemd/system/pulse-sensor-proxy-selfheal.timer"
 SCRIPT_SOURCE="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]:-$0}")"
@@ -889,6 +894,8 @@ fi
 
 # Create directories with proper ownership (handles fresh installs and upgrades)
 print_info "Setting up directories with proper ownership..."
+install -d -o root -g root -m 0755 "${INSTALL_ROOT}"
+install -d -o root -g root -m 0755 "${INSTALL_ROOT}/bin"
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 "$SSH_DIR"
 install -m 0600 -o pulse-sensor-proxy -g pulse-sensor-proxy /dev/null "$SSH_DIR/known_hosts"
@@ -1218,7 +1225,7 @@ print_info "Installing hardened systemd service..."
 # Generate service file based on mode (Proxmox vs standalone)
 if [[ "$STANDALONE" == true ]]; then
     # Standalone/Docker mode - no Proxmox-specific paths
-    cat > "$SERVICE_PATH" << 'EOF'
+    cat > "$SERVICE_PATH" <<EOF
 [Unit]
 Description=Pulse Temperature Proxy
 Documentation=https://github.com/rcourtman/Pulse
@@ -1229,7 +1236,7 @@ Type=simple
 User=pulse-sensor-proxy
 Group=pulse-sensor-proxy
 WorkingDirectory=/var/lib/pulse-sensor-proxy
-ExecStart=/usr/local/bin/pulse-sensor-proxy --config /etc/pulse-sensor-proxy/config.yaml
+ExecStart=${BINARY_PATH} --config /etc/pulse-sensor-proxy/config.yaml
 Restart=on-failure
 RestartSec=5s
 
@@ -1276,7 +1283,7 @@ WantedBy=multi-user.target
 EOF
 else
     # Proxmox mode - include Proxmox paths
-    cat > "$SERVICE_PATH" << 'EOF'
+    cat > "$SERVICE_PATH" <<EOF
 [Unit]
 Description=Pulse Temperature Proxy
 Documentation=https://github.com/rcourtman/Pulse
@@ -1288,7 +1295,7 @@ User=pulse-sensor-proxy
 Group=pulse-sensor-proxy
 SupplementaryGroups=www-data
 WorkingDirectory=/var/lib/pulse-sensor-proxy
-ExecStart=/usr/local/bin/pulse-sensor-proxy
+ExecStart=${BINARY_PATH}
 Restart=on-failure
 RestartSec=5s
 
@@ -2293,7 +2300,7 @@ fi
 EOF
 chmod 0755 "$SELFHEAL_SCRIPT"
 
-cat > "$SELFHEAL_SERVICE_UNIT" <<'EOF'
+cat > "$SELFHEAL_SERVICE_UNIT" <<EOF
 [Unit]
 Description=Pulse Sensor Proxy Self-Heal
 After=network-online.target
@@ -2301,7 +2308,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/pulse-sensor-proxy-selfheal.sh
+ExecStart=${SELFHEAL_SCRIPT}
 StandardOutput=journal
 StandardError=journal
 
