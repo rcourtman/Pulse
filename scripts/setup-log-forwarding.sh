@@ -60,3 +60,9 @@ EOF
 
 systemctl restart rsyslog
 echo "Log forwarding enabled to $REMOTE_HOST:$REMOTE_PORT"
+
+# Verification checklist:
+# 1. sudo rsyslogd -N1  (syntax check)
+# 2. sudo systemctl status rsyslog --no-pager
+# 3. tail -f /var/log/pulse/sensor-proxy/forwarding.log
+# 4. Confirm new `pulse.audit` events arrive on the remote collector

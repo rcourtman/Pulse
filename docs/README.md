@@ -11,6 +11,11 @@ section groups related guides so you can jump straight to the material you need.
 - [FAQ.md](FAQ.md) – Common questions and troubleshooting quick answers.
 - [MIGRATION.md](MIGRATION.md) – Export/import process for moving between hosts.
 - [DEV-QUICK-START.md](../DEV-QUICK-START.md) – Hot reload workflow for local development.
+- **Post-install checklist**
+  - [operations/audit-log-rotation.md](operations/audit-log-rotation.md) – Schedule regular sensor proxy log rotations after your first installation.
+  - [operations/sensor-proxy-log-forwarding.md](operations/sensor-proxy-log-forwarding.md) – Forward audit/proxy logs to your SIEM as soon as compliance retention is required.
+  - [operations/auto-update.md](operations/auto-update.md) – Enable and verify the `pulse-update` timer before handing the system to on-call.
+  - [operations/ADAPTIVE_POLLING_ROLLOUT.md](operations/ADAPTIVE_POLLING_ROLLOUT.md) – Plan the rollout when turning on adaptive polling beyond lab environments.
 
 ## Deployment Guides
 
@@ -40,10 +45,10 @@ section groups related guides so you can jump straight to the material you need.
 
 ## Operations Runbooks
 
-- [operations/audit-log-rotation.md](operations/audit-log-rotation.md) – Rotate sensor proxy audit logs safely.
-- [operations/ADAPTIVE_POLLING_ROLLOUT.md](operations/ADAPTIVE_POLLING_ROLLOUT.md) – Step-by-step adaptive polling rollout guide.
-- [operations/auto-update.md](operations/auto-update.md) – Manage the automatic update timer/service.
-- [operations/sensor-proxy-log-forwarding.md](operations/sensor-proxy-log-forwarding.md) – Forward sensor proxy logs to a SIEM over RELP + TLS.
+- [operations/audit-log-rotation.md](operations/audit-log-rotation.md) – Monthly/incident log rotation procedure that preserves the hash chain and validates scheduler health afterward.
+- [operations/ADAPTIVE_POLLING_ROLLOUT.md](operations/ADAPTIVE_POLLING_ROLLOUT.md) – Rollout/rollback plan for enabling adaptive polling in staging or production.
+- [operations/auto-update.md](operations/auto-update.md) – Lifecycle of the `pulse-update` timer/service: enablement, manual trigger, rollback, and observability.
+- [operations/sensor-proxy-log-forwarding.md](operations/sensor-proxy-log-forwarding.md) – Configure rsyslog + RELP/TLS to ship sensor proxy audit/proxy logs to centralized logging.
 
 ## Reference
 
