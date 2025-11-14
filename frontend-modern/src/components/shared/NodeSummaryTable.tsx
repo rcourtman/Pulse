@@ -9,6 +9,8 @@ import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { getCpuTemperature } from '@/utils/temperature';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildMetricKey } from '@/utils/metricsKeys';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getNodeStatusIndicator, getPBSStatusIndicator } from '@/utils/status';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -426,6 +428,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const pbs = isPBS ? (item.data as PBSInstance) : null;
 
                 const online = isItemOnline(item);
+                const statusIndicator = createMemo(() =>
+                  isPVE ? getNodeStatusIndicator(node as Node) : getPBSStatusIndicator(pbs as PBSInstance),
+                );
                 const cpuPercentValue = getCpuPercent(item);
                 const memoryPercentValue = getMemoryPercent(item);
                 const diskPercentValue = getDiskPercent(item);
@@ -508,7 +513,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <td
                       class={`pr-2 py-0.5 whitespace-nowrap ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}
                     >
-                      <div class="flex items-center gap-1">
+                      <div class="flex items-center gap-1.5">
+                        <StatusDot
+                          variant={statusIndicator().variant}
+                          title={statusIndicator().label}
+                          ariaLabel={statusIndicator().label}
+                          size="xs"
+                        />
                         <a
                           href={
                             isPVE

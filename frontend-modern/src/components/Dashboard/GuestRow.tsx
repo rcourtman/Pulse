@@ -5,7 +5,8 @@ import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { TagBadges } from './TagBadges';
 import { DiskList } from './DiskList';
-import { isGuestRunning } from '@/utils/status';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
@@ -334,6 +335,7 @@ export function GuestRow(props: GuestRowProps) {
 
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);
   const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
+  const guestStatus = createMemo(() => getGuestPowerIndicator(props.guest, parentOnline()));
   const lockLabel = createMemo(() => (props.guest.lock || '').trim());
 
   // Get helpful tooltip for disk status
@@ -425,96 +427,106 @@ export function GuestRow(props: GuestRowProps) {
       {/* Name - Sticky column */}
       <td class={firstCellClass()}>
         <div class="flex items-center gap-2">
-          {/* Name - show input when editing, otherwise show name with optional link */}
-          <Show
-            when={isEditingUrl()}
-            fallback={
-              <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                <span
-                  class="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-text select-none overflow-hidden text-ellipsis"
-                  style="cursor: text;"
-                  title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                  onClick={startEditingUrl}
-                  data-guest-name-editable
-                >
-                  {props.guest.name}
-                </span>
-                <Show when={customUrl()}>
-                  <a
-                    href={customUrl()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                    title="Open in new tab"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <svg
-                      class="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+          <div class="flex items-center gap-1.5 flex-1 min-w-0">
+            <StatusDot
+              variant={guestStatus().variant}
+              title={guestStatus().label}
+              ariaLabel={guestStatus().label}
+              size="xs"
+            />
+            <div class="flex-1 min-w-0">
+              {/* Name - show input when editing, otherwise show name with optional link */}
+              <Show
+                when={isEditingUrl()}
+                fallback={
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span
+                      class="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-text select-none overflow-hidden text-ellipsis"
+                      style="cursor: text;"
+                      title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                      onClick={startEditingUrl}
+                      data-guest-name-editable
                     >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                  </a>
-                </Show>
-              </div>
-            }
-          >
-            <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-              <input
-                ref={urlInputRef}
-                type="text"
-                value={editingUrlValue()}
-                data-guest-id={guestId()}
-                onInput={(e) => {
-                  editingValues.set(guestId(), e.currentTarget.value);
-                  setEditingValuesVersion(v => v + 1);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    saveUrl();
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    cancelEditingUrl();
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-                placeholder="https://192.168.1.100:8006"
-                class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="button"
-                data-url-editor-button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  saveUrl();
-                }}
-                class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                title="Save (or press Enter)"
+                      {props.guest.name}
+                    </span>
+                    <Show when={customUrl()}>
+                      <a
+                        href={customUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                        title="Open in new tab"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                      </a>
+                    </Show>
+                  </div>
+                }
               >
-                ✓
-              </button>
-              <button
-                type="button"
-                data-url-editor-button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteUrl();
-                }}
-                class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                title="Delete URL"
-              >
-                ✕
-              </button>
+                <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                  <input
+                    ref={urlInputRef}
+                    type="text"
+                    value={editingUrlValue()}
+                    data-guest-id={guestId()}
+                    onInput={(e) => {
+                      editingValues.set(guestId(), e.currentTarget.value);
+                      setEditingValuesVersion(v => v + 1);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveUrl();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelEditingUrl();
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="https://192.168.1.100:8006"
+                    class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    data-url-editor-button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      saveUrl();
+                    }}
+                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    title="Save (or press Enter)"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    data-url-editor-button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteUrl();
+                    }}
+                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    title="Delete URL"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </Show>
             </div>
-          </Show>
+          </div>
 
           {/* Tag badges - hide when editing URL to save space */}
           <Show when={!isEditingUrl()}>
