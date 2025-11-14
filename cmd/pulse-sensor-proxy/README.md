@@ -9,7 +9,7 @@ capabilities, and produces append-only audit logs.
 
 | Scenario | Command |
 | --- | --- |
-| **Recommended (automated)** | `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh \`<br>`  | bash` |
+| **Recommended (automated)** | `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh \| bash` |
 | **Manual build** | `go build ./cmd/pulse-sensor-proxy` and `sudo install -m 0755 pulse-sensor-proxy /usr/local/bin/` |
 | **Prebuilt artifact** | Copy the binary from `/opt/pulse/bin/pulse-sensor-proxy-*` inside the Pulse Docker image or download via `/download/pulse-sensor-proxy?platform=linux&arch=amd64`. |
 
@@ -88,10 +88,10 @@ truncate, restart service, reapply `+a`). Also consider forwarding with
 
 | Signal | Command |
 | --- | --- |
-| Prometheus metrics | `curl -s http://127.0.0.1:9127/metrics | head` |
-| Scheduler health (Pulse) | `curl -s http://localhost:7655/api/monitoring/scheduler/health \`<br>`  | jq '.instances[] | select(.key | contains("temperature")) | {key, breaker: .breaker.state, deadLetter: .deadLetter.present}'` |
+| Prometheus metrics | `curl -s http://127.0.0.1:9127/metrics \| head` |
+| Scheduler health (Pulse) | `curl -s http://localhost:7655/api/monitoring/scheduler/health \| jq '.instances[] \| select(.key \| contains(\"temperature\")) \| {key, breaker: .breaker.state, deadLetter: .deadLetter.present}'` |
 | Journal logs | `journalctl -u pulse-sensor-proxy -f` |
-| Rate-limit hits | `journalctl -u pulse-sensor-proxy | grep "rate limit"` |
+| Rate-limit hits | `journalctl -u pulse-sensor-proxy \| grep "rate limit"` |
 
 Set alerts on:
 
