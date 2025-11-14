@@ -36,11 +36,11 @@ import (
 
 // Router handles HTTP routing
 type Router struct {
-	mux                      *http.ServeMux
-	config                   *config.Config
-	monitor                  *monitoring.Monitor
-	alertHandlers            *AlertHandlers
-	configHandlers           *ConfigHandlers
+	mux                       *http.ServeMux
+	config                    *config.Config
+	monitor                   *monitoring.Monitor
+	alertHandlers             *AlertHandlers
+	configHandlers            *ConfigHandlers
 	notificationHandlers      *NotificationHandlers
 	notificationQueueHandlers *NotificationQueueHandlers
 	dockerAgentHandlers       *DockerAgentHandlers
@@ -48,14 +48,14 @@ type Router struct {
 	temperatureProxyHandlers  *TemperatureProxyHandlers
 	systemSettingsHandler     *SystemSettingsHandler
 	wsHub                     *websocket.Hub
-	reloadFunc               func() error
-	updateManager            *updates.Manager
-	exportLimiter            *RateLimiter
-	persistence              *config.ConfigPersistence
-	oidcMu                   sync.Mutex
-	oidcService              *OIDCService
-	wrapped                  http.Handler
-	projectRoot              string
+	reloadFunc                func() error
+	updateManager             *updates.Manager
+	exportLimiter             *RateLimiter
+	persistence               *config.ConfigPersistence
+	oidcMu                    sync.Mutex
+	oidcService               *OIDCService
+	wrapped                   http.Handler
+	projectRoot               string
 	// Cached system settings to avoid loading from disk on every request
 	settingsMu           sync.RWMutex
 	cachedAllowEmbedding bool
@@ -3381,18 +3381,32 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 		)
 	}
 
+	checkedPaths := make([]string, 0, len(searchPaths)*2)
+	shouldCheckWindowsExe := func(path string) bool {
+		base := strings.ToLower(filepath.Base(path))
+		return strings.Contains(base, "windows") && !strings.HasSuffix(base, ".exe")
+	}
+
 	for _, candidate := range searchPaths {
 		if candidate == "" {
 			continue
 		}
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			// Check if this is a checksum request
-			if strings.HasSuffix(req.URL.Path, ".sha256") {
-				r.serveChecksum(w, req, candidate)
+		pathsToCheck := []string{candidate}
+		if shouldCheckWindowsExe(candidate) {
+			pathsToCheck = append(pathsToCheck, candidate+".exe")
+		}
+
+		for _, path := range pathsToCheck {
+			checkedPaths = append(checkedPaths, path)
+			if info, err := os.Stat(path); err == nil && !info.IsDir() {
+				// Check if this is a checksum request
+				if strings.HasSuffix(req.URL.Path, ".sha256") {
+					r.serveChecksum(w, req, path)
+					return
+				}
+				http.ServeFile(w, req, path)
 				return
 			}
-			http.ServeFile(w, req, candidate)
-			return
 		}
 	}
 
@@ -3406,7 +3420,7 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 	errorMsg.WriteString(fmt.Sprintf("   GOOS=%s GOARCH=%s go build -o pulse-host-agent-%s-%s ./cmd/pulse-host-agent\n", platformParam, archParam, platformParam, archParam))
 	errorMsg.WriteString(fmt.Sprintf("   sudo mv pulse-host-agent-%s-%s /opt/pulse/bin/\n\n", platformParam, archParam))
 	errorMsg.WriteString("Searched locations:\n")
-	for _, path := range searchPaths {
+	for _, path := range checkedPaths {
 		errorMsg.WriteString(fmt.Sprintf("  - %s\n", path))
 	}
 
