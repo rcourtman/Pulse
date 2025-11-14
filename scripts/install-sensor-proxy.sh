@@ -60,6 +60,54 @@ configure_local_authorized_key() {
     fi
 }
 
+# Helper function to safely update allowed_nodes section in config file
+# Removes any existing allowed_nodes section before adding new one to prevent duplicates
+update_allowed_nodes() {
+    local config_file="/etc/pulse-sensor-proxy/config.yaml"
+    local comment_line="$1"
+    shift
+    local nodes=("$@")
+
+    # Create temp file
+    local tmp_config
+    tmp_config=$(mktemp)
+
+    # Remove any existing allowed_nodes section (including the YAML key and all list items)
+    # This handles multi-line allowed_nodes blocks by removing from "allowed_nodes:" through the next non-indented line
+    if [[ -f "$config_file" ]]; then
+        awk '
+            /^allowed_nodes:/ { in_section=1; next }
+            in_section && /^[^ \t#]/ { in_section=0 }
+            in_section && /^[ \t]*#/ { next }
+            in_section && /^[ \t]*-/ { next }
+            in_section && /^[ \t]*$/ { next }
+            !in_section { print }
+        ' "$config_file" > "$tmp_config"
+
+        # Preserve file permissions
+        chmod --reference="$config_file" "$tmp_config" 2>/dev/null || chmod 0644 "$tmp_config"
+        chown --reference="$config_file" "$tmp_config" 2>/dev/null || true
+    else
+        touch "$tmp_config"
+        chmod 0644 "$tmp_config"
+        chown pulse-sensor-proxy:pulse-sensor-proxy "$tmp_config" 2>/dev/null || true
+    fi
+
+    # Append new allowed_nodes section
+    {
+        echo ""
+        echo "# ${comment_line}"
+        echo "# These nodes are allowed to request temperature data when cluster IPC validation is unavailable"
+        echo "allowed_nodes:"
+        for node in "${nodes[@]}"; do
+            echo "  - $node"
+        done
+    } >> "$tmp_config"
+
+    # Replace original file
+    mv "$tmp_config" "$config_file"
+}
+
 BINARY_PATH="/usr/local/bin/pulse-sensor-proxy"
 WRAPPER_SCRIPT="/usr/local/bin/pulse-sensor-wrapper.sh"
 SERVICE_PATH="/etc/systemd/system/pulse-sensor-proxy.service"
@@ -1878,19 +1926,16 @@ if command -v pvecm >/dev/null 2>&1; then
 
         # Add discovered cluster nodes to config file for allowlist validation
         print_info "Updating proxy configuration with discovered cluster nodes..."
-        cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
-
-# Cluster nodes (auto-discovered during installation)
-# These nodes are allowed to request temperature data when cluster IPC validation is unavailable
-allowed_nodes:
-EOF
-        # Add both IPs and hostnames to allow-list
+        # Collect all nodes (IPs and hostnames) into array
+        local all_nodes=()
         for node_ip in $CLUSTER_NODES; do
-            echo "  - $node_ip" >> /etc/pulse-sensor-proxy/config.yaml
+            all_nodes+=("$node_ip")
         done
         for node_name in $CLUSTER_NODE_NAMES; do
-            echo "  - $node_name" >> /etc/pulse-sensor-proxy/config.yaml
+            all_nodes+=("$node_name")
         done
+        # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
+        update_allowed_nodes "Cluster nodes (auto-discovered during installation)" "${all_nodes[@]}"
     else
         # No cluster found - configure standalone node
         print_info "No cluster detected, configuring standalone node..."
@@ -1907,18 +1952,15 @@ EOF
         # Add localhost to config file for allowlist validation
         print_info "Updating proxy configuration for standalone mode..."
         LOCAL_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || echo "127.0.0.1")
-        cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
-
-# Standalone node configuration (auto-configured during installation)
-# Allow localhost access for self-monitoring
-allowed_nodes:
-EOF
+        # Collect all local IPs and localhost variants into array
+        local all_nodes=()
         for local_ip in $LOCAL_IPS; do
-            echo "  - $local_ip" >> /etc/pulse-sensor-proxy/config.yaml
+            all_nodes+=("$local_ip")
         done
         # Always include localhost variants
-        echo "  - 127.0.0.1" >> /etc/pulse-sensor-proxy/config.yaml
-        echo "  - localhost" >> /etc/pulse-sensor-proxy/config.yaml
+        all_nodes+=("127.0.0.1" "localhost")
+        # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
+        update_allowed_nodes "Standalone node configuration (auto-configured during installation)" "${all_nodes[@]}"
     fi
 else
     # Proxmox host but pvecm not available (shouldn't happen, but handle it)
@@ -1934,18 +1976,15 @@ else
     # Add localhost to config file for allowlist validation
     print_info "Updating proxy configuration for localhost fallback..."
     LOCAL_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || echo "127.0.0.1")
-    cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
-
-# Localhost fallback configuration (pvecm unavailable)
-# Allow localhost access for self-monitoring
-allowed_nodes:
-EOF
+    # Collect all local IPs and localhost variants into array
+    local all_nodes=()
     for local_ip in $LOCAL_IPS; do
-        echo "  - $local_ip" >> /etc/pulse-sensor-proxy/config.yaml
+        all_nodes+=("$local_ip")
     done
     # Always include localhost variants
-    echo "  - 127.0.0.1" >> /etc/pulse-sensor-proxy/config.yaml
-    echo "  - localhost" >> /etc/pulse-sensor-proxy/config.yaml
+    all_nodes+=("127.0.0.1" "localhost")
+    # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
+    update_allowed_nodes "Localhost fallback configuration (pvecm unavailable)" "${all_nodes[@]}"
 fi
 
 # Container-specific configuration (skip for standalone mode)
