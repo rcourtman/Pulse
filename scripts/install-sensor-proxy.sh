@@ -1965,7 +1965,7 @@ if command -v pvecm >/dev/null 2>&1; then
         # Add discovered cluster nodes to config file for allowlist validation
         print_info "Updating proxy configuration with discovered cluster nodes..."
         # Collect all nodes (IPs and hostnames) into array
-        local all_nodes=()
+        all_nodes=()
         for node_ip in $CLUSTER_NODES; do
             all_nodes+=("$node_ip")
         done
@@ -1991,7 +1991,7 @@ if command -v pvecm >/dev/null 2>&1; then
         print_info "Updating proxy configuration for standalone mode..."
         LOCAL_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || echo "127.0.0.1")
         # Collect all local IPs and localhost variants into array
-        local all_nodes=()
+        all_nodes=()
         for local_ip in $LOCAL_IPS; do
             all_nodes+=("$local_ip")
         done
@@ -2015,7 +2015,7 @@ else
     print_info "Updating proxy configuration for localhost fallback..."
     LOCAL_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || echo "127.0.0.1")
     # Collect all local IPs and localhost variants into array
-    local all_nodes=()
+    all_nodes=()
     for local_ip in $LOCAL_IPS; do
         all_nodes+=("$local_ip")
     done
