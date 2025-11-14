@@ -50,7 +50,7 @@ if [[ -z "$HOST" ]]; then
 
     # Discover cluster nodes
     if command -v pvecm >/dev/null 2>&1; then
-        CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}' || true)
+        CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}')
 
         if [[ -n "$CLUSTER_NODES" ]]; then
             for node_ip in $CLUSTER_NODES; do
@@ -134,5 +134,56 @@ else
     fi
 fi
 
-log_info "Cleanup completed successfully"
+# Full cleanup: uninstall proxy service, remove bind mounts, delete API tokens
+log_info "Starting full cleanup: uninstalling proxy service and removing remaining artifacts"
+
+# 1. Run the proxy uninstaller if available
+INSTALLER_PATH="/usr/local/share/pulse/install-sensor-proxy.sh"
+if [[ -x "$INSTALLER_PATH" ]]; then
+    log_info "Running proxy uninstaller to remove service and bind mounts"
+    if "$INSTALLER_PATH" --uninstall --quiet; then
+        log_info "Proxy service uninstalled successfully"
+    else
+        log_warn "Proxy uninstaller reported errors (may already be removed)"
+    fi
+else
+    log_warn "Proxy uninstaller not found at $INSTALLER_PATH - manual cleanup may be required"
+fi
+
+# 2. Delete Proxmox API tokens
+log_info "Removing Proxmox API tokens for pulse-monitor user"
+
+# Find all API tokens for pulse-monitor user
+if command -v pveum >/dev/null 2>&1; then
+    # List tokens for pulse-monitor user
+    TOKENS=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk 'NR>1 {print $1}' || echo "")
+
+    if [[ -n "$TOKENS" ]]; then
+        for token_id in $TOKENS; do
+            log_info "Removing API token: pulse-monitor@pam!${token_id}"
+            if pveum user token remove pulse-monitor@pam "${token_id}" 2>/dev/null; then
+                log_info "Successfully removed token: ${token_id}"
+            else
+                log_warn "Failed to remove token: ${token_id}"
+            fi
+        done
+    else
+        log_info "No API tokens found for pulse-monitor@pam user"
+    fi
+
+    # Remove the pulse-monitor user entirely
+    if pveum user list 2>/dev/null | grep -q "pulse-monitor@pam"; then
+        log_info "Removing pulse-monitor@pam user"
+        if pveum user delete pulse-monitor@pam 2>/dev/null; then
+            log_info "Successfully removed pulse-monitor@pam user"
+        else
+            log_warn "Failed to remove pulse-monitor@pam user"
+        fi
+    fi
+else
+    log_warn "pveum command not available - cannot remove API tokens automatically"
+    log_info "Manual cleanup: pveum user delete pulse-monitor@pam"
+fi
+
+log_info "Full cleanup completed successfully"
 exit 0
