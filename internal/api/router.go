@@ -67,6 +67,13 @@ type Router struct {
 	bootstrapTokenPath   string
 }
 
+func pulseBinDir() string {
+	if dir := strings.TrimSpace(os.Getenv("PULSE_BIN_DIR")); dir != "" {
+		return dir
+	}
+	return "/opt/pulse/bin"
+}
+
 func isDirectLoopbackRequest(req *http.Request) bool {
 	if req == nil {
 		return false
@@ -3209,7 +3216,7 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 
 	if normalized := normalizeDockerAgentArch(archParam); normalized != "" {
 		searchPaths = append(searchPaths,
-			filepath.Join("/opt/pulse/bin", "pulse-docker-agent-"+normalized),
+			filepath.Join(pulseBinDir(), "pulse-docker-agent-"+normalized),
 			filepath.Join("/opt/pulse", "pulse-docker-agent-"+normalized),
 			filepath.Join("/app", "pulse-docker-agent-"+normalized), // legacy Docker image layout
 		)
@@ -3217,7 +3224,7 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 
 	// Default locations (host architecture)
 	searchPaths = append(searchPaths,
-		filepath.Join("/opt/pulse/bin", "pulse-docker-agent"),
+		filepath.Join(pulseBinDir(), "pulse-docker-agent"),
 		"/opt/pulse/pulse-docker-agent",
 		filepath.Join("/app", "pulse-docker-agent"), // legacy Docker image layout
 	)
@@ -3359,7 +3366,7 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 	// Try platform-specific binary first
 	if strictMode {
 		searchPaths = append(searchPaths,
-			filepath.Join("/opt/pulse/bin", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
+			filepath.Join(pulseBinDir(), fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
 			filepath.Join("/opt/pulse", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
 			filepath.Join("/app", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
 		)
@@ -3367,7 +3374,7 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 
 	if platformParam != "" && !strictMode {
 		searchPaths = append(searchPaths,
-			filepath.Join("/opt/pulse/bin", "pulse-host-agent-"+platformParam),
+			filepath.Join(pulseBinDir(), "pulse-host-agent-"+platformParam),
 			filepath.Join("/opt/pulse", "pulse-host-agent-"+platformParam),
 			filepath.Join("/app", "pulse-host-agent-"+platformParam),
 		)
@@ -3376,7 +3383,7 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 	// Default locations (host architecture) - only when no platform/arch specified
 	if !strictMode && platformParam == "" {
 		searchPaths = append(searchPaths,
-			filepath.Join("/opt/pulse/bin", "pulse-host-agent"),
+			filepath.Join(pulseBinDir(), "pulse-host-agent"),
 			"/opt/pulse/pulse-host-agent",
 			filepath.Join("/app", "pulse-host-agent"),
 		)
@@ -3603,11 +3610,11 @@ func (r *Router) handleDownloadPulseSensorProxy(w http.ResponseWriter, req *http
 	}
 
 	// Try pre-built architecture-specific binary first (in container)
-	binaryPath = filepath.Join("/opt/pulse/bin", filename)
+	binaryPath = filepath.Join(pulseBinDir(), filename)
 	content, err := os.ReadFile(binaryPath)
 	if err != nil {
 		// Try generic pulse-sensor-proxy binary (built for host arch)
-		genericPath := "/opt/pulse/bin/pulse-sensor-proxy"
+		genericPath := filepath.Join(pulseBinDir(), "pulse-sensor-proxy")
 		content, err = os.ReadFile(genericPath)
 		if err == nil {
 			log.Info().
