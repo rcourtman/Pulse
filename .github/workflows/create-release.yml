@@ -420,6 +420,20 @@ jobs:
             exit 1
           fi
 
+          RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          if [ "$RELEASE_TAG" != "$TAG" ]; then
+            echo "::warning::Release tag mismatch (got ${RELEASE_TAG}, expected ${TAG}). Updating tag name..."
+            RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+              -X PATCH \
+              -F tag_name="${TAG}")
+            UPDATED_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+            if [ "$UPDATED_TAG" != "$TAG" ]; then
+              echo "::error::Failed to update release tag to ${TAG} (still ${UPDATED_TAG})"
+              exit 1
+            fi
+            echo "✓ Release tag normalized to ${UPDATED_TAG}"
+          fi
+
           echo "release_url=$(echo "$RELEASE_JSON" | jq -r '.html_url')" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
 
