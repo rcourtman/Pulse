@@ -272,6 +272,28 @@ type Proxy struct {
 	idMappedGIDRanges []idRange
 }
 
+type contextKey int
+
+const (
+	contextKeyPeerCapabilities contextKey = iota + 1
+)
+
+func withPeerCapabilities(ctx context.Context, caps Capability) context.Context {
+	return context.WithValue(ctx, contextKeyPeerCapabilities, caps)
+}
+
+func peerCapabilitiesFromContext(ctx context.Context) Capability {
+	if ctx == nil {
+		return 0
+	}
+	if value := ctx.Value(contextKeyPeerCapabilities); value != nil {
+		if caps, ok := value.(Capability); ok {
+			return caps
+		}
+	}
+	return 0
+}
+
 // RPC request types
 const (
 	RPCEnsureClusterKeys = "ensure_cluster_keys"
@@ -755,6 +777,9 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 		p.audit.LogCommandStart(req.CorrelationID, cred, remoteAddr, "", req.Method, nil)
 	}
 
+	// Annotate context with peer capabilities before executing handler
+	ctx = withPeerCapabilities(ctx, peerCaps)
+
 	// Execute handler
 	result, err := handler(ctx, &req, logger)
 	duration := time.Since(startTime)
@@ -1041,11 +1066,19 @@ func (p *Proxy) handleGetStatusV2(ctx context.Context, req *RPCRequest, logger z
 	}
 
 	logger.Info().Msg("Status request served")
-	return map[string]interface{}{
+	response := map[string]interface{}{
 		"version":    Version,
 		"public_key": string(pubKey),
 		"ssh_dir":    p.sshKeyPath,
-	}, nil
+	}
+
+	if caps := peerCapabilitiesFromContext(ctx); caps != 0 {
+		if names := capabilityNames(caps); len(names) > 0 {
+			response["capabilities"] = names
+		}
+	}
+
+	return response, nil
 }
 
 // handleEnsureClusterKeysV2 discovers cluster nodes and pushes SSH keys with validation

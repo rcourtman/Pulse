@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -3461,6 +3462,18 @@ func (r *Router) handleDiagnosticsRegisterProxyNodes(w http.ResponseWriter, req 
 
 	nodes, err := client.RegisterNodes()
 	if err != nil {
+		var proxyErr *tempproxy.ProxyError
+		if errors.As(err, &proxyErr) {
+			status := http.StatusBadGateway
+			code := "proxy_error"
+			if proxyErr.Type == tempproxy.ErrorTypeAuth {
+				status = http.StatusForbidden
+				code = "proxy_permission_denied"
+			}
+			writeErrorResponse(w, status, code, proxyErr.Error(), nil)
+			return
+		}
+
 		log.Error().Err(err).Msg("Failed to request proxy node registration status")
 		writeErrorResponse(w, http.StatusBadGateway, "proxy_error", err.Error(), nil)
 		return
