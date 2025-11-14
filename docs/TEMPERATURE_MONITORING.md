@@ -12,6 +12,16 @@ Pulse can display real-time CPU and NVMe temperatures directly in your dashboard
   - Yellow: 60-80°C (warm)
   - Red: > 80°C (hot)
 
+## Transport Architecture
+
+Pulse attempts temperature collection in a fixed order so you can reason about which path is active for any node:
+
+1. **HTTPS proxy (`pulse-sensor-proxy --http-mode`)** – each Proxmox host can expose its own TLS endpoint on port 8443. Pulse stores the proxy URL and bearer token in `nodes.enc` and talks to that proxy first.
+2. **Unix socket proxy** – when Pulse runs on the same machine, it mounts `/run/pulse-sensor-proxy` from the host and speaks to the proxy over a Unix socket with SO\_PEERCRED authentication.
+3. **Direct SSH** – final fallback for bare-metal installs. Container deployments keep this disabled unless `PULSE_DEV_ALLOW_CONTAINER_SSH=true`.
+
+If a node has an HTTPS proxy configured, Pulse does **not** fall back to socket or SSH. Instead it marks the node unavailable and surfaces the HTTP error in diagnostics so you can fix the underlying issue rather than masking it.
+
 ## Deployment-Specific Setup
 
 > **Important:** Pick the transport that matches your deployment:
@@ -178,17 +188,17 @@ For scripted environments, set either:
 
 ## How It Works
 
-### Secure Architecture (v4.24.0+)
+### Proxy-first architecture
 
-For **containerized deployments** (LXC/Docker), Pulse uses a secure proxy architecture:
+Pulse keeps temperature collection outside the Pulse process whenever possible:
 
-1. **pulse-sensor-proxy** runs on the Proxmox host (outside the container)
-2. SSH keys are stored on the host filesystem (`/var/lib/pulse-sensor-proxy/ssh/`)
-3. Pulse communicates with the proxy via unix socket
-4. The proxy handles all SSH connections to cluster nodes
+1. **pulse-sensor-proxy** runs on each Proxmox host, owns the SSH keys, and reads sensor data locally.
+2. Pulse talks to the proxy over HTTPS (`--http-mode`) when the host is remote, or over the Unix socket (`/run/pulse-sensor-proxy`) when Pulse runs on the same machine.
+3. The proxy fan-outs to cluster members using its own SSH configuration, so the Pulse container never needs direct SSH access.
 
 **Benefits:**
 - SSH keys never enter the container
+- HTTPS mode lets Pulse collect temperatures from any node reachable over TCP/8443 without sharing sockets across hosts
 - Container compromise doesn't expose infrastructure credentials
 - **LXC:** Automatically configured during installation (fully turnkey)
 - **Docker:** Requires manual proxy installation and volume mount (see Quick Start above)
@@ -223,7 +233,13 @@ When you need to provision the proxy yourself (for example via your own automati
    allowed_source_subnets:
      - 192.168.1.0/24
    metrics_address: 0.0.0.0:9127   # use "disabled" to switch metrics off
+   http_enabled: true
+   http_listen_addr: ":8443"
+   http_tls_cert: /etc/pulse-sensor-proxy/tls/server.crt
+   http_tls_key: /etc/pulse-sensor-proxy/tls/server.key
    ```
+
+   Provide `http_auth_token` (32+ bytes of random data) and ensure the TLS files exist. Tokens configured here must match the value saved in Pulse for each node.
 
 5. **Install the hardened systemd unit**  
    Copy the unit from `scripts/install-sensor-proxy.sh` or create `/etc/systemd/system/pulse-sensor-proxy.service` with:
@@ -287,7 +303,7 @@ When you need to provision the proxy yourself (for example via your own automati
 
 After the container restarts, the backend will automatically use the proxy. To refresh SSH keys on cluster nodes (e.g., after adding a new node), SSH to your Proxmox host and re-run the setup script: `curl -fsSL https://get.pulsenode.com/install-proxy.sh | bash -s -- --ctid <your-container-id>`
 
-### Post-install Verification (v4.24.0+)
+### Post-install Verification
 
 1. **Confirm proxy metrics**
    ```bash
@@ -302,7 +318,7 @@ After the container restarts, the backend will automatically use the proxy. To r
 3. **Check update history** – Any future proxy restarts/rollbacks are logged under **Settings → System → Updates**; include the associated `event_id` in post-change notes.
 4. **Measure queue depth/staleness** – Grafana panels `pulse_monitor_poll_queue_depth` and `pulse_monitor_poll_staleness_seconds` should return to baseline within a few polling cycles.
 
-### Legacy Architecture (Pre-v4.24.0 / Native Installs)
+### Legacy SSH Architecture (native installs)
 
 For native (non-containerized) installations, Pulse connects directly via SSH:
 
@@ -439,15 +455,38 @@ ssh root@your-proxmox-node "sensors -j"
 
 You should see JSON output with temperature data.
 
-## How It Works
+## Temperature Collection Pipeline
 
-1. Pulse uses SSH to connect to each node as root
-2. Runs `sensors -j` to get temperature data in JSON format
-3. Parses CPU temperatures (coretemp/k10temp)
-4. Parses NVMe temperatures (nvme-pci-*)
-5. Displays CPU temperatures on the overview dashboard and lists NVMe drive temperatures in the Storage tab's disk table when available
+1. **HTTPS proxy** – If a node has `TemperatureProxyURL` + `TemperatureProxyToken` configured (set automatically during `--http-mode` installs), Pulse calls `https://node:8443/temps?node=<shortname>` with the bearer token. The proxy enforces TLS, CIDR allowlists, and rate limits before handing Pulse the JSON payload from `sensors -j`.
+2. **Unix socket proxy** – If no HTTPS proxy is configured but the `/run/pulse-sensor-proxy` socket is mounted, Pulse talks to the proxy locally using SO\_PEERCRED authentication.
+3. **SSH fallback** – Bare-metal installs can still let Pulse SSH directly into the node, run `sensors -j`, and parse the output. Containerized Pulse keeps this disabled unless explicitly overridden for development.
+
+Regardless of transport, Pulse parses CPU package/core temperatures plus NVMe sensor data and surfaces it on the dashboard, Host details, and the Storage tab.
 
 ## Troubleshooting
+
+### HTTPS proxy not responding
+
+**Symptom:** Settings → Diagnostics → Temperature Proxy shows `proxy_unreachable`, `invalid_token`, or HTTP timeout errors for a node.
+
+**Verify connectivity:**
+```bash
+# On the Pulse host/container
+curl -vk https://node.example:8443/health \
+  -H "Authorization: Bearer $(sudo cat /etc/pulse-sensor-proxy/.http-auth-token)"
+```
+
+If that fails, confirm:
+- Port 8443/TCP is reachable from the Pulse host.
+- `/etc/pulse-sensor-proxy/config.yaml` lists the Pulse source CIDR in `allowed_source_subnets`.
+- `/etc/pulse-sensor-proxy/.http-auth-token` and `/etc/pulse-sensor-proxy/tls/*` exist with the correct permissions.
+
+**Resetting the proxy:** When you need to rebuild the proxy configuration, run the uninstall path first to clear sockets, TLS keys, and state:
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+  sudo bash -s -- --uninstall --purge
+```
+Then reinstall with the desired flags (for example, `--standalone --http-mode --pulse-server https://pulse:7655`).
 
 ### SSH Connection Attempts from Container ([preauth] Logs)
 
@@ -461,7 +500,7 @@ Connection closed by authenticating user root <container-ip> port <port> [preaut
 **Common causes:**
 - Dev mode enabled (`PULSE_DEV_ALLOW_CONTAINER_SSH=true` environment variable)
 - Sensor proxy not installed or socket not accessible
-- Legacy SSH keys from pre-v4.24.0 installations
+- Leftover SSH keys from legacy installations
 
 **Fix:**
 - **Docker:** Follow [Quick Start for Docker Deployments](#quick-start-for-docker-deployments) to install the proxy and add the bind mount
@@ -472,6 +511,8 @@ Connection closed by authenticating user root <container-ip> port <port> [preaut
 Once the proxy is properly configured, these log entries will stop immediately. See [Container Security Considerations](#container-security-considerations) for why direct container SSH is blocked.
 
 ### No Temperature Data Shown
+
+Check Settings → Diagnostics → Temperature Proxy first; it usually reports the precise HTTPS or socket error. If diagnostics are clear but temperatures are still blank, validate the legacy SSH path:
 
 **Check SSH access**:
 ```bash
