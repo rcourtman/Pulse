@@ -68,9 +68,9 @@ update_allowed_nodes() {
     shift
     local nodes=("$@")
 
-    # Create temp file
+    # Create temp file with unique prefix to avoid conflicts
     local tmp_config
-    tmp_config=$(mktemp)
+    tmp_config=$(mktemp /tmp/pulse-config.XXXXXXXXXX)
 
     # Ensure temp file is cleaned up on exit (success or failure)
     trap "rm -f '$tmp_config'" RETURN
