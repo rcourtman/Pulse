@@ -966,6 +966,9 @@ ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock
 journalctl -u pulse-sensor-proxy -f
 ```
 
+Forward these logs off-host for retention by following
+[operations/sensor-proxy-log-forwarding.md](operations/sensor-proxy-log-forwarding.md).
+
 In the Pulse container, check the logs at startup:
 ```bash
 # Should see: "Temperature proxy detected - using secure host-side bridge"
