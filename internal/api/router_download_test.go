@@ -11,12 +11,16 @@ import (
 	"testing"
 )
 
-func TestHandleDownloadHostAgentServesWindowsExe(t *testing.T) {
-	t.Cleanup(func() {
-		_ = os.Remove("/opt/pulse/bin/pulse-host-agent-windows-unit-test.exe")
-	})
+func setupTempPulseBin(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("PULSE_BIN_DIR", dir)
+	return dir
+}
 
-	filePath := filepath.Join("/opt/pulse/bin", "pulse-host-agent-windows-unit-test.exe")
+func TestHandleDownloadHostAgentServesWindowsExe(t *testing.T) {
+	binDir := setupTempPulseBin(t)
+	filePath := filepath.Join(binDir, "pulse-host-agent-windows-unit-test.exe")
 	if err := os.WriteFile(filePath, []byte("exe-binary"), 0o755); err != nil {
 		t.Fatalf("failed to write test binary: %v", err)
 	}
@@ -41,10 +45,8 @@ func TestHandleDownloadHostAgentServesChecksumForWindowsExe(t *testing.T) {
 		arch     = "unit-sha"
 		filename = "pulse-host-agent-windows-" + arch + ".exe"
 	)
-	filePath := filepath.Join("/opt/pulse/bin", filename)
-	t.Cleanup(func() {
-		_ = os.Remove(filePath)
-	})
+	binDir := setupTempPulseBin(t)
+	filePath := filepath.Join(binDir, filename)
 
 	payload := []byte("checksum-data")
 	if err := os.WriteFile(filePath, payload, 0o755); err != nil {
