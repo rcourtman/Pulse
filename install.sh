@@ -2553,9 +2553,15 @@ setup_directories() {
     chmod 700 "$CONFIG_DIR"
 
     # Ensure critical config files retain proper permissions if they exist
-    for config_file in "$CONFIG_DIR"/alerts.json "$CONFIG_DIR"/system.json "$CONFIG_DIR"/*.enc; do
+    for config_file in "$CONFIG_DIR"/alerts.json "$CONFIG_DIR"/system.json "$CONFIG_DIR"/*.enc "$CONFIG_DIR"/*.json; do
         if [[ -f "$config_file" ]]; then
             chown pulse:pulse "$config_file"
+        fi
+    done
+
+    for config_dir in "$CONFIG_DIR"/alerts "$CONFIG_DIR"/notifications; do
+        if [[ -d "$config_dir" ]]; then
+            chown -R pulse:pulse "$config_dir"
         fi
     done
 
@@ -2576,8 +2582,15 @@ PULSE_MOCK_MODE=false
 #PULSE_MOCK_RANDOM_METRICS=true
 #PULSE_MOCK_STOPPED_PERCENT=20
 EOF
+    fi
+    if [[ -f "$CONFIG_DIR/.env" ]]; then
         chown pulse:pulse "$CONFIG_DIR/.env"
         chmod 600 "$CONFIG_DIR/.env"
+    fi
+
+    if [[ -f "$CONFIG_DIR/.encryption.key" ]]; then
+        chown pulse:pulse "$CONFIG_DIR/.encryption.key"
+        chmod 600 "$CONFIG_DIR/.encryption.key"
     fi
 }
 
