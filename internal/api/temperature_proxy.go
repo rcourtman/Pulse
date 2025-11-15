@@ -188,11 +188,6 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 		return
 	}
 
-	if proxyURL == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_proxy_url", "Proxy URL is required", nil)
-		return
-	}
-
 	mode := strings.ToLower(strings.TrimSpace(req.Mode))
 	if mode == "" {
 		if proxyURL != "" {
@@ -203,11 +198,16 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 	}
 
 	isHTTPMode := mode == "http"
-	if isHTTPMode && !strings.HasPrefix(proxyURL, "https://") {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_proxy_url", "Proxy URL must use HTTPS", nil)
-		return
-	}
-	if !isHTTPMode {
+	if isHTTPMode {
+		if proxyURL == "" {
+			writeErrorResponse(w, http.StatusBadRequest, "missing_proxy_url", "Proxy URL is required for HTTP mode", nil)
+			return
+		}
+		if !strings.HasPrefix(strings.ToLower(proxyURL), "https://") {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_proxy_url", "Proxy URL must use HTTPS", nil)
+			return
+		}
+	} else {
 		proxyURL = ""
 	}
 
