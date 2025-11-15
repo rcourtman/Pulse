@@ -2291,10 +2291,12 @@ fi
 # Configure Pulse backend environment override inside container
 print_info "Configuring Pulse to use proxy..."
 
-# Check if Pulse service exists in container before configuring
+# Always make sure the Pulse .env file contains the proxy socket override.
+configure_container_proxy_env
+
 if ! pct exec "$CTID" -- systemctl status pulse >/dev/null 2>&1; then
-    print_warn "Pulse service not found in container $CTID; skipping proxy configuration"
-    print_info "Install Pulse in the container first, then re-run this installer"
+    print_warn "Pulse service not found in container $CTID; proxy socket configured but service restart deferred."
+    print_info "Install or restart Pulse inside the container to enable temperature monitoring."
 else
     pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse.service.d"
     pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse.service.d/10-pulse-proxy.conf
@@ -2470,3 +2472,20 @@ else
 fi
 
 exit 0
+# Ensure Pulse inside the container knows where to find the proxy socket.
+configure_container_proxy_env() {
+    local socket_line="PULSE_SENSOR_PROXY_SOCKET=/mnt/pulse-proxy/pulse-sensor-proxy.sock"
+    pct exec "$CTID" -- bash -lc '
+set -e
+ENV_FILE="/etc/pulse/.env"
+SOCKET_LINE="'"$socket_line"'"
+mkdir -p /etc/pulse
+if [[ -f "$ENV_FILE" ]] && grep -q "^PULSE_SENSOR_PROXY_SOCKET=" "$ENV_FILE" 2>/dev/null; then
+  sed -i "s|^PULSE_SENSOR_PROXY_SOCKET=.*|$SOCKET_LINE|" "$ENV_FILE"
+else
+  echo "$SOCKET_LINE" >> "$ENV_FILE"
+fi
+chmod 600 "$ENV_FILE" 2>/dev/null || true
+chown pulse:pulse "$ENV_FILE" 2>/dev/null || true
+' >/dev/null 2>&1 || print_warn "Unable to update /etc/pulse/.env inside container $CTID"
+}
