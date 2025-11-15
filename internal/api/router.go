@@ -487,8 +487,11 @@ func (r *Router) setupRoutes() {
 				status["bootstrapTokenPath"] = r.bootstrapTokenPath
 				status["isDocker"] = os.Getenv("PULSE_DOCKER") == "true"
 				status["inContainer"] = system.InContainer()
+				// Try auto-detection first, then fall back to env override
 				if ctid := system.DetectLXCCTID(); ctid != "" {
 					status["lxcCtid"] = ctid
+				} else if envCtid := os.Getenv("PULSE_LXC_CTID"); envCtid != "" {
+					status["lxcCtid"] = envCtid
 				}
 				if containerName := system.DetectDockerContainerName(); containerName != "" {
 					status["dockerContainerName"] = containerName
