@@ -988,12 +988,13 @@ register_with_pulse() {
     local pulse_url="$1"
     local hostname="$2"
     local proxy_url="$3"
+    local mode="${4:-}"
 
     # Output to stderr so it doesn't interfere with command substitution
     print_info "Registering temperature proxy with Pulse at $pulse_url..." >&2
 
     # Build registration request with retry logic
-    local response
+    local response body
     local http_code
     local attempt
     local max_attempts=3
@@ -1005,18 +1006,30 @@ register_with_pulse() {
             sleep 2
         fi
 
-        # Capture both HTTP code and response body
-        response=$(curl -w "\n%{http_code}" -f -s -X POST \
+        response=$(curl -w "\n%{http_code}" -sS -X POST \
             -H "Content-Type: application/json" \
             -d "{\"hostname\":\"${hostname}\",\"proxy_url\":\"${proxy_url}\"}" \
-            "$register_url" 2>&1)
+            "$register_url")
 
         local curl_exit=$?
         http_code=$(echo "$response" | tail -1)
-        response=$(echo "$response" | head -n -1)
+        body=$(echo "$response" | head -n -1)
 
-        if [[ $curl_exit -eq 0 ]]; then
-            break
+        # Retry network errors
+        if [[ $curl_exit -ne 0 && -z "$http_code" ]]; then
+            continue
+        fi
+
+        if [[ "$http_code" =~ ^20 ]]; then
+            print_success "Registered successfully" >&2
+            echo "$body"
+            return 0
+        fi
+
+        if [[ "$http_code" == "404" && "$body" == *'"pve_instance_not_found"'* ]]; then
+            print_warn "Pulse has not been configured with a Proxmox instance named '$hostname' yet." >&2
+            print_warn "Add the node in Pulse (Settings → Nodes) and re-run the sensor proxy installer to enable control-plane sync." >&2
+            return 0
         fi
 
         if [[ $attempt -eq $max_attempts ]]; then
@@ -1029,7 +1042,7 @@ register_with_pulse() {
             print_error "HTTP Code: $http_code" >&2
             print_error "Hostname: $hostname" >&2
             print_error "Proxy URL: $proxy_url" >&2
-            print_error "Response: $response" >&2
+            print_error "Response: $body" >&2
             print_error "" >&2
             print_error "Troubleshooting:" >&2
             print_error "  1. Ensure this PVE instance is added to Pulse first" >&2
@@ -1043,11 +1056,7 @@ register_with_pulse() {
         fi
     done
 
-    # Output to stderr so it doesn't interfere with command substitution
-    print_success "Registered successfully" >&2
-
-    # Return full response for caller parsing
-    echo "$response"
+    return 1
 }
 
 write_control_plane_token() {
