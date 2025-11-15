@@ -1761,13 +1761,16 @@ if [[ -z "$HOST" ]]; then
 else
     log_info "Cleaning up specific host: $HOST"
 
-    # Extract IP from host URL
+    # Extract hostname/IP from host URL
     HOST_CLEAN=$(echo "$HOST" | sed -e 's|^https\?://||' -e 's|:.*$||')
 
-    # Check if this is localhost
+    # Check if this is localhost (by IP, hostname, or FQDN)
     LOCAL_IPS=$(hostname -I 2>/dev/null || echo "")
+    LOCAL_HOSTNAME=$(hostname 2>/dev/null || echo "")
+    LOCAL_FQDN=$(hostname -f 2>/dev/null || echo "")
     IS_LOCAL=false
 
+    # Check against all local IPs
     for local_ip in $LOCAL_IPS; do
         if [[ "$HOST_CLEAN" == "$local_ip" ]]; then
             IS_LOCAL=true
@@ -1775,7 +1778,9 @@ else
         fi
     done
 
-    if [[ "$HOST_CLEAN" == "127.0.0.1" || "$HOST_CLEAN" == "localhost" ]]; then
+    # Check against hostname and FQDN
+    if [[ "$HOST_CLEAN" == "127.0.0.1" || "$HOST_CLEAN" == "localhost" || \
+          "$HOST_CLEAN" == "$LOCAL_HOSTNAME" || "$HOST_CLEAN" == "$LOCAL_FQDN" ]]; then
         IS_LOCAL=true
     fi
 
@@ -1837,7 +1842,9 @@ else
             # Use systemd-run to create isolated transient unit that won't be killed
             # when we stop pulse-sensor-proxy.service
             if command -v systemd-run >/dev/null 2>&1; then
-                UNINSTALL_UNIT="pulse-uninstall-$(date +%s)"
+                # Use UUID for unique unit name (prevents same-second collisions)
+                UNINSTALL_UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s%N)
+                UNINSTALL_UNIT="pulse-uninstall-${UNINSTALL_UUID}"
                 log_info "Spawning isolated uninstaller unit: $UNINSTALL_UNIT"
 
                 systemd-run \
@@ -1845,12 +1852,19 @@ else
                     --property="Type=oneshot" \
                     --property="Conflicts=pulse-sensor-proxy.service" \
                     --property="After=pulse-sensor-cleanup.service" \
-                    --no-block \
+                    --collect \
+                    --wait \
                     --quiet \
-                    -- bash -c "$INSTALLER_PATH --uninstall --quiet >> /var/log/pulse/sensor-proxy/uninstall.log 2>&1" \
+                    -- bash -c "$INSTALLER_PATH --uninstall --purge --quiet >> /var/log/pulse/sensor-proxy/uninstall.log 2>&1" \
                     2>&1 | logger -t "$LOG_TAG" -p user.info
 
-                log_info "Uninstaller started in isolated systemd unit (non-blocking)"
+                UNINSTALL_EXIT=$?
+                if [[ $UNINSTALL_EXIT -eq 0 ]]; then
+                    log_info "Uninstaller completed successfully"
+                else
+                    log_error "Uninstaller failed with exit code $UNINSTALL_EXIT"
+                    exit 1
+                fi
             else
                 log_warn "systemd-run not available, attempting direct uninstall (may fail)"
                 bash "$INSTALLER_PATH" --uninstall --quiet >> /var/log/pulse/sensor-proxy/uninstall.log 2>&1 || \
@@ -1938,10 +1952,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=pulse-sensor-cleanup
 
-# Security hardening (less restrictive than the proxy since we need SSH access)
+# Security hardening (less restrictive than the proxy since we need SSH access and Proxmox config access)
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/pulse-sensor-proxy /root/.ssh
+ReadWritePaths=/var/lib/pulse-sensor-proxy /root/.ssh /etc/pve /etc/systemd/system
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -1994,7 +2008,7 @@ if command -v pvecm >/dev/null 2>&1; then
         print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"
 
         # Configure SSH key with forced command restriction
-        FORCED_CMD='command="/usr/local/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+        FORCED_CMD='command="/opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
         AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
         # Track SSH key push results
@@ -2084,7 +2098,7 @@ if command -v pvecm >/dev/null 2>&1; then
         print_info "No cluster detected, configuring standalone node..."
 
         # Configure SSH key with forced command restriction
-        FORCED_CMD='command="/usr/local/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+        FORCED_CMD='command="/opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
         AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
         print_info "Authorizing proxy key on localhost..."
@@ -2355,7 +2369,7 @@ cat > "$SELFHEAL_SCRIPT" <<'EOF'
 set -euo pipefail
 
 SERVICE="pulse-sensor-proxy"
-INSTALLER="/usr/local/share/pulse/install-sensor-proxy.sh"
+INSTALLER="/opt/pulse/sensor-proxy/install-sensor-proxy.sh"
 CTID_FILE="/etc/pulse-sensor-proxy/ctid"
 LOG_TAG="pulse-sensor-proxy-selfheal"
 

@@ -3528,8 +3528,12 @@ if [[ $MAIN_ACTION =~ ^[2Rr]$ ]]; then
     echo ""
 
     # Run cleanup helper to remove SSH keys from remote nodes
-    if [ -x /usr/local/bin/pulse-sensor-cleanup.sh ]; then
+    if [ -x /opt/pulse/sensor-proxy/bin/pulse-sensor-cleanup.sh ]; then
         echo "  • Running cleanup helper..."
+        /opt/pulse/sensor-proxy/bin/pulse-sensor-cleanup.sh 2>/dev/null || echo "  ℹ️  Cleanup helper completed"
+        echo ""
+    elif [ -x /usr/local/bin/pulse-sensor-cleanup.sh ]; then
+        echo "  • Running cleanup helper (legacy path)..."
         /usr/local/bin/pulse-sensor-cleanup.sh 2>/dev/null || echo "  ℹ️  Cleanup helper completed"
         echo ""
     fi
@@ -3569,15 +3573,17 @@ if [[ $MAIN_ACTION =~ ^[2Rr]$ ]]; then
             fi
         fi
 
-        # Remove pulse-sensor-proxy binary
+        # Remove pulse-sensor-proxy binaries (both new and legacy paths)
+        if [ -d /opt/pulse/sensor-proxy ]; then
+            echo "  • Removing pulse-sensor-proxy installation..."
+            rm -rf /opt/pulse/sensor-proxy
+        fi
         if [ -f /usr/local/bin/pulse-sensor-proxy ]; then
-            echo "  • Removing pulse-sensor-proxy binary..."
+            echo "  • Removing legacy pulse-sensor-proxy binary..."
             rm -f /usr/local/bin/pulse-sensor-proxy
         fi
-
-        # Remove cleanup helper script
         if [ -f /usr/local/bin/pulse-sensor-cleanup.sh ]; then
-            echo "  • Removing cleanup helper script..."
+            echo "  • Removing legacy cleanup helper script..."
             rm -f /usr/local/bin/pulse-sensor-cleanup.sh
         fi
 
