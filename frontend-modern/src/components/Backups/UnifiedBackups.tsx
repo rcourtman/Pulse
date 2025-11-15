@@ -50,7 +50,7 @@ interface DateGroup {
 
 const UnifiedBackups: Component = () => {
   const navigate = useNavigate();
-  const { state, connected } = useWebSocket();
+  const { state, connected, initialDataReceived } = useWebSocket();
   const pveBackupsState = createMemo(() => state.backups?.pve ?? state.pveBackups);
   const pbsBackupsState = createMemo(() => state.backups?.pbs ?? state.pbsBackups);
   const pmgBackupsState = createMemo(() => state.backups?.pmg ?? state.pmgBackups);
@@ -178,8 +178,11 @@ const UnifiedBackups: Component = () => {
     if (!connected()) {
       return true;
     }
-    const lastUpdate = state.lastUpdate;
-    return !lastUpdate;
+    if (!initialDataReceived()) {
+      return true;
+    }
+    const hasLastUpdate = Boolean(state.lastUpdate);
+    return !hasLastUpdate;
   });
 
   // Normalize all backup data into unified format
