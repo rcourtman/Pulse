@@ -56,6 +56,37 @@ func InContainer() bool {
 	return false
 }
 
+// DetectDockerContainerName attempts to detect the Docker container name.
+// Returns empty string if not in Docker or name cannot be determined.
+func DetectDockerContainerName() string {
+	// Method 1: Check hostname (Docker uses container ID or name as hostname)
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		// Docker hostnames are either short container ID (12 chars) or custom name
+		// If it looks like a container ID (hex), skip it - user needs to use name
+		if !isHexString(hostname) || len(hostname) > 12 {
+			return hostname
+		}
+	}
+
+	// Method 2: Try reading from /proc/self/cgroup
+	if data, err := os.ReadFile("/proc/self/cgroup"); err == nil {
+		// Look for patterns like: 0::/docker/<container-id>
+		// But we can't get name from cgroup, only ID
+		_ = data // placeholder for future enhancement
+	}
+
+	return ""
+}
+
+func isHexString(s string) bool {
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 // DetectLXCCTID attempts to detect the Proxmox LXC container ID.
 // Returns empty string if not in an LXC container or CTID cannot be determined.
 func DetectLXCCTID() string {

@@ -490,6 +490,9 @@ func (r *Router) setupRoutes() {
 				if ctid := system.DetectLXCCTID(); ctid != "" {
 					status["lxcCtid"] = ctid
 				}
+				if containerName := system.DetectDockerContainerName(); containerName != "" {
+					status["dockerContainerName"] = containerName
+				}
 			}
 
 			if r.config.DisableAuthEnvDetected {
