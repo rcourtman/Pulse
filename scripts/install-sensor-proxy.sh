@@ -649,6 +649,11 @@ if ! groups pulse-sensor-proxy | grep -q '\bwww-data\b'; then
     usermod -aG www-data pulse-sensor-proxy
 fi
 
+# Create installation directories before binary installation (handles fresh installs and upgrades)
+print_info "Setting up installation directories..."
+install -d -o root -g root -m 0755 "${INSTALL_ROOT}"
+install -d -o root -g root -m 0755 "${INSTALL_ROOT}/bin"
+
 # Install binary - either from local file or download from GitHub
 if [[ -n "$LOCAL_BINARY" ]]; then
     # Use local binary for testing
@@ -892,10 +897,8 @@ sys.exit(0)
     print_info "Binary installed to $BINARY_PATH"
 fi
 
-# Create directories with proper ownership (handles fresh installs and upgrades)
-print_info "Setting up directories with proper ownership..."
-install -d -o root -g root -m 0755 "${INSTALL_ROOT}"
-install -d -o root -g root -m 0755 "${INSTALL_ROOT}/bin"
+# Create remaining directories with proper ownership (handles fresh installs and upgrades)
+print_info "Setting up service directories with proper ownership..."
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy
 install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 "$SSH_DIR"
 install -m 0600 -o pulse-sensor-proxy -g pulse-sensor-proxy /dev/null "$SSH_DIR/known_hosts"
