@@ -118,19 +118,14 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 lines = path.read_text().splitlines()
-if not lines:
-    path.write_text('')
-    exit()
-
 out = []
 pending = []
 skip = False
 
 def flush_pending():
-    global pending
     if pending:
         out.extend(pending)
-        pending = []
+        pending.clear()
 
 i = 0
 while i < len(lines):
@@ -138,14 +133,14 @@ while i < len(lines):
     stripped = line.lstrip()
 
     if skip:
-        indent = len(line) - len(stripped)
-        if indent > 0 or stripped.startswith('#'):
+        # Keep skipping until a non-indented, non-comment line appears
+        if stripped == '' or stripped.startswith('#') or stripped.startswith('-') or line.startswith((' ', '\t')):
             i += 1
             continue
         skip = False
 
     if stripped.startswith('allowed_nodes:'):
-        pending = []
+        pending.clear()
         skip = True
         i += 1
         continue
@@ -160,7 +155,7 @@ while i < len(lines):
     i += 1
 
 flush_pending()
-path.write_text('\n'.join(out) + '\n')
+path.write_text('\n'.join(out) + ('\n' if out else ''))
 PY
     else
         # Fallback: truncate the file to remove duplicates if python3 is unavailable
