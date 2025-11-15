@@ -319,18 +319,22 @@ IMPORTANT: Keep these credentials secure!
                   >
                     <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
                       <Show when={isDocker()}>
-                        <div class="text-blue-600 dark:text-blue-400 mb-1"># From container host:</div>
+                        <div class="text-blue-600 dark:text-blue-400 mb-1"># From Docker host:</div>
                         docker exec &lt;container-name&gt; cat {bootstrapTokenPath()}
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or kubectl for Kubernetes:</div>
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># For Kubernetes:</div>
                         kubectl exec &lt;pod-name&gt; -- cat {bootstrapTokenPath()}
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or exec into the container:</div>
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># For Proxmox LXC running Docker:</div>
+                        pct exec &lt;ctid&gt; -- docker exec &lt;container-name&gt; cat {bootstrapTokenPath()}
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or enter the LXC container first:</div>
+                        pct enter &lt;ctid&gt;
+                        <div class="text-gray-500 dark:text-gray-400 mt-1 mb-1"># Then inside LXC:</div>
                       </Show>
                       <Show when={!isDocker() && bootstrapTokenPath() === '/etc/pulse/.bootstrap_token'}>
                         <div class="text-blue-600 dark:text-blue-400 mb-1"># For Proxmox LXC, run from Proxmox host:</div>
                         pct enter &lt;ctid&gt;
                         <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or directly retrieve:</div>
                         pct exec &lt;ctid&gt; -- cat {bootstrapTokenPath()}
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or from inside the container:</div>
+                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or from inside the LXC container:</div>
                       </Show>
                       cat {bootstrapTokenPath()}
                     </div>
