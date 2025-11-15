@@ -269,7 +269,7 @@ determine_installer_ref() {
 
 cache_installer_for_self_heal() {
     INSTALLER_CACHE_REASON=""
-    install -d "$SHARE_DIR"
+    install -d "${INSTALL_ROOT}"
 
     local source_issue=""
     if [[ -n "$SCRIPT_SOURCE" && -f "$SCRIPT_SOURCE" ]]; then
