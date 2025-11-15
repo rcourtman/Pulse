@@ -50,7 +50,7 @@ interface DateGroup {
 
 const UnifiedBackups: Component = () => {
   const navigate = useNavigate();
-  const { state } = useWebSocket();
+  const { state, connected } = useWebSocket();
   const pveBackupsState = createMemo(() => state.backups?.pve ?? state.pveBackups);
   const pbsBackupsState = createMemo(() => state.backups?.pbs ?? state.pbsBackups);
   const pmgBackupsState = createMemo(() => state.backups?.pmg ?? state.pmgBackups);
@@ -174,6 +174,9 @@ const UnifiedBackups: Component = () => {
       (pmg?.length ?? 0) > 0;
     if (hasData) {
       return false;
+    }
+    if (!connected()) {
+      return true;
     }
     const lastUpdate = state.lastUpdate;
     return !lastUpdate;
