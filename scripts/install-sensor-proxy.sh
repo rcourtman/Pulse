@@ -2076,9 +2076,6 @@ if command -v pvecm >/dev/null 2>&1; then
     # Extract node IPs from pvecm status
     CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print $3}' || true)
 
-    # Extract node names from pvecm nodes (for allowlist)
-    CLUSTER_NODE_NAMES=$(pvecm nodes 2>/dev/null | awk 'NR>2 {print $3}' || true)
-
     if [[ -n "$CLUSTER_NODES" ]]; then
         print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"
 
@@ -2166,13 +2163,10 @@ if command -v pvecm >/dev/null 2>&1; then
 
         # Add discovered cluster nodes to config file for allowlist validation
         print_info "Updating proxy configuration with discovered cluster nodes..."
-        # Collect all nodes (IPs and hostnames) into array
+        # Collect only IPs (hostnames are not used for SSH temperature collection)
         all_nodes=()
         for node_ip in $CLUSTER_NODES; do
             all_nodes+=("$node_ip")
-        done
-        for node_name in $CLUSTER_NODE_NAMES; do
-            all_nodes+=("$node_name")
         done
         # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
         update_allowed_nodes "Cluster nodes (auto-discovered during installation)" "${all_nodes[@]}"
