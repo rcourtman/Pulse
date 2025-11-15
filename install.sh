@@ -1864,7 +1864,7 @@ download_pulse() {
                 UPDATE_CHANNEL="${FORCE_CHANNEL}"
                 print_info "Using $UPDATE_CHANNEL channel from command line"
             elif [[ -f "$CONFIG_DIR/system.json" ]]; then
-                CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
+                CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
                 if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
                     UPDATE_CHANNEL="rc"
                     print_info "RC channel detected in configuration"
