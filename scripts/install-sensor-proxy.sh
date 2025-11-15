@@ -111,45 +111,60 @@ update_allowed_nodes() {
     done
 
     # Remove any existing allowed_nodes block (including descriptive comments) to prevent duplicates
-    local tmp_config
-    tmp_config=$(mktemp)
-    if awk '
-        BEGIN { skip=0; pending_count=0 }
-        function flush_pending() {
-            for (i=1; i<=pending_count; i++) print pending[i]
-            pending_count=0
-        }
-        {
-            if (skip) {
-                if ($0 ~ /^[[:space:]]*$/ || $0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*-[[:space:]]*/) {
-                    next
-                }
-                skip=0
-            }
-            if ($0 ~ /^[[:space:]]*allowed_nodes:[[:space:]]*$/) {
-                pending_count=0
-                skip=1
-                next
-            }
-            if ($0 ~ /^[[:space:]]*$/ || $0 ~ /^[[:space:]]*#/) {
-                pending[++pending_count]=$0
-                next
-            }
-            if (pending_count > 0) {
-                flush_pending()
-            }
-            print
-        }
-        END {
-            if (!skip && pending_count > 0) {
-                flush_pending()
-            }
-        }
-    ' "$config_file" > "$tmp_config"; then
-        mv "$tmp_config" "$config_file"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$config_file" <<'PY' || true
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text().splitlines()
+out = []
+pending = []
+skip = False
+
+def flush_pending(buf, output):
+    if buf:
+        output.extend(buf)
+        buf.clear()
+
+i = 0
+while i < len(text):
+    line = text[i]
+    stripped = line.lstrip()
+
+    if skip:
+        if stripped == "" or stripped.startswith("#") or stripped.startswith("-"):
+            i += 1
+            continue
+        if line.startswith(" "):
+            # still part of allowed_nodes indentation (e.g., comments), skip
+            if stripped.startswith("allowed_nodes:"):
+                # unexpected nested block; continue handling
+                i += 1
+                continue
+        skip = False
+
+    if stripped.startswith("allowed_nodes:"):
+        pending.clear()
+        skip = True
+        i += 1
+        continue
+
+    if stripped == "" or stripped.startswith("#"):
+        pending.append(line)
+        i += 1
+        continue
+
+    flush_pending(pending, out)
+    out.append(line)
+    i += 1
+
+flush_pending(pending, out)
+path.write_text("\n".join(out) + ("\n" if text else ""))
+PY
     else
-        rm -f "$tmp_config"
-        print_warn "Failed to sanitize existing allowed_nodes block; duplicates may remain"
+        # Fallback: truncate the file to remove duplicates if python3 is unavailable
+        grep -v '^allowed_nodes:' "$config_file" > "${config_file}.tmp" && mv "${config_file}.tmp" "$config_file"
     fi
 
     {
