@@ -47,6 +47,7 @@ type InitiatedVia string
 
 const (
 	InitiatedViaUI      InitiatedVia = "ui"
+	InitiatedViaAPI     InitiatedVia = "api"
 	InitiatedViaCLI     InitiatedVia = "cli"
 	InitiatedViaScript  InitiatedVia = "script"
 	InitiatedViaWebhook InitiatedVia = "webhook"
@@ -54,23 +55,23 @@ const (
 
 // UpdateHistoryEntry represents a single update event
 type UpdateHistoryEntry struct {
-	EventID        string              `json:"event_id"`
-	Timestamp      time.Time           `json:"timestamp"`
-	Action         UpdateAction        `json:"action"`
-	Channel        string              `json:"channel"`
-	VersionFrom    string              `json:"version_from"`
-	VersionTo      string              `json:"version_to"`
-	DeploymentType string              `json:"deployment_type"`
-	InitiatedBy    InitiatedBy         `json:"initiated_by"`
-	InitiatedVia   InitiatedVia        `json:"initiated_via"`
-	Status         UpdateStatusType    `json:"status"`
-	DurationMs     int64               `json:"duration_ms"`
-	BackupPath     string              `json:"backup_path,omitempty"`
-	LogPath        string              `json:"log_path,omitempty"`
-	Error          *UpdateError        `json:"error,omitempty"`
-	DownloadBytes  int64               `json:"download_bytes,omitempty"`
-	RelatedEventID string              `json:"related_event_id,omitempty"`
-	Notes          string              `json:"notes,omitempty"`
+	EventID        string           `json:"event_id"`
+	Timestamp      time.Time        `json:"timestamp"`
+	Action         UpdateAction     `json:"action"`
+	Channel        string           `json:"channel"`
+	VersionFrom    string           `json:"version_from"`
+	VersionTo      string           `json:"version_to"`
+	DeploymentType string           `json:"deployment_type"`
+	InitiatedBy    InitiatedBy      `json:"initiated_by"`
+	InitiatedVia   InitiatedVia     `json:"initiated_via"`
+	Status         UpdateStatusType `json:"status"`
+	DurationMs     int64            `json:"duration_ms"`
+	BackupPath     string           `json:"backup_path,omitempty"`
+	LogPath        string           `json:"log_path,omitempty"`
+	Error          *UpdateError     `json:"error,omitempty"`
+	DownloadBytes  int64            `json:"download_bytes,omitempty"`
+	RelatedEventID string           `json:"related_event_id,omitempty"`
+	Notes          string           `json:"notes,omitempty"`
 }
 
 // UpdateError represents error information
@@ -82,10 +83,10 @@ type UpdateError struct {
 
 // HistoryFilter represents filters for querying update history
 type HistoryFilter struct {
-	Status       UpdateStatusType
-	Action       UpdateAction
+	Status         UpdateStatusType
+	Action         UpdateAction
 	DeploymentType string
-	Limit        int
+	Limit          int
 }
 
 // UpdateHistory manages the update history log

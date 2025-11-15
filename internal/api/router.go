@@ -52,6 +52,7 @@ type Router struct {
 	wsHub                     *websocket.Hub
 	reloadFunc                func() error
 	updateManager             *updates.Manager
+	updateHistory             *updates.UpdateHistory
 	exportLimiter             *RateLimiter
 	persistence               *config.ConfigPersistence
 	oidcMu                    sync.Mutex
@@ -101,10 +102,18 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	InitSessionStore(cfg.DataPath)
 	InitCSRFStore(cfg.DataPath)
 
+	updateHistory, err := updates.NewUpdateHistory(cfg.DataPath)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize update history")
+	}
+
 	projectRoot, err := os.Getwd()
 	if err != nil {
 		projectRoot = "."
 	}
+
+	updateManager := updates.NewManager(cfg)
+	updateManager.SetHistory(updateHistory)
 
 	r := &Router{
 		mux:           http.NewServeMux(),
@@ -112,7 +121,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		monitor:       monitor,
 		wsHub:         wsHub,
 		reloadFunc:    reloadFunc,
-		updateManager: updates.NewManager(cfg),
+		updateManager: updateManager,
+		updateHistory: updateHistory,
 		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
 		persistence:   config.NewConfigPersistence(cfg.DataPath),
 		projectRoot:   projectRoot,
@@ -160,7 +170,7 @@ func (r *Router) setupRoutes() {
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	dockerMetadataHandler := NewDockerMetadataHandler(r.config.DataPath)
 	r.configHandlers = NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
-	updateHandlers := NewUpdateHandlers(r.updateManager, r.config.DataPath)
+	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
 	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.persistence)
