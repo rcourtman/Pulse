@@ -1924,7 +1924,6 @@ except: pass
                     --unit="${UNINSTALL_UNIT}" \
                     --property="Type=oneshot" \
                     --property="Conflicts=pulse-sensor-proxy.service" \
-                    --property="After=pulse-sensor-cleanup.service" \
                     --collect \
                     --wait \
                     --quiet \
