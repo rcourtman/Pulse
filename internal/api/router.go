@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tempproxy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -485,6 +486,10 @@ func (r *Router) setupRoutes() {
 			if r.bootstrapTokenHash != "" {
 				status["bootstrapTokenPath"] = r.bootstrapTokenPath
 				status["isDocker"] = os.Getenv("PULSE_DOCKER") == "true"
+				status["inContainer"] = system.InContainer()
+				if ctid := system.DetectLXCCTID(); ctid != "" {
+					status["lxcCtid"] = ctid
+				}
 			}
 
 			if r.config.DisableAuthEnvDetected {
