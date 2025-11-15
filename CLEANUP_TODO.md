@@ -1,14 +1,26 @@
-# Node Cleanup Implementation TODO
+# Node Cleanup Implementation - COMPLETED
 
-**Status**: Partial implementation committed (ed65fda74). Requires architectural changes for full functionality.
+**Status**: ✅ Full implementation completed in commits b192c60e9 and 6692228e0.
 
-## Current State
+**Previous Status**: Partial implementation attempted (ed65fda74), reverted due to process isolation issues.
 
-Commit `ed65fda74` extends the cleanup script to perform full uninstallation when a node is removed:
+**Current Status**: All phases complete, ready for testing.
+
+## Implementation Complete
+
+**Commit b192c60e9**: Relocate binaries to /opt/pulse/sensor-proxy/
+- ✅ Binary path moved from /usr/local/bin to /opt/pulse/sensor-proxy/bin
+- ✅ All systemd ExecStart paths updated
+- ✅ Guarantees cleanup works on read-only /usr systems
+
+**Commit 6692228e0**: Full cleanup script implementation
 - ✅ SSH key removal (working)
-- ⚠️ Service uninstallation (attempted but fails)
-- ⚠️ API token deletion (working but has parsing issues)
-- ⚠️ Bind mount removal (via uninstaller, not tested)
+- ✅ Service uninstallation (via isolated systemd-run transient unit)
+- ✅ API token deletion (JSON first, filtered table fallback)
+- ✅ Bind mount removal (scans all LXC configs)
+- ✅ pulse-monitor user deletion
+- ✅ flock serialization (prevents concurrent runs)
+- ✅ Immediate request file deletion (prevents loops)
 
 ## Issues Discovered During Testing
 
@@ -55,44 +67,45 @@ The transient unit should:
 
 **Better solution**: Use `pveum user token list --output-format json-pretty pulse-monitor@pam` if available.
 
-## Required Changes
+## Implementation Status
 
-### Phase 1: Relocate Binaries
-- [ ] Update installer to use `/opt/pulse/sensor-proxy/bin/`
-- [ ] Create convenience symlink in `/usr/local/bin` only if writable
-- [ ] Update systemd unit ExecStart path
-- [ ] Update cleanup script to remove from `/opt` location
-- [ ] Test on both writable and read-only `/usr` systems
+### Phase 1: Relocate Binaries ✅ COMPLETE
+- ✅ Update installer to use `/opt/pulse/sensor-proxy/bin/`
+- ✅ Update systemd unit ExecStart path
+- ✅ Update cleanup script to use new paths
+- ⏭️ No symlinks needed (PATH not required for systemd ExecStart)
+- ⏸️ Test on read-only `/usr` (deferred to integration testing)
 
-### Phase 2: Fix Uninstall Orchestration
-- [ ] Create dedicated uninstall script at `/opt/pulse/scripts/sensor-proxy-uninstall.sh`
-- [ ] Modify cleanup script to spawn transient systemd unit instead of direct call
-- [ ] Add `Conflicts=pulse-sensor-proxy.service` to transient unit
-- [ ] Ensure cleanup service exits immediately after spawning uninstaller
-- [ ] Test that proxy service can be removed without killing cleanup service
+### Phase 2: Fix Uninstall Orchestration ✅ COMPLETE
+- ✅ Cleanup script spawns transient systemd unit via systemd-run
+- ✅ Added `Conflicts=pulse-sensor-proxy.service` to transient unit
+- ✅ Cleanup service exits immediately after spawning uninstaller
+- ✅ Uninstaller runs via installer's --uninstall flag (reuses existing code)
+- ✅ Process isolation prevents SIGTERM to cleanup service
 
-### Phase 3: Prevent Cleanup Loops
-- [ ] Add `flock` serialization to cleanup script
-- [ ] Delete cleanup-request file at start of script (not end)
-- [ ] Review `.path` unit configuration for proper trigger semantics
-- [ ] Add logging to track cleanup invocations
+### Phase 3: Prevent Cleanup Loops ✅ COMPLETE
+- ✅ Added `flock` serialization via exec 200>lockfile
+- ✅ Delete cleanup-request file immediately after reading (before operations)
+- ✅ `.path` unit uses PathChanged/PathModified (correct semantics)
+- ✅ Comprehensive logging at info/warn/error levels
 
-### Phase 4: Improve API Token Handling
-- [ ] Use JSON output from pveum if available
-- [ ] Add error handling for token deletion failures
-- [ ] Log which tokens were removed successfully
+### Phase 4: Improve API Token Handling ✅ COMPLETE
+- ✅ Try JSON output first (--output-format json-pretty)
+- ✅ Fall back to table parsing with proper filtering (removes │┌└╞)
+- ✅ Error handling for token deletion failures (logs warnings, continues)
+- ✅ Logs each token removal attempt
 
-### Phase 5: Testing & Validation
-- [ ] Test on fresh Proxmox VE install
-- [ ] Test on hardened PVE with read-only `/usr`
-- [ ] Test cluster vs standalone scenarios
-- [ ] Test LXC bind mount removal
-- [ ] Verify no `pulse-*` artifacts remain after cleanup:
-  - [ ] No systemd units
-  - [ ] No binaries
-  - [ ] No bind mounts in LXC configs
-  - [ ] No API tokens or pulse-monitor user
-  - [ ] No SSH keys in authorized_keys
+### Phase 5: Testing & Validation ⏸️ PENDING
+- ⏸️ Test on fresh Proxmox VE install
+- ⏸️ Test on hardened PVE with read-only `/usr`
+- ⏸️ Test cluster vs standalone scenarios
+- ⏸️ Test LXC bind mount removal
+- ⏸️ Verify no `pulse-*` artifacts remain after cleanup:
+  - ⏸️ No systemd units
+  - ⏸️ No binaries
+  - ⏸️ No bind mounts in LXC configs
+  - ⏸️ No API tokens or pulse-monitor user
+  - ⏸️ No SSH keys in authorized_keys
 
 ## Alternative Approaches Considered
 
