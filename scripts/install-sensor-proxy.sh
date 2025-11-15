@@ -1716,15 +1716,19 @@ fi
 
 log_info "Processing cleanup request from $CLEANUP_REQUEST"
 
-# Read and parse the cleanup request, then delete immediately to prevent re-processing
+# Read and parse the cleanup request
 CLEANUP_DATA=$(cat "$CLEANUP_REQUEST")
 HOST=$(echo "$CLEANUP_DATA" | grep -o '"host":"[^"]*"' | cut -d'"' -f4 || echo "")
 REQUESTED_AT=$(echo "$CLEANUP_DATA" | grep -o '"requestedAt":"[^"]*"' | cut -d'"' -f4 || echo "")
 
 log_info "Cleanup requested at: ${REQUESTED_AT:-unknown}"
 
-# Delete request file IMMEDIATELY to prevent loops (before any long-running operations)
-rm -f "$CLEANUP_REQUEST"
+# Rename request file to .processing to prevent re-triggering while allowing retry on failure
+PROCESSING_FILE="${CLEANUP_REQUEST}.processing"
+mv "$CLEANUP_REQUEST" "$PROCESSING_FILE" 2>/dev/null || {
+    log_warn "Failed to rename cleanup request file, may have been processed by another instance"
+    exit 0
+}
 
 # If no specific host was provided, clean up all known nodes
 if [[ -z "$HOST" ]]; then
@@ -1796,22 +1800,56 @@ else
         # 2. Delete API tokens and user
         log_info "Removing Proxmox API tokens and pulse-monitor user"
         if command -v pveum >/dev/null 2>&1; then
-            # Use JSON output if available (Proxmox 7.0+), fall back to text parsing
-            if pveum user token list --output-format json-pretty pulse-monitor@pam >/dev/null 2>&1; then
-                TOKEN_IDS=$(pveum user token list --output-format json-pretty pulse-monitor@pam 2>/dev/null | \
-                    grep -o '"tokenid":"[^"]*"' | cut -d'"' -f4 || true)
-            else
-                # Fall back to parsing table output, filtering table decorations
-                TOKEN_IDS=$(pveum user token list pulse-monitor@pam 2>/dev/null | \
-                    grep -v '^[│┌└╞]' | awk 'NR>1 && /pulse/ {print $1}' | grep -v '^$' || true)
+            # Try JSON output first (pveum with --output-format json)
+            TOKEN_IDS=""
+            if command -v python3 >/dev/null 2>&1; then
+                # Try pveum with JSON output
+                if TOKEN_JSON=$(pveum user token list pulse-monitor@pam --output-format json 2>/dev/null); then
+                    TOKEN_IDS=$(echo "$TOKEN_JSON" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    if isinstance(data, list):
+        for item in data:
+            if "tokenid" in item:
+                print(item["tokenid"])
+except: pass
+' || true)
+                fi
             fi
 
-            for token_id in $TOKEN_IDS; do
-                log_info "Deleting API token: $token_id"
-                pveum user token remove pulse-monitor@pam "${token_id}" 2>&1 | \
-                    logger -t "$LOG_TAG" -p user.info || \
-                    log_warn "Failed to delete token $token_id"
-            done
+            # Fall back to pvesh JSON API if pveum JSON didn't work
+            if [[ -z "$TOKEN_IDS" ]] && command -v pvesh >/dev/null 2>&1; then
+                if TOKEN_JSON=$(pvesh get /access/users/pulse-monitor@pam/token 2>/dev/null); then
+                    TOKEN_IDS=$(echo "$TOKEN_JSON" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    if isinstance(data, dict) and "data" in data:
+        for item in data["data"]:
+            if "tokenid" in item:
+                print(item["tokenid"])
+except: pass
+' 2>/dev/null || true)
+                fi
+            fi
+
+            # Last resort: parse table output with better filtering
+            if [[ -z "$TOKEN_IDS" ]]; then
+                TOKEN_IDS=$(pveum user token list pulse-monitor@pam 2>/dev/null | \
+                    awk 'NR>1 && /^[[:space:]]*pulse/ {print $1}' | grep -v '^[│┌└╞─]' | grep -v '^$' || true)
+            fi
+
+            if [[ -n "$TOKEN_IDS" ]]; then
+                for token_id in $TOKEN_IDS; do
+                    log_info "Deleting API token: $token_id"
+                    pveum user token remove pulse-monitor@pam "${token_id}" 2>&1 | \
+                        logger -t "$LOG_TAG" -p user.info || \
+                        log_warn "Failed to delete token $token_id"
+                done
+            else
+                log_info "No API tokens found for pulse-monitor@pam"
+            fi
 
             # Remove the pulse-monitor user
             log_info "Removing pulse-monitor@pam user"
@@ -1827,11 +1865,17 @@ else
         if command -v pct >/dev/null 2>&1; then
             for ctid in $(pct list 2>/dev/null | awk 'NR>1 {print $1}' || true); do
                 CONF_FILE="/etc/pve/lxc/${ctid}.conf"
-                if [[ -f "$CONF_FILE" ]] && grep -q "pulse-sensor-proxy" "$CONF_FILE" 2>/dev/null; then
-                    log_info "Removing bind mount from container $ctid"
-                    sed -i '/pulse-sensor-proxy/d' "$CONF_FILE" 2>&1 | \
-                        logger -t "$LOG_TAG" -p user.info || \
-                        log_warn "Failed to update config for container $ctid"
+                if [[ -f "$CONF_FILE" ]]; then
+                    # Find pulse-sensor-proxy mount points and remove them using pct
+                    for mp_key in $(grep -o "^mp[0-9]\+:" "$CONF_FILE" | grep -f <(grep "pulse-sensor-proxy" "$CONF_FILE" | grep -o "^mp[0-9]\+:") || true); do
+                        mp_num="${mp_key%:}"
+                        log_info "Removing ${mp_num} (pulse-sensor-proxy) from container $ctid"
+                        if pct set "$ctid" -delete "${mp_num}" 2>&1 | logger -t "$LOG_TAG" -p user.info; then
+                            log_info "Successfully removed ${mp_num} from container $ctid"
+                        else
+                            log_warn "Failed to remove ${mp_num} from container $ctid"
+                        fi
+                    done
                 fi
             done
         fi
@@ -1907,6 +1951,9 @@ else
         fi
     fi
 fi
+
+# Remove processing file on success
+rm -f "$PROCESSING_FILE"
 
 log_info "Cleanup completed successfully"
 exit 0
