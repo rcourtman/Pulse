@@ -28,6 +28,7 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
   const [isDocker, setIsDocker] = createSignal<boolean>(false);
   const [inContainer, setInContainer] = createSignal<boolean>(false);
   const [lxcCtid, setLxcCtid] = createSignal<string>('');
+  const [dockerContainerName, setDockerContainerName] = createSignal<string>('');
   const [showAlternatives, setShowAlternatives] = createSignal(false);
 
   const applyTheme = (mode: 'system' | 'light' | 'dark') => {
@@ -77,6 +78,7 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
           setIsDocker(data.isDocker || false);
           setInContainer(data.inContainer || false);
           setLxcCtid(data.lxcCtid || '');
+          setDockerContainerName(data.dockerContainerName || '');
         }
       }
     } catch (error) {
@@ -336,10 +338,10 @@ IMPORTANT: Keep these credentials secure!
                         pct exec &lt;ctid&gt; -- cat {bootstrapTokenPath()}
                       </Show>
 
-                      {/* Docker (generic) */}
+                      {/* Docker (with detected name or placeholder) */}
                       <Show when={isDocker()}>
                         <div class="text-blue-600 dark:text-blue-400 mb-1 font-semibold"># From Docker host:</div>
-                        docker exec &lt;container-name&gt; cat {bootstrapTokenPath()}
+                        docker exec {dockerContainerName() || '<container-name>'} cat {bootstrapTokenPath()}
                       </Show>
 
                       {/* Bare metal / inside container */}
