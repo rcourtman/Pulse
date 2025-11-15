@@ -25,15 +25,7 @@ type UpdateHandlers struct {
 }
 
 // NewUpdateHandlers creates new update handlers
-func NewUpdateHandlers(manager *updates.Manager, dataDir string) *UpdateHandlers {
-	// Initialize update history using configured data directory
-	// Empty string defaults to /var/lib/pulse for backward compatibility
-	history, err := updates.NewUpdateHistory(dataDir)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to initialize update history")
-		// Continue without history - handlers will check for nil
-	}
-
+func NewUpdateHandlers(manager *updates.Manager, history *updates.UpdateHistory) *UpdateHandlers {
 	// Initialize updater registry
 	registry := updates.NewUpdaterRegistry()
 
@@ -108,7 +100,13 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 	// Start update in background with a new context (not request context which gets cancelled)
 	go func() {
 		ctx := context.Background()
-		if err := h.manager.ApplyUpdate(ctx, req.DownloadURL); err != nil {
+		applyReq := updates.ApplyUpdateRequest{
+			DownloadURL:  req.DownloadURL,
+			Channel:      r.URL.Query().Get("channel"),
+			InitiatedBy:  updates.InitiatedByUser,
+			InitiatedVia: updates.InitiatedViaUI,
+		}
+		if err := h.manager.ApplyUpdate(ctx, applyReq); err != nil {
 			log.Error().Err(err).Msg("Failed to apply update")
 		}
 	}()

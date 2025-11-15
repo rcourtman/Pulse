@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -301,7 +302,7 @@ func TestApplyUpdateFailsOnChecksumError(t *testing.T) {
 
 	downloadURL := server.URL + "/pulse-v0.0.1-linux-amd64.tar.gz"
 
-	err := manager.ApplyUpdate(context.Background(), downloadURL)
+	err := manager.ApplyUpdate(context.Background(), ApplyUpdateRequest{DownloadURL: downloadURL})
 	if err == nil {
 		t.Fatalf("expected update to fail, got nil")
 	}
@@ -401,6 +402,83 @@ func TestVersionSemverOrdering(t *testing.T) {
 
 			if release.TagName != tt.expectedVersion {
 				t.Errorf("Expected version %s but got %s. %s", tt.expectedVersion, release.TagName, tt.description)
+			}
+		})
+	}
+}
+
+func TestManagerHistoryEntryLifecycle(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	cfg := &config.Config{}
+	manager := NewManager(cfg)
+
+	historyDir := t.TempDir()
+	history, err := NewUpdateHistory(historyDir)
+	if err != nil {
+		t.Fatalf("NewUpdateHistory: %v", err)
+	}
+	manager.SetHistory(history)
+
+	ctx := context.Background()
+	eventID := manager.createHistoryEntry(ctx, UpdateHistoryEntry{
+		Action:         ActionUpdate,
+		Status:         StatusInProgress,
+		VersionFrom:    "v4.24.0",
+		VersionTo:      "v4.25.0",
+		DeploymentType: "systemd",
+		Channel:        "stable",
+	})
+	if eventID == "" {
+		t.Fatalf("expected event ID")
+	}
+
+	backupPath := "/tmp/pulse-backup"
+	manager.updateHistoryEntry(ctx, eventID, func(entry *UpdateHistoryEntry) {
+		entry.BackupPath = backupPath
+		entry.DownloadBytes = 2048
+	})
+
+	start := time.Now().Add(-1500 * time.Millisecond)
+	manager.completeHistoryEntry(ctx, eventID, StatusSuccess, start, nil)
+
+	entry, err := history.GetEntry(eventID)
+	if err != nil {
+		t.Fatalf("GetEntry: %v", err)
+	}
+
+	if entry.Status != StatusSuccess {
+		t.Fatalf("unexpected status %s", entry.Status)
+	}
+	if entry.BackupPath != backupPath {
+		t.Fatalf("expected backup path %s, got %s", backupPath, entry.BackupPath)
+	}
+	if entry.DownloadBytes != 2048 {
+		t.Fatalf("expected download bytes 2048, got %d", entry.DownloadBytes)
+	}
+	if entry.DurationMs <= 0 {
+		t.Fatalf("expected positive duration, got %d", entry.DurationMs)
+	}
+	if entry.Error != nil {
+		t.Fatalf("expected no error, got %+v", entry.Error)
+	}
+}
+
+func TestInferVersionFromDownloadURL(t *testing.T) {
+	tests := []struct {
+		url      string
+		expected string
+	}{
+		{"https://github.com/rcourtman/Pulse/releases/download/v4.25.0/pulse-v4.25.0-linux-amd64.tar.gz", "v4.25.0"},
+		{"https://example.com/pulse-v4.25.0-rc.1-linux-arm64.tar.gz", "v4.25.0-rc.1"},
+		{"https://example.com/assets/pulse.tar.gz", ""},
+		{"pulse-v4.30.0-linux-amd64.tar.gz", "v4.30.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			if got := inferVersionFromDownloadURL(tt.url); got != tt.expected {
+				t.Fatalf("expected %s, got %s", tt.expected, got)
 			}
 		})
 	}

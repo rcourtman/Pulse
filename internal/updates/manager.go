@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -68,6 +69,7 @@ var (
 // Manager handles update operations
 type Manager struct {
 	config        *config.Config
+	history       *UpdateHistory
 	status        UpdateStatus
 	statusMu      sync.RWMutex
 	checkCache    map[string]*UpdateInfo // keyed by channel
@@ -76,6 +78,15 @@ type Manager struct {
 	progressChan  chan UpdateStatus
 	queue         *UpdateQueue
 	sseBroadcast  *SSEBroadcaster
+}
+
+// ApplyUpdateRequest describes an update request initiated via the API/UI.
+type ApplyUpdateRequest struct {
+	DownloadURL  string
+	Channel      string
+	InitiatedBy  InitiatedBy
+	InitiatedVia InitiatedVia
+	Notes        string
 }
 
 // NewManager creates a new update manager
@@ -101,6 +112,11 @@ func NewManager(cfg *config.Config) *Manager {
 	go m.sseHeartbeatLoop()
 
 	return m
+}
+
+// SetHistory wires an update history sink for recording update progress.
+func (m *Manager) SetHistory(history *UpdateHistory) {
+	m.history = history
 }
 
 // GetProgressChannel returns the channel for update progress
@@ -338,10 +354,13 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 }
 
 // ApplyUpdate downloads and applies an update
-func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
+func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error {
 	// Validate download URL (allow test server URLs when PULSE_UPDATE_SERVER is set)
+	if req.DownloadURL == "" {
+		return fmt.Errorf("download URL is required")
+	}
 	if os.Getenv("PULSE_UPDATE_SERVER") == "" {
-		if !strings.HasPrefix(downloadURL, "https://github.com/rcourtman/Pulse/releases/download/") {
+		if !strings.HasPrefix(req.DownloadURL, "https://github.com/rcourtman/Pulse/releases/download/") {
 			return fmt.Errorf("invalid download URL")
 		}
 	}
@@ -358,7 +377,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	}
 
 	// Enqueue the update job
-	job, accepted := m.queue.Enqueue(downloadURL)
+	job, accepted := m.queue.Enqueue(req.DownloadURL)
 	if !accepted {
 		return fmt.Errorf("update already in progress")
 	}
@@ -370,6 +389,42 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	ctx = job.Context
 
 	m.updateStatus("downloading", 10, "Downloading update...")
+
+	channel := m.resolveChannel(req.Channel, currentInfo)
+	targetVersion := inferVersionFromDownloadURL(req.DownloadURL)
+	initiatedBy := req.InitiatedBy
+	if initiatedBy == "" {
+		initiatedBy = InitiatedByUser
+	}
+	initiatedVia := req.InitiatedVia
+	if initiatedVia == "" {
+		initiatedVia = InitiatedViaAPI
+	}
+
+	start := time.Now()
+	eventID := m.createHistoryEntry(ctx, UpdateHistoryEntry{
+		Action:         ActionUpdate,
+		Channel:        channel,
+		VersionFrom:    currentInfo.Version,
+		VersionTo:      targetVersion,
+		DeploymentType: currentInfo.DeploymentType,
+		InitiatedBy:    initiatedBy,
+		InitiatedVia:   initiatedVia,
+		Status:         StatusInProgress,
+		Notes:          req.Notes,
+	})
+
+	var runErr error
+	defer func() {
+		if eventID == "" {
+			return
+		}
+		status := StatusSuccess
+		if runErr != nil {
+			status = StatusFailed
+		}
+		m.completeHistoryEntry(ctx, eventID, status, start, runErr)
+	}()
 
 	// Create temp directory in a location we can write to
 	// Try multiple locations in order of preference
@@ -393,6 +448,8 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 			if err != nil {
 				tempErr := fmt.Errorf("failed to create temp directory in any location: %w", err)
 				m.updateStatus("error", 10, "Failed to create temp directory", tempErr)
+				runErr = tempErr
+				m.queue.MarkCompleted(job.ID, tempErr)
 				return tempErr
 			}
 		}
@@ -401,20 +458,28 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 
 	// Download update
 	tarballPath := filepath.Join(tempDir, "update.tar.gz")
-	if err := m.downloadFile(ctx, downloadURL, tarballPath); err != nil {
+	downloadBytes, err := m.downloadFile(ctx, req.DownloadURL, tarballPath)
+	if err != nil {
 		downloadErr := fmt.Errorf("failed to download update: %w", err)
 		m.updateStatus("error", 20, "Failed to download update", downloadErr)
 		m.queue.MarkCompleted(job.ID, downloadErr)
-		return downloadErr
+		runErr = downloadErr
+		return runErr
+	}
+	if downloadBytes > 0 {
+		m.updateHistoryEntry(ctx, eventID, func(entry *UpdateHistoryEntry) {
+			entry.DownloadBytes = downloadBytes
+		})
 	}
 
 	// Verify checksum if available
 	m.updateStatus("verifying", 30, "Verifying download...")
-	if err := m.verifyChecksum(ctx, downloadURL, tarballPath); err != nil {
+	if err := m.verifyChecksum(ctx, req.DownloadURL, tarballPath); err != nil {
 		checksumErr := fmt.Errorf("checksum verification failed: %w", err)
 		m.updateStatus("error", 30, "Failed to verify update checksum", checksumErr)
 		m.queue.MarkCompleted(job.ID, checksumErr)
-		return checksumErr
+		runErr = checksumErr
+		return runErr
 	}
 	log.Info().Msg("Checksum verification passed")
 
@@ -426,7 +491,8 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 		extractErr := fmt.Errorf("failed to extract update: %w", err)
 		m.updateStatus("error", 40, "Failed to extract update", extractErr)
 		m.queue.MarkCompleted(job.ID, extractErr)
-		return extractErr
+		runErr = extractErr
+		return runErr
 	}
 
 	m.updateStatus("backing-up", 60, "Creating backup...")
@@ -437,23 +503,15 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 		backupErr := fmt.Errorf("failed to create backup: %w", err)
 		m.updateStatus("error", 60, "Failed to create backup", backupErr)
 		m.queue.MarkCompleted(job.ID, backupErr)
-		return backupErr
+		runErr = backupErr
+		return runErr
 	}
 	log.Info().Str("backup", backupPath).Msg("Created backup")
+	m.updateHistoryEntry(ctx, eventID, func(entry *UpdateHistoryEntry) {
+		entry.BackupPath = backupPath
+	})
 
 	m.updateStatus("applying", 80, "Applying update...")
-
-	// Extract version from download URL or use timestamp
-	version := "unknown"
-	if parts := strings.Split(downloadURL, "/"); len(parts) > 0 {
-		for _, part := range parts {
-			if strings.HasPrefix(part, "v") {
-				version = strings.TrimPrefix(part, "v")
-				version = strings.TrimSuffix(version, ".tar.gz")
-				break
-			}
-		}
-	}
 
 	// Apply the update files
 	// With the new directory structure (/opt/pulse/bin/), the pulse user has write access
@@ -463,11 +521,12 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 		applyErr := fmt.Errorf("failed to apply update: %w", err)
 		m.updateStatus("error", 80, "Failed to apply update", applyErr)
 		m.queue.MarkCompleted(job.ID, applyErr)
+		runErr = applyErr
 		// Attempt to restore backup
 		if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
 			log.Error().Err(restoreErr).Msg("Failed to restore backup")
 		}
-		return applyErr
+		return runErr
 	}
 
 	m.updateStatus("restarting", 95, "Restarting service...")
@@ -713,38 +772,112 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	return nil, fmt.Errorf("no releases found for channel %s", channel)
 }
 
+func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) string {
+	if requested != "" {
+		return requested
+	}
+	if m.config != nil && m.config.UpdateChannel != "" {
+		return m.config.UpdateChannel
+	}
+	if currentInfo != nil && currentInfo.Channel != "" {
+		return currentInfo.Channel
+	}
+	return "stable"
+}
+
+func (m *Manager) createHistoryEntry(ctx context.Context, entry UpdateHistoryEntry) string {
+	if m.history == nil {
+		return ""
+	}
+	eventID, err := m.history.CreateEntry(ctx, entry)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create update history entry")
+		return ""
+	}
+	return eventID
+}
+
+func (m *Manager) updateHistoryEntry(ctx context.Context, eventID string, updateFn func(entry *UpdateHistoryEntry)) {
+	if m.history == nil || eventID == "" {
+		return
+	}
+	if err := m.history.UpdateEntry(ctx, eventID, func(e *UpdateHistoryEntry) error {
+		updateFn(e)
+		return nil
+	}); err != nil {
+		log.Error().Err(err).Str("event_id", eventID).Msg("Failed to update history entry")
+	}
+}
+
+func (m *Manager) completeHistoryEntry(ctx context.Context, eventID string, status UpdateStatusType, start time.Time, runErr error) {
+	if m.history == nil || eventID == "" {
+		return
+	}
+	if err := m.history.UpdateEntry(ctx, eventID, func(e *UpdateHistoryEntry) error {
+		e.Status = status
+		e.DurationMs = time.Since(start).Milliseconds()
+		if runErr != nil {
+			e.Error = &UpdateError{
+				Message: runErr.Error(),
+				Code:    "update_failed",
+			}
+		} else {
+			e.Error = nil
+		}
+		return nil
+	}); err != nil {
+		log.Error().Err(err).Str("event_id", eventID).Msg("Failed to finalize history entry")
+	}
+}
+
+var versionInURLRegex = regexp.MustCompile(`v\d+\.\d+\.\d+(?:-[A-Za-z0-9\.]*\d[A-Za-z0-9\.]*)?`)
+
+func inferVersionFromDownloadURL(downloadURL string) string {
+	if downloadURL == "" {
+		return ""
+	}
+	if match := versionInURLRegex.FindString(downloadURL); match != "" {
+		return match
+	}
+	base := filepath.Base(downloadURL)
+	if match := versionInURLRegex.FindString(base); match != "" {
+		return match
+	}
+	return ""
+}
+
 // downloadFile downloads a file from URL to dest
-func (m *Manager) downloadFile(ctx context.Context, url, dest string) error {
+func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed with status %d", resp.StatusCode)
+		return 0, fmt.Errorf("download failed with status %d", resp.StatusCode)
 	}
 
 	out, err := os.Create(dest)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer out.Close()
 
 	// Copy with progress updates
 	written, err := io.Copy(out, resp.Body)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	log.Info().Int64("bytes", written).Str("file", dest).Msg("Downloaded file")
-	return nil
+	return written, nil
 }
 
 // verifyChecksum downloads and verifies the SHA256 checksum of a file
