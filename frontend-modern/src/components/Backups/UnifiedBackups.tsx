@@ -167,13 +167,16 @@ const UnifiedBackups: Component = () => {
     const pve = pveBackupsState();
     const pbs = pbsBackupsState();
     const pmg = pmgBackupsState();
-    return (
-      !(pve?.guestSnapshots?.length ?? 0) &&
-      !(pve?.storageBackups?.length ?? 0) &&
-      !(pbs?.length ?? 0) &&
-      !(pmg?.length ?? 0) &&
-      !state.pbs?.length
-    );
+    const hasData =
+      (pve?.guestSnapshots?.length ?? 0) > 0 ||
+      (pve?.storageBackups?.length ?? 0) > 0 ||
+      (pbs?.length ?? 0) > 0 ||
+      (pmg?.length ?? 0) > 0;
+    if (hasData) {
+      return false;
+    }
+    const pollingCycles = state.stats?.pollingCycles ?? 0;
+    return pollingCycles === 0;
   });
 
   // Normalize all backup data into unified format
