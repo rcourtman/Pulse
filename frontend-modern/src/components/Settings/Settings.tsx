@@ -4056,11 +4056,17 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }
                                 >
                                   <div class="text-xs text-green-700 dark:text-green-300 space-y-1">
-                                    <p>Run the install script:</p>
+                                    <p>
+                                      Click the "Install Update" button below, or download and install manually:
+                                    </p>
                                     <code class="block p-1 bg-green-200 dark:bg-green-800 rounded text-xs">
-                                      curl -fsSL
-                                      https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh
-                                      | bash
+                                      curl -LO https://github.com/rcourtman/Pulse/releases/download/{updateInfo()?.latestVersion}/pulse-{updateInfo()?.latestVersion}-linux-amd64.tar.gz
+                                      <br />
+                                      sudo systemctl stop pulse
+                                      <br />
+                                      sudo tar -xzf pulse-{updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse
+                                      <br />
+                                      sudo systemctl start pulse
                                     </code>
                                   </div>
                                 </Show>
