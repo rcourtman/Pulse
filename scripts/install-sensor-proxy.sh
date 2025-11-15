@@ -68,95 +68,12 @@ update_allowed_nodes() {
     shift
     local nodes=("$@")
 
-    # Create temp file with unique prefix to avoid conflicts
-    local tmp_config
-    tmp_config=$(mktemp /tmp/pulse-config.XXXXXXXXXX)
+    mkdir -p "$(dirname "$config_file")"
+    touch "$config_file"
 
-    # Ensure temp file is cleaned up on exit (success or failure)
-    trap "rm -f '$tmp_config'" RETURN
+    # Remove any existing allowed_nodes block (including descriptive comments) to prevent duplicates
+    perl -0pi -e 's/\n(?:[ 	]*#[^\n]*\n)*allowed_nodes:\n(?:(?:[ 	]+-[^\n]*|[ 	]*#[^\n]*)\n)*//g' "$config_file" 2>/dev/null || true
 
-    # Remove any existing allowed_nodes section using a robust state machine
-    # This removes the YAML key, all list items, and any comment lines immediately preceding it
-    if [[ -f "$config_file" ]]; then
-        awk '
-            BEGIN {
-                in_section = 0
-                comment_buffer_size = 0
-            }
-
-            # Detect start of allowed_nodes section
-            /^allowed_nodes:/ {
-                # Discard any buffered comment lines (they belong to allowed_nodes)
-                comment_buffer_size = 0
-                in_section = 1
-                next
-            }
-
-            # Inside allowed_nodes section: skip lines until we hit a non-indented, non-comment line
-            in_section {
-                # Empty lines within section: skip
-                if (/^[ \t]*$/) {
-                    next
-                }
-                # Indented lines (list items): skip
-                if (/^[ \t]+-/) {
-                    next
-                }
-                # Indented comments: skip
-                if (/^[ \t]+#/) {
-                    next
-                }
-                # Non-indented, non-comment line: section ends
-                if (/^[^ \t#]/) {
-                    in_section = 0
-                    # Fall through to normal processing
-                }
-            }
-
-            # Outside section: buffer comment lines (might precede allowed_nodes)
-            !in_section && /^[ \t]*#/ {
-                comment_buffer[comment_buffer_size++] = $0
-                next
-            }
-
-            # Outside section: non-comment, non-empty line
-            !in_section && !/^[ \t]*$/ {
-                # Flush buffered comments (they don'\''t belong to allowed_nodes)
-                for (i = 0; i < comment_buffer_size; i++) {
-                    print comment_buffer[i]
-                }
-                comment_buffer_size = 0
-                print
-                next
-            }
-
-            # Outside section: empty line
-            !in_section && /^[ \t]*$/ {
-                # Flush buffered comments and print empty line
-                for (i = 0; i < comment_buffer_size; i++) {
-                    print comment_buffer[i]
-                }
-                comment_buffer_size = 0
-                print
-                next
-            }
-
-            # At end of file, flush any remaining buffered comments
-            END {
-                for (i = 0; i < comment_buffer_size; i++) {
-                    print comment_buffer[i]
-                }
-            }
-        ' "$config_file" > "$tmp_config"
-
-        # Preserve file permissions (but defer ownership change until after all writes)
-        chmod --reference="$config_file" "$tmp_config" 2>/dev/null || chmod 0644 "$tmp_config"
-    else
-        touch "$tmp_config"
-        chmod 0644 "$tmp_config"
-    fi
-
-    # Append new allowed_nodes section
     {
         echo ""
         echo "# ${comment_line}"
@@ -165,18 +82,13 @@ update_allowed_nodes() {
         for node in "${nodes[@]}"; do
             echo "  - $node"
         done
-    } >> "$tmp_config"
+    } >> "$config_file"
 
-    # Replace original file atomically
-    if ! mv "$tmp_config" "$config_file"; then
-        echo "ERROR: Failed to update $config_file - check permissions" >&2
-        return 1
-    fi
-
-    # Ensure proper permissions
     chmod 0644 "$config_file" 2>/dev/null || true
     chown pulse-sensor-proxy:pulse-sensor-proxy "$config_file" 2>/dev/null || true
 }
+
+
 
 # Installation root - writable location that works on read-only /usr systems
 INSTALL_ROOT="/opt/pulse/sensor-proxy"
