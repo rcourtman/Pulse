@@ -2125,6 +2125,14 @@ if command -v pvecm >/dev/null 2>&1; then
             ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
                 "sed -i '/# pulse-managed-key\$/d' /root/.ssh/authorized_keys" 2>/dev/null || true
 
+            # Ensure wrapper compatibility on remote node (supports old installations)
+            # Create symlink if old wrapper exists but new path doesn't
+            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+                "if [[ -f /usr/local/bin/pulse-sensor-wrapper.sh && ! -f /opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh ]]; then \
+                    mkdir -p /opt/pulse/sensor-proxy/bin && \
+                    ln -sf /usr/local/bin/pulse-sensor-wrapper.sh /opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh; \
+                fi" 2>/dev/null || true
+
             # Add new key with forced command
             SSH_ERROR=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
                 "echo '${AUTH_LINE}' >> /root/.ssh/authorized_keys" 2>&1)
@@ -2201,7 +2209,7 @@ else
     print_info "Configuring SSH key for localhost..."
 
     # Configure localhost as fallback
-    FORCED_CMD='command="/usr/local/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+    FORCED_CMD='command="/opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
     AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
     configure_local_authorized_key "$AUTH_LINE"
