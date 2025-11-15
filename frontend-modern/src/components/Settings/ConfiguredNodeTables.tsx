@@ -105,7 +105,7 @@ const resolveTemperatureTransport = (
   }
 
   return {
-    label: 'SSH fallback',
+    label: 'Proxy (SSH)',
     badgeClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
   };
 };
