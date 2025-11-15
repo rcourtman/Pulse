@@ -60,6 +60,25 @@ configure_local_authorized_key() {
     fi
 }
 
+configure_container_proxy_env() {
+    local socket_line="PULSE_SENSOR_PROXY_SOCKET=/mnt/pulse-proxy/pulse-sensor-proxy.sock"
+    if ! SOCKET_LINE="$socket_line" pct exec "$CTID" -- bash <<'EOF'
+set -e
+ENV_FILE="/etc/pulse/.env"
+mkdir -p /etc/pulse
+if [[ -f "$ENV_FILE" ]] && grep -q "^PULSE_SENSOR_PROXY_SOCKET=" "$ENV_FILE" 2>/dev/null; then
+  sed -i "s|^PULSE_SENSOR_PROXY_SOCKET=.*|$SOCKET_LINE|" "$ENV_FILE"
+else
+  echo "$SOCKET_LINE" >> "$ENV_FILE"
+fi
+chmod 600 "$ENV_FILE" 2>/dev/null || true
+chown pulse:pulse "$ENV_FILE" 2>/dev/null || true
+EOF
+    then
+        print_warn "Unable to update /etc/pulse/.env inside container $CTID"
+    fi
+}
+
 # Helper function to safely update allowed_nodes section in config file
 # Removes any existing allowed_nodes section before adding new one to prevent duplicates
 update_allowed_nodes() {
@@ -2472,20 +2491,3 @@ else
 fi
 
 exit 0
-# Ensure Pulse inside the container knows where to find the proxy socket.
-configure_container_proxy_env() {
-    local socket_line="PULSE_SENSOR_PROXY_SOCKET=/mnt/pulse-proxy/pulse-sensor-proxy.sock"
-    pct exec "$CTID" -- bash -lc '
-set -e
-ENV_FILE="/etc/pulse/.env"
-SOCKET_LINE="'"$socket_line"'"
-mkdir -p /etc/pulse
-if [[ -f "$ENV_FILE" ]] && grep -q "^PULSE_SENSOR_PROXY_SOCKET=" "$ENV_FILE" 2>/dev/null; then
-  sed -i "s|^PULSE_SENSOR_PROXY_SOCKET=.*|$SOCKET_LINE|" "$ENV_FILE"
-else
-  echo "$SOCKET_LINE" >> "$ENV_FILE"
-fi
-chmod 600 "$ENV_FILE" 2>/dev/null || true
-chown pulse:pulse "$ENV_FILE" 2>/dev/null || true
-' >/dev/null 2>&1 || print_warn "Unable to update /etc/pulse/.env inside container $CTID"
-}
