@@ -112,55 +112,55 @@ update_allowed_nodes() {
 
     # Remove any existing allowed_nodes block (including descriptive comments) to prevent duplicates
     if command -v python3 >/dev/null 2>&1; then
-        python3 - "$config_file" <<'PY' || true
+        python3 - "$config_file" <<'PY'
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
-text = path.read_text().splitlines()
+lines = path.read_text().splitlines()
+if not lines:
+    path.write_text('')
+    exit()
+
 out = []
 pending = []
 skip = False
 
-def flush_pending(buf, output):
-    if buf:
-        output.extend(buf)
-        buf.clear()
+def flush_pending():
+    global pending
+    if pending:
+        out.extend(pending)
+        pending = []
 
 i = 0
-while i < len(text):
-    line = text[i]
+while i < len(lines):
+    line = lines[i]
     stripped = line.lstrip()
 
     if skip:
-        if stripped == "" or stripped.startswith("#") or stripped.startswith("-"):
+        indent = len(line) - len(stripped)
+        if indent > 0 or stripped.startswith('#'):
             i += 1
             continue
-        if line.startswith(" "):
-            # still part of allowed_nodes indentation (e.g., comments), skip
-            if stripped.startswith("allowed_nodes:"):
-                # unexpected nested block; continue handling
-                i += 1
-                continue
         skip = False
 
-    if stripped.startswith("allowed_nodes:"):
-        pending.clear()
+    if stripped.startswith('allowed_nodes:'):
+        pending = []
         skip = True
         i += 1
         continue
 
-    if stripped == "" or stripped.startswith("#"):
+    if stripped == '' or stripped.startswith('#'):
         pending.append(line)
         i += 1
         continue
 
-    flush_pending(pending, out)
+    flush_pending()
     out.append(line)
     i += 1
 
-flush_pending(pending, out)
-path.write_text("\n".join(out) + ("\n" if text else ""))
+flush_pending()
+path.write_text('\n'.join(out) + '\n')
 PY
     else
         # Fallback: truncate the file to remove duplicates if python3 is unavailable
