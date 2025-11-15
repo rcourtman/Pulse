@@ -1662,15 +1662,15 @@ WRAPPER_EOF
 chmod +x "$WRAPPER_SCRIPT"
 print_success "Sensor wrapper installed at $WRAPPER_SCRIPT"
 
-# Install cleanup system for automatic SSH key removal when nodes are deleted
+# Install cleanup system for full Pulse removal when nodes are deleted
 print_info "Installing cleanup system..."
 
 # Install cleanup script
-CLEANUP_SCRIPT_PATH="/usr/local/bin/pulse-sensor-cleanup.sh"
-cat > "$CLEANUP_SCRIPT_PATH" << 'CLEANUP_EOF'
+cat > "$CLEANUP_SCRIPT_PATH" <<'CLEANUP_EOF'
 #!/bin/bash
 
-# pulse-sensor-cleanup.sh - Removes Pulse SSH keys from Proxmox nodes when they're removed from Pulse
+# pulse-sensor-cleanup.sh - Complete Pulse footprint removal when nodes are removed
+# Removes: SSH keys, proxy service, binaries, API tokens, and LXC bind mounts
 # This script is triggered by systemd path unit when cleanup-request.json is created
 
 set -euo pipefail
@@ -1678,7 +1678,9 @@ set -euo pipefail
 # Configuration
 WORK_DIR="/var/lib/pulse-sensor-proxy"
 CLEANUP_REQUEST="${WORK_DIR}/cleanup-request.json"
+LOCKFILE="${WORK_DIR}/cleanup.lock"
 LOG_TAG="pulse-sensor-cleanup"
+INSTALLER_PATH="/opt/pulse/sensor-proxy/install-sensor-proxy.sh"
 
 # Logging functions
 log_info() {
@@ -1696,6 +1698,13 @@ log_error() {
     echo "[ERROR] $1" >&2
 }
 
+# Acquire exclusive lock to prevent concurrent cleanup runs
+exec 200>"$LOCKFILE"
+if ! flock -n 200; then
+    log_info "Another cleanup instance is running, exiting"
+    exit 0
+fi
+
 # Check if cleanup request file exists
 if [[ ! -f "$CLEANUP_REQUEST" ]]; then
     log_info "No cleanup request found at $CLEANUP_REQUEST"
@@ -1704,14 +1713,14 @@ fi
 
 log_info "Processing cleanup request from $CLEANUP_REQUEST"
 
-# Read and parse the cleanup request
+# Read and parse the cleanup request, then delete immediately to prevent re-processing
 CLEANUP_DATA=$(cat "$CLEANUP_REQUEST")
 HOST=$(echo "$CLEANUP_DATA" | grep -o '"host":"[^"]*"' | cut -d'"' -f4 || echo "")
 REQUESTED_AT=$(echo "$CLEANUP_DATA" | grep -o '"requestedAt":"[^"]*"' | cut -d'"' -f4 || echo "")
 
 log_info "Cleanup requested at: ${REQUESTED_AT:-unknown}"
 
-# Remove the cleanup request file immediately to prevent re-processing
+# Delete request file IMMEDIATELY to prevent loops (before any long-running operations)
 rm -f "$CLEANUP_REQUEST"
 
 # If no specific host was provided, clean up all known nodes
@@ -1768,10 +1777,88 @@ else
     fi
 
     if [[ "$IS_LOCAL" == true ]]; then
-        log_info "Cleaning up localhost SSH keys"
+        log_info "Performing full cleanup on localhost"
+
+        # 1. Remove SSH keys
+        log_info "Removing SSH keys from authorized_keys"
         sed -i -e '/# pulse-managed-key$/d' -e '/# pulse-proxy-key$/d' /root/.ssh/authorized_keys 2>&1 | \
             logger -t "$LOG_TAG" -p user.info || \
-            log_warn "Failed to clean up SSH keys on localhost"
+            log_warn "Failed to clean up SSH keys"
+
+        # 2. Delete API tokens and user
+        log_info "Removing Proxmox API tokens and pulse-monitor user"
+        if command -v pveum >/dev/null 2>&1; then
+            # Use JSON output if available (Proxmox 7.0+), fall back to text parsing
+            if pveum user token list --output-format json-pretty pulse-monitor@pam >/dev/null 2>&1; then
+                TOKEN_IDS=$(pveum user token list --output-format json-pretty pulse-monitor@pam 2>/dev/null | \
+                    grep -o '"tokenid":"[^"]*"' | cut -d'"' -f4 || true)
+            else
+                # Fall back to parsing table output, filtering table decorations
+                TOKEN_IDS=$(pveum user token list pulse-monitor@pam 2>/dev/null | \
+                    grep -v '^[│┌└╞]' | awk 'NR>1 && /pulse/ {print $1}' | grep -v '^$' || true)
+            fi
+
+            for token_id in $TOKEN_IDS; do
+                log_info "Deleting API token: $token_id"
+                pveum user token remove pulse-monitor@pam "${token_id}" 2>&1 | \
+                    logger -t "$LOG_TAG" -p user.info || \
+                    log_warn "Failed to delete token $token_id"
+            done
+
+            # Remove the pulse-monitor user
+            log_info "Removing pulse-monitor@pam user"
+            pveum user delete pulse-monitor@pam 2>&1 | \
+                logger -t "$LOG_TAG" -p user.info || \
+                log_warn "pulse-monitor@pam user not found or already removed"
+        else
+            log_warn "pveum command not available, skipping API token cleanup"
+        fi
+
+        # 3. Remove LXC bind mounts
+        log_info "Removing LXC bind mounts from container configs"
+        if command -v pct >/dev/null 2>&1; then
+            for ctid in $(pct list 2>/dev/null | awk 'NR>1 {print $1}' || true); do
+                CONF_FILE="/etc/pve/lxc/${ctid}.conf"
+                if [[ -f "$CONF_FILE" ]] && grep -q "pulse-sensor-proxy" "$CONF_FILE" 2>/dev/null; then
+                    log_info "Removing bind mount from container $ctid"
+                    sed -i '/pulse-sensor-proxy/d' "$CONF_FILE" 2>&1 | \
+                        logger -t "$LOG_TAG" -p user.info || \
+                        log_warn "Failed to update config for container $ctid"
+                fi
+            done
+        fi
+
+        # 4. Uninstall proxy service and remove binaries via isolated transient unit
+        log_info "Starting full uninstallation (service, binaries, configs)"
+        if [[ -x "$INSTALLER_PATH" ]]; then
+            # Use systemd-run to create isolated transient unit that won't be killed
+            # when we stop pulse-sensor-proxy.service
+            if command -v systemd-run >/dev/null 2>&1; then
+                UNINSTALL_UNIT="pulse-uninstall-$(date +%s)"
+                log_info "Spawning isolated uninstaller unit: $UNINSTALL_UNIT"
+
+                systemd-run \
+                    --unit="${UNINSTALL_UNIT}" \
+                    --property="Type=oneshot" \
+                    --property="Conflicts=pulse-sensor-proxy.service" \
+                    --property="After=pulse-sensor-cleanup.service" \
+                    --no-block \
+                    --quiet \
+                    -- bash -c "$INSTALLER_PATH --uninstall --quiet >> /var/log/pulse/sensor-proxy/uninstall.log 2>&1" \
+                    2>&1 | logger -t "$LOG_TAG" -p user.info
+
+                log_info "Uninstaller started in isolated systemd unit (non-blocking)"
+            else
+                log_warn "systemd-run not available, attempting direct uninstall (may fail)"
+                bash "$INSTALLER_PATH" --uninstall --quiet >> /var/log/pulse/sensor-proxy/uninstall.log 2>&1 || \
+                    log_error "Uninstaller failed - manual cleanup may be required"
+            fi
+        else
+            log_warn "Installer not found at $INSTALLER_PATH, cannot run uninstaller"
+            log_info "Manual cleanup required: systemctl stop pulse-sensor-proxy && systemctl disable pulse-sensor-proxy"
+        fi
+
+        log_info "Localhost cleanup initiated (uninstaller running in background)"
     else
         log_info "Cleaning up remote host: $HOST_CLEAN"
 
@@ -1830,7 +1917,7 @@ PATH_EOF
 
 # Install systemd service unit
 CLEANUP_SERVICE_UNIT="/etc/systemd/system/pulse-sensor-cleanup.service"
-cat > "$CLEANUP_SERVICE_UNIT" << 'SERVICE_EOF'
+cat > "$CLEANUP_SERVICE_UNIT" <<SERVICE_EOF
 [Unit]
 Description=Pulse Sensor Cleanup Service
 Documentation=https://github.com/rcourtman/Pulse
@@ -1838,7 +1925,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/pulse-sensor-cleanup.sh
+ExecStart=${CLEANUP_SCRIPT_PATH}
 User=root
 Group=root
 WorkingDirectory=/var/lib/pulse-sensor-proxy
