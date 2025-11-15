@@ -75,47 +75,76 @@ update_allowed_nodes() {
     # Ensure temp file is cleaned up on exit (success or failure)
     trap "rm -f '$tmp_config'" RETURN
 
-    # Remove any existing allowed_nodes section (including the YAML key and all list items)
-    # This handles multi-line allowed_nodes blocks and associated comment headers
+    # Remove any existing allowed_nodes section using a robust state machine
+    # This removes the YAML key, all list items, and any comment lines immediately preceding it
     if [[ -f "$config_file" ]]; then
         awk '
-            # When we hit allowed_nodes, mark section start and clear pending comments
+            BEGIN {
+                in_section = 0
+                comment_buffer_size = 0
+            }
+
+            # Detect start of allowed_nodes section
             /^allowed_nodes:/ {
-                in_section=1
-                delete pending_lines
-                pending_count=0
+                # Discard any buffered comment lines (they belong to allowed_nodes)
+                comment_buffer_size = 0
+                in_section = 1
                 next
             }
 
-            # Inside section: skip all content until we hit a non-indented, non-comment line
-            in_section && /^[^ \t#]/ {
-                in_section=0
-                # Fall through to print this line
-            }
+            # Inside allowed_nodes section: skip lines until we hit a non-indented, non-comment line
             in_section {
-                next
-            }
-
-            # Outside section: buffer comment lines (they might belong to allowed_nodes)
-            !in_section && /^[ \t]*#/ {
-                pending_lines[pending_count++] = $0
-                next
-            }
-
-            # Outside section: non-comment line - flush pending comments and print
-            !in_section {
-                for (i = 0; i < pending_count; i++) {
-                    print pending_lines[i]
+                # Empty lines within section: skip
+                if (/^[ \t]*$/) {
+                    next
                 }
-                delete pending_lines
-                pending_count = 0
-                print
+                # Indented lines (list items): skip
+                if (/^[ \t]+-/) {
+                    next
+                }
+                # Indented comments: skip
+                if (/^[ \t]+#/) {
+                    next
+                }
+                # Non-indented, non-comment line: section ends
+                if (/^[^ \t#]/) {
+                    in_section = 0
+                    # Fall through to normal processing
+                }
             }
 
-            # At end of file, flush any remaining pending comments
+            # Outside section: buffer comment lines (might precede allowed_nodes)
+            !in_section && /^[ \t]*#/ {
+                comment_buffer[comment_buffer_size++] = $0
+                next
+            }
+
+            # Outside section: non-comment, non-empty line
+            !in_section && !/^[ \t]*$/ {
+                # Flush buffered comments (they don'\''t belong to allowed_nodes)
+                for (i = 0; i < comment_buffer_size; i++) {
+                    print comment_buffer[i]
+                }
+                comment_buffer_size = 0
+                print
+                next
+            }
+
+            # Outside section: empty line
+            !in_section && /^[ \t]*$/ {
+                # Flush buffered comments and print empty line
+                for (i = 0; i < comment_buffer_size; i++) {
+                    print comment_buffer[i]
+                }
+                comment_buffer_size = 0
+                print
+                next
+            }
+
+            # At end of file, flush any remaining buffered comments
             END {
-                for (i = 0; i < pending_count; i++) {
-                    print pending_lines[i]
+                for (i = 0; i < comment_buffer_size; i++) {
+                    print comment_buffer[i]
                 }
             }
         ' "$config_file" > "$tmp_config"
@@ -138,7 +167,7 @@ update_allowed_nodes() {
         done
     } >> "$tmp_config"
 
-    # Replace original file
+    # Replace original file atomically
     if ! mv "$tmp_config" "$config_file"; then
         echo "ERROR: Failed to update $config_file - check permissions" >&2
         return 1
