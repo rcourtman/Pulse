@@ -175,8 +175,8 @@ const UnifiedBackups: Component = () => {
     if (hasData) {
       return false;
     }
-    const pollingCycles = state.stats?.pollingCycles ?? 0;
-    return pollingCycles === 0;
+    const lastUpdate = state.lastUpdate;
+    return !lastUpdate;
   });
 
   // Normalize all backup data into unified format
