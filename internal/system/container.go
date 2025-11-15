@@ -56,6 +56,58 @@ func InContainer() bool {
 	return false
 }
 
+// DetectLXCCTID attempts to detect the Proxmox LXC container ID.
+// Returns empty string if not in an LXC container or CTID cannot be determined.
+func DetectLXCCTID() string {
+	// Method 1: Parse /proc/1/cgroup for LXC container ID
+	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			// Look for patterns like: 0::/lxc/123 or 0::/lxc.payload.123
+			if strings.Contains(line, "/lxc") || strings.Contains(line, "lxc.payload") {
+				// Extract digits after lxc/ or lxc.payload.
+				parts := strings.Split(line, "/")
+				for _, part := range parts {
+					part = strings.TrimPrefix(part, "lxc.payload.")
+					part = strings.TrimPrefix(part, "lxc.")
+					if isNumeric(part) {
+						return part
+					}
+				}
+			}
+			// Also check for machine-lxc-NNN pattern
+			if strings.Contains(line, "machine-lxc") {
+				fields := strings.Split(line, "-")
+				for _, field := range fields {
+					if isNumeric(field) {
+						return field
+					}
+				}
+			}
+		}
+	}
+
+	// Method 2: Check hostname (some LXC containers use CTID as hostname)
+	if hostname, err := os.Hostname(); err == nil && isNumeric(hostname) {
+		return hostname
+	}
+
+	return ""
+}
+
+func isNumeric(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func isTruthy(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "1", "true", "t", "yes", "y", "on":

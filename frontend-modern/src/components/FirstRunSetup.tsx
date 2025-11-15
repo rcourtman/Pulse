@@ -26,6 +26,9 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
   const [isUnlocked, setIsUnlocked] = createSignal(false);
   const [bootstrapTokenPath, setBootstrapTokenPath] = createSignal<string>('');
   const [isDocker, setIsDocker] = createSignal<boolean>(false);
+  const [inContainer, setInContainer] = createSignal<boolean>(false);
+  const [lxcCtid, setLxcCtid] = createSignal<string>('');
+  const [showAlternatives, setShowAlternatives] = createSignal(false);
 
   const applyTheme = (mode: 'system' | 'light' | 'dark') => {
     if (mode === 'light') {
@@ -72,6 +75,8 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
         if (data.bootstrapTokenPath) {
           setBootstrapTokenPath(data.bootstrapTokenPath);
           setIsDocker(data.isDocker || false);
+          setInContainer(data.inContainer || false);
+          setLxcCtid(data.lxcCtid || '');
         }
       }
     } catch (error) {
@@ -317,26 +322,68 @@ IMPORTANT: Keep these credentials secure!
                       </div>
                     }
                   >
+                    {/* Show most relevant command based on detected environment */}
                     <div class="bg-white dark:bg-gray-800 rounded p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
-                      <Show when={isDocker()}>
-                        <div class="text-blue-600 dark:text-blue-400 mb-1"># From Docker host:</div>
-                        docker exec &lt;container-name&gt; cat {bootstrapTokenPath()}
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># For Kubernetes:</div>
-                        kubectl exec &lt;pod-name&gt; -- cat {bootstrapTokenPath()}
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># For Proxmox LXC running Docker:</div>
-                        pct exec &lt;ctid&gt; -- docker exec &lt;container-name&gt; cat {bootstrapTokenPath()}
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or enter the LXC container first:</div>
-                        pct enter &lt;ctid&gt;
-                        <div class="text-gray-500 dark:text-gray-400 mt-1 mb-1"># Then inside LXC:</div>
+                      {/* LXC with detected CTID */}
+                      <Show when={inContainer() && !isDocker() && lxcCtid()}>
+                        <div class="text-blue-600 dark:text-blue-400 mb-1 font-semibold"># Run from Proxmox host:</div>
+                        pct exec {lxcCtid()} -- cat {bootstrapTokenPath()}
                       </Show>
-                      <Show when={!isDocker() && bootstrapTokenPath() === '/etc/pulse/.bootstrap_token'}>
-                        <div class="text-blue-600 dark:text-blue-400 mb-1"># For Proxmox LXC, run from Proxmox host:</div>
-                        pct enter &lt;ctid&gt;
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or directly retrieve:</div>
+
+                      {/* LXC without CTID */}
+                      <Show when={inContainer() && !isDocker() && !lxcCtid()}>
+                        <div class="text-blue-600 dark:text-blue-400 mb-1 font-semibold"># Run from Proxmox host:</div>
                         pct exec &lt;ctid&gt; -- cat {bootstrapTokenPath()}
-                        <div class="text-gray-500 dark:text-gray-400 mt-2 mb-1"># Or from inside the LXC container:</div>
                       </Show>
-                      cat {bootstrapTokenPath()}
+
+                      {/* Docker (generic) */}
+                      <Show when={isDocker()}>
+                        <div class="text-blue-600 dark:text-blue-400 mb-1 font-semibold"># From Docker host:</div>
+                        docker exec &lt;container-name&gt; cat {bootstrapTokenPath()}
+                      </Show>
+
+                      {/* Bare metal / inside container */}
+                      <Show when={!inContainer()}>
+                        <div class="text-blue-600 dark:text-blue-400 mb-1 font-semibold"># On this host:</div>
+                        cat {bootstrapTokenPath()}
+                      </Show>
+                    </div>
+
+                    {/* Collapsible alternatives */}
+                    <div class="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAlternatives(!showAlternatives())}
+                        class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {showAlternatives() ? '▼' : '▶'} Show other retrieval methods
+                      </button>
+                      <Show when={showAlternatives()}>
+                        <div class="mt-2 space-y-2 text-gray-600 dark:text-gray-400">
+                          <Show when={isDocker()}>
+                            <div class="bg-gray-50 dark:bg-gray-900 rounded p-3 font-mono text-xs">
+                              <div class="mb-1"># For Kubernetes:</div>
+                              kubectl exec &lt;pod-name&gt; -- cat {bootstrapTokenPath()}
+                            </div>
+                            <div class="bg-gray-50 dark:bg-gray-900 rounded p-3 font-mono text-xs">
+                              <div class="mb-1"># For Proxmox LXC running Docker:</div>
+                              pct exec &lt;ctid&gt; -- docker exec &lt;container-name&gt; cat {bootstrapTokenPath()}
+                            </div>
+                          </Show>
+                          <Show when={inContainer() && !isDocker()}>
+                            <div class="bg-gray-50 dark:bg-gray-900 rounded p-3 font-mono text-xs">
+                              <div class="mb-1"># Enter container then run:</div>
+                              pct enter {lxcCtid() || '<ctid>'}
+                              <br />
+                              cat {bootstrapTokenPath()}
+                            </div>
+                          </Show>
+                          <div class="bg-gray-50 dark:bg-gray-900 rounded p-3 font-mono text-xs">
+                            <div class="mb-1"># Direct file access:</div>
+                            cat {bootstrapTokenPath()}
+                          </div>
+                        </div>
+                      </Show>
                     </div>
                   </Show>
                 </div>
