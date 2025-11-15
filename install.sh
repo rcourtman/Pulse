@@ -1576,7 +1576,7 @@ fi'; then
                 local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
                 print_info "Copying locally-built pulse-sensor-proxy binary from container..."
                 if pct pull $CTID /opt/pulse/bin/pulse-sensor-proxy "$local_proxy_binary" 2>/dev/null; then
-                    proxy_install_args=(--ctid "$CTID" --local-binary "$local_proxy_binary" --skip-restart)
+                    proxy_install_args=(--ctid "$CTID" --local-binary "$local_proxy_binary" --skip-restart --pulse-server "http://${IP}:${frontend_port}")
                     print_info "Using locally-built binary from container"
                 else
                     print_warn "Failed to copy binary from container, will try fallback download"

@@ -111,7 +111,46 @@ update_allowed_nodes() {
     done
 
     # Remove any existing allowed_nodes block (including descriptive comments) to prevent duplicates
-    perl -0pi -e 's/(?:^[ \t]*#[^\n]*\n)*allowed_nodes:\n(?:(?:[ \t]+-[^\n]*|[ \t]*#[^\n]*)\n)*//mg' "$config_file" 2>/dev/null || true
+    local tmp_config
+    tmp_config=$(mktemp)
+    if awk '
+        BEGIN { skip=0; pending_count=0 }
+        function flush_pending() {
+            for (i=1; i<=pending_count; i++) print pending[i]
+            pending_count=0
+        }
+        {
+            if (skip) {
+                if ($0 ~ /^[[:space:]]*$/ || $0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*-[[:space:]]*/) {
+                    next
+                }
+                skip=0
+            }
+            if ($0 ~ /^[[:space:]]*allowed_nodes:[[:space:]]*$/) {
+                pending_count=0
+                skip=1
+                next
+            }
+            if ($0 ~ /^[[:space:]]*$/ || $0 ~ /^[[:space:]]*#/) {
+                pending[++pending_count]=$0
+                next
+            }
+            if (pending_count > 0) {
+                flush_pending()
+            }
+            print
+        }
+        END {
+            if (!skip && pending_count > 0) {
+                flush_pending()
+            }
+        }
+    ' "$config_file" > "$tmp_config"; then
+        mv "$tmp_config" "$config_file"
+    else
+        rm -f "$tmp_config"
+        print_warn "Failed to sanitize existing allowed_nodes block; duplicates may remain"
+    fi
 
     {
         echo ""
