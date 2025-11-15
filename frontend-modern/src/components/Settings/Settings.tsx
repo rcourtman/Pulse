@@ -139,6 +139,14 @@ interface TemperatureProxyHTTPStatus {
   error?: string;
 }
 
+interface TemperatureProxyControlPlaneState {
+  instance: string;
+  lastSync?: string;
+  refreshIntervalSeconds?: number;
+  secondsBehind?: number;
+  status?: string;
+}
+
 interface TemperatureProxyDiagnostic {
   legacySSHDetected: boolean;
   recommendProxyUpgrade: boolean;
@@ -155,6 +163,8 @@ interface TemperatureProxyDiagnostic {
   proxyCapabilities?: string[];
   notes?: string[];
   httpProxies?: TemperatureProxyHTTPStatus[];
+  controlPlaneEnabled?: boolean;
+  controlPlaneStates?: TemperatureProxyControlPlaneState[];
 }
 
 interface APITokenSummary {
@@ -792,6 +802,33 @@ const Settings: Component<SettingsProps> = (props) => {
     return formatRelativeTime(timestamp);
   };
 
+  const controlPlaneStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'healthy':
+        return 'Healthy';
+      case 'stale':
+        return 'Behind';
+      case 'offline':
+        return 'Offline';
+      case 'pending':
+      default:
+        return 'Pending';
+    }
+  };
+
+  const controlPlaneStatusClass = (status?: string) => {
+    switch (status) {
+      case 'healthy':
+        return 'bg-green-500';
+      case 'stale':
+        return 'bg-yellow-500';
+      case 'offline':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
   const formatUptime = (seconds: number) => {
     if (!seconds || seconds <= 0) {
       return 'Unknown';
@@ -814,15 +851,26 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   const emitTemperatureProxyWarnings = (diag: DiagnosticsData | null) => {
-    if (!diag?.temperatureProxy?.httpProxies) {
+    if (!diag?.temperatureProxy) {
       return;
     }
-    const failing = (diag.temperatureProxy.httpProxies as TemperatureProxyHTTPStatus[]).filter(
-      (proxy) => proxy && proxy.node && !proxy.reachable,
-    );
-    if (failing.length > 0) {
-      const nodes = failing.map((proxy) => proxy.node || 'Unknown').join(', ');
-      showWarning(`Pulse cannot reach HTTPS temperature proxy on: ${nodes}`);
+    if (diag.temperatureProxy.httpProxies) {
+      const failing = (diag.temperatureProxy.httpProxies as TemperatureProxyHTTPStatus[]).filter(
+        (proxy) => proxy && proxy.node && !proxy.reachable,
+      );
+      if (failing.length > 0) {
+        const nodes = failing.map((proxy) => proxy.node || 'Unknown').join(', ');
+        showWarning(`Pulse cannot reach HTTPS temperature proxy on: ${nodes}`);
+      }
+    }
+    if (diag.temperatureProxy.controlPlaneStates) {
+      const stale = (diag.temperatureProxy.controlPlaneStates as TemperatureProxyControlPlaneState[]).filter(
+        (state) => state && (state.status === 'stale' || state.status === 'offline'),
+      );
+      if (stale.length > 0) {
+        const names = stale.map((state) => state.instance || 'Proxy').join(', ');
+        showWarning(`Temperature proxy control plane is behind on: ${names}`);
+      }
     }
   };
 
@@ -5210,17 +5258,71 @@ const Settings: Component<SettingsProps> = (props) => {
                                     <Show when={typeof temp().legacySshKeyCount === 'number'}>
                                       <div>Legacy SSH keys: {temp().legacySshKeyCount ?? 0}</div>
                                     </Show>
-                                    <Show when={temp().legacySSHDetected}>
-                                      <div class="text-red-500">
-                                        Legacy SSH temperature collection detected
+                                  <Show when={temp().legacySSHDetected}>
+                                    <div class="text-red-500">
+                                      Legacy SSH temperature collection detected
+                                    </div>
+                                  </Show>
+                                </div>
+                                <Show
+                                  when={
+                                    temp().controlPlaneStates &&
+                                    (temp().controlPlaneStates as TemperatureProxyControlPlaneState[]).length > 0
+                                  }
+                                >
+                                  <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
+                                    <div class="flex items-center justify-between">
+                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
+                                        Control plane sync
                                       </div>
-                                    </Show>
+                                      <span
+                                        class={`px-2 py-0.5 rounded text-white text-xs ${
+                                          temp().controlPlaneEnabled ? 'bg-green-500' : 'bg-gray-500'
+                                        }`}
+                                      >
+                                        {temp().controlPlaneEnabled ? 'Enabled' : 'Disabled'}
+                                      </span>
+                                    </div>
+                                    <For each={temp().controlPlaneStates || []}>
+                                      {(state) => (
+                                        <div class="rounded border border-gray-200 dark:border-gray-700 px-2 py-1.5 space-y-1">
+                                          <div class="flex items-center justify-between">
+                                            <div class="font-medium text-gray-700 dark:text-gray-200">
+                                              {state.instance || 'Proxy'}
+                                            </div>
+                                            <span
+                                              class={`px-2 py-0.5 rounded text-white text-xs ${controlPlaneStatusClass(
+                                                state.status,
+                                              )}`}
+                                            >
+                                              {controlPlaneStatusLabel(state.status)}
+                                            </span>
+                                          </div>
+                                          <Show when={state.lastSync}>
+                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                              Last sync: {formatIsoRelativeTime(state.lastSync)}
+                                            </div>
+                                          </Show>
+                                          <Show when={typeof state.secondsBehind === 'number' && (state.secondsBehind || 0) > 0}>
+                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                              Behind by ~{formatUptime(state.secondsBehind || 0)}
+                                            </div>
+                                          </Show>
+                                          <Show when={state.refreshIntervalSeconds}>
+                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                              Target interval: {formatUptime(state.refreshIntervalSeconds || 0)}
+                                            </div>
+                                          </Show>
+                                        </div>
+                                      )}
+                                    </For>
                                   </div>
-                                  <Show
-                                    when={
-                                      temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
-                                    }
-                                  >
+                                </Show>
+                                <Show
+                                  when={
+                                    temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
+                                  }
+                                >
                                     <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
                                       <div class="font-semibold text-gray-700 dark:text-gray-200">
                                         HTTPS proxies

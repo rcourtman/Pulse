@@ -184,6 +184,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeHostReport, r.hostAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/", RequireAdmin(r.config, RequireScope(config.ScopeHostManage, r.hostAgentHandlers.HandleDeleteHost)))
 	r.mux.HandleFunc("/api/temperature-proxy/register", r.temperatureProxyHandlers.HandleRegister)
+	r.mux.HandleFunc("/api/temperature-proxy/authorized-nodes", r.temperatureProxyHandlers.HandleAuthorizedNodes)
 	r.mux.HandleFunc("/api/temperature-proxy/unregister", RequireAdmin(r.config, r.temperatureProxyHandlers.HandleUnregister))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
@@ -196,6 +197,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/diagnostics/docker/prepare-token", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleDiagnosticsDockerPrepareToken)))
 	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.handleDownloadPulseSensorProxy)
 	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.handleDownloadInstallerScript)
+	r.mux.HandleFunc("/api/install/migrate-sensor-proxy-control-plane.sh", r.handleDownloadMigrationScript)
 	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
 	r.mux.HandleFunc("/api/config", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleConfig)))
 	r.mux.HandleFunc("/api/backups", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackups)))
@@ -273,6 +275,7 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+	r.mux.HandleFunc("/api/security/validate-bootstrap-token", r.handleValidateBootstrapToken)
 
 	// Test node configuration endpoint (for new nodes)
 	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, req *http.Request) {
@@ -1262,7 +1265,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if r.config.AllowedOrigins != "" {
 			w.Header().Set("Access-Control-Allow-Origin", r.config.AllowedOrigins)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token, X-Setup-Token")
 			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token, X-Authenticated-User, X-Auth-Method")
 		}
 
@@ -1309,25 +1312,28 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			publicPaths := []string{
 				"/api/health",
 				"/api/security/status",
+				"/api/security/validate-bootstrap-token",
 				"/api/version",
 				"/api/login", // Add login endpoint as public
 				"/api/oidc/login",
 				config.DefaultOIDCCallbackPath,
-				"/install-docker-agent.sh",             // Docker agent bootstrap script must be public
-				"/install-container-agent.sh",          // Container agent bootstrap script must be public
-				"/download/pulse-docker-agent",         // Agent binary download should not require auth
-				"/install-host-agent.sh",               // Host agent bootstrap script must be public
-				"/install-host-agent.ps1",              // Host agent PowerShell script must be public
-				"/uninstall-host-agent.sh",             // Host agent uninstall script must be public
-				"/uninstall-host-agent.ps1",            // Host agent uninstall script must be public
-				"/download/pulse-host-agent",           // Host agent binary download should not require auth
-				"/api/agent/version",                   // Agent update checks need to work before auth
-				"/api/server/info",                     // Server info for installer script
-				"/api/install/install-sensor-proxy.sh", // Temperature proxy installer fallback
-				"/api/install/pulse-sensor-proxy",      // Temperature proxy binary fallback
-				"/api/install/install-docker.sh",       // Docker turnkey installer
-				"/api/system/proxy-public-key",         // Temperature proxy public key for setup script
-				"/api/temperature-proxy/register",      // Temperature proxy registration (called by installer)
+				"/install-docker-agent.sh",                           // Docker agent bootstrap script must be public
+				"/install-container-agent.sh",                        // Container agent bootstrap script must be public
+				"/download/pulse-docker-agent",                       // Agent binary download should not require auth
+				"/install-host-agent.sh",                             // Host agent bootstrap script must be public
+				"/install-host-agent.ps1",                            // Host agent PowerShell script must be public
+				"/uninstall-host-agent.sh",                           // Host agent uninstall script must be public
+				"/uninstall-host-agent.ps1",                          // Host agent uninstall script must be public
+				"/download/pulse-host-agent",                         // Host agent binary download should not require auth
+				"/api/agent/version",                                 // Agent update checks need to work before auth
+				"/api/server/info",                                   // Server info for installer script
+				"/api/install/install-sensor-proxy.sh",               // Temperature proxy installer fallback
+				"/api/install/pulse-sensor-proxy",                    // Temperature proxy binary fallback
+				"/api/install/migrate-sensor-proxy-control-plane.sh", // Proxy migration helper
+				"/api/install/install-docker.sh",                     // Docker turnkey installer
+				"/api/system/proxy-public-key",                       // Temperature proxy public key for setup script
+				"/api/temperature-proxy/register",                    // Temperature proxy registration (called by installer)
+				"/api/temperature-proxy/authorized-nodes",            // Proxy control-plane sync
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -3762,6 +3768,31 @@ func (r *Router) handleDownloadDockerInstallerScript(w http.ResponseWriter, req 
 	w.Header().Set("Content-Disposition", "attachment; filename=install-docker.sh")
 	if _, err := w.Write(content); err != nil {
 		log.Error().Err(err).Msg("Failed to write Docker installer script to client")
+	}
+}
+
+func (r *Router) handleDownloadMigrationScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
+		return
+	}
+
+	scriptPath := "/opt/pulse/scripts/migrate-sensor-proxy-control-plane.sh"
+	content, err := os.ReadFile(scriptPath)
+	if err != nil {
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "migrate-sensor-proxy-control-plane.sh")
+		content, err = os.ReadFile(scriptPath)
+		if err != nil {
+			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read migration script")
+			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read migration script", nil)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.Header().Set("Content-Disposition", "attachment; filename=migrate-sensor-proxy-control-plane.sh")
+	if _, err := w.Write(content); err != nil {
+		log.Error().Err(err).Msg("Failed to write migration script to client")
 	}
 }
 

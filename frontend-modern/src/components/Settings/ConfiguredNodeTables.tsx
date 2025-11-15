@@ -64,7 +64,14 @@ const resolveTemperatureTransport = (
   globalEnabled: boolean,
 ): TemperatureTransportBadge => {
   const monitoringEnabled = isTemperatureMonitoringEnabled(node, globalEnabled);
+  const normalizedTransport = (node.temperatureTransport || '').toLowerCase();
   if (!monitoringEnabled) {
+    return {
+      label: 'Temp disabled',
+      badgeClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
+    };
+  }
+  if (normalizedTransport === 'disabled') {
     return {
       label: 'Temp disabled',
       badgeClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
@@ -73,6 +80,68 @@ const resolveTemperatureTransport = (
 
   const key = (node.name || '').toLowerCase();
   const httpEntry = info?.httpMap?.[key];
+  const socketStatus = info?.socketStatus;
+
+  const buildSocketBadge = (): TemperatureTransportBadge => {
+    if (socketStatus === 'error') {
+      return {
+        label: 'Socket error',
+        badgeClass: 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
+        description: 'Proxy socket not responding',
+      };
+    }
+    if (socketStatus === 'missing') {
+      return {
+        label: 'Socket missing',
+        badgeClass: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+        description: 'Mount /mnt/pulse-proxy inside the container',
+      };
+    }
+    return {
+      label: 'Socket proxy',
+      badgeClass: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
+    };
+  };
+
+  if (normalizedTransport) {
+    switch (normalizedTransport) {
+      case 'https-proxy':
+        if (httpEntry) {
+          if (httpEntry.reachable) {
+            return {
+              label: 'HTTPS proxy',
+              badgeClass: 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300',
+              description: httpEntry.url,
+            };
+          }
+          return {
+            label: 'HTTPS error',
+            badgeClass: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+            description: httpEntry.error || 'Proxy unreachable',
+          };
+        }
+        return {
+          label: 'HTTPS proxy',
+          badgeClass: 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300',
+        };
+      case 'socket-proxy':
+        return buildSocketBadge();
+      case 'ssh-blocked':
+        return {
+          label: 'Proxy required',
+          badgeClass: 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
+          description: 'Containerized Pulse requires pulse-sensor-proxy',
+        };
+      case 'ssh':
+        return {
+          label: 'SSH fallback',
+          badgeClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
+        };
+      default:
+        break;
+    }
+  }
+
   if (httpEntry) {
     if (httpEntry.reachable) {
       return {
@@ -89,18 +158,8 @@ const resolveTemperatureTransport = (
   }
 
   if (info) {
-    if (info.socketStatus === 'healthy') {
-      return {
-        label: 'Socket proxy',
-        badgeClass: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
-      };
-    }
-    if (info.socketStatus === 'error') {
-      return {
-        label: 'Socket error',
-        badgeClass: 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
-        description: 'Proxy socket not responding',
-      };
+    if (info.socketStatus === 'healthy' || info.socketStatus === 'error' || info.socketStatus === 'missing') {
+      return buildSocketBadge();
     }
   }
 

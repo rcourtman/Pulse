@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"os/user"
@@ -249,21 +251,24 @@ func lookupUserFromPasswd(username string) (*userSpec, error) {
 
 // Proxy manages the temperature monitoring proxy
 type Proxy struct {
-	socketPath        string
-	sshKeyPath        string
-	workDir           string
-	knownHosts        knownhosts.Manager
-	listener          net.Listener
-	rateLimiter       *rateLimiter
-	nodeGate          *nodeGate
-	router            map[string]handlerFunc
-	config            *Config
-	metrics           *ProxyMetrics
-	audit             *auditLogger
-	nodeValidator     *nodeValidator
-	readTimeout       time.Duration
-	writeTimeout      time.Duration
-	maxSSHOutputBytes int64
+	socketPath         string
+	sshKeyPath         string
+	workDir            string
+	knownHosts         knownhosts.Manager
+	listener           net.Listener
+	rateLimiter        *rateLimiter
+	nodeGate           *nodeGate
+	router             map[string]handlerFunc
+	config             *Config
+	metrics            *ProxyMetrics
+	audit              *auditLogger
+	nodeValidator      *nodeValidator
+	readTimeout        time.Duration
+	writeTimeout       time.Duration
+	maxSSHOutputBytes  int64
+	controlPlaneCfg    *ControlPlaneConfig
+	controlPlaneToken  string
+	controlPlaneCancel context.CancelFunc
 
 	allowedPeerUIDs   map[uint32]struct{}
 	allowedPeerGIDs   map[uint32]struct{}
@@ -426,6 +431,7 @@ func runProxy() {
 		readTimeout:       cfg.ReadTimeout,
 		writeTimeout:      cfg.WriteTimeout,
 		maxSSHOutputBytes: cfg.MaxSSHOutputBytes,
+		controlPlaneCfg:   cfg.PulseControlPlane,
 	}
 
 	if wd, err := os.Getwd(); err == nil {
@@ -453,6 +459,7 @@ func runProxy() {
 	if err := proxy.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start proxy")
 	}
+	proxy.startControlPlaneSync()
 
 	// Start HTTP server if enabled
 	var httpServer *HTTPServer
@@ -537,10 +544,124 @@ func (p *Proxy) Start() error {
 
 // Stop shuts down the proxy
 func (p *Proxy) Stop() {
+	if p.controlPlaneCancel != nil {
+		p.controlPlaneCancel()
+	}
 	if p.listener != nil {
 		p.listener.Close()
 		os.Remove(p.socketPath)
 	}
+}
+
+func (p *Proxy) startControlPlaneSync() {
+	if p.controlPlaneCfg == nil || strings.TrimSpace(p.controlPlaneCfg.URL) == "" {
+		return
+	}
+
+	tokenBytes, err := os.ReadFile(p.controlPlaneCfg.TokenFile)
+	if err != nil {
+		log.Warn().Err(err).Str("token_file", p.controlPlaneCfg.TokenFile).Msg("Control plane token unavailable; skipping sync")
+		return
+	}
+	token := strings.TrimSpace(string(tokenBytes))
+	if token == "" {
+		log.Warn().Str("token_file", p.controlPlaneCfg.TokenFile).Msg("Control plane token is empty; skipping sync")
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p.controlPlaneToken = token
+	p.controlPlaneCancel = cancel
+	go p.controlPlaneLoop(ctx)
+	log.Info().
+		Str("url", p.controlPlaneCfg.URL).
+		Int("refresh_interval", p.controlPlaneCfg.RefreshIntervalSec).
+		Msg("Control plane synchronization enabled")
+}
+
+func (p *Proxy) controlPlaneLoop(ctx context.Context) {
+	refresh := time.Duration(p.controlPlaneCfg.RefreshIntervalSec) * time.Second
+	if refresh <= 0 {
+		refresh = time.Duration(defaultControlPlaneRefreshSecs) * time.Second
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	if p.controlPlaneCfg.InsecureSkipVerify {
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		}
+	}
+
+	for {
+		if err := p.fetchAuthorizedNodes(client); err != nil {
+			log.Warn().Err(err).Msg("Control plane sync failed")
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(refresh):
+		}
+	}
+}
+
+func (p *Proxy) fetchAuthorizedNodes(client *http.Client) error {
+	cfg := p.controlPlaneCfg
+	if cfg == nil {
+		return nil
+	}
+
+	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(cfg.URL, "/")+"/api/temperature-proxy/authorized-nodes", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Proxy-Token", p.controlPlaneToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("control plane responded %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var payload struct {
+		Nodes []struct {
+			Name string `json:"name"`
+			IP   string `json:"ip"`
+		} `json:"nodes"`
+		Hash            string    `json:"hash"`
+		RefreshInterval int       `json:"refresh_interval"`
+		GeneratedAt     time.Time `json:"generated_at"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return fmt.Errorf("decode authorized-nodes response: %w", err)
+	}
+
+	if payload.RefreshInterval > 0 && cfg.RefreshIntervalSec != payload.RefreshInterval {
+		cfg.RefreshIntervalSec = payload.RefreshInterval
+	}
+
+	var entries []string
+	for _, node := range payload.Nodes {
+		if node.Name != "" {
+			entries = append(entries, node.Name)
+		}
+		if node.IP != "" {
+			entries = append(entries, node.IP)
+		}
+	}
+
+	if len(entries) == 0 {
+		return errors.New("authorized-nodes response empty")
+	}
+
+	p.nodeValidator.UpdateAllowlist(entries)
+	return nil
 }
 
 // acceptConnections handles incoming socket connections

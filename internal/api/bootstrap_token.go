@@ -3,8 +3,10 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,4 +137,44 @@ func (r *Router) clearBootstrapToken() {
 
 	r.bootstrapTokenHash = ""
 	r.bootstrapTokenPath = ""
+}
+
+func (r *Router) handleValidateBootstrapToken(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.bootstrapTokenHash == "" {
+		http.Error(w, "Bootstrap token unavailable. Reload the page or restart Pulse.", http.StatusConflict)
+		return
+	}
+
+	token := strings.TrimSpace(req.Header.Get(bootstrapTokenHeader))
+
+	if token == "" {
+		var payload struct {
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+		token = strings.TrimSpace(payload.Token)
+	}
+
+	if token == "" {
+		http.Error(w, "Bootstrap token is required", http.StatusBadRequest)
+		return
+	}
+
+	if !r.bootstrapTokenValid(token) {
+		log.Warn().
+			Str("ip", GetClientIP(req)).
+			Msg("Rejected invalid bootstrap token validation request")
+		http.Error(w, "Invalid bootstrap setup token", http.StatusUnauthorized)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

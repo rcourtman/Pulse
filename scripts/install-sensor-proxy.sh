@@ -90,15 +90,35 @@ update_allowed_nodes() {
     mkdir -p "$(dirname "$config_file")"
     touch "$config_file"
 
+    # Gather existing nodes (if any) to preserve manual edits
+    local existing_nodes=()
+    if command -v perl >/dev/null 2>&1; then
+        mapfile -t existing_nodes < <(perl -0ne 'if (m/allowed_nodes:\n((?:[ \t]+-[^\n]*\n)+)/m) { @lines = split /\n/, $1; for (@lines) { s/^[ \t-]+//; s/\s+$//; next unless $_; print "$_\n"; } }' "$config_file" 2>/dev/null || true)
+    fi
+
+    # Merge and de-duplicate nodes
+    local merged_nodes=()
+    declare -A seen_nodes=()
+    for node in "${existing_nodes[@]}" "${nodes[@]}"; do
+        node=$(echo "$node" | awk '{$1=$1;print}')
+        if [[ -z "$node" ]]; then
+            continue
+        fi
+        if [[ -z "${seen_nodes[$node]+set}" ]]; then
+            merged_nodes+=("$node")
+            seen_nodes["$node"]=1
+        fi
+    done
+
     # Remove any existing allowed_nodes block (including descriptive comments) to prevent duplicates
-    perl -0pi -e 's/\n(?:[ 	]*#[^\n]*\n)*allowed_nodes:\n(?:(?:[ 	]+-[^\n]*|[ 	]*#[^\n]*)\n)*//g' "$config_file" 2>/dev/null || true
+    perl -0pi -e 's/(?:^[ \t]*#[^\n]*\n)*allowed_nodes:\n(?:(?:[ \t]+-[^\n]*|[ \t]*#[^\n]*)\n)*//mg' "$config_file" 2>/dev/null || true
 
     {
         echo ""
         echo "# ${comment_line}"
         echo "# These nodes are allowed to request temperature data when cluster IPC validation is unavailable"
         echo "allowed_nodes:"
-        for node in "${nodes[@]}"; do
+        for node in "${merged_nodes[@]}"; do
             echo "  - $node"
         done
     } >> "$config_file"
@@ -468,6 +488,9 @@ FALLBACK_BASE="${PULSE_SENSOR_PROXY_FALLBACK_URL:-}"
 SKIP_RESTART=false
 UNINSTALL=false
 PURGE=false
+CONTROL_PLANE_TOKEN=""
+CONTROL_PLANE_REFRESH=""
+SHORT_HOSTNAME=$(hostname -s 2>/dev/null || hostname | cut -d'.' -f1)
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -981,33 +1004,45 @@ register_with_pulse() {
         fi
     done
 
-    # Parse token from response
-    local token
-    token=$(echo "$response" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-
-    if [[ -z "$token" ]]; then
-        print_error "Registration succeeded but no token received"
-        print_error "Response: $response"
-        return 1
-    fi
-
-    # Store token
-    echo "$token" > /etc/pulse-sensor-proxy/.http-auth-token
-    chmod 600 /etc/pulse-sensor-proxy/.http-auth-token
-    chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/.http-auth-token
-
     # Output to stderr so it doesn't interfere with command substitution
-    print_success "Registered successfully - token received" >&2
+    print_success "Registered successfully" >&2
 
-    # Parse instance name from response for logging
-    local instance_name
-    instance_name=$(echo "$response" | grep -o '"pve_instance":"[^"]*"' | cut -d'"' -f4)
-    if [[ -n "$instance_name" ]]; then
-        print_info "Linked to PVE instance: $instance_name" >&2
+    # Return full response for caller parsing
+    echo "$response"
+}
+
+write_control_plane_token() {
+    local token="$1"
+    if [[ -z "$token" ]]; then
+        return
+    fi
+    print_info "Writing control plane token..."
+    echo "$token" > /etc/pulse-sensor-proxy/.pulse-control-token
+    chmod 600 /etc/pulse-sensor-proxy/.pulse-control-token
+    chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/.pulse-control-token
+}
+
+ensure_control_plane_config() {
+    local pulse_url="$1"
+    local refresh="$2"
+    if [[ -z "$pulse_url" ]]; then
+        return
+    fi
+    if [[ -z "$refresh" ]]; then
+        refresh=60
+    fi
+    if grep -q "^pulse_control_plane:" /etc/pulse-sensor-proxy/config.yaml 2>/dev/null; then
+        return
     fi
 
-    # Return token for caller to use (stdout only)
-    echo "$token"
+    cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
+
+# Pulse control plane configuration (auto-generated)
+pulse_control_plane:
+  url: "$pulse_url"
+  token_file: "/etc/pulse-sensor-proxy/.pulse-control-token"
+  refresh_interval: $refresh
+EOF
 }
 
 # Create base config file if it doesn't exist
@@ -1030,6 +1065,25 @@ rate_limit:
 EOF
     chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/config.yaml
     chmod 0644 /etc/pulse-sensor-proxy/config.yaml
+fi
+
+# Register socket-mode proxy with Pulse if server provided
+if [[ "$HTTP_MODE" != true ]]; then
+    if [[ -z "$PULSE_SERVER" ]]; then
+        print_warn "PULSE_SERVER not provided; control plane sync disabled. Temperatures will only work on this host."
+    else
+        print_info "Registering socket proxy with Pulse server ${PULSE_SERVER}..."
+        registration_response=$(register_with_pulse "$PULSE_SERVER" "$SHORT_HOSTNAME" "" "socket")
+        if [[ $? -eq 0 && -n "$registration_response" ]]; then
+            CONTROL_PLANE_TOKEN=$(echo "$registration_response" | grep -o '"control_token":"[^"]*"' | head -1 | cut -d'"' -f4)
+            CONTROL_PLANE_REFRESH=$(echo "$registration_response" | grep -o '"refresh_interval":[0-9]*' | head -1 | awk -F: '{print $2}')
+            if [[ -z "$CONTROL_PLANE_REFRESH" ]]; then
+                CONTROL_PLANE_REFRESH="60"
+            fi
+        else
+            print_warn "Failed to register socket proxy with Pulse; continuing without control plane sync"
+        fi
+    fi
 fi
 
 # HTTP Mode Configuration
@@ -1114,15 +1168,30 @@ if [[ "$HTTP_MODE" == true ]]; then
     PROXY_URL="https://${PRIMARY_IP}${HTTP_ADDR}"
     print_info "Proxy will be accessible at: $PROXY_URL"
 
-    # Register with Pulse and get auth token
-    # Use short hostname for registration matching (PVE cluster endpoints use short names)
-    SHORT_HOSTNAME=$(hostname -s 2>/dev/null || hostname | cut -d'.' -f1)
-    HTTP_AUTH_TOKEN=$(register_with_pulse "$PULSE_SERVER" "$SHORT_HOSTNAME" "$PROXY_URL")
-    if [[ $? -ne 0 || -z "$HTTP_AUTH_TOKEN" ]]; then
+    # Register with Pulse and get auth/control tokens
+    registration_response=$(register_with_pulse "$PULSE_SERVER" "$SHORT_HOSTNAME" "$PROXY_URL" "http")
+    if [[ $? -ne 0 || -z "$registration_response" ]]; then
         print_error "Failed to register with Pulse - aborting installation"
         print_error "Fix the issue and re-run the installer"
         exit 1
     fi
+
+    HTTP_AUTH_TOKEN=$(echo "$registration_response" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
+    CONTROL_PLANE_TOKEN=$(echo "$registration_response" | grep -o '"control_token":"[^"]*"' | head -1 | cut -d'"' -f4)
+    CONTROL_PLANE_REFRESH=$(echo "$registration_response" | grep -o '"refresh_interval":[0-9]*' | head -1 | awk -F: '{print $2}')
+    if [[ -z "$CONTROL_PLANE_REFRESH" ]]; then
+        CONTROL_PLANE_REFRESH="60"
+    fi
+
+    if [[ -z "$HTTP_AUTH_TOKEN" ]]; then
+        print_error "Registration succeeded but Pulse did not return an auth token"
+        print_error "Response: $registration_response"
+        exit 1
+    fi
+
+    echo "$HTTP_AUTH_TOKEN" > /etc/pulse-sensor-proxy/.http-auth-token
+    chmod 600 /etc/pulse-sensor-proxy/.http-auth-token
+    chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/.http-auth-token
 
     # Backup config before modifying
     if [[ -f /etc/pulse-sensor-proxy/config.yaml ]]; then
@@ -1174,6 +1243,11 @@ EOF
     print_info "  Allow inbound TCP connections on port ${HTTP_ADDR#:} from Pulse server"
     print_info "  Command: ufw allow from <pulse-server-ip> to any port ${HTTP_ADDR#:}"
     echo ""
+fi
+
+if [[ -n "$CONTROL_PLANE_TOKEN" && -n "$PULSE_SERVER" ]]; then
+    write_control_plane_token "$CONTROL_PLANE_TOKEN"
+    ensure_control_plane_config "$PULSE_SERVER" "$CONTROL_PLANE_REFRESH"
 fi
 
 # Stop existing service if running (for upgrades)

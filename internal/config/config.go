@@ -389,8 +389,8 @@ func splitAndTrim(value string) []string {
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
 	Name                         string
-	Host                         string  // Primary endpoint (user-provided)
-	GuestURL                     string  // Optional guest-accessible URL (for navigation)
+	Host                         string // Primary endpoint (user-provided)
+	GuestURL                     string // Optional guest-accessible URL (for navigation)
 	User                         string
 	Password                     string
 	TokenName                    string
@@ -409,6 +409,8 @@ type PVEInstance struct {
 	// Temperature proxy configuration (for external PVE hosts)
 	TemperatureProxyURL   string // Optional HTTPS URL to pulse-sensor-proxy (e.g., https://pve1.lan:8443)
 	TemperatureProxyToken string // Bearer token for proxy authentication
+	// Control-plane token for socket-mode proxies (Pulse -> proxy sync)
+	TemperatureProxyControlToken string
 
 	// Cluster support
 	IsCluster        bool              // True if this is a cluster
@@ -418,16 +420,16 @@ type PVEInstance struct {
 
 // ClusterEndpoint represents a single node in a cluster
 type ClusterEndpoint struct {
-	NodeID           string     // Node ID in cluster
-	NodeName         string     // Node name
-	Host             string     // Full URL (e.g., https://node1.lan:8006)
-	GuestURL         string     // Optional guest-accessible URL (for navigation)
-	IP               string     // IP address
-	Online           bool       // Current online status from Proxmox
-	LastSeen         time.Time  // Last successful connection
-	PulseReachable   *bool      // Pulse's view: can Pulse reach this endpoint? nil = not yet checked
-	LastPulseCheck   *time.Time // Last time Pulse checked connectivity
-	PulseError       string     // Last error Pulse encountered connecting to this endpoint
+	NodeID         string     // Node ID in cluster
+	NodeName       string     // Node name
+	Host           string     // Full URL (e.g., https://node1.lan:8006)
+	GuestURL       string     // Optional guest-accessible URL (for navigation)
+	IP             string     // IP address
+	Online         bool       // Current online status from Proxmox
+	LastSeen       time.Time  // Last successful connection
+	PulseReachable *bool      // Pulse's view: can Pulse reach this endpoint? nil = not yet checked
+	LastPulseCheck *time.Time // Last time Pulse checked connectivity
+	PulseError     string     // Last error Pulse encountered connecting to this endpoint
 }
 
 // PBSInstance represents a Proxmox Backup Server connection
@@ -627,21 +629,21 @@ func Load() (*Config, error) {
 			// Always load DiscoveryEnabled even if false
 			cfg.DiscoveryEnabled = systemSettings.DiscoveryEnabled
 			if systemSettings.DiscoverySubnet != "" {
-			cfg.DiscoverySubnet = systemSettings.DiscoverySubnet
-		}
-		cfg.Discovery = NormalizeDiscoveryConfig(CloneDiscoveryConfig(systemSettings.DiscoveryConfig))
-		cfg.TemperatureMonitoringEnabled = systemSettings.TemperatureMonitoringEnabled
-		// Load DNS cache timeout
-		if systemSettings.DNSCacheTimeout > 0 {
-			cfg.DNSCacheTimeout = time.Duration(systemSettings.DNSCacheTimeout) * time.Second
-		}
-		// Load SSH port
-		if systemSettings.SSHPort > 0 {
-			cfg.SSHPort = systemSettings.SSHPort
-		} else {
-			cfg.SSHPort = 22 // Default SSH port
-		}
-		// APIToken no longer loaded from system.json - only from .env
+				cfg.DiscoverySubnet = systemSettings.DiscoverySubnet
+			}
+			cfg.Discovery = NormalizeDiscoveryConfig(CloneDiscoveryConfig(systemSettings.DiscoveryConfig))
+			cfg.TemperatureMonitoringEnabled = systemSettings.TemperatureMonitoringEnabled
+			// Load DNS cache timeout
+			if systemSettings.DNSCacheTimeout > 0 {
+				cfg.DNSCacheTimeout = time.Duration(systemSettings.DNSCacheTimeout) * time.Second
+			}
+			// Load SSH port
+			if systemSettings.SSHPort > 0 {
+				cfg.SSHPort = systemSettings.SSHPort
+			} else {
+				cfg.SSHPort = 22 // Default SSH port
+			}
+			// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
 				Str("logLevel", cfg.LogLevel).

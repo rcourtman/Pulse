@@ -30,6 +30,7 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
   const [lxcCtid, setLxcCtid] = createSignal<string>('');
   const [dockerContainerName, setDockerContainerName] = createSignal<string>('');
   const [showAlternatives, setShowAlternatives] = createSignal(false);
+  const [isValidatingToken, setIsValidatingToken] = createSignal(false);
 
   const applyTheme = (mode: 'system' | 'light' | 'dark') => {
     if (mode === 'light') {
@@ -102,13 +103,39 @@ export const FirstRunSetup: Component<{ force?: boolean; showLegacyBanner?: bool
     return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
   };
 
-  const handleUnlock = () => {
+  const handleUnlock = async () => {
     if (!bootstrapToken().trim()) {
       showError('Please enter the bootstrap token');
       return;
     }
-    // Simple client-side unlock - actual validation happens during setup
-    setIsUnlocked(true);
+
+    setIsValidatingToken(true);
+
+    try {
+      const response = await fetch('/api/security/validate-bootstrap-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token: bootstrapToken().trim() }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Invalid bootstrap setup token');
+      }
+
+      setIsUnlocked(true);
+      showSuccess('Bootstrap token verified. Continue with setup.');
+    } catch (error) {
+      if (error instanceof Error) {
+        showError(error.message || 'Failed to validate bootstrap token');
+      } else {
+        showError('Failed to validate bootstrap token');
+      }
+    } finally {
+      setIsValidatingToken(false);
+    }
   };
 
   const handleSetup = async () => {
@@ -399,7 +426,7 @@ IMPORTANT: Keep these credentials secure!
                     type="text"
                     value={bootstrapToken()}
                     onInput={(e) => setBootstrapToken(e.currentTarget.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
+                  onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
                     class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                     placeholder="Paste the token from your host"
                     autofocus
@@ -423,10 +450,10 @@ IMPORTANT: Keep these credentials secure!
                 <button
                   type="button"
                   onClick={handleUnlock}
-                  disabled={!bootstrapToken().trim()}
+                  disabled={isValidatingToken() || !bootstrapToken().trim()}
                   class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
                 >
-                  Unlock Wizard
+                  {isValidatingToken() ? 'Validating...' : 'Unlock Wizard'}
                 </button>
               </div>
             </div>

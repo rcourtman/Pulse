@@ -396,8 +396,8 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 			strings.Contains(chipLower, "nct6796") || // Nuvoton NCT6796 SuperIO
 			strings.Contains(chipLower, "nct6797") || // Nuvoton NCT6797 SuperIO
 			strings.Contains(chipLower, "nct6798") || // Nuvoton NCT6798 SuperIO
-			strings.Contains(chipLower, "w83627") ||  // Winbond W83627 SuperIO series
-			strings.Contains(chipLower, "f71882") ||  // Fintek F71882 SuperIO
+			strings.Contains(chipLower, "w83627") || // Winbond W83627 SuperIO series
+			strings.Contains(chipLower, "f71882") || // Fintek F71882 SuperIO
 			strings.Contains(chipLower, "cpu_thermal") || // Raspberry Pi CPU temperature
 			strings.Contains(chipLower, "rpitemp") {
 			foundCPUChip = true
@@ -815,6 +815,11 @@ func (tc *TemperatureCollector) isProxyEnabled() bool {
 	}
 
 	return useProxy
+}
+
+// SocketProxyAvailable reports whether the unix socket proxy can currently be used.
+func (tc *TemperatureCollector) SocketProxyAvailable() bool {
+	return tc != nil && tc.isProxyEnabled()
 }
 
 func (tc *TemperatureCollector) handleProxySuccess() {

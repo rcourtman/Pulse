@@ -221,6 +221,7 @@ const (
 
 // nodeValidator enforces node allow-list and cluster membership checks
 type nodeValidator struct {
+	mu             sync.RWMutex
 	allowHosts     map[string]struct{}
 	allowCIDRs     []*net.IPNet
 	hasAllowlist   bool
@@ -286,23 +287,7 @@ func newNodeValidator(cfg *Config, metrics *ProxyMetrics) (*nodeValidator, error
 		clock:          time.Now,
 	}
 
-	for _, raw := range cfg.AllowedNodes {
-		entry := strings.TrimSpace(raw)
-		if entry == "" {
-			continue
-		}
-
-		if _, network, err := net.ParseCIDR(entry); err == nil {
-			v.allowCIDRs = append(v.allowCIDRs, network)
-			continue
-		}
-
-		if normalized := normalizeAllowlistEntry(entry); normalized != "" {
-			v.allowHosts[normalized] = struct{}{}
-		}
-	}
-
-	v.hasAllowlist = len(v.allowHosts) > 0 || len(v.allowCIDRs) > 0
+	v.setAllowlist(cfg.AllowedNodes)
 
 	if v.hasAllowlist {
 		log.Info().
@@ -331,17 +316,67 @@ func newNodeValidator(cfg *Config, metrics *ProxyMetrics) (*nodeValidator, error
 	return v, nil
 }
 
+func (v *nodeValidator) setAllowlist(entries []string) {
+	v.allowHosts = make(map[string]struct{})
+	v.allowCIDRs = nil
+
+	for _, raw := range entries {
+		entry := strings.TrimSpace(raw)
+		if entry == "" {
+			continue
+		}
+
+		if _, network, err := net.ParseCIDR(entry); err == nil {
+			v.allowCIDRs = append(v.allowCIDRs, network)
+			continue
+		}
+
+		if normalized := normalizeAllowlistEntry(entry); normalized != "" {
+			v.allowHosts[normalized] = struct{}{}
+		}
+	}
+
+	v.hasAllowlist = len(v.allowHosts) > 0 || len(v.allowCIDRs) > 0
+}
+
+func (v *nodeValidator) UpdateAllowlist(entries []string) {
+	if v == nil {
+		return
+	}
+
+	v.mu.Lock()
+	v.setAllowlist(entries)
+	hasAllowlist := v.hasAllowlist
+	hosts := len(v.allowHosts)
+	cidrs := len(v.allowCIDRs)
+	v.mu.Unlock()
+
+	if hasAllowlist {
+		log.Info().
+			Int("allowed_node_count", hosts).
+			Int("allowed_cidr_count", cidrs).
+			Msg("Updated node allow-list from control plane")
+	} else {
+		log.Warn().Msg("Control plane allow-list update produced empty set")
+	}
+}
+
 // Validate ensures the provided node is authorized before any SSH is attempted.
 func (v *nodeValidator) Validate(ctx context.Context, node string) error {
 	if v == nil {
 		return nil
 	}
 
+	v.mu.RLock()
+	hasAllowlist := v.hasAllowlist
+	clusterEnabled := v.clusterEnabled
+	v.mu.RUnlock()
+
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	if v.hasAllowlist {
+	if hasAllowlist {
 		allowed, err := v.matchesAllowlist(ctx, node)
 		if err != nil {
 			v.recordFailure(validationReasonResolutionFailed)
@@ -354,7 +389,7 @@ func (v *nodeValidator) Validate(ctx context.Context, node string) error {
 		return nil
 	}
 
-	if v.clusterEnabled {
+	if clusterEnabled {
 		allowed, err := v.matchesCluster(ctx, node)
 		if err != nil {
 			// Cluster query failed (e.g., IPC permission denied, running in LXC)
@@ -416,33 +451,39 @@ func (v *nodeValidator) validateAsLocalhost(ctx context.Context, node string) er
 }
 
 func (v *nodeValidator) matchesAllowlist(ctx context.Context, node string) (bool, error) {
+	v.mu.RLock()
+	allowHosts := v.allowHosts
+	allowCIDRs := v.allowCIDRs
+	resolver := v.resolver
+	v.mu.RUnlock()
+
 	normalized := normalizeAllowlistEntry(node)
 	if normalized != "" {
-		if _, ok := v.allowHosts[normalized]; ok {
+		if _, ok := allowHosts[normalized]; ok {
 			return true, nil
 		}
 	}
 
 	if ip := parseNodeIP(node); ip != nil {
-		if v.ipAllowed(ip) {
+		if ipAllowed(ip, allowHosts, allowCIDRs) {
 			return true, nil
 		}
 		// If the node itself is an IP and it didn't match, no need to resolve again.
 		return false, nil
 	}
 
-	if len(v.allowCIDRs) == 0 {
+	if len(allowCIDRs) == 0 {
 		return false, nil
 	}
 
 	host := stripNodeDelimiters(node)
-	ips, err := v.resolver.LookupIP(ctx, host)
+	ips, err := resolver.LookupIP(ctx, host)
 	if err != nil {
 		return false, fmt.Errorf("resolve node %q: %w", host, err)
 	}
 
 	for _, ip := range ips {
-		if v.ipAllowed(ip) {
+		if ipAllowed(ip, allowHosts, allowCIDRs) {
 			return true, nil
 		}
 	}
@@ -558,6 +599,23 @@ func (v *nodeValidator) ipAllowed(ip net.IP) bool {
 		return true
 	}
 	for _, network := range v.allowCIDRs {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func ipAllowed(ip net.IP, hosts map[string]struct{}, cidrs []*net.IPNet) bool {
+	if ip == nil {
+		return false
+	}
+	if hosts != nil {
+		if _, ok := hosts[ip.String()]; ok {
+			return true
+		}
+	}
+	for _, network := range cidrs {
 		if network.Contains(ip) {
 			return true
 		}

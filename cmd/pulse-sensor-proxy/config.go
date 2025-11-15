@@ -39,11 +39,20 @@ type Config struct {
 	RateLimit *RateLimitConfig `yaml:"rate_limit,omitempty"`
 
 	// HTTP mode configuration
-	HTTPEnabled     bool   `yaml:"http_enabled"`      // Enable HTTP server mode
-	HTTPListenAddr  string `yaml:"http_listen_addr"`  // Address to listen on (e.g., ":8443")
-	HTTPTLSCertFile string `yaml:"http_tls_cert"`     // Path to TLS certificate
-	HTTPTLSKeyFile  string `yaml:"http_tls_key"`      // Path to TLS private key
-	HTTPAuthToken   string `yaml:"http_auth_token"`   // Bearer token for authentication
+	HTTPEnabled     bool   `yaml:"http_enabled"`     // Enable HTTP server mode
+	HTTPListenAddr  string `yaml:"http_listen_addr"` // Address to listen on (e.g., ":8443")
+	HTTPTLSCertFile string `yaml:"http_tls_cert"`    // Path to TLS certificate
+	HTTPTLSKeyFile  string `yaml:"http_tls_key"`     // Path to TLS private key
+	HTTPAuthToken   string `yaml:"http_auth_token"`  // Bearer token for authentication
+
+	PulseControlPlane *ControlPlaneConfig `yaml:"pulse_control_plane"`
+}
+
+type ControlPlaneConfig struct {
+	URL                string `yaml:"url"`
+	TokenFile          string `yaml:"token_file"`
+	RefreshIntervalSec int    `yaml:"refresh_interval"` // seconds
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 }
 
 // PeerConfig represents a peer entry with capabilities.
@@ -323,6 +332,15 @@ func loadConfig(configPath string) (*Config, error) {
 		}
 	}
 
+	if cfg.PulseControlPlane != nil {
+		if cfg.PulseControlPlane.TokenFile == "" {
+			cfg.PulseControlPlane.TokenFile = defaultControlPlaneTokenPath
+		}
+		if cfg.PulseControlPlane.RefreshIntervalSec <= 0 {
+			cfg.PulseControlPlane.RefreshIntervalSec = defaultControlPlaneRefreshSecs
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -453,3 +471,8 @@ func parseAllowedSubnets(cfg []string) ([]string, error) {
 
 	return normalized, nil
 }
+
+const (
+	defaultControlPlaneTokenPath   = "/etc/pulse-sensor-proxy/.pulse-control-token"
+	defaultControlPlaneRefreshSecs = 60
+)

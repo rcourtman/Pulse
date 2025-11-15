@@ -115,6 +115,78 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 	}
 }
 
+func TestValidateBootstrapTokenEndpoint(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+	}
+
+	router := &Router{config: cfg}
+	router.initializeBootstrapToken()
+
+	tokenPath := filepath.Join(cfg.DataPath, bootstrapTokenFilename)
+	content, err := os.ReadFile(tokenPath)
+	if err != nil {
+		t.Fatalf("read bootstrap token: %v", err)
+	}
+	token := strings.TrimSpace(string(content))
+	if token == "" {
+		t.Fatalf("bootstrap token should not be empty")
+	}
+
+	handler := http.HandlerFunc(router.handleValidateBootstrapToken)
+
+	// GET not allowed
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/security/validate-bootstrap-token", nil)
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for GET, got %d", rr.Code)
+	}
+
+	// Missing token payload
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader("{}"))
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing token, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	// Invalid token
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"deadbeef"}`))
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid token, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	// Valid token
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"`+token+`"}`))
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for valid token, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	// Bootstrap token should remain on disk after validation
+	if _, err := os.Stat(tokenPath); err != nil {
+		t.Fatalf("bootstrap token should remain after validation, got err=%v", err)
+	}
+
+	// Once token removed, endpoint should report conflict
+	router.clearBootstrapToken()
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"`+token+`"}`))
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409 when bootstrap token unavailable, got %d (%s)", rr.Code, rr.Body.String())
+	}
+}
+
 func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 	resetTrustedProxyConfig()
