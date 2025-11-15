@@ -1,5 +1,12 @@
 import type { Temperature } from '@/types/api';
 
+export type TemperatureTransport =
+  | 'disabled'
+  | 'socket-proxy'
+  | 'https-proxy'
+  | 'ssh'
+  | 'ssh-blocked';
+
 // Node configuration types
 
 export interface ClusterEndpoint {
@@ -83,6 +90,7 @@ export type NodeConfig = (PVENodeConfig | PBSNodeConfig | PMGNodeConfig) & {
   status?: 'connected' | 'disconnected' | 'offline' | 'error' | 'pending';
   temperature?: Temperature;
   displayName?: string;
+  temperatureTransport?: TemperatureTransport;
 };
 
 export interface NodesResponse {

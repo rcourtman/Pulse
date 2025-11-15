@@ -3457,6 +3457,21 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 	return statuses
 }
 
+// HasSocketTemperatureProxy reports whether the local unix socket proxy is available.
+func (m *Monitor) HasSocketTemperatureProxy() bool {
+	if m == nil {
+		return false
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.tempCollector == nil {
+		return false
+	}
+	return m.tempCollector.SocketProxyAvailable()
+}
+
 // checkContainerizedTempMonitoring logs a security warning if Pulse is running
 // in a container with SSH-based temperature monitoring enabled
 func checkContainerizedTempMonitoring() {

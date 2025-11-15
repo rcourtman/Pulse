@@ -234,19 +234,29 @@ type SystemDiagnostic struct {
 
 // TemperatureProxyDiagnostic summarizes proxy detection state
 type TemperatureProxyDiagnostic struct {
-	SocketFound          bool                         `json:"socketFound"`
-	SocketPath           string                       `json:"socketPath,omitempty"`
-	SocketPermissions    string                       `json:"socketPermissions,omitempty"`
-	SocketOwner          string                       `json:"socketOwner,omitempty"`
-	SocketGroup          string                       `json:"socketGroup,omitempty"`
-	ProxyReachable       bool                         `json:"proxyReachable"`
-	ProxyVersion         string                       `json:"proxyVersion,omitempty"`
-	ProxyPublicKeySHA256 string                       `json:"proxyPublicKeySha256,omitempty"`
-	ProxySSHDirectory    string                       `json:"proxySshDirectory,omitempty"`
-	LegacySSHKeyCount    int                          `json:"legacySshKeyCount,omitempty"`
-	ProxyCapabilities    []string                     `json:"proxyCapabilities,omitempty"`
-	Notes                []string                     `json:"notes,omitempty"`
-	HTTPProxies          []TemperatureProxyHTTPStatus `json:"httpProxies,omitempty"`
+	SocketFound          bool                                `json:"socketFound"`
+	SocketPath           string                              `json:"socketPath,omitempty"`
+	SocketPermissions    string                              `json:"socketPermissions,omitempty"`
+	SocketOwner          string                              `json:"socketOwner,omitempty"`
+	SocketGroup          string                              `json:"socketGroup,omitempty"`
+	ProxyReachable       bool                                `json:"proxyReachable"`
+	ProxyVersion         string                              `json:"proxyVersion,omitempty"`
+	ProxyPublicKeySHA256 string                              `json:"proxyPublicKeySha256,omitempty"`
+	ProxySSHDirectory    string                              `json:"proxySshDirectory,omitempty"`
+	LegacySSHKeyCount    int                                 `json:"legacySshKeyCount,omitempty"`
+	ProxyCapabilities    []string                            `json:"proxyCapabilities,omitempty"`
+	Notes                []string                            `json:"notes,omitempty"`
+	HTTPProxies          []TemperatureProxyHTTPStatus        `json:"httpProxies,omitempty"`
+	ControlPlaneEnabled  bool                                `json:"controlPlaneEnabled"`
+	ControlPlaneStates   []TemperatureProxyControlPlaneState `json:"controlPlaneStates,omitempty"`
+}
+
+type TemperatureProxyControlPlaneState struct {
+	Instance               string `json:"instance"`
+	LastSync               string `json:"lastSync,omitempty"`
+	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds,omitempty"`
+	SecondsBehind          int    `json:"secondsBehind,omitempty"`
+	Status                 string `json:"status,omitempty"`
 }
 
 type TemperatureProxyHTTPStatus struct {
@@ -403,7 +413,12 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		MemoryMB:     memStats.Alloc / 1024 / 1024,
 	}
 
-	diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config)
+	var proxySync map[string]proxySyncState
+	if r.temperatureProxyHandlers != nil {
+		proxySync = r.temperatureProxyHandlers.SnapshotSyncStatus()
+	}
+
+	diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config, proxySync)
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 
 	// Test each configured node
@@ -659,7 +674,7 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 	return discovery
 }
 
-func buildTemperatureProxyDiagnostic(cfg *config.Config) *TemperatureProxyDiagnostic {
+func buildTemperatureProxyDiagnostic(cfg *config.Config, syncStates map[string]proxySyncState) *TemperatureProxyDiagnostic {
 	diag := &TemperatureProxyDiagnostic{}
 
 	appendNote := func(note string) {
@@ -781,8 +796,74 @@ func buildTemperatureProxyDiagnostic(cfg *config.Config) *TemperatureProxyDiagno
 					status.Reachable = true
 				}
 			}
-
 			diag.HTTPProxies = append(diag.HTTPProxies, status)
+		}
+
+		controlStates := make([]TemperatureProxyControlPlaneState, 0)
+		now := time.Now()
+
+		lookupState := func(name string) (proxySyncState, bool) {
+			if len(syncStates) == 0 {
+				return proxySyncState{}, false
+			}
+			key := strings.ToLower(strings.TrimSpace(name))
+			if state, ok := syncStates[key]; ok {
+				return state, true
+			}
+			for _, state := range syncStates {
+				if strings.EqualFold(state.Instance, name) {
+					return state, true
+				}
+			}
+			return proxySyncState{}, false
+		}
+
+		for _, inst := range cfg.PVEInstances {
+			if strings.TrimSpace(inst.TemperatureProxyControlToken) == "" {
+				continue
+			}
+
+			state := TemperatureProxyControlPlaneState{
+				Instance:               strings.TrimSpace(inst.Name),
+				Status:                 "pending",
+				RefreshIntervalSeconds: defaultProxyAllowlistRefreshSeconds,
+			}
+			diag.ControlPlaneEnabled = true
+
+			if syncState, ok := lookupState(inst.Name); ok {
+				if syncState.RefreshInterval > 0 {
+					state.RefreshIntervalSeconds = syncState.RefreshInterval
+				}
+				if !syncState.LastPull.IsZero() {
+					state.LastSync = syncState.LastPull.UTC().Format(time.RFC3339)
+					behind := int(now.Sub(syncState.LastPull).Seconds())
+					if behind < 0 {
+						behind = 0
+					}
+					state.SecondsBehind = behind
+
+					switch {
+					case behind <= state.RefreshIntervalSeconds+15:
+						state.Status = "healthy"
+					case behind <= state.RefreshIntervalSeconds*4:
+						state.Status = "stale"
+						appendNote(fmt.Sprintf("Proxy '%s' has not refreshed its authorized nodes for %d seconds (target %d). Verify pulse-sensor-proxy is running.", state.Instance, behind, state.RefreshIntervalSeconds))
+					default:
+						state.Status = "offline"
+						appendNote(fmt.Sprintf("Proxy '%s' missed the control plane for %d seconds. Check connectivity and restart pulse-sensor-proxy.", state.Instance, behind))
+					}
+				} else {
+					appendNote(fmt.Sprintf("Proxy '%s' registered for control plane sync but has not completed its first pull yet.", state.Instance))
+				}
+			} else {
+				appendNote(fmt.Sprintf("Proxy '%s' has control-plane sync enabled but has not contacted Pulse. Confirm the installer wrote the control token and the host has connectivity.", state.Instance))
+			}
+
+			controlStates = append(controlStates, state)
+		}
+
+		if len(controlStates) > 0 {
+			diag.ControlPlaneStates = controlStates
 		}
 	}
 

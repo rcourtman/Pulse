@@ -44,6 +44,14 @@ var (
 	setupAuthTokenPattern = regexp.MustCompile(`^[A-Fa-f0-9]{32,128}$`)
 )
 
+const (
+	temperatureTransportDisabled    = "disabled"
+	temperatureTransportSocketProxy = "socket-proxy"
+	temperatureTransportHTTPSProxy  = "https-proxy"
+	temperatureTransportSSHFallback = "ssh"
+	temperatureTransportSSHBlocked  = "ssh-blocked"
+)
+
 func sanitizeInstallerURL(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -409,6 +417,7 @@ type NodeResponse struct {
 	MonitorBackups               bool                     `json:"monitorBackups,omitempty"`
 	MonitorPhysicalDisks         *bool                    `json:"monitorPhysicalDisks,omitempty"`
 	TemperatureMonitoringEnabled *bool                    `json:"temperatureMonitoringEnabled,omitempty"`
+	TemperatureTransport         string                   `json:"temperatureTransport,omitempty"`
 	MonitorDatastores            bool                     `json:"monitorDatastores,omitempty"`
 	MonitorSyncJobs              bool                     `json:"monitorSyncJobs,omitempty"`
 	MonitorVerifyJobs            bool                     `json:"monitorVerifyJobs,omitempty"`
@@ -422,6 +431,44 @@ type NodeResponse struct {
 	IsCluster                    bool                     `json:"isCluster,omitempty"`
 	ClusterName                  string                   `json:"clusterName,omitempty"`
 	ClusterEndpoints             []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
+}
+
+func determineTemperatureTransport(enabled bool, proxyURL, proxyToken string, socketAvailable bool, containerSSHBlocked bool) string {
+	if !enabled {
+		return temperatureTransportDisabled
+	}
+
+	proxyURL = strings.TrimSpace(proxyURL)
+	proxyToken = strings.TrimSpace(proxyToken)
+	if proxyURL != "" && proxyToken != "" {
+		return temperatureTransportHTTPSProxy
+	}
+
+	if socketAvailable {
+		return temperatureTransportSocketProxy
+	}
+
+	if containerSSHBlocked {
+		return temperatureTransportSSHBlocked
+	}
+
+	return temperatureTransportSSHFallback
+}
+
+func isContainerSSHRestricted() bool {
+	isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
+	if !isContainer {
+		return false
+	}
+	return strings.ToLower(strings.TrimSpace(os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH"))) != "true"
+}
+
+func (h *ConfigHandlers) resolveTemperatureTransport(enabledOverride *bool, proxyURL, proxyToken string, socketAvailable bool, containerSSHBlocked bool) string {
+	enabled := h.config.TemperatureMonitoringEnabled
+	if enabledOverride != nil {
+		enabled = *enabledOverride
+	}
+	return determineTemperatureTransport(enabled, proxyURL, proxyToken, socketAvailable, containerSSHBlocked)
 }
 
 // deriveSchemeAndPort infers the scheme (without ://) and port from a base host URL.
@@ -742,6 +789,8 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existi
 // GetAllNodesForAPI returns all configured nodes for API responses
 func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 	nodes := []NodeResponse{}
+	socketAvailable := h.monitor != nil && h.monitor.HasSocketTemperatureProxy()
+	containerSSHBlocked := isContainerSSHRestricted()
 
 	// Add PVE nodes
 	for i, pve := range h.config.PVEInstances {
@@ -766,6 +815,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			MonitorBackups:               pve.MonitorBackups,
 			MonitorPhysicalDisks:         pve.MonitorPhysicalDisks,
 			TemperatureMonitoringEnabled: pve.TemperatureMonitoringEnabled,
+			TemperatureTransport:         h.resolveTemperatureTransport(pve.TemperatureMonitoringEnabled, pve.TemperatureProxyURL, pve.TemperatureProxyToken, socketAvailable, containerSSHBlocked),
 			Status:                       h.getNodeStatus("pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
@@ -788,6 +838,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			Fingerprint:                  pbs.Fingerprint,
 			VerifySSL:                    pbs.VerifySSL,
 			TemperatureMonitoringEnabled: pbs.TemperatureMonitoringEnabled,
+			TemperatureTransport:         h.resolveTemperatureTransport(pbs.TemperatureMonitoringEnabled, "", "", socketAvailable, containerSSHBlocked),
 			MonitorDatastores:            pbs.MonitorDatastores,
 			MonitorSyncJobs:              pbs.MonitorSyncJobs,
 			MonitorVerifyJobs:            pbs.MonitorVerifyJobs,
@@ -822,6 +873,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 			MonitorQuarantine:            pmgInst.MonitorQuarantine,
 			MonitorDomainStats:           pmgInst.MonitorDomainStats,
 			Status:                       h.getNodeStatus("pmg", pmgInst.Name),
+			TemperatureTransport:         h.resolveTemperatureTransport(pmgInst.TemperatureMonitoringEnabled, "", "", socketAvailable, containerSSHBlocked),
 		}
 		nodes = append(nodes, node)
 	}
@@ -884,6 +936,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 				IsCluster:            true,
 				ClusterName:          "mock-cluster",
 				ClusterEndpoints:     clusterEndpoints, // All cluster nodes
+				TemperatureTransport: temperatureTransportSocketProxy,
 			}
 			mockNodes = append(mockNodes, clusterNode)
 		}
@@ -910,6 +963,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 				IsCluster:            false, // Not part of a cluster
 				ClusterName:          "",
 				ClusterEndpoints:     []config.ClusterEndpoint{},
+				TemperatureTransport: temperatureTransportSocketProxy,
 			}
 			mockNodes = append(mockNodes, standaloneNode)
 		}
@@ -917,22 +971,23 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 		// Add mock PBS instances
 		for i, pbs := range state.PBSInstances {
 			pbsNode := NodeResponse{
-				ID:                 generateNodeID("pbs", i),
-				Type:               "pbs",
-				Name:               pbs.Name,
-				Host:               pbs.Host,
-				User:               "pulse@pbs",
-				HasPassword:        false,
-				TokenName:          "pulse",
-				HasToken:           true,
-				Fingerprint:        "",
-				VerifySSL:          false,
-				MonitorDatastores:  true,
-				MonitorSyncJobs:    true,
-				MonitorVerifyJobs:  true,
-				MonitorPruneJobs:   true,
-				MonitorGarbageJobs: true,
-				Status:             "connected", // Always connected in mock mode
+				ID:                   generateNodeID("pbs", i),
+				Type:                 "pbs",
+				Name:                 pbs.Name,
+				Host:                 pbs.Host,
+				User:                 "pulse@pbs",
+				HasPassword:          false,
+				TokenName:            "pulse",
+				HasToken:             true,
+				Fingerprint:          "",
+				VerifySSL:            false,
+				MonitorDatastores:    true,
+				MonitorSyncJobs:      true,
+				MonitorVerifyJobs:    true,
+				MonitorPruneJobs:     true,
+				MonitorGarbageJobs:   true,
+				Status:               "connected", // Always connected in mock mode
+				TemperatureTransport: temperatureTransportSocketProxy,
 			}
 			mockNodes = append(mockNodes, pbsNode)
 		}
@@ -940,17 +995,18 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 		// Add mock PMG instances
 		for i, pmg := range state.PMGInstances {
 			pmgNode := NodeResponse{
-				ID:          generateNodeID("pmg", i),
-				Type:        "pmg",
-				Name:        pmg.Name,
-				Host:        pmg.Host,
-				User:        "root@pam",
-				HasPassword: true,
-				TokenName:   "pulse",
-				HasToken:    true,
-				Fingerprint: "",
-				VerifySSL:   false,
-				Status:      "connected", // Always connected in mock mode
+				ID:                   generateNodeID("pmg", i),
+				Type:                 "pmg",
+				Name:                 pmg.Name,
+				Host:                 pmg.Host,
+				User:                 "root@pam",
+				HasPassword:          true,
+				TokenName:            "pulse",
+				HasToken:             true,
+				Fingerprint:          "",
+				VerifySSL:            false,
+				Status:               "connected", // Always connected in mock mode
+				TemperatureTransport: temperatureTransportSocketProxy,
 			}
 			mockNodes = append(mockNodes, pmgNode)
 		}

@@ -185,6 +185,11 @@ safe_systemctl() {
 
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "pulse"
+        return
+    fi
+
     if systemctl list-unit-files --no-legend | grep -q "^pulse-backend.service"; then
         echo "pulse-backend"
     elif systemctl list-unit-files --no-legend | grep -q "^pulse.service"; then
@@ -1565,7 +1570,7 @@ fi'; then
             fi
 
             # If building from source, copy the binary from the LXC instead of downloading
-            local proxy_install_args=(--ctid "$CTID" --skip-restart)
+            local proxy_install_args=(--ctid "$CTID" --skip-restart --pulse-server "http://${IP}:${frontend_port}")
             local local_proxy_binary=""
             if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
                 local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
@@ -1770,20 +1775,29 @@ compare_versions() {
 check_existing_installation() {
     CURRENT_VERSION=""  # Make it global so we can use it later
     local BINARY_PATH=""
-    
+    local detected_service="$SERVICE_NAME"
+    local service_available=false
+
     # Check for the binary in expected locations
     if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
         BINARY_PATH="$INSTALL_DIR/bin/pulse"
     elif [[ -f "$INSTALL_DIR/pulse" ]]; then
         BINARY_PATH="$INSTALL_DIR/pulse"
     fi
-    
+
+    # Detect actual service name if systemd is available
+    if command -v systemctl >/dev/null 2>&1; then
+        detected_service=$(detect_service_name)
+        SERVICE_NAME="$detected_service"
+        service_available=true
+    fi
+
     # Try to get version if binary exists
     if [[ -n "$BINARY_PATH" ]]; then
         CURRENT_VERSION=$($BINARY_PATH --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
     fi
     
-    if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
+    if [[ "$service_available" == true ]] && systemctl is-active --quiet "$detected_service" 2>/dev/null; then
         if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != "unknown" ]]; then
             print_info "Pulse $CURRENT_VERSION is currently running"
         else

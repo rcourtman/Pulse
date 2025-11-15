@@ -43,6 +43,16 @@ If a node has an HTTPS proxy configured, Pulse does **not** fall back to socket 
 
 Use the socket path wherever Pulse is containerised. Use HTTP mode when the sensors live on machines Pulse cannot mount directly.
 
+### Monitoring proxy health
+
+Pulse surfaces the current transport status under **Settings → Diagnostics → Temperature proxy**.
+
+- The **Control plane sync** table lists every proxy registered with the new control-plane channel (`install-sensor-proxy.sh` now configures this automatically). Each entry shows the last time the proxy fetched its authorized node list, the expected refresh interval, and whether it is healthy, stale, or offline.
+- If a proxy falls behind more than one refresh interval you will see a yellow “Behind” badge; Pulse also adds a diagnostic note explaining which host is lagging. After four consecutive missed polls the badge turns red (“Offline”).
+- HTTPS-mode proxies still appear under the **HTTPS proxies** section with reachability/error information, so you can see socket/HTTP transport issues side-by-side.
+
+If a proxy never completes its first sync the diagnostics card will call that out explicitly (status “Pending”). Rerun the host installer or check the proxy journal (`journalctl -u pulse-sensor-proxy`) to resolve any startup problems, then refresh Diagnostics to confirm the sync is healthy.
+
 ## Docker in VM Setup
 
 **Running Pulse in Docker inside a VM on Proxmox?** The proxy socket cannot cross VM boundaries, so use pulse-host-agent instead.
@@ -1336,6 +1346,38 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
    - Return proxy status, socket accessibility, and last successful poll
 
 **Contributions Welcome:** If any of these improvements interest you, open a GitHub issue to discuss implementation!
+
+## Control-Plane Sync & Migration
+
+As of v4.32 the sensor proxy registers with Pulse and syncs its authorized node list via `/api/temperature-proxy/authorized-nodes`. No more manual `allowed_nodes` maintenance or `/etc/pve` access is required.
+
+### New installs
+
+Always pass the Pulse URL when installing:
+
+```bash
+curl -sSL https://pulse.example.com/api/install/install-sensor-proxy.sh \
+  | sudo bash -s -- --ctid 108 --pulse-server http://192.168.0.149:7655
+```
+
+The installer now:
+
+- Registers the proxy with Pulse (even for socket-only mode)
+- Saves `/etc/pulse-sensor-proxy/.pulse-control-token`
+- Appends a `pulse_control_plane` block to `/etc/pulse-sensor-proxy/config.yaml`
+
+### Migrating existing hosts
+
+If you installed before v4.32, run the migration helper on each host:
+
+```bash
+curl -sSL https://pulse.example.com/api/install/migrate-sensor-proxy-control-plane.sh \
+  | sudo bash -s -- --pulse-server http://192.168.0.149:7655
+```
+
+The script registers the existing proxy, writes the control token, updates the config, and restarts the service (use `--skip-restart` if you prefer to bounce it yourself). Once migrated, temperatures for every node defined in Pulse will continue working even if the proxy can’t reach `/etc/pve` or Corosync IPC.
+
+After migration you should see `Temperature data fetched successfully` entries for each node in `journalctl -u pulse-sensor-proxy`, and Settings → Diagnostics will show the last control-plane sync time.
 
 ### Getting Help
 
