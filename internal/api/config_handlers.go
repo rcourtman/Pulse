@@ -4002,6 +4002,7 @@ TEMPERATURE_ENABLED=false
 TEMP_MONITORING_AVAILABLE=true
 MIN_PROXY_VERSION="%s"
 PULSE_VERSION_ENDPOINT="%s/api/version"
+STANDALONE_PROXY_DEPLOYED=false
 
 version_ge() {
     if command -v dpkg >/dev/null 2>&1; then
@@ -4058,6 +4059,12 @@ if command -v pct >/dev/null 2>&1; then
             done
         done
     fi
+fi
+
+# Determine if this node is standalone (not joined to a cluster)
+IS_STANDALONE_NODE=false
+if ! command -v pvecm >/dev/null 2>&1 || ! pvecm status >/dev/null 2>&1; then
+    IS_STANDALONE_NODE=true
 fi
 
 # Track whether temperature monitoring can work (may be disabled by checks above)
@@ -4327,6 +4334,42 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
         if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
         echo "Configuring temperature monitoring..."
 
+        if [ "$IS_STANDALONE_NODE" = true ]; then
+            echo "  • Deploying hardened pulse-sensor-proxy..."
+            PROXY_INSTALLER_URL="$PULSE_URL/api/install/install-sensor-proxy.sh"
+            PROXY_INSTALLER=$(mktemp)
+            if curl -fsSL "$PROXY_INSTALLER_URL" -o "$PROXY_INSTALLER" 2>/dev/null; then
+                chmod +x "$PROXY_INSTALLER"
+                if "$PROXY_INSTALLER" --standalone --http-mode --pulse-server "$PULSE_URL"; then
+                    echo "    ✓ pulse-sensor-proxy installed and registered with Pulse"
+                    STANDALONE_PROXY_DEPLOYED=true
+                    TEMPERATURE_ENABLED=true
+                else
+                    echo "    ⚠️  Proxy installer reported an error; falling back to SSH-based collector"
+                fi
+                rm -f "$PROXY_INSTALLER"
+            else
+                echo "    ⚠️  Unable to download proxy installer from $PULSE_URL"
+                echo "    Falling back to SSH-based temperature monitoring."
+            fi
+        fi
+
+        if [ "$STANDALONE_PROXY_DEPLOYED" = true ]; then
+            echo ""
+            echo "✓ Temperature monitoring will use pulse-sensor-proxy on this host."
+            echo "  Temperature data will appear in the dashboard within 10 seconds."
+            if [ -f /root/.ssh/authorized_keys ]; then
+                TMP_AUTH_KEYS=$(mktemp)
+                if grep -v '# pulse-' /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS" 2>/dev/null; then
+                    chmod --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || chmod 600 "$TMP_AUTH_KEYS"
+                    chown --reference=/root/.ssh/authorized_keys "$TMP_AUTH_KEYS" 2>/dev/null || true
+                    mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys
+                else
+                    rm -f "$TMP_AUTH_KEYS"
+                fi
+            fi
+        else
+
         if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
             # Add keys to root's authorized_keys
             mkdir -p /root/.ssh
@@ -4519,6 +4562,7 @@ Host ${NODE}
                 echo "  journalctl -u pulse -n 100 | grep -i ssh"
             fi
         fi
+        fi  # End hardened proxy branch
         else
             echo "Temperature monitoring skipped."
         fi
@@ -4693,14 +4737,8 @@ fi
 # Standalone Node Configuration (for non-cluster nodes)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Check if this node is standalone (not in a cluster)
-IS_STANDALONE=false
-if ! command -v pvecm >/dev/null 2>&1 || ! pvecm status >/dev/null 2>&1; then
-    IS_STANDALONE=true
-fi
-
-# If standalone and temperature monitoring was enabled, try to fetch proxy key
-if [ "$IS_STANDALONE" = true ] && [ "$TEMPERATURE_ENABLED" = true ]; then
+# If standalone and temperature monitoring was enabled via SSH fallback, ensure proxy key is configured
+if [ "$IS_STANDALONE_NODE" = true ] && [ "$TEMPERATURE_ENABLED" = true ] && [ "$STANDALONE_PROXY_DEPLOYED" != true ]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Standalone Node Temperature Setup"
