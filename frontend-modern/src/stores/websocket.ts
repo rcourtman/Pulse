@@ -326,8 +326,8 @@ export function createWebSocketStore(url: string) {
         ) {
           // Update state properties individually to ensure reactivity
           if (message.data) {
-            // Mark that we've received initial data
-            if (message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE) {
+            // Mark that we've received usable data (initial payload or raw update)
+            if (!initialDataReceived()) {
               setInitialDataReceived(true);
             }
 
