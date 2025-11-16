@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -24,6 +26,7 @@ type Config struct {
 	MetricsAddress         string        `yaml:"metrics_address"`
 	LogLevel               string        `yaml:"log_level"`
 	AllowedNodes           []string      `yaml:"allowed_nodes"`
+	AllowedNodesFile       string        `yaml:"allowed_nodes_file"`
 	StrictNodeValidation   bool          `yaml:"strict_node_validation"`
 	ReadTimeout            time.Duration `yaml:"read_timeout"`
 	WriteTimeout           time.Duration `yaml:"write_timeout"`
@@ -54,6 +57,8 @@ type ControlPlaneConfig struct {
 	RefreshIntervalSec int    `yaml:"refresh_interval"` // seconds
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 }
+
+const defaultAllowedNodesFile = "/etc/pulse-sensor-proxy/allowed_nodes.yaml"
 
 // PeerConfig represents a peer entry with capabilities.
 type PeerConfig struct {
@@ -203,6 +208,29 @@ func loadConfig(configPath string) (*Config, error) {
 				Msg("Appended allowed nodes from environment")
 		}
 	}
+
+	if cfg.AllowedNodesFile == "" {
+		if _, err := os.Stat(defaultAllowedNodesFile); err == nil {
+			cfg.AllowedNodesFile = defaultAllowedNodesFile
+		}
+	}
+
+	if cfg.AllowedNodesFile != "" {
+		if fileNodes, err := loadAllowedNodesFile(cfg.AllowedNodesFile); err != nil {
+			log.Warn().
+				Err(err).
+				Str("allowed_nodes_file", cfg.AllowedNodesFile).
+				Msg("Failed to load allowed nodes file")
+		} else if len(fileNodes) > 0 {
+			cfg.AllowedNodes = append(cfg.AllowedNodes, fileNodes...)
+			log.Info().
+				Str("allowed_nodes_file", cfg.AllowedNodesFile).
+				Int("allowed_node_count", len(fileNodes)).
+				Msg("Loaded allowed nodes from file")
+		}
+	}
+
+	cfg.AllowedNodes = normalizeNodes(cfg.AllowedNodes)
 
 	// Strict node validation override
 	if envStrict := os.Getenv("PULSE_SENSOR_PROXY_STRICT_NODE_VALIDATION"); envStrict != "" {
@@ -384,6 +412,64 @@ func splitAndTrim(raw string) []string {
 		}
 	}
 	return result
+}
+
+func normalizeNodes(nodes []string) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	for _, node := range nodes {
+		trimmed := strings.TrimSpace(node)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, trimmed)
+	}
+	return result
+}
+
+func loadAllowedNodesFile(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	type wrapper struct {
+		AllowedNodes []string `yaml:"allowed_nodes"`
+	}
+
+	var w wrapper
+	if err := yaml.Unmarshal(data, &w); err == nil && len(w.AllowedNodes) > 0 {
+		return normalizeNodes(w.AllowedNodes), nil
+	}
+
+	var list []string
+	if err := yaml.Unmarshal(data, &list); err == nil && len(list) > 0 {
+		return normalizeNodes(list), nil
+	}
+
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	var plain []string
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "-") {
+			line = strings.TrimSpace(strings.TrimPrefix(line, "-"))
+		}
+		if line != "" {
+			plain = append(plain, line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return normalizeNodes(plain), err
+	}
+	return normalizeNodes(plain), nil
 }
 
 // detectHostCIDRs detects local host IP addresses as /32 (IPv4) or /128 (IPv6) CIDRs

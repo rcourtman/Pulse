@@ -6,6 +6,9 @@
 
 set -euo pipefail
 
+CONFIG_FILE="/etc/pulse-sensor-proxy/config.yaml"
+ALLOWED_NODES_FILE="/etc/pulse-sensor-proxy/allowed_nodes.yaml"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -79,44 +82,27 @@ EOF
     fi
 }
 
-# Helper function to safely update allowed_nodes section in config file
-# Removes any existing allowed_nodes section before adding new one to prevent duplicates
-update_allowed_nodes() {
-    local config_file="/etc/pulse-sensor-proxy/config.yaml"
-    local comment_line="$1"
-    shift
-    local nodes=("$@")
-
-    mkdir -p "$(dirname "$config_file")"
-    touch "$config_file"
-
-    # Gather existing nodes (if any) to preserve manual edits
-    local existing_nodes=()
-    if command -v perl >/dev/null 2>&1; then
-        mapfile -t existing_nodes < <(perl -0ne 'if (m/allowed_nodes:\n((?:[ \t]+-[^\n]*\n)+)/m) { @lines = split /\n/, $1; for (@lines) { s/^[ \t-]+//; s/\s+$//; next unless $_; print "$_\n"; } }' "$config_file" 2>/dev/null || true)
+ensure_allowed_nodes_file_reference() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        return
     fi
+    if ! grep -q "allowed_nodes_file" "$CONFIG_FILE" 2>/dev/null; then
+        echo 'allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"' >> "$CONFIG_FILE"
+    fi
+}
 
-    # Merge and de-duplicate nodes
-    local merged_nodes=()
-    declare -A seen_nodes=()
-    for node in "${existing_nodes[@]}" "${nodes[@]}"; do
-        node=$(echo "$node" | awk '{$1=$1;print}')
-        if [[ -z "$node" ]]; then
-            continue
-        fi
-        if [[ -z "${seen_nodes[$node]+set}" ]]; then
-            merged_nodes+=("$node")
-            seen_nodes["$node"]=1
-        fi
-    done
-
-    # Remove any existing allowed_nodes block (including descriptive comments) to prevent duplicates
-    if command -v python3 >/dev/null 2>&1; then
-        python3 - "$config_file" <<'PY'
+remove_allowed_nodes_block() {
+    if ! command -v python3 >/dev/null 2>&1; then
+        sed -i '/allowed_nodes:/d' "$CONFIG_FILE" 2>/dev/null || true
+        return
+    fi
+    python3 - "$CONFIG_FILE" <<'PY'
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
+if not path.exists():
+    sys.exit(0)
 lines = path.read_text().splitlines()
 out = []
 pending = []
@@ -131,49 +117,93 @@ i = 0
 while i < len(lines):
     line = lines[i]
     stripped = line.lstrip()
-
     if skip:
-        # Keep skipping until a non-indented, non-comment line appears
         if stripped == '' or stripped.startswith('#') or stripped.startswith('-') or line.startswith((' ', '\t')):
             i += 1
             continue
         skip = False
-
     if stripped.startswith('allowed_nodes:'):
         pending.clear()
         skip = True
         i += 1
         continue
-
     if stripped == '' or stripped.startswith('#'):
         pending.append(line)
         i += 1
         continue
-
     flush_pending()
     out.append(line)
     i += 1
-
 flush_pending()
 path.write_text('\n'.join(out) + ('\n' if out else ''))
 PY
-    else
-        # Fallback: truncate the file to remove duplicates if python3 is unavailable
-        grep -v '^allowed_nodes:' "$config_file" > "${config_file}.tmp" && mv "${config_file}.tmp" "$config_file"
+}
+
+update_allowed_nodes() {
+    local comment_line="$1"
+    shift
+    local nodes=("$@")
+
+    ensure_allowed_nodes_file_reference
+    remove_allowed_nodes_block
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        print_warn "python3 is required to manage allowed_nodes; skipping update"
+        return
     fi
 
-    {
-        echo ""
-        echo "# ${comment_line}"
-        echo "# These nodes are allowed to request temperature data when cluster IPC validation is unavailable"
-        echo "allowed_nodes:"
-        for node in "${merged_nodes[@]}"; do
-            echo "  - $node"
-        done
-    } >> "$config_file"
+    python3 - "$ALLOWED_NODES_FILE" "$comment_line" "${nodes[@]}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
 
-    chmod 0644 "$config_file" 2>/dev/null || true
-    chown pulse-sensor-proxy:pulse-sensor-proxy "$config_file" 2>/dev/null || true
+path = Path(sys.argv[1])
+comment = sys.argv[2]
+new_nodes = [n.strip() for n in sys.argv[3:] if n.strip()]
+existing = []
+if path.exists():
+    text = path.read_text()
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        data = None
+    if isinstance(data, dict):
+        arr = data.get('allowed_nodes')
+        if isinstance(arr, list):
+            existing = [str(x).strip() for x in arr if str(x).strip()]
+    elif isinstance(data, list):
+        existing = [str(x).strip() for x in data if str(x).strip()]
+    else:
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.startswith('-'):
+                line = line[1:].strip()
+            if line:
+                existing.append(line)
+
+seen = set()
+merged = []
+for entry in existing + new_nodes:
+    entry = entry.strip()
+    if not entry:
+        continue
+    key = entry.lower()
+    if key in seen:
+        continue
+    seen.add(key)
+    merged.append(entry)
+
+path.parent.mkdir(parents=True, exist_ok=True)
+with path.open('w') as fh:
+    fh.write("# Managed by install-sensor-proxy.sh\n")
+    fh.write(f"# {comment}\n")
+    yaml.safe_dump({'allowed_nodes': merged}, fh, default_flow_style=False, sort_keys=False)
+PY
+
+    chmod 0644 "$ALLOWED_NODES_FILE" 2>/dev/null || true
+    chown pulse-sensor-proxy:pulse-sensor-proxy "$ALLOWED_NODES_FILE" 2>/dev/null || true
 }
 
 
@@ -1124,6 +1154,8 @@ EOF
     chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/config.yaml
     chmod 0644 /etc/pulse-sensor-proxy/config.yaml
 fi
+
+ensure_allowed_nodes_file_reference
 
 # Register socket-mode proxy with Pulse if server provided
 if [[ "$HTTP_MODE" != true ]]; then
