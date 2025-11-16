@@ -198,6 +198,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/install/pulse-sensor-proxy", r.handleDownloadPulseSensorProxy)
 	r.mux.HandleFunc("/api/install/install-sensor-proxy.sh", r.handleDownloadInstallerScript)
 	r.mux.HandleFunc("/api/install/migrate-sensor-proxy-control-plane.sh", r.handleDownloadMigrationScript)
+	r.mux.HandleFunc("/api/install/migrate-temperature-proxy.sh", r.handleDownloadTemperatureProxyMigrationScript)
 	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
 	r.mux.HandleFunc("/api/config", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleConfig)))
 	r.mux.HandleFunc("/api/backups", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackups)))
@@ -1330,6 +1331,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/install/install-sensor-proxy.sh",               // Temperature proxy installer fallback
 				"/api/install/pulse-sensor-proxy",                    // Temperature proxy binary fallback
 				"/api/install/migrate-sensor-proxy-control-plane.sh", // Proxy migration helper
+				"/api/install/migrate-temperature-proxy.sh",          // SSH-to-proxy migration helper
 				"/api/install/install-docker.sh",                     // Docker turnkey installer
 				"/api/system/proxy-public-key",                       // Temperature proxy public key for setup script
 				"/api/temperature-proxy/register",                    // Temperature proxy registration (called by installer)
@@ -3793,6 +3795,31 @@ func (r *Router) handleDownloadMigrationScript(w http.ResponseWriter, req *http.
 	w.Header().Set("Content-Disposition", "attachment; filename=migrate-sensor-proxy-control-plane.sh")
 	if _, err := w.Write(content); err != nil {
 		log.Error().Err(err).Msg("Failed to write migration script to client")
+	}
+}
+
+func (r *Router) handleDownloadTemperatureProxyMigrationScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
+		return
+	}
+
+	scriptPath := "/opt/pulse/scripts/migrate-temperature-proxy.sh"
+	content, err := os.ReadFile(scriptPath)
+	if err != nil {
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "migrate-temperature-proxy.sh")
+		content, err = os.ReadFile(scriptPath)
+		if err != nil {
+			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read temperature migration script")
+			writeErrorResponse(w, http.StatusInternalServerError, "read_error", "Failed to read temperature migration script", nil)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.Header().Set("Content-Disposition", "attachment; filename=migrate-temperature-proxy.sh")
+	if _, err := w.Write(content); err != nil {
+		log.Error().Err(err).Msg("Failed to write temperature migration script to client")
 	}
 }
 
