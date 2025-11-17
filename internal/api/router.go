@@ -186,6 +186,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/temperature-proxy/register", r.temperatureProxyHandlers.HandleRegister)
 	r.mux.HandleFunc("/api/temperature-proxy/authorized-nodes", r.temperatureProxyHandlers.HandleAuthorizedNodes)
 	r.mux.HandleFunc("/api/temperature-proxy/unregister", RequireAdmin(r.config, r.temperatureProxyHandlers.HandleUnregister))
+	r.mux.HandleFunc("/api/temperature-proxy/install-command", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleTemperatureProxyInstallCommand)))
+	r.mux.HandleFunc("/api/temperature-proxy/host-status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleHostProxyStatus)))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
@@ -3823,6 +3825,75 @@ func (r *Router) handleDownloadTemperatureProxyMigrationScript(w http.ResponseWr
 	}
 }
 
+func (r *Router) handleTemperatureProxyInstallCommand(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
+		return
+	}
+
+	baseURL := strings.TrimSpace(r.resolvePublicURL(req))
+	if baseURL == "" {
+		http.Error(w, "Pulse public URL is not configured", http.StatusBadRequest)
+		return
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	node := strings.TrimSpace(req.URL.Query().Get("node"))
+	command := fmt.Sprintf(
+		"curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | sudo bash -s -- --standalone --http-mode --pulse-server %s",
+		baseURL,
+	)
+
+	response := map[string]string{
+		"command":  command,
+		"pulseURL": baseURL,
+	}
+	if node != "" {
+		response["node"] = node
+	}
+
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize proxy install command response")
+	}
+}
+
+func (r *Router) handleHostProxyStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
+		return
+	}
+
+	hostSocket := fileExists("/run/pulse-sensor-proxy/pulse-sensor-proxy.sock")
+	containerSocket := fileExists("/mnt/pulse-proxy/pulse-sensor-proxy.sock")
+
+	resp := map[string]interface{}{
+		"hostSocketPresent":      hostSocket,
+		"containerSocketPresent": containerSocket,
+		"lastChecked":            time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if summary, err := loadHostProxySummary(); err == nil && summary != nil {
+		resp["summary"] = summary
+	}
+
+	baseURL := strings.TrimRight(r.resolvePublicURL(req), "/")
+	if baseURL == "" {
+		baseURL = "http://localhost:7655"
+	}
+
+	ctid := "<ctid>"
+	if summary, ok := resp["summary"].(*HostProxySummary); ok && summary != nil && summary.CTID != "" {
+		ctid = summary.CTID
+	}
+
+	resp["reinstallCommand"] = fmt.Sprintf("curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | sudo bash -s -- --ctid %s --pulse-server %s", ctid, baseURL)
+	resp["installerURL"] = fmt.Sprintf("%s/api/install/install-sensor-proxy.sh", baseURL)
+
+	if err := utils.WriteJSONResponse(w, resp); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize host proxy status response")
+	}
+}
+
 func (r *Router) resolvePublicURL(req *http.Request) string {
 	if publicURL := strings.TrimSpace(r.config.PublicURL); publicURL != "" {
 		return strings.TrimRight(publicURL, "/")
@@ -3850,6 +3921,11 @@ func (r *Router) resolvePublicURL(req *http.Request) string {
 	}
 
 	return fmt.Sprintf("%s://%s", scheme, host)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func normalizeDockerAgentArch(arch string) string {

@@ -32,6 +32,9 @@ CURRENT_INSTALL_CTID=""
 CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
+INSTALL_SUMMARY_FILE="/etc/pulse/install_summary.json"
+HOST_PROXY_REQUESTED=false
+HOST_PROXY_INSTALLED=false
 
 DEBIAN_TEMPLATE_FALLBACK="debian-12-standard_12.12-1_amd64.tar.zst"
 DEBIAN_TEMPLATE=""
@@ -1513,6 +1516,7 @@ fi'; then
     case "$PROXY_MODE" in
         yes)
             install_proxy=true
+            HOST_PROXY_REQUESTED=true
             ;;
         no)
             install_proxy=false
@@ -1521,12 +1525,14 @@ fi'; then
             # Auto-detect: install if Docker is present
             if [[ "$docker_in_container" == "true" ]]; then
                 install_proxy=true
+                HOST_PROXY_REQUESTED=true
             fi
             ;;
         *)
             # Empty/unset - reuse earlier user choice (defaults handled already)
             if [[ "$PROXY_USER_CHOICE" == "yes" ]]; then
                 install_proxy=true
+                HOST_PROXY_REQUESTED=true
             fi
             ;;
     esac
@@ -1676,6 +1682,7 @@ fi'; then
                 fi
 
                     print_success "Temperature proxy is healthy and ready"
+                    HOST_PROXY_INSTALLED=true
                 fi  # End of health checks
 
                 # Clean up temporary binary if it was copied
@@ -2879,6 +2886,43 @@ create_marker_file() {
     touch ~/.pulse 2>/dev/null || true
 }
 
+write_install_summary() {
+    local summary_dir="/etc/pulse"
+    mkdir -p "$summary_dir"
+
+    local host_socket="false"
+    if [[ -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]]; then
+        host_socket="true"
+    fi
+
+    local container_socket="null"
+    if [[ -n "${CTID:-}" ]] && command -v pct >/dev/null 2>&1; then
+        if pct exec "$CTID" -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock >/dev/null 2>&1; then
+            container_socket="true"
+        else
+            container_socket="false"
+        fi
+    fi
+
+    local timestamp=""
+    if command -v date >/dev/null 2>&1; then
+        timestamp=$(date -Is 2>/dev/null || date)
+    fi
+
+    cat > "$INSTALL_SUMMARY_FILE" <<EOF
+{
+  "generatedAt": "$timestamp",
+  "ctid": "${CTID:-}",
+  "proxy": {
+    "requested": ${HOST_PROXY_REQUESTED},
+    "installed": ${HOST_PROXY_INSTALLED},
+    "hostSocketPresent": $host_socket,
+    "containerSocketPresent": $container_socket
+  }
+}
+EOF
+}
+
 print_completion() {
     local IP=$(hostname -I | awk '{print $1}')
     
@@ -2906,6 +2950,15 @@ print_completion() {
     echo "  Update:     curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
     echo "  Reset:      curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --reset"
     echo "  Uninstall:  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --uninstall"
+
+    local proxy_status="Not installed"
+    if [[ -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]]; then
+        proxy_status="Installed (host socket present)"
+    elif [[ "$HOST_PROXY_REQUESTED" == true ]]; then
+        proxy_status="Install requested (pending)"
+    fi
+    echo
+    echo -e "${YELLOW}Temperature proxy:${NC} ${proxy_status}"
 
     if [[ "$IN_CONTAINER" == "true" ]]; then
         local proxy_ctid="${DETECTED_CTID:-<your-container-id>}"
@@ -2948,6 +3001,8 @@ print_completion() {
             echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════════╝${NC}"
         fi
     fi
+
+    write_install_summary
 
     echo
 }

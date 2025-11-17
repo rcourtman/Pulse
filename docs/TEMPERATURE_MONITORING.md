@@ -181,6 +181,10 @@ When Pulse cannot share the `/run/pulse-sensor-proxy` socket (for example, you r
 
 This HTTP path complements the socket path—you can run both simultaneously. Containerised Pulse stacks still need the socket for their own host, while HTTP mode covers every additional Proxmox node on the LAN or across sites.
 
+Pulse now isolates transport failures per node: when a proxy reports that a node is invalid or unreachable, Pulse cools down polling for that node only instead of tearing down the shared socket. You will see a cooldown note in the diagnostics card if a node keeps failing; fix the proxy or disable temperature monitoring for that node to resume collection.
+
+> **Tip:** When Pulse is running inside a container and temperatures are blocked, open **Settings → Nodes → Edit node → Temperature monitoring**. The UI now offers a one-click “Generate HTTPS proxy command” button that produces the exact `install-sensor-proxy.sh --standalone --http-mode --pulse-server …` command for that node, so you can copy it straight to the host shell without rebuilding the instructions manually.
+
 ---
 
 ## Disable Temperature Monitoring
@@ -358,6 +362,8 @@ When run on a Proxmox host with Pulse in an LXC container:
 4. Configures the container bind mount automatically
 5. Sets up SSH keys and cluster discovery
 6. **Fully turnkey - no manual steps required!**
+
+> **Note:** The main `install.sh` already installs the host-side proxy when you opt-in during bootstrap, so the Quick Setup script simply verifies it and moves on—you won’t be prompted a second time. Remote/standalone nodes still prompt to deploy their own HTTPS proxy.
 
 ### For Docker Deployments (Manual Steps Required)
 

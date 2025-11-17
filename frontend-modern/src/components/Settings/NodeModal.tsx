@@ -1,4 +1,4 @@
-import { Component, Show, For, createSignal, createEffect } from 'solid-js';
+import { Component, Show, For, createSignal, createEffect, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
@@ -6,6 +6,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { showSuccess, showError } from '@/utils/toast';
 import { getPulseBaseUrl } from '@/utils/url';
 import { NodesAPI } from '@/api/nodes';
+import { apiFetchJSON } from '@/utils/apiClient';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import {
   formField,
@@ -32,6 +33,12 @@ interface NodeModalProps {
   savingTemperatureSetting?: boolean;
   onToggleTemperatureMonitoring?: (enabled: boolean) => Promise<void> | void;
 }
+
+type TemperatureTransportDetail = {
+	tone: 'info' | 'success' | 'warning' | 'danger';
+	message: string;
+	disable?: boolean;
+};
 
 const deriveNameFromHost = (host: string): string => {
   let value = host.trim();
@@ -85,9 +92,97 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const [quickSetupCommand, setQuickSetupCommand] = createSignal('');
   const [quickSetupToken, setQuickSetupToken] = createSignal('');
   const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
+  const [proxyInstallCommand, setProxyInstallCommand] = createSignal('');
+  const [loadingProxyCommand, setLoadingProxyCommand] = createSignal(false);
+  const [proxyCommandError, setProxyCommandError] = createSignal<string | null>(null);
   const showTemperatureMonitoringSection = () =>
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
+  const temperatureTransportDetail = createMemo<TemperatureTransportDetail | null>(() => {
+    const transport = props.editingNode?.temperatureTransport;
+    if (!transport) {
+      return null;
+    }
+
+    switch (transport.toLowerCase()) {
+      case 'socket-proxy':
+        return {
+          tone: 'success',
+          message: 'Temperatures flow through the host sensor proxy mounted at /run/pulse-sensor-proxy.',
+        };
+      case 'https-proxy':
+        return {
+          tone: 'success',
+          message: 'Temperatures are collected via the HTTPS proxy registered for this node.',
+        };
+      case 'ssh-blocked':
+        return {
+          tone: 'danger',
+          disable: true,
+          message:
+            'Pulse is running in a container without the pulse-sensor-proxy bind mount. Install the proxy on the host or register an HTTPS proxy before enabling temperatures.',
+        };
+      case 'ssh':
+        return {
+          tone: 'info',
+          message: 'Pulse will SSH directly into this node for temperature collection.',
+        };
+      default:
+        return null;
+    }
+  });
+  const temperatureToggleDisabled = () =>
+    props.temperatureMonitoringLocked ||
+    props.savingTemperatureSetting ||
+    Boolean(temperatureTransportDetail()?.disable);
+  const temperatureTransportMessageClass = () => {
+    const tone = temperatureTransportDetail()?.tone ?? 'info';
+    switch (tone) {
+      case 'success':
+        return 'text-green-600 dark:text-green-300';
+      case 'warning':
+        return 'text-amber-600 dark:text-amber-300';
+      case 'danger':
+        return 'text-red-600 dark:text-red-300';
+      default:
+        return 'text-gray-600 dark:text-gray-400';
+    }
+  };
+  const temperatureToggleTitle = () => {
+    const detail = temperatureTransportDetail();
+    if (detail?.disable) {
+      return detail.message;
+    }
+    return undefined;
+  };
+  const shouldOfferProxyCommand = () =>
+    props.nodeType === 'pve' && Boolean(props.editingNode?.id) && Boolean(temperatureTransportDetail()?.disable);
+  const fetchProxyInstallCommand = async () => {
+    if (loadingProxyCommand()) {
+      return;
+    }
+    setLoadingProxyCommand(true);
+    setProxyCommandError(null);
+    setProxyInstallCommand('');
+    try {
+      const nodeName = props.editingNode?.name ? encodeURIComponent(props.editingNode!.name) : '';
+      const query = nodeName ? `?node=${nodeName}` : '';
+      const response = await apiFetchJSON(`/api/temperature-proxy/install-command${query}`);
+      if (!response || typeof response.command !== 'string') {
+        throw new Error('Proxy installer command unavailable');
+      }
+      setProxyInstallCommand(response.command);
+      showSuccess('HTTPS proxy command ready', 2000);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to generate HTTPS proxy command';
+      setProxyCommandError(message);
+      showError(message);
+      logger.error('Failed to load proxy install command', error);
+    } finally {
+      setLoadingProxyCommand(false);
+    }
+  };
   const quickSetupExpiryLabel = () => {
     const expiry = quickSetupExpiry();
     if (!expiry) {
@@ -1781,7 +1876,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               onChange={(event) => {
                                 props.onToggleTemperatureMonitoring?.(event.currentTarget.checked);
                               }}
-                              disabled={props.temperatureMonitoringLocked || props.savingTemperatureSetting}
+                              disabled={temperatureToggleDisabled()}
+                              title={temperatureToggleTitle()}
                               ariaLabel={
                                 temperatureMonitoringEnabledValue()
                                   ? 'Disable temperature monitoring'
@@ -1789,6 +1885,58 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               }
                             />
                           </div>
+                          <Show when={temperatureTransportDetail()}>
+                            <p class={`mt-2 text-xs ${temperatureTransportMessageClass()}`}>
+                              {temperatureTransportDetail()?.message}
+                            </p>
+                          </Show>
+                          <Show when={shouldOfferProxyCommand()}>
+                            <div class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-100 space-y-2">
+                              <div class="font-semibold">Install HTTPS proxy on this host</div>
+                              <div>Generate a one-line installer command to run on the Proxmox host:</div>
+                              <div class="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  class="rounded bg-blue-600 px-2 py-1 text-white hover:bg-blue-700 disabled:opacity-70"
+                                  onClick={() => void fetchProxyInstallCommand()}
+                                  disabled={loadingProxyCommand()}
+                                >
+                                  {loadingProxyCommand() ? 'Generating…' : 'Generate command'}
+                                </button>
+                                <a
+                                  href="/api/install/install-sensor-proxy.sh"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  class="rounded border border-blue-400 px-2 py-1 text-blue-700 hover:bg-blue-100 dark:text-blue-200 dark:border-blue-300 dark:hover:bg-blue-900/40"
+                                >
+                                  Download installer script
+                                </a>
+                              </div>
+                              <Show when={proxyCommandError()}>
+                                <p class="text-xs text-red-600 dark:text-red-300">
+                                  {proxyCommandError()}
+                                </p>
+                              </Show>
+                              <Show when={proxyInstallCommand()}>
+                                <pre class="overflow-x-auto rounded bg-white/70 px-2 py-1 font-mono text-[0.65rem] text-gray-800 dark:bg-gray-900/40 dark:text-gray-200">
+                                  {proxyInstallCommand()}
+                                </pre>
+                                <button
+                                  type="button"
+                                  class="rounded bg-blue-600 px-2 py-1 text-white hover:bg-blue-700"
+                                  onClick={() => {
+                                    const command = proxyInstallCommand();
+                                    if (command) {
+                                      void copyToClipboard(command);
+                                      showSuccess('Proxy installer command copied');
+                                    }
+                                  }}
+                                >
+                                  Copy command
+                                </button>
+                              </Show>
+                            </div>
+                          </Show>
                           <Show when={!temperatureMonitoringEnabledValue()}>
                             <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
                               Pulse will skip SSH temperature polling for this node. Existing dashboard readings will stop refreshing.

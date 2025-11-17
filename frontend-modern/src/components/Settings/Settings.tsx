@@ -17,6 +17,7 @@ import { getPulsePort, getPulseWebSocketUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import {
   apiFetch,
+  apiFetchJSON,
   clearApiToken as clearApiClientToken,
   getApiToken as getApiClientToken,
   setApiToken as setApiClientToken,
@@ -147,6 +148,38 @@ interface TemperatureProxyControlPlaneState {
   status?: string;
 }
 
+interface TemperatureProxySocketHost {
+  node?: string;
+  host?: string;
+  cooldownUntil?: string;
+  secondsRemaining?: number;
+  lastError?: string;
+}
+
+type TemperatureSocketCooldownInfo = {
+  secondsRemaining?: number;
+  until?: string;
+  lastError?: string;
+};
+
+interface HostProxySummary {
+  requested?: boolean;
+  installed?: boolean;
+  hostSocketPresent?: boolean;
+  containerSocketPresent?: boolean | null;
+  lastUpdated?: string;
+  ctid?: string;
+}
+
+interface HostProxyStatusResponse {
+  hostSocketPresent?: boolean;
+  containerSocketPresent?: boolean;
+  summary?: HostProxySummary | null;
+  reinstallCommand?: string;
+  installerURL?: string;
+  lastChecked?: string;
+}
+
 interface TemperatureProxyDiagnostic {
   legacySSHDetected: boolean;
   recommendProxyUpgrade: boolean;
@@ -165,6 +198,7 @@ interface TemperatureProxyDiagnostic {
   httpProxies?: TemperatureProxyHTTPStatus[];
   controlPlaneEnabled?: boolean;
   controlPlaneStates?: TemperatureProxyControlPlaneState[];
+  socketHostCooldowns?: TemperatureProxySocketHost[];
 }
 
 interface APITokenSummary {
@@ -588,6 +622,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
   const [temperatureMonitoringEnabled, setTemperatureMonitoringEnabled] = createSignal(true);
   const [savingTemperatureSetting, setSavingTemperatureSetting] = createSignal(false);
+  const [hostProxyStatus, setHostProxyStatus] = createSignal<HostProxyStatusResponse | null>(null);
   const temperatureMonitoringLocked = () =>
     Boolean(
       envOverrides().temperatureMonitoringEnabled || envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
@@ -850,6 +885,26 @@ const Settings: Component<SettingsProps> = (props) => {
     return `${Math.floor(seconds)}s`;
   };
 
+  const normalizeHostKey = (value?: string | null) => {
+    if (!value) {
+      return '';
+    }
+    let result = value.trim().toLowerCase();
+    if (!result) {
+      return '';
+    }
+    result = result.replace(/^https?:\/\//, '');
+    const slashIndex = result.indexOf('/');
+    if (slashIndex !== -1) {
+      result = result.slice(0, slashIndex);
+    }
+    const colonIndex = result.indexOf(':');
+    if (colonIndex !== -1) {
+      result = result.slice(0, colonIndex);
+    }
+    return result;
+  };
+
   const emitTemperatureProxyWarnings = (diag: DiagnosticsData | null) => {
     if (!diag?.temperatureProxy) {
       return;
@@ -870,6 +925,15 @@ const Settings: Component<SettingsProps> = (props) => {
       if (stale.length > 0) {
         const names = stale.map((state) => state.instance || 'Proxy').join(', ');
         showWarning(`Temperature proxy control plane is behind on: ${names}`);
+      }
+    }
+    if (diag.temperatureProxy.socketHostCooldowns) {
+      const cooling = (diag.temperatureProxy.socketHostCooldowns as TemperatureProxySocketHost[]).filter(
+        (entry) => entry && (entry.node || entry.host),
+      );
+      if (cooling.length > 0) {
+        const hosts = cooling.map((entry) => entry.node || entry.host || 'proxy').join(', ');
+        showWarning(`Temperature proxy is cooling down the following hosts: ${hosts}`);
       }
     }
   };
@@ -901,7 +965,20 @@ const Settings: Component<SettingsProps> = (props) => {
         : diag.temperatureProxy.socketFound
         ? 'error'
         : 'missing';
-    return { httpMap, socketStatus };
+    const cooldowns: Record<string, TemperatureSocketCooldownInfo> = {};
+    const socketHosts = diag.temperatureProxy.socketHostCooldowns || [];
+    (socketHosts as TemperatureProxySocketHost[]).forEach((entry) => {
+      const key = normalizeHostKey(entry.node) || normalizeHostKey(entry.host);
+      if (!key) {
+        return;
+      }
+      cooldowns[key] = {
+        secondsRemaining: entry.secondsRemaining,
+        until: entry.cooldownUntil,
+        lastError: entry.lastError || undefined,
+      };
+    });
+    return { httpMap, socketStatus, socketCooldowns: cooldowns };
   });
 
   const proxyNodeChecksSupported = createMemo(() => {
@@ -921,6 +998,15 @@ const Settings: Component<SettingsProps> = (props) => {
       const diag = await response.json();
       setDiagnosticsData(diag);
       emitTemperatureProxyWarnings(diag);
+      if (diag?.temperatureProxy?.hostProxySummary) {
+        setHostProxyStatus({
+          hostSocketPresent: Boolean(diag.temperatureProxy?.socketFound),
+          containerSocketPresent: Boolean(
+            diag.temperatureProxy?.hostProxySummary?.containerSocketPresent ?? false,
+          ),
+          summary: diag.temperatureProxy?.hostProxySummary ?? undefined,
+        });
+      }
     } catch (err) {
       logger.error('Failed to fetch diagnostics', err);
       showError('Failed to run diagnostics');
@@ -928,6 +1014,40 @@ const Settings: Component<SettingsProps> = (props) => {
       setRunningDiagnostics(false);
     }
   };
+
+  const refreshHostProxyStatus = async (notify = false) => {
+    try {
+      const status = (await apiFetchJSON(
+        '/api/temperature-proxy/host-status',
+      )) as HostProxyStatusResponse;
+      setHostProxyStatus(status);
+      if (notify) {
+        showSuccess('Host proxy status refreshed', 2000);
+      }
+    } catch (err) {
+      logger.error('Failed to refresh host proxy status', err);
+      showError('Failed to refresh host proxy status');
+    }
+  };
+
+  createEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const shouldPoll = currentTab() === 'proxmox' || currentTab() === 'diagnostics';
+    if (!shouldPoll) {
+      return;
+    }
+    void runDiagnostics();
+    void refreshHostProxyStatus(false);
+    const intervalId = window.setInterval(() => {
+      void runDiagnostics();
+      void refreshHostProxyStatus(false);
+    }, 60000);
+    onCleanup(() => {
+      window.clearInterval(intervalId);
+    });
+  });
 
   const handleRegisterProxyNodes = async () => {
     if (proxyActionLoading()) return;
@@ -1548,7 +1668,11 @@ const Settings: Component<SettingsProps> = (props) => {
       }
     } catch (error) {
       logger.error('Failed to update temperature monitoring setting', error);
-      notificationStore.error('Failed to update temperature monitoring setting');
+      notificationStore.error(
+        error instanceof Error
+          ? error.message
+          : 'Failed to update temperature monitoring setting',
+      );
       setTemperatureMonitoringEnabled(previous);
     } finally {
       setSavingTemperatureSetting(false);
@@ -1589,7 +1713,11 @@ const Settings: Component<SettingsProps> = (props) => {
       }
     } catch (error) {
       logger.error('Failed to update node temperature monitoring setting', error);
-      notificationStore.error('Failed to update temperature monitoring setting');
+      notificationStore.error(
+        error instanceof Error
+          ? error.message
+          : 'Failed to update temperature monitoring setting',
+      );
       // Revert on error
       setNodes(
         nodes().map((n) => (n.id === nodeId ? { ...n, temperatureMonitoringEnabled: previous } : n)),
@@ -5318,11 +5446,11 @@ const Settings: Component<SettingsProps> = (props) => {
                                     </For>
                                   </div>
                                 </Show>
-                                <Show
-                                  when={
-                                    temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
-                                  }
-                                >
+                                    <Show
+                                      when={
+                                        temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
+                                      }
+                                    >
                                     <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
                                       <div class="font-semibold text-gray-700 dark:text-gray-200">
                                         HTTPS proxies
@@ -5358,7 +5486,61 @@ const Settings: Component<SettingsProps> = (props) => {
                                         )}
                                       </For>
                                     </div>
+                                    <div class="mt-2 text-[0.65rem] text-blue-700 dark:text-blue-300">
+                                      Learn more:{" "}
+                                      <a
+                                        href="https://github.com/rcourtman/Pulse/blob/main/docs/TEMPERATURE_MONITORING.md"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        class="underline hover:text-blue-500"
+                                      >
+                                        Temperature Monitoring docs
+                                      </a>
+                                    </div>
                                   </Show>
+                                <Show
+                                  when={
+                                    temp().socketHostCooldowns &&
+                                    (temp().socketHostCooldowns as TemperatureProxySocketHost[]).length > 0
+                                  }
+                                >
+                                  <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
+                                    <div class="font-semibold text-gray-700 dark:text-gray-200">
+                                      Socket cooldowns
+                                    </div>
+                                    <For each={temp().socketHostCooldowns || []}>
+                                      {(entry) => (
+                                        <div class="rounded border border-amber-200 dark:border-amber-700 px-2 py-1.5 space-y-1">
+                                          <div class="flex items-center justify-between">
+                                            <div>
+                                              <div class="font-medium text-gray-700 dark:text-gray-200">
+                                                {entry.node || entry.host || 'Host'}
+                                              </div>
+                                              <Show when={entry.cooldownUntil}>
+                                                <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                                  Until {entry.cooldownUntil}
+                                                </div>
+                                              </Show>
+                                            </div>
+                                            <span class="px-2 py-0.5 rounded text-white text-xs bg-amber-500">
+                                              Cooling
+                                            </span>
+                                          </div>
+                                          <Show when={typeof entry.secondsRemaining === 'number'}>
+                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                              Retrying in ~{formatUptime(entry.secondsRemaining || 0)}
+                                            </div>
+                                          </Show>
+                                          <Show when={entry.lastError}>
+                                            <div class="text-[0.65rem] text-red-500">
+                                              {entry.lastError}
+                                            </div>
+                                          </Show>
+                                        </div>
+                                      )}
+                                    </For>
+                                  </div>
+                                </Show>
                                   <Show
                                     when={proxyNodeChecksSupported()}
                                     fallback={
@@ -5386,6 +5568,68 @@ const Settings: Component<SettingsProps> = (props) => {
                                           : 'Check proxy nodes'}
                                       </button>
                                     </div>
+                                    <Show when={hostProxyStatus()}>
+                                      {(status) => (
+                                        <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
+                                          <div class="flex items-center justify-between">
+                                            <div class="font-semibold text-gray-700 dark:text-gray-200">
+                                              Pulse host proxy
+                                            </div>
+                                            <button
+                                              type="button"
+                                              class="text-xs rounded bg-blue-600 text-white px-2 py-1 hover:bg-blue-700 disabled:opacity-50"
+                                              onClick={() => void refreshHostProxyStatus(true)}
+                                            >
+                                              Refresh
+                                            </button>
+                                          </div>
+                                          <div class="grid grid-cols-2 gap-y-1">
+                                            <div>Requested</div>
+                                            <div>{status().summary?.requested ? 'Yes' : 'No'}</div>
+                                            <div>Installed</div>
+                                            <div>{status().summary?.installed ? 'Yes' : 'No'}</div>
+                                            <div>Host socket</div>
+                                            <div>{status().hostSocketPresent ? 'Present' : 'Missing'}</div>
+                                            <div>Container socket</div>
+                                            <div>{status().containerSocketPresent ? 'Present' : 'Missing'}</div>
+                                          </div>
+                                          <Show when={status().reinstallCommand}>
+                                            <div class="flex flex-wrap gap-2">
+                                              <button
+                                                type="button"
+                                                class="rounded bg-blue-600 text-white px-2 py-1 hover:bg-blue-700"
+                                                onClick={() => {
+                                                  const command = status().reinstallCommand;
+                                                  if (command) {
+                                                    void copyToClipboard(command);
+                                                    showSuccess('Host proxy command copied', 2000);
+                                                  }
+                                                }}
+                                              >
+                                                Copy reinstall command
+                                              </button>
+                                              <Show when={status().installerURL}>
+                                                {(url) => (
+                                                  <a
+                                                    href={url()}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    class="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-800"
+                                                  >
+                                                    Download installer script
+                                                  </a>
+                                                )}
+                                              </Show>
+                                            </div>
+                                          </Show>
+                                          <Show when={status().summary?.lastUpdated}>
+                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                              Summary updated {status().summary?.lastUpdated}
+                                            </div>
+                                          </Show>
+                                        </div>
+                                      )}
+                                    </Show>
                                   </Show>
                                   <Show
                                     when={
@@ -6221,6 +6465,30 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }
                                   return sanitizedEntry;
                                 });
+                              }
+                              if (Array.isArray(proxyDiag.socketHostCooldowns)) {
+                                proxyDiag.socketHostCooldowns = (
+                                  proxyDiag.socketHostCooldowns as Array<Record<string, unknown>>
+                                ).map((entry) => ({
+                                  node: sanitizeHostname(
+                                    typeof entry.node === 'string' ? (entry.node as string) : undefined,
+                                  ) as string,
+                                  host: sanitizeHostname(
+                                    typeof entry.host === 'string' ? (entry.host as string) : undefined,
+                                  ) as string,
+                                  cooldownUntil:
+                                    typeof entry.cooldownUntil === 'string'
+                                      ? (entry.cooldownUntil as string)
+                                      : undefined,
+                                  secondsRemaining:
+                                    typeof entry.secondsRemaining === 'number'
+                                      ? (entry.secondsRemaining as number)
+                                      : undefined,
+                                  lastError:
+                                    typeof entry.lastError === 'string'
+                                      ? sanitizeText(entry.lastError as string) ?? (entry.lastError as string)
+                                      : undefined,
+                                }));
                               }
                             }
 

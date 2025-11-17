@@ -455,6 +455,19 @@ func determineTemperatureTransport(enabled bool, proxyURL, proxyToken string, so
 	return temperatureTransportSSHFallback
 }
 
+func ensureTemperatureTransportAvailable(enabled bool, proxyURL, proxyToken string, socketAvailable bool, containerSSHBlocked bool) error {
+	if !enabled {
+		return nil
+	}
+
+	transport := determineTemperatureTransport(true, proxyURL, proxyToken, socketAvailable, containerSSHBlocked)
+	if transport == temperatureTransportSSHBlocked {
+		return fmt.Errorf("pulse is running in a container without access to pulse-sensor-proxy. Install the host proxy or register an HTTPS-mode sensor proxy for this node before enabling temperature monitoring")
+	}
+
+	return nil
+}
+
 func isContainerSSHRestricted() bool {
 	isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
 	if !isContainer {
@@ -1186,8 +1199,18 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	socketAvailable := h.monitor != nil && h.monitor.HasSocketTemperatureProxy()
+	containerSSHBlocked := isContainerSSHRestricted()
+
 	// Add to appropriate list
 	if req.Type == "pve" {
+		if req.TemperatureMonitoringEnabled != nil && *req.TemperatureMonitoringEnabled {
+			if err := ensureTemperatureTransportAvailable(true, "", "", socketAvailable, containerSSHBlocked); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+
 		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
 			req.User = normalizePVEUser(req.User)
 		}
@@ -1844,6 +1867,9 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		Interface("temperatureMonitoringEnabled", req.TemperatureMonitoringEnabled).
 		Msg("Received node update request")
 
+	socketAvailable := h.monitor != nil && h.monitor.HasSocketTemperatureProxy()
+	containerSSHBlocked := isContainerSSHRestricted()
+
 	// Parse node ID
 	parts := strings.Split(nodeID, "-")
 	if len(parts) != 2 {
@@ -1861,6 +1887,13 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	// Update the node
 	if nodeType == "pve" && index < len(h.config.PVEInstances) {
 		pve := &h.config.PVEInstances[index]
+
+		if req.TemperatureMonitoringEnabled != nil && *req.TemperatureMonitoringEnabled {
+			if err := ensureTemperatureTransportAvailable(true, pve.TemperatureProxyURL, pve.TemperatureProxyToken, socketAvailable, containerSSHBlocked); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
 
 		// Only update name if provided
 		if req.Name != "" {
@@ -3991,6 +4024,14 @@ echo "Temperature Monitoring Setup (Optional)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ "$SKIP_TEMPERATURE_PROMPT" != true ]; then
+    if [ "${SUMMARY_PROXY_INSTALLED:-false}" != "true" ]; then
+        echo "ℹ️  During the initial Pulse installation the host-side proxy was not installed."
+        echo "    Enabling it now lets the Pulse container read sensors securely via the host."
+        echo ""
+    fi
+fi
+
 # SSH public keys embedded from Pulse server
 # Proxy key: used for ProxyJump (unrestricted but limited to port forwarding)
 # Sensors key: used for temperature collection (restricted to sensors -j command)
@@ -4003,6 +4044,12 @@ TEMP_MONITORING_AVAILABLE=true
 MIN_PROXY_VERSION="%s"
 PULSE_VERSION_ENDPOINT="%s/api/version"
 STANDALONE_PROXY_DEPLOYED=false
+SKIP_TEMPERATURE_PROMPT=false
+
+if [ -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]; then
+    TEMPERATURE_ENABLED=true
+    SKIP_TEMPERATURE_PROMPT=true
+fi
 
 version_ge() {
     if command -v dpkg >/dev/null 2>&1; then
@@ -4064,7 +4111,47 @@ fi
 # Determine if this node is standalone (not joined to a cluster)
 IS_STANDALONE_NODE=false
 if ! command -v pvecm >/dev/null 2>&1 || ! pvecm status >/dev/null 2>&1; then
-    IS_STANDALONE_NODE=true
+	IS_STANDALONE_NODE=true
+fi
+
+INSTALL_SUMMARY_FILE="/etc/pulse/install_summary.json"
+SUMMARY_PROXY_REQUESTED="false"
+SUMMARY_PROXY_INSTALLED="false"
+SUMMARY_PROXY_SOCKET="false"
+if [ -f "$INSTALL_SUMMARY_FILE" ]; then
+	if command -v python3 >/dev/null 2>&1; then
+		if SUMMARY_EVAL=$(python3 <<'PY'
+import json
+from pathlib import Path
+path = Path("/etc/pulse/install_summary.json")
+try:
+	data = json.loads(path.read_text())
+except Exception:
+	raise SystemExit(1)
+proxy = data.get("proxy") or {}
+def emit(key, value):
+	print(f"{key}={'true' if value else 'false'}")
+emit("SUMMARY_PROXY_REQUESTED", proxy.get("requested"))
+emit("SUMMARY_PROXY_INSTALLED", proxy.get("installed"))
+emit("SUMMARY_PROXY_SOCKET", proxy.get("hostSocketPresent"))
+PY
+		); then
+			eval "$SUMMARY_EVAL"
+		fi
+	elif command -v jq >/dev/null 2>&1; then
+		if SUMMARY_EVAL=$(jq -r '
+			[
+				"\(.proxy.requested // false)",
+				"\(.proxy.installed // false)",
+				"\(.proxy.hostSocketPresent // false)"
+			] | @tsv
+		' "$INSTALL_SUMMARY_FILE" 2>/dev/null); then
+			read -r requested installed host_socket <<<"$SUMMARY_EVAL"
+			SUMMARY_PROXY_REQUESTED=$requested
+			SUMMARY_PROXY_INSTALLED=$installed
+			SUMMARY_PROXY_SOCKET=$host_socket
+		fi
+	fi
 fi
 
 # Track whether temperature monitoring can work (may be disabled by checks above)
@@ -4095,8 +4182,8 @@ if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
     fi
 fi
 
-# If Pulse is containerized, try to install proxy automatically
-if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
+# If Pulse is containerized, try to install proxy automatically (unless already present)
+if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ] && [ "$SKIP_TEMPERATURE_PROMPT" != true ]; then
     # Try automatic installation - proxy keeps SSH credentials on the host for security
     if true; then
         # Download installer script from Pulse server
@@ -4154,6 +4241,10 @@ if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true
                 fi
 
                 # Note: Mount configuration and container restart are handled by the installer
+                if [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
+                    TEMPERATURE_ENABLED=true
+                    SKIP_TEMPERATURE_PROMPT=true
+                fi
             else
                 echo ""
                 echo "⚠️  Proxy installation had issues - you may need to configure manually"
@@ -4196,7 +4287,11 @@ if [ -n "$SSH_PUBLIC_KEY" ] && [ -f /root/.ssh/authorized_keys ]; then
 fi
 
 # Single temperature monitoring prompt
-if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
+if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
+    echo "Temperature monitoring is already configured via pulse-sensor-proxy on this host."
+    echo "Pulse will collect temperatures as soon as you finish the setup wizard."
+    echo ""
+elif [ "$SSH_ALREADY_CONFIGURED" = true ]; then
     TEMPERATURE_ENABLED=true
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Temperature monitoring is currently ENABLED"

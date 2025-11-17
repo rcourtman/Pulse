@@ -34,6 +34,7 @@ const (
 	ErrorTypeSSH                 // SSH connectivity issues
 	ErrorTypeSensor              // Sensor command failures
 	ErrorTypeTimeout             // Operation timeout
+	ErrorTypeNode                // Node allowlist or validation failures
 )
 
 // ProxyError wraps errors with classification
@@ -125,6 +126,16 @@ func classifyError(err error, respError string) *ProxyError {
 	// Check response error messages first (even if err is nil)
 	// This handles cases where the socket succeeds but the proxy returns an application error
 	if respError != "" {
+		// Node validator/allowlist rejections should not disable the proxy globally
+		if contains(respError, "rejected by validator", "not in allowlist", "node \"") {
+			return &ProxyError{
+				Type:      ErrorTypeNode,
+				Message:   respError,
+				Retryable: false,
+				Wrapped:   fmt.Errorf("%s", respError),
+			}
+		}
+
 		// Rate limiting - never retry
 		if contains(respError, "rate limit") {
 			return &ProxyError{
@@ -412,7 +423,15 @@ func (c *Client) GetTemperature(nodeHost string) (string, error) {
 	}
 
 	if !resp.Success {
-		return "", fmt.Errorf("proxy error: %s", resp.Error)
+		if proxyErr := classifyError(nil, resp.Error); proxyErr != nil {
+			return "", proxyErr
+		}
+		return "", &ProxyError{
+			Type:      ErrorTypeUnknown,
+			Message:   resp.Error,
+			Retryable: false,
+			Wrapped:   fmt.Errorf("%s", resp.Error),
+		}
 	}
 
 	// Extract temperature JSON string

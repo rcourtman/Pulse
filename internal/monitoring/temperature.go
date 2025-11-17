@@ -43,8 +43,23 @@ type TemperatureCollector struct {
 	proxyMu            sync.Mutex
 	proxyFailures      int
 	proxyCooldownUntil time.Time
+	proxyHostStates    map[string]*proxyHostState
 	missingKeyWarned   atomic.Bool
 	legacySSHDisabled  atomic.Bool
+}
+
+type proxyHostState struct {
+	failures      int
+	cooldownUntil time.Time
+	lastError     string
+}
+
+// ProxyHostDiagnostics describes the proxy transport state for a host.
+type ProxyHostDiagnostics struct {
+	Host          string
+	Failures      int
+	CooldownUntil time.Time
+	LastError     string
 }
 
 // NewTemperatureCollector creates a new temperature collector with default SSH port (22)
@@ -59,9 +74,10 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 	}
 
 	tc := &TemperatureCollector{
-		sshUser:    sshUser,
-		sshKeyPath: sshKeyPath,
-		sshPort:    sshPort,
+		sshUser:         sshUser,
+		sshKeyPath:      sshKeyPath,
+		sshPort:         sshPort,
+		proxyHostStates: make(map[string]*proxyHostState),
 	}
 
 	homeDir := os.Getenv("HOME")
@@ -126,9 +142,17 @@ func (tc *TemperatureCollector) CollectTemperatureWithProxy(ctx context.Context,
 
 	// Use Unix socket proxy if available (local deployment)
 	if tc.isProxyEnabled() {
+		if tc.shouldSkipProxyHost(host) {
+			log.Debug().
+				Str("node", nodeName).
+				Str("host", host).
+				Msg("Skipping temperature proxy request while host is in cooldown")
+			return &models.Temperature{Available: false}, nil
+		}
+
 		output, err = tc.proxyClient.GetTemperature(host)
 		if err != nil {
-			tc.handleProxyFailure(err)
+			tc.handleProxyFailure(host, err)
 			log.Debug().
 				Str("node", nodeName).
 				Str("host", host).
@@ -137,6 +161,7 @@ func (tc *TemperatureCollector) CollectTemperatureWithProxy(ctx context.Context,
 			return &models.Temperature{Available: false}, nil
 		}
 		tc.handleProxySuccess()
+		tc.handleProxyHostSuccess(host)
 	} else {
 		// SECURITY: Block SSH fallback when running in containers (unless dev mode)
 		// Container compromise = SSH key compromise = root access to infrastructure
@@ -817,6 +842,33 @@ func (tc *TemperatureCollector) isProxyEnabled() bool {
 	return useProxy
 }
 
+func (tc *TemperatureCollector) shouldSkipProxyHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+	state, ok := tc.proxyHostStates[host]
+	if !ok || state == nil {
+		return false
+	}
+
+	now := time.Now()
+	if state.cooldownUntil.IsZero() || now.After(state.cooldownUntil) {
+		// Cooldown expired; reset state so we can retry this host.
+		state.cooldownUntil = time.Time{}
+		state.failures = 0
+		if state.cooldownUntil.IsZero() && state.failures == 0 {
+			delete(tc.proxyHostStates, host)
+		}
+		return false
+	}
+
+	return true
+}
+
 // SocketProxyAvailable reports whether the unix socket proxy can currently be used.
 func (tc *TemperatureCollector) SocketProxyAvailable() bool {
 	return tc != nil && tc.isProxyEnabled()
@@ -831,26 +883,71 @@ func (tc *TemperatureCollector) handleProxySuccess() {
 	tc.proxyMu.Unlock()
 }
 
-func (tc *TemperatureCollector) handleProxyFailure(err error) {
-	if tc.proxyClient == nil || !tc.shouldDisableProxy(err) {
+func (tc *TemperatureCollector) handleProxyHostSuccess(host string) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return
+	}
+	tc.proxyMu.Lock()
+	delete(tc.proxyHostStates, host)
+	tc.proxyMu.Unlock()
+}
+
+func (tc *TemperatureCollector) handleProxyFailure(host string, err error) {
+	if tc.proxyClient == nil {
+		return
+	}
+
+	if tc.shouldDisableProxy(err) {
+		tc.proxyMu.Lock()
+		tc.proxyFailures++
+		disable := tc.proxyFailures >= proxyFailureThreshold && tc.useProxy
+		if disable {
+			tc.useProxy = false
+			tc.proxyCooldownUntil = time.Now().Add(proxyRetryInterval)
+			tc.proxyFailures = 0
+		}
+		tc.proxyMu.Unlock()
+
+		if disable {
+			log.Warn().
+				Err(err).
+				Dur("cooldown", proxyRetryInterval).
+				Msg("Temperature proxy disabled after repeated failures; will retry later")
+		}
+		return
+	}
+
+	tc.handleProxyHostFailure(host, err)
+}
+
+func (tc *TemperatureCollector) handleProxyHostFailure(host string, err error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
 		return
 	}
 
 	tc.proxyMu.Lock()
-	tc.proxyFailures++
-	disable := tc.proxyFailures >= proxyFailureThreshold && tc.useProxy
-	if disable {
-		tc.useProxy = false
-		tc.proxyCooldownUntil = time.Now().Add(proxyRetryInterval)
-		tc.proxyFailures = 0
+	state, ok := tc.proxyHostStates[host]
+	if !ok || state == nil {
+		state = &proxyHostState{}
+		tc.proxyHostStates[host] = state
+	}
+	state.failures++
+	state.lastError = strings.TrimSpace(err.Error())
+	trip := state.failures >= proxyFailureThreshold
+	if trip {
+		state.failures = 0
+		state.cooldownUntil = time.Now().Add(proxyRetryInterval)
 	}
 	tc.proxyMu.Unlock()
 
-	if disable {
+	if trip {
 		log.Warn().
 			Err(err).
+			Str("host", host).
 			Dur("cooldown", proxyRetryInterval).
-			Msg("Temperature proxy disabled after repeated failures; will retry later")
+			Msg("Temperature proxy host in cooldown after repeated failures")
 	}
 }
 
@@ -865,4 +962,32 @@ func (tc *TemperatureCollector) shouldDisableProxy(err error) bool {
 		}
 	}
 	return true
+}
+
+// ProxyHostDiagnostics returns a snapshot of per-host proxy error state.
+func (tc *TemperatureCollector) ProxyHostDiagnostics() []ProxyHostDiagnostics {
+	if tc == nil {
+		return nil
+	}
+
+	tc.proxyMu.Lock()
+	defer tc.proxyMu.Unlock()
+
+	if len(tc.proxyHostStates) == 0 {
+		return nil
+	}
+
+	result := make([]ProxyHostDiagnostics, 0, len(tc.proxyHostStates))
+	for host, state := range tc.proxyHostStates {
+		if state == nil {
+			continue
+		}
+		result = append(result, ProxyHostDiagnostics{
+			Host:          host,
+			Failures:      state.failures,
+			CooldownUntil: state.cooldownUntil,
+			LastError:     state.lastError,
+		})
+	}
+	return result
 }
