@@ -89,6 +89,9 @@ ensure_allowed_nodes_file_reference() {
     if ! grep -q "allowed_nodes_file" "$CONFIG_FILE" 2>/dev/null; then
         echo 'allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"' >> "$CONFIG_FILE"
     fi
+    if grep -q "^allowed_nodes:" "$CONFIG_FILE" 2>/dev/null; then
+        remove_allowed_nodes_block
+    fi
 }
 
 remove_allowed_nodes_block() {
@@ -137,8 +140,9 @@ while i < len(lines):
 flush_pending()
 path.write_text('\n'.join(out) + ('\n' if out else ''))
 PY
-    # Fallback cleanup in case formatting prevented python script from matching
-    sed -i '/^allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
+    if grep -q "^allowed_nodes:" "$CONFIG_FILE" 2>/dev/null; then
+        sed -i '/^allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
+    fi
 }
 
 update_allowed_nodes() {
