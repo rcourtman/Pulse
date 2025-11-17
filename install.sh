@@ -364,14 +364,23 @@ prepare_sensor_proxy_installer() {
         return 1
     fi
 
-    local installer_path=""
-    if installer_path=$(find_sensor_proxy_installer 2>/dev/null); then
-        if cp "$installer_path" "$destination" 2>/dev/null; then
-            chmod +x "$destination" 2>/dev/null || true
-            print_info "Using local pulse-sensor-proxy installer from $installer_path"
-            return 0
+    local allow_local_copy=true
+    if [[ "$BUILD_FROM_SOURCE" == "true" || "${PULSE_FORCE_REMOTE_PROXY_INSTALLER:-}" == "1" ]]; then
+        allow_local_copy=false
+    fi
+
+    if [[ "$allow_local_copy" == true ]]; then
+        local installer_path=""
+        if installer_path=$(find_sensor_proxy_installer 2>/dev/null); then
+            if cp "$installer_path" "$destination" 2>/dev/null; then
+                chmod +x "$destination" 2>/dev/null || true
+                print_info "Using local pulse-sensor-proxy installer from $installer_path"
+                return 0
+            fi
+            print_warn "Found local pulse-sensor-proxy installer at $installer_path but failed to copy it"
         fi
-        print_warn "Found local pulse-sensor-proxy installer at $installer_path but failed to copy it"
+    else
+        print_info "Fetching pulse-sensor-proxy installer for branch $SOURCE_BRANCH"
     fi
 
     local ref
