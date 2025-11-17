@@ -1702,11 +1702,14 @@ fi'; then
                 echo
                 echo "  2. Re-run the Pulse installer and skip temperature monitoring when prompted"
                 echo
+                write_install_summary
                 exit 1
             fi
             rm -f "$proxy_script"
         fi
     fi
+
+    write_install_summary
 
     # Clean final output
     echo
@@ -3001,8 +3004,6 @@ print_completion() {
             echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════════╝${NC}"
         fi
     fi
-
-    write_install_summary
 
     echo
 }
