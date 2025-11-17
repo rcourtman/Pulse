@@ -3429,6 +3429,7 @@ AUTO_MODE="${PULSE_AUTO_MODE:-}"
 AUTO_TEMP_CHOICE="${PULSE_AUTO_TEMP:-}"
 PULSE_SKIP_CLUSTER_CONFIG="${PULSE_SKIP_CLUSTER_CONFIG:-false}"
 AUTO_CLEANUP="${PULSE_AUTO_CLEANUP:-}"
+PULSE_SKIP_NODE_REGISTRATION="${PULSE_SKIP_NODE_REGISTRATION:-false}"
 REQUESTED_SETUP_TOKEN=""
 
 request_setup_token() {
@@ -3884,54 +3885,59 @@ fi
 echo "Creating monitoring user..."
 pveum user add pulse-monitor@pam --comment "Pulse monitoring service" 2>/dev/null || echo "User already exists"
 
-# Generate API token
-echo "Generating API token..."
-
-# Check if token already exists
-TOKEN_EXISTED=false
-if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "%s"; then
-    TOKEN_EXISTED=true
-    echo ""
-    echo "================================================================"
-    echo "WARNING: Token '%s' already exists!"
-    echo "================================================================"
-    echo ""
-    echo "To create a new token, first remove the existing one:"
-    echo "  pveum user token remove pulse-monitor@pam %s"
-    echo ""
-    echo "Or create a token with a different name:"
-    echo "  pveum user token add pulse-monitor@pam %s-$(date +%%s) --privsep 0"
-    echo ""
-    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pam!%s-1234567890)"
-    echo "================================================================"
-    echo ""
+if [ "$PULSE_SKIP_NODE_REGISTRATION" = true ]; then
+    echo "Skipping node registration (managed by cluster automation)"
+    TOKEN_EXISTED=false
+    TOKEN_VALUE=""
 else
-    # Create token silently first
-    TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam %s --privsep 0)
-    
-    # Extract the token value for auto-registration
-    TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
-    
-    if [ -z "$TOKEN_VALUE" ]; then
-        # If we can't extract the token, show it to the user
+    # Generate API token
+    echo "Generating API token..."
+
+    # Check if token already exists
+    TOKEN_EXISTED=false
+    if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "%s"; then
+        TOKEN_EXISTED=true
         echo ""
         echo "================================================================"
-        echo "IMPORTANT: Copy the token value below - it's only shown once!"
-        echo "================================================================"
-        echo "$TOKEN_OUTPUT"
+        echo "WARNING: Token '%s' already exists!"
         echo "================================================================"
         echo ""
-        echo "⚠️  Failed to extract token value from output."
-        echo "   Manual registration may be required."
+        echo "To create a new token, first remove the existing one:"
+        echo "  pveum user token remove pulse-monitor@pam %s"
+        echo ""
+        echo "Or create a token with a different name:"
+        echo "  pveum user token add pulse-monitor@pam %s-$(date +%%s) --privsep 0"
+        echo ""
+        echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pam!%s-1234567890)"
+        echo "================================================================"
         echo ""
     else
-        # Token created successfully
-        echo "API token generated successfully"
-        echo ""
-    fi
+        # Create token silently first
+        TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam %s --privsep 0)
+        
+        # Extract the token value for auto-registration
+        TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
+        
+        if [ -z "$TOKEN_VALUE" ]; then
+            # If we can't extract the token, show it to the user
+            echo ""
+            echo "================================================================"
+            echo "IMPORTANT: Copy the token value below - it's only shown once!"
+            echo "================================================================"
+            echo "$TOKEN_OUTPUT"
+            echo "================================================================"
+            echo ""
+            echo "⚠️  Failed to extract token value from output."
+            echo "   Manual registration may be required."
+            echo ""
+        else
+            # Token created successfully
+            echo "API token generated successfully"
+            echo ""
+        fi
 
-    # Try auto-registration
-    echo "Registering node with Pulse..."
+        # Try auto-registration
+        echo "Registering node with Pulse..."
 
     # Use auth token from URL parameter when provided (automation workflows)
     AUTH_TOKEN="%s"
@@ -4053,6 +4059,9 @@ else
         echo "   2. Add this node manually in Pulse Settings"
     fi
     echo ""
+fi
+
+# End of node registration guard
 fi
 
 # Set up permissions
@@ -4853,6 +4862,7 @@ if [ "$PULSE_SKIP_CLUSTER_CONFIG" != true ] && [ "$TEMPERATURE_ENABLED" = true ]
 export PULSE_AUTO_MODE=1; \
 export PULSE_AUTO_TEMP=y; \
 export PULSE_SKIP_CLUSTER_CONFIG=true; \
+export PULSE_SKIP_NODE_REGISTRATION=true; \
 curl -fsSL '$REMOTE_SCRIPT_URL' | bash"
                             if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR root@"$NODE" "$SSH_COMMAND"; then
                                 echo "  ✓ Node registered and configured"
