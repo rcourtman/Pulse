@@ -555,6 +555,7 @@ LOG_DIR="/var/log/pulse/sensor-proxy"
 SELFHEAL_SERVICE_UNIT="/etc/systemd/system/pulse-sensor-proxy-selfheal.service"
 SELFHEAL_TIMER_UNIT="/etc/systemd/system/pulse-sensor-proxy-selfheal.timer"
 SCRIPT_SOURCE="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]:-$0}")"
+SKIP_SELF_HEAL_SETUP="${PULSE_SENSOR_PROXY_SELFHEAL:-false}"
 GITHUB_REPO="rcourtman/Pulse"
 LATEST_RELEASE_TAG=""
 REQUESTED_VERSION=""
@@ -2862,17 +2863,20 @@ if [ "$LEGACY_KEYS_FOUND" = true ] && [ "$QUIET" != true ]; then
 fi
 fi  # End of container-specific configuration
 
-# Install self-heal safeguards to keep proxy available
-print_info "Configuring self-heal safeguards..."
-if ! cache_installer_for_self_heal; then
-    if [[ -n "$INSTALLER_CACHE_REASON" ]]; then
-        print_warn "Unable to cache installer script for self-heal (${INSTALLER_CACHE_REASON})"
-    else
-        print_warn "Unable to cache installer script for self-heal"
+if [[ "$SKIP_SELF_HEAL_SETUP" == "true" ]]; then
+    print_info "Skipping self-heal safeguards during self-heal run"
+else
+    # Install self-heal safeguards to keep proxy available
+    print_info "Configuring self-heal safeguards..."
+    if ! cache_installer_for_self_heal; then
+        if [[ -n "$INSTALLER_CACHE_REASON" ]]; then
+            print_warn "Unable to cache installer script for self-heal (${INSTALLER_CACHE_REASON})"
+        else
+            print_warn "Unable to cache installer script for self-heal"
+        fi
     fi
-fi
 
-cat > "$SELFHEAL_SCRIPT" <<'EOF'
+    cat > "$SELFHEAL_SCRIPT" <<'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -2922,7 +2926,7 @@ attempt_control_plane_reconcile() {
         fi
     fi
 
-    if bash "$INSTALLER" "${cmd[@]}"; then
+    if PULSE_SENSOR_PROXY_SELFHEAL=1 bash "$INSTALLER" "${cmd[@]}"; then
         rm -f "$PENDING_FILE"
     else
         log "Control-plane reconciliation failed"
@@ -2936,7 +2940,7 @@ fi
 if ! systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE}\\.service"; then
     if [[ -x "$INSTALLER" && -f "$CTID_FILE" ]]; then
         log "Service unit missing; attempting reinstall"
-        bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
+        PULSE_SENSOR_PROXY_SELFHEAL=1 bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
     fi
     exit 0
 fi
@@ -2949,7 +2953,7 @@ fi
 if ! systemctl is-active --quiet "${SERVICE}.service"; then
     if [[ -x "$INSTALLER" && -f "$CTID_FILE" ]]; then
         log "Service failed to start; attempting reinstall"
-        bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
+        PULSE_SENSOR_PROXY_SELFHEAL=1 bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
         systemctl start "${SERVICE}.service" || true
     fi
 fi
@@ -2987,9 +2991,10 @@ Unit=pulse-sensor-proxy-selfheal.service
 WantedBy=timers.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now pulse-sensor-proxy-selfheal.timer >/dev/null 2>&1 || true
-systemctl start pulse-sensor-proxy-selfheal.service >/dev/null 2>&1 || true
+    systemctl daemon-reload
+    systemctl enable --now pulse-sensor-proxy-selfheal.timer >/dev/null 2>&1 || true
+    systemctl start pulse-sensor-proxy-selfheal.service >/dev/null 2>&1 || true
+fi
 
 if [ "$QUIET" = true ]; then
     print_success "pulse-sensor-proxy installed and running"
