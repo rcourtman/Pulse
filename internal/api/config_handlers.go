@@ -3352,6 +3352,8 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		}
 		pulseURL = fmt.Sprintf("%s://%s", scheme, r.Host)
 	}
+	pulseURLParam := url.QueryEscape(pulseURL)
+	setupScriptBase := fmt.Sprintf("%s/api/setup-script?type=pve&pulse_url=%s&host=", pulseURL, pulseURLParam)
 
 	// Extract hostname/IP from the host URL if provided
 	serverName := "your-server"
@@ -3422,6 +3424,30 @@ if [ "$EUID" -ne 0 ]; then
    echo "Please run this script as root"
    exit 1
 fi
+
+AUTO_MODE="${PULSE_AUTO_MODE:-}"
+AUTO_TEMP_CHOICE="${PULSE_AUTO_TEMP:-}"
+PULSE_SKIP_CLUSTER_CONFIG="${PULSE_SKIP_CLUSTER_CONFIG:-false}"
+
+urlencode() {
+    local str="$1"
+    local encoded=""
+    local char hex
+    local i
+    for (( i=0; i<${#str}; i++ )); do
+        char="${str:i:1}"
+        case "$char" in
+            [a-zA-Z0-9.~_-])
+                encoded+="$char"
+                ;;
+            *)
+                printf -v hex '%%%%%%02X' "'$char"
+                encoded+="$hex"
+                ;;
+        esac
+    done
+    printf '%%s' "$encoded"
+}
 
 # Detect environment (Proxmox host vs LXC guest)
 detect_environment() {
@@ -3557,14 +3583,29 @@ echo ""
 echo -n "Your choice [1/2/3]: "
 
 MAIN_ACTION=""
-if [ -t 0 ]; then
-    read -n 1 -r MAIN_ACTION
-else
-    if read -n 1 -r MAIN_ACTION </dev/tty 2>/dev/null; then
-        :
+if [ -n "$AUTO_MODE" ]; then
+    case "$AUTO_MODE" in
+        1|install|INSTALL)
+            MAIN_ACTION="1"
+            ;;
+        2|remove|REMOVE)
+            MAIN_ACTION="2"
+            ;;
+        3|cancel|CANCEL)
+            MAIN_ACTION="3"
+            ;;
+    esac
+fi
+if [ -z "$MAIN_ACTION" ]; then
+    if [ -t 0 ]; then
+        read -n 1 -r MAIN_ACTION
     else
-        echo "(No terminal available - defaulting to Install)"
-        MAIN_ACTION="1"
+        if read -n 1 -r MAIN_ACTION </dev/tty 2>/dev/null; then
+            :
+        else
+            echo "(No terminal available - defaulting to Install)"
+            MAIN_ACTION="1"
+        fi
     fi
 fi
 echo ""
@@ -4043,6 +4084,7 @@ TEMPERATURE_ENABLED=false
 TEMP_MONITORING_AVAILABLE=true
 MIN_PROXY_VERSION="%s"
 PULSE_VERSION_ENDPOINT="%s/api/version"
+SETUP_SCRIPT_BASE="__SETUP_SCRIPT_BASE__"
 STANDALONE_PROXY_DEPLOYED=false
 SKIP_TEMPERATURE_PROMPT=false
 
@@ -4410,17 +4452,22 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
         echo "Enable temperature monitoring? [y/N]"
         echo -n "> "
 
-        if [ -t 0 ]; then
-            read -n 1 -r SSH_REPLY
+        if [ -n "$AUTO_TEMP_CHOICE" ]; then
+            SSH_REPLY="$AUTO_TEMP_CHOICE"
+            echo "$SSH_REPLY"
         else
-            # When stdin is not a terminal (e.g., curl | bash), try /dev/tty first, then stdin for piped input
-            if read -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
-                :
-            elif read -t 2 -n 1 -r SSH_REPLY 2>/dev/null && [ -n "$SSH_REPLY" ]; then
-                echo "$SSH_REPLY"
+            if [ -t 0 ]; then
+                read -n 1 -r SSH_REPLY
             else
-                echo "(No terminal available - skipping temperature monitoring)"
-                SSH_REPLY="n"
+                # When stdin is not a terminal (e.g., curl | bash), try /dev/tty first, then stdin for piped input
+                if read -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
+                    :
+                elif read -t 2 -n 1 -r SSH_REPLY 2>/dev/null && [ -n "$SSH_REPLY" ]; then
+                    echo "$SSH_REPLY"
+                else
+                    echo "(No terminal available - skipping temperature monitoring)"
+                    SSH_REPLY="n"
+                fi
             fi
         fi
         echo ""
@@ -4665,7 +4712,7 @@ Host ${NODE}
 fi  # End of TEMP_MONITORING_AVAILABLE
 
 # Offer to configure other Proxmox cluster nodes if temperature monitoring is enabled here
-if [ "$TEMPERATURE_ENABLED" = true ] && command -v pvecm >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
+if [ "$PULSE_SKIP_CLUSTER_CONFIG" != true ] && [ "$TEMPERATURE_ENABLED" = true ] && command -v pvecm >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
     CLUSTER_OUTPUT=$(pvecm nodes 2>/dev/null || true)
     if [ -n "$CLUSTER_OUTPUT" ]; then
         LOCAL_NODE=$(hostname -s 2>/dev/null || hostname)
@@ -4717,9 +4764,46 @@ if [ "$TEMPERATURE_ENABLED" = true ] && command -v pvecm >/dev/null 2>&1 && comm
                 echo ""
 
                 if [[ $REMOTE_REPLY =~ ^[Yy]$ ]]; then
-                    for NODE in "${OTHER_NODES_LIST[@]}"; do
-                        echo "Configuring temperature monitoring on $NODE..."
-                        if ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR root@"$NODE" "bash -s" <<EOF
+                    TARGET_NODES=("${OTHER_NODES_LIST[@]}")
+                    AUTO_CONFIGURED_NODES=()
+                    FAILED_REMOTE_NODES=()
+                    if [ -n "$AUTH_TOKEN" ] && [ ${#TARGET_NODES[@]} -gt 0 ]; then
+                        printf -v ESCAPED_AUTH_TOKEN "%%q" "$AUTH_TOKEN"
+                        HOST_SCHEME=$(echo "$HOST_URL" | sed -n 's,^\(https\?\)://.*,\1,p')
+                        if [ -z "$HOST_SCHEME" ]; then
+                            HOST_SCHEME="https"
+                        fi
+                        HOST_PORT=$(echo "$HOST_URL" | sed -n 's,^[^:]*://[^:]*:\([0-9]\+\).*,\1,p')
+                        if [ -z "$HOST_PORT" ]; then
+                            HOST_PORT="8006"
+                        fi
+                        for NODE in "${TARGET_NODES[@]}"; do
+                            echo "Configuring temperature monitoring on $NODE..."
+                            REMOTE_HOST_URL="${HOST_SCHEME}://${NODE}:${HOST_PORT}"
+                            ENCODED_HOST=$(urlencode "$REMOTE_HOST_URL")
+                            REMOTE_SCRIPT_URL="${SETUP_SCRIPT_BASE}${ENCODED_HOST}"
+                            SSH_COMMAND="PULSE_SETUP_TOKEN=$ESCAPED_AUTH_TOKEN PULSE_AUTO_MODE=1 PULSE_AUTO_TEMP=y PULSE_SKIP_CLUSTER_CONFIG=true curl -fsSL '$REMOTE_SCRIPT_URL' | bash"
+                            if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR root@"$NODE" "$SSH_COMMAND"; then
+                                echo "  ✓ Node registered and configured"
+                                AUTO_CONFIGURED_NODES+=("$NODE")
+                            else
+                                echo "  ✗ Failed to configure $NODE automatically"
+                                FAILED_REMOTE_NODES+=("$NODE")
+                            fi
+                            echo ""
+                        done
+                        TARGET_NODES=("${FAILED_REMOTE_NODES[@]}")
+                    fi
+
+                    if [ ${#TARGET_NODES[@]} -eq 0 ]; then
+                        echo "✓ Temperature monitoring configured via pulse-sensor-proxy"
+                        echo "  Temperature data will appear in the dashboard within 10 seconds"
+                        echo ""
+                    else
+                        echo "Falling back to SSH configuration for remaining nodes..."
+                        for NODE in "${TARGET_NODES[@]}"; do
+                            echo "Configuring temperature monitoring on $NODE..."
+                            if ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR root@"$NODE" "bash -s" <<EOF
 set -e
 SSH_SENSORS_PUBLIC_KEY='$SSH_SENSORS_PUBLIC_KEY'
 SSH_SENSORS_KEY_ENTRY='$SSH_SENSORS_KEY_ENTRY'
@@ -4775,52 +4859,48 @@ else
     echo "  ✓ lm-sensors package verified"
 fi
 EOF
-                        then
-                            echo "  ✓ Temperature monitoring enabled on $NODE"
+                            then
+                                echo "  ✓ Temperature monitoring enabled on $NODE"
+                            else
+                                echo "  ✗ Failed to configure $NODE (check SSH/cluster connectivity)"
+                            fi
+                            echo ""
+                        done
+
+                        # Verify that Pulse can actually SSH to the configured nodes
+                        echo ""
+                        # Check if we're using the temperature proxy
+                        if [ -n "$TEMPERATURE_PROXY_KEY" ]; then
+                            echo "✓ Temperature monitoring configured via pulse-sensor-proxy"
+                            echo "  Temperature data will appear in the dashboard within 10 seconds"
+                            echo ""
+                        elif [ "$PULSE_IS_CONTAINERIZED" != true ]; then
+                            echo "Verifying temperature monitoring connectivity from Pulse..."
+                            echo ""
+
+                            CONFIGURED_NODES="${TARGET_NODES[@]}"
+                            if [ "$TEMPERATURE_ENABLED" = true ]; then
+                                CONFIGURED_NODES="$(hostname) ${CONFIGURED_NODES}"
+                            fi
+
+                            VERIFY_RESPONSE=$(curl -s -X POST "%s/api/system/verify-temperature-ssh" \
+                                -H "Content-Type: application/json" \
+                                -H "Authorization: Bearer %s" \
+                                -d "{\"nodes\": \"$CONFIGURED_NODES\"}" 2>/dev/null || echo "")
+
+                            if [ -n "$VERIFY_RESPONSE" ]; then
+                                echo "$VERIFY_RESPONSE"
+                            else
+                                echo "⚠️  Unable to verify SSH connectivity."
+                                echo "   Temperature data will appear once SSH connectivity is configured."
+                            fi
+                            echo ""
                         else
-                            echo "  ✗ Failed to configure $NODE (check SSH/cluster connectivity)"
+                            echo "✓ Temperature monitoring configured"
+                            echo "  Note: Container cannot directly SSH to nodes"
+                            echo "  Temperature data will appear once proxy is configured on the host"
+                            echo ""
                         fi
-                        echo ""
-                    done
-
-                    # Verify that Pulse can actually SSH to the configured nodes
-                    echo ""
-                    # Check if we're using the temperature proxy
-                    # If proxy key was detected earlier, we're using proxy-based temperature monitoring
-                    if [ -n "$TEMPERATURE_PROXY_KEY" ]; then
-                        # Using proxy - verification not needed, proxy handles SSH
-                        echo "✓ Temperature monitoring configured via pulse-sensor-proxy"
-                        echo "  Temperature data will appear in the dashboard within 10 seconds"
-                        echo ""
-                    elif [ "$PULSE_IS_CONTAINERIZED" != true ]; then
-                        # Non-containerized Pulse - can verify SSH directly
-                        echo "Verifying temperature monitoring connectivity from Pulse..."
-                        echo ""
-
-                        CONFIGURED_NODES="${OTHER_NODES_LIST[@]}"
-                        if [ "$TEMPERATURE_ENABLED" = true ]; then
-                            # Add current node to the list
-                            CONFIGURED_NODES="$(hostname) ${CONFIGURED_NODES}"
-                        fi
-
-                        VERIFY_RESPONSE=$(curl -s -X POST "%s/api/system/verify-temperature-ssh" \
-                            -H "Content-Type: application/json" \
-                            -H "Authorization: Bearer %s" \
-                            -d "{\"nodes\": \"$CONFIGURED_NODES\"}" 2>/dev/null || echo "")
-
-                        if [ -n "$VERIFY_RESPONSE" ]; then
-                            echo "$VERIFY_RESPONSE"
-                        else
-                            echo "⚠️  Unable to verify SSH connectivity."
-                            echo "   Temperature data will appear once SSH connectivity is configured."
-                        fi
-                        echo ""
-                    else
-                        # Containerized without proxy - temperature data will appear automatically
-                        echo "✓ Temperature monitoring configured"
-                        echo "  Note: Container cannot directly SSH to nodes"
-                        echo "  Temperature data will appear once proxy is configured on the host"
-                        echo ""
                     fi
                 fi
             fi
@@ -4926,6 +5006,7 @@ fi
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
 			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
 			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, tokenName)
+		script = strings.ReplaceAll(script, "__SETUP_SCRIPT_BASE__", setupScriptBase)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash

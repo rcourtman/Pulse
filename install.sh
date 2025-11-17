@@ -335,6 +335,92 @@ find_sensor_proxy_installer() {
     return 1
 }
 
+get_sensor_proxy_installer_ref() {
+    if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+        printf '%s' "$SOURCE_BRANCH"
+        return
+    fi
+    if [[ -n "${FORCE_VERSION:-}" ]]; then
+        printf '%s' "$FORCE_VERSION"
+        return
+    fi
+    if [[ -n "${LATEST_RELEASE:-}" ]]; then
+        printf '%s' "$LATEST_RELEASE"
+        return
+    fi
+    printf 'main'
+}
+
+sensor_proxy_installer_url() {
+    local ref
+    ref=$(get_sensor_proxy_installer_ref)
+    printf 'https://raw.githubusercontent.com/%s/%s/scripts/install-sensor-proxy.sh' "$GITHUB_REPO" "$ref"
+}
+
+prepare_sensor_proxy_installer() {
+    local destination="$1"
+    if [[ -z "$destination" ]]; then
+        print_error "prepare_sensor_proxy_installer requires a destination path"
+        return 1
+    fi
+
+    local installer_path=""
+    if installer_path=$(find_sensor_proxy_installer 2>/dev/null); then
+        if cp "$installer_path" "$destination" 2>/dev/null; then
+            chmod +x "$destination" 2>/dev/null || true
+            print_info "Using local pulse-sensor-proxy installer from $installer_path"
+            return 0
+        fi
+        print_warn "Found local pulse-sensor-proxy installer at $installer_path but failed to copy it"
+    fi
+
+    local ref
+    ref=$(get_sensor_proxy_installer_ref)
+
+    local -a urls=()
+    if [[ -n "$ref" ]]; then
+        if [[ "$ref" != "main" ]]; then
+            urls+=("https://github.com/$GITHUB_REPO/releases/download/$ref/install-sensor-proxy.sh")
+        fi
+        urls+=("https://raw.githubusercontent.com/$GITHUB_REPO/$ref/scripts/install-sensor-proxy.sh")
+    fi
+    urls+=("https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/install-sensor-proxy.sh")
+
+    local url=""
+    local tmp_err
+    tmp_err=$(mktemp)
+    for url in "${urls[@]}"; do
+        [[ -z "$url" ]] && continue
+        if command -v timeout >/dev/null 2>&1; then
+            if timeout 20 curl -fsSL --connect-timeout 10 --max-time 30 "$url" -o "$destination" 2>"$tmp_err"; then
+                chmod +x "$destination" 2>/dev/null || true
+                rm -f "$tmp_err"
+                print_info "Downloaded pulse-sensor-proxy installer from $url"
+                return 0
+            fi
+        else
+            if curl -fsSL --connect-timeout 10 --max-time 30 "$url" -o "$destination" 2>"$tmp_err"; then
+                chmod +x "$destination" 2>/dev/null || true
+                rm -f "$tmp_err"
+                print_info "Downloaded pulse-sensor-proxy installer from $url"
+                return 0
+            fi
+        fi
+    done
+
+    local last_error=""
+    if [[ -s "$tmp_err" ]]; then
+        last_error=$(head -1 "$tmp_err")
+    fi
+    rm -f "$tmp_err"
+    if [[ -n "$last_error" ]]; then
+        print_warn "Failed to download pulse-sensor-proxy installer (${last_error})"
+    else
+        print_warn "Failed to download pulse-sensor-proxy installer (unknown error)"
+    fi
+    return 1
+}
+
 manual_sensor_proxy_cleanup() {
     print_info "Falling back to manual pulse-sensor-proxy cleanup..."
 
@@ -468,7 +554,7 @@ prompt_proxy_installation() {
         echo ""
         print_info "Skipping proxy installation"
         print_info "Temperature monitoring from container will be unavailable"
-        print_info "To enable later, run: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid <CTID>"
+        print_info "To enable later, run: curl -fsSL $(sensor_proxy_installer_url) | bash -s -- --ctid <CTID>"
         return 1
     fi
 }
@@ -1545,27 +1631,10 @@ fi'; then
     if [[ "$install_proxy" == "true" ]]; then
         echo
         print_info "Installing temperature monitoring proxy on host..."
-        local proxy_script="/tmp/install-sensor-proxy-$$.sh"
+        local proxy_script
+        proxy_script=$(mktemp /tmp/install-sensor-proxy-XXXXXX.sh)
 
-        # Download proxy installer
-        if command -v timeout >/dev/null 2>&1; then
-            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 \
-                "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
-                > "$proxy_script" 2>/dev/null; then
-                print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-                print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
-            fi
-        else
-            if ! curl -fsSL --connect-timeout 5 --max-time 15 \
-                "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
-                > "$proxy_script" 2>/dev/null; then
-                print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-                print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
-            fi
-        fi
-
-        # Run proxy installer if downloaded
-        if [[ -f "$proxy_script" ]]; then
+        if prepare_sensor_proxy_installer "$proxy_script"; then
             chmod +x "$proxy_script"
 
             # Stop existing pulse-sensor-proxy service if running to allow binary update
@@ -1577,6 +1646,8 @@ fi'; then
 
             # If building from source, copy the binary from the LXC instead of downloading
             local proxy_install_args=(--ctid "$CTID" --skip-restart --pulse-server "http://${IP}:${frontend_port}")
+            local proxy_version_ref=""
+            proxy_version_ref=$(get_sensor_proxy_installer_ref)
             local local_proxy_binary=""
             if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
                 local_proxy_binary="/tmp/pulse-sensor-proxy-$CTID"
@@ -1591,6 +1662,9 @@ fi'; then
             else
                 # For release installs, set fallback URL to download from Pulse server inside the LXC
                 export PULSE_SENSOR_PROXY_FALLBACK_URL="http://${IP}:${frontend_port}/api/install/pulse-sensor-proxy"
+                if [[ -n "$proxy_version_ref" ]]; then
+                    proxy_install_args+=(--version "$proxy_version_ref")
+                fi
             fi
 
             if bash "$proxy_script" "${proxy_install_args[@]}" 2>&1 | tee /tmp/proxy-install-${CTID}.log; then
@@ -1698,13 +1772,17 @@ fi'; then
                 echo
                 echo "To fix, you can either:"
                 echo "  1. Fix the issue and run the proxy installer manually:"
-                echo "     curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+                echo "     curl -fsSL $(sensor_proxy_installer_url) | bash -s -- --ctid $CTID"
                 echo
                 echo "  2. Re-run the Pulse installer and skip temperature monitoring when prompted"
                 echo
                 write_install_summary
                 exit 1
             fi
+            rm -f "$proxy_script"
+        else
+            print_warn "Failed to retrieve proxy installer - temperature monitoring unavailable"
+            print_info "Run manually later: curl -fsSL $(sensor_proxy_installer_url) | bash -s -- --ctid $CTID"
             rm -f "$proxy_script"
         fi
     fi
@@ -2965,10 +3043,12 @@ print_completion() {
 
     if [[ "$IN_CONTAINER" == "true" ]]; then
         local proxy_ctid="${DETECTED_CTID:-<your-container-id>}"
+        local proxy_installer_cmd
+        proxy_installer_cmd=$(sensor_proxy_installer_url)
         echo
         echo -e "${YELLOW}Temperature monitoring:${NC}"
         echo "  Run on the Proxmox host to enable secure temperature collection:"
-        echo "    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \\"
+        echo "    curl -fsSL ${proxy_installer_cmd} | \\"
         echo "      bash -s -- --ctid ${proxy_ctid} --pulse-server ${PULSE_URL}"
         echo "  See docs/TEMPERATURE_MONITORING.md for details."
     fi

@@ -83,65 +83,122 @@ EOF
 }
 
 ensure_allowed_nodes_file_reference() {
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        return
-    fi
-    if ! grep -q "allowed_nodes_file" "$CONFIG_FILE" 2>/dev/null; then
-        echo 'allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"' >> "$CONFIG_FILE"
-    fi
-    if grep -q "^allowed_nodes:" "$CONFIG_FILE" 2>/dev/null; then
-        remove_allowed_nodes_block
-    fi
+    normalize_allowed_nodes_section
 }
 
 remove_allowed_nodes_block() {
-    if ! command -v python3 >/dev/null 2>&1; then
-        sed -i '/^allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
+    normalize_allowed_nodes_section
+}
+
+normalize_allowed_nodes_section() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
         return
     fi
-    python3 - "$CONFIG_FILE" <<'PY'
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$CONFIG_FILE" <<'PY'
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 if not path.exists():
     sys.exit(0)
-lines = path.read_text().splitlines()
-out = []
-pending = []
-skip = False
 
-def flush_pending():
-    if pending:
-        out.extend(pending)
-        pending.clear()
+lines = path.read_text().splitlines()
+to_skip = set()
+saved_comment = None
+
+def capture_comment_block(idx: int):
+    global saved_comment
+    blanks = []
+    comments = []
+    j = idx - 1
+    while j >= 0 and lines[j].strip() == "":
+        blanks.append((j, lines[j]))
+        j -= 1
+    while j >= 0 and lines[j].lstrip().startswith("#"):
+        comments.append((j, lines[j]))
+        j -= 1
+    if not comments:
+        return []
+    blanks.reverse()
+    comments.reverse()
+    block = blanks + comments
+    for index, _ in block:
+        to_skip.add(index)
+    return [text for _, text in block]
 
 i = 0
 while i < len(lines):
     line = lines[i]
     stripped = line.lstrip()
-    if skip:
-        if stripped == '' or stripped.startswith('#') or stripped.startswith('-') or line.startswith((' ', '\t')):
-            i += 1
-            continue
-        skip = False
-    if stripped.startswith('allowed_nodes:'):
-        pending.clear()
-        skip = True
+    if stripped.startswith("allowed_nodes_file:"):
+        comment_block = capture_comment_block(i)
+        if comment_block:
+            saved_comment = comment_block
+        to_skip.add(i)
         i += 1
         continue
-    if stripped == '' or stripped.startswith('#'):
-        pending.append(line)
+
+    if stripped.startswith("allowed_nodes:"):
+        comment_block = capture_comment_block(i)
+        if comment_block:
+            saved_comment = comment_block
+        to_skip.add(i)
         i += 1
+        while i < len(lines):
+            next_line = lines[i]
+            next_stripped = next_line.lstrip()
+            if (
+                next_stripped == ""
+                or next_stripped.startswith("#")
+                or next_stripped.startswith("-")
+                or next_line.startswith((" ", "\t"))
+            ):
+                to_skip.add(i)
+                i += 1
+                continue
+            break
         continue
-    flush_pending()
-    out.append(line)
+
     i += 1
-flush_pending()
-path.write_text('\n'.join(out) + ('\n' if out else ''))
+
+result = [text for idx, text in enumerate(lines) if idx not in to_skip]
+
+default_comment = [
+    "# Cluster nodes (auto-discovered during installation)",
+    "# These nodes are allowed to request temperature data when cluster IPC validation is unavailable",
+]
+
+if saved_comment is None:
+    saved_comment = [""] + default_comment
+else:
+    while saved_comment and saved_comment[-1].strip() == "":
+        saved_comment.pop()
+    if saved_comment and saved_comment[0].strip() != "":
+        saved_comment.insert(0, "")
+
+if result and result[-1].strip() != "":
+    result.append("")
+
+result.extend(saved_comment)
+result.append('allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"')
+
+path.write_text("\n".join(result).rstrip() + "\n")
 PY
-    if grep -q "^allowed_nodes:" "$CONFIG_FILE" 2>/dev/null; then
-        sed -i '/^allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
+        return
+    fi
+
+    # Fallback when python3 is unavailable
+    sed -i '/^[[:space:]]*allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
+    sed -i '/^[[:space:]]*allowed_nodes_file:/d' "$CONFIG_FILE" 2>/dev/null || true
+    if ! grep -q "allowed_nodes_file" "$CONFIG_FILE" 2>/dev/null; then
+        {
+            echo ""
+            echo "# Cluster nodes (auto-discovered during installation)"
+            echo "# These nodes are allowed to request temperature data when cluster IPC validation is unavailable"
+            echo 'allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"'
+        } >>"$CONFIG_FILE"
     fi
 }
 
