@@ -5568,7 +5568,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				Bool("exists", exists).
 				Int("totalCodes", len(h.setupCodes)).
 				Msg("Setup code lookup result")
-			if exists && !setupCode.Used && time.Now().Before(setupCode.ExpiresAt) {
+			now := time.Now()
+			if exists && !setupCode.Used && now.Before(setupCode.ExpiresAt) {
 				// Validate that the code matches the node type
 				// Note: We don't validate the host anymore as it may differ between
 				// what's entered in the UI and what's provided in the setup script URL
@@ -5576,7 +5577,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 					setupCode.Used = true // Mark as used immediately
 					// Allow the token to be reused for a brief grace period so the setup
 					// script can complete follow-up actions (temperature verification, etc).
-					graceExpiry := time.Now().Add(5 * time.Minute)
+					graceExpiry := now.Add(5 * time.Minute)
 					if setupCode.ExpiresAt.After(graceExpiry) {
 						graceExpiry = setupCode.ExpiresAt
 					}
@@ -5594,7 +5595,16 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 						Msg("Setup code validation failed - type mismatch")
 				}
 			} else if exists && setupCode.Used {
-				log.Warn().Msg("Setup code already used")
+				// Allow short-lived reuse for chained automation (cluster fan-out)
+				if expiresAt, ok := h.recentSetupTokens[codeHash]; ok && now.Before(expiresAt) {
+					authenticated = true
+					log.Info().
+						Str("type", req.Type).
+						Str("host", req.Host).
+						Msg("Auto-register authenticated via recently used setup code")
+				} else {
+					log.Warn().Msg("Setup code already used")
+				}
 			} else if exists {
 				log.Warn().Msg("Setup code expired")
 			} else {
