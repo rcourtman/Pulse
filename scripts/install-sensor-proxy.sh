@@ -2905,8 +2905,8 @@ cat > "$SELFHEAL_TIMER_UNIT" <<'EOF'
 Description=Ensure pulse-sensor-proxy stays installed and running
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=30min
+OnBootSec=2min
+OnUnitActiveSec=5min
 Unit=pulse-sensor-proxy-selfheal.service
 
 [Install]
@@ -2915,6 +2915,7 @@ EOF
 
 systemctl daemon-reload
 systemctl enable --now pulse-sensor-proxy-selfheal.timer >/dev/null 2>&1 || true
+systemctl start pulse-sensor-proxy-selfheal.service >/dev/null 2>&1 || true
 
 if [ "$QUIET" = true ]; then
     print_success "pulse-sensor-proxy installed and running"
