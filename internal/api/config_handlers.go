@@ -3429,6 +3429,43 @@ AUTO_MODE="${PULSE_AUTO_MODE:-}"
 AUTO_TEMP_CHOICE="${PULSE_AUTO_TEMP:-}"
 PULSE_SKIP_CLUSTER_CONFIG="${PULSE_SKIP_CLUSTER_CONFIG:-false}"
 AUTO_CLEANUP="${PULSE_AUTO_CLEANUP:-}"
+REQUESTED_SETUP_TOKEN=""
+
+request_setup_token() {
+    local request_host="$1"
+    local json_payload
+    if [ -z "$request_host" ]; then
+        request_host="$HOST_URL"
+    fi
+    if [ -z "$PULSE_URL" ]; then
+        return 1
+    fi
+    json_payload=$(cat <<EOF
+{"type":"pve","host":"$request_host","backupPerms":false}
+EOF
+)
+    local response
+    response=$(curl -fsSL -X POST "$PULSE_URL/api/setup-script-url" \
+        -H "Content-Type: application/json" \
+        -d "$json_payload" 2>/dev/null || true)
+    if [ -z "$response" ]; then
+        return 1
+    fi
+
+    local token=""
+    if command -v python3 >/dev/null 2>&1; then
+        token=$(python3 -c 'import json,sys; data=json.load(sys.stdin); print(data.get("setupToken",""))' <<<"$response" 2>/dev/null || true)
+    fi
+    if [ -z "$token" ]; then
+        token=$(echo "$response" | sed -n 's/.*"setupToken"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    fi
+    if [ -n "$token" ]; then
+        REQUESTED_SETUP_TOKEN="$token"
+        export PULSE_SETUP_TOKEN="$token"
+        return 0
+    fi
+    return 1
+}
 
 urlencode() {
     local str="$1"
@@ -3904,6 +3941,14 @@ else
         AUTH_TOKEN="$PULSE_SETUP_TOKEN"
     fi
 
+    # Automatically request a setup token from Pulse if none provided
+    if [ -z "$AUTH_TOKEN" ]; then
+        echo "Requesting setup token from Pulse..."
+        if request_setup_token "$HOST_URL"; then
+            AUTH_TOKEN="$REQUESTED_SETUP_TOKEN"
+        fi
+    fi
+
     # Prompt the operator if we still don't have a token and a TTY is available
     if [ -z "$AUTH_TOKEN" ]; then
         if [ -t 0 ]; then
@@ -3923,6 +3968,13 @@ else
 
     # Only proceed with auto-registration if we have an auth token
     if [ -n "$AUTH_TOKEN" ]; then
+        PULSE_SETUP_TOKEN="$AUTH_TOKEN"
+        export PULSE_SETUP_TOKEN
+        AUTO_REG_SUCCESS=false
+        REGISTER_RESPONSE=""
+        REGISTRATION_ATTEMPTS=0
+        while [ $REGISTRATION_ATTEMPTS -lt 2 ]; do
+            REGISTRATION_ATTEMPTS=$((REGISTRATION_ATTEMPTS + 1))
         # Get the server's hostname
         SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
         SERVER_IP=$(hostname -I | awk '{print $1}')
@@ -3955,21 +4007,33 @@ else
         REGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"pulse-monitor@pam!%s","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$AUTH_TOKEN"'"}'
 
         # Send registration with setup code
-        REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -d @- 2>&1)
+            REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -s -X POST "$PULSE_URL/api/auto-register" \
+                -H "Content-Type: application/json" \
+                -d @- 2>&1)
+            if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+                AUTO_REG_SUCCESS=true
+                echo "Node registered successfully"
+                echo ""
+                break
+            fi
+            if echo "$REGISTER_RESPONSE" | grep -qi "Invalid or expired setup code" && [ $REGISTRATION_ATTEMPTS -lt 2 ]; then
+                echo "Setup token expired, requesting a new one..."
+                if request_setup_token "$HOST_URL"; then
+                    AUTH_TOKEN="$REQUESTED_SETUP_TOKEN"
+                    PULSE_SETUP_TOKEN="$AUTH_TOKEN"
+                    export PULSE_SETUP_TOKEN
+                    continue
+                fi
+            fi
+            break
+        done
     else
         echo "⚠️  Auto-registration skipped: no setup token provided"
         AUTO_REG_SUCCESS=false
         REGISTER_RESPONSE=""
     fi
 
-    AUTO_REG_SUCCESS=false
-    if echo "$REGISTER_RESPONSE" | grep -q "success"; then
-        AUTO_REG_SUCCESS=true
-        echo "Node registered successfully"
-        echo ""
-    else
+    if [ "$AUTO_REG_SUCCESS" != true ]; then
         if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
             echo "Error: Auto-registration failed - authentication required"
             echo ""
