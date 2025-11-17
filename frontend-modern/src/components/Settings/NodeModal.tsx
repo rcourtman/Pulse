@@ -40,6 +40,12 @@ type TemperatureTransportDetail = {
 	disable?: boolean;
 };
 
+interface ProxyInstallResponse {
+	command: string;
+	pulseURL: string;
+	node?: string;
+}
+
 const deriveNameFromHost = (host: string): string => {
   let value = host.trim();
   if (!value) {
@@ -167,12 +173,14 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     try {
       const nodeName = props.editingNode?.name ? encodeURIComponent(props.editingNode!.name) : '';
       const query = nodeName ? `?node=${nodeName}` : '';
-      const response = await apiFetchJSON(`/api/temperature-proxy/install-command${query}`);
+      const response = (await apiFetchJSON(
+        `/api/temperature-proxy/install-command${query}`,
+      )) as ProxyInstallResponse;
       if (!response || typeof response.command !== 'string') {
         throw new Error('Proxy installer command unavailable');
       }
       setProxyInstallCommand(response.command);
-      showSuccess('HTTPS proxy command ready', 2000);
+      showSuccess('HTTPS proxy command ready', undefined, 2000);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to generate HTTPS proxy command';
