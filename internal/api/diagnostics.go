@@ -249,6 +249,8 @@ type TemperatureProxyDiagnostic struct {
 	HTTPProxies          []TemperatureProxyHTTPStatus        `json:"httpProxies,omitempty"`
 	ControlPlaneEnabled  bool                                `json:"controlPlaneEnabled"`
 	ControlPlaneStates   []TemperatureProxyControlPlaneState `json:"controlPlaneStates,omitempty"`
+	SocketHostCooldowns  []TemperatureProxySocketHost        `json:"socketHostCooldowns,omitempty"`
+	HostProxySummary     *HostProxySummary                   `json:"hostProxySummary,omitempty"`
 }
 
 type TemperatureProxyControlPlaneState struct {
@@ -264,6 +266,23 @@ type TemperatureProxyHTTPStatus struct {
 	URL       string `json:"url"`
 	Reachable bool   `json:"reachable"`
 	Error     string `json:"error,omitempty"`
+}
+
+type TemperatureProxySocketHost struct {
+	Node             string `json:"node,omitempty"`
+	Host             string `json:"host,omitempty"`
+	CooldownUntil    string `json:"cooldownUntil,omitempty"`
+	SecondsRemaining int    `json:"secondsRemaining,omitempty"`
+	LastError        string `json:"lastError,omitempty"`
+}
+
+type HostProxySummary struct {
+	Requested              bool   `json:"requested"`
+	Installed              bool   `json:"installed"`
+	HostSocketPresent      bool   `json:"hostSocketPresent"`
+	ContainerSocketPresent *bool  `json:"containerSocketPresent,omitempty"`
+	LastUpdated            string `json:"lastUpdated,omitempty"`
+	CTID                   string `json:"ctid,omitempty"`
 }
 
 // APITokenDiagnostic reports on the state of the multi-token authentication system.
@@ -413,12 +432,18 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		MemoryMB:     memStats.Alloc / 1024 / 1024,
 	}
 
-	var proxySync map[string]proxySyncState
+	var (
+		proxySync       map[string]proxySyncState
+		socketHostState []monitoring.ProxyHostDiagnostics
+	)
 	if r.temperatureProxyHandlers != nil {
 		proxySync = r.temperatureProxyHandlers.SnapshotSyncStatus()
 	}
+	if r.monitor != nil {
+		socketHostState = r.monitor.SocketProxyHostDiagnostics()
+	}
 
-	diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config, proxySync)
+	diag.TemperatureProxy = buildTemperatureProxyDiagnostic(r.config, proxySync, socketHostState)
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 
 	// Test each configured node
@@ -674,7 +699,7 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 	return discovery
 }
 
-func buildTemperatureProxyDiagnostic(cfg *config.Config, syncStates map[string]proxySyncState) *TemperatureProxyDiagnostic {
+func buildTemperatureProxyDiagnostic(cfg *config.Config, syncStates map[string]proxySyncState, hostStates []monitoring.ProxyHostDiagnostics) *TemperatureProxyDiagnostic {
 	diag := &TemperatureProxyDiagnostic{}
 
 	appendNote := func(note string) {
@@ -716,6 +741,9 @@ func buildTemperatureProxyDiagnostic(cfg *config.Config, syncStates map[string]p
 
 	if !diag.SocketFound {
 		appendNote("No proxy socket detected inside the container. Remove the affected node in Pulse, then re-add it using the installer script from Settings → Nodes to regenerate the mount (or rerun the host installer script if you prefer).")
+		if cfg != nil && cfg.TemperatureMonitoringEnabled {
+			appendNote("Global temperature monitoring is enabled but the host proxy socket is missing; reinstall the proxy or disable temperatures until it is restored.")
+		}
 	} else if diag.SocketPath == "/run/pulse-sensor-proxy/pulse-sensor-proxy.sock" {
 		// Only warn about /run mount in LXC containers where /mnt/pulse-proxy is preferred
 		// Docker deployments correctly use /run/pulse-sensor-proxy per docker-compose.yml
@@ -867,7 +895,106 @@ func buildTemperatureProxyDiagnostic(cfg *config.Config, syncStates map[string]p
 		}
 	}
 
+	if len(hostStates) > 0 && cfg != nil {
+		now := time.Now()
+		cooldowns := make([]TemperatureProxySocketHost, 0, len(hostStates))
+		for _, state := range hostStates {
+			if state.Host == "" || state.CooldownUntil.IsZero() {
+				continue
+			}
+			if now.After(state.CooldownUntil) {
+				continue
+			}
+			entry := TemperatureProxySocketHost{
+				Host:             state.Host,
+				CooldownUntil:    state.CooldownUntil.UTC().Format(time.RFC3339),
+				SecondsRemaining: int(time.Until(state.CooldownUntil).Seconds()),
+				LastError:        state.LastError,
+			}
+			if entry.SecondsRemaining < 0 {
+				entry.SecondsRemaining = 0
+			}
+			if name := matchInstanceNameByHost(cfg, state.Host); name != "" {
+				entry.Node = name
+			}
+			cooldowns = append(cooldowns, entry)
+		}
+		if len(cooldowns) > 0 {
+			diag.SocketHostCooldowns = cooldowns
+		}
+	}
+
+	if summary, err := loadHostProxySummary(); err == nil {
+		diag.HostProxySummary = summary
+	}
+
 	return diag
+}
+
+func loadHostProxySummary() (*HostProxySummary, error) {
+	const summaryPath = "/etc/pulse/install_summary.json"
+	data, err := os.ReadFile(summaryPath)
+	if err != nil {
+		return nil, err
+	}
+	var raw struct {
+		GeneratedAt string `json:"generatedAt"`
+		CTID        string `json:"ctid"`
+		Proxy       struct {
+			Requested              bool  `json:"requested"`
+			Installed              bool  `json:"installed"`
+			HostSocketPresent      bool  `json:"hostSocketPresent"`
+			ContainerSocketPresent *bool `json:"containerSocketPresent"`
+		} `json:"proxy"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	summary := &HostProxySummary{
+		Requested:         raw.Proxy.Requested,
+		Installed:         raw.Proxy.Installed,
+		HostSocketPresent: raw.Proxy.HostSocketPresent,
+		LastUpdated:       strings.TrimSpace(raw.GeneratedAt),
+		CTID:              strings.TrimSpace(raw.CTID),
+	}
+	if raw.Proxy.ContainerSocketPresent != nil {
+		value := *raw.Proxy.ContainerSocketPresent
+		summary.ContainerSocketPresent = &value
+	}
+	return summary, nil
+}
+
+func matchInstanceNameByHost(cfg *config.Config, host string) string {
+	if cfg == nil {
+		return ""
+	}
+	needle := normalizeHostForComparison(host)
+	if needle == "" {
+		return ""
+	}
+	for _, inst := range cfg.PVEInstances {
+		candidate := normalizeHostForComparison(inst.Host)
+		if candidate != "" && strings.EqualFold(candidate, needle) {
+			return strings.TrimSpace(inst.Name)
+		}
+	}
+	return ""
+}
+
+func normalizeHostForComparison(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	trimmed = strings.TrimPrefix(trimmed, "https://")
+	trimmed = strings.TrimPrefix(trimmed, "http://")
+	if idx := strings.IndexByte(trimmed, '/'); idx != -1 {
+		trimmed = trimmed[:idx]
+	}
+	if idx := strings.IndexByte(trimmed, ':'); idx != -1 {
+		trimmed = trimmed[:idx]
+	}
+	return strings.ToLower(strings.TrimSpace(trimmed))
 }
 
 func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *APITokenDiagnostic {

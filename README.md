@@ -125,6 +125,12 @@ Your infrastructure data is yours alone.
 | Kubernetes/Helm | Clusters needing HA, ingress, GitOps | Kubernetes cluster with storage class + Helm 3 | [docs/KUBERNETES.md](docs/KUBERNETES.md) |
 | Bare metal/systemd | Minimal installs or environments without containers | Go-supported Linux host, systemd access | [docs/INSTALL.md](docs/INSTALL.md) and `scripts/build-release.sh` |
 
+### Bootstrap vs Node Setup
+
+- Run `install.sh` on the Proxmox host to create the Pulse LXC and (optionally) install `pulse-sensor-proxy`. The installer records the decision in `/etc/pulse/install_summary.json`.
+- After Pulse is running, head to **Settings → Nodes** and run the Quick Setup script per PVE/PBS/PMG instance. The script reads the summary so it can skip redundant prompts when the host proxy already exists, and it only asks you to deploy HTTPS proxies for remote/standalone nodes.
+- If you skipped the proxy during bootstrap, the Quick Setup script (and the Settings UI) now remind you and provide a copy/paste HTTPS installer command so you can enable temperatures later.
+
 ## Quick Start
 
 ### Install

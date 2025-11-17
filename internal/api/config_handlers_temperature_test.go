@@ -56,3 +56,28 @@ func TestDetermineTemperatureTransport(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsureTemperatureTransportAvailable(t *testing.T) {
+	t.Parallel()
+
+	t.Run("allows socket transport", func(t *testing.T) {
+		t.Parallel()
+		if err := ensureTemperatureTransportAvailable(true, "", "", true, true); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("blocks container without proxy", func(t *testing.T) {
+		t.Parallel()
+		if err := ensureTemperatureTransportAvailable(true, "", "", false, true); err == nil {
+			t.Fatal("expected error when no transport is available")
+		}
+	})
+
+	t.Run("ignores disabled state", func(t *testing.T) {
+		t.Parallel()
+		if err := ensureTemperatureTransportAvailable(false, "", "", false, true); err != nil {
+			t.Fatalf("expected nil error when not enabling transport, got %v", err)
+		}
+	})
+}

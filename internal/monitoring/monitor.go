@@ -3472,6 +3472,19 @@ func (m *Monitor) HasSocketTemperatureProxy() bool {
 	return m.tempCollector.SocketProxyAvailable()
 }
 
+// SocketProxyHostDiagnostics exposes per-host proxy cooldown state for diagnostics.
+func (m *Monitor) SocketProxyHostDiagnostics() []ProxyHostDiagnostics {
+	m.mu.RLock()
+	collector := m.tempCollector
+	m.mu.RUnlock()
+
+	if collector == nil {
+		return nil
+	}
+
+	return collector.ProxyHostDiagnostics()
+}
+
 // checkContainerizedTempMonitoring logs a security warning if Pulse is running
 // in a container with SSH-based temperature monitoring enabled
 func checkContainerizedTempMonitoring() {
@@ -3513,6 +3526,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 
 	// Security warning if running in container with SSH temperature monitoring
 	checkContainerizedTempMonitoring()
+
+	if cfg != nil && cfg.TemperatureMonitoringEnabled {
+		isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
+		if isContainer && tempCollector != nil && !tempCollector.SocketProxyAvailable() {
+			log.Warn().Msg("Temperature monitoring is enabled but the container does not have access to pulse-sensor-proxy. Install the proxy on the host or disable temperatures until it is available.")
+		}
+	}
 
 	stalenessTracker := NewStalenessTracker(getPollMetrics())
 	stalenessTracker.SetBounds(cfg.AdaptivePollingBaseInterval, cfg.AdaptivePollingMaxInterval)

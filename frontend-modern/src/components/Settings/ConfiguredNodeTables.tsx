@@ -10,7 +10,14 @@ type NodeConfigWithStatus = NodeConfig & {
 export interface TemperatureTransportInfo {
   httpMap: Record<string, { reachable: boolean; error?: string; url?: string }>;
   socketStatus: 'healthy' | 'error' | 'missing';
+  socketCooldowns?: Record<string, TemperatureSocketCooldownInfo>;
 }
+
+type TemperatureSocketCooldownInfo = {
+  secondsRemaining?: number;
+  until?: string;
+  lastError?: string;
+};
 
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
@@ -28,6 +35,39 @@ type TemperatureTransportBadge = {
   label: string;
   badgeClass: string;
   description?: string;
+};
+
+const normalizeHostKey = (value?: string) => {
+  if (!value) {
+    return '';
+  }
+  let result = value.trim().toLowerCase();
+  if (!result) {
+    return '';
+  }
+  result = result.replace(/^https?:\/\//, '');
+  const slashIndex = result.indexOf('/');
+  if (slashIndex !== -1) {
+    result = result.slice(0, slashIndex);
+  }
+  const colonIndex = result.indexOf(':');
+  if (colonIndex !== -1) {
+    result = result.slice(0, colonIndex);
+  }
+  return result;
+};
+
+const formatCooldown = (seconds?: number) => {
+  if (!seconds || seconds <= 0) {
+    return '0s';
+  }
+  if (seconds >= 3600) {
+    return `${Math.round(seconds / 3600)}h`;
+  }
+  if (seconds >= 60) {
+    return `${Math.round(seconds / 60)}m`;
+  }
+  return `${Math.round(seconds)}s`;
 };
 
 const STATUS_META: Record<string, StatusMeta> = {
@@ -65,6 +105,11 @@ const resolveTemperatureTransport = (
 ): TemperatureTransportBadge => {
   const monitoringEnabled = isTemperatureMonitoringEnabled(node, globalEnabled);
   const normalizedTransport = (node.temperatureTransport || '').toLowerCase();
+  const nodeKey = normalizeHostKey(node.name);
+  const hostKey = normalizeHostKey(node.host);
+  const socketCooldownEntry =
+    (nodeKey && info?.socketCooldowns?.[nodeKey]) ||
+    (hostKey && info?.socketCooldowns?.[hostKey]);
   if (!monitoringEnabled) {
     return {
       label: 'Temp disabled',
@@ -78,11 +123,21 @@ const resolveTemperatureTransport = (
     };
   }
 
-  const key = (node.name || '').toLowerCase();
-  const httpEntry = info?.httpMap?.[key];
+  const key = nodeKey;
+  const httpEntry = key ? info?.httpMap?.[key] : undefined;
   const socketStatus = info?.socketStatus;
 
   const buildSocketBadge = (): TemperatureTransportBadge => {
+    if (socketCooldownEntry) {
+      const retryText = `Retrying in ${formatCooldown(socketCooldownEntry.secondsRemaining)}`;
+      return {
+        label: 'Socket cooldown',
+        badgeClass: 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
+        description: socketCooldownEntry.lastError
+          ? `${socketCooldownEntry.lastError} (${retryText})`
+          : retryText,
+      };
+    }
     if (socketStatus === 'error') {
       return {
         label: 'Socket error',
