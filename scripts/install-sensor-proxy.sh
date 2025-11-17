@@ -13,6 +13,8 @@ MIN_ALLOWED_NODES_FILE_VERSION="v4.31.1"
 ALLOWLIST_MODE="file"
 INSTALLED_PROXY_VERSION=""
 
+PENDING_CONTROL_PLANE_FILE="/etc/pulse-sensor-proxy/pending-control-plane.env"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -723,6 +725,8 @@ EOF
         rm -f "$CTID_FILE"
     fi
 
+    rm -f "$PENDING_CONTROL_PLANE_FILE" 2>/dev/null || true
+
     if command -v systemctl >/dev/null 2>&1; then
         systemctl daemon-reload 2>/dev/null || true
     fi
@@ -1422,8 +1426,10 @@ if [[ "$HTTP_MODE" != true ]]; then
             if [[ -z "$CONTROL_PLANE_REFRESH" ]]; then
                 CONTROL_PLANE_REFRESH="60"
             fi
+            clear_pending_control_plane
         else
             print_warn "Failed to register socket proxy with Pulse; continuing without control plane sync"
+            record_pending_control_plane "socket"
         fi
     fi
 fi
@@ -1515,6 +1521,7 @@ if [[ "$HTTP_MODE" == true ]]; then
     if [[ $? -ne 0 || -z "$registration_response" ]]; then
         print_error "Failed to register with Pulse - aborting installation"
         print_error "Fix the issue and re-run the installer"
+        record_pending_control_plane "http"
         exit 1
     fi
 
@@ -1524,6 +1531,7 @@ if [[ "$HTTP_MODE" == true ]]; then
     if [[ -z "$CONTROL_PLANE_REFRESH" ]]; then
         CONTROL_PLANE_REFRESH="60"
     fi
+    clear_pending_control_plane
 
     if [[ -z "$HTTP_AUTH_TOKEN" ]]; then
         print_error "Registration succeeded but Pulse did not return an auth token"
@@ -2797,10 +2805,54 @@ set -euo pipefail
 SERVICE="pulse-sensor-proxy"
 INSTALLER="/opt/pulse/sensor-proxy/install-sensor-proxy.sh"
 CTID_FILE="/etc/pulse-sensor-proxy/ctid"
+PENDING_FILE="/etc/pulse-sensor-proxy/pending-control-plane.env"
+TOKEN_FILE="/etc/pulse-sensor-proxy/.pulse-control-token"
 LOG_TAG="pulse-sensor-proxy-selfheal"
 
 log() {
     logger -t "$LOG_TAG" "$1"
+}
+
+attempt_control_plane_reconcile() {
+    if [[ ! -f "$PENDING_FILE" ]]; then
+        return
+    fi
+    if [[ -f "$TOKEN_FILE" ]]; then
+        return
+    fi
+    if [[ ! -x "$INSTALLER" ]]; then
+        return
+    fi
+
+    # shellcheck disable=SC1090
+    source "$PENDING_FILE" || return
+    if [[ -z "${PENDING_PULSE_SERVER:-}" ]]; then
+        return
+    fi
+
+    cmd=("$INSTALLER" "--skip-restart" "--quiet" "--pulse-server" "${PENDING_PULSE_SERVER}")
+    if [[ "${PENDING_STANDALONE:-false}" == "true" ]]; then
+        cmd+=("--standalone")
+        if [[ "${PENDING_HTTP_MODE:-false}" == "true" ]]; then
+            cmd+=("--http-mode")
+            if [[ -n "${PENDING_HTTP_ADDR:-}" ]]; then
+                cmd+=("--http-addr" "${PENDING_HTTP_ADDR}")
+            fi
+        fi
+    else
+        if [[ -f "$CTID_FILE" ]]; then
+            cmd+=("--ctid" "$(cat "$CTID_FILE")")
+        else
+            log "CTID file missing; cannot reconcile control plane"
+            return
+        fi
+    fi
+
+    if bash "$INSTALLER" "${cmd[@]}"; then
+        rm -f "$PENDING_FILE"
+    else
+        log "Control-plane reconciliation failed"
+    fi
 }
 
 if ! command -v systemctl >/dev/null 2>&1; then
@@ -2827,6 +2879,8 @@ if ! systemctl is-active --quiet "${SERVICE}.service"; then
         systemctl start "${SERVICE}.service" || true
     fi
 fi
+
+attempt_control_plane_reconcile
 EOF
 chmod 0755 "$SELFHEAL_SCRIPT"
 
@@ -2907,3 +2961,22 @@ else
 fi
 
 exit 0
+record_pending_control_plane() {
+    local mode="$1"
+    if [[ -z "$PULSE_SERVER" ]]; then
+        return
+    fi
+
+    cat > "$PENDING_CONTROL_PLANE_FILE" <<EOF
+PENDING_PULSE_SERVER="${PULSE_SERVER}"
+PENDING_MODE="${mode}"
+PENDING_STANDALONE="${STANDALONE}"
+PENDING_HTTP_MODE="${HTTP_MODE}"
+PENDING_HTTP_ADDR="${HTTP_ADDR}"
+EOF
+    chmod 0600 "$PENDING_CONTROL_PLANE_FILE" 2>/dev/null || true
+}
+
+clear_pending_control_plane() {
+    rm -f "$PENDING_CONTROL_PLANE_FILE" 2>/dev/null || true
+}
