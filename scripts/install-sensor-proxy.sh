@@ -2993,7 +2993,6 @@ EOF
 
     systemctl daemon-reload
     systemctl enable --now pulse-sensor-proxy-selfheal.timer >/dev/null 2>&1 || true
-    systemctl start pulse-sensor-proxy-selfheal.service >/dev/null 2>&1 || true
 fi
 
 if [ "$QUIET" = true ]; then
