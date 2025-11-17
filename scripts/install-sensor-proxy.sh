@@ -93,7 +93,7 @@ ensure_allowed_nodes_file_reference() {
 
 remove_allowed_nodes_block() {
     if ! command -v python3 >/dev/null 2>&1; then
-        sed -i '/allowed_nodes:/d' "$CONFIG_FILE" 2>/dev/null || true
+        sed -i '/^allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
         return
     fi
     python3 - "$CONFIG_FILE" <<'PY'
@@ -137,6 +137,8 @@ while i < len(lines):
 flush_pending()
 path.write_text('\n'.join(out) + ('\n' if out else ''))
 PY
+    # Fallback cleanup in case formatting prevented python script from matching
+    sed -i '/^allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
 }
 
 update_allowed_nodes() {
