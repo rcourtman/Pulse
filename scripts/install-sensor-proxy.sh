@@ -331,22 +331,47 @@ if not path.exists():
     sys.exit(0)
 
 lines = path.read_text().splitlines()
-result = []
-skip = False
-seen = False
-for line in lines:
-    stripped = line.strip()
-    if stripped.startswith("allowed_nodes:"):
-        if seen:
-            skip = True
-            continue
-        seen = True
-    if skip:
-        if stripped.startswith("#") or stripped.startswith("-") or stripped == "" or line.startswith((" ", "\t")):
-            continue
-        skip = False
-    result.append(line)
+to_skip = set()
 
+def capture_leading_comment(idx: int):
+    """Remove contiguous blank/comment lines immediately above idx."""
+    j = idx - 1
+    while j >= 0 and lines[j].strip() == "":
+        to_skip.add(j)
+        j -= 1
+    while j >= 0 and lines[j].lstrip().startswith("#"):
+        to_skip.add(j)
+        j -= 1
+
+i = 0
+while i < len(lines):
+    line = lines[i]
+    stripped = line.lstrip()
+    if stripped.startswith("allowed_nodes_file:"):
+        to_skip.add(i)
+        i += 1
+        continue
+    if stripped.startswith("allowed_nodes:"):
+        capture_leading_comment(i)
+        to_skip.add(i)
+        i += 1
+        while i < len(lines):
+            next_line = lines[i]
+            next_stripped = next_line.lstrip()
+            if (
+                next_stripped == ""
+                or next_stripped.startswith("#")
+                or next_stripped.startswith("-")
+                or next_line.startswith((" ", "\t"))
+            ):
+                to_skip.add(i)
+                i += 1
+                continue
+            break
+        continue
+    i += 1
+
+result = [text for idx, text in enumerate(lines) if idx not in to_skip]
 path.write_text("\n".join(result).rstrip() + "\n")
 PY
 
