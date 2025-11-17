@@ -8,6 +8,10 @@ set -euo pipefail
 
 CONFIG_FILE="/etc/pulse-sensor-proxy/config.yaml"
 ALLOWED_NODES_FILE="/etc/pulse-sensor-proxy/allowed_nodes.yaml"
+MIN_ALLOWED_NODES_FILE_VERSION="v4.31.1"
+
+ALLOWLIST_MODE="file"
+INSTALLED_PROXY_VERSION=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,6 +35,74 @@ print_error() {
 
 print_success() {
     echo -e "${GREEN}✓${NC} $1"
+}
+
+normalize_semver() {
+    local ver="${1#v}"
+    ver="${ver%%+*}"
+    ver="${ver%%-*}"
+    printf '%s' "$ver"
+}
+
+semver_to_tuple() {
+    local ver
+    ver="$(normalize_semver "$1")"
+    IFS='.' read -r major minor patch <<< "$ver"
+    [[ -n "$major" ]] || major=0
+    [[ -n "$minor" ]] || minor=0
+    [[ -n "$patch" ]] || patch=0
+    printf '%s %s %s' "$major" "$minor" "$patch"
+}
+
+version_at_least() {
+    local current target
+    read -r c_major c_minor c_patch <<< "$(semver_to_tuple "$1")"
+    read -r t_major t_minor t_patch <<< "$(semver_to_tuple "$2")"
+
+    if (( c_major > t_major )); then
+        return 0
+    elif (( c_major < t_major )); then
+        return 1
+    fi
+
+    if (( c_minor > t_minor )); then
+        return 0
+    elif (( c_minor < t_minor )); then
+        return 1
+    fi
+
+    if (( c_patch >= t_patch )); then
+        return 0
+    fi
+    return 1
+}
+
+detect_proxy_version() {
+    local binary="$1"
+    if [[ -x "$binary" ]]; then
+        "$binary" version 2>/dev/null | awk '/pulse-sensor-proxy/{print $2; exit}'
+    fi
+}
+
+determine_allowlist_mode() {
+    INSTALLED_PROXY_VERSION="$(detect_proxy_version "$BINARY_PATH")"
+
+    if [[ -z "$INSTALLED_PROXY_VERSION" ]]; then
+        print_warn "Unable to detect installed pulse-sensor-proxy version; assuming allowed_nodes_file is supported"
+        ALLOWLIST_MODE="file"
+        return
+    fi
+
+    if version_at_least "$INSTALLED_PROXY_VERSION" "$MIN_ALLOWED_NODES_FILE_VERSION"; then
+        if [[ "$QUIET" != true ]]; then
+            print_info "Detected pulse-sensor-proxy ${INSTALLED_PROXY_VERSION} (allowed_nodes_file supported)"
+        fi
+        ALLOWLIST_MODE="file"
+        return
+    fi
+
+    ALLOWLIST_MODE="inline"
+    print_warn "pulse-sensor-proxy ${INSTALLED_PROXY_VERSION} does not support allowed_nodes_file; using inline allow list updates"
 }
 
 configure_local_authorized_key() {
@@ -83,68 +155,239 @@ EOF
 }
 
 ensure_allowed_nodes_file_reference() {
-    if [[ ! -f "$CONFIG_FILE" ]]; then
+    if [[ "$ALLOWLIST_MODE" != "file" ]]; then
+        if [[ -f "$CONFIG_FILE" ]]; then
+            sed -i '/^[[:space:]]*allowed_nodes_file:/d' "$CONFIG_FILE" 2>/dev/null || true
+        fi
         return
     fi
-    if ! grep -q "allowed_nodes_file" "$CONFIG_FILE" 2>/dev/null; then
-        echo 'allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"' >> "$CONFIG_FILE"
-    fi
+
+    normalize_allowed_nodes_section
 }
 
 remove_allowed_nodes_block() {
-    if ! command -v python3 >/dev/null 2>&1; then
-        sed -i '/^allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
+    if [[ "$ALLOWLIST_MODE" != "file" ]]; then
         return
     fi
-    python3 - "$CONFIG_FILE" <<'PY'
+
+    normalize_allowed_nodes_section
+}
+
+normalize_allowed_nodes_section() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        return
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$CONFIG_FILE" <<'PY'
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 if not path.exists():
     sys.exit(0)
-lines = path.read_text().splitlines()
-out = []
-pending = []
-skip = False
 
-def flush_pending():
-    if pending:
-        out.extend(pending)
-        pending.clear()
+lines = path.read_text().splitlines()
+to_skip = set()
+saved_comment = None
+
+def capture_comment_block(idx: int):
+    global saved_comment
+    blanks = []
+    comments = []
+    j = idx - 1
+    while j >= 0 and lines[j].strip() == "":
+        blanks.append((j, lines[j]))
+        j -= 1
+    while j >= 0 and lines[j].lstrip().startswith("#"):
+        comments.append((j, lines[j]))
+        j -= 1
+    if not comments:
+        return []
+    blanks.reverse()
+    comments.reverse()
+    block = blanks + comments
+    for index, _ in block:
+        to_skip.add(index)
+    return [text for _, text in block]
 
 i = 0
 while i < len(lines):
     line = lines[i]
     stripped = line.lstrip()
-    if skip:
-        if stripped == '' or stripped.startswith('#') or stripped.startswith('-') or line.startswith((' ', '\t')):
-            i += 1
-            continue
-        skip = False
-    if stripped.startswith('allowed_nodes:'):
-        pending.clear()
-        skip = True
+    if stripped.startswith("allowed_nodes_file:"):
+        comment_block = capture_comment_block(i)
+        if comment_block:
+            saved_comment = comment_block
+        to_skip.add(i)
         i += 1
         continue
-    if stripped == '' or stripped.startswith('#'):
-        pending.append(line)
+
+    if stripped.startswith("allowed_nodes:"):
+        comment_block = capture_comment_block(i)
+        if comment_block:
+            saved_comment = comment_block
+        to_skip.add(i)
         i += 1
+        while i < len(lines):
+            next_line = lines[i]
+            next_stripped = next_line.lstrip()
+            if (
+                next_stripped == ""
+                or next_stripped.startswith("#")
+                or next_stripped.startswith("-")
+                or next_line.startswith((" ", "\t"))
+            ):
+                to_skip.add(i)
+                i += 1
+                continue
+            break
         continue
-    flush_pending()
-    out.append(line)
+
     i += 1
-flush_pending()
-path.write_text('\n'.join(out) + ('\n' if out else ''))
+
+result = [text for idx, text in enumerate(lines) if idx not in to_skip]
+
+default_comment = [
+    "# Cluster nodes (auto-discovered during installation)",
+    "# These nodes are allowed to request temperature data when cluster IPC validation is unavailable",
+]
+
+if saved_comment is None:
+    saved_comment = [""] + default_comment
+else:
+    while saved_comment and saved_comment[-1].strip() == "":
+        saved_comment.pop()
+    if saved_comment and saved_comment[0].strip() != "":
+        saved_comment.insert(0, "")
+
+if result and result[-1].strip() != "":
+    result.append("")
+
+result.extend(saved_comment)
+result.append('allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"')
+
+path.write_text("\n".join(result).rstrip() + "\n")
 PY
-    # Fallback cleanup in case formatting prevented python script from matching
-    sed -i '/^allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
+        return
+    fi
+
+    # Fallback when python3 is unavailable
+    sed -i '/^[[:space:]]*allowed_nodes:/,/^[^[:space:]]/d' "$CONFIG_FILE" 2>/dev/null || true
+    sed -i '/^[[:space:]]*allowed_nodes_file:/d' "$CONFIG_FILE" 2>/dev/null || true
+    if ! grep -q "allowed_nodes_file" "$CONFIG_FILE" 2>/dev/null; then
+        {
+            echo ""
+            echo "# Cluster nodes (auto-discovered during installation)"
+            echo "# These nodes are allowed to request temperature data when cluster IPC validation is unavailable"
+            echo 'allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"'
+        } >>"$CONFIG_FILE"
+    fi
+}
+
+write_inline_allowed_nodes() {
+    local comment_line="$1"
+    shift || true
+    local nodes=("$@")
+
+    if [[ "$ALLOWLIST_MODE" != "inline" ]]; then
+        return
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        print_warn "python3 is required to manage inline allowed_nodes; skipping update"
+        return
+    fi
+
+    python3 - "$CONFIG_FILE" "$comment_line" "${nodes[@]}" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+comment = (sys.argv[2] or "").strip()
+new_nodes = [n.strip() for n in sys.argv[3:] if n.strip()]
+
+lines = []
+if path.exists():
+    lines = path.read_text().splitlines()
+
+skip = set()
+existing = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    stripped = line.lstrip()
+    if stripped.startswith("allowed_nodes_file:"):
+        skip.add(i)
+        i += 1
+        continue
+    if stripped.startswith("allowed_nodes:"):
+        skip.add(i)
+        i += 1
+        while i < len(lines):
+            current = lines[i]
+            current_stripped = current.lstrip()
+            if current_stripped.startswith("-"):
+                value = current_stripped[1:].strip()
+                if value:
+                    existing.append(value)
+                skip.add(i)
+                i += 1
+                continue
+            if (
+                current_stripped == "" or
+                current_stripped.startswith("#") or
+                current.startswith((" ", "\t"))
+            ):
+                skip.add(i)
+                i += 1
+                continue
+            break
+        continue
+    i += 1
+
+result = [line for idx, line in enumerate(lines) if idx not in skip]
+
+seen = set()
+merged = []
+for entry in existing + new_nodes:
+    normalized = entry.strip()
+    if not normalized:
+        continue
+    key = normalized.lower()
+    if key in seen:
+        continue
+    seen.add(key)
+    merged.append(normalized)
+
+if merged:
+    if result and result[-1].strip() != "":
+        result.append("")
+    if comment:
+        result.append(f"# {comment}")
+    else:
+        result.append("# Cluster nodes (auto-discovered during installation)")
+    result.append("allowed_nodes:")
+    for entry in merged:
+        result.append(f"  - {entry}")
+
+content = "\n".join(result).rstrip()
+if content:
+    content += "\n"
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(content)
+PY
 }
 
 update_allowed_nodes() {
     local comment_line="$1"
     shift
     local nodes=("$@")
+
+    if [[ "$ALLOWLIST_MODE" == "inline" ]]; then
+        write_inline_allowed_nodes "$comment_line" "${nodes[@]}"
+        return
+    fi
 
     ensure_allowed_nodes_file_reference
     remove_allowed_nodes_block
@@ -1073,6 +1316,11 @@ register_with_pulse() {
             print_warn "Add the node in Pulse (Settings → Nodes) and re-run the sensor proxy installer to enable control-plane sync." >&2
             return 0
         fi
+        if [[ "$http_code" == "400" && "$body" == *'"missing_proxy_url"'* && "${mode:-socket}" != "http" ]]; then
+            print_warn "Pulse refused proxy registration because the node '$hostname' hasn't been added yet." >&2
+            print_warn "Control-plane sync will be deferred until the node exists in Pulse; temperature proxy will run with a local allow list." >&2
+            return 0
+        fi
 
         if [[ $attempt -eq $max_attempts ]]; then
             print_error "Failed to register with Pulse API after $max_attempts attempts" >&2
@@ -1134,6 +1382,8 @@ pulse_control_plane:
   refresh_interval: $refresh
 EOF
 }
+
+determine_allowlist_mode
 
 # Create base config file if it doesn't exist
 if [[ ! -f /etc/pulse-sensor-proxy/config.yaml ]]; then
