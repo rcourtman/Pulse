@@ -998,15 +998,16 @@ const Settings: Component<SettingsProps> = (props) => {
       const diag = await response.json();
       setDiagnosticsData(diag);
       emitTemperatureProxyWarnings(diag);
-      if (diag?.temperatureProxy?.hostProxySummary) {
-        setHostProxyStatus({
-          hostSocketPresent: Boolean(diag.temperatureProxy?.socketFound),
-          containerSocketPresent: Boolean(
-            diag.temperatureProxy?.hostProxySummary?.containerSocketPresent ?? false,
-          ),
-          summary: diag.temperatureProxy?.hostProxySummary ?? undefined,
-        });
-      }
+      setHostProxyStatus(
+        diag?.temperatureProxy?.hostProxySummary
+          ? {
+              hostSocketPresent: Boolean(diag.temperatureProxy?.socketFound),
+              containerSocketPresent:
+                diag.temperatureProxy?.hostProxySummary?.containerSocketPresent ?? undefined,
+              summary: diag.temperatureProxy?.hostProxySummary ?? undefined,
+            }
+          : null,
+      );
     } catch (err) {
       logger.error('Failed to fetch diagnostics', err);
       showError('Failed to run diagnostics');
@@ -1022,7 +1023,7 @@ const Settings: Component<SettingsProps> = (props) => {
       )) as HostProxyStatusResponse;
       setHostProxyStatus(status);
       if (notify) {
-        showSuccess('Host proxy status refreshed', 2000);
+        showSuccess('Host proxy status refreshed', undefined, 2000);
       }
     } catch (err) {
       logger.error('Failed to refresh host proxy status', err);
@@ -5602,7 +5603,11 @@ const Settings: Component<SettingsProps> = (props) => {
                                                   const command = status().reinstallCommand;
                                                   if (command) {
                                                     void copyToClipboard(command);
-                                                    showSuccess('Host proxy command copied', 2000);
+                                                    showSuccess(
+                                                      'Host proxy command copied',
+                                                      undefined,
+                                                      2000,
+                                                    );
                                                   }
                                                 }}
                                               >
@@ -6213,6 +6218,8 @@ const Settings: Component<SettingsProps> = (props) => {
                               const suffix = suffixMatch ? suffixMatch[0] : '';
                               return `node-REDACTED${suffix}`;
                             };
+                            const sanitizeOptionalHostname = (value?: string) =>
+                              value && value.trim() ? sanitizeHostname(value) : undefined;
 
                             const sanitizeText = (text: string | undefined) => {
                               if (!text) return text;
@@ -6469,26 +6476,28 @@ const Settings: Component<SettingsProps> = (props) => {
                               if (Array.isArray(proxyDiag.socketHostCooldowns)) {
                                 proxyDiag.socketHostCooldowns = (
                                   proxyDiag.socketHostCooldowns as Array<Record<string, unknown>>
-                                ).map((entry) => ({
-                                  node: sanitizeHostname(
-                                    typeof entry.node === 'string' ? (entry.node as string) : undefined,
-                                  ) as string,
-                                  host: sanitizeHostname(
-                                    typeof entry.host === 'string' ? (entry.host as string) : undefined,
-                                  ) as string,
-                                  cooldownUntil:
-                                    typeof entry.cooldownUntil === 'string'
-                                      ? (entry.cooldownUntil as string)
-                                      : undefined,
-                                  secondsRemaining:
-                                    typeof entry.secondsRemaining === 'number'
-                                      ? (entry.secondsRemaining as number)
-                                      : undefined,
-                                  lastError:
-                                    typeof entry.lastError === 'string'
-                                      ? sanitizeText(entry.lastError as string) ?? (entry.lastError as string)
-                                      : undefined,
-                                }));
+                                ).map((entry) => {
+                                  const originalNode =
+                                    typeof entry.node === 'string' ? (entry.node as string) : undefined;
+                                  const originalHost =
+                                    typeof entry.host === 'string' ? (entry.host as string) : undefined;
+                                  return {
+                                    node: sanitizeOptionalHostname(originalNode),
+                                    host: sanitizeOptionalHostname(originalHost),
+                                    cooldownUntil:
+                                      typeof entry.cooldownUntil === 'string'
+                                        ? (entry.cooldownUntil as string)
+                                        : undefined,
+                                    secondsRemaining:
+                                      typeof entry.secondsRemaining === 'number'
+                                        ? (entry.secondsRemaining as number)
+                                        : undefined,
+                                    lastError:
+                                      typeof entry.lastError === 'string'
+                                        ? sanitizeText(entry.lastError as string) ?? (entry.lastError as string)
+                                        : undefined,
+                                  };
+                                });
                               }
                             }
 
