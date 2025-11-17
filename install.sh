@@ -1709,6 +1709,8 @@ fi'; then
         fi
     fi
 
+    refresh_container_proxy_installer "$CTID"
+
     write_install_summary
 
     # Clean final output
@@ -1731,6 +1733,22 @@ fi'; then
     trap - INT TERM
     
     exit 0
+}
+
+refresh_container_proxy_installer() {
+    local target_ctid="$1"
+    if [[ "$IN_CONTAINER" == true ]]; then
+        return
+    fi
+    if [[ -z "$target_ctid" ]]; then
+        return
+    fi
+
+    local installer_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${SOURCE_BRANCH:-main}/scripts/install-sensor-proxy.sh"
+    print_info "Refreshing sensor proxy installer inside container ${target_ctid}..."
+    if ! pct exec "$target_ctid" -- bash -c "set -euo pipefail; mkdir -p /usr/local/share/pulse; tmp=\$(mktemp); curl -fsSL --connect-timeout 10 --max-time 45 '${installer_url}' -o \$tmp && install -m 0755 \$tmp /usr/local/share/pulse/install-sensor-proxy.sh && rm -f \$tmp"; then
+        print_warn "Unable to refresh container installer; continuing with bundled version"
+    fi
 }
 
 # Compare two version strings
