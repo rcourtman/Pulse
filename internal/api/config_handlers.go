@@ -3428,6 +3428,7 @@ fi
 AUTO_MODE="${PULSE_AUTO_MODE:-}"
 AUTO_TEMP_CHOICE="${PULSE_AUTO_TEMP:-}"
 PULSE_SKIP_CLUSTER_CONFIG="${PULSE_SKIP_CLUSTER_CONFIG:-false}"
+AUTO_CLEANUP="${PULSE_AUTO_CLEANUP:-}"
 
 urlencode() {
     local str="$1"
@@ -3808,25 +3809,27 @@ if [ ! -z "$OLD_TOKENS" ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🗑️  CLEANUP OPTION"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Would you like to remove these old tokens? Type 'y' for yes, 'n' for no: "
-    # Read from terminal, not from stdin (which is the piped script)
-    if [ -t 0 ]; then
-        # Running interactively
-        read -p "> " -n 1 -r REPLY
-    else
-        # Being piped - try to read from terminal if available
-        if read -p "> " -n 1 -r REPLY </dev/tty 2>/dev/null; then
-            # Successfully read from terminal
-            :
-        else
-            # No terminal available (e.g., in Docker without -t flag)
-            echo "(No terminal available for input - keeping existing tokens)"
-            REPLY="n"
-        fi
+    CLEANUP_REPLY=""
+    if [ -n "$AUTO_MODE" ]; then
+        CLEANUP_REPLY="${AUTO_CLEANUP:-n}"
+        echo "(Auto mode: keeping existing tokens)"
     fi
-    echo ""
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [ -z "$CLEANUP_REPLY" ]; then
+        echo "Would you like to remove these old tokens? Type 'y' for yes, 'n' for no: "
+        if [ -t 0 ]; then
+            read -p "> " -n 1 -r CLEANUP_REPLY
+        else
+            if read -p "> " -n 1 -r CLEANUP_REPLY </dev/tty 2>/dev/null; then
+                :
+            else
+                echo "(No terminal available for input - keeping existing tokens)"
+                CLEANUP_REPLY="n"
+            fi
+        fi
+        echo ""
+        echo ""
+    fi
+    if [[ $CLEANUP_REPLY =~ ^[Yy]$ ]]; then
         echo "Removing old tokens..."
         while IFS= read -r TOKEN; do
             if [ ! -z "$TOKEN" ]; then
@@ -4782,7 +4785,11 @@ if [ "$PULSE_SKIP_CLUSTER_CONFIG" != true ] && [ "$TEMPERATURE_ENABLED" = true ]
                             REMOTE_HOST_URL="${HOST_SCHEME}://${NODE}:${HOST_PORT}"
                             ENCODED_HOST=$(urlencode "$REMOTE_HOST_URL")
                             REMOTE_SCRIPT_URL="${SETUP_SCRIPT_BASE}${ENCODED_HOST}"
-                            SSH_COMMAND="PULSE_SETUP_TOKEN=$ESCAPED_AUTH_TOKEN PULSE_AUTO_MODE=1 PULSE_AUTO_TEMP=y PULSE_SKIP_CLUSTER_CONFIG=true curl -fsSL '$REMOTE_SCRIPT_URL' | bash"
+                            SSH_COMMAND="export PULSE_SETUP_TOKEN=$ESCAPED_AUTH_TOKEN; \
+export PULSE_AUTO_MODE=1; \
+export PULSE_AUTO_TEMP=y; \
+export PULSE_SKIP_CLUSTER_CONFIG=true; \
+curl -fsSL '$REMOTE_SCRIPT_URL' | bash"
                             if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR root@"$NODE" "$SSH_COMMAND"; then
                                 echo "  ✓ Node registered and configured"
                                 AUTO_CONFIGURED_NODES+=("$NODE")
@@ -5059,25 +5066,27 @@ if [ ! -z "$OLD_TOKENS" ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🗑️  CLEANUP OPTION"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Would you like to remove these old tokens? Type 'y' for yes, 'n' for no: "
-    # Read from terminal, not from stdin (which is the piped script)
-    if [ -t 0 ]; then
-        # Running interactively
-        read -p "> " -n 1 -r REPLY
-    else
-        # Being piped - try to read from terminal if available
-        if read -p "> " -n 1 -r REPLY </dev/tty 2>/dev/null; then
-            # Successfully read from terminal
-            :
-        else
-            # No terminal available (e.g., in Docker without -t flag)
-            echo "(No terminal available for input - keeping existing tokens)"
-            REPLY="n"
-        fi
+    CLEANUP_REPLY=""
+    if [ -n "$AUTO_MODE" ]; then
+        CLEANUP_REPLY="${AUTO_CLEANUP:-n}"
+        echo "(Auto mode: keeping existing tokens)"
     fi
-    echo ""
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [ -z "$CLEANUP_REPLY" ]; then
+        echo "Would you like to remove these old tokens? Type 'y' for yes, 'n' for no: "
+        if [ -t 0 ]; then
+            read -p "> " -n 1 -r CLEANUP_REPLY
+        else
+            if read -p "> " -n 1 -r CLEANUP_REPLY </dev/tty 2>/dev/null; then
+                :
+            else
+                echo "(No terminal available for input - keeping existing tokens)"
+                CLEANUP_REPLY="n"
+            fi
+        fi
+        echo ""
+        echo ""
+    fi
+    if [[ $CLEANUP_REPLY =~ ^[Yy]$ ]]; then
         echo "Removing old tokens..."
         while IFS= read -r TOKEN; do
             if [ ! -z "$TOKEN" ]; then
