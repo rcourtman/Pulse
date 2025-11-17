@@ -322,6 +322,34 @@ write_inline_allowed_nodes() {
         return
     fi
 
+    python3 - "$CONFIG_FILE" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    sys.exit(0)
+
+lines = path.read_text().splitlines()
+result = []
+skip = False
+seen = False
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("allowed_nodes:"):
+        if seen:
+            skip = True
+            continue
+        seen = True
+    if skip:
+        if stripped.startswith("#") or stripped.startswith("-") or stripped == "" or line.startswith((" ", "\t")):
+            continue
+        skip = False
+    result.append(line)
+
+path.write_text("\n".join(result).rstrip() + "\n")
+PY
+
     python3 - "$CONFIG_FILE" "$comment_line" "${nodes[@]}" <<'PY'
 import sys
 from pathlib import Path
