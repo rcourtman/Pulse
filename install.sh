@@ -2955,13 +2955,26 @@ print_completion() {
     echo "  Uninstall:  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --uninstall"
 
     local proxy_status="Not installed"
-    if [[ -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]]; then
-        proxy_status="Installed (host socket present)"
+    local pending_file="/etc/pulse-sensor-proxy/pending-control-plane.env"
+    local control_token_file="/etc/pulse-sensor-proxy/.pulse-control-token"
+
+    if [[ "$HOST_PROXY_INSTALLED" == true ]]; then
+        if [[ -f "$control_token_file" ]]; then
+            proxy_status="Installed (control-plane sync active)"
+        elif [[ -f "$pending_file" ]]; then
+            proxy_status="Installed (waiting for Pulse to register host)"
+        else
+            proxy_status="Installed (local allow list)"
+        fi
     elif [[ "$HOST_PROXY_REQUESTED" == true ]]; then
         proxy_status="Install requested (pending)"
     fi
     echo
     echo -e "${YELLOW}Temperature proxy:${NC} ${proxy_status}"
+
+    if [[ "$HOST_PROXY_INSTALLED" == true && -f "$pending_file" ]]; then
+        echo "  Add this host in Pulse (Settings → Nodes) and the proxy will auto-register."
+    fi
 
     if [[ "$IN_CONTAINER" == "true" ]]; then
         local proxy_ctid="${DETECTED_CTID:-<your-container-id>}"
