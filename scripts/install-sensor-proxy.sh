@@ -107,6 +107,26 @@ determine_allowlist_mode() {
     print_warn "pulse-sensor-proxy ${INSTALLED_PROXY_VERSION} does not support allowed_nodes_file; using inline allow list updates"
 }
 
+record_pending_control_plane() {
+    local mode="$1"
+    if [[ -z "$PULSE_SERVER" ]]; then
+        return
+    fi
+
+    cat > "$PENDING_CONTROL_PLANE_FILE" <<EOF
+PENDING_PULSE_SERVER="${PULSE_SERVER}"
+PENDING_MODE="${mode}"
+PENDING_STANDALONE="${STANDALONE}"
+PENDING_HTTP_MODE="${HTTP_MODE}"
+PENDING_HTTP_ADDR="${HTTP_ADDR}"
+EOF
+    chmod 0600 "$PENDING_CONTROL_PLANE_FILE" 2>/dev/null || true
+}
+
+clear_pending_control_plane() {
+    rm -f "$PENDING_CONTROL_PLANE_FILE" 2>/dev/null || true
+}
+
 
 configure_local_authorized_key() {
     local auth_line=$1
