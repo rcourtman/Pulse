@@ -9470,9 +9470,31 @@ func (m *Monitor) removeFailedPMGInstance(instanceName string) {
 	m.state.SetConnectionHealth("pmg-"+instanceName, false)
 }
 
+type pbsBackupGroupKey struct {
+	datastore  string
+	namespace  string
+	backupType string
+	backupID   string
+}
+
+type cachedPBSGroup struct {
+	snapshots []models.PBSBackup
+	latest    time.Time
+}
+
+type pbsBackupFetchRequest struct {
+	datastore string
+	namespace string
+	group     pbs.BackupGroup
+	cached    cachedPBSGroup
+}
+
 // pollPBSBackups fetches all backups from PBS datastores
 func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
 	log.Debug().Str("instance", instanceName).Msg("Polling PBS backups")
+
+	// Cache existing PBS backups so we can avoid redundant API calls when no changes occurred.
+	existingGroups := m.buildPBSBackupCache(instanceName)
 
 	var allBackups []models.PBSBackup
 	datastoreCount := len(datastores) // Number of datastores to query
@@ -9481,11 +9503,14 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Process each datastore
 	for _, ds := range datastores {
-		// Get namespace paths
-		namespacePaths := make([]string, 0, len(ds.Namespaces))
-		for _, ns := range ds.Namespaces {
-			namespacePaths = append(namespacePaths, ns.Path)
+		if ctx.Err() != nil {
+			log.Warn().
+				Str("instance", instanceName).
+				Msg("PBS backup polling cancelled before completion")
+			return
 		}
+
+		namespacePaths := namespacePathsForDatastore(ds)
 
 		log.Info().
 			Str("instance", instanceName).
@@ -9494,82 +9519,99 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			Strs("namespace_paths", namespacePaths).
 			Msg("Processing datastore namespaces")
 
-		// Fetch backups from all namespaces concurrently
-		backupsMap, err := client.ListAllBackups(ctx, ds.Name, namespacePaths)
-		if err != nil {
-			log.Error().Err(err).
-				Str("instance", instanceName).
-				Str("datastore", ds.Name).
-				Msg("Failed to fetch PBS backups")
-			datastoreErrors++
-			continue
+		datastoreHadSuccess := false
+		groupsReused := 0
+		groupsRequested := 0
+
+		for _, namespace := range namespacePaths {
+			if ctx.Err() != nil {
+				log.Warn().
+					Str("instance", instanceName).
+					Msg("PBS backup polling cancelled mid-datastore")
+				return
+			}
+
+			groups, err := client.ListBackupGroups(ctx, ds.Name, namespace)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("instance", instanceName).
+					Str("datastore", ds.Name).
+					Str("namespace", namespace).
+					Msg("Failed to list PBS backup groups")
+				continue
+			}
+
+			datastoreHadSuccess = true
+			requests := make([]pbsBackupFetchRequest, 0, len(groups))
+
+			for _, group := range groups {
+				key := pbsBackupGroupKey{
+					datastore:  ds.Name,
+					namespace:  namespace,
+					backupType: group.BackupType,
+					backupID:   group.BackupID,
+				}
+				cached := existingGroups[key]
+
+				// Group deleted (no backups left) - ensure cached data is dropped.
+				if group.BackupCount == 0 {
+					continue
+				}
+
+				lastBackupTime := time.Unix(group.LastBackup, 0)
+				hasCachedData := len(cached.snapshots) > 0
+				// Only re-fetch when the backup count changes or the most recent backup is newer.
+				if hasCachedData &&
+					len(cached.snapshots) == group.BackupCount &&
+					!lastBackupTime.After(cached.latest) {
+
+					allBackups = append(allBackups, cached.snapshots...)
+					groupsReused++
+					continue
+				}
+
+				requests = append(requests, pbsBackupFetchRequest{
+					datastore: ds.Name,
+					namespace: namespace,
+					group:     group,
+					cached:    cached,
+				})
+			}
+
+			if len(requests) == 0 {
+				continue
+			}
+
+			groupsRequested += len(requests)
+			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
+			if len(fetched) > 0 {
+				allBackups = append(allBackups, fetched...)
+			}
 		}
 
-		datastoreFetches++
-
-		// Convert PBS backups to model backups
-		for namespace, snapshots := range backupsMap {
-			for _, snapshot := range snapshots {
-				backupTime := time.Unix(snapshot.BackupTime, 0)
-
-				// Generate unique ID
-				id := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d",
-					instanceName, ds.Name, namespace,
-					snapshot.BackupType, snapshot.BackupID,
-					snapshot.BackupTime)
-
-				// Extract file names from files (which can be strings or objects)
-				var fileNames []string
-				for _, file := range snapshot.Files {
-					switch f := file.(type) {
-					case string:
-						fileNames = append(fileNames, f)
-					case map[string]interface{}:
-						if filename, ok := f["filename"].(string); ok {
-							fileNames = append(fileNames, filename)
-						}
-					}
+		if datastoreHadSuccess {
+			datastoreFetches++
+			log.Info().
+				Str("instance", instanceName).
+				Str("datastore", ds.Name).
+				Int("namespaces", len(namespacePaths)).
+				Int("groups_reused", groupsReused).
+				Int("groups_refreshed", groupsRequested).
+				Msg("PBS datastore processed")
+		} else {
+			// Preserve cached data for this datastore if we couldn't fetch anything new.
+			log.Warn().
+				Str("instance", instanceName).
+				Str("datastore", ds.Name).
+				Msg("No namespaces succeeded for PBS datastore; using cached backups")
+			for key, entry := range existingGroups {
+				if key.datastore != ds.Name || len(entry.snapshots) == 0 {
+					continue
 				}
-
-				// Extract verification status
-				verified := false
-				if snapshot.Verification != nil {
-					switch v := snapshot.Verification.(type) {
-					case string:
-						verified = v == "ok"
-					case map[string]interface{}:
-						if state, ok := v["state"].(string); ok {
-							verified = state == "ok"
-						}
-					}
-
-					// Debug log verification data
-					log.Debug().
-						Str("vmid", snapshot.BackupID).
-						Int64("time", snapshot.BackupTime).
-						Interface("verification", snapshot.Verification).
-						Bool("verified", verified).
-						Msg("PBS backup verification status")
-				}
-
-				backup := models.PBSBackup{
-					ID:         id,
-					Instance:   instanceName,
-					Datastore:  ds.Name,
-					Namespace:  namespace,
-					BackupType: snapshot.BackupType,
-					VMID:       snapshot.BackupID,
-					BackupTime: backupTime,
-					Size:       snapshot.Size,
-					Protected:  snapshot.Protected,
-					Verified:   verified,
-					Comment:    snapshot.Comment,
-					Files:      fileNames,
-					Owner:      snapshot.Owner,
-				}
-
-				allBackups = append(allBackups, backup)
+				allBackups = append(allBackups, entry.snapshots...)
 			}
+			datastoreErrors++
 		}
 	}
 
@@ -9608,6 +9650,184 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		}
 		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
 	}
+}
+
+func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {
+	snapshot := m.state.GetSnapshot()
+	cache := make(map[pbsBackupGroupKey]cachedPBSGroup)
+	for _, backup := range snapshot.PBSBackups {
+		if backup.Instance != instanceName {
+			continue
+		}
+		key := pbsBackupGroupKey{
+			datastore:  backup.Datastore,
+			namespace:  normalizePBSNamespacePath(backup.Namespace),
+			backupType: backup.BackupType,
+			backupID:   backup.VMID,
+		}
+		entry := cache[key]
+		entry.snapshots = append(entry.snapshots, backup)
+		if backup.BackupTime.After(entry.latest) {
+			entry.latest = backup.BackupTime
+		}
+		cache[key] = entry
+	}
+	return cache
+}
+
+func normalizePBSNamespacePath(ns string) string {
+	if ns == "/" {
+		return ""
+	}
+	return ns
+}
+
+func namespacePathsForDatastore(ds models.PBSDatastore) []string {
+	if len(ds.Namespaces) == 0 {
+		return []string{""}
+	}
+
+	seen := make(map[string]struct{}, len(ds.Namespaces))
+	var paths []string
+	for _, ns := range ds.Namespaces {
+		path := normalizePBSNamespacePath(ns.Path)
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
+	}
+	if len(paths) == 0 {
+		paths = append(paths, "")
+	}
+	return paths
+}
+
+func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) []models.PBSBackup {
+	if len(requests) == 0 {
+		return nil
+	}
+
+	results := make(chan []models.PBSBackup, len(requests))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 5)
+
+	for _, req := range requests {
+		req := req
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-sem }()
+
+			log.Debug().
+				Str("instance", instanceName).
+				Str("datastore", req.datastore).
+				Str("namespace", req.namespace).
+				Str("type", req.group.BackupType).
+				Str("id", req.group.BackupID).
+				Msg("Refreshing PBS backup group")
+
+			snapshots, err := client.ListBackupSnapshots(ctx, req.datastore, req.namespace, req.group.BackupType, req.group.BackupID)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("instance", instanceName).
+					Str("datastore", req.datastore).
+					Str("namespace", req.namespace).
+					Str("type", req.group.BackupType).
+					Str("id", req.group.BackupID).
+					Msg("Failed to list PBS backup snapshots")
+
+				if len(req.cached.snapshots) > 0 {
+					results <- req.cached.snapshots
+				}
+				return
+			}
+
+			results <- convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var combined []models.PBSBackup
+	for backups := range results {
+		if len(backups) == 0 {
+			continue
+		}
+		combined = append(combined, backups...)
+	}
+
+	return combined
+}
+
+func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []pbs.BackupSnapshot) []models.PBSBackup {
+	backups := make([]models.PBSBackup, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		backupTime := time.Unix(snapshot.BackupTime, 0)
+		id := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d",
+			instanceName, datastore, namespace,
+			snapshot.BackupType, snapshot.BackupID,
+			snapshot.BackupTime)
+
+		var fileNames []string
+		for _, file := range snapshot.Files {
+			switch f := file.(type) {
+			case string:
+				fileNames = append(fileNames, f)
+			case map[string]interface{}:
+				if filename, ok := f["filename"].(string); ok {
+					fileNames = append(fileNames, filename)
+				}
+			}
+		}
+
+		verified := false
+		if snapshot.Verification != nil {
+			switch v := snapshot.Verification.(type) {
+			case string:
+				verified = v == "ok"
+			case map[string]interface{}:
+				if state, ok := v["state"].(string); ok {
+					verified = state == "ok"
+				}
+			}
+
+			log.Debug().
+				Str("vmid", snapshot.BackupID).
+				Int64("time", snapshot.BackupTime).
+				Interface("verification", snapshot.Verification).
+				Bool("verified", verified).
+				Msg("PBS backup verification status")
+		}
+
+		backups = append(backups, models.PBSBackup{
+			ID:         id,
+			Instance:   instanceName,
+			Datastore:  datastore,
+			Namespace:  namespace,
+			BackupType: snapshot.BackupType,
+			VMID:       snapshot.BackupID,
+			BackupTime: backupTime,
+			Size:       snapshot.Size,
+			Protected:  snapshot.Protected,
+			Verified:   verified,
+			Comment:    snapshot.Comment,
+			Files:      fileNames,
+			Owner:      snapshot.Owner,
+		})
+	}
+
+	return backups
 }
 
 // checkMockAlerts checks alerts for mock data
