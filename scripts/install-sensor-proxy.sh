@@ -1423,6 +1423,9 @@ register_with_pulse() {
     local hostname="$2"
     local proxy_url="$3"
     local mode="${4:-}"
+    if [[ -z "$mode" ]]; then
+        mode="socket"
+    fi
 
     # Output to stderr so it doesn't interfere with command substitution
     print_info "Registering temperature proxy with Pulse at $pulse_url..." >&2
@@ -1442,7 +1445,7 @@ register_with_pulse() {
 
         response=$(curl -w "\n%{http_code}" -sS -X POST \
             -H "Content-Type: application/json" \
-            -d "{\"hostname\":\"${hostname}\",\"proxy_url\":\"${proxy_url}\"}" \
+            -d "{\"hostname\":\"${hostname}\",\"proxy_url\":\"${proxy_url}\",\"mode\":\"${mode}\"}" \
             "$register_url")
 
         local curl_exit=$?
@@ -1465,7 +1468,12 @@ register_with_pulse() {
             print_warn "Add the node in Pulse (Settings → Nodes) and re-run the sensor proxy installer to enable control-plane sync." >&2
             return 0
         fi
-        if [[ "$http_code" == "400" && "$body" == *'"missing_proxy_url"'* && "${mode:-socket}" != "http" ]]; then
+        if [[ "$http_code" == "400" && "$body" == *'"missing_proxy_url"'* && "$mode" != "http" ]]; then
+            if [[ $attempt -lt $max_attempts ]]; then
+                print_warn "Pulse reported node '$hostname' is not ready yet; retrying..." >&2
+                sleep 2
+                continue
+            fi
             print_warn "Pulse refused proxy registration because the node '$hostname' hasn't been added yet." >&2
             print_warn "Control-plane sync will be deferred until the node exists in Pulse; temperature proxy will run with a local allow list." >&2
             return 0
@@ -3066,6 +3074,12 @@ EOF
 
     systemctl daemon-reload
     systemctl enable --now pulse-sensor-proxy-selfheal.timer >/dev/null 2>&1 || true
+    if [[ -f "$PENDING_CONTROL_PLANE_FILE" ]]; then
+        if [[ "$QUIET" != true ]]; then
+            print_info "Pending control-plane sync detected; triggering immediate retry..."
+        fi
+        systemctl start pulse-sensor-proxy-selfheal.service >/dev/null 2>&1 || true
+    fi
 fi
 
 if [ "$QUIET" = true ]; then
