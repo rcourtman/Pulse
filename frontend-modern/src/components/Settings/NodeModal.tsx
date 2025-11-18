@@ -206,6 +206,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   // Track previous state to detect changes
   let previousResetKey: number | undefined = undefined;
   let previousNodeType: string | undefined = undefined;
+  let previousFormSourceSignature: string | null = null;
 
   // Reset form when conditions change
   createEffect(() => {
@@ -222,6 +223,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       setQuickSetupToken('');
       setQuickSetupExpiry(null);
       setTestResult(null);
+      previousFormSourceSignature = null;
       return;
     }
 
@@ -233,6 +235,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       setQuickSetupToken('');
       setQuickSetupExpiry(null);
       setTestResult(null);
+      previousFormSourceSignature = null;
       return;
     }
     previousNodeType = nodeType;
@@ -244,6 +247,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       setQuickSetupToken('');
       setQuickSetupExpiry(null);
       setTestResult(null);
+      previousFormSourceSignature = null;
     }
   });
 
@@ -254,50 +258,61 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   createEffect(() => {
     // Only populate form if we have an editing node AND it matches the current node type
     // This prevents PVE data from being used when adding a PBS node
-    if (props.editingNode && props.editingNode.type === props.nodeType) {
-      const node = props.editingNode;
-      let username = ('user' in node ? node.user : '') || '';
-      let tokenName = node.tokenName || '';
-
-      const usesToken =
-        node.type !== 'pve' && tokenName && tokenName.includes('!') && !node.hasPassword;
-      if (usesToken) {
-        const parts = tokenName.split('!');
-        username = parts[0];
-      }
-
-      const pmgConfig =
-        node.type === 'pmg'
-          ? (node as NodeConfig & {
-              monitorMailStats?: boolean;
-              monitorQueues?: boolean;
-              monitorQuarantine?: boolean;
-              monitorDomainStats?: boolean;
-            })
-          : undefined;
-
-      setFormData({
-        name: node.name || '',
-        host: node.host || '',
-        guestURL: ('guestURL' in node ? node.guestURL : '') || '',
-        authType: node.hasPassword ? 'password' : 'token',
-        setupMode: 'auto',
-        user: username,
-        password: '',
-        tokenName: tokenName,
-        tokenValue: '',
-        fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
-        verifySSL: node.verifySSL ?? true,
-        monitorPhysicalDisks:
-          node.type === 'pve'
-            ? (node as NodeConfig & { monitorPhysicalDisks?: boolean }).monitorPhysicalDisks ?? true
-            : false,
-        monitorMailStats: pmgConfig?.monitorMailStats ?? true,
-        monitorQueues: pmgConfig?.monitorQueues ?? true,
-        monitorQuarantine: pmgConfig?.monitorQuarantine ?? true,
-        monitorDomainStats: pmgConfig?.monitorDomainStats ?? false,
-      });
+    const node = props.editingNode;
+    if (!node || node.type !== props.nodeType) {
+      previousFormSourceSignature = null;
+      return;
     }
+
+    let username = ('user' in node ? node.user : '') || '';
+    let tokenName = node.tokenName || '';
+
+    const usesToken =
+      node.type !== 'pve' && tokenName && tokenName.includes('!') && !node.hasPassword;
+    if (usesToken) {
+      const parts = tokenName.split('!');
+      username = parts[0];
+    }
+
+    const pmgConfig =
+      node.type === 'pmg'
+        ? (node as NodeConfig & {
+            monitorMailStats?: boolean;
+            monitorQueues?: boolean;
+            monitorQuarantine?: boolean;
+            monitorDomainStats?: boolean;
+          })
+        : undefined;
+
+    const formSource = {
+      name: node.name || '',
+      host: node.host || '',
+      guestURL: ('guestURL' in node ? node.guestURL : '') || '',
+      authType: node.hasPassword ? 'password' : 'token',
+      setupMode: 'auto' as const,
+      user: username,
+      password: '',
+      tokenName: tokenName,
+      tokenValue: '',
+      fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
+      verifySSL: node.verifySSL ?? true,
+      monitorPhysicalDisks:
+        node.type === 'pve'
+          ? (node as NodeConfig & { monitorPhysicalDisks?: boolean }).monitorPhysicalDisks ?? true
+          : false,
+      monitorMailStats: pmgConfig?.monitorMailStats ?? true,
+      monitorQueues: pmgConfig?.monitorQueues ?? true,
+      monitorQuarantine: pmgConfig?.monitorQuarantine ?? true,
+      monitorDomainStats: pmgConfig?.monitorDomainStats ?? false,
+    };
+
+    const formSourceSignature = JSON.stringify(formSource);
+    if (formSourceSignature === previousFormSourceSignature) {
+      return;
+    }
+
+    previousFormSourceSignature = formSourceSignature;
+    setFormData(formSource);
   });
 
   const handleSubmit = (e: Event) => {
