@@ -113,7 +113,7 @@ func TestCollectSnapshotSizes(t *testing.T) {
 	client := fakeSnapshotClient{
 		storages: map[string][]proxmox.Storage{
 			"node1": {
-				{Storage: "local-zfs", Content: "images"},
+				{Storage: "local-zfs", Content: "images", Active: 1, Enabled: 1},
 			},
 		},
 		contents: map[string]map[string][]proxmox.StorageContent{
