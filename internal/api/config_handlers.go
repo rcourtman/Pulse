@@ -3879,8 +3879,8 @@ else
 
     # Only proceed with auto-registration if we have an auth token
     if [ -n "$AUTH_TOKEN" ]; then
-        # Get the server's hostname
-        SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+        # Get the server's hostname (short form to match Pulse node names)
+        SERVER_HOSTNAME=$(hostname -s 2>/dev/null || hostname)
         SERVER_IP=$(hostname -I | awk '{print $1}')
         
         # Send registration to Pulse
@@ -5080,8 +5080,8 @@ else
 
     # Only proceed with auto-registration if we have an auth token
     if [ -n "$AUTH_TOKEN" ]; then
-        # Get the server's hostname
-        SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+        # Get the server's hostname (short form to match Pulse node names)
+        SERVER_HOSTNAME=$(hostname -s 2>/dev/null || hostname)
         SERVER_IP=$(hostname -I | awk '{print $1}')
         
         # Send registration to Pulse
