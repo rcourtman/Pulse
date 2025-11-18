@@ -317,6 +317,8 @@ When you need to provision the proxy yourself (for example via your own automati
 
 After the container restarts, the backend will automatically use the proxy. To refresh SSH keys on cluster nodes (e.g., after adding a new node), SSH to your Proxmox host and re-run the setup script: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid <your-container-id>`
 
+> **Tip:** Re-running the installer now rewrites the `pulse_control_plane` block with the latest Pulse URL and token file automatically. If you rebuild the Pulse container or change its address, just rerun `install-sensor-proxy.sh` and the control-plane config will follow without manual edits.
+
 ### Post-install Verification
 
 1. **Confirm proxy metrics**
@@ -392,6 +394,7 @@ If the node is part of a Proxmox cluster, the script will detect other members a
 - Run the host installer (`install-sensor-proxy.sh --standalone`) on the Proxmox machine that hosts Pulse to install and maintain the `pulse-sensor-proxy` service
 - Add the bind mount to your docker-compose.yml: `- /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:ro`
 - Re-run the host installer if the service or socket disappears after a host upgrade or configuration cleanup; the installer is idempotent
+- The installer will also refresh the `pulse_control_plane` stanza every run, so changing the Pulse URL is as simple as re-running `install-sensor-proxy.sh --standalone --pulse-server <new-url>`
 - The installer ships a self-heal timer (`pulse-sensor-proxy-selfheal.timer`) that restarts or reinstalls the proxy if it ever goes missing; leave it enabled for automatic recovery
 - Hot dev builds warn when only a container-local proxy socket is present, signaling that the host proxy needs to be reinstalled before temperatures will flow back into Pulse
 
