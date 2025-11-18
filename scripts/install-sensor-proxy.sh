@@ -1520,17 +1520,40 @@ write_control_plane_token() {
 ensure_control_plane_config() {
     local pulse_url="$1"
     local refresh="$2"
+    local config_file="/etc/pulse-sensor-proxy/config.yaml"
+
     if [[ -z "$pulse_url" ]]; then
         return
     fi
     if [[ -z "$refresh" ]]; then
         refresh=60
     fi
-    if grep -q "^pulse_control_plane:" /etc/pulse-sensor-proxy/config.yaml 2>/dev/null; then
+
+    if grep -q "^pulse_control_plane:" "$config_file" 2>/dev/null; then
+        # Re-write the existing control-plane block with the latest URL/token path.
+        local tmp
+        tmp=$(mktemp)
+        awk -v url="$pulse_url" -v refresh="$refresh" '
+            BEGIN { in_block = 0 }
+            /^pulse_control_plane:/ {
+                print "pulse_control_plane:"
+                print "  url: " url
+                print "  token_file: /etc/pulse-sensor-proxy/.pulse-control-token"
+                print "  refresh_interval: " refresh
+                print ""
+                in_block = 1
+                next
+            }
+            # Exit the replacement block when we hit a non-indented line
+            in_block && /^[^[:space:]]/ { in_block = 0 }
+            in_block { next }
+            { print }
+        ' "$config_file" > "$tmp"
+        mv "$tmp" "$config_file"
         return
     fi
 
-    cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
+    cat >> "$config_file" << EOF
 
 # Pulse control plane configuration (auto-generated)
 pulse_control_plane:
