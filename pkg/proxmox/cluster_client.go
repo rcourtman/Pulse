@@ -592,6 +592,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			strings.Contains(errStr, "permission denied") ||
 			(strings.Contains(errStr, "400") && strings.Contains(errStr, "\"ds\"") && strings.Contains(errStr, "property is not defined in schema")) ||
 			strings.Contains(errStr, "json: cannot unmarshal") ||
+			(strings.Contains(errStr, "storage '") && strings.Contains(errStr, "is not available on node")) ||
 			strings.Contains(errStr, "unexpected response format") {
 			// This is likely a node-specific failure, not an endpoint failure
 			// Return the error but don't mark the endpoint as unhealthy
@@ -760,9 +761,9 @@ func (cc *ClusterClient) GetHealthStatus() map[string]bool {
 
 // EndpointHealth contains health information for a single endpoint
 type EndpointHealth struct {
-	Healthy    bool
-	LastCheck  time.Time
-	LastError  string
+	Healthy   bool
+	LastCheck time.Time
+	LastError string
 }
 
 // GetHealthStatusWithErrors returns detailed health status including error messages
