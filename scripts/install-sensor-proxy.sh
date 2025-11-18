@@ -482,45 +482,106 @@ while i < len(lines):
     stripped = line.lstrip()
     if stripped.startswith("allowed_nodes:"):
         start = i
-        i += 1
-        while i < len(lines):
-            nxt = lines[i]
+        entries = []
+        j = i + 1
+        while j < len(lines):
+            nxt = lines[j]
             nxt_stripped = nxt.lstrip()
+            if nxt_stripped.startswith("-"):
+                entries.append(nxt_stripped[1:].strip())
+                j += 1
+                continue
             if (
-                nxt_stripped.startswith("-")
-                or nxt_stripped.startswith("#")
+                nxt_stripped.startswith("#")
                 or nxt_stripped == ""
                 or nxt.startswith((" ", "\t"))
             ):
-                i += 1
+                j += 1
                 continue
             break
-        blocks.append((start, i))
+
+        comment_indices = set()
+        comment_text = []
+        k = start - 1
+        while k >= 0 and lines[k].strip() == "":
+            comment_indices.add(k)
+            k -= 1
+        while k >= 0 and lines[k].lstrip().startswith("#"):
+            comment_indices.add(k)
+            comment_text.append(lines[k])
+            k -= 1
+        comment_text.reverse()
+
+        blocks.append(
+            {
+                "start": start,
+                "end": j,
+                "comment_indices": comment_indices,
+                "comment_text": comment_text,
+                "entries": entries,
+            }
+        )
+        i = j
         continue
     i += 1
 
 if len(blocks) <= 1:
     sys.exit(0)
 
-keep_start, keep_end = blocks[-1]
+seen = set()
+merged = []
+for block in blocks:
+    for entry in block["entries"]:
+        key = entry.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(entry)
 
-def capture_comment(idx):
-    remove = set()
-    j = idx - 1
-    while j >= 0 and (lines[j].strip() == "" or lines[j].lstrip().startswith("#")):
-        remove.add(j)
-        j -= 1
-    return remove
+if not merged:
+    sys.exit(0)
 
-to_remove = set()
-for start, end in blocks[:-1]:
-    to_remove.update(range(start, end))
-    to_remove.update(capture_comment(start))
+first_block = blocks[0]
+insert_at = min(
+    [first_block["start"]] + list(first_block["comment_indices"])
+) if first_block["comment_indices"] else first_block["start"]
 
-result = [text for idx, text in enumerate(lines) if idx not in to_remove]
-content = "\n".join(result).rstrip()
-if content:
-    content += "\n"
+def build_comment():
+    if first_block["comment_text"]:
+        return first_block["comment_text"]
+    return ["# Cluster nodes (auto-discovered during installation)"]
+
+comment_block = build_comment()
+replacement = []
+replacement.extend(comment_block)
+if replacement and replacement[-1].strip() != "":
+    replacement.append("")
+replacement.append("allowed_nodes:")
+for entry in merged:
+    replacement.append(f"  - {entry}")
+replacement.append("")
+
+indices_to_remove = set()
+for block in blocks:
+    indices_to_remove.update(range(block["start"], block["end"]))
+    indices_to_remove.update(block["comment_indices"])
+
+result = []
+inserted = False
+for idx, line in enumerate(lines):
+    if not inserted and idx == insert_at:
+        result.extend(replacement)
+        inserted = True
+    if idx in indices_to_remove:
+        continue
+    result.append(line)
+
+if not inserted:
+    if result and result[-1].strip() != "":
+        result.append("")
+    result.extend(replacement)
+
+content = "\n".join(result).rstrip() + "\n"
 path.write_text(content)
 PY
 }
