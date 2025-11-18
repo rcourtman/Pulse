@@ -1540,6 +1540,43 @@ pulse_control_plane:
 EOF
 }
 
+declare -a CONTROL_PLANE_ALLOWED_NODE_LIST=()
+
+apply_allowed_nodes_from_response() {
+    local response="$1"
+    if [[ -z "$response" ]]; then
+        return
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        return
+    fi
+
+    local parsed_nodes
+    parsed_nodes=$(printf '%s' "$response" | python3 -c '
+import json, sys
+try:
+    payload = json.load(sys.stdin)
+except Exception:
+    payload = {}
+nodes = payload.get("allowed_nodes") or []
+for entry in nodes:
+    ip = entry.get("ip") or ""
+    name = entry.get("name") or ""
+    value = (ip or name).strip()
+    if value:
+        print(value)
+')
+
+    if [[ -z "$parsed_nodes" ]]; then
+        return
+    fi
+
+    mapfile -t __allowed_nodes <<<"$parsed_nodes"
+    if [[ ${#__allowed_nodes[@]} -gt 0 ]]; then
+        CONTROL_PLANE_ALLOWED_NODE_LIST=("${__allowed_nodes[@]}")
+    fi
+}
+
 determine_allowlist_mode
 cleanup_inline_allowed_nodes
 
@@ -1580,6 +1617,7 @@ if [[ "$HTTP_MODE" != true ]]; then
             if [[ -z "$CONTROL_PLANE_REFRESH" ]]; then
                 CONTROL_PLANE_REFRESH="60"
             fi
+            apply_allowed_nodes_from_response "$registration_response"
             clear_pending_control_plane
         else
             print_warn "Failed to register socket proxy with Pulse; continuing without control plane sync"
@@ -1685,6 +1723,7 @@ if [[ "$HTTP_MODE" == true ]]; then
     if [[ -z "$CONTROL_PLANE_REFRESH" ]]; then
         CONTROL_PLANE_REFRESH="60"
     fi
+    apply_allowed_nodes_from_response "$registration_response"
     clear_pending_control_plane
 
     if [[ -z "$HTTP_AUTH_TOKEN" ]]; then
@@ -2677,6 +2716,9 @@ if command -v pvecm >/dev/null 2>&1; then
         for node_ip in $CLUSTER_NODES; do
             all_nodes+=("$node_ip")
         done
+        if [[ ${#CONTROL_PLANE_ALLOWED_NODE_LIST[@]} -gt 0 ]]; then
+            all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
+        fi
         # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
         update_allowed_nodes "Cluster nodes (auto-discovered during installation)" "${all_nodes[@]}"
     else
@@ -2702,6 +2744,9 @@ if command -v pvecm >/dev/null 2>&1; then
         done
         # Always include localhost variants
         all_nodes+=("127.0.0.1" "localhost")
+        if [[ ${#CONTROL_PLANE_ALLOWED_NODE_LIST[@]} -gt 0 ]]; then
+            all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
+        fi
         # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
         update_allowed_nodes "Standalone node configuration (auto-configured during installation)" "${all_nodes[@]}"
     fi
@@ -2726,8 +2771,11 @@ else
     done
     # Always include localhost variants
     all_nodes+=("127.0.0.1" "localhost")
+    if [[ ${#CONTROL_PLANE_ALLOWED_NODE_LIST[@]} -gt 0 ]]; then
+        all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
+    fi
     # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
-update_allowed_nodes "Localhost fallback configuration (pvecm unavailable)" "${all_nodes[@]}"
+    update_allowed_nodes "Localhost fallback configuration (pvecm unavailable)" "${all_nodes[@]}"
 fi
 
 cleanup_inline_allowed_nodes
