@@ -1981,7 +1981,7 @@ PY
     fi
 
     local token_value
-    token_value=$(echo "$token_output" | grep -E "│[[:space:]]*value" | awk -F'│' '{print $3}' | tr -d '[:space:]' | tail -n1)
+    token_value=$(awk -F'│' '/[[:space:]]value[[:space:]]/{col=$3; gsub(/^[[:space:]]+|[[:space:]]+$/, "", col); print col}' <<<"$token_output" | tail -n1 | tr -d '\r')
     if [[ -z "$token_value" ]]; then
         AUTO_NODE_REGISTER_ERROR="token value unavailable"
         print_warn "Failed to extract token value from pveum output; skipping automatic node registration"
