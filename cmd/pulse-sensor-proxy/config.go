@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -83,6 +84,10 @@ func loadConfig(configPath string) (*Config, error) {
 			data, err := os.ReadFile(configPath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read config file: %w", err)
+			}
+
+			if sanitized, newData := sanitizeDuplicateAllowedNodesBlocks(configPath, data); sanitized {
+				data = newData
 			}
 
 			if err := yaml.Unmarshal(data, cfg); err != nil {
@@ -516,6 +521,49 @@ func detectHostCIDRs() []string {
 	}
 
 	return cidrs
+}
+
+var allowedNodesBlockPattern = regexp.MustCompile(`(?m)(?:^[ \t]*#.*\n)*^[ \t]*allowed_nodes:\n(?:^[ \t]+-.*\n?)+`)
+
+func sanitizeDuplicateAllowedNodesBlocks(path string, data []byte) (bool, []byte) {
+	matches := allowedNodesBlockPattern.FindAllIndex(data, -1)
+	if len(matches) <= 1 {
+		return false, data
+	}
+
+	var buf bytes.Buffer
+	last := 0
+	for idx, match := range matches {
+		start, end := match[0], match[1]
+		if idx == 0 {
+			buf.Write(data[last:end])
+		} else {
+			buf.Write(data[last:start])
+		}
+		last = end
+	}
+	buf.Write(data[last:])
+
+	cleaned := buf.Bytes()
+	if path != "" {
+		if err := os.WriteFile(path, cleaned, 0600); err != nil {
+			log.Warn().
+				Err(err).
+				Str("config_file", path).
+				Msg("Failed to rewrite sanitized configuration; using in-memory copy only")
+		} else {
+			log.Warn().
+				Str("config_file", path).
+				Int("removed_duplicate_blocks", len(matches)-1).
+				Msg("Detected duplicate allowed_nodes blocks and sanitized configuration automatically")
+		}
+	} else {
+		log.Warn().
+			Int("removed_duplicate_blocks", len(matches)-1).
+			Msg("Detected duplicate allowed_nodes blocks and sanitized configuration (in-memory only)")
+	}
+
+	return true, cleaned
 }
 
 // parseAllowedSubnets validates and normalizes subnet specifications
