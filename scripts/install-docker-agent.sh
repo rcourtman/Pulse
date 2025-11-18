@@ -365,6 +365,11 @@ ensure_service_user() {
         if [[ -n "$existing_home" ]]; then
             SERVICE_HOME="$existing_home"
         fi
+        if ! service_user_managed_by_installer; then
+            if [[ "$SERVICE_HOME" == "$SERVICE_HOME_DEFAULT" ]] || [[ "$SERVICE_HOME" == "$SERVICE_HOME_LEGACY" ]] || [[ "$SERVICE_HOME" == "/home/$SERVICE_USER" ]]; then
+                write_service_user_marker "$SERVICE_USER" "$SERVICE_HOME"
+            fi
+        fi
         return
     fi
 
@@ -398,6 +403,7 @@ ensure_service_user() {
         fi
         if [[ "$SERVICE_USER_CREATED" == "true" ]]; then
             log_success "Created service user: $SERVICE_USER"
+            write_service_user_marker "$SERVICE_USER_ACTUAL" "$SERVICE_HOME"
         fi
         return
     fi
@@ -444,6 +450,78 @@ get_user_home_path() {
     fi
 }
 
+write_service_user_marker() {
+    local user="$1"
+    local home="$2"
+    local dir
+    dir=$(dirname "$SERVICE_USER_MARKER")
+    mkdir -p "$dir"
+
+    local tmp
+    if command -v mktemp >/dev/null 2>&1; then
+        tmp=$(mktemp "${SERVICE_USER_MARKER}.XXXXXX")
+    else
+        tmp="${SERVICE_USER_MARKER}.tmp.$$"
+    fi
+    {
+        printf 'user=%s\n' "$user"
+        if [[ -n "$home" ]]; then
+            printf 'home=%s\n' "$home"
+        fi
+    } > "$tmp"
+    chmod 600 "$tmp" >/dev/null 2>&1 || true
+    mv "$tmp" "$SERVICE_USER_MARKER"
+}
+
+service_user_managed_by_installer() {
+    if [[ ! -f "$SERVICE_USER_MARKER" ]]; then
+        return 1
+    fi
+
+    local recorded_user
+    recorded_user=$(grep -m1 '^user=' "$SERVICE_USER_MARKER" 2>/dev/null | cut -d= -f2-)
+    if [[ "$recorded_user" == "$SERVICE_USER" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+remove_service_user_if_managed() {
+    if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
+        rm -f "$SERVICE_USER_MARKER" >/dev/null 2>&1 || true
+        return
+    fi
+
+    if ! service_user_managed_by_installer; then
+        log_info "Preserving existing service user $SERVICE_USER (not created by installer)"
+        return
+    fi
+
+    if command -v pgrep >/dev/null 2>&1; then
+        if pgrep -u "$SERVICE_USER" >/dev/null 2>&1; then
+            log_warn "Service user $SERVICE_USER still owns running processes; skipping removal"
+            return
+        fi
+    fi
+
+    if command -v userdel >/dev/null 2>&1; then
+        if userdel -r "$SERVICE_USER" >/dev/null 2>&1; then
+            log_success "Removed service user: $SERVICE_USER"
+            rm -f "$SERVICE_USER_MARKER" >/dev/null 2>&1 || true
+            return
+        fi
+    elif command -v deluser >/dev/null 2>&1; then
+        if deluser --remove-home "$SERVICE_USER" >/dev/null 2>&1; then
+            log_success "Removed service user: $SERVICE_USER"
+            rm -f "$SERVICE_USER_MARKER" >/dev/null 2>&1 || true
+            return
+        fi
+    fi
+
+    log_warn "Failed to remove service user $SERVICE_USER; remove manually if desired"
+}
+
 ensure_snap_home_compatibility() {
     if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
         return
@@ -486,11 +564,21 @@ ensure_snap_home_compatibility() {
 detect_snap_docker() {
     SNAP_DOCKER_DETECTED="false"
 
-    # Check if the active docker binary resolves to a snap path
-    if command -v docker >/dev/null 2>&1; then
-        local docker_path
-        docker_path=$(readlink -f "$(command -v docker)" 2>/dev/null || echo "")
-        if [[ "$docker_path" == /snap/* ]] || [[ "$docker_path" == /var/lib/snapd/snap/* ]]; then
+    local docker_cmd docker_resolved
+    docker_cmd="$(command -v docker 2>/dev/null || true)"
+    if [[ -n "$docker_cmd" ]]; then
+        if [[ "$docker_cmd" == /snap/* ]] || [[ "$docker_cmd" == /var/lib/snapd/snap/* ]]; then
+            SNAP_DOCKER_DETECTED="true"
+        fi
+
+        docker_resolved=$(readlink -f "$docker_cmd" 2>/dev/null || echo "")
+        if [[ "$docker_resolved" == /snap/* ]] || [[ "$docker_resolved" == /var/lib/snapd/snap/* ]]; then
+            SNAP_DOCKER_DETECTED="true"
+        fi
+    fi
+
+    if [[ "$SNAP_DOCKER_DETECTED" != "true" ]] && command -v snap >/dev/null 2>&1; then
+        if snap list docker >/dev/null 2>&1; then
             SNAP_DOCKER_DETECTED="true"
         fi
     fi
@@ -960,6 +1048,7 @@ SYSTEMD_SUPPLEMENTARY_GROUPS_LINE=""
 SNAP_DOCKER_DETECTED="false"
 SNAP_DOCKER_GROUP_CREATED="false"
 DOCKER_SOCKET_PATHS="/var/run/docker.sock"
+SERVICE_USER_MARKER="/etc/pulse/.pulse-docker-agent.user"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -1304,6 +1393,7 @@ if [ "$UNINSTALL" = true ]; then
         else
             log_info "Agent log file already absent: $LOG_PATH"
         fi
+        remove_service_user_if_managed
         if [[ -n "$SERVICE_HOME" && "$SERVICE_HOME" != "/" && -d "$SERVICE_HOME" ]]; then
             rm -rf "$SERVICE_HOME"
             log_success "Removed service home directory: $SERVICE_HOME"
