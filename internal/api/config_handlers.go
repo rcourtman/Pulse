@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
-	"math/big"
 	"net"
 	"net/http"
 	"net/url"
@@ -5192,16 +5192,18 @@ fi
 	w.Write([]byte(script))
 }
 
-// generateSetupCode generates a 6-character alphanumeric code for one-time use
+// generateSetupCode generates a secure hex token that satisfies sanitizeSetupAuthToken.
 func (h *ConfigHandlers) generateSetupCode() string {
-	// Use alphanumeric characters (excluding similar looking ones)
-	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	b := make([]byte, 6)
-	for i := range b {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		b[i] = charset[n.Int64()]
+	// 16 bytes => 32 hex characters which matches the sanitizer's lower bound.
+	const tokenBytes = 16
+	buf := make([]byte, tokenBytes)
+	if _, err := rand.Read(buf); err == nil {
+		return hex.EncodeToString(buf)
 	}
-	return string(b)
+
+	// rand.Read should never fail, but if it does fall back to timestamp-based token.
+	log.Warn().Msg("fallback setup token generator used due to entropy failure")
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
 // HandleSetupScriptURL generates a one-time setup code and URL for the setup script
