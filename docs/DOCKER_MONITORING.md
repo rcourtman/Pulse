@@ -67,6 +67,18 @@ curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install
   rm -f /tmp/pulse-install-docker-agent.sh
 ```
 
+### Removing the agent
+
+Re-run the installer with `--uninstall` to stop the service, delete the systemd unit, and keep the logs for later review:
+
+```bash
+curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
+  sudo bash /tmp/pulse-install-docker-agent.sh --uninstall && \
+  rm -f /tmp/pulse-install-docker-agent.sh
+```
+
+Add `--purge` when you also want the installer to remove `/var/log/pulse-docker-agent`, the env/config files under `/etc/pulse`, and the `pulse-docker` service account. Purging cleans up `/etc/passwd` so container processes that run as UID 999 stop showing up as the `pulse-docker` user in `ps` output.
+
 ### Quick install for Podman (system service)
 
 Use the multi-runtime installer when you want the agent to run against Podman as a systemd service. The script takes care of enabling `podman.socket`, creating a dedicated service account, and wiring the correct runtime socket automatically:
