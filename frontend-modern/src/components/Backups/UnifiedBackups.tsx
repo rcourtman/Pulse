@@ -163,27 +163,7 @@ const UnifiedBackups: Component = () => {
   };
 
   // Check if we have any backup data yet
-  const isLoading = createMemo(() => {
-    const pve = pveBackupsState();
-    const pbs = pbsBackupsState();
-    const pmg = pmgBackupsState();
-    const hasData =
-      (pve?.guestSnapshots?.length ?? 0) > 0 ||
-      (pve?.storageBackups?.length ?? 0) > 0 ||
-      (pbs?.length ?? 0) > 0 ||
-      (pmg?.length ?? 0) > 0;
-    if (hasData) {
-      return false;
-    }
-    if (!connected()) {
-      return true;
-    }
-    if (!initialDataReceived()) {
-      return true;
-    }
-    const hasLastUpdate = Boolean(state.lastUpdate);
-    return !hasLastUpdate;
-  });
+  const isLoading = createMemo(() => !connected() || !initialDataReceived());
 
   // Normalize all backup data into unified format
   const normalizedData = createMemo(() => {
