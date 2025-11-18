@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -1122,6 +1123,8 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	startTime := time.Now()
 
+	instanceCfg := m.getInstanceConfig(instanceName)
+
 	// Get cluster storage configuration first (single call)
 	clusterStorages, err := client.GetAllStorage(ctx)
 	clusterStorageAvailable := err == nil
@@ -1207,6 +1210,25 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 			// Fetch storage for this node
 			nodeStorage, err := client.GetStorage(ctx, n.Node)
+			if err != nil {
+				if shouldAttemptFallback(err) {
+					if fallbackStorage, ferr := m.fetchNodeStorageFallback(ctx, instanceCfg, n.Node); ferr == nil {
+						log.Warn().
+							Str("instance", instanceName).
+							Str("node", n.Node).
+							Err(err).
+							Msg("Primary storage query failed; using direct node fallback")
+						nodeStorage = fallbackStorage
+						err = nil
+					} else {
+						log.Warn().
+							Str("instance", instanceName).
+							Str("node", n.Node).
+							Err(ferr).
+							Msg("Storage fallback to direct node query failed")
+					}
+				}
+			}
 			if err != nil {
 				// Handle timeout gracefully - unavailable storage (e.g., NFS mounts) can cause this
 				if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
@@ -1544,4 +1566,54 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			Dur("duration", duration).
 			Msg("Parallel storage polling completed")
 	}
+}
+
+func shouldAttemptFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "context canceled")
+}
+
+func (m *Monitor) fetchNodeStorageFallback(ctx context.Context, instanceCfg *config.PVEInstance, nodeName string) ([]proxmox.Storage, error) {
+	if m == nil || instanceCfg == nil || !instanceCfg.IsCluster || len(instanceCfg.ClusterEndpoints) == 0 {
+		return nil, fmt.Errorf("fallback unavailable")
+	}
+
+	var target string
+	hasFingerprint := strings.TrimSpace(instanceCfg.Fingerprint) != ""
+	for _, ep := range instanceCfg.ClusterEndpoints {
+		if !strings.EqualFold(ep.NodeName, nodeName) {
+			continue
+		}
+		target = clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint)
+		if target != "" {
+			break
+		}
+	}
+	if strings.TrimSpace(target) == "" {
+		return nil, fmt.Errorf("fallback endpoint missing for node %s", nodeName)
+	}
+
+	cfg := proxmox.ClientConfig{
+		Host:        target,
+		VerifySSL:   instanceCfg.VerifySSL,
+		Fingerprint: instanceCfg.Fingerprint,
+		Timeout:     m.pollTimeout,
+	}
+	if instanceCfg.TokenName != "" && instanceCfg.TokenValue != "" {
+		cfg.TokenName = instanceCfg.TokenName
+		cfg.TokenValue = instanceCfg.TokenValue
+	} else {
+		cfg.User = instanceCfg.User
+		cfg.Password = instanceCfg.Password
+	}
+
+	directClient, err := proxmox.NewClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return directClient.GetStorage(ctx, nodeName)
 }

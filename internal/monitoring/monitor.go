@@ -123,6 +123,18 @@ func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 	return baseName
 }
 
+func (m *Monitor) getInstanceConfig(instanceName string) *config.PVEInstance {
+	if m == nil || m.config == nil {
+		return nil
+	}
+	for i := range m.config.PVEInstances {
+		if strings.EqualFold(m.config.PVEInstances[i].Name, instanceName) {
+			return &m.config.PVEInstances[i]
+		}
+	}
+	return nil
+}
+
 func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) []models.PhysicalDisk {
 	if len(disks) == 0 || len(nodes) == 0 {
 		return disks
