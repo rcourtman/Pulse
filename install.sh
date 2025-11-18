@@ -36,6 +36,10 @@ INSTALL_SUMMARY_FILE="/etc/pulse/install_summary.json"
 HOST_PROXY_REQUESTED=false
 HOST_PROXY_INSTALLED=false
 
+AUTO_NODE_REGISTERED=false
+AUTO_NODE_REGISTERED_NAME=""
+AUTO_NODE_REGISTER_ERROR=""
+
 DEBIAN_TEMPLATE_FALLBACK="debian-12-standard_12.12-1_amd64.tar.zst"
 DEBIAN_TEMPLATE=""
 
@@ -1483,6 +1487,9 @@ create_lxc_container() {
     # Get container IP
     local IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
 
+    # Automatically register the Proxmox host with Pulse so temperature proxy sync succeeds
+    auto_register_pve_node "$CTID" "$IP" "$frontend_port"
+
     if [[ "$IN_CONTAINER" != "true" ]] && [[ "$PROXY_PREPARE_MOUNT" == "true" ]]; then
         print_info "Configuring pulse-sensor-proxy socket inside container..."
         if ! pct exec $CTID -- bash -c 'set -e
@@ -1546,26 +1553,42 @@ fi'; then
         echo
         print_info "Installing temperature monitoring proxy on host..."
         local proxy_script="/tmp/install-sensor-proxy-$$.sh"
+        local installer_source="${PULSE_SENSOR_PROXY_INSTALLER:-}"
+        local installer_ready=false
 
-        # Download proxy installer
-        if command -v timeout >/dev/null 2>&1; then
-            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 \
-                "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
-                > "$proxy_script" 2>/dev/null; then
-                print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-                print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+        if [[ -n "$installer_source" ]]; then
+            if install -m 0755 "$installer_source" "$proxy_script"; then
+                print_info "Using local temperature proxy installer at ${installer_source}"
+                installer_ready=true
+            else
+                print_warn "Failed to copy installer from ${installer_source}; falling back to download"
             fi
-        else
-            if ! curl -fsSL --connect-timeout 5 --max-time 15 \
-                "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
-                > "$proxy_script" 2>/dev/null; then
-                print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-                print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+        fi
+
+        if [[ "$installer_ready" != true ]]; then
+            if command -v timeout >/dev/null 2>&1; then
+                if timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 \
+                    "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
+                    > "$proxy_script" 2>/dev/null; then
+                    installer_ready=true
+                else
+                    print_warn "Failed to download proxy installer - temperature monitoring unavailable"
+                    print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+                fi
+            else
+                if curl -fsSL --connect-timeout 5 --max-time 15 \
+                    "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
+                    > "$proxy_script" 2>/dev/null; then
+                    installer_ready=true
+                else
+                    print_warn "Failed to download proxy installer - temperature monitoring unavailable"
+                    print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+                fi
             fi
         fi
 
         # Run proxy installer if downloaded
-        if [[ -f "$proxy_script" ]]; then
+        if [[ "$installer_ready" == true ]]; then
             chmod +x "$proxy_script"
 
             # Stop existing pulse-sensor-proxy service if running to allow binary update
@@ -1719,6 +1742,11 @@ fi'; then
     echo
     echo "  Web UI:     http://${IP}:${frontend_port}"
     echo "  Container:  $CTID"
+    if [[ "$AUTO_NODE_REGISTERED" == true ]]; then
+        echo "  Node:       Registered ${AUTO_NODE_REGISTERED_NAME} in Pulse"
+    elif [[ -n "$AUTO_NODE_REGISTER_ERROR" ]]; then
+        echo "  Node:       Registration pending (${AUTO_NODE_REGISTER_ERROR})"
+    fi
     echo
     echo "  First-time setup:"
     echo "    pct exec $CTID -- cat /etc/pulse/.bootstrap_token  # Get bootstrap token"
@@ -1749,6 +1777,262 @@ refresh_container_proxy_installer() {
     if ! pct exec "$target_ctid" -- bash -c "set -euo pipefail; mkdir -p /usr/local/share/pulse; tmp=\$(mktemp); curl -fsSL --connect-timeout 10 --max-time 45 '${installer_url}' -o \$tmp && install -m 0755 \$tmp /usr/local/share/pulse/install-sensor-proxy.sh && rm -f \$tmp"; then
         print_warn "Unable to refresh container installer; continuing with bundled version"
     fi
+}
+
+auto_register_pve_node() {
+    local ctid="$1"
+    local pulse_ip="$2"
+    local pulse_port="${3:-7655}"
+
+    if [[ "$IN_CONTAINER" == "true" ]]; then
+        return
+    fi
+
+    if [[ -z "$ctid" || -z "$pulse_ip" ]]; then
+        return
+    fi
+
+    local skip_auto="${PULSE_SKIP_AUTO_NODE:-}"
+    if [[ "$skip_auto" =~ ^([Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|1|on|ON)$ ]]; then
+        print_info "Skipping automatic node registration (PULSE_SKIP_AUTO_NODE set)"
+        return
+    fi
+
+    if ! command -v pveum >/dev/null 2>&1; then
+        AUTO_NODE_REGISTER_ERROR="pveum unavailable"
+        print_warn "pveum command not available; skipping automatic node registration"
+        return
+    fi
+
+    if ! command -v curl >/dev/null 2>&1; then
+        AUTO_NODE_REGISTER_ERROR="curl unavailable"
+        print_warn "curl command not available; skipping automatic node registration"
+        return
+    fi
+
+    local default_port="${PULSE_PVE_API_PORT:-8006}"
+    local host_input="${PULSE_PVE_HOST_URL:-}"
+    if [[ -z "$host_input" ]]; then
+        host_input="$(hostname -f 2>/dev/null || hostname)"
+    fi
+
+    local normalized_host_url
+    normalized_host_url=$(python3 - <<'PY' "$host_input" "$default_port"
+import sys, urllib.parse
+raw = sys.argv[1].strip()
+default_port = sys.argv[2]
+if not raw:
+    print("")
+    sys.exit(0)
+if "://" not in raw:
+    raw = f"https://{raw}"
+parsed = urllib.parse.urlparse(raw)
+scheme = parsed.scheme or "https"
+netloc = parsed.netloc or parsed.path
+path = parsed.path if parsed.netloc else ""
+if not netloc:
+    print("")
+    sys.exit(0)
+host = netloc.split('@', 1)[-1]
+if ':' not in host:
+    netloc = f"{netloc}:{default_port}"
+print(urllib.parse.urlunparse((scheme, netloc, path, "", "", "")))
+PY
+) || normalized_host_url=""
+
+    if [[ -z "$normalized_host_url" ]]; then
+        AUTO_NODE_REGISTER_ERROR="invalid host URL"
+        print_warn "Unable to determine Proxmox API URL; skipping automatic node registration"
+        return
+    fi
+
+    local server_name
+    server_name="$(hostname -s 2>/dev/null || hostname)"
+    if [[ -z "$server_name" ]]; then
+        server_name="pulse-proxmox-host"
+    fi
+
+    local bootstrap_token=""
+    if command -v pct >/dev/null 2>&1 && [[ -n "$ctid" ]]; then
+        for attempt in $(seq 1 30); do
+            bootstrap_token=$(pct exec "$ctid" -- bash -lc "if [ -f /etc/pulse/.bootstrap_token ]; then cat /etc/pulse/.bootstrap_token; fi" 2>/dev/null | tr -d '\r\n')
+            if [[ -n "$bootstrap_token" ]]; then
+                print_info "Discovered bootstrap token from container after ${attempt}s"
+                break
+            fi
+            sleep 1
+        done
+    fi
+
+    local backup_flag="${PULSE_AUTO_BACKUP_PERMS:-true}"
+    local backup_perms="false"
+    if [[ "$backup_flag" =~ ^([Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|1|on|ON)$ ]]; then
+        backup_perms="true"
+    fi
+
+    local setup_payload
+    setup_payload=$(python3 - <<'PY' "$normalized_host_url" "$backup_perms"
+import json, sys
+host = sys.argv[1]
+backup = sys.argv[2].lower() == "true"
+print(json.dumps({"type": "pve", "host": host, "backupPerms": backup}))
+PY
+)
+
+    echo "$setup_payload" > /tmp/pulse-auto-register-request.json 2>/dev/null || true
+
+    local pulse_url="http://${pulse_ip}:${pulse_port}"
+    local setup_headers=(-H "Content-Type: application/json")
+    if [[ -n "$bootstrap_token" ]]; then
+        setup_headers+=(-H "X-Setup-Token: $bootstrap_token")
+    fi
+
+    local setup_response
+    if ! setup_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" "${setup_headers[@]}" -d "$setup_payload"); then
+        AUTO_NODE_REGISTER_ERROR="setup token request failed"
+        print_warn "Unable to request setup token from Pulse (${pulse_url}); skipping automatic node registration"
+        return
+    fi
+
+    # Persist for debugging when running interactively
+    echo "$setup_response" > /tmp/pulse-auto-register-response.json 2>/dev/null || true
+
+    local setup_token
+    setup_token=$(python3 - "$setup_response" <<'PY'
+import json, sys
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    print("")
+    sys.exit(0)
+print(data.get("setupToken", ""))
+PY
+) || setup_token=""
+
+    if [[ -z "$setup_token" ]]; then
+        AUTO_NODE_REGISTER_ERROR="missing setup token"
+        print_warn "Pulse did not return a setup token; skipping automatic node registration"
+        return
+    fi
+
+    pveum user add pulse-monitor@pam --comment "Pulse monitoring service" >/dev/null 2>&1 || true
+    pveum aclmod / -user pulse-monitor@pam -role PVEAuditor >/dev/null 2>&1 || true
+    if [[ "$backup_perms" == "true" ]]; then
+        pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin >/dev/null 2>&1 || true
+    fi
+
+    local extra_privs=()
+    if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
+        extra_privs+=("Sys.Audit")
+    elif pveum role add PulseSysAuditProbe -privs Sys.Audit >/dev/null 2>&1; then
+        extra_privs+=("Sys.Audit")
+        pveum role delete PulseSysAuditProbe >/dev/null 2>&1 || true
+    fi
+
+    local has_vm_monitor=false
+    if pveum role list 2>/dev/null | grep -q "VM.Monitor"; then
+        has_vm_monitor=true
+    elif pveum role add PulseVmMonitorProbe -privs VM.Monitor >/dev/null 2>&1; then
+        has_vm_monitor=true
+        pveum role delete PulseVmMonitorProbe >/dev/null 2>&1 || true
+    fi
+
+    local has_guest_audit=false
+    if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
+        has_guest_audit=true
+    elif pveum role add PulseGuestAuditProbe -privs VM.GuestAgent.Audit >/dev/null 2>&1; then
+        has_guest_audit=true
+        pveum role delete PulseGuestAuditProbe >/dev/null 2>&1 || true
+    fi
+
+    if [[ "$has_vm_monitor" == true ]]; then
+        extra_privs+=("VM.Monitor")
+    elif [[ "$has_guest_audit" == true ]]; then
+        extra_privs+=("VM.GuestAgent.Audit")
+    fi
+
+    if [[ ${#extra_privs[@]} -gt 0 ]]; then
+        local priv_string="${extra_privs[*]}"
+        pveum role delete PulseMonitor >/dev/null 2>&1 || true
+        if pveum role add PulseMonitor -privs "$priv_string" >/dev/null 2>&1; then
+            pveum aclmod / -user pulse-monitor@pam -role PulseMonitor >/dev/null 2>&1 || true
+        fi
+    fi
+
+    local pulse_host_slug
+    pulse_host_slug=$(python3 - <<'PY' "$pulse_url"
+import sys, urllib.parse
+parsed = urllib.parse.urlparse(sys.argv[1])
+host = (parsed.hostname or "pulse").replace(".", "-")
+print(host)
+PY
+)
+    local token_name="pulse-${pulse_host_slug}-$(date +%s)"
+
+    local token_output=""
+    set +e
+    token_output=$(pveum user token add pulse-monitor@pam "$token_name" --privsep 0 2>&1)
+    local token_status=$?
+    set -e
+    if [[ $token_status -ne 0 ]]; then
+        AUTO_NODE_REGISTER_ERROR="failed to create token"
+        print_warn "Unable to create monitoring API token; skipping automatic node registration"
+        return
+    fi
+
+    local token_value
+    token_value=$(echo "$token_output" | grep -E "│[[:space:]]*value" | awk -F'│' '{print $3}' | tr -d '[:space:]' | tail -n1)
+    if [[ -z "$token_value" ]]; then
+        AUTO_NODE_REGISTER_ERROR="token value unavailable"
+        print_warn "Failed to extract token value from pveum output; skipping automatic node registration"
+        return
+    fi
+    local token_id="pulse-monitor@pam!${token_name}"
+
+    local register_payload
+    register_payload=$(python3 - <<'PY' "$normalized_host_url" "$token_id" "$token_value" "$server_name" "$setup_token"
+import json, sys
+host, token_id, token_value, server_name, auth_token = sys.argv[1:]
+print(json.dumps({
+    "type": "pve",
+    "host": host,
+    "tokenId": token_id,
+    "tokenValue": token_value,
+    "serverName": server_name,
+    "authToken": auth_token
+}))
+PY
+)
+
+    local register_response
+    if ! register_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d "$register_payload"); then
+        AUTO_NODE_REGISTER_ERROR="auto-register request failed"
+        print_warn "Pulse auto-registration request failed; skipping automatic node registration"
+        return
+    fi
+
+    local register_status
+    register_status=$(python3 - "$register_response" <<'PY'
+import json, sys
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    print("")
+    sys.exit(0)
+print(data.get("status", ""))
+PY
+) || register_status=""
+
+    if [[ "$register_status" != "success" ]]; then
+        AUTO_NODE_REGISTER_ERROR="auto-register unsuccessful"
+        print_warn "Pulse auto-registration reported an error: $register_response"
+        return
+    fi
+
+    AUTO_NODE_REGISTERED=true
+    AUTO_NODE_REGISTERED_NAME="$server_name"
+    AUTO_NODE_REGISTER_ERROR=""
+    print_success "Registered ${server_name} with Pulse automatically"
 }
 
 # Compare two version strings

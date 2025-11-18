@@ -3469,7 +3469,7 @@ func (m *Monitor) HasSocketTemperatureProxy() bool {
 	if m.tempCollector == nil {
 		return false
 	}
-	return m.tempCollector.SocketProxyAvailable()
+	return m.tempCollector.SocketProxyDetected()
 }
 
 // SocketProxyHostDiagnostics exposes per-host proxy cooldown state for diagnostics.

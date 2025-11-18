@@ -5275,9 +5275,14 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		backupPerms = "&backup_perms=true"
 	}
 
-	// Build script URL without embedding the secret token directly
-	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s",
-		pulseURL, req.Type, encodedHost, pulseURL, backupPerms)
+	authParam := ""
+	if token != "" {
+		authParam = "&auth_token=" + url.QueryEscape(token)
+	}
+
+	// Build script URL and include the one-time auth token for automatic registration
+	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s%s",
+		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, authParam)
 
 	// Return a simple curl command - no environment variables needed
 	// The setup token is returned separately so the script can prompt the user

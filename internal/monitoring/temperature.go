@@ -874,6 +874,14 @@ func (tc *TemperatureCollector) SocketProxyAvailable() bool {
 	return tc != nil && tc.isProxyEnabled()
 }
 
+// SocketProxyDetected reports whether the proxy socket exists (regardless of cooldown status).
+func (tc *TemperatureCollector) SocketProxyDetected() bool {
+	if tc == nil || tc.proxyClient == nil {
+		return false
+	}
+	return tc.proxyClient.IsAvailable()
+}
+
 func (tc *TemperatureCollector) handleProxySuccess() {
 	if tc.proxyClient == nil {
 		return
