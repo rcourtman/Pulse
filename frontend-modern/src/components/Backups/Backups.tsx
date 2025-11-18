@@ -6,7 +6,15 @@ import UnifiedBackups from './UnifiedBackups';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 
 const Backups: Component = () => {
-  const { state, connected } = useWebSocket();
+  const { state, connected, initialDataReceived } = useWebSocket();
+
+  const hasBackupData = () =>
+    Boolean(
+      state.backups?.pve?.guestSnapshots?.length ||
+        state.backups?.pve?.storageBackups?.length ||
+        state.backups?.pbs?.length ||
+        state.backups?.pmg?.length,
+    );
 
   return (
     <div class="space-y-3">
@@ -14,13 +22,7 @@ const Backups: Component = () => {
 
       {/* Loading State */}
       <Show
-        when={
-          connected() &&
-          !(state.backups?.pve?.guestSnapshots?.length ||
-            state.backups?.pve?.storageBackups?.length ||
-            state.backups?.pbs?.length ||
-            state.backups?.pmg?.length)
-        }
+        when={connected() && !initialDataReceived() && !hasBackupData()}
       >
         <Card padding="lg">
           <EmptyState
