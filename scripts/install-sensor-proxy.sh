@@ -447,10 +447,80 @@ if merged:
     for entry in merged:
         result.append(f"  - {entry}")
 
+    content = "\n".join(result).rstrip()
+    if content:
+        content += "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+PY
+}
+
+cleanup_inline_allowed_nodes() {
+    if [[ "$ALLOWLIST_MODE" != "inline" ]]; then
+        return
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        return
+    fi
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        return
+    fi
+
+    python3 - "$CONFIG_FILE" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    sys.exit(0)
+
+lines = path.read_text().splitlines()
+blocks = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    stripped = line.lstrip()
+    if stripped.startswith("allowed_nodes:"):
+        start = i
+        i += 1
+        while i < len(lines):
+            nxt = lines[i]
+            nxt_stripped = nxt.lstrip()
+            if (
+                nxt_stripped.startswith("-")
+                or nxt_stripped.startswith("#")
+                or nxt_stripped == ""
+                or nxt.startswith((" ", "\t"))
+            ):
+                i += 1
+                continue
+            break
+        blocks.append((start, i))
+        continue
+    i += 1
+
+if len(blocks) <= 1:
+    sys.exit(0)
+
+keep_start, keep_end = blocks[-1]
+
+def capture_comment(idx):
+    remove = set()
+    j = idx - 1
+    while j >= 0 and (lines[j].strip() == "" or lines[j].lstrip().startswith("#")):
+        remove.add(j)
+        j -= 1
+    return remove
+
+to_remove = set()
+for start, end in blocks[:-1]:
+    to_remove.update(range(start, end))
+    to_remove.update(capture_comment(start))
+
+result = [text for idx, text in enumerate(lines) if idx not in to_remove]
 content = "\n".join(result).rstrip()
 if content:
     content += "\n"
-path.parent.mkdir(parents=True, exist_ok=True)
 path.write_text(content)
 PY
 }
@@ -1463,6 +1533,7 @@ EOF
 }
 
 determine_allowlist_mode
+cleanup_inline_allowed_nodes
 
 # Create base config file if it doesn't exist
 if [[ ! -f /etc/pulse-sensor-proxy/config.yaml ]]; then
@@ -2648,8 +2719,10 @@ else
     # Always include localhost variants
     all_nodes+=("127.0.0.1" "localhost")
     # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
-    update_allowed_nodes "Localhost fallback configuration (pvecm unavailable)" "${all_nodes[@]}"
+update_allowed_nodes "Localhost fallback configuration (pvecm unavailable)" "${all_nodes[@]}"
 fi
+
+cleanup_inline_allowed_nodes
 
 # Container-specific configuration (skip for standalone mode)
 if [[ "$STANDALONE" == false ]]; then
