@@ -1342,10 +1342,21 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 					}
 				}
 
-				// Override with cluster config if available
+				// Override with cluster config if available, but only when the
+				// cluster metadata explicitly carries those flags. Some storage
+				// types (notably PBS) omit enabled/active, and forcing them to 0
+				// would make us skip backup polling even though the node reports
+				// the storage as available.
 				if hasClusterConfig {
-					modelStorage.Enabled = clusterConfig.Enabled == 1
-					modelStorage.Active = clusterConfig.Active == 1
+					// Cluster metadata is inconsistent across storage types; PBS storages often omit
+					// enabled/active entirely (decode as zero). To avoid marking usable storages as
+					// disabled, only override when the cluster explicitly sets the flag to 1.
+					if clusterConfig.Enabled == 1 {
+						modelStorage.Enabled = true
+					}
+					if clusterConfig.Active == 1 {
+						modelStorage.Active = true
+					}
 				}
 
 				// Determine status based on active/enabled flags
