@@ -91,14 +91,16 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 		tc.hostKeys = manager
 	}
 
-	// Check if proxy is available
+	// Always keep a proxy client so we can detect the socket later even if it
+	// isn't present during startup. Without this, containerized deployments that
+	// mount the socket after Pulse starts never re-enable the hardened proxy.
 	proxyClient := tempproxy.NewClient()
+	tc.proxyClient = proxyClient
 	if proxyClient.IsAvailable() {
 		log.Info().Msg("Temperature proxy detected - using secure host-side bridge")
-		tc.proxyClient = proxyClient
 		tc.useProxy = true
 	} else {
-		log.Debug().Msg("Temperature proxy not available - using direct SSH")
+		log.Debug().Msg("Temperature proxy not available yet - falling back to SSH until socket appears")
 		tc.useProxy = false
 	}
 

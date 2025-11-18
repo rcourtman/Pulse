@@ -18,5 +18,17 @@ func storageContentQueryable(storage proxmox.Storage) bool {
 	if storage.Enabled == 0 {
 		return false
 	}
-	return storage.Active == 1
+
+	if storage.Active == 1 {
+		return true
+	}
+
+	// PBS storages report Active=0 on every node because they are accessed remotely via the
+	// backup proxy. We still need to inspect them so the UI can surface PBS-backed Proxmox
+	// backups even when no dedicated PBS instance is configured inside Pulse.
+	if strings.Contains(storage.Content, "backup") && storage.Type == "pbs" {
+		return true
+	}
+
+	return false
 }
