@@ -85,6 +85,9 @@ func (m *Monitor) collectContainerRootUsage(ctx context.Context, client PVEClien
 		if !storageSupportsContainerVolumes(storage.Content) {
 			continue
 		}
+		if !storageContentQueryable(storage) {
+			continue
+		}
 
 		contents, err := client.GetStorageContent(ctx, node, storage.Storage)
 		if err != nil {

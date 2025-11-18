@@ -8436,6 +8436,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if !strings.Contains(storage.Content, "backup") {
 				continue
 			}
+			if !storageContentQueryable(storage) {
+				continue
+			}
 
 			storagesWithBackup++
 
@@ -9104,6 +9107,9 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 
 			contentTypes := strings.ToLower(storage.Content)
 			if !strings.Contains(contentTypes, "images") && !strings.Contains(contentTypes, "rootdir") {
+				continue
+			}
+			if !storageContentQueryable(storage) {
 				continue
 			}
 
