@@ -113,11 +113,7 @@ func extractHostPart(raw string) string {
 	return strings.TrimSpace(host)
 }
 
-func buildAuthorizedNodeList(instance *config.PVEInstance) []authorizedNode {
-	if instance == nil {
-		return nil
-	}
-
+func buildAuthorizedNodeList(instances []config.PVEInstance) []authorizedNode {
 	nodes := make([]authorizedNode, 0)
 	seen := make(map[string]struct{})
 	add := func(name, ip string) {
@@ -134,21 +130,23 @@ func buildAuthorizedNodeList(instance *config.PVEInstance) []authorizedNode {
 		nodes = append(nodes, authorizedNode{Name: name, IP: ip})
 	}
 
-	// Base instance host/name
-	add(instance.Name, extractHostPart(instance.Host))
-	add(instance.Name, extractHostPart(instance.GuestURL))
+	for i := range instances {
+		instance := &instances[i]
+		add(instance.Name, extractHostPart(instance.Host))
+		add(instance.Name, extractHostPart(instance.GuestURL))
 
-	if instance.ClusterEndpoints != nil {
-		for _, ep := range instance.ClusterEndpoints {
-			name := ep.NodeName
-			ip := ep.IP
-			if ip == "" {
-				ip = extractHostPart(ep.Host)
+		if instance.ClusterEndpoints != nil {
+			for _, ep := range instance.ClusterEndpoints {
+				name := ep.NodeName
+				ip := ep.IP
+				if ip == "" {
+					ip = extractHostPart(ep.Host)
+				}
+				if name == "" {
+					name = ep.Host
+				}
+				add(name, ip)
 			}
-			if name == "" {
-				name = ep.Host
-			}
-			add(name, ip)
 		}
 	}
 
@@ -292,7 +290,7 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 		Str("pve_instance", matchedInstance.Name).
 		Msg("Temperature proxy registered successfully")
 
-	allowed := buildAuthorizedNodeList(matchedInstance)
+	allowed := buildAuthorizedNodeList(nodesConfig.PVEInstances)
 	resp := map[string]any{
 		"success":          true,
 		"token":            authToken,
@@ -371,9 +369,8 @@ func (h *TemperatureProxyHandlers) HandleAuthorizedNodes(w http.ResponseWriter, 
 		refreshInterval = refreshFromProxy
 	}
 
-	nodes := buildAuthorizedNodeList(matched)
-	if len(nodes) == 0 {
-		// Always include at least the base instance name/host
+	nodes := buildAuthorizedNodeList(nodesConfig.PVEInstances)
+	if len(nodes) == 0 && matched != nil {
 		nodes = append(nodes, authorizedNode{Name: matched.Name, IP: extractHostPart(matched.Host)})
 	}
 
