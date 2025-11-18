@@ -90,9 +90,7 @@ func (rm *ReloadableMonitor) doReload() error {
 		return err
 	}
 
-	// Note: Polling interval is now hardcoded to 10s, no special handling needed
-
-	// For other changes, do a full reload
+	// Polling interval changes and other settings require a full reload
 	log.Info().Msg("Performing full monitor reload")
 
 	// Cancel current monitor
@@ -122,8 +120,6 @@ func (rm *ReloadableMonitor) doReload() error {
 
 	return nil
 }
-
-// Note: Polling interval change detection removed - now hardcoded to 10s
 
 // GetMonitor returns the current monitor instance
 func (rm *ReloadableMonitor) GetMonitor() *Monitor {
@@ -160,5 +156,3 @@ func (rm *ReloadableMonitor) Stop() {
 		rm.monitor.Stop()
 	}
 }
-
-// Note: UpdatePollingInterval removed - polling interval is now hardcoded to 10s

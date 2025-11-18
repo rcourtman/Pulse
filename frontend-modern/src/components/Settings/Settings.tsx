@@ -406,6 +406,17 @@ const BACKUP_INTERVAL_OPTIONS = [
 
 const BACKUP_INTERVAL_MAX_MINUTES = 7 * 24 * 60; // 7 days
 
+const PVE_POLLING_MIN_SECONDS = 10;
+const PVE_POLLING_MAX_SECONDS = 3600;
+const PVE_POLLING_PRESETS = [
+  { label: '10 seconds (default)', value: 10 },
+  { label: '15 seconds', value: 15 },
+  { label: '30 seconds', value: 30 },
+  { label: '60 seconds', value: 60 },
+  { label: '2 minutes', value: 120 },
+  { label: '5 minutes', value: 300 },
+];
+
 // Node with UI-specific fields
 type NodeConfigWithStatus = NodeConfig & {
   hasPassword?: boolean;
@@ -610,7 +621,11 @@ const Settings: Component<SettingsProps> = (props) => {
   const pmgNodes = createMemo(() => nodes().filter((n) => n.type === 'pmg'));
 
   // System settings
-  // PBS polling interval removed - fixed at 10 seconds
+  const [pvePollingInterval, setPVEPollingInterval] = createSignal<number>(PVE_POLLING_MIN_SECONDS);
+  const [pvePollingSelection, setPVEPollingSelection] = createSignal<number | 'custom'>(
+    PVE_POLLING_MIN_SECONDS,
+  );
+  const [pvePollingCustomSeconds, setPVEPollingCustomSeconds] = createSignal(30);
   const [allowedOrigins, setAllowedOrigins] = createSignal('*');
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal(false);
   const [discoverySubnet, setDiscoverySubnet] = createSignal('auto');
@@ -627,6 +642,8 @@ const Settings: Component<SettingsProps> = (props) => {
     Boolean(
       envOverrides().temperatureMonitoringEnabled || envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
     );
+  const pvePollingEnvLocked = () =>
+    Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
   let discoverySubnetInputRef: HTMLInputElement | undefined;
 
   const parseSubnetList = (value: string) => {
@@ -1912,7 +1929,22 @@ const Settings: Component<SettingsProps> = (props) => {
       // Load system settings
       try {
         const systemSettings = await SettingsAPI.getSystemSettings();
-        // PBS polling interval is now fixed at 10 seconds
+        const rawPVESecs =
+          typeof systemSettings.pvePollingInterval === 'number'
+            ? Math.round(systemSettings.pvePollingInterval)
+            : PVE_POLLING_MIN_SECONDS;
+        const clampedPVESecs = Math.min(
+          PVE_POLLING_MAX_SECONDS,
+          Math.max(PVE_POLLING_MIN_SECONDS, rawPVESecs),
+        );
+        setPVEPollingInterval(clampedPVESecs);
+        const presetMatch = PVE_POLLING_PRESETS.find((opt) => opt.value === clampedPVESecs);
+        if (presetMatch) {
+          setPVEPollingSelection(presetMatch.value);
+        } else {
+          setPVEPollingSelection('custom');
+          setPVEPollingCustomSeconds(clampedPVESecs);
+        }
         setAllowedOrigins(systemSettings.allowedOrigins || '*');
         // Connection timeout is backend-only
         // Load discovery settings (default to false when unset)
@@ -2027,7 +2059,7 @@ const Settings: Component<SettingsProps> = (props) => {
       ) {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
-          // PBS polling interval is now fixed at 10 seconds
+          pvePollingInterval: pvePollingInterval(),
           allowedOrigins: allowedOrigins(),
           // Connection timeout is backend-only
           // Discovery settings are saved immediately on toggle
@@ -3520,6 +3552,133 @@ const Settings: Component<SettingsProps> = (props) => {
                             }
                           }}
                         />
+                      </div>
+                    </div>
+                  </Card>
+                  <Card
+                    padding="none"
+                    class="overflow-hidden border border-gray-200 dark:border-gray-700"
+                    border={false}
+                  >
+                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                      <div class="flex items-center gap-3">
+                        <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                          <Activity class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
+                        </div>
+                        <SectionHeader
+                          title="Monitoring cadence"
+                          description="Control how frequently Pulse polls Proxmox VE nodes."
+                          size="sm"
+                          class="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div class="p-6 space-y-5">
+                      <div class="space-y-2">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                          Shorter intervals provide near-real-time updates at the cost of higher API
+                          and CPU usage on each node. Set a longer interval to reduce load on busy
+                          clusters.
+                        </p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                          Current cadence: {pvePollingInterval()} seconds (
+                          {pvePollingInterval() >= 60
+                            ? `${(pvePollingInterval() / 60).toFixed(
+                                pvePollingInterval() % 60 === 0 ? 0 : 1,
+                              )} minute${pvePollingInterval() / 60 === 1 ? '' : 's'}`
+                            : 'under a minute'}
+                          ).
+                        </p>
+                      </div>
+                      <div class="space-y-4">
+                        <div class="grid gap-2 sm:grid-cols-3">
+                          <For each={PVE_POLLING_PRESETS}>
+                            {(option) => (
+                              <button
+                                type="button"
+                                class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                                  pvePollingSelection() === option.value
+                                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
+                                } ${pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                disabled={pvePollingEnvLocked()}
+                                onClick={() => {
+                                  if (pvePollingEnvLocked()) return;
+                                  setPVEPollingSelection(option.value);
+                                  setPVEPollingInterval(option.value);
+                                  setHasUnsavedChanges(true);
+                                }}
+                              >
+                                {option.label}
+                              </button>
+                            )}
+                          </For>
+                          <button
+                            type="button"
+                            class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                              pvePollingSelection() === 'custom'
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
+                            } ${pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            disabled={pvePollingEnvLocked()}
+                            onClick={() => {
+                              if (pvePollingEnvLocked()) return;
+                              setPVEPollingSelection('custom');
+                              setPVEPollingInterval(pvePollingCustomSeconds());
+                              setHasUnsavedChanges(true);
+                            }}
+                          >
+                            Custom interval
+                          </button>
+                        </div>
+                        <Show when={pvePollingSelection() === 'custom'}>
+                          <div class="space-y-2 rounded-md border border-dashed border-gray-300 p-4 dark:border-gray-600">
+                            <label class="text-xs font-medium text-gray-700 dark:text-gray-200">
+                              Custom polling interval (10–3600 seconds)
+                            </label>
+                            <input
+                              type="number"
+                              min={PVE_POLLING_MIN_SECONDS}
+                              max={PVE_POLLING_MAX_SECONDS}
+                              value={pvePollingCustomSeconds()}
+                              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900/60"
+                              disabled={pvePollingEnvLocked()}
+                              onInput={(e) => {
+                                if (pvePollingEnvLocked()) return;
+                                const parsed = Math.floor(Number(e.currentTarget.value));
+                                if (Number.isNaN(parsed)) {
+                                  return;
+                                }
+                                const clamped = Math.min(
+                                  PVE_POLLING_MAX_SECONDS,
+                                  Math.max(PVE_POLLING_MIN_SECONDS, parsed),
+                                );
+                                setPVEPollingCustomSeconds(clamped);
+                                setPVEPollingInterval(clamped);
+                                setHasUnsavedChanges(true);
+                              }}
+                            />
+                            <p class="text-[0.68rem] text-gray-500 dark:text-gray-400">
+                              Applies to all PVE clusters and standalone nodes.
+                            </p>
+                          </div>
+                        </Show>
+                        <Show when={pvePollingEnvLocked()}>
+                          <div class="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                            <svg
+                              class="h-4 w-4 flex-shrink-0"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="12" y1="8" x2="12" y2="12" />
+                              <circle cx="12" cy="16" r="0.5" />
+                            </svg>
+                            <span>Managed via environment variable PVE_POLLING_INTERVAL.</span>
+                          </div>
+                        </Show>
                       </div>
                     </div>
                   </Card>

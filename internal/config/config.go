@@ -83,7 +83,7 @@ type Config struct {
 	PMGInstances []PMGInstance
 
 	// Monitoring settings
-	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
+	PVEPollingInterval              time.Duration `envconfig:"PVE_POLLING_INTERVAL"` // PVE polling interval (10s default)
 	PBSPollingInterval              time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
 	PMGPollingInterval              time.Duration `envconfig:"PMG_POLLING_INTERVAL"` // PMG polling interval (60s default)
 	ConcurrentPolling               bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
@@ -529,6 +529,7 @@ func Load() (*Config, error) {
 		BackupPollingCycles:             10,
 		BackupPollingInterval:           0,
 		EnableBackupPolling:             true,
+		PVEPollingInterval:              10 * time.Second,
 		WebhookBatchDelay:               10 * time.Second,
 		AdaptivePollingEnabled:          false,
 		AdaptivePollingBaseInterval:     10 * time.Second,
@@ -578,7 +579,10 @@ func Load() (*Config, error) {
 
 		// Load system configuration
 		if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
-			// Load PBS polling interval if configured
+			// Load polling intervals if configured
+			if systemSettings.PVEPollingInterval > 0 {
+				cfg.PVEPollingInterval = time.Duration(systemSettings.PVEPollingInterval) * time.Second
+			}
 			if systemSettings.PBSPollingInterval > 0 {
 				cfg.PBSPollingInterval = time.Duration(systemSettings.PBSPollingInterval) * time.Second
 			}
@@ -675,8 +679,13 @@ func Load() (*Config, error) {
 		log.Warn().Err(err).Msg("Failed to load API tokens from persistence")
 	}
 
-	// Ensure PBS polling interval has default if not set
-	// Note: PVE polling is hardcoded to 10s in monitor.go
+	// Ensure polling intervals have sane defaults if not set
+	if cfg.PVEPollingInterval <= 0 {
+		cfg.PVEPollingInterval = 10 * time.Second
+	}
+	if cfg.PVEPollingInterval > time.Hour {
+		cfg.PVEPollingInterval = time.Hour
+	}
 	if cfg.PBSPollingInterval == 0 {
 		cfg.PBSPollingInterval = 60 * time.Second
 	}
@@ -720,6 +729,28 @@ func Load() (*Config, error) {
 			}
 		} else {
 			log.Warn().Str("value", intervalStr).Msg("Invalid BACKUP_POLLING_INTERVAL value, expected duration or seconds")
+		}
+	}
+
+	if intervalStr := utils.GetenvTrim("PVE_POLLING_INTERVAL"); intervalStr != "" {
+		if dur, err := time.ParseDuration(intervalStr); err == nil {
+			if dur < 10*time.Second {
+				log.Warn().Dur("interval", dur).Msg("Ignoring PVE_POLLING_INTERVAL below 10s from environment")
+			} else {
+				cfg.PVEPollingInterval = dur
+				cfg.EnvOverrides["PVE_POLLING_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Overriding PVE polling interval from environment")
+			}
+		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
+			if seconds < 10 {
+				log.Warn().Int("seconds", seconds).Msg("Ignoring PVE_POLLING_INTERVAL below 10s from environment")
+			} else {
+				cfg.PVEPollingInterval = time.Duration(seconds) * time.Second
+				cfg.EnvOverrides["PVE_POLLING_INTERVAL"] = true
+				log.Info().Int("seconds", seconds).Msg("Overriding PVE polling interval (seconds) from environment")
+			}
+		} else {
+			log.Warn().Str("value", intervalStr).Msg("Invalid PVE_POLLING_INTERVAL value, expected duration or seconds")
 		}
 	}
 
@@ -1295,7 +1326,7 @@ func SaveConfig(cfg *Config) error {
 	// Save system configuration
 	adaptiveEnabled := cfg.AdaptivePollingEnabled
 	systemSettings := SystemSettings{
-		// Note: PVE polling is hardcoded to 10s
+		PVEPollingInterval:          int(cfg.PVEPollingInterval / time.Second),
 		UpdateChannel:               cfg.UpdateChannel,
 		AutoUpdateEnabled:           cfg.AutoUpdateEnabled,
 		AutoUpdateCheckInterval:     int(cfg.AutoUpdateCheckInterval.Hours()),
@@ -1349,7 +1380,12 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate monitoring settings
-	// Note: PVE polling is hardcoded to 10s
+	if c.PVEPollingInterval < 10*time.Second {
+		return fmt.Errorf("PVE polling interval must be at least 10 seconds")
+	}
+	if c.PVEPollingInterval > time.Hour {
+		return fmt.Errorf("PVE polling interval cannot exceed 1 hour")
+	}
 	if c.ConnectionTimeout < time.Second {
 		return fmt.Errorf("connection timeout must be at least 1 second")
 	}

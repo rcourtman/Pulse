@@ -252,21 +252,13 @@ func runServer() {
 				configWatcher.ReloadConfig()
 			}
 
-			// Reload system.json
-			persistence := config.NewConfigPersistence(cfg.DataPath)
-			if persistence != nil {
-				if _, err := persistence.LoadSystemSettings(); err == nil {
-					// Note: Polling interval is now hardcoded to 10s, no longer configurable
-					// Could reload other system.json settings here
-					log.Info().Msg("Reloaded system configuration")
+			if reloadFunc != nil {
+				if err := reloadFunc(); err != nil {
+					log.Error().Err(err).Msg("Failed to reload monitor after SIGHUP")
 				} else {
-					log.Error().Err(err).Msg("Failed to reload system.json")
+					log.Info().Msg("Runtime configuration reloaded")
 				}
 			}
-
-			// Could reload other configs here (alerts.json, webhooks.json, etc.)
-
-			log.Info().Msg("Configuration reload complete")
 
 		case <-sigChan:
 			log.Info().Msg("Shutting down server...")

@@ -27,7 +27,7 @@ export interface AuthConfig {
  * These are application behavior settings
  */
 export interface SystemConfig {
-  // Note: PVE polling is hardcoded to 10s (Proxmox cluster/resources updates every 10s)
+  pvePollingInterval?: number; // PVE polling interval in seconds
   pbsPollingInterval?: number; // PBS polling interval in seconds
   connectionTimeout?: number; // Seconds before timeout (default: 10)
   autoUpdateEnabled: boolean; // Enable auto-updates
