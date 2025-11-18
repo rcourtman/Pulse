@@ -7886,8 +7886,10 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 							Int("datastores", len(ds)).
 							Msg("Starting background PBS backup polling")
 
-						// Use parent context for proper cancellation chain
-						backupCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+						// Detached background poll: parent ctx may be cancelled when the main
+						// poll cycle finishes, so use a fresh context to let PBS polling
+						// complete unless the explicit timeout is reached.
+						backupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 						defer cancel()
 
 						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
