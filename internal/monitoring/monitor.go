@@ -6470,8 +6470,14 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Dur("timeout", timeout).
 							Msg("Starting background backup/snapshot polling")
 
-						// Use parent context for proper cancellation chain
-						backupCtx, cancel := context.WithTimeout(ctx, timeout)
+						// The per-cycle ctx is canceled as soon as the main polling loop finishes,
+						// so derive the backup poll context from the long-lived runtime context instead.
+						parentCtx := m.runtimeCtx
+						if parentCtx == nil {
+							parentCtx = context.Background()
+						}
+
+						backupCtx, cancel := context.WithTimeout(parentCtx, timeout)
 						defer cancel()
 
 						// Poll backup tasks

@@ -278,6 +278,29 @@ safe_read_with_default() {
     return 0
 }
 
+wait_for_pulse_ready() {
+    local pulse_url="$1"
+    local retries="${2:-60}"
+    local delay="${3:-1}"
+
+    if [[ -z "$pulse_url" ]] || ! command -v curl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local api_endpoint="${pulse_url%/}/api/health"
+    print_info "Waiting for Pulse API at ${api_endpoint}..."
+    for attempt in $(seq 1 "$retries"); do
+        if curl -fsS --max-time 2 "$api_endpoint" >/dev/null 2>&1; then
+            print_info "Pulse API is reachable"
+            return 0
+        fi
+        sleep "$delay"
+    done
+
+    print_warn "Pulse API did not respond after ${retries}s; continuing anyway"
+    return 1
+}
+
 print_error() {
     echo -e "${RED}[ERROR] $1${NC}" >&2
 }
@@ -1487,6 +1510,8 @@ create_lxc_container() {
     # Get container IP
     local IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
 
+    local PULSE_BASE_URL="http://${IP}:${frontend_port}"
+
     # Automatically register the Proxmox host with Pulse so temperature proxy sync succeeds
     auto_register_pve_node "$CTID" "$IP" "$frontend_port"
 
@@ -1509,6 +1534,8 @@ fi'; then
             print_warn "Unable to restart $SERVICE_NAME inside container; please restart manually"
         fi
     fi
+
+    wait_for_pulse_ready "$PULSE_BASE_URL" 120 1
 
     # Determine if we should install temperature proxy
     local install_proxy=false
