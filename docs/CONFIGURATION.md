@@ -107,7 +107,8 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 **Contents:**
 ```json
 {
-  "pbsPollingInterval": 60,            // Seconds between PBS refreshes (PVE polling fixed at 10s)
+  "pvePollingInterval": 10,            // Seconds between PVE refreshes (10s default, 10–3600 allowed)
+  "pbsPollingInterval": 60,            // Seconds between PBS refreshes
   "pmgPollingInterval": 60,            // Seconds between PMG refreshes (mail analytics and health)
   "connectionTimeout": 60,             // Seconds before node connection timeout
   "autoUpdateEnabled": false,          // Systemd timer toggle for automatic updates
@@ -142,6 +143,7 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - Can be safely backed up without exposing secrets
 - Missing file results in defaults being used
 - Changes take effect immediately (no restart required)
+- `pvePollingInterval` controls how often Pulse polls all Proxmox VE nodes. Configure it in **Settings → System → General → Monitoring cadence** (10–3600 seconds).
 - API tokens are no longer managed in system.json (moved to .env in v4.3.9+)
 - **Adaptive polling controls** (`adaptivePollingEnabled`, `adaptivePolling*Interval`) map directly to the Scheduler Health API and adjust queue/backoff behaviour in real time.
 - **Runtime logging controls** (`logLevel`, `logFormat`, `logFile`, `logMaxSize`, `logMaxAge`, `logCompress`) can be tuned from the UI or system.json; updates are applied immediately so you can raise verbosity, switch to structured JSON, or stream logs to disk without restarting Pulse.

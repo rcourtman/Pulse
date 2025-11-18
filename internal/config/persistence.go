@@ -803,33 +803,33 @@ type NodesConfig struct {
 
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
-	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
-	PBSPollingInterval          int             `json:"pbsPollingInterval"` // PBS polling interval in seconds
-	PMGPollingInterval          int             `json:"pmgPollingInterval"` // PMG polling interval in seconds
-	BackupPollingInterval       int             `json:"backupPollingInterval,omitempty"`
-	BackupPollingEnabled        *bool           `json:"backupPollingEnabled,omitempty"`
-	AdaptivePollingEnabled      *bool           `json:"adaptivePollingEnabled,omitempty"`
-	AdaptivePollingBaseInterval int             `json:"adaptivePollingBaseInterval,omitempty"`
-	AdaptivePollingMinInterval  int             `json:"adaptivePollingMinInterval,omitempty"`
-	AdaptivePollingMaxInterval  int             `json:"adaptivePollingMaxInterval,omitempty"`
-	BackendPort                 int             `json:"backendPort,omitempty"`
-	FrontendPort                int             `json:"frontendPort,omitempty"`
-	AllowedOrigins              string          `json:"allowedOrigins,omitempty"`
-	ConnectionTimeout           int             `json:"connectionTimeout,omitempty"`
-	UpdateChannel               string          `json:"updateChannel,omitempty"`
-	AutoUpdateEnabled           bool            `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
-	AutoUpdateCheckInterval     int             `json:"autoUpdateCheckInterval,omitempty"`
-	AutoUpdateTime              string          `json:"autoUpdateTime,omitempty"`
-	LogLevel                    string          `json:"logLevel,omitempty"`
-	DiscoveryEnabled            bool            `json:"discoveryEnabled"`
-	DiscoverySubnet             string          `json:"discoverySubnet,omitempty"`
-	DiscoveryConfig             DiscoveryConfig `json:"discoveryConfig"`
-	Theme                       string          `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
+	PVEPollingInterval           int             `json:"pvePollingInterval"` // PVE polling interval in seconds
+	PBSPollingInterval           int             `json:"pbsPollingInterval"` // PBS polling interval in seconds
+	PMGPollingInterval           int             `json:"pmgPollingInterval"` // PMG polling interval in seconds
+	BackupPollingInterval        int             `json:"backupPollingInterval,omitempty"`
+	BackupPollingEnabled         *bool           `json:"backupPollingEnabled,omitempty"`
+	AdaptivePollingEnabled       *bool           `json:"adaptivePollingEnabled,omitempty"`
+	AdaptivePollingBaseInterval  int             `json:"adaptivePollingBaseInterval,omitempty"`
+	AdaptivePollingMinInterval   int             `json:"adaptivePollingMinInterval,omitempty"`
+	AdaptivePollingMaxInterval   int             `json:"adaptivePollingMaxInterval,omitempty"`
+	BackendPort                  int             `json:"backendPort,omitempty"`
+	FrontendPort                 int             `json:"frontendPort,omitempty"`
+	AllowedOrigins               string          `json:"allowedOrigins,omitempty"`
+	ConnectionTimeout            int             `json:"connectionTimeout,omitempty"`
+	UpdateChannel                string          `json:"updateChannel,omitempty"`
+	AutoUpdateEnabled            bool            `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
+	AutoUpdateCheckInterval      int             `json:"autoUpdateCheckInterval,omitempty"`
+	AutoUpdateTime               string          `json:"autoUpdateTime,omitempty"`
+	LogLevel                     string          `json:"logLevel,omitempty"`
+	DiscoveryEnabled             bool            `json:"discoveryEnabled"`
+	DiscoverySubnet              string          `json:"discoverySubnet,omitempty"`
+	DiscoveryConfig              DiscoveryConfig `json:"discoveryConfig"`
+	Theme                        string          `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
 	AllowEmbedding               bool            `json:"allowEmbedding"`                // Allow iframe embedding
 	AllowedEmbedOrigins          string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
 	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"`
-	DNSCacheTimeout              int             `json:"dnsCacheTimeout,omitempty"` // DNS cache timeout in seconds (0 = default 5 minutes)
-	SSHPort                      int             `json:"sshPort,omitempty"`         // Default SSH port for temperature monitoring (0 = use 22)
+	DNSCacheTimeout              int             `json:"dnsCacheTimeout,omitempty"`            // DNS cache timeout in seconds (0 = default 5 minutes)
+	SSHPort                      int             `json:"sshPort,omitempty"`                    // Default SSH port for temperature monitoring (0 = use 22)
 	WebhookAllowedPrivateCIDRs   string          `json:"webhookAllowedPrivateCIDRs,omitempty"` // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
 	// APIToken removed - now handled via .env file only
 }
@@ -838,6 +838,7 @@ type SystemSettings struct {
 func DefaultSystemSettings() *SystemSettings {
 	defaultDiscovery := DefaultDiscoveryConfig()
 	return &SystemSettings{
+		PVEPollingInterval:           10,
 		PBSPollingInterval:           60,
 		PMGPollingInterval:           60,
 		AutoUpdateEnabled:            false,
@@ -1361,9 +1362,8 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Skip POLLING_INTERVAL lines - deprecated
+		// Skip legacy POLLING_INTERVAL lines - replaced by system.json PVE_POLLING_INTERVAL
 		if strings.HasPrefix(line, "POLLING_INTERVAL=") {
-			// Skip this line, polling interval is now hardcoded
 			continue
 		} else if strings.HasPrefix(line, "UPDATE_CHANNEL=") && settings.UpdateChannel != "" {
 			lines = append(lines, fmt.Sprintf("UPDATE_CHANNEL=%s", settings.UpdateChannel))
@@ -1381,7 +1381,7 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		return err
 	}
 
-	// Note: POLLING_INTERVAL is deprecated and no longer written
+	// Note: legacy POLLING_INTERVAL is deprecated and no longer written
 
 	// Build the new content
 	content := strings.Join(lines, "\n")

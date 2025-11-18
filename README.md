@@ -396,7 +396,7 @@ The UI detects your deployment type and reminds you which command sequence to ru
 
 Quick start - most settings are in the web UI:
 - **Settings → Nodes**: Add/remove Proxmox instances
-- **Settings → System**: Polling intervals, timeouts, update settings
+- **Settings → System**: Monitor cadence (PVE polling), timeouts, update settings
 - **Settings → Security**: Authentication and API tokens
 - **Alerts**: Thresholds and notifications
 

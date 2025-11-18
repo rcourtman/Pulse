@@ -4019,10 +4019,28 @@ func (m *Monitor) getExecutor() PollExecutor {
 	return exec
 }
 
+func (m *Monitor) effectivePVEPollingInterval() time.Duration {
+	const minInterval = 10 * time.Second
+	const maxInterval = time.Hour
+
+	interval := minInterval
+	if m != nil && m.config != nil && m.config.PVEPollingInterval > 0 {
+		interval = m.config.PVEPollingInterval
+	}
+	if interval < minInterval {
+		interval = minInterval
+	}
+	if interval > maxInterval {
+		interval = maxInterval
+	}
+	return interval
+}
+
 // Start begins the monitoring loop
 func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
+	pollingInterval := m.effectivePVEPollingInterval()
 	log.Info().
-		Dur("pollingInterval", 10*time.Second).
+		Dur("pollingInterval", pollingInterval).
 		Msg("Starting monitoring loop")
 
 	m.mu.Lock()
@@ -4113,9 +4131,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		wsHub.BroadcastAlert(alert)
 	})
 
-	// Create separate tickers for polling and broadcasting
-	// Hardcoded to 10 seconds since Proxmox updates cluster/resources every 10 seconds
-	const pollingInterval = 10 * time.Second
+	// Create separate tickers for polling and broadcasting using the configured cadence
 
 	workerCount := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
 	m.startTaskWorkers(ctx, workerCount)

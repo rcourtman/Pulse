@@ -28,6 +28,7 @@ type SystemSettingsHandler struct {
 	persistence              *config.ConfigPersistence
 	wsHub                    *websocket.Hub
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
+	reloadMonitorFunc        func() error
 	monitor                  interface {
 		GetDiscoveryService() *discovery.Service
 		StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
@@ -48,13 +49,14 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	DisableTemperatureMonitoring()
 	GetNotificationManager() *notifications.NotificationManager
 	HasSocketTemperatureProxy() bool
-}, reloadSystemSettingsFunc func()) *SystemSettingsHandler {
+}, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
 		config:                   cfg,
 		persistence:              persistence,
 		wsHub:                    wsHub,
 		monitor:                  monitor,
 		reloadSystemSettingsFunc: reloadSystemSettingsFunc,
+		reloadMonitorFunc:        reloadMonitorFunc,
 	}
 }
 
@@ -118,8 +120,21 @@ func discoveryConfigMap(raw map[string]interface{}) (map[string]interface{}, boo
 
 // validateSystemSettings validates settings before applying them
 func validateSystemSettings(settings *config.SystemSettings, rawRequest map[string]interface{}) error {
-	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
-	// Legacy polling interval fields are ignored if provided
+	if val, ok := rawRequest["pvePollingInterval"]; ok {
+		if interval, ok := val.(float64); ok {
+			if interval <= 0 {
+				return fmt.Errorf("PVE polling interval must be positive (minimum 10 seconds)")
+			}
+			if interval < 10 {
+				return fmt.Errorf("PVE polling interval must be at least 10 seconds")
+			}
+			if interval > 3600 {
+				return fmt.Errorf("PVE polling interval cannot exceed 3600 seconds (1 hour)")
+			}
+		} else {
+			return fmt.Errorf("PVE polling interval must be a number")
+		}
+	}
 
 	if val, ok := rawRequest["pbsPollingInterval"]; ok {
 		if interval, ok := val.(float64); ok {
@@ -382,6 +397,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 			Msg("Loaded system settings for API response")
 
 		// Always expose effective backup polling configuration
+		settings.PVEPollingInterval = int(h.config.PVEPollingInterval.Seconds())
 		settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
 		enabled := h.config.EnableBackupPolling
 		settings.BackupPollingEnabled = &enabled
@@ -485,9 +501,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	discoveryConfigUpdated := false
 	prevTempEnabled := h.config.TemperatureMonitoringEnabled
 	tempToggleRequested := false
+	pveIntervalChanged := false
 
 	// Only update fields that were provided in the request
-	// Note: PVE polling is hardcoded to 10s, legacy polling fields are ignored
+	if _, ok := rawRequest["pvePollingInterval"]; ok {
+		settings.PVEPollingInterval = updates.PVEPollingInterval
+	}
 	if _, ok := rawRequest["pbsPollingInterval"]; ok {
 		settings.PBSPollingInterval = updates.PBSPollingInterval
 	}
@@ -608,7 +627,16 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 
 	// Update the config
-	// Note: PVE polling is hardcoded to 10s
+	if _, ok := rawRequest["pvePollingInterval"]; ok && settings.PVEPollingInterval > 0 {
+		newInterval := time.Duration(settings.PVEPollingInterval) * time.Second
+		if newInterval < 10*time.Second {
+			newInterval = 10 * time.Second
+		}
+		if h.config.PVEPollingInterval != newInterval {
+			pveIntervalChanged = true
+		}
+		h.config.PVEPollingInterval = newInterval
+	}
 	if settings.AllowedOrigins != "" {
 		h.config.AllowedOrigins = settings.AllowedOrigins
 	}
@@ -716,6 +744,14 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	// Reload cached system settings after successful save
 	if h.reloadSystemSettingsFunc != nil {
 		h.reloadSystemSettingsFunc()
+	}
+
+	if pveIntervalChanged && h.reloadMonitorFunc != nil {
+		if err := h.reloadMonitorFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after PVE polling interval change")
+			http.Error(w, "Configuration saved but failed to reload monitor", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	log.Info().Msg("System settings updated")

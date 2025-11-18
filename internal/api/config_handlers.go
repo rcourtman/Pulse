@@ -2876,6 +2876,7 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 
 	// Get current values from running config
 	settings := *persistedSettings
+	settings.PVEPollingInterval = int(h.config.PVEPollingInterval.Seconds())
 	settings.PBSPollingInterval = int(h.config.PBSPollingInterval.Seconds())
 	settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
 	settings.BackendPort = h.config.BackendPort
