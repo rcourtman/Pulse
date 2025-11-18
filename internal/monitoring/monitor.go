@@ -2873,6 +2873,7 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 	}
 
 	rootDeviceHint := ""
+	var mountMetadata map[string]containerMountMetadata
 	addressSet := make(map[string]struct{})
 	addressOrder := make([]string, 0, 4)
 
@@ -2952,8 +2953,16 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 			Int("vmid", container.VMID).
 			Msg("Container config metadata unavailable")
 	} else if len(configData) > 0 {
-		if hint := extractContainerRootDeviceFromConfig(configData); hint != "" {
-			rootDeviceHint = hint
+		mountMetadata = parseContainerMountMetadata(configData)
+		if rootDeviceHint == "" {
+			if meta, ok := mountMetadata["rootfs"]; ok && meta.Source != "" {
+				rootDeviceHint = meta.Source
+			}
+		}
+		if rootDeviceHint == "" {
+			if hint := extractContainerRootDeviceFromConfig(configData); hint != "" {
+				rootDeviceHint = hint
+			}
 		}
 		for _, detail := range parseContainerConfigNetworks(configData) {
 			if len(detail.Addresses) > 0 {
@@ -3043,7 +3052,7 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		container.NetworkInterfaces = networkIfaces
 	}
 
-	if disks := convertContainerDiskInfo(status); len(disks) > 0 {
+	if disks := convertContainerDiskInfo(status, mountMetadata); len(disks) > 0 {
 		container.Disks = disks
 	}
 
@@ -3091,7 +3100,7 @@ func ensureContainerRootDiskEntry(container *models.Container) {
 	}
 }
 
-func convertContainerDiskInfo(status *proxmox.Container) []models.Disk {
+func convertContainerDiskInfo(status *proxmox.Container, metadata map[string]containerMountMetadata) []models.Disk {
 	if status == nil || len(status.DiskInfo) == 0 {
 		return nil
 	}
@@ -3119,15 +3128,39 @@ func convertContainerDiskInfo(status *proxmox.Container) []models.Disk {
 		}
 
 		label := strings.TrimSpace(name)
+		lowerLabel := strings.ToLower(label)
+		mountpoint := ""
+		device := ""
+
+		if metadata != nil {
+			if meta, ok := metadata[lowerLabel]; ok {
+				mountpoint = strings.TrimSpace(meta.Mountpoint)
+				device = strings.TrimSpace(meta.Source)
+			}
+		}
+
 		if strings.EqualFold(label, "rootfs") || label == "" {
-			disk.Mountpoint = "/"
+			if mountpoint == "" {
+				mountpoint = "/"
+			}
 			disk.Type = "rootfs"
-			if device := sanitizeRootFSDevice(status.RootFS); device != "" {
-				disk.Device = device
+			if device == "" {
+				device = sanitizeRootFSDevice(status.RootFS)
 			}
 		} else {
-			disk.Mountpoint = label
-			disk.Type = strings.ToLower(label)
+			if mountpoint == "" {
+				mountpoint = label
+			}
+			if lowerLabel != "" {
+				disk.Type = lowerLabel
+			} else {
+				disk.Type = "disk"
+			}
+		}
+
+		disk.Mountpoint = mountpoint
+		if disk.Device == "" && device != "" {
+			disk.Device = device
 		}
 
 		disks = append(disks, disk)
@@ -3276,6 +3309,12 @@ type containerNetworkDetails struct {
 	Addresses []string
 }
 
+type containerMountMetadata struct {
+	Key        string
+	Mountpoint string
+	Source     string
+}
+
 func parseContainerConfigNetworks(config map[string]interface{}) []containerNetworkDetails {
 	if len(config) == 0 {
 		return nil
@@ -3329,6 +3368,59 @@ func parseContainerConfigNetworks(config map[string]interface{}) []containerNetw
 		if detail.Name != "" || detail.MAC != "" || len(detail.Addresses) > 0 {
 			results = append(results, detail)
 		}
+	}
+
+	if len(results) == 0 {
+		return nil
+	}
+
+	return results
+}
+
+func parseContainerMountMetadata(config map[string]interface{}) map[string]containerMountMetadata {
+	if len(config) == 0 {
+		return nil
+	}
+
+	results := make(map[string]containerMountMetadata)
+	for rawKey, rawValue := range config {
+		key := strings.ToLower(strings.TrimSpace(rawKey))
+		if key != "rootfs" && !strings.HasPrefix(key, "mp") {
+			continue
+		}
+
+		value := strings.TrimSpace(fmt.Sprint(rawValue))
+		if value == "" {
+			continue
+		}
+
+		meta := containerMountMetadata{
+			Key: key,
+		}
+
+		parts := strings.Split(value, ",")
+		if len(parts) > 0 {
+			meta.Source = strings.TrimSpace(parts[0])
+		}
+
+		for _, part := range parts[1:] {
+			kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+			if len(kv) != 2 {
+				continue
+			}
+			k := strings.ToLower(strings.TrimSpace(kv[0]))
+			v := strings.TrimSpace(kv[1])
+			switch k {
+			case "mp", "mountpoint":
+				meta.Mountpoint = v
+			}
+		}
+
+		if meta.Mountpoint == "" && key == "rootfs" {
+			meta.Mountpoint = "/"
+		}
+
+		results[key] = meta
 	}
 
 	if len(results) == 0 {
