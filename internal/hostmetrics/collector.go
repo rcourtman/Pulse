@@ -97,6 +97,7 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 
 	disks := make([]agentshost.Disk, 0, len(partitions))
 	seen := make(map[string]struct{}, len(partitions))
+	zfsDatasets := make([]zfsDatasetUsage, 0)
 
 	for _, part := range partitions {
 		if part.Mountpoint == "" {
@@ -112,6 +113,26 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 			continue
 		}
 		if usage.Total == 0 {
+			continue
+		}
+
+		if part.Fstype == "zfs" {
+			pool := zfsPoolFromDevice(part.Device)
+			if pool == "" {
+				continue
+			}
+			if fsfilters.ShouldIgnoreReadOnlyFilesystem(part.Fstype, usage.Total, usage.Used) {
+				continue
+			}
+
+			zfsDatasets = append(zfsDatasets, zfsDatasetUsage{
+				Pool:       pool,
+				Dataset:    part.Device,
+				Mountpoint: part.Mountpoint,
+				Total:      usage.Total,
+				Used:       usage.Used,
+				Free:       usage.Free,
+			})
 			continue
 		}
 
@@ -133,6 +154,8 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 			Usage:      usage.UsedPercent,
 		})
 	}
+
+	disks = append(disks, summarizeZFSPools(ctx, zfsDatasets)...)
 
 	sort.Slice(disks, func(i, j int) bool { return disks[i].Mountpoint < disks[j].Mountpoint })
 	return disks
