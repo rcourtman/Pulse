@@ -50,3 +50,35 @@ allowed_nodes:
 		t.Fatalf("expected config to remain unchanged")
 	}
 }
+
+func TestSanitizeDuplicateAllowedNodesBlocks_WithCommentBlocks(t *testing.T) {
+	raw := `
+allowed_source_subnets:
+  - 192.168.1.0/24
+
+# Cluster nodes (auto-discovered during installation)
+# These nodes are allowed to request temperature data when cluster IPC validation is unavailable
+allowed_nodes:
+  - delly
+  - minipc
+
+# Cluster nodes (auto-discovered during installation)
+# These nodes are allowed to request temperature data when cluster IPC validation is unavailable
+allowed_nodes:
+  - delly
+  - minipc
+`
+
+	sanitized, out := sanitizeDuplicateAllowedNodesBlocks("", []byte(raw))
+	if !sanitized {
+		t.Fatalf("expected sanitizer to run for duplicate comment blocks")
+	}
+
+	result := string(out)
+	if strings.Count(result, "allowed_nodes:") != 1 {
+		t.Fatalf("expected a single allowed_nodes block, got %q", result)
+	}
+	if strings.Count(result, "# Cluster nodes") != 1 {
+		t.Fatalf("expected duplicate comments to collapse, got %q", result)
+	}
+}

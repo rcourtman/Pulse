@@ -3098,10 +3098,144 @@ INSTALLER="/opt/pulse/sensor-proxy/install-sensor-proxy.sh"
 CTID_FILE="/etc/pulse-sensor-proxy/ctid"
 PENDING_FILE="/etc/pulse-sensor-proxy/pending-control-plane.env"
 TOKEN_FILE="/etc/pulse-sensor-proxy/.pulse-control-token"
+CONFIG_FILE="/etc/pulse-sensor-proxy/config.yaml"
 LOG_TAG="pulse-sensor-proxy-selfheal"
 
 log() {
     logger -t "$LOG_TAG" "$1"
+}
+
+sanitize_allowed_nodes() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        return
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        return
+    fi
+
+    local result
+    if ! result=$(python3 - "$CONFIG_FILE" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+lines = path.read_text().splitlines()
+blocks = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    stripped = line.lstrip()
+    if stripped.startswith("allowed_nodes:"):
+        start = i
+        entries = []
+        j = i + 1
+        while j < len(lines):
+            nxt = lines[j]
+            nxt_stripped = nxt.lstrip()
+            if nxt_stripped.startswith("-"):
+                entries.append(nxt_stripped[1:].strip())
+                j += 1
+                continue
+            if (
+                nxt_stripped.startswith("#")
+                or nxt_stripped == ""
+                or nxt.startswith((" ", "\t"))
+            ):
+                j += 1
+                continue
+            break
+
+        comment_indices = set()
+        comment_text = []
+        k = start - 1
+        while k >= 0 and lines[k].strip() == "":
+            comment_indices.add(k)
+            k -= 1
+        while k >= 0 and lines[k].lstrip().startswith("#"):
+            comment_indices.add(k)
+            comment_text.append(lines[k])
+            k -= 1
+        comment_text.reverse()
+
+        blocks.append(
+            {
+                "start": start,
+                "end": j,
+                "comment_indices": comment_indices,
+                "comment_text": comment_text,
+                "entries": entries,
+            }
+        )
+        i = j
+        continue
+    i += 1
+
+if len(blocks) <= 1:
+    sys.exit(0)
+
+seen = set()
+merged = []
+for block in blocks:
+    for entry in block["entries"]:
+        key = entry.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(entry)
+
+if not merged:
+    sys.exit(0)
+
+first_block = blocks[0]
+insert_at = min(
+    [first_block["start"]] + list(first_block["comment_indices"])
+) if first_block["comment_indices"] else first_block["start"]
+
+def build_comment():
+    if first_block["comment_text"]:
+        return first_block["comment_text"]
+    return ["# Cluster nodes (auto-discovered during installation)"]
+
+comment_block = build_comment()
+replacement = []
+replacement.extend(comment_block)
+if replacement and replacement[-1].strip() != "":
+    replacement.append("")
+replacement.append("allowed_nodes:")
+for entry in merged:
+    replacement.append(f"  - {entry}")
+replacement.append("")
+
+indices_to_remove = set()
+for block in blocks:
+    indices_to_remove.update(range(block["start"], block["end"]))
+    indices_to_remove.update(block["comment_indices"])
+
+result = []
+inserted = False
+for idx, line in enumerate(lines):
+    if not inserted and idx == insert_at:
+        result.extend(replacement)
+        inserted = True
+    if idx in indices_to_remove:
+        continue
+    result.append(line)
+
+if not inserted:
+    if result and result[-1].strip() != "":
+        result.append("")
+    result.extend(replacement)
+
+path.write_text("\n".join(result).rstrip() + "\n")
+print(f"Sanitized duplicate allowed_nodes blocks ({len(blocks) - 1} removed)")
+PY
+    ); then
+        return
+    fi
+
+    if [[ -n "$result" ]]; then
+        log "$result"
+    fi
 }
 
 attempt_control_plane_reconcile() {
@@ -3141,10 +3275,13 @@ attempt_control_plane_reconcile() {
 
     if PULSE_SENSOR_PROXY_SELFHEAL=1 bash "$INSTALLER" "${cmd[@]}"; then
         rm -f "$PENDING_FILE"
+        sanitize_allowed_nodes
     else
         log "Control-plane reconciliation failed"
     fi
 }
+
+sanitize_allowed_nodes
 
 if ! command -v systemctl >/dev/null 2>&1; then
     exit 0
@@ -3153,7 +3290,11 @@ fi
 if ! systemctl list-unit-files 2>/dev/null | grep -q "^${SERVICE}\\.service"; then
     if [[ -x "$INSTALLER" && -f "$CTID_FILE" ]]; then
         log "Service unit missing; attempting reinstall"
-        PULSE_SENSOR_PROXY_SELFHEAL=1 bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
+        if PULSE_SENSOR_PROXY_SELFHEAL=1 bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet; then
+            sanitize_allowed_nodes
+        else
+            log "Reinstall attempt failed"
+        fi
     fi
     exit 0
 fi
@@ -3166,7 +3307,11 @@ fi
 if ! systemctl is-active --quiet "${SERVICE}.service"; then
     if [[ -x "$INSTALLER" && -f "$CTID_FILE" ]]; then
         log "Service failed to start; attempting reinstall"
-        PULSE_SENSOR_PROXY_SELFHEAL=1 bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet || log "Reinstall attempt failed"
+        if PULSE_SENSOR_PROXY_SELFHEAL=1 bash "$INSTALLER" --ctid "$(cat "$CTID_FILE")" --skip-restart --quiet; then
+            sanitize_allowed_nodes
+        else
+            log "Reinstall attempt failed"
+        fi
         systemctl start "${SERVICE}.service" || true
     fi
 fi
