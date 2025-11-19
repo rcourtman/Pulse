@@ -407,6 +407,9 @@ func migrateInlineToFile(configPath, allowedNodesPath string) error {
 				return fmt.Errorf("failed to read config: %w", err)
 			}
 
+			// Sanitize duplicate blocks before parsing
+			_, configData = sanitizeDuplicateAllowedNodesBlocks(configPath, configData)
+
 			// Parse config to extract inline nodes
 			var config map[string]interface{}
 			if err := yaml.Unmarshal(configData, &config); err != nil {
