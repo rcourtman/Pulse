@@ -94,8 +94,15 @@ chown pulse-sensor-proxy:pulse-sensor-proxy "$TOKEN_FILE"
 
 update_config_atomically() {
     # Phase 2: Use atomic write to prevent corruption
+    # NOTE: This script is for one-time migration from v4.31 to v4.32+
+    # It uses atomic write but doesn't use config.yaml.lock (minor race risk)
+    # Future: Deprecate this script once all users are on v4.32+
+
+    # Create temp file in same directory to ensure rename is atomic
+    local config_dir
+    config_dir=$(dirname "$CONFIG_FILE")
     local temp_file
-    temp_file=$(mktemp)
+    temp_file=$(mktemp "$config_dir/.config.XXXXXX")
 
     # Remove old control plane blocks and add new one atomically
     python3 - "$CONFIG_FILE" "$temp_file" <<'PY'
