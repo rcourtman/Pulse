@@ -464,6 +464,7 @@ BIND_MOUNT_SOCKET="/mnt/pulse-proxy/pulse-sensor-proxy.sock"
 LOCAL_SOCKET="/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
 SOCKET_PATH=""
 SKIP_INSTALLATION=false
+LOCAL_PROXY_EXISTED_AT_START=false
 
 echo "Checking for existing pulse-sensor-proxy..."
 echo ""
@@ -492,10 +493,12 @@ fi
 # Check for existing local installation
 if [ -S "$LOCAL_SOCKET" ] && [ "$SKIP_INSTALLATION" = false ]; then
     echo "  Found socket at /run/pulse-sensor-proxy (local installation)"
+    LOCAL_PROXY_EXISTED_AT_START=true
     if validate_socket "$LOCAL_SOCKET"; then
-        echo "  ✓ Socket is functional"
+        echo "  ✓ Socket is functional - will refresh to update tokens/config"
         SOCKET_PATH="/run/pulse-sensor-proxy"
-        SKIP_INSTALLATION=true
+        # Don't skip installation - always reinstall to refresh tokens
+        SKIP_INSTALLATION=false
     else
         echo "  ⚠️  Socket exists but is not responsive - will reinstall"
         systemctl stop pulse-sensor-proxy 2>/dev/null || true
