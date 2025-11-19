@@ -34,17 +34,26 @@ var validateCmd = &cobra.Command{
 			cfgPath = defaultConfigPath
 		}
 
-		allowedNodesPath := allowedNodesPathFlag
-		if allowedNodesPath == "" {
-			allowedNodesPath = filepath.Join(filepath.Dir(cfgPath), "allowed_nodes.yaml")
-		}
-
-		if err := validateConfigFile(cfgPath); err != nil {
+		// Use loadConfig to parse config properly and get the actual allowed_nodes_file path
+		cfg, err := loadConfig(cfgPath)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Config validation failed: %v\n", err)
 			return err
 		}
 
+		// Determine allowed_nodes path from config (honors allowed_nodes_file setting)
+		allowedNodesPath := allowedNodesPathFlag
+		if allowedNodesPath == "" {
+			if cfg.AllowedNodesFile != "" {
+				allowedNodesPath = cfg.AllowedNodesFile
+			} else {
+				// Default fallback
+				allowedNodesPath = filepath.Join(filepath.Dir(cfgPath), "allowed_nodes.yaml")
+			}
+		}
+
 		// Check if allowed_nodes.yaml exists and validate it
+		// Empty lists are allowed (admin may clear for security or cluster relies on IPC validation)
 		if _, err := os.Stat(allowedNodesPath); err == nil {
 			if err := validateAllowedNodesFile(allowedNodesPath); err != nil {
 				fmt.Fprintf(os.Stderr, "Allowed nodes validation failed: %v\n", err)
@@ -76,8 +85,9 @@ Examples:
 			allowedNodesPath = "/etc/pulse-sensor-proxy/allowed_nodes.yaml"
 		}
 
-		if len(mergeNodesFlag) == 0 {
-			return fmt.Errorf("no nodes specified (use --merge flag)")
+		// Allow zero nodes when using --replace (admin may want to clear the list)
+		if len(mergeNodesFlag) == 0 && !replaceMode {
+			return fmt.Errorf("no nodes specified (use --merge flag, or --replace to clear)")
 		}
 
 		if err := setAllowedNodes(allowedNodesPath, mergeNodesFlag, replaceMode); err != nil {
@@ -155,7 +165,8 @@ func validateAllowedNodesFile(path string) error {
 		return fmt.Errorf("failed to parse allowed_nodes YAML: %w", err)
 	}
 
-	// Extract nodes
+	// Extract nodes (empty list is valid - admin may clear for security)
+	// Clusters can also rely on IPC-based validation instead of static allowlists
 	var nodes []string
 	switch v := result.(type) {
 	case map[string]interface{}:
@@ -174,12 +185,12 @@ func validateAllowedNodesFile(path string) error {
 				nodes = append(nodes, s)
 			}
 		}
+	case nil:
+		// Empty file is valid
+		return nil
 	}
 
-	if len(nodes) == 0 {
-		return fmt.Errorf("allowed_nodes file is empty or invalid")
-	}
-
+	// Empty list is allowed - don't enforce minimum
 	return nil
 }
 
@@ -191,8 +202,9 @@ func setAllowedNodes(path string, newNodes []string, replace bool) error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Use file locking to prevent concurrent writes
-	return withLockedFile(path, func(f *os.File) error {
+	// Use a separate lock file that persists across renames
+	lockPath := path + ".lock"
+	return withLockedFile(lockPath, func(f *os.File) error {
 		var existing []string
 
 		// Read existing nodes if not in replace mode
@@ -205,6 +217,7 @@ func setAllowedNodes(path string, newNodes []string, replace bool) error {
 		// Merge and deduplicate
 		merged := normalizeNodes(append(existing, newNodes...))
 
+		// Allow empty lists (admin may want to clear the file)
 		// Serialize to YAML
 		output := map[string]interface{}{
 			"allowed_nodes": merged,
@@ -218,17 +231,17 @@ func setAllowedNodes(path string, newNodes []string, replace bool) error {
 		header := "# Managed by pulse-sensor-proxy config CLI\n# Do not edit manually while service is running\n"
 		finalData := []byte(header + string(data))
 
-		// Write atomically
+		// Write atomically while holding lock
 		return atomicWriteFile(path, finalData, 0644)
 	})
 }
 
-// withLockedFile opens a file with exclusive locking and runs a callback
-func withLockedFile(path string, fn func(f *os.File) error) error {
-	// Open or create the file
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+// withLockedFile opens a lock file with exclusive locking and runs a callback
+func withLockedFile(lockPath string, fn func(f *os.File) error) error {
+	// Open or create the lock file (never deleted, persists across renames)
+	f, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return fmt.Errorf("failed to open lock file: %w", err)
 	}
 	defer f.Close()
 
@@ -238,7 +251,7 @@ func withLockedFile(path string, fn func(f *os.File) error) error {
 	}
 	defer unix.Flock(int(f.Fd()), unix.LOCK_UN) //nolint:errcheck
 
-	// Run callback
+	// Run callback while holding lock
 	return fn(f)
 }
 
