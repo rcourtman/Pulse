@@ -4289,9 +4289,9 @@ fi
 
 # Single temperature monitoring prompt
 if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
-    echo "Temperature monitoring is already configured via pulse-sensor-proxy on this host."
-    echo "Pulse will collect temperatures as soon as you finish the setup wizard."
+    echo "Existing pulse-sensor-proxy detected—running repair to refresh tokens and control-plane settings..."
     echo ""
+    TEMPERATURE_ENABLED=true
 elif [ "$SSH_ALREADY_CONFIGURED" = true ]; then
     TEMPERATURE_ENABLED=true
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
