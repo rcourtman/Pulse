@@ -104,10 +104,46 @@ Examples:
 	},
 }
 
+var migrateToFileCmd = &cobra.Command{
+	Use:   "migrate-to-file",
+	Short: "Migrate inline allowed_nodes to file-based configuration",
+	Long: `Atomically migrates inline allowed_nodes block from config.yaml to allowed_nodes.yaml.
+
+This command:
+- Extracts nodes from inline allowed_nodes block in config.yaml
+- Removes the inline block from config.yaml
+- Ensures allowed_nodes_file is set in config.yaml
+- Writes nodes to allowed_nodes.yaml
+- All operations are atomic with file locking
+
+Safe to run multiple times (idempotent).
+`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfgPath := configPathFlag
+		if cfgPath == "" {
+			cfgPath = defaultConfigPath
+		}
+
+		allowedNodesPath := allowedNodesPathFlag
+		if allowedNodesPath == "" {
+			allowedNodesPath = filepath.Join(filepath.Dir(cfgPath), "allowed_nodes.yaml")
+		}
+
+		if err := migrateInlineToFile(cfgPath, allowedNodesPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
+			return err
+		}
+
+		fmt.Println("Migration complete: inline allowed_nodes moved to file")
+		return nil
+	},
+}
+
 func init() {
 	// Add subcommands to config command
 	configCmd.AddCommand(validateCmd)
 	configCmd.AddCommand(setAllowedNodesCmd)
+	configCmd.AddCommand(migrateToFileCmd)
 
 	// Validate command flags
 	validateCmd.Flags().StringVar(&configPathFlag, "config", "", "Path to config.yaml (default: /etc/pulse-sensor-proxy/config.yaml)")
@@ -117,6 +153,10 @@ func init() {
 	setAllowedNodesCmd.Flags().StringVar(&allowedNodesPathFlag, "allowed-nodes", "", "Path to allowed_nodes.yaml (default: /etc/pulse-sensor-proxy/allowed_nodes.yaml)")
 	setAllowedNodesCmd.Flags().StringSliceVar(&mergeNodesFlag, "merge", []string{}, "Node to merge (can be specified multiple times)")
 	setAllowedNodesCmd.Flags().BoolVar(&replaceMode, "replace", false, "Replace entire list instead of merging")
+
+	// Migrate-to-file command flags
+	migrateToFileCmd.Flags().StringVar(&configPathFlag, "config", "", "Path to config.yaml (default: /etc/pulse-sensor-proxy/config.yaml)")
+	migrateToFileCmd.Flags().StringVar(&allowedNodesPathFlag, "allowed-nodes", "", "Path to allowed_nodes.yaml (default: same dir as config)")
 
 	// Add config command to root
 	rootCmd.AddCommand(configCmd)
@@ -350,4 +390,81 @@ func extractNodesFromYAML(data []byte) []string {
 	}
 
 	return nodes
+}
+
+// migrateInlineToFile atomically migrates inline allowed_nodes from config.yaml to allowed_nodes.yaml
+func migrateInlineToFile(configPath, allowedNodesPath string) error {
+	configLockPath := configPath + ".lock"
+	allowedNodesLockPath := allowedNodesPath + ".lock"
+
+	// Lock both files in consistent order to prevent deadlocks
+	// Always lock config.yaml before allowed_nodes.yaml
+	return withLockedFile(configLockPath, func(configLock *os.File) error {
+		return withLockedFile(allowedNodesLockPath, func(allowedNodesLock *os.File) error {
+			// Read current config
+			configData, err := os.ReadFile(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to read config: %w", err)
+			}
+
+			// Parse config to extract inline nodes
+			var config map[string]interface{}
+			if err := yaml.Unmarshal(configData, &config); err != nil {
+				return fmt.Errorf("failed to parse config: %w", err)
+			}
+
+			// Extract inline nodes (if any)
+			var inlineNodes []string
+			if allowedNodes, ok := config["allowed_nodes"]; ok {
+				if nodeList, ok := allowedNodes.([]interface{}); ok {
+					for _, node := range nodeList {
+						if s, ok := node.(string); ok && s != "" {
+							inlineNodes = append(inlineNodes, s)
+						}
+					}
+				}
+			}
+
+			// Remove inline allowed_nodes block from config
+			delete(config, "allowed_nodes")
+
+			// Ensure allowed_nodes_file is set
+			if _, exists := config["allowed_nodes_file"]; !exists {
+				config["allowed_nodes_file"] = allowedNodesPath
+			}
+
+			// Write updated config atomically
+			newConfigData, err := yaml.Marshal(config)
+			if err != nil {
+				return fmt.Errorf("failed to marshal config: %w", err)
+			}
+
+			if err := atomicWriteFile(configPath, newConfigData, 0644); err != nil {
+				return fmt.Errorf("failed to write config: %w", err)
+			}
+
+			// Merge inline nodes with existing file nodes (if any)
+			var existingNodes []string
+			if data, err := os.ReadFile(allowedNodesPath); err == nil {
+				existingNodes = extractNodesFromYAML(data)
+			}
+
+			// Combine and deduplicate
+			allNodes := normalizeNodes(append(existingNodes, inlineNodes...))
+
+			// Write allowed_nodes.yaml atomically
+			output := map[string]interface{}{
+				"allowed_nodes": allNodes,
+			}
+			allowedNodesData, err := yaml.Marshal(output)
+			if err != nil {
+				return fmt.Errorf("failed to marshal allowed_nodes: %w", err)
+			}
+
+			header := "# Managed by pulse-sensor-proxy config CLI\n# Do not edit manually while service is running\n"
+			finalData := []byte(header + string(allowedNodesData))
+
+			return atomicWriteFile(allowedNodesPath, finalData, 0644)
+		})
+	})
 }
