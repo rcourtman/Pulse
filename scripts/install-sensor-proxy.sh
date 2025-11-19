@@ -3094,6 +3094,7 @@ else
 set -euo pipefail
 
 SERVICE="pulse-sensor-proxy"
+BINARY_PATH="/opt/pulse/sensor-proxy/bin/pulse-sensor-proxy"
 INSTALLER="/opt/pulse/sensor-proxy/install-sensor-proxy.sh"
 CTID_FILE="/etc/pulse-sensor-proxy/ctid"
 PENDING_FILE="/etc/pulse-sensor-proxy/pending-control-plane.env"

@@ -92,14 +92,20 @@ echo "$CONTROL_TOKEN" > "$TOKEN_FILE"
 chmod 600 "$TOKEN_FILE"
 chown pulse-sensor-proxy:pulse-sensor-proxy "$TOKEN_FILE"
 
-remove_control_block() {
-    python3 - "$CONFIG_FILE" <<'PY'
+update_config_atomically() {
+    # Phase 2: Use atomic write to prevent corruption
+    local temp_file
+    temp_file=$(mktemp)
+
+    # Remove old control plane blocks and add new one atomically
+    python3 - "$CONFIG_FILE" "$temp_file" <<'PY'
 from pathlib import Path
 import sys
-path = Path(sys.argv[1])
-if not path.exists():
+config_path = Path(sys.argv[1])
+temp_path = Path(sys.argv[2])
+if not config_path.exists():
     sys.exit(0)
-lines = path.read_text().splitlines(keepends=True)
+lines = config_path.read_text().splitlines(keepends=True)
 result = []
 i = 0
 while i < len(lines):
@@ -116,13 +122,11 @@ while i < len(lines):
         continue
     result.append(line)
     i += 1
-path.write_text("".join(result))
+temp_path.write_text("".join(result))
 PY
-}
 
-log "Updating config..."
-remove_control_block
-cat >> "$CONFIG_FILE" <<EOF
+    # Append new control plane config
+    cat >> "$temp_file" <<EOF
 
 # Pulse control plane configuration (added by migrate-sensor-proxy-control-plane.sh)
 pulse_control_plane:
@@ -130,6 +134,15 @@ pulse_control_plane:
   token_file: "$TOKEN_FILE"
   refresh_interval: $REFRESH_INTERVAL
 EOF
+
+    # Atomic rename
+    mv "$temp_file" "$CONFIG_FILE"
+    chmod 644 "$CONFIG_FILE"
+    chown pulse-sensor-proxy:pulse-sensor-proxy "$CONFIG_FILE" 2>/dev/null || true
+}
+
+log "Updating config..."
+update_config_atomically
 
 if [[ "$SKIP_RESTART" == false ]]; then
     log "Restarting pulse-sensor-proxy..."
