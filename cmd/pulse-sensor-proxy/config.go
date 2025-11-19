@@ -552,15 +552,17 @@ func sanitizeDuplicateAllowedNodesBlocks(path string, data []byte) (bool, []byte
 				Str("config_file", path).
 				Msg("Failed to rewrite sanitized configuration; using in-memory copy only")
 		} else {
+			// Phase 2: This sanitizer should never fire with the new config CLI
+			// If it does, it indicates a bug or manual file editing
 			log.Warn().
 				Str("config_file", path).
 				Int("removed_duplicate_blocks", len(matches)-1).
-				Msg("Detected duplicate allowed_nodes blocks and sanitized configuration automatically")
+				Msg("CONFIG SANITIZED – duplicate allowed_nodes blocks removed; this should not happen with Phase 2 config CLI – please report if you see this")
 		}
 	} else {
 		log.Warn().
 			Int("removed_duplicate_blocks", len(matches)-1).
-			Msg("Detected duplicate allowed_nodes blocks and sanitized configuration (in-memory only)")
+			Msg("CONFIG SANITIZED – duplicate allowed_nodes blocks detected in-memory – this should not happen with Phase 2 config CLI")
 	}
 
 	return true, cleaned
