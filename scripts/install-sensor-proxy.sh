@@ -1598,6 +1598,8 @@ ensure_control_plane_config() {
             { print }
         ' "$config_file" > "$tmp"
         mv "$tmp" "$config_file"
+        chown pulse-sensor-proxy:pulse-sensor-proxy "$config_file"
+        chmod 0644 "$config_file"
         return
     fi
 
@@ -1855,6 +1857,8 @@ allowed_source_subnets:
   - $PULSE_IP/32
   - 127.0.0.1/32
 EOF
+    chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/config.yaml
+    chmod 0644 /etc/pulse-sensor-proxy/config.yaml
 
     print_success "HTTP mode configured successfully"
     echo ""
