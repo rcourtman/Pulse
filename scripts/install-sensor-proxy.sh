@@ -993,7 +993,7 @@ EOF
 
 # Parse arguments first to check for standalone mode
 CTID=""
-VERSION="latest"
+VERSION="v4.32.0"
 LOCAL_BINARY=""
 QUIET=false
 PULSE_SERVER=""
@@ -1002,6 +1002,7 @@ HTTP_MODE=false
 HTTP_ADDR=":8443"
 FALLBACK_BASE="${PULSE_SENSOR_PROXY_FALLBACK_URL:-}"
 SKIP_RESTART=false
+RESTART_PULSE=false
 UNINSTALL=false
 PURGE=false
 CONTROL_PLANE_TOKEN=""
@@ -1044,6 +1045,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-restart)
             SKIP_RESTART=true
+            shift
+            ;;
+        --restart-pulse)
+            RESTART_PULSE=true
             shift
             ;;
         --uninstall)
@@ -3270,6 +3275,43 @@ else
         print_info "Or if using Docker directly:"
         echo "  docker restart pulse"
         echo ""
+    fi
+
+    # Check if Pulse needs to be restarted to pick up the proxy registration
+    PULSE_RESTART_CMD=""
+    if systemctl is-active --quiet pulse 2>/dev/null; then
+        PULSE_RESTART_CMD="systemctl restart pulse"
+    elif systemctl is-active --quiet pulse-hot-dev 2>/dev/null; then
+        PULSE_RESTART_CMD="systemctl restart pulse-hot-dev"
+    elif command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^pulse$'; then
+        PULSE_RESTART_CMD="docker restart pulse"
+    fi
+
+    if [[ -n "$PULSE_RESTART_CMD" ]]; then
+        if [[ "$RESTART_PULSE" == true ]]; then
+            echo ""
+            print_info "Restarting Pulse to enable temperature monitoring..."
+            if eval "$PULSE_RESTART_CMD"; then
+                sleep 3
+                print_success "Pulse restarted successfully - temperature monitoring is now active"
+            else
+                print_warn "Failed to restart Pulse automatically. Please restart manually:"
+                echo "  $PULSE_RESTART_CMD"
+            fi
+            echo ""
+        else
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  Pulse Restart Required"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            print_info "${YELLOW}IMPORTANT:${NC} Restart Pulse to enable temperature monitoring:"
+            echo "  sudo $PULSE_RESTART_CMD"
+            echo ""
+            print_info "Or add --restart-pulse flag to restart automatically:"
+            echo "  curl ... | bash -s -- ... --restart-pulse"
+            echo ""
+        fi
     fi
 
     print_info "To check proxy status:"
