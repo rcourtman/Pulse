@@ -545,20 +545,15 @@ func sanitizeDuplicateAllowedNodesBlocks(path string, data []byte) (bool, []byte
 	buf.Write(data[last:])
 
 	cleaned := buf.Bytes()
+
+	// Phase 2: DO NOT write the file back - that would create an uncoordinated writer
+	// The sanitizer only fixes the in-memory copy for this startup
+	// Admins should run `pulse-sensor-proxy config migrate-to-file` to fix the file atomically
 	if path != "" {
-		if err := os.WriteFile(path, cleaned, 0600); err != nil {
-			log.Warn().
-				Err(err).
-				Str("config_file", path).
-				Msg("Failed to rewrite sanitized configuration; using in-memory copy only")
-		} else {
-			// Phase 2: This sanitizer should never fire with the new config CLI
-			// If it does, it indicates a bug or manual file editing
-			log.Warn().
-				Str("config_file", path).
-				Int("removed_duplicate_blocks", len(matches)-1).
-				Msg("CONFIG SANITIZED – duplicate allowed_nodes blocks removed; this should not happen with Phase 2 config CLI – please report if you see this")
-		}
+		log.Warn().
+			Str("config_file", path).
+			Int("removed_duplicate_blocks", len(matches)-1).
+			Msg("CONFIG SANITIZED (in-memory only) – duplicate allowed_nodes blocks detected; run 'pulse-sensor-proxy config migrate-to-file' to fix the file permanently")
 	} else {
 		log.Warn().
 			Int("removed_duplicate_blocks", len(matches)-1).
