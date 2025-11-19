@@ -22,7 +22,9 @@ import (
 
 // TemperatureProxyHandlers manages temperature proxy registration
 type TemperatureProxyHandlers struct {
+	config      *config.Config
 	persistence *config.ConfigPersistence
+	reloadFunc  func() error
 	syncMu      sync.RWMutex
 	syncStatus  map[string]proxySyncState
 }
@@ -41,10 +43,19 @@ type authorizedNode struct {
 }
 
 // NewTemperatureProxyHandlers constructs a new handler set for temperature proxy
-func NewTemperatureProxyHandlers(persistence *config.ConfigPersistence) *TemperatureProxyHandlers {
+func NewTemperatureProxyHandlers(cfg *config.Config, persistence *config.ConfigPersistence, reloadFunc func() error) *TemperatureProxyHandlers {
 	return &TemperatureProxyHandlers{
+		config:      cfg,
 		persistence: persistence,
+		reloadFunc:  reloadFunc,
 		syncStatus:  make(map[string]proxySyncState),
+	}
+}
+
+// SetConfig updates the configuration reference used by the handler.
+func (h *TemperatureProxyHandlers) SetConfig(cfg *config.Config) {
+	if h != nil {
+		h.config = cfg
 	}
 }
 
@@ -278,9 +289,26 @@ func (h *TemperatureProxyHandlers) HandleRegister(w http.ResponseWriter, r *http
 	nodesConfig.PVEInstances[matchedIndex].TemperatureProxyControlToken = ctrlToken
 
 	// Save updated configuration
+	log.Debug().
+		Int("matchedIndex", matchedIndex).
+		Str("saving_url", nodesConfig.PVEInstances[matchedIndex].TemperatureProxyURL).
+		Bool("saving_has_token", nodesConfig.PVEInstances[matchedIndex].TemperatureProxyToken != "").
+		Str("instance_name", nodesConfig.PVEInstances[matchedIndex].Name).
+		Msg("About to save nodes config with proxy registration")
 	if err := h.persistence.SaveNodesConfig(nodesConfig.PVEInstances, nodesConfig.PBSInstances, nodesConfig.PMGInstances); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "config_save_failed", "Failed to save configuration", map[string]string{"error": err.Error()})
 		return
+	}
+
+	// Reload the entire config to ensure all components (router, monitor, handlers) get the fresh config
+	// This prevents the monitor from later overwriting nodes.enc with stale data
+	if h.reloadFunc != nil {
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload config after temperature proxy registration")
+			// Don't fail the request - the save succeeded, reload is best-effort
+		} else {
+			log.Info().Str("instance", matchedInstance.Name).Msg("Config reloaded after temperature proxy registration")
+		}
 	}
 
 	log.Info().

@@ -1738,17 +1738,35 @@ if [[ "$HTTP_MODE" == true ]]; then
     # Check if port is already in use
     PORT_NUMBER="${HTTP_ADDR#:}"
     if ss -ltn | grep -q ":${PORT_NUMBER} "; then
-        print_error "Port ${PORT_NUMBER} is already in use"
-        print_error ""
-        print_error "Currently using port ${PORT_NUMBER}:"
-        ss -ltnp | grep ":${PORT_NUMBER} " || true
-        print_error ""
-        print_error "Options:"
-        print_error "  1. Stop the conflicting service"
-        print_error "  2. Use a different port: --http-addr :PORT"
-        print_error "  3. If this is a previous sensor-proxy, uninstall first:"
-        print_error "     $0 --uninstall"
-        exit 1
+        # Port is in use - check if it's our own service (refresh scenario)
+        if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+            # Check if the process using the port is pulse-sensor-proxy
+            PORT_OWNER=$(ss -ltnp | grep ":${PORT_NUMBER} " | grep -o 'pulse-sensor-pr' || true)
+            if [[ -n "$PORT_OWNER" ]]; then
+                # Our service is using the port - this is a refresh, continue
+                print_info "Existing pulse-sensor-proxy detected on port ${PORT_NUMBER} - will refresh configuration"
+            else
+                # Service is active but something else is using the port
+                print_error "Port ${PORT_NUMBER} is already in use by another process"
+                print_error ""
+                print_error "Currently using port ${PORT_NUMBER}:"
+                ss -ltnp | grep ":${PORT_NUMBER} " || true
+                exit 1
+            fi
+        else
+            # Service not active, port conflict with something else
+            print_error "Port ${PORT_NUMBER} is already in use"
+            print_error ""
+            print_error "Currently using port ${PORT_NUMBER}:"
+            ss -ltnp | grep ":${PORT_NUMBER} " || true
+            print_error ""
+            print_error "Options:"
+            print_error "  1. Stop the conflicting service"
+            print_error "  2. Use a different port: --http-addr :PORT"
+            print_error "  3. If this is a previous sensor-proxy, uninstall first:"
+            print_error "     $0 --uninstall"
+            exit 1
+        fi
     fi
 
     # Setup TLS certificates
@@ -1814,11 +1832,18 @@ if [[ "$HTTP_MODE" == true ]]; then
     chmod 600 /etc/pulse-sensor-proxy/.http-auth-token
     chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/.http-auth-token
 
-    # Backup config before modifying
+    # Backup config and token files before modifying
     if [[ -f /etc/pulse-sensor-proxy/config.yaml ]]; then
-        BACKUP_CONFIG="/etc/pulse-sensor-proxy/config.yaml.backup.$(date +%s)"
+        BACKUP_TIMESTAMP="$(date +%s)"
+        BACKUP_CONFIG="/etc/pulse-sensor-proxy/config.yaml.backup.$BACKUP_TIMESTAMP"
         cp /etc/pulse-sensor-proxy/config.yaml "$BACKUP_CONFIG"
         print_info "Config backed up to: $BACKUP_CONFIG"
+
+        # Also backup token files so rollback restores matching secrets
+        if [[ -f /etc/pulse-sensor-proxy/.pulse-control-token ]]; then
+            BACKUP_CONTROL_TOKEN="/etc/pulse-sensor-proxy/.pulse-control-token.backup.$BACKUP_TIMESTAMP"
+            cp /etc/pulse-sensor-proxy/.pulse-control-token "$BACKUP_CONTROL_TOKEN"
+        fi
 
         # Remove any existing HTTP configuration to prevent duplicates
         if grep -q "^# HTTP Mode Configuration" /etc/pulse-sensor-proxy/config.yaml; then
@@ -1841,9 +1866,15 @@ if [[ "$HTTP_MODE" == true ]]; then
 
     print_info "Pulse server detected at: $PULSE_IP"
 
-    # Append HTTP configuration to config.yaml
+    # Configure HTTP mode - check if already configured to avoid duplicates
     print_info "Configuring HTTP mode..."
-    cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
+    if grep -q "^http_enabled:" /etc/pulse-sensor-proxy/config.yaml 2>/dev/null; then
+        # HTTP mode already configured - only update the token (avoid duplicates)
+        sed -i "s|^http_auth_token:.*|http_auth_token: $HTTP_AUTH_TOKEN|" /etc/pulse-sensor-proxy/config.yaml
+        print_info "Updated HTTP auth token (existing HTTP mode configuration kept)"
+    else
+        # Fresh HTTP mode configuration - append to file
+        cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
 
 # HTTP Mode Configuration (External PVE Host)
 http_enabled: true
@@ -1857,6 +1888,7 @@ allowed_source_subnets:
   - $PULSE_IP/32
   - 127.0.0.1/32
 EOF
+    fi
     chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/config.yaml
     chmod 0644 /etc/pulse-sensor-proxy/config.yaml
 
@@ -1876,7 +1908,10 @@ fi
 # Stop existing service if running (for upgrades)
 if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
     print_info "Stopping existing service for upgrade..."
-    systemctl stop pulse-sensor-proxy
+    # Tolerate timeout from slow HTTPS shutdown (can take 30s)
+    systemctl stop pulse-sensor-proxy || true
+    # Clear any failed state from the stop
+    systemctl reset-failed pulse-sensor-proxy 2>/dev/null || true
 fi
 
 # Install hardened systemd service
@@ -2031,7 +2066,7 @@ if ! systemctl enable pulse-sensor-proxy.service; then
     exit 1
 fi
 
-if ! systemctl restart pulse-sensor-proxy.service; then
+if ! systemctl start pulse-sensor-proxy.service; then
     print_error "Failed to start pulse-sensor-proxy service"
     print_error ""
 
@@ -2040,7 +2075,14 @@ if ! systemctl restart pulse-sensor-proxy.service; then
         print_warn "Attempting to rollback to previous configuration..."
         if cp "$BACKUP_CONFIG" /etc/pulse-sensor-proxy/config.yaml; then
             print_info "Config restored from backup"
-            if systemctl restart pulse-sensor-proxy.service; then
+            # Also restore token files to match the old config
+            if [[ -n "$BACKUP_CONTROL_TOKEN" && -f "$BACKUP_CONTROL_TOKEN" ]]; then
+                cp "$BACKUP_CONTROL_TOKEN" /etc/pulse-sensor-proxy/.pulse-control-token
+                print_info "Control plane token restored from backup"
+            fi
+            # Clear failed state before attempting rollback start
+            systemctl reset-failed pulse-sensor-proxy 2>/dev/null || true
+            if systemctl start pulse-sensor-proxy.service; then
                 print_success "Service restarted with previous configuration"
                 print_error ""
                 print_error "HTTP mode installation failed but previous config restored"
