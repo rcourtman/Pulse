@@ -507,6 +507,40 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/instal
 ```
 Then reinstall with the desired flags (for example, `--standalone --http-mode --pulse-server https://pulse:7655`).
 
+### Config Validation Failure on Startup
+
+**Symptom:** Proxy service fails to start with "Config validation failed" or "duplicate allowed_nodes blocks detected"
+
+**Cause:** Config file corruption from earlier versions that had dual code paths for managing the allowed nodes list. This was the root cause of 99% of temperature monitoring failures.
+
+**Fix (Automatic):**
+Version 4.31.1+ automatically migrates to file-based config management during installation. Simply reinstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+  sudo bash -s -- --standalone --pulse-server http://your-pulse:7655
+```
+
+The installer will:
+- Detect and repair duplicate `allowed_nodes:` blocks in config.yaml
+- Migrate to separate `/etc/pulse-sensor-proxy/allowed_nodes.yaml` file
+- Use atomic Go CLI for all future config updates
+
+**Verify the fix:**
+```bash
+# Check for duplicates (should only appear once, in allowed_nodes.yaml)
+grep -n "allowed_nodes:" /etc/pulse-sensor-proxy/*.yaml
+
+# Validate configuration
+pulse-sensor-proxy config validate
+
+# Check service status
+systemctl status pulse-sensor-proxy
+```
+
+**Manual recovery (if needed):**
+See troubleshooting section in `/opt/pulse/cmd/pulse-sensor-proxy/README.md`
+
 ### SSH Connection Attempts from Container ([preauth] Logs)
 
 **Symptom:** Proxmox host logs (`/var/log/auth.log`) show repeated SSH connection attempts from your Pulse container:
@@ -1355,6 +1389,33 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
    - Return proxy status, socket accessibility, and last successful poll
 
 **Contributions Welcome:** If any of these improvements interest you, open a GitHub issue to discuss implementation!
+
+## Configuration Management
+
+Starting with v4.31.1, the sensor proxy includes a built-in CLI for safe configuration management. This prevents config corruption that caused 99% of temperature monitoring failures.
+
+### Quick Reference
+
+```bash
+# Validate config files
+pulse-sensor-proxy config validate
+
+# Add nodes to allowed list
+pulse-sensor-proxy config set-allowed-nodes --merge 192.168.0.1 --merge node1.local
+
+# Replace entire allowed list
+pulse-sensor-proxy config set-allowed-nodes --replace --merge 192.168.0.1
+```
+
+**Key benefits:**
+- Atomic writes with file locking prevent corruption
+- Automatic deduplication and normalization
+- systemd validation prevents startup with bad config
+- Installer uses CLI (no more shell/Python divergence)
+
+**See also:**
+- [Sensor Proxy Config Management Guide](operations/sensor-proxy-config-management.md) - Complete runbook
+- [Sensor Proxy CLI Reference](/opt/pulse/cmd/pulse-sensor-proxy/README.md) - Full command documentation
 
 ## Control-Plane Sync & Migration
 
