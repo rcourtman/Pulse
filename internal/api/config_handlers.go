@@ -5047,14 +5047,16 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 echo ""
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"),
-			tokenName, pulseURL, pulseURL, pulseURL, serverHost, pulseURL,
-			pulseURL, serverHost, pulseURL, tokenName, pulseURL, pulseURL,
+			tokenName, pulseURL, pulseURL,
+			pulseURL, serverHost, pulseURL,
+			pulseURL, serverHost, pulseURL,
+			tokenName, pulseURL, pulseURL,
 			pulseURL, pulseURL,
 			pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
 			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
-			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
+			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
