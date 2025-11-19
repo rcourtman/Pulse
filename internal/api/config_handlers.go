@@ -4745,7 +4745,7 @@ Host ${NODE}
                 # This will be written to /home/pulse/.ssh/config inside the container
                 echo "$SSH_CONFIG" | curl -s -X POST "%s/api/system/ssh-config" \
                     -H "Content-Type: text/plain" \
-                    -H "Authorization: Bearer %s" \
+                    -H "Authorization: Bearer $AUTH_TOKEN" \
                     --data-binary @- > /dev/null 2>&1
 
                 if [ $? -eq 0 ]; then
@@ -4934,7 +4934,7 @@ EOF
 
                         VERIFY_RESPONSE=$(curl -s -X POST "%s/api/system/verify-temperature-ssh" \
                             -H "Content-Type: application/json" \
-                            -H "Authorization: Bearer %s" \
+                            -H "Authorization: Bearer $AUTH_TOKEN" \
                             -d "{\"nodes\": \"$CONFIGURED_NODES\"}" 2>/dev/null || echo "")
 
                         if [ -n "$VERIFY_RESPONSE" ]; then
@@ -5056,7 +5056,7 @@ fi
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
 			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
-			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, tokenName)
+			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
