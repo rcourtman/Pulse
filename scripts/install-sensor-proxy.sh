@@ -650,66 +650,30 @@ update_allowed_nodes() {
     local nodes=("$@")
 
     # File mode is now required - inline mode has been removed
+    # Phase 2: Use config CLI instead of shell/Python manipulation
     ensure_allowed_nodes_file_reference
     remove_allowed_nodes_block
 
-    if ! command -v python3 >/dev/null 2>&1; then
-        print_warn "python3 is required to manage allowed_nodes; skipping update"
+    # Build --merge flags for the CLI
+    local merge_args=()
+    for node in "${nodes[@]}"; do
+        if [[ -n "$node" ]]; then
+            merge_args+=(--merge "$node")
+        fi
+    done
+
+    if [[ ${#merge_args[@]} -eq 0 ]]; then
         return
     fi
 
-    python3 - "$ALLOWED_NODES_FILE" "$comment_line" "${nodes[@]}" <<'PY'
-import sys
-from pathlib import Path
-import yaml
-
-path = Path(sys.argv[1])
-comment = sys.argv[2]
-new_nodes = [n.strip() for n in sys.argv[3:] if n.strip()]
-existing = []
-if path.exists():
-    text = path.read_text()
-    try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError:
-        data = None
-    if isinstance(data, dict):
-        arr = data.get('allowed_nodes')
-        if isinstance(arr, list):
-            existing = [str(x).strip() for x in arr if str(x).strip()]
-    elif isinstance(data, list):
-        existing = [str(x).strip() for x in data if str(x).strip()]
-    else:
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            if line.startswith('-'):
-                line = line[1:].strip()
-            if line:
-                existing.append(line)
-
-seen = set()
-merged = []
-for entry in existing + new_nodes:
-    entry = entry.strip()
-    if not entry:
-        continue
-    key = entry.lower()
-    if key in seen:
-        continue
-    seen.add(key)
-    merged.append(entry)
-
-path.parent.mkdir(parents=True, exist_ok=True)
-with path.open('w') as fh:
-    fh.write("# Managed by install-sensor-proxy.sh\n")
-    fh.write(f"# {comment}\n")
-    yaml.safe_dump({'allowed_nodes': merged}, fh, default_flow_style=False, sort_keys=False)
-PY
-
-    chmod 0644 "$ALLOWED_NODES_FILE" 2>/dev/null || true
-    chown pulse-sensor-proxy:pulse-sensor-proxy "$ALLOWED_NODES_FILE" 2>/dev/null || true
+    # Use the config CLI for atomic, locked updates
+    if "$BINARY_PATH" config set-allowed-nodes --allowed-nodes "$ALLOWED_NODES_FILE" "${merge_args[@]}"; then
+        chmod 0644 "$ALLOWED_NODES_FILE" 2>/dev/null || true
+        chown pulse-sensor-proxy:pulse-sensor-proxy "$ALLOWED_NODES_FILE" 2>/dev/null || true
+    else
+        print_error "Failed to update allowed_nodes using config CLI"
+        return 1
+    fi
 }
 
 
@@ -1958,6 +1922,8 @@ Type=simple
 User=pulse-sensor-proxy
 Group=pulse-sensor-proxy
 WorkingDirectory=/var/lib/pulse-sensor-proxy
+# Validate config before starting (Phase 2: prevent corruption from starting service)
+ExecStartPre=${BINARY_PATH} config validate --config /etc/pulse-sensor-proxy/config.yaml
 ExecStart=${BINARY_PATH} --config /etc/pulse-sensor-proxy/config.yaml
 Restart=on-failure
 RestartSec=5s
@@ -2017,6 +1983,8 @@ User=pulse-sensor-proxy
 Group=pulse-sensor-proxy
 SupplementaryGroups=www-data
 WorkingDirectory=/var/lib/pulse-sensor-proxy
+# Validate config before starting (Phase 2: prevent corruption from starting service)
+ExecStartPre=${BINARY_PATH} config validate --config /etc/pulse-sensor-proxy/config.yaml
 ExecStart=${BINARY_PATH}
 Restart=on-failure
 RestartSec=5s
