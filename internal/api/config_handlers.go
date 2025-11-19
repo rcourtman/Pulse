@@ -4046,10 +4046,12 @@ MIN_PROXY_VERSION="%s"
 PULSE_VERSION_ENDPOINT="%s/api/version"
 STANDALONE_PROXY_DEPLOYED=false
 SKIP_TEMPERATURE_PROMPT=false
+PROXY_SOCKET_EXISTED_AT_START=false
 
 if [ -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]; then
     TEMPERATURE_ENABLED=true
     SKIP_TEMPERATURE_PROMPT=true
+    PROXY_SOCKET_EXISTED_AT_START=true
 fi
 
 version_ge() {
@@ -4119,6 +4121,7 @@ INSTALL_SUMMARY_FILE="/etc/pulse/install_summary.json"
 SUMMARY_PROXY_REQUESTED="false"
 SUMMARY_PROXY_INSTALLED="false"
 SUMMARY_PROXY_SOCKET="false"
+SUMMARY_CTID=""
 if [ -f "$INSTALL_SUMMARY_FILE" ]; then
 	if command -v python3 >/dev/null 2>&1; then
 		if SUMMARY_EVAL=$(python3 <<'PY'
@@ -4130,11 +4133,16 @@ try:
 except Exception:
 	raise SystemExit(1)
 proxy = data.get("proxy") or {}
+ctid = data.get("ctid") or ""
 def emit(key, value):
-	print(f"{key}={'true' if value else 'false'}")
+	if isinstance(value, bool):
+		print(f"{key}={'true' if value else 'false'}")
+	else:
+		print(f"{key}={value}")
 emit("SUMMARY_PROXY_REQUESTED", proxy.get("requested"))
 emit("SUMMARY_PROXY_INSTALLED", proxy.get("installed"))
 emit("SUMMARY_PROXY_SOCKET", proxy.get("hostSocketPresent"))
+emit("SUMMARY_CTID", ctid)
 PY
 		); then
 			eval "$SUMMARY_EVAL"
@@ -4144,13 +4152,15 @@ PY
 			[
 				"\(.proxy.requested // false)",
 				"\(.proxy.installed // false)",
-				"\(.proxy.hostSocketPresent // false)"
+				"\(.proxy.hostSocketPresent // false)",
+				"\(.ctid // \"\")"
 			] | @tsv
 		' "$INSTALL_SUMMARY_FILE" 2>/dev/null); then
-			read -r requested installed host_socket <<<"$SUMMARY_EVAL"
+			read -r requested installed host_socket ctid <<<"$SUMMARY_EVAL"
 			SUMMARY_PROXY_REQUESTED=$requested
 			SUMMARY_PROXY_INSTALLED=$installed
 			SUMMARY_PROXY_SOCKET=$host_socket
+			SUMMARY_CTID=$ctid
 		fi
 	fi
 fi
@@ -4289,8 +4299,8 @@ fi
 
 # Single temperature monitoring prompt
 if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
-    # Check if this is a fresh install from this run (don't repair what we just installed)
-    if [ "$SUMMARY_PROXY_INSTALLED" = "true" ]; then
+    # Check if socket existed before this script ran (PROXY_SOCKET_EXISTED_AT_START is more reliable than SUMMARY_PROXY_INSTALLED)
+    if [ "$PROXY_SOCKET_EXISTED_AT_START" = true ]; then
         # Socket existed before this script ran - this is a repair scenario
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "🔧 Refreshing pulse-sensor-proxy installation"
@@ -4307,11 +4317,21 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
             chmod +x "$PROXY_INSTALLER"
 
             # Determine correct installer mode based on how it was originally deployed
-            # Priority: use PULSE_CTID if available, otherwise check standalone status
+            # Priority: 1) PULSE_CTID from live detection, 2) SUMMARY_CTID from install_summary.json, 3) standalone check
             INSTALLER_ARGS=""
+            DETECTED_CTID=""
+
             if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
+                # Live container detection succeeded
+                DETECTED_CTID="$PULSE_CTID"
+            elif [ -n "$SUMMARY_CTID" ]; then
+                # Fall back to CTID from install_summary.json (container might be offline)
+                DETECTED_CTID="$SUMMARY_CTID"
+            fi
+
+            if [ -n "$DETECTED_CTID" ]; then
                 # Was deployed for containerized Pulse - use --ctid mode
-                INSTALLER_ARGS="--ctid $PULSE_CTID --pulse-server %s"
+                INSTALLER_ARGS="--ctid $DETECTED_CTID --pulse-server %s"
             elif [ "$IS_STANDALONE_NODE" = true ]; then
                 # Standalone node - use --standalone --http-mode
                 INSTALLER_ARGS="--standalone --http-mode --pulse-server %s"
@@ -4323,6 +4343,7 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
                 echo "      • For container: $PROXY_INSTALLER --ctid <CTID> --pulse-server %s"
                 echo "      • For standalone: $PROXY_INSTALLER --standalone --http-mode --pulse-server %s"
                 echo ""
+                echo "    Keeping existing proxy configuration"
                 rm -f "$PROXY_INSTALLER"
                 INSTALLER_ARGS=""
             fi
@@ -4368,24 +4389,27 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
                         else
                             echo "  ⚠️  Could not fetch SSH key from proxy"
                         fi
-                        TEMPERATURE_ENABLED=true
                     fi
+                    # Note: Keep TEMPERATURE_ENABLED=true even if health checks fail, since proxy was already working
                 else
                     echo ""
-                    echo "⚠️  Proxy repair failed"
+                    echo "⚠️  Proxy repair failed - keeping existing proxy configuration"
                     if [ -n "$INSTALL_OUTPUT" ]; then
                         echo ""
                         echo "$INSTALL_OUTPUT" | tail -n 20
                     fi
                     echo ""
+                    # Note: Keep TEMPERATURE_ENABLED=true since proxy was already working before repair attempt
                 fi
 
                 rm -f "$PROXY_INSTALLER"
             fi
+            # Note: Keep TEMPERATURE_ENABLED=true in all cases - proxy existed and may still be working
         else
             echo "⚠️  Could not download installer from $INSTALLER_URL"
             echo "    Keeping existing configuration"
             echo ""
+            # Note: Keep TEMPERATURE_ENABLED=true since proxy already exists
         fi
     else
         # Fresh install from this run - skip repair
