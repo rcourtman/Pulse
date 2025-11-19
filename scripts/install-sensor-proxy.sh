@@ -2830,7 +2830,10 @@ if command -v pvecm >/dev/null 2>&1; then
             all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
         fi
         # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
-        update_allowed_nodes "Cluster nodes (auto-discovered during installation)" "${all_nodes[@]}"
+        if ! update_allowed_nodes "Cluster nodes (auto-discovered during installation)" "${all_nodes[@]}"; then
+            print_error "Failed to update allowed_nodes list"
+            exit 1
+        fi
     else
         # No cluster found - configure standalone node
         print_info "No cluster detected, configuring standalone node..."
@@ -2858,7 +2861,10 @@ if command -v pvecm >/dev/null 2>&1; then
             all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
         fi
         # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
-        update_allowed_nodes "Standalone node configuration (auto-configured during installation)" "${all_nodes[@]}"
+        if ! update_allowed_nodes "Standalone node configuration (auto-configured during installation)" "${all_nodes[@]}"; then
+            print_error "Failed to update allowed_nodes list"
+            exit 1
+        fi
     fi
 else
     # Proxmox host but pvecm not available (shouldn't happen, but handle it)
@@ -2885,7 +2891,10 @@ else
         all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
     fi
     # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
-    update_allowed_nodes "Localhost fallback configuration (pvecm unavailable)" "${all_nodes[@]}"
+    if ! update_allowed_nodes "Localhost fallback configuration (pvecm unavailable)" "${all_nodes[@]}"; then
+        print_error "Failed to update allowed_nodes list"
+        exit 1
+    fi
 fi
 
 cleanup_inline_allowed_nodes
