@@ -589,6 +589,7 @@ journalctl -u pulse -f
 
 ## Operations Runbooks
 
+- [Sensor proxy config management](docs/operations/sensor-proxy-config-management.md) – Safe configuration updates using the built-in CLI, migration guide, and troubleshooting.
 - [Sensor proxy audit log rotation](docs/operations/audit-log-rotation.md) – Safely rotate append-only logs and verify poller health.
 - [Adaptive polling rollout](docs/operations/ADAPTIVE_POLLING_ROLLOUT.md) – Enable/disable the adaptive scheduler with guardrails.
 - [Automatic update management](docs/operations/auto-update.md) – Control the `pulse-update` timer/service, trigger manual runs, and roll back safely.

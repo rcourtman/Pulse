@@ -46,6 +46,71 @@ The proxy reads `/etc/pulse-sensor-proxy/config.yaml` (see
 | `max_ssh_output_bytes` | Cap command output | Prevents memory exhaustion (default 1 MiB) |
 | `rate_limit.per_peer_interval_ms` / `per_peer_burst` | Token bucket guardrails | Keep interval ≥100 ms in production |
 | `http_*` keys | HTTPS bridge mode | Needs TLS files plus bearer token |
+| `allowed_nodes_file` | Path to allowed nodes list | Default: `/etc/pulse-sensor-proxy/allowed_nodes.yaml` |
+
+### Configuration Management CLI
+
+The proxy includes built-in commands for safe configuration management. These prevent corruption by using atomic writes and file locking.
+
+**Validate configuration:**
+```bash
+# Validate config.yaml and allowed_nodes.yaml
+pulse-sensor-proxy config validate
+
+# Validate specific config file
+pulse-sensor-proxy config validate --config /path/to/config.yaml
+
+# Validate specific allowed_nodes file
+pulse-sensor-proxy config validate --allowed-nodes /path/to/allowed_nodes.yaml
+```
+
+**Manage allowed nodes:**
+```bash
+# Add nodes to the allowed list (merge mode)
+pulse-sensor-proxy config set-allowed-nodes --merge 192.168.0.1 --merge node1.local
+
+# Replace entire list with new nodes
+pulse-sensor-proxy config set-allowed-nodes --replace --merge 192.168.0.1 --merge 192.168.0.2
+
+# Clear the allowed nodes list (replace with empty)
+pulse-sensor-proxy config set-allowed-nodes --replace
+
+# Use custom path
+pulse-sensor-proxy config set-allowed-nodes --allowed-nodes /custom/path.yaml --merge 192.168.0.10
+```
+
+**How it works:**
+- All writes are atomic (temp file + rename)
+- File locking prevents concurrent modifications
+- Deduplication and normalization happen automatically
+- Empty lists are allowed (useful for security lockdown or IPC-only clusters)
+- Config validation runs before service startup (systemd ExecStartPre)
+
+**Best practices:**
+- Use the CLI instead of manual editing whenever possible
+- The installer automatically uses these commands
+- Manual edits to `config.yaml` are safe if the service is stopped
+- Never edit `allowed_nodes.yaml` while the service is running
+
+### Allowed Nodes File
+
+The proxy maintains a separate YAML file for the authorized node list at
+`/etc/pulse-sensor-proxy/allowed_nodes.yaml`. This separation prevents
+config corruption when the installer or control-plane sync updates the list.
+
+Format:
+```yaml
+# Managed by pulse-sensor-proxy config CLI
+# Do not edit manually while service is running
+allowed_nodes:
+  - 192.168.0.1
+  - 192.168.0.2
+  - node1.local
+  - node2.example.com
+```
+
+The file is optional - if missing or empty, the proxy falls back to IPC-based
+discovery (pvecm status) when available.
 
 ### Environment Overrides
 
@@ -105,11 +170,64 @@ Set alerts on:
 
 | Symptom | Guidance |
 | --- | --- |
+| Service fails to start with "Config validation failed" | Run `pulse-sensor-proxy config validate` to see specific errors. Check for duplicate keys or malformed YAML. |
+| Config corruption detected during startup | Older versions had dual code paths. Update to v4.31.1+ and reinstall proxy. The migration runs automatically. |
+| Temperature monitoring stops working after config change | Validate config first with `pulse-sensor-proxy config validate`, then restart service: `systemctl restart pulse-sensor-proxy`. |
 | `Cannot open audit log file` | Check permissions on `/var/log/pulse/sensor-proxy`. Remove `chattr +a` only during rotation. |
 | `connection denied` in audit log | UID/GID not listed in `allowed_peers`. Verify Pulse container UID mapping. |
 | `HTTP request from unauthorized source IP` | Update `allowed_source_subnets` or run through a reverse proxy that advertises the client IP via `ProxyProtocol` (not supported yet). |
 | `rate limit exceeded` | Increase `rate_limit.per_peer_burst` or fix noisy hosts before relaxing limits. |
 | `temperature pollers stuck` | Hit `/api/monitoring/scheduler/health`, ensure breakers are `closed`, restart Pulse + proxy if necessary. |
+| Lock file permissions error | Lock files use 0600 to prevent unprivileged DoS. Check file ownership matches proxy user. |
+
+### Config Corruption Recovery
+
+If you suspect config corruption (service won't start, temperatures stopped):
+
+1. **Validate the config:**
+   ```bash
+   pulse-sensor-proxy config validate
+   ```
+
+2. **If corruption is detected, reinstall the proxy:**
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+     sudo bash -s -- --standalone --pulse-server http://your-pulse:7655
+   ```
+   The installer automatically migrates to file-based config and fixes corruption.
+
+3. **Check for duplicate allowed_nodes blocks:**
+   ```bash
+   grep -n "allowed_nodes:" /etc/pulse-sensor-proxy/config.yaml
+   ```
+   Should only appear once. Multiple instances indicate corruption that Phase 1 migration will fix.
+
+4. **Manual recovery (if installer unavailable):**
+   ```bash
+   # Stop the service
+   sudo systemctl stop pulse-sensor-proxy
+
+   # Validate and identify issues
+   pulse-sensor-proxy config validate --config /etc/pulse-sensor-proxy/config.yaml
+
+   # If allowed_nodes appears in config.yaml, extract it manually:
+   grep -A 100 "^allowed_nodes:" /etc/pulse-sensor-proxy/config.yaml | \
+     head -n 20 > /tmp/nodes.txt
+
+   # Remove duplicate allowed_nodes from config.yaml (edit manually)
+   # Then create allowed_nodes.yaml:
+   pulse-sensor-proxy config set-allowed-nodes --replace --merge node1 --merge node2
+
+   # Add allowed_nodes_file reference to config.yaml if missing:
+   echo "allowed_nodes_file: /etc/pulse-sensor-proxy/allowed_nodes.yaml" | \
+     sudo tee -a /etc/pulse-sensor-proxy/config.yaml
+
+   # Validate again
+   pulse-sensor-proxy config validate
+
+   # Start service
+   sudo systemctl start pulse-sensor-proxy
+   ```
 
 For additional hardening steps, read `docs/PULSE_SENSOR_PROXY_HARDENING.md` and
 `docs/TEMPERATURE_MONITORING_SECURITY.md`.

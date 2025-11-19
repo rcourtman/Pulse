@@ -280,6 +280,56 @@ See [Configuration Guide](CONFIGURATION.md#tlshttps-configuration) for complete 
 
 ### Temperature Monitoring Issues
 
+#### Sensor proxy fails to start (config validation error)
+
+**Symptoms:** Service won't start, logs show "Config validation failed" or "duplicate allowed_nodes blocks detected"
+
+**Diagnosis:**
+```bash
+# Check service status
+sudo systemctl status pulse-sensor-proxy
+
+# Validate config manually
+pulse-sensor-proxy config validate
+
+# Look for duplicate blocks
+grep -n "allowed_nodes:" /etc/pulse-sensor-proxy/config.yaml
+```
+
+**Fix:**
+The issue is config corruption from earlier versions. Version 4.31.1+ fixes this automatically:
+
+```bash
+# Reinstall to migrate to new config system
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+  sudo bash -s -- --standalone --pulse-server http://your-pulse:7655
+
+# Verify the fix
+pulse-sensor-proxy config validate
+sudo systemctl status pulse-sensor-proxy
+```
+
+The new config system:
+- Separates allowed nodes into `/etc/pulse-sensor-proxy/allowed_nodes.yaml`
+- Uses atomic writes with file locking
+- Validates config before service startup
+- Includes CLI for safe config management
+
+**Manual config management (advanced):**
+```bash
+# Add nodes to allowed list
+pulse-sensor-proxy config set-allowed-nodes --merge 192.168.0.1 --merge node1.local
+
+# Replace entire list
+pulse-sensor-proxy config set-allowed-nodes --replace --merge 192.168.0.1
+
+# Validate before restarting
+pulse-sensor-proxy config validate
+sudo systemctl restart pulse-sensor-proxy
+```
+
+See `/opt/pulse/cmd/pulse-sensor-proxy/README.md` for complete CLI documentation.
+
 #### Temperature data flickers after adding nodes
 
 **Symptoms:** Dashboard temperatures alternate between values and `--`, or new nodes never show readings. Proxy logs contain `limiter.rejection` messages.

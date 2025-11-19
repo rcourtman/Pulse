@@ -45,6 +45,7 @@ section groups related guides so you can jump straight to the material you need.
 
 ## Operations Runbooks
 
+- [operations/sensor-proxy-config-management.md](operations/sensor-proxy-config-management.md) – Safe configuration updates using the built-in CLI, migration from inline config, and troubleshooting corruption issues.
 - [operations/audit-log-rotation.md](operations/audit-log-rotation.md) – Monthly/incident log rotation procedure that preserves the hash chain and validates scheduler health afterward.
 - [operations/ADAPTIVE_POLLING_ROLLOUT.md](operations/ADAPTIVE_POLLING_ROLLOUT.md) – Rollout/rollback plan for enabling adaptive polling in staging or production.
 - [operations/auto-update.md](operations/auto-update.md) – Lifecycle of the `pulse-update` timer/service: enablement, manual trigger, rollback, and observability.
