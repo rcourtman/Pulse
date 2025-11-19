@@ -21,14 +21,14 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-// Register the codex tool for initial questions
+// Register the codex tool for both questions and implementation
 server.registerTool(
   "codex",
   {
     title: "Codex AI Assistant",
-    description: "Ask a question to OpenAI Codex AI assistant. Returns a thoughtful response. Use this for architectural decisions, code review, and technical consultation.",
+    description: "Ask OpenAI Codex to implement changes or answer questions. Codex has full filesystem access and can create/modify files directly. Use this for architectural decisions, code review, technical consultation, and implementation tasks.",
     inputSchema: {
-      question: z.string().describe("The question to ask Codex"),
+      question: z.string().describe("The question or implementation task for Codex"),
       conversationId: z.string().optional().describe("Optional conversation ID to maintain context across calls"),
     },
   },
