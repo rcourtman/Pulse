@@ -69,6 +69,7 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 	script := rr.Body.String()
 
 	// Critical alignment checks to prevent fmt.Sprintf argument mismatch bugs
+	// After refactor: script uses bash variables ($PULSE_URL, $TOKEN_NAME) instead of fmt.Sprintf substitutions
 	tests := []struct {
 		name     string
 		contains string
@@ -76,13 +77,13 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 	}{
 		{
 			name:     "repair_installer_url",
-			contains: `INSTALLER_URL="http://SENTINEL_URL:7656/api/install/install-sensor-proxy.sh"`,
-			desc:     "Repair block INSTALLER_URL should get pulseURL, not authToken",
+			contains: `INSTALLER_URL="$PULSE_URL/api/install/install-sensor-proxy.sh"`,
+			desc:     "Repair block INSTALLER_URL should use $PULSE_URL bash variable",
 		},
 		{
 			name:     "repair_ctid_pulse_server",
-			contains: `--pulse-server http://SENTINEL_URL:7656`,
-			desc:     "Repair --ctid --pulse-server should get pulseURL, not authToken",
+			contains: `--pulse-server $PULSE_URL`,
+			desc:     "Repair --ctid --pulse-server should use $PULSE_URL bash variable",
 		},
 		{
 			name:     "runtime_auth_token_ssh_config",
@@ -91,8 +92,18 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 		},
 		{
 			name:     "token_id_uses_tokenname",
-			contains: `Token ID: pulse-monitor@pam!pulse-`,
-			desc:     "Token ID should use tokenName (pulse-*), not pulseURL or authToken",
+			contains: `Token ID: $PULSE_TOKEN_ID`,
+			desc:     "Token ID should use $PULSE_TOKEN_ID bash variable",
+		},
+		{
+			name:     "bash_variables_defined",
+			contains: `PULSE_URL="http://SENTINEL_URL:7656"`,
+			desc:     "Bash variable PULSE_URL should be defined at top of script",
+		},
+		{
+			name:     "token_name_variable_defined",
+			contains: `TOKEN_NAME="pulse-SENTINEL_URL-`,
+			desc:     "Bash variable TOKEN_NAME should be defined with correct format",
 		},
 	}
 

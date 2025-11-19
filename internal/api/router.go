@@ -173,7 +173,7 @@ func (r *Router) setupRoutes() {
 	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.monitor, r.wsHub)
-	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.persistence)
+	r.temperatureProxyHandlers = NewTemperatureProxyHandlers(r.config, r.persistence, r.reloadFunc)
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
@@ -1207,6 +1207,9 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	}
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetConfig(r.config)
+	}
+	if r.temperatureProxyHandlers != nil {
+		r.temperatureProxyHandlers.SetConfig(r.config)
 	}
 }
 

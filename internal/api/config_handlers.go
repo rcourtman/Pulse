@@ -3418,6 +3418,12 @@ echo "  Pulse Monitoring Setup for Proxmox VE"
 echo "============================================"
 echo ""
 
+PULSE_URL="%s"
+SERVER_HOST="%s"
+TOKEN_NAME="%s"
+PULSE_TOKEN_ID="pulse-monitor@pam!${TOKEN_NAME}"
+SETUP_SCRIPT_URL="$PULSE_URL/api/setup-script?type=pve&host=$SERVER_HOST&pulse_url=$PULSE_URL"
+
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
    echo "Please run this script as root"
@@ -3497,10 +3503,10 @@ case "$ENVIRONMENT" in
 # 1) Create or reuse the Pulse monitoring API token
 pveum user add pulse-monitor@pam --comment "Pulse monitoring service"
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
-pveum user token add pulse-monitor@pam %s --privsep 0
+pveum user token add pulse-monitor@pam "$TOKEN_NAME" --privsep 0
 
 # 2) Install or update pulse-sensor-proxy on the host
-curl -sSL "%s/api/install/install-sensor-proxy.sh" | bash -s -- --ctid ${CTID_DISPLAY} --pulse-server "%s"
+curl -sSL "$PULSE_URL/api/install/install-sensor-proxy.sh" | bash -s -- --ctid ${CTID_DISPLAY} --pulse-server "$PULSE_URL"
 
 # 3) Ensure the proxy socket is mounted into this container
 NEXT_MP=\$(pct config ${CTID_DISPLAY} | awk '\$1 ~ /^mp[0-9]+:/ && index(\$0, "mp=/mnt/pulse-proxy") {gsub(":", "", \$1); print \$1; exit}')
@@ -3510,7 +3516,7 @@ pct exec ${CTID_DISPLAY} -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock && 
 
 EOF
         echo "For the simplest experience, run this script on your Proxmox host instead:"
-        echo "  curl -sSL \"%s/api/setup-script?type=pve&host=%s&pulse_url=%s\" | bash"
+        echo "  curl -sSL \"$SETUP_SCRIPT_URL\" | bash"
         echo ""
         echo "Exiting without error. Re-run after completing the host steps."
         exit 0
@@ -3519,23 +3525,23 @@ EOF
         echo "This script requires Proxmox host tooling (pveum)."
         echo ""
         echo "Run on your Proxmox host:"
-        echo "  curl -sSL \"%s/api/setup-script?type=pve&host=%s&pulse_url=%s\" | bash"
+        echo "  curl -sSL \"$SETUP_SCRIPT_URL\" | bash"
         echo ""
         echo "Manual setup steps:"
         echo "  1. On Proxmox host, create API token:"
         echo "       pveum user add pulse-monitor@pam --comment \"Pulse monitoring service\""
         echo "       pveum aclmod / -user pulse-monitor@pam -role PVEAuditor"
-        echo "       pveum user token add pulse-monitor@pam %s --privsep 0"
+        echo "       pveum user token add pulse-monitor@pam "$TOKEN_NAME" --privsep 0"
         echo ""
         echo "  2. In Pulse: Settings → Nodes → Add Node (enter token from above)"
         echo ""
         echo "  3. (Optional) For temperature monitoring on containerized Pulse:"
         echo ""
         echo "     For LXC containers, run on Proxmox host:"
-        echo "       curl -sSL %s/api/install/install-sensor-proxy.sh | bash -s -- --ctid <CTID> --pulse-server %s"
+        echo "       curl -sSL $PULSE_URL/api/install/install-sensor-proxy.sh | bash -s -- --ctid <CTID> --pulse-server $PULSE_URL"
         echo ""
         echo "     For Docker containers, run on Proxmox host:"
-        echo "       curl -sSL %s/api/install/install-sensor-proxy.sh | bash -s -- --standalone --pulse-server %s"
+        echo "       curl -sSL $PULSE_URL/api/install/install-sensor-proxy.sh | bash -s -- --standalone --pulse-server $PULSE_URL"
         echo "       Then add to docker-compose.yml:"
         echo "         volumes:"
         echo "           - /run/pulse-sensor-proxy:/run/pulse-sensor-proxy:rw"
@@ -3809,25 +3815,25 @@ echo "Generating API token..."
 
 # Check if token already exists
 TOKEN_EXISTED=false
-if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "%s"; then
+if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "$TOKEN_NAME"; then
     TOKEN_EXISTED=true
     echo ""
     echo "================================================================"
-    echo "WARNING: Token '%s' already exists!"
+    echo "WARNING: Token '$TOKEN_NAME' already exists!"
     echo "================================================================"
     echo ""
     echo "To create a new token, first remove the existing one:"
-    echo "  pveum user token remove pulse-monitor@pam %s"
+    echo "  pveum user token remove pulse-monitor@pam $TOKEN_NAME"
     echo ""
     echo "Or create a token with a different name:"
-    echo "  pveum user token add pulse-monitor@pam %s-$(date +%%s) --privsep 0"
+    echo "  pveum user token add pulse-monitor@pam ${TOKEN_NAME}-$(date +%%s) --privsep 0"
     echo ""
-    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pam!%s-1234567890)"
+    echo "Then use the new token ID in Pulse (e.g., ${PULSE_TOKEN_ID}-1234567890)"
     echo "================================================================"
     echo ""
 else
     # Create token silently first
-    TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam %s --privsep 0)
+    TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam "$TOKEN_NAME" --privsep 0)
     
     # Extract the token value for auto-registration
     TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
@@ -3884,11 +3890,8 @@ else
         SERVER_HOSTNAME=$(hostname -s 2>/dev/null || hostname)
         SERVER_IP=$(hostname -I | awk '{print $1}')
         
-        # Send registration to Pulse
-        PULSE_URL="%s"
-        
         # Check if host URL was provided
-        HOST_URL="%s"
+        HOST_URL="$SERVER_HOST"
         if [ "$HOST_URL" = "https://YOUR_PROXMOX_HOST:8006" ] || [ -z "$HOST_URL" ]; then
             echo ""
             echo "❌ ERROR: No Proxmox host URL provided!"
@@ -3901,7 +3904,7 @@ else
             echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=https://192.168.0.5:8006&pulse_url=$PULSE_URL\" | bash"
             echo ""
             echo "📝 For manual setup, use the token created above with:"
-            echo "   Token ID: pulse-monitor@pam!%s"
+            echo "   Token ID: $PULSE_TOKEN_ID"
             echo "   Token Value: [See above]"
             echo ""
             exit 1
@@ -3909,7 +3912,7 @@ else
         
         # Construct registration request with setup code
         # Build JSON carefully to preserve the exclamation mark
-        REGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"pulse-monitor@pam!%s","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$AUTH_TOKEN"'"}'
+        REGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"'"$PULSE_TOKEN_ID"'","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$AUTH_TOKEN"'"}'
 
         # Send registration with setup code
         REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -s -X POST "$PULSE_URL/api/auto-register" \
@@ -4043,7 +4046,7 @@ SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwardi
 TEMPERATURE_ENABLED=false
 TEMP_MONITORING_AVAILABLE=true
 MIN_PROXY_VERSION="%s"
-PULSE_VERSION_ENDPOINT="%s/api/version"
+PULSE_VERSION_ENDPOINT="$PULSE_URL/api/version"
 STANDALONE_PROXY_DEPLOYED=false
 SKIP_TEMPERATURE_PROMPT=false
 PROXY_SOCKET_EXISTED_AT_START=false
@@ -4067,7 +4070,7 @@ version_ge() {
 }
 
 # Check if temperature proxy is available and override SSH key if it is
-PROXY_KEY_URL="%s/api/system/proxy-public-key"
+PROXY_KEY_URL="$PULSE_URL/api/system/proxy-public-key"
 TEMPERATURE_PROXY_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
 if [ -n "$TEMPERATURE_PROXY_KEY" ] && [[ "$TEMPERATURE_PROXY_KEY" =~ ^ssh-(rsa|ed25519) ]]; then
     # Proxy is available - use its key instead of container's key
@@ -4080,7 +4083,7 @@ PULSE_CTID=""
 PULSE_IS_CONTAINERIZED=false
 if command -v pct >/dev/null 2>&1; then
     # Extract Pulse IP from URL
-    PULSE_IP=$(echo "%s" | sed -E 's|^https?://([^:/]+).*|\1|')
+    PULSE_IP=$(echo "$PULSE_URL" | sed -E 's|^https?://([^:/]+).*|\1|')
 
     # Find container with this IP
     if [[ "$PULSE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -4199,7 +4202,7 @@ if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true
     if true; then
         # Download installer script from Pulse server
         PROXY_INSTALLER="/tmp/install-sensor-proxy-$$.sh"
-        INSTALLER_URL="%s/api/install/install-sensor-proxy.sh"
+        INSTALLER_URL="$PULSE_URL/api/install/install-sensor-proxy.sh"
 
         echo "Installing pulse-sensor-proxy..."
         if curl --fail --silent --location \
@@ -4208,7 +4211,7 @@ if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true
             chmod +x "$PROXY_INSTALLER"
 
             # Run installer with Pulse server as fallback
-            INSTALL_OUTPUT=$("$PROXY_INSTALLER" --ctid "$PULSE_CTID" --pulse-server "%s" 2>&1)
+            INSTALL_OUTPUT=$("$PROXY_INSTALLER" --ctid "$PULSE_CTID" --pulse-server "$PULSE_URL" 2>&1)
             INSTALL_STATUS=$?
 
             if [ -n "$INSTALL_OUTPUT" ]; then
@@ -4311,7 +4314,7 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
 
         # Download and run installer to refresh config
         PROXY_INSTALLER="/tmp/install-sensor-proxy-repair-$$.sh"
-        INSTALLER_URL="%s/api/install/install-sensor-proxy.sh"
+        INSTALLER_URL="$PULSE_URL/api/install/install-sensor-proxy.sh"
 
         if curl --fail --silent --location "$INSTALLER_URL" -o "$PROXY_INSTALLER" 2>/dev/null; then
             chmod +x "$PROXY_INSTALLER"
@@ -4331,10 +4334,10 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
 
             if [ -n "$DETECTED_CTID" ]; then
                 # Was deployed for containerized Pulse - use --ctid mode
-                INSTALLER_ARGS="--ctid $DETECTED_CTID --pulse-server %s"
+                INSTALLER_ARGS="--ctid $DETECTED_CTID --pulse-server $PULSE_URL"
             elif [ "$IS_STANDALONE_NODE" = true ]; then
                 # Standalone node - use --standalone --http-mode
-                INSTALLER_ARGS="--standalone --http-mode --pulse-server %s"
+                INSTALLER_ARGS="--standalone --http-mode --pulse-server $PULSE_URL"
             else
                 # Cannot determine deployment type - bail out
                 echo ""
@@ -4342,10 +4345,10 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
                 echo "    Manual repair required. Run one of:"
                 echo ""
                 echo "      • For container:"
-                echo "        curl -fsSL %s/api/install/install-sensor-proxy.sh | bash -s -- --ctid <CTID> --pulse-server %s"
+                echo "        curl -fsSL $PULSE_URL/api/install/install-sensor-proxy.sh | bash -s -- --ctid <CTID> --pulse-server $PULSE_URL"
                 echo ""
                 echo "      • For standalone:"
-                echo "        curl -fsSL %s/api/install/install-sensor-proxy.sh | bash -s -- --standalone --http-mode --pulse-server %s"
+                echo "        curl -fsSL $PULSE_URL/api/install/install-sensor-proxy.sh | bash -s -- --standalone --http-mode --pulse-server $PULSE_URL"
                 echo ""
                 echo "    Keeping existing proxy configuration"
                 rm -f "$PROXY_INSTALLER"
@@ -4353,7 +4356,15 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
             fi
 
             if [ -n "$INSTALLER_ARGS" ]; then
-                # Run installer and capture output for diagnostics
+                # Check if service is already running
+                if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                    echo "✓ pulse-sensor-proxy service is already running"
+                    echo "  Refreshing configuration and token..."
+                    echo ""
+                fi
+
+                # Run installer to refresh config and restart service
+                # The installer handles stopping/restarting on its own
                 INSTALL_OUTPUT=$("$PROXY_INSTALLER" $INSTALLER_ARGS 2>&1)
                 REPAIR_STATUS=$?
 
@@ -4486,7 +4497,7 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
     # SECURITY: Block SSH-based temperature monitoring for containerized Pulse (unless dev mode)
     if [ "$PULSE_IS_CONTAINERIZED" = true ]; then
         # Check for dev mode override (from Pulse server environment)
-        DEV_MODE_RESPONSE=$(curl -s "%s/api/health" 2>/dev/null | grep -o '"devModeSSH"[[:space:]]*:[[:space:]]*true' || echo "")
+        DEV_MODE_RESPONSE=$(curl -s "$PULSE_URL/api/health" 2>/dev/null | grep -o '"devModeSSH"[[:space:]]*:[[:space:]]*true' || echo "")
 
         if [ -n "$DEV_MODE_RESPONSE" ]; then
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -4743,7 +4754,7 @@ Host ${NODE}
 
                 # Write SSH config to Pulse container
                 # This will be written to /home/pulse/.ssh/config inside the container
-                echo "$SSH_CONFIG" | curl -s -X POST "%s/api/system/ssh-config" \
+                echo "$SSH_CONFIG" | curl -s -X POST "$PULSE_URL/api/system/ssh-config" \
                     -H "Content-Type: text/plain" \
                     -H "Authorization: Bearer $AUTH_TOKEN" \
                     --data-binary @- > /dev/null 2>&1
@@ -4932,7 +4943,7 @@ EOF
                             CONFIGURED_NODES="$(hostname) ${CONFIGURED_NODES}"
                         fi
 
-                        VERIFY_RESPONSE=$(curl -s -X POST "%s/api/system/verify-temperature-ssh" \
+                        VERIFY_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/system/verify-temperature-ssh" \
                             -H "Content-Type: application/json" \
                             -H "Authorization: Bearer $AUTH_TOKEN" \
                             -d "{\"nodes\": \"$CONFIGURED_NODES\"}" 2>/dev/null || echo "")
@@ -4975,7 +4986,7 @@ if [ "$IS_STANDALONE_NODE" = true ] && [ "$TEMPERATURE_ENABLED" = true ] && [ "$
     echo ""
 
     # Try to fetch the proxy's public key from Pulse server
-    PROXY_KEY_URL="%s/api/system/proxy-public-key"
+    PROXY_KEY_URL="$PULSE_URL/api/system/proxy-public-key"
     echo "Fetching temperature proxy public key..."
 
     PROXY_PUBLIC_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
@@ -5035,7 +5046,7 @@ echo ""
 # Only show manual setup instructions if auto-registration failed
 if [ "$AUTO_REG_SUCCESS" != true ]; then
     echo "Manual setup instructions:"
-    echo "  Token ID: pulse-monitor@pam!%s"
+    echo "  Token ID: $PULSE_TOKEN_ID"
     if [ "$TOKEN_EXISTED" = true ]; then
         echo "  Token Value: [Use your existing token or create a new one as shown above]"
     elif [ -n "$TOKEN_VALUE" ]; then
@@ -5047,16 +5058,11 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 echo ""
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"),
-			tokenName, pulseURL, pulseURL,
-			pulseURL, serverHost, pulseURL,
-			pulseURL, serverHost, pulseURL,
-			tokenName, pulseURL, pulseURL,
-			pulseURL, pulseURL,
+			pulseURL, serverHost, tokenName,
 			pulseIP,
-			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
-			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
-			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
+			authToken,
+			storagePerms,
+			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
