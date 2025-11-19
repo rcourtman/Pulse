@@ -90,7 +90,7 @@ determine_allowlist_mode() {
     INSTALLED_PROXY_VERSION="$(detect_proxy_version "$BINARY_PATH")"
 
     if [[ -z "$INSTALLED_PROXY_VERSION" ]]; then
-        print_warn "Unable to detect installed pulse-sensor-proxy version; assuming allowed_nodes_file is supported"
+        # During initial install, version detection fails - that's expected
         ALLOWLIST_MODE="file"
         return
     fi
@@ -103,8 +103,11 @@ determine_allowlist_mode() {
         return
     fi
 
-    ALLOWLIST_MODE="inline"
-    print_warn "pulse-sensor-proxy ${INSTALLED_PROXY_VERSION} does not support allowed_nodes_file; using inline allow list updates"
+    # Refuse to install/upgrade on unsupported versions
+    print_error "pulse-sensor-proxy ${INSTALLED_PROXY_VERSION} is too old (< ${MIN_ALLOWED_NODES_FILE_VERSION})"
+    print_error "File-based allowlist is now required. Please upgrade the proxy binary first."
+    print_error "Download latest from: https://github.com/rcourtman/Pulse/releases/latest"
+    exit 1
 }
 
 record_pending_control_plane() {
@@ -305,6 +308,61 @@ PY
             echo "# These nodes are allowed to request temperature data when cluster IPC validation is unavailable"
             echo 'allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"'
         } >>"$CONFIG_FILE"
+    fi
+}
+
+migrate_inline_allowed_nodes_to_file() {
+    # Extract any inline allowed_nodes from config.yaml and migrate them to allowed_nodes.yaml
+    # This is called during install/upgrade to ensure we never have inline blocks
+
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        return
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        print_warn "python3 not available; skipping inline allowed_nodes migration"
+        return
+    fi
+
+    # Extract inline nodes if they exist
+    local inline_nodes
+    inline_nodes=$(python3 - "$CONFIG_FILE" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+path = Path(sys.argv[1])
+if not path.exists():
+    sys.exit(0)
+
+try:
+    data = yaml.safe_load(path.read_text())
+    if isinstance(data, dict) and 'allowed_nodes' in data:
+        nodes = data.get('allowed_nodes', [])
+        if isinstance(nodes, list):
+            for node in nodes:
+                print(node)
+except yaml.YAMLError:
+    pass
+PY
+    )
+
+    if [[ -n "$inline_nodes" ]]; then
+        # We found inline nodes - migrate them to the file
+        local -a nodes_array
+        mapfile -t nodes_array <<<"$inline_nodes"
+
+        if [[ ${#nodes_array[@]} -gt 0 ]]; then
+            print_info "Migrating ${#nodes_array[@]} inline allowed_nodes entries to ${ALLOWED_NODES_FILE}"
+
+            # Add them to the file (update_allowed_nodes will merge with existing)
+            update_allowed_nodes "Migrated from inline config" "${nodes_array[@]}"
+
+            # Now remove the inline block from config.yaml
+            normalize_allowed_nodes_section
+
+            print_success "Migration complete: inline allowed_nodes moved to file"
+        fi
     fi
 }
 
@@ -591,11 +649,7 @@ update_allowed_nodes() {
     shift
     local nodes=("$@")
 
-    if [[ "$ALLOWLIST_MODE" == "inline" ]]; then
-        write_inline_allowed_nodes "$comment_line" "${nodes[@]}"
-        return
-    fi
-
+    # File mode is now required - inline mode has been removed
     ensure_allowed_nodes_file_reference
     remove_allowed_nodes_block
 
@@ -1662,6 +1716,10 @@ for entry in nodes:
 }
 
 determine_allowlist_mode
+
+# Migrate any existing inline allowed_nodes to file (Phase 1 hotfix for config corruption)
+migrate_inline_allowed_nodes_to_file
+
 cleanup_inline_allowed_nodes
 
 # Create base config file if it doesn't exist
