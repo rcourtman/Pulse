@@ -312,57 +312,19 @@ PY
 }
 
 migrate_inline_allowed_nodes_to_file() {
-    # Extract any inline allowed_nodes from config.yaml and migrate them to allowed_nodes.yaml
-    # This is called during install/upgrade to ensure we never have inline blocks
-
+    # Phase 2: Use config CLI for migration - no Python manipulation
     if [[ ! -f "$CONFIG_FILE" ]]; then
         return
     fi
 
-    if ! command -v python3 >/dev/null 2>&1; then
-        print_warn "python3 not available; skipping inline allowed_nodes migration"
+    if [[ ! -x "$BINARY_PATH" ]]; then
+        print_warn "Binary not available yet; skipping migration"
         return
     fi
 
-    # Extract inline nodes if they exist
-    local inline_nodes
-    inline_nodes=$(python3 - "$CONFIG_FILE" <<'PY'
-import sys
-from pathlib import Path
-import yaml
-
-path = Path(sys.argv[1])
-if not path.exists():
-    sys.exit(0)
-
-try:
-    data = yaml.safe_load(path.read_text())
-    if isinstance(data, dict) and 'allowed_nodes' in data:
-        nodes = data.get('allowed_nodes', [])
-        if isinstance(nodes, list):
-            for node in nodes:
-                print(node)
-except yaml.YAMLError:
-    pass
-PY
-    )
-
-    if [[ -n "$inline_nodes" ]]; then
-        # We found inline nodes - migrate them to the file
-        local -a nodes_array
-        mapfile -t nodes_array <<<"$inline_nodes"
-
-        if [[ ${#nodes_array[@]} -gt 0 ]]; then
-            print_info "Migrating ${#nodes_array[@]} inline allowed_nodes entries to ${ALLOWED_NODES_FILE}"
-
-            # Add them to the file (update_allowed_nodes will merge with existing)
-            update_allowed_nodes "Migrated from inline config" "${nodes_array[@]}"
-
-            # Now remove the inline block from config.yaml
-            normalize_allowed_nodes_section
-
-            print_success "Migration complete: inline allowed_nodes moved to file"
-        fi
+    # Use CLI to atomically migrate inline nodes to file
+    if "$BINARY_PATH" config migrate-to-file --config "$CONFIG_FILE" --allowed-nodes "$ALLOWED_NODES_FILE"; then
+        print_success "Migration complete: inline allowed_nodes moved to file"
     fi
 }
 
@@ -649,10 +611,11 @@ update_allowed_nodes() {
     shift
     local nodes=("$@")
 
-    # File mode is now required - inline mode has been removed
-    # Phase 2: Use config CLI instead of shell/Python manipulation
-    ensure_allowed_nodes_file_reference
-    remove_allowed_nodes_block
+    # Phase 2: Use config CLI exclusively - no shell/Python manipulation
+    # First, migrate any inline allowed_nodes to file mode
+    if "$BINARY_PATH" config migrate-to-file --config "$CONFIG_FILE" --allowed-nodes "$ALLOWED_NODES_FILE" 2>/dev/null; then
+        print_info "Migrated inline allowed_nodes to file mode"
+    fi
 
     # Build --merge flags for the CLI
     local merge_args=()
