@@ -4289,9 +4289,50 @@ fi
 
 # Single temperature monitoring prompt
 if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
-    echo "Existing pulse-sensor-proxy detected—running repair to refresh tokens and control-plane settings..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🔧 Refreshing pulse-sensor-proxy installation"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    TEMPERATURE_ENABLED=true
+    echo "Existing proxy detected - updating to refresh tokens and control-plane settings..."
+    echo ""
+
+    # Download and run installer to refresh config
+    PROXY_INSTALLER="/tmp/install-sensor-proxy-repair-$$.sh"
+    INSTALLER_URL="%s/api/install/install-sensor-proxy.sh"
+
+    if curl --fail --silent --location "$INSTALLER_URL" -o "$PROXY_INSTALLER" 2>/dev/null; then
+        chmod +x "$PROXY_INSTALLER"
+
+        # Determine correct installer mode based on how it was originally deployed
+        if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
+            # Was deployed for containerized Pulse - use --ctid mode
+            "$PROXY_INSTALLER" --ctid "$PULSE_CTID" --pulse-server "%s"
+        elif [ "$IS_STANDALONE_NODE" = true ]; then
+            # Standalone node - use --standalone --http-mode
+            "$PROXY_INSTALLER" --standalone --http-mode --pulse-server "%s"
+        else
+            # Clustered node without container - use default mode
+            "$PROXY_INSTALLER" --pulse-server "%s"
+        fi
+
+        REPAIR_STATUS=$?
+        rm -f "$PROXY_INSTALLER"
+
+        if [ $REPAIR_STATUS -eq 0 ]; then
+            echo ""
+            echo "✓ pulse-sensor-proxy refreshed successfully"
+            echo ""
+            TEMPERATURE_ENABLED=true
+        else
+            echo ""
+            echo "⚠️  Proxy repair had issues - check logs with: journalctl -u pulse-sensor-proxy -n 40"
+            echo ""
+        fi
+    else
+        echo "⚠️  Could not download installer from $INSTALLER_URL"
+        echo "    Keeping existing configuration"
+        echo ""
+    fi
 elif [ "$SSH_ALREADY_CONFIGURED" = true ]; then
     TEMPERATURE_ENABLED=true
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -4926,7 +4967,7 @@ fi
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
 			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
-			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, tokenName)
+			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
