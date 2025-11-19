@@ -4340,8 +4340,12 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
                 echo ""
                 echo "⚠️  Cannot determine proxy deployment type (no CTID, not standalone)"
                 echo "    Manual repair required. Run one of:"
-                echo "      • For container: $PROXY_INSTALLER --ctid <CTID> --pulse-server %s"
-                echo "      • For standalone: $PROXY_INSTALLER --standalone --http-mode --pulse-server %s"
+                echo ""
+                echo "      • For container:"
+                echo "        curl -fsSL %s/api/install/install-sensor-proxy.sh | bash -s -- --ctid <CTID> --pulse-server %s"
+                echo ""
+                echo "      • For standalone:"
+                echo "        curl -fsSL %s/api/install/install-sensor-proxy.sh | bash -s -- --standalone --http-mode --pulse-server %s"
                 echo ""
                 echo "    Keeping existing proxy configuration"
                 rm -f "$PROXY_INSTALLER"
@@ -5050,7 +5054,7 @@ fi
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
 			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
-			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
+			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
