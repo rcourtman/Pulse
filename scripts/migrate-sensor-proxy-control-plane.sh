@@ -148,12 +148,22 @@ EOF
     chown pulse-sensor-proxy:pulse-sensor-proxy "$CONFIG_FILE" 2>/dev/null || true
 }
 
+log "Stopping service to prevent config file races..."
+if systemctl is-active --quiet pulse-sensor-proxy; then
+    systemctl stop pulse-sensor-proxy
+    SERVICE_WAS_RUNNING=true
+else
+    SERVICE_WAS_RUNNING=false
+fi
+
 log "Updating config..."
 update_config_atomically
 
-if [[ "$SKIP_RESTART" == false ]]; then
-    log "Restarting pulse-sensor-proxy..."
-    systemctl restart pulse-sensor-proxy
+if [[ "$SKIP_RESTART" == false ]] && [[ "$SERVICE_WAS_RUNNING" == true ]]; then
+    log "Starting pulse-sensor-proxy..."
+    systemctl start pulse-sensor-proxy
+elif [[ "$SERVICE_WAS_RUNNING" == false ]]; then
+    log "Service was not running; leaving stopped"
 else
     warn "Skipping service restart; control-plane sync will start on next restart"
 fi
