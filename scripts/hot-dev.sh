@@ -166,7 +166,7 @@ if [[ -f "${ROOT_DIR}/mock.env" ]]; then
     else
         # Sync production config when not in mock mode
         echo "Syncing production configuration..."
-        "${ROOT_DIR}/scripts/sync-production-config.sh"
+        DEV_DIR="${ROOT_DIR}/tmp/dev-config" "${ROOT_DIR}/scripts/sync-production-config.sh"
     fi
 fi
 
@@ -181,6 +181,10 @@ fi
 printf "[hot-dev] Starting backend on port %s...\n" "${PULSE_DEV_API_PORT}"
 cd "${ROOT_DIR}"
 
+# Ensure dummy frontend file exists for go:embed
+mkdir -p internal/api/frontend-modern/dist
+touch internal/api/frontend-modern/dist/index.html
+
 go build -o pulse ./cmd/pulse
 
 # CRITICAL: Export all required environment variables for the backend
@@ -192,7 +196,7 @@ export FRONTEND_PORT PULSE_DEV_API_PORT PORT
 
 # Set data directory strategy for the backend
 if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
-    export PULSE_DATA_DIR=/opt/pulse/tmp/mock-data
+    export PULSE_DATA_DIR="${ROOT_DIR}/tmp/mock-data"
     mkdir -p "$PULSE_DATA_DIR"
     echo "[hot-dev] Mock mode: Using isolated data directory: ${PULSE_DATA_DIR}"
 else
@@ -216,7 +220,7 @@ else
         elif [[ ${PULSE_DATA_DIR} == "${ROOT_DIR}/tmp/dev-config" ]]; then
             DEV_KEY_FILE="${PULSE_DATA_DIR}/.encryption.key"
             if [[ ! -f "${DEV_KEY_FILE}" ]]; then
-                openssl rand -hex 32 > "${DEV_KEY_FILE}"
+                openssl rand -base64 32 > "${DEV_KEY_FILE}"
                 chmod 600 "${DEV_KEY_FILE}"
                 echo "[hot-dev] Generated dev encryption key at ${DEV_KEY_FILE}"
             fi

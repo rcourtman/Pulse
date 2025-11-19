@@ -5,7 +5,7 @@
 set -euo pipefail
 
 PROD_DIR="/etc/pulse"
-DEV_DIR="/opt/pulse/tmp/dev-config"
+DEV_DIR=${DEV_DIR:-"/opt/pulse/tmp/dev-config"}
 
 # Ensure dev config directory exists
 mkdir -p "$DEV_DIR"
@@ -44,7 +44,7 @@ else
     echo "⚠ Production encryption key not found. Using dev-only key."
     if [ ! -f "$DEV_DIR/.encryption.key" ]; then
         # Generate a dev-only encryption key so backend can start
-        openssl rand -hex 32 > "$DEV_DIR/.encryption.key"
+        openssl rand -base64 32 > "$DEV_DIR/.encryption.key"
         chmod 600 "$DEV_DIR/.encryption.key"
         echo "✓ Generated dev encryption key at $DEV_DIR/.encryption.key"
     else
