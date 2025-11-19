@@ -237,13 +237,22 @@ func setAllowedNodes(path string, newNodes []string, replace bool) error {
 }
 
 // withLockedFile opens a lock file with exclusive locking and runs a callback
+//
+// IMPORTANT: If future commands need to modify multiple files, use consistent lock ordering
+// to avoid deadlocks (e.g., always lock config.yaml.lock before allowed_nodes.yaml.lock)
 func withLockedFile(lockPath string, fn func(f *os.File) error) error {
 	// Open or create the lock file (never deleted, persists across renames)
-	f, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0644)
+	// Use 0600 to prevent unprivileged users from holding LOCK_EX and DoS'ing the installer
+	f, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open lock file: %w", err)
 	}
 	defer f.Close()
+
+	// Ensure correct permissions even if file already exists with broader perms
+	if err := f.Chmod(0600); err != nil {
+		return fmt.Errorf("failed to set lock file permissions: %w", err)
+	}
 
 	// Acquire exclusive lock
 	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX); err != nil {
