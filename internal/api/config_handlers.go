@@ -4289,49 +4289,108 @@ fi
 
 # Single temperature monitoring prompt
 if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🔧 Refreshing pulse-sensor-proxy installation"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "Existing proxy detected - updating to refresh tokens and control-plane settings..."
-    echo ""
+    # Check if this is a fresh install from this run (don't repair what we just installed)
+    if [ "$SUMMARY_PROXY_INSTALLED" = "true" ]; then
+        # Socket existed before this script ran - this is a repair scenario
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🔧 Refreshing pulse-sensor-proxy installation"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "Existing proxy detected - updating to refresh tokens and control-plane settings..."
+        echo ""
 
-    # Download and run installer to refresh config
-    PROXY_INSTALLER="/tmp/install-sensor-proxy-repair-$$.sh"
-    INSTALLER_URL="%s/api/install/install-sensor-proxy.sh"
+        # Download and run installer to refresh config
+        PROXY_INSTALLER="/tmp/install-sensor-proxy-repair-$$.sh"
+        INSTALLER_URL="%s/api/install/install-sensor-proxy.sh"
 
-    if curl --fail --silent --location "$INSTALLER_URL" -o "$PROXY_INSTALLER" 2>/dev/null; then
-        chmod +x "$PROXY_INSTALLER"
+        if curl --fail --silent --location "$INSTALLER_URL" -o "$PROXY_INSTALLER" 2>/dev/null; then
+            chmod +x "$PROXY_INSTALLER"
 
-        # Determine correct installer mode based on how it was originally deployed
-        if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
-            # Was deployed for containerized Pulse - use --ctid mode
-            "$PROXY_INSTALLER" --ctid "$PULSE_CTID" --pulse-server "%s"
-        elif [ "$IS_STANDALONE_NODE" = true ]; then
-            # Standalone node - use --standalone --http-mode
-            "$PROXY_INSTALLER" --standalone --http-mode --pulse-server "%s"
+            # Determine correct installer mode based on how it was originally deployed
+            # Priority: use PULSE_CTID if available, otherwise check standalone status
+            INSTALLER_ARGS=""
+            if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
+                # Was deployed for containerized Pulse - use --ctid mode
+                INSTALLER_ARGS="--ctid $PULSE_CTID --pulse-server %s"
+            elif [ "$IS_STANDALONE_NODE" = true ]; then
+                # Standalone node - use --standalone --http-mode
+                INSTALLER_ARGS="--standalone --http-mode --pulse-server %s"
+            else
+                # Cannot determine deployment type - bail out
+                echo ""
+                echo "⚠️  Cannot determine proxy deployment type (no CTID, not standalone)"
+                echo "    Manual repair required. Run one of:"
+                echo "      • For container: $PROXY_INSTALLER --ctid <CTID> --pulse-server %s"
+                echo "      • For standalone: $PROXY_INSTALLER --standalone --http-mode --pulse-server %s"
+                echo ""
+                rm -f "$PROXY_INSTALLER"
+                INSTALLER_ARGS=""
+            fi
+
+            if [ -n "$INSTALLER_ARGS" ]; then
+                # Run installer and capture output for diagnostics
+                INSTALL_OUTPUT=$("$PROXY_INSTALLER" $INSTALLER_ARGS 2>&1)
+                REPAIR_STATUS=$?
+
+                if [ -n "$INSTALL_OUTPUT" ]; then
+                    echo "$INSTALL_OUTPUT"
+                fi
+
+                if [ $REPAIR_STATUS -eq 0 ]; then
+                    # Verify proxy health (same checks as main install path)
+                    PROXY_HEALTHY=false
+                    if systemctl is-active --quiet pulse-sensor-proxy 2>/dev/null; then
+                        PROXY_HEALTHY=true
+                        echo ""
+                        echo "✓ pulse-sensor-proxy refreshed successfully"
+                        echo ""
+                    else
+                        echo ""
+                        echo "⚠️  pulse-sensor-proxy service is not active. Check logs with:"
+                        echo "    journalctl -u pulse-sensor-proxy -n 40"
+                        echo ""
+                    fi
+
+                    if [ "$PROXY_HEALTHY" = true ] && [ ! -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock ]; then
+                        echo "  ✗ Proxy socket not found at /run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
+                        echo "    Check logs with: journalctl -u pulse-sensor-proxy -n 40"
+                        PROXY_HEALTHY=false
+                    fi
+
+                    if [ "$PROXY_HEALTHY" = true ]; then
+                        # Fetch the proxy's SSH public key
+                        echo "  • Fetching SSH public key from proxy..."
+                        TEMPERATURE_PROXY_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
+                        if [ -n "$TEMPERATURE_PROXY_KEY" ] && [[ "$TEMPERATURE_PROXY_KEY" =~ ^ssh-(rsa|ed25519) ]]; then
+                            SSH_SENSORS_PUBLIC_KEY="$TEMPERATURE_PROXY_KEY"
+                            SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $TEMPERATURE_PROXY_KEY # pulse-sensor-proxy"
+                            echo "  ✓ SSH public key retrieved from proxy"
+                        else
+                            echo "  ⚠️  Could not fetch SSH key from proxy"
+                        fi
+                        TEMPERATURE_ENABLED=true
+                    fi
+                else
+                    echo ""
+                    echo "⚠️  Proxy repair failed"
+                    if [ -n "$INSTALL_OUTPUT" ]; then
+                        echo ""
+                        echo "$INSTALL_OUTPUT" | tail -n 20
+                    fi
+                    echo ""
+                fi
+
+                rm -f "$PROXY_INSTALLER"
+            fi
         else
-            # Clustered node without container - use default mode
-            "$PROXY_INSTALLER" --pulse-server "%s"
-        fi
-
-        REPAIR_STATUS=$?
-        rm -f "$PROXY_INSTALLER"
-
-        if [ $REPAIR_STATUS -eq 0 ]; then
-            echo ""
-            echo "✓ pulse-sensor-proxy refreshed successfully"
-            echo ""
-            TEMPERATURE_ENABLED=true
-        else
-            echo ""
-            echo "⚠️  Proxy repair had issues - check logs with: journalctl -u pulse-sensor-proxy -n 40"
+            echo "⚠️  Could not download installer from $INSTALLER_URL"
+            echo "    Keeping existing configuration"
             echo ""
         fi
     else
-        echo "⚠️  Could not download installer from $INSTALLER_URL"
-        echo "    Keeping existing configuration"
-        echo ""
+        # Fresh install from this run - skip repair
+        echo "Temperature monitoring configured via pulse-sensor-proxy"
+        TEMPERATURE_ENABLED=true
     fi
 elif [ "$SSH_ALREADY_CONFIGURED" = true ]; then
     TEMPERATURE_ENABLED=true
@@ -4967,7 +5026,7 @@ fi
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms,
 			sshKeys.ProxyPublicKey, sshKeys.SensorsPublicKey, minProxyReadyVersion,
-			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
+			pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, authToken, pulseURL, authToken, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, pulseURL, tokenName)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
