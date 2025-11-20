@@ -516,7 +516,6 @@ const LoginForm: Component<{
               <label
                 for="remember-me"
                 class="ml-2 block text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
-                onClick={() => setRememberMe(!rememberMe())}
               >
                 Remember me
               </label>
