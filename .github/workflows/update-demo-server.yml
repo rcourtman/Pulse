@@ -98,14 +98,30 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.DEMO_SERVER_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Update demo server
+      - name: Check current demo version
         if: steps.gate.outputs.skip != 'true'
+        id: current
+        run: |
+          TARGET="${{ steps.target.outputs.tag }}"
+          TARGET_STRIPPED="${TARGET#v}"
+          CURRENT=$(ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
+            "curl -s http://localhost:7655/api/version | jq -r .version")
+          echo "Current demo version: ${CURRENT}"
+          if [ "$CURRENT" = "$TARGET" ] || [ "$CURRENT" = "$TARGET_STRIPPED" ] || [ "v${CURRENT}" = "$TARGET" ]; then
+            echo "skip_current=true" >> "$GITHUB_OUTPUT"
+            echo "Demo server already on target version; skipping update."
+          else
+            echo "skip_current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update demo server
+        if: steps.gate.outputs.skip != 'true' && steps.current.outputs.skip_current != 'true'
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
             'curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash'
 
       - name: Verify update
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.gate.outputs.skip != 'true' && steps.current.outputs.skip_current != 'true'
         run: |
           # Wait a moment for service to restart
           sleep 5
