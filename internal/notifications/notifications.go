@@ -105,29 +105,29 @@ type webhookRateLimit struct {
 
 // NotificationManager handles sending notifications
 type NotificationManager struct {
-	mu                sync.RWMutex
-	emailConfig       EmailConfig
-	emailManager      *EnhancedEmailManager        // Shared email manager for rate limiting
-	webhooks          []WebhookConfig
-	appriseConfig     AppriseConfig
-	enabled           bool
-	cooldown          time.Duration
-	lastNotified      map[string]notificationRecord
-	groupWindow       time.Duration
-	pendingAlerts     []*alerts.Alert
-	groupTimer        *time.Timer
-	groupByNode       bool
-	publicURL         string // Full URL to access Pulse
-	groupByGuest      bool
-	webhookHistory    []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
-	webhookRateLimits map[string]*webhookRateLimit // Track rate limits per webhook URL
-	webhookRateMu     sync.Mutex                   // Separate mutex for webhook rate limiting
-	appriseExec       appriseExecFunc
-	queue             *NotificationQueue // Persistent notification queue
-	webhookClient     *http.Client       // Shared HTTP client for webhooks
-	stopCleanup       chan struct{}      // Signal to stop cleanup goroutine
-	allowedPrivateNets []*net.IPNet      // Parsed CIDR ranges allowed for private webhook targets
-	allowedPrivateMu   sync.RWMutex      // Protects allowedPrivateNets
+	mu                 sync.RWMutex
+	emailConfig        EmailConfig
+	emailManager       *EnhancedEmailManager // Shared email manager for rate limiting
+	webhooks           []WebhookConfig
+	appriseConfig      AppriseConfig
+	enabled            bool
+	cooldown           time.Duration
+	lastNotified       map[string]notificationRecord
+	groupWindow        time.Duration
+	pendingAlerts      []*alerts.Alert
+	groupTimer         *time.Timer
+	groupByNode        bool
+	publicURL          string // Full URL to access Pulse
+	groupByGuest       bool
+	webhookHistory     []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
+	webhookRateLimits  map[string]*webhookRateLimit // Track rate limits per webhook URL
+	webhookRateMu      sync.Mutex                   // Separate mutex for webhook rate limiting
+	appriseExec        appriseExecFunc
+	queue              *NotificationQueue // Persistent notification queue
+	webhookClient      *http.Client       // Shared HTTP client for webhooks
+	stopCleanup        chan struct{}      // Signal to stop cleanup goroutine
+	allowedPrivateNets []*net.IPNet       // Parsed CIDR ranges allowed for private webhook targets
+	allowedPrivateMu   sync.RWMutex       // Protects allowedPrivateNets
 }
 
 type appriseExecFunc func(ctx context.Context, path string, args []string) ([]byte, error)
@@ -2066,14 +2066,14 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 func isPrivateIP(ip net.IP) bool {
 	// Private IPv4 ranges
 	privateRanges := []string{
-		"10.0.0.0/8",      // RFC1918
-		"172.16.0.0/12",   // RFC1918
-		"192.168.0.0/16",  // RFC1918
-		"127.0.0.0/8",     // Loopback
-		"169.254.0.0/16",  // Link-local
-		"::1/128",         // IPv6 loopback
-		"fe80::/10",       // IPv6 link-local
-		"fc00::/7",        // IPv6 unique local
+		"10.0.0.0/8",     // RFC1918
+		"172.16.0.0/12",  // RFC1918
+		"192.168.0.0/16", // RFC1918
+		"127.0.0.0/8",    // Loopback
+		"169.254.0.0/16", // Link-local
+		"::1/128",        // IPv6 loopback
+		"fe80::/10",      // IPv6 link-local
+		"fc00::/7",       // IPv6 unique local
 	}
 
 	for _, cidr := range privateRanges {
@@ -2263,9 +2263,8 @@ func (n *NotificationManager) groupAlerts(alertList []*alerts.Alert) map[string]
 	return groups
 }
 
-// SendTestNotification sends a test notification
-func (n *NotificationManager) SendTestNotification(method string) error {
-	testAlert := &alerts.Alert{
+func buildNotificationTestAlert() *alerts.Alert {
+	return &alerts.Alert{
 		ID:           "test-alert",
 		Type:         "cpu",
 		Level:        "warning",
@@ -2282,6 +2281,11 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 			"resourceType": "vm",
 		},
 	}
+}
+
+// SendTestNotification sends a test notification
+func (n *NotificationManager) SendTestNotification(method string) error {
+	testAlert := buildNotificationTestAlert()
 
 	switch method {
 	case "email":
@@ -2336,11 +2340,35 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 		}
 
 		// Use sendGroupedApprise with a single test alert
-		n.sendGroupedApprise(appriseConfig, []*alerts.Alert{testAlert})
-		return nil
+		return n.sendGroupedApprise(appriseConfig, []*alerts.Alert{testAlert})
 	default:
 		return fmt.Errorf("unknown notification method: %s", method)
 	}
+}
+
+// SendTestAppriseWithConfig sends a test Apprise notification using provided config
+func (n *NotificationManager) SendTestAppriseWithConfig(config AppriseConfig) error {
+	cfg := NormalizeAppriseConfig(config)
+
+	log.Info().
+		Bool("enabled", cfg.Enabled).
+		Str("mode", string(cfg.Mode)).
+		Int("targetCount", len(cfg.Targets)).
+		Str("serverURL", cfg.ServerURL).
+		Msg("Testing Apprise notification with provided config")
+
+	if !cfg.Enabled {
+		switch cfg.Mode {
+		case AppriseModeCLI:
+			return fmt.Errorf("apprise notifications are not enabled in the provided configuration: at least one target is required for CLI mode")
+		case AppriseModeHTTP:
+			return fmt.Errorf("apprise notifications are not enabled in the provided configuration: server URL is required for API mode")
+		default:
+			return fmt.Errorf("apprise notifications are not enabled in the provided configuration")
+		}
+	}
+
+	return n.sendGroupedApprise(cfg, []*alerts.Alert{buildNotificationTestAlert()})
 }
 
 // SendTestWebhook sends a test notification to a specific webhook

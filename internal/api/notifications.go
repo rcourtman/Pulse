@@ -330,10 +330,10 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		Msg("Test notification request received")
 
 	var req struct {
-		Method    string                     `json:"method"`              // "email" or "webhook"
-		Type      string                     `json:"type"`                // Alternative field name used by frontend
-		Config    *notifications.EmailConfig `json:"config,omitempty"`    // Optional config for testing
-		WebhookID string                     `json:"webhookId,omitempty"` // For webhook testing
+		Method    string          `json:"method"`              // "email", "webhook", or "apprise"
+		Type      string          `json:"type"`                // Alternative field name used by frontend
+		Config    json.RawMessage `json:"config,omitempty"`    // Optional config for testing (email or apprise)
+		WebhookID string          `json:"webhookId,omitempty"` // For webhook testing
 	}
 
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -387,24 +387,40 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-	} else if req.Method == "email" && req.Config != nil {
-		// If config is provided, use it for testing (without saving)
+	} else if req.Method == "email" && len(req.Config) > 0 {
+		var emailConfig notifications.EmailConfig
+		if err := json.Unmarshal(req.Config, &emailConfig); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid email config: %v", err), http.StatusBadRequest)
+			return
+		}
+
 		// If password is empty, use the saved password
-		if req.Config.Password == "" {
+		if emailConfig.Password == "" {
 			savedConfig := h.monitor.GetNotificationManager().GetEmailConfig()
-			req.Config.Password = savedConfig.Password
+			emailConfig.Password = savedConfig.Password
 		}
 
 		log.Info().
-			Bool("enabled", req.Config.Enabled).
-			Str("smtp", req.Config.SMTPHost).
-			Str("from", req.Config.From).
-			Int("toCount", len(req.Config.To)).
-			Strs("to", req.Config.To).
-			Bool("hasPassword", req.Config.Password != "").
+			Bool("enabled", emailConfig.Enabled).
+			Str("smtp", emailConfig.SMTPHost).
+			Str("from", emailConfig.From).
+			Int("toCount", len(emailConfig.To)).
+			Strs("to", emailConfig.To).
+			Bool("hasPassword", emailConfig.Password != "").
 			Msg("Testing email with provided config")
 
-		if err := h.monitor.GetNotificationManager().SendTestNotificationWithConfig(req.Method, req.Config, nodeInfo); err != nil {
+		if err := h.monitor.GetNotificationManager().SendTestNotificationWithConfig(req.Method, &emailConfig, nodeInfo); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else if req.Method == "apprise" && len(req.Config) > 0 {
+		var appriseConfig notifications.AppriseConfig
+		if err := json.Unmarshal(req.Config, &appriseConfig); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid Apprise config: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		if err := h.monitor.GetNotificationManager().SendTestAppriseWithConfig(appriseConfig); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -631,10 +647,10 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 	webhooks := nm.GetWebhooks()
 
 	health := map[string]interface{}{
-		"queue":     queueStats,
+		"queue": queueStats,
 		"email": map[string]interface{}{
-			"enabled":     emailCfg.Enabled,
-			"configured":  emailCfg.SMTPHost != "",
+			"enabled":    emailCfg.Enabled,
+			"configured": emailCfg.SMTPHost != "",
 		},
 		"webhooks": map[string]interface{}{
 			"total":   len(webhooks),
