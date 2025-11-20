@@ -573,6 +573,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
       const dockerHostsList: DockerHost[] = state.dockerHosts || [];
       const dockerHostMap = new Map<string, DockerHost>();
       const dockerContainerMap = new Map<string, { host: DockerHost; container: DockerContainer }>();
+      const hostAgentMap = new Map<string, Host>();
 
       dockerHostsList.forEach((host) => {
         dockerHostMap.set(host.id, host);
@@ -580,6 +581,9 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           const resourceId = `docker:${host.id}/${container.id}`;
           dockerContainerMap.set(resourceId, { host, container });
         });
+      });
+      (state.hosts || []).forEach((host) => {
+        hostAgentMap.set(host.id, host);
       });
 
       Object.entries(rawConfig).forEach(([key, thresholds]) => {
@@ -652,6 +656,26 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
             name: hostId || key,
             type: 'dockerHost',
             resourceType: 'Container Host',
+            disableConnectivity: thresholds.disableConnectivity || false,
+            thresholds: extractTriggerValues(thresholds),
+          });
+          return;
+        }
+
+        // Host agent override stored by host ID
+        const hostAgent = hostAgentMap.get(key);
+        if (hostAgent) {
+          const displayName =
+            hostAgent.displayName?.trim() || hostAgent.hostname || hostAgent.id;
+
+          overridesList.push({
+            id: hostAgent.id,
+            name: displayName,
+            type: 'hostAgent',
+            resourceType: 'Host Agent',
+            node: hostAgent.hostname,
+            instance: hostAgent.platform || hostAgent.osName || '',
+            disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
           });
