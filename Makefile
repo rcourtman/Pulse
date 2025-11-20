@@ -69,6 +69,10 @@ format-backend:
 format-frontend:
 	npm --prefix $(FRONTEND_DIR) run format
 
+test:
+	@echo "Running backend tests (excluding tmp tooling)..."
+	go test $$(go list ./... | grep -v '/tmp$$')
+
 # Build all agent binaries for all platforms
 build-agents:
 	@echo "Building agent binaries for all platforms..."
