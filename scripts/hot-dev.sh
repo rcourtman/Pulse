@@ -24,9 +24,28 @@ load_env_file "${ROOT_DIR}/.env.dev"
 FRONTEND_PORT=${FRONTEND_PORT:-${PORT:-7655}}
 PORT=${PORT:-${FRONTEND_PORT}}
 
+# Try to detect LAN IP
+if [[ -z ${LAN_IP:-} ]]; then
+    # Try hostname -I (Linux)
+    if command -v hostname >/dev/null 2>&1 && hostname -I >/dev/null 2>&1; then
+        LAN_IP=$(hostname -I | awk '{print $1}')
+    fi
+    
+    # Fallback for macOS
+    if [[ -z ${LAN_IP:-} ]]; then
+        LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || echo "")
+    fi
+    
+    # Fallback to 0.0.0.0 if detection fails
+    if [[ -z ${LAN_IP:-} ]]; then
+        LAN_IP="0.0.0.0"
+    fi
+fi
+
 FRONTEND_DEV_HOST=${FRONTEND_DEV_HOST:-0.0.0.0}
 FRONTEND_DEV_PORT=${FRONTEND_DEV_PORT:-${FRONTEND_PORT}}
-PULSE_DEV_API_HOST=${PULSE_DEV_API_HOST:-127.0.0.1}
+# Use LAN IP for API host so other devices can connect
+PULSE_DEV_API_HOST=${PULSE_DEV_API_HOST:-${LAN_IP}}
 PULSE_DEV_API_PORT=${PULSE_DEV_API_PORT:-7656}
 
 if [[ -z ${PULSE_DEV_API_URL:-} ]]; then
@@ -43,9 +62,13 @@ if [[ -z ${PULSE_DEV_WS_URL:-} ]]; then
     fi
 fi
 
+# Allow all origins for LAN access
+ALLOWED_ORIGINS="*"
+
 export FRONTEND_PORT PORT
 export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
 export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
+export ALLOWED_ORIGINS
 
 # Auto-detect pulse-sensor-proxy socket if available
 HOST_PROXY_SOCKET="/mnt/pulse-proxy/pulse-sensor-proxy.sock"
@@ -77,7 +100,8 @@ cat <<BANNER
 Starting HOT-RELOAD development mode
 =========================================
 
-Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (with hot-reload)
+Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (Local)
+          http://${LAN_IP}:${FRONTEND_DEV_PORT} (LAN)
 Backend API: ${PULSE_DEV_API_URL}
 
 Mock Mode: ${PULSE_MOCK_MODE:-false}
