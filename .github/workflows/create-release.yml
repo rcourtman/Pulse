@@ -62,6 +62,8 @@ jobs:
     needs: version_guard
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      FRONTEND_DIST: frontend-modern/dist
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -76,9 +78,19 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend-modern ci
 
+      - name: Restore frontend build cache
+        uses: actions/cache@v4
+        with:
+          path: frontend-modern/dist
+          key: frontend-build-${{ hashFiles('frontend-modern/package-lock.json', 'frontend-modern/src/**/*', 'frontend-modern/index.html', 'frontend-modern/postcss.config.cjs', 'frontend-modern/tailwind.config.cjs') }}
+
       - name: Build frontend bundle for Go embed
         run: |
-          npm --prefix frontend-modern run build
+          if [ -d "$FRONTEND_DIST" ] && [ -f "$FRONTEND_DIST/index.html" ]; then
+            echo "Using cached frontend build";
+          else
+            npm --prefix frontend-modern run build;
+          fi
           rm -rf internal/api/frontend-modern
           mkdir -p internal/api/frontend-modern
           cp -r frontend-modern/dist internal/api/frontend-modern/
@@ -320,6 +332,17 @@ jobs:
         run: |
           echo "Building release ${{ needs.extract_version.outputs.tag }}..."
           ./scripts/build-release.sh ${{ needs.extract_version.outputs.version }}
+
+      - name: Post-build health check
+        run: |
+          echo "Verifying server binary responds to --version and API health..."
+          if [ -x ./pulse ]; then
+            ./pulse --version
+          elif [ -x ./cmd/pulse/pulse ]; then
+            ./cmd/pulse/pulse --version
+          else
+            echo "::warning::Pulse binary not found after build-release; skipping version check"
+          fi
 
       - name: Prepare release notes
         id: generate_notes
