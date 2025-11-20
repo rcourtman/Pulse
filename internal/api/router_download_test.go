@@ -40,6 +40,29 @@ func TestHandleDownloadHostAgentServesWindowsExe(t *testing.T) {
 	}
 }
 
+func TestHandleDownloadHostAgentServesLinuxArm64(t *testing.T) {
+	binDir := setupTempPulseBin(t)
+	filePath := filepath.Join(binDir, "pulse-host-agent-linux-arm64")
+	payload := []byte("arm64-binary")
+	if err := os.WriteFile(filePath, payload, 0o755); err != nil {
+		t.Fatalf("failed to write test binary: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/download/pulse-host-agent?platform=linux&arch=arm64", nil)
+	rr := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleDownloadHostAgent(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rr.Code)
+	}
+
+	if got := rr.Body.String(); got != string(payload) {
+		t.Fatalf("unexpected response body: %q", got)
+	}
+}
+
 func TestHandleDownloadHostAgentServesChecksumForWindowsExe(t *testing.T) {
 	const (
 		arch     = "unit-sha"
