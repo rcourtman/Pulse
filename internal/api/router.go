@@ -1524,11 +1524,21 @@ func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 		return
 	}
 
+	if !canCapturePublicURL(r.config, req) {
+		return
+	}
+
 	if r.config.EnvOverrides != nil && r.config.EnvOverrides["publicURL"] {
 		return
 	}
 
-	rawHost := firstForwardedValue(req.Header.Get("X-Forwarded-Host"))
+	peerIP := extractRemoteIP(req.RemoteAddr)
+	trustedProxy := isTrustedProxyIP(peerIP)
+
+	rawHost := ""
+	if trustedProxy {
+		rawHost = firstForwardedValue(req.Header.Get("X-Forwarded-Host"))
+	}
 	if rawHost == "" {
 		rawHost = req.Host
 	}
@@ -1540,9 +1550,12 @@ func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 		return
 	}
 
-	rawProto := firstForwardedValue(req.Header.Get("X-Forwarded-Proto"))
-	if rawProto == "" {
-		rawProto = firstForwardedValue(req.Header.Get("X-Forwarded-Scheme"))
+	rawProto := ""
+	if trustedProxy {
+		rawProto = firstForwardedValue(req.Header.Get("X-Forwarded-Proto"))
+		if rawProto == "" {
+			rawProto = firstForwardedValue(req.Header.Get("X-Forwarded-Scheme"))
+		}
 	}
 	scheme := strings.ToLower(strings.TrimSpace(rawProto))
 	switch scheme {
@@ -1666,6 +1679,64 @@ func shouldAppendForwardedPort(port, scheme string) bool {
 		return false
 	}
 	return true
+}
+
+func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
+	if cfg == nil || req == nil {
+		return false
+	}
+
+	if isDirectLoopbackRequest(req) {
+		return true
+	}
+
+	return isRequestAuthenticated(cfg, req)
+}
+
+func isRequestAuthenticated(cfg *config.Config, req *http.Request) bool {
+	if cfg == nil || req == nil {
+		return false
+	}
+
+	if cfg.ProxyAuthSecret != "" {
+		if ok, _, _ := CheckProxyAuth(cfg, req); ok {
+			return true
+		}
+	}
+
+	if cfg.HasAPITokens() {
+		if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
+			if _, ok := cfg.ValidateAPIToken(token); ok {
+				return true
+			}
+		}
+		if authHeader := strings.TrimSpace(req.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			if _, ok := cfg.ValidateAPIToken(strings.TrimSpace(authHeader[7:])); ok {
+				return true
+			}
+		}
+	}
+
+	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+		if ValidateSession(cookie.Value) {
+			return true
+		}
+	}
+
+	if cfg.AuthUser != "" && cfg.AuthPass != "" {
+		const prefix = "Basic "
+		if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, prefix) {
+			if decoded, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):]); err == nil {
+				if parts := strings.SplitN(string(decoded), ":", 2); len(parts) == 2 {
+					if parts[0] == cfg.AuthUser && auth.CheckPasswordHash(parts[1], cfg.AuthPass) {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // handleHealth handles health check requests
