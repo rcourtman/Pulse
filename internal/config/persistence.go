@@ -958,7 +958,12 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 // LoadNodesConfig loads nodes configuration from file (decrypts if encrypted)
 func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
+	unlocked := false
+	defer func() {
+		if !unlocked {
+			c.mu.RUnlock()
+		}
+	}()
 
 	data, err := os.ReadFile(c.nodesFile)
 	if err != nil {
@@ -1075,6 +1080,41 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	// Track if any migrations were applied
 	migrationApplied := false
 
+	normalizeHostWithDefault := func(host, defaultPort string) (string, bool) {
+		normalized := normalizeHostPort(host, defaultPort)
+		if normalized == "" || normalized == host {
+			return host, false
+		}
+		return normalized, true
+	}
+
+	// Normalize PVE hosts (and cluster endpoints) to restore default ports for configs
+	// saved during the 4.32.0 regression that skipped default port injection.
+	for i := range config.PVEInstances {
+		if normalized, changed := normalizeHostWithDefault(config.PVEInstances[i].Host, defaultPVEPort); changed {
+			log.Info().
+				Str("instance", config.PVEInstances[i].Name).
+				Str("oldHost", config.PVEInstances[i].Host).
+				Str("newHost", normalized).
+				Msg("Normalized PVE host to include default port")
+			config.PVEInstances[i].Host = normalized
+			migrationApplied = true
+		}
+
+		for j := range config.PVEInstances[i].ClusterEndpoints {
+			if normalized, changed := normalizeHostWithDefault(config.PVEInstances[i].ClusterEndpoints[j].Host, defaultPVEPort); changed {
+				log.Info().
+					Str("instance", config.PVEInstances[i].Name).
+					Str("node", config.PVEInstances[i].ClusterEndpoints[j].NodeName).
+					Str("oldHost", config.PVEInstances[i].ClusterEndpoints[j].Host).
+					Str("newHost", normalized).
+					Msg("Normalized PVE cluster endpoint host to include default port")
+				config.PVEInstances[i].ClusterEndpoints[j].Host = normalized
+				migrationApplied = true
+			}
+		}
+	}
+
 	// Fix for bug where TokenName was incorrectly set when using password auth
 	// If a PBS instance has both Password and TokenName, clear the TokenName
 	for i := range config.PBSInstances {
@@ -1084,49 +1124,17 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				Msg("Fixing PBS config: clearing TokenName since Password is set")
 			config.PBSInstances[i].TokenName = ""
 			config.PBSInstances[i].TokenValue = ""
+			migrationApplied = true
 		}
 
-		// Fix for missing port in PBS host
-		host := config.PBSInstances[i].Host
-		if host != "" {
-			// Check if we need to add default port
-			protocolEnd := 0
-			if strings.HasPrefix(host, "https://") {
-				protocolEnd = 8
-			} else if strings.HasPrefix(host, "http://") {
-				protocolEnd = 7
-			} else if !strings.Contains(host, "://") {
-				// No protocol specified, add https and check for port
-				if !strings.Contains(host, ":") {
-					// No port specified, add protocol and default port
-					config.PBSInstances[i].Host = "https://" + host + ":8007"
-					log.Info().
-						Str("instance", config.PBSInstances[i].Name).
-						Str("oldHost", host).
-						Str("newHost", config.PBSInstances[i].Host).
-						Msg("Fixed PBS host by adding protocol and default port")
-				} else {
-					// Port specified, just add protocol
-					config.PBSInstances[i].Host = "https://" + host
-					log.Info().
-						Str("instance", config.PBSInstances[i].Name).
-						Str("oldHost", host).
-						Str("newHost", config.PBSInstances[i].Host).
-						Msg("Fixed PBS host by adding protocol")
-				}
-			} else if protocolEnd > 0 {
-				// Has protocol, check if port is missing
-				hostAfterProtocol := host[protocolEnd:]
-				if !strings.Contains(hostAfterProtocol, ":") {
-					// No port specified, add default PBS port
-					config.PBSInstances[i].Host = host + ":8007"
-					log.Info().
-						Str("instance", config.PBSInstances[i].Name).
-						Str("oldHost", host).
-						Str("newHost", config.PBSInstances[i].Host).
-						Msg("Fixed PBS host by adding default port 8007")
-				}
-			}
+		if normalized, changed := normalizeHostWithDefault(config.PBSInstances[i].Host, defaultPBSPort); changed {
+			log.Info().
+				Str("instance", config.PBSInstances[i].Name).
+				Str("oldHost", config.PBSInstances[i].Host).
+				Str("newHost", normalized).
+				Msg("Normalized PBS host to include default port")
+			config.PBSInstances[i].Host = normalized
+			migrationApplied = true
 		}
 
 		// Migration: Ensure MonitorBackups is enabled for PBS instances
@@ -1150,42 +1158,14 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			migrationApplied = true
 		}
 
-		host := config.PMGInstances[i].Host
-		if host == "" {
-			continue
-		}
-
-		protocolEnd := 0
-		if strings.HasPrefix(host, "https://") {
-			protocolEnd = 8
-		} else if strings.HasPrefix(host, "http://") {
-			protocolEnd = 7
-		} else if !strings.Contains(host, "://") {
-			if !strings.Contains(host, ":") {
-				config.PMGInstances[i].Host = "https://" + host + ":8006"
-			} else {
-				config.PMGInstances[i].Host = "https://" + host
-			}
+		if normalized, changed := normalizeHostWithDefault(config.PMGInstances[i].Host, defaultPVEPort); changed {
 			log.Info().
 				Str("instance", config.PMGInstances[i].Name).
-				Str("oldHost", host).
-				Str("newHost", config.PMGInstances[i].Host).
-				Msg("Fixed PMG host by adding protocol/port")
+				Str("oldHost", config.PMGInstances[i].Host).
+				Str("newHost", normalized).
+				Msg("Normalized PMG host to include default port")
+			config.PMGInstances[i].Host = normalized
 			migrationApplied = true
-			continue
-		}
-
-		if protocolEnd > 0 {
-			hostAfterProtocol := host[protocolEnd:]
-			if !strings.Contains(hostAfterProtocol, ":") {
-				config.PMGInstances[i].Host = host + ":8006"
-				log.Info().
-					Str("instance", config.PMGInstances[i].Name).
-					Str("oldHost", host).
-					Str("newHost", config.PMGInstances[i].Host).
-					Msg("Fixed PMG host by adding default port 8006")
-				migrationApplied = true
-			}
 		}
 	}
 
@@ -1209,6 +1189,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		copy(pmgCopy, config.PMGInstances)
 
 		// Release read lock before saving (SaveNodesConfig acquires write lock)
+		unlocked = true
 		c.mu.RUnlock()
 
 		log.Info().Msg("Migrations applied, saving updated configuration")
