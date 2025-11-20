@@ -284,7 +284,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
           })
         : undefined;
 
-    const formSource = {
+    const formSource: ReturnType<typeof getCleanFormData> = {
       name: node.name || '',
       host: node.host || '',
       guestURL: ('guestURL' in node ? node.guestURL : '') || '',
