@@ -127,6 +127,7 @@ function Resolve-PulseArchitectureCandidate {
         RawValue      = $normalized
         Source        = $Source
         UsedHeuristic = $false
+        ObservedValues = @()
     }
 }
 
