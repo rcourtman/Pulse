@@ -1086,6 +1086,67 @@ func extractHostAndPort(hostStr string) (string, string, error) {
 	return hostStr, "", nil
 }
 
+func defaultPortForNodeType(nodeType string) string {
+	switch nodeType {
+	case "pve", "pmg":
+		return "8006"
+	case "pbs":
+		return "8007"
+	default:
+		return ""
+	}
+}
+
+// normalizeNodeHost ensures hosts always include a scheme and only adds a default port
+// when the user did not supply a scheme (e.g., bare hostname/IP inputs). If the user
+// explicitly provides http/https, we respect their choice and avoid forcing a port.
+func normalizeNodeHost(rawHost, nodeType string) (string, error) {
+	host := strings.TrimSpace(rawHost)
+	if host == "" {
+		return "", fmt.Errorf("host is required")
+	}
+
+	userProvidedScheme := strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://")
+	scheme := "https"
+	if strings.HasPrefix(host, "http://") {
+		scheme = "http"
+		host = strings.TrimPrefix(host, "http://")
+	} else if strings.HasPrefix(host, "https://") {
+		host = strings.TrimPrefix(host, "https://")
+	}
+
+	// Strip any path/query fragments before parsing
+	if slash := strings.Index(host, "/"); slash != -1 {
+		host = host[:slash]
+	}
+
+	hostWithoutBrackets := strings.Trim(host, "[]")
+	if ip := net.ParseIP(hostWithoutBrackets); ip != nil && strings.Contains(hostWithoutBrackets, ":") && !strings.HasPrefix(host, "[") {
+		host = "[" + host + "]"
+	}
+
+	hostForParse := scheme + "://" + host
+	parsed, err := url.Parse(hostForParse)
+	if err != nil || parsed.Host == "" {
+		return "", fmt.Errorf("invalid host format")
+	}
+
+	// Drop any path/query fragments to avoid persisting unsafe values
+	parsed.Path = ""
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+
+	if parsed.Port() == "" && !userProvidedScheme {
+		defaultPort := defaultPortForNodeType(nodeType)
+		if defaultPort != "" {
+			parsed.Host = net.JoinHostPort(parsed.Hostname(), defaultPort)
+		}
+	}
+
+	return parsed.String(), nil
+}
+
 // HandleAddNode adds a new node
 func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
@@ -1174,6 +1235,12 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	normalizedHost, err := normalizeNodeHost(req.Host, req.Type)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// Check for duplicate nodes by name
 	switch req.Type {
 	case "pve":
@@ -1214,20 +1281,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
 			req.User = normalizePVEUser(req.User)
 		}
-		// Ensure host has protocol
-		host := req.Host
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		// Add port if missing
-		if !strings.Contains(host, ":8006") && !strings.Contains(host, ":443") {
-			if strings.HasPrefix(host, "https://") {
-				host = strings.Replace(host, "https://", "https://", 1)
-				if !strings.Contains(host[8:], ":") {
-					host += ":8006"
-				}
-			}
-		}
+		host := normalizedHost
 
 		// Check if node is part of a cluster (skip for test/invalid IPs)
 		var isCluster bool
@@ -1309,23 +1363,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				Msg("Added Proxmox cluster with auto-discovered endpoints")
 		}
 	} else if req.Type == "pbs" {
-		// PBS node - ensure host has protocol and port
-		host := req.Host
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		// Add default PBS port if missing
-		// Check if there's no port specified after the protocol
-		protocolEnd := 0
-		if strings.HasPrefix(host, "https://") {
-			protocolEnd = 8
-		} else if strings.HasPrefix(host, "http://") {
-			protocolEnd = 7
-		}
-		// Only add default port if no port is specified
-		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
-			host = host + ":8007"
-		}
+		host := normalizedHost
 
 		// Parse PBS authentication details
 		var pbsUser string
@@ -1399,19 +1437,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 		h.config.PBSInstances = append(h.config.PBSInstances, pbs)
 	} else if req.Type == "pmg" {
-		host := req.Host
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		protocolEnd := 0
-		if strings.HasPrefix(host, "https://") {
-			protocolEnd = 8
-		} else if strings.HasPrefix(host, "http://") {
-			protocolEnd = 7
-		}
-		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
-			host = host + ":8006"
-		}
+		host := normalizedHost
 
 		var pmgUser string
 		var pmgPassword string
@@ -1578,22 +1604,15 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	normalizedHost, err := normalizeNodeHost(req.Host, req.Type)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// Test connection based on type
 	if req.Type == "pve" {
-		// Ensure host has protocol
-		host := req.Host
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		// Add port if missing
-		if !strings.Contains(host, ":8006") && !strings.Contains(host, ":443") {
-			if strings.HasPrefix(host, "https://") {
-				host = strings.Replace(host, "https://", "https://", 1)
-				if !strings.Contains(host[8:], ":") {
-					host += ":8006"
-				}
-			}
-		}
+		host := normalizedHost
 
 		// Create a temporary client
 		authUser := req.User
@@ -1647,27 +1666,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	} else if req.Type == "pbs" {
-		// Ensure host has protocol for PBS
-		host := req.Host
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		// Add port if missing (PBS defaults to port 8007)
-		if strings.HasPrefix(host, "https://") {
-			// Check if there's already a port specified after the protocol
-			hostWithoutProtocol := host[8:] // Remove "https://"
-			if !strings.Contains(hostWithoutProtocol, ":") {
-				// No port specified, add default PBS port
-				host += ":8007"
-			}
-		} else if strings.HasPrefix(host, "http://") {
-			// Check if there's already a port specified after the protocol
-			hostWithoutProtocol := host[7:] // Remove "http://"
-			if !strings.Contains(hostWithoutProtocol, ":") {
-				// No port specified, add default PBS port
-				host += ":8007"
-			}
-		}
+		host := normalizedHost
 
 		log.Info().
 			Str("processedHost", host).
@@ -1732,19 +1731,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	} else {
-		host := req.Host
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		protocolEnd := 0
-		if strings.HasPrefix(host, "https://") {
-			protocolEnd = 8
-		} else if strings.HasPrefix(host, "http://") {
-			protocolEnd = 7
-		}
-		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
-			host = host + ":8006"
-		}
+		host := normalizedHost
 
 		verifySSL := false
 		if req.VerifySSL != nil {
@@ -1901,18 +1888,10 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 
 		if req.Host != "" {
-			host := req.Host
-			if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-				host = "https://" + host
-			}
-			protocolEnd := 0
-			if strings.HasPrefix(host, "https://") {
-				protocolEnd = 8
-			} else if strings.HasPrefix(host, "http://") {
-				protocolEnd = 7
-			}
-			if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
-				host = host + ":8006"
+			host, err := normalizeNodeHost(req.Host, nodeType)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
 			}
 			pve.Host = host
 		}
@@ -1979,21 +1958,10 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		pbs := &h.config.PBSInstances[index]
 		pbs.Name = req.Name
 
-		// Ensure PBS host has protocol and port
-		host := req.Host
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		// Check if port is missing
-		protocolEnd := 0
-		if strings.HasPrefix(host, "https://") {
-			protocolEnd = 8
-		} else if strings.HasPrefix(host, "http://") {
-			protocolEnd = 7
-		}
-		// Only add default port if no port is specified
-		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
-			host = host + ":8007"
+		host, err := normalizeNodeHost(req.Host, nodeType)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		pbs.Host = host
 
@@ -2069,18 +2037,10 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		pmgInst.Name = req.Name
 
 		if req.Host != "" {
-			host := req.Host
-			if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-				host = "https://" + host
-			}
-			protocolEnd := 0
-			if strings.HasPrefix(host, "https://") {
-				protocolEnd = 8
-			} else if strings.HasPrefix(host, "http://") {
-				protocolEnd = 7
-			}
-			if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
-				host = host + ":8006"
+			host, err := normalizeNodeHost(req.Host, nodeType)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
 			}
 			pmgInst.Host = host
 		}
@@ -3810,6 +3770,99 @@ fi
 echo "Creating monitoring user..."
 pveum user add pulse-monitor@pam --comment "Pulse monitoring service" 2>/dev/null || echo "User already exists"
 
+SETUP_AUTH_TOKEN="%s"
+AUTO_REG_SUCCESS=false
+
+attempt_auto_registration() {
+
+    if [ -z "$SETUP_AUTH_TOKEN" ] && [ -n "$PULSE_SETUP_TOKEN" ]; then
+        SETUP_AUTH_TOKEN="$PULSE_SETUP_TOKEN"
+    fi
+
+    if [ -z "$SETUP_AUTH_TOKEN" ]; then
+        if [ -t 0 ]; then
+            printf "Pulse setup token: "
+            if command -v stty >/dev/null 2>&1; then stty -echo; fi
+            IFS= read -r SETUP_AUTH_TOKEN
+            if command -v stty >/dev/null 2>&1; then stty echo; fi
+            printf "\n"
+		elif [ -c /dev/tty ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+			printf "Pulse setup token: " >/dev/tty
+			if command -v stty >/dev/null 2>&1; then stty -echo </dev/tty 2>/dev/null || true; fi
+			IFS= read -r SETUP_AUTH_TOKEN </dev/tty || true
+			if command -v stty >/dev/null 2>&1; then stty echo </dev/tty 2>/dev/null || true; fi
+			printf "\n" >/dev/tty
+		fi
+	fi
+
+    if [ -z "$TOKEN_VALUE" ]; then
+        echo "⚠️  Auto-registration skipped: token value unavailable"
+        AUTO_REG_SUCCESS=false
+        REGISTER_RESPONSE=""
+        return
+    fi
+
+    if [ -z "$SETUP_AUTH_TOKEN" ]; then
+        echo "⚠️  Auto-registration skipped: no setup token provided"
+        AUTO_REG_SUCCESS=false
+        REGISTER_RESPONSE=""
+        return
+    fi
+
+    SERVER_HOSTNAME=$(hostname -s 2>/dev/null || hostname)
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+
+    HOST_URL="$SERVER_HOST"
+    if [ "$HOST_URL" = "https://YOUR_PROXMOX_HOST:8006" ] || [ -z "$HOST_URL" ]; then
+        echo ""
+        echo "❌ ERROR: No Proxmox host URL provided!"
+        echo "   The setup script URL is missing the 'host' parameter."
+        echo ""
+        echo "   Please use the correct URL format:"
+        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=YOUR_PVE_URL&pulse_url=$PULSE_URL\" | bash"
+        echo ""
+        echo "   Example:"
+        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=https://192.168.0.5:8006&pulse_url=$PULSE_URL\" | bash"
+        echo ""
+        echo "📝 For manual setup, use the token created above with:"
+        echo "   Token ID: $PULSE_TOKEN_ID"
+        echo "   Token Value: [See above]"
+        echo ""
+        exit 1
+    fi
+
+    REGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"'"$PULSE_TOKEN_ID"'","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$SETUP_AUTH_TOKEN"'"}'
+
+    REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -s -X POST "$PULSE_URL/api/auto-register" \
+        -H "Content-Type: application/json" \
+        -d @- 2>&1)
+
+    AUTO_REG_SUCCESS=false
+    if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+        AUTO_REG_SUCCESS=true
+        echo "Node registered successfully"
+        echo ""
+    else
+        if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
+            echo "Error: Auto-registration failed - authentication required"
+            echo ""
+            if [ -z "$PULSE_API_TOKEN" ]; then
+                echo "To enable auto-registration, add your API token to the setup URL"
+                echo "You can find your API token in Pulse Settings → Security"
+            else
+                echo "The provided API token was invalid"
+            fi
+        else
+            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
+            echo "   Response: $REGISTER_RESPONSE"
+        fi
+        echo ""
+        echo "📝 For manual setup:"
+        echo "   1. Copy the token value shown above"
+        echo "   2. Add this node manually in Pulse Settings"
+    fi
+}
+
 # Generate API token
 echo "Generating API token..."
 
@@ -3856,99 +3909,6 @@ else
         echo ""
     fi
 
-    # Try auto-registration
-    echo "Registering node with Pulse..."
-
-    # Use auth token from URL parameter when provided (automation workflows)
-    AUTH_TOKEN="%s"
-
-    # Allow non-interactive override via environment variable
-    if [ -z "$AUTH_TOKEN" ] && [ -n "$PULSE_SETUP_TOKEN" ]; then
-        AUTH_TOKEN="$PULSE_SETUP_TOKEN"
-    fi
-
-    # Prompt the operator if we still don't have a token and a TTY is available
-    if [ -z "$AUTH_TOKEN" ]; then
-        if [ -t 0 ]; then
-            printf "Pulse setup token: "
-            if command -v stty >/dev/null 2>&1; then stty -echo; fi
-            IFS= read -r AUTH_TOKEN
-            if command -v stty >/dev/null 2>&1; then stty echo; fi
-            printf "\n"
-		elif [ -c /dev/tty ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
-			printf "Pulse setup token: " >/dev/tty
-			if command -v stty >/dev/null 2>&1; then stty -echo </dev/tty 2>/dev/null || true; fi
-			IFS= read -r AUTH_TOKEN </dev/tty || true
-			if command -v stty >/dev/null 2>&1; then stty echo </dev/tty 2>/dev/null || true; fi
-			printf "\n" >/dev/tty
-		fi
-	fi
-
-    # Only proceed with auto-registration if we have an auth token
-    if [ -n "$AUTH_TOKEN" ]; then
-        # Get the server's hostname (short form to match Pulse node names)
-        SERVER_HOSTNAME=$(hostname -s 2>/dev/null || hostname)
-        SERVER_IP=$(hostname -I | awk '{print $1}')
-        
-        # Check if host URL was provided
-        HOST_URL="$SERVER_HOST"
-        if [ "$HOST_URL" = "https://YOUR_PROXMOX_HOST:8006" ] || [ -z "$HOST_URL" ]; then
-            echo ""
-            echo "❌ ERROR: No Proxmox host URL provided!"
-            echo "   The setup script URL is missing the 'host' parameter."
-            echo ""
-            echo "   Please use the correct URL format:"
-            echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=YOUR_PVE_URL&pulse_url=$PULSE_URL\" | bash"
-            echo ""
-            echo "   Example:"
-            echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=https://192.168.0.5:8006&pulse_url=$PULSE_URL\" | bash"
-            echo ""
-            echo "📝 For manual setup, use the token created above with:"
-            echo "   Token ID: $PULSE_TOKEN_ID"
-            echo "   Token Value: [See above]"
-            echo ""
-            exit 1
-        fi
-        
-        # Construct registration request with setup code
-        # Build JSON carefully to preserve the exclamation mark
-        REGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"'"$PULSE_TOKEN_ID"'","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$AUTH_TOKEN"'"}'
-
-        # Send registration with setup code
-        REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -d @- 2>&1)
-    else
-        echo "⚠️  Auto-registration skipped: no setup token provided"
-        AUTO_REG_SUCCESS=false
-        REGISTER_RESPONSE=""
-    fi
-
-    AUTO_REG_SUCCESS=false
-    if echo "$REGISTER_RESPONSE" | grep -q "success"; then
-        AUTO_REG_SUCCESS=true
-        echo "Node registered successfully"
-        echo ""
-    else
-        if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
-            echo "Error: Auto-registration failed - authentication required"
-            echo ""
-            if [ -z "$PULSE_API_TOKEN" ]; then
-                echo "To enable auto-registration, add your API token to the setup URL"
-                echo "You can find your API token in Pulse Settings → Security"
-            else
-                echo "The provided API token was invalid"
-            fi
-        else
-            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
-            echo "   Response: $REGISTER_RESPONSE"
-        fi
-        echo ""
-        echo "📝 For manual setup:"
-        echo "   1. Copy the token value shown above"  
-        echo "   2. Add this node manually in Pulse Settings"
-    fi
-    echo ""
 fi
 
 # Set up permissions
@@ -4021,6 +3981,8 @@ if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
 else
     echo "  • No additional privileges detected. Pulse may show limited VM metrics."
 fi
+
+attempt_auto_registration
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -5730,35 +5692,10 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Normalize the host URL
-	host := req.Host
-	if req.Type == "pve" {
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		// Add port if missing
-		if !strings.Contains(host, ":8006") && !strings.Contains(host, ":443") {
-			if strings.HasPrefix(host, "https://") {
-				if !strings.Contains(host[8:], ":") {
-					host += ":8006"
-				}
-			}
-		}
-	} else if req.Type == "pbs" {
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		// Add PBS port if missing
-		protocolEnd := 0
-		if strings.HasPrefix(host, "https://") {
-			protocolEnd = 8
-		} else if strings.HasPrefix(host, "http://") {
-			protocolEnd = 7
-		}
-		// Only add default port if no port is specified
-		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
-			host += ":8007"
-		}
+	host, err := normalizeNodeHost(req.Host, req.Type)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	// Create a node configuration
@@ -6078,37 +6015,10 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	tokenValue := fmt.Sprintf("%x-%x-%x-%x-%x",
 		tokenBytes[0:4], tokenBytes[4:6], tokenBytes[6:8], tokenBytes[8:10], tokenBytes[10:16])
 
-	// Normalize the host URL
-	host := req.Host
-	if req.Type == "pve" {
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		if !strings.Contains(host, ":8006") && !strings.Contains(host, ":443") {
-			if strings.HasPrefix(host, "https://") {
-				host = strings.Replace(host, "https://", "", 1)
-				if !strings.Contains(host, ":") {
-					host = "https://" + host + ":8006"
-				} else {
-					host = "https://" + host
-				}
-			}
-		}
-	} else if req.Type == "pbs" {
-		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-			host = "https://" + host
-		}
-		// Check if port is missing
-		protocolEnd := 0
-		if strings.HasPrefix(host, "https://") {
-			protocolEnd = 8
-		} else if strings.HasPrefix(host, "http://") {
-			protocolEnd = 7
-		}
-		// Only add default port if no port is specified
-		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
-			host += ":8007"
-		}
+	host, err := normalizeNodeHost(req.Host, req.Type)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	// Create the token on the remote server
