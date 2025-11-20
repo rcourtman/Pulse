@@ -1210,6 +1210,13 @@ else
     print_info "Service account pulse-sensor-proxy already exists"
 fi
 
+# Ensure group exists (in case user was created without it)
+if ! getent group pulse-sensor-proxy >/dev/null 2>&1; then
+    print_info "Creating pulse-sensor-proxy group..."
+    groupadd --system pulse-sensor-proxy
+    usermod -aG pulse-sensor-proxy pulse-sensor-proxy
+fi
+
 # Add pulse-sensor-proxy user to www-data group for Proxmox IPC access (pvecm commands)
 if ! groups pulse-sensor-proxy | grep -q '\bwww-data\b'; then
     print_info "Adding pulse-sensor-proxy to www-data group for Proxmox IPC access..."
@@ -1466,10 +1473,22 @@ fi
 
 # Create remaining directories with proper ownership (handles fresh installs and upgrades)
 print_info "Setting up service directories with proper ownership..."
-install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy
-install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 "$SSH_DIR"
-install -m 0600 -o pulse-sensor-proxy -g pulse-sensor-proxy /dev/null "$SSH_DIR/known_hosts"
-install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0755 /etc/pulse-sensor-proxy
+if ! install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0750 /var/lib/pulse-sensor-proxy; then
+    print_error "Failed to create /var/lib/pulse-sensor-proxy"
+    exit 1
+fi
+if ! install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0700 "$SSH_DIR"; then
+    print_error "Failed to create $SSH_DIR"
+    exit 1
+fi
+if ! install -m 0600 -o pulse-sensor-proxy -g pulse-sensor-proxy /dev/null "$SSH_DIR/known_hosts"; then
+    print_error "Failed to create $SSH_DIR/known_hosts"
+    exit 1
+fi
+if ! install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0755 /etc/pulse-sensor-proxy; then
+    print_error "Failed to create /etc/pulse-sensor-proxy"
+    exit 1
+fi
 
 if [[ -n "$CTID" ]]; then
     echo "$CTID" > "$CTID_FILE"

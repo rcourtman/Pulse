@@ -4205,7 +4205,15 @@ if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true
                 # Fetch the proxy's SSH public key now that it's installed and running
                 if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PROXY_HEALTHY" = true ]; then
                     echo "  • Fetching SSH public key from proxy..."
-                    TEMPERATURE_PROXY_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
+                    # Try CLI command first
+                    TEMPERATURE_PROXY_KEY=$(/opt/pulse/sensor-proxy/bin/pulse-sensor-proxy keys 2>/dev/null | grep "Proxy Public Key:" | cut -d' ' -f4-)
+                    
+                    # Fallback: try to read keys directly from file
+                    if [ -z "$TEMPERATURE_PROXY_KEY" ] && [ -f "/var/lib/pulse-sensor-proxy/ssh/id_ed25519.pub" ]; then
+                        TEMPERATURE_PROXY_KEY=$(cat /var/lib/pulse-sensor-proxy/ssh/id_ed25519.pub)
+                        echo "  ✓ Fetched SSH key from file"
+                    fi
+
                     if [ -n "$TEMPERATURE_PROXY_KEY" ] && [[ "$TEMPERATURE_PROXY_KEY" =~ ^ssh-(rsa|ed25519) ]]; then
                         SSH_SENSORS_PUBLIC_KEY="$TEMPERATURE_PROXY_KEY"
                         SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $TEMPERATURE_PROXY_KEY # pulse-sensor-proxy"
@@ -4346,7 +4354,15 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
                     if [ "$PROXY_HEALTHY" = true ]; then
                         # Fetch the proxy's SSH public key
                         echo "  • Fetching SSH public key from proxy..."
-                        TEMPERATURE_PROXY_KEY=$(curl -s -f "$PROXY_KEY_URL" 2>/dev/null || echo "")
+                        # Try CLI command first
+                        TEMPERATURE_PROXY_KEY=$(/opt/pulse/sensor-proxy/bin/pulse-sensor-proxy keys 2>/dev/null | grep "Proxy Public Key:" | cut -d' ' -f4-)
+                        
+                        # Fallback: try to read keys directly from file
+                        if [ -z "$TEMPERATURE_PROXY_KEY" ] && [ -f "/var/lib/pulse-sensor-proxy/ssh/id_ed25519.pub" ]; then
+                            TEMPERATURE_PROXY_KEY=$(cat /var/lib/pulse-sensor-proxy/ssh/id_ed25519.pub)
+                            echo "  ✓ Fetched SSH key from file"
+                        fi
+
                         if [ -n "$TEMPERATURE_PROXY_KEY" ] && [[ "$TEMPERATURE_PROXY_KEY" =~ ^ssh-(rsa|ed25519) ]]; then
                             SSH_SENSORS_PUBLIC_KEY="$TEMPERATURE_PROXY_KEY"
                             SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $TEMPERATURE_PROXY_KEY # pulse-sensor-proxy"

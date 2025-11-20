@@ -3682,10 +3682,23 @@ func (r *Router) handleDownloadPulseSensorProxy(w http.ResponseWriter, req *http
 		tmpFile.Close()
 		defer os.Remove(tmpFileName)
 
-		cmd := exec.Command("go", "build", "-o", tmpFileName, "./cmd/pulse-sensor-proxy")
+		// Determine target architecture
+		targetArch := "amd64"
+		if strings.Contains(arch, "arm64") {
+			targetArch = "arm64"
+		} else if strings.Contains(arch, "arm") {
+			targetArch = "arm"
+		} else if strings.Contains(arch, "386") {
+			targetArch = "386"
+		}
+
+		ldflags := "-X main.Version=4.32.0-dev"
+		cmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", tmpFileName, "./cmd/pulse-sensor-proxy")
 		cmd.Dir = r.projectRoot
 		cmd.Env = append(os.Environ(),
 			"CGO_ENABLED=0",
+			"GOOS=linux",
+			fmt.Sprintf("GOARCH=%s", targetArch),
 		)
 
 		buildOutput, err := cmd.CombinedOutput()
