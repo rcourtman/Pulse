@@ -105,6 +105,8 @@ $env:PULSE_TOKEN  = "<api-token>"
 irm http://pulse.example.local:7655/install-host-agent.ps1 | iex
 ```
 
+If PowerShell is running under emulation or reports an unexpected architecture, force the download target with `-Arch amd64|arm64|386` (or set `PULSE_ARCH` before running the script).
+
 The script installs the service under `PulseHostAgent`, registers Windows Event Log messages, configures automatic recovery on failure, and waits for Pulse to acknowledge the new host.
 
 ### Manual installation (advanced)
