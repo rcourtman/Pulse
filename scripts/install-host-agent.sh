@@ -71,6 +71,7 @@ KEYCHAIN_ENABLED=true
 KEYCHAIN_OPT_OUT=false
 KEYCHAIN_OPT_OUT_REASON=""
 USE_KEYCHAIN=false
+AGENT_ID="${PULSE_AGENT_ID:-}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -84,6 +85,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --interval)
             INTERVAL="$2"
+            shift 2
+            ;;
+        --agent-id)
+            AGENT_ID="$2"
             shift 2
             ;;
         --platform)
@@ -162,9 +167,10 @@ fi
 
 if [[ -z "$PULSE_URL" ]]; then
     log_error "Pulse URL is required"
-    echo "Usage: $0 --url <pulse-url> --token <api-token> [--interval 30s] [--platform linux|darwin|windows] [--force] [--no-keychain]"
+    echo "Usage: $0 --url <pulse-url> --token <api-token> [--interval 30s] [--agent-id <id>] [--platform linux|darwin|windows] [--force] [--no-keychain]"
     echo ""
     echo "  --force       Skip interactive prompts and accept secure defaults (including Keychain storage)."
+    echo "  --agent-id    Override the identifier used to deduplicate hosts (defaults to machine-id)."
     echo "  --no-keychain Disable Keychain storage and embed the token in the launch agent plist instead."
     exit 1
 fi
@@ -233,6 +239,11 @@ if [[ -n "$PULSE_TOKEN" ]]; then
     echo "  Token: $TOKEN_MASKED"
 else
     echo "  Token: none"
+fi
+if [[ -n "$AGENT_ID" ]]; then
+    echo "  Agent ID: $AGENT_ID"
+else
+    echo "  Agent ID: machine-id (default)"
 fi
 echo "  Interval: $INTERVAL"
 echo "  Platform: $PLATFORM/$ARCH"
@@ -406,6 +417,9 @@ if [[ -n "$PULSE_TOKEN" ]]; then
     AGENT_CMD="$AGENT_CMD --token $PULSE_TOKEN"
 fi
 AGENT_CMD="$AGENT_CMD --interval $INTERVAL"
+if [[ -n "$AGENT_ID" ]]; then
+    AGENT_CMD="$AGENT_CMD --agent-id $AGENT_ID"
+fi
 MANUAL_START_CMD="$AGENT_CMD"
 MANUAL_START_WRAPPED="nohup $MANUAL_START_CMD >$LINUX_LOG_FILE 2>&1 &"
 
@@ -529,6 +543,12 @@ elif [[ "$PLATFORM" == "darwin" ]] && command -v launchctl &> /dev/null; then
         USE_KEYCHAIN=false
     fi
 
+    LAUNCHD_AGENT_ID_ARGS=""
+    if [[ -n "$AGENT_ID" ]]; then
+        LAUNCHD_AGENT_ID_ARGS="        <string>--agent-id</string>
+        <string>$AGENT_ID</string>"
+    fi
+
     # Create wrapper script if using Keychain
     if [[ "$USE_KEYCHAIN" == true ]]; then
         WRAPPER_SCRIPT="/usr/local/bin/pulse-host-agent-wrapper.sh"
@@ -588,6 +608,7 @@ WRAPPER_EOF
         <string>$PULSE_URL</string>
         <string>--interval</string>
         <string>$INTERVAL</string>
+$LAUNCHD_AGENT_ID_ARGS
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -619,6 +640,7 @@ EOF
         <string>$PULSE_TOKEN</string>
         <string>--interval</string>
         <string>$INTERVAL</string>
+$LAUNCHD_AGENT_ID_ARGS
     </array>
     <key>RunAtLoad</key>
     <true/>

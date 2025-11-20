@@ -201,6 +201,18 @@ Start-Service -Name PulseHostAgent
 
 Run `pulse-host-agent --help` for the full list.
 
+## Avoiding ID collisions
+
+Pulse keys hosts on the identifier supplied by the agent (machine-id by default). Cloned systems frequently share `/etc/machine-id`, which makes Pulse alternate a single row between multiple machines. Keep the ID unique by regenerating the machine-id on each clone or by providing an explicit `--agent-id`/`PULSE_AGENT_ID` when installing:
+
+```bash
+sudo rm /etc/machine-id /var/lib/dbus/machine-id
+sudo systemd-machine-id-setup
+sudo systemctl restart pulse-host-agent
+```
+
+Re-running the installer with `--agent-id <unique-name>` achieves the same result if regenerating the machine-id is undesirable.
+
 ## Viewing Hosts
 
 - **Settings → Agents → Host agents** lists every reporting host and provides ready-made install commands.
