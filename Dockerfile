@@ -197,7 +197,7 @@ ENV PULSE_NO_AUTO_UPDATE=true
 ENTRYPOINT ["/usr/local/bin/pulse-docker-agent"]
 
 # Final stage (Pulse server runtime)
-FROM alpine:3.20
+FROM alpine:3.20 AS runtime
 
 RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client
 
