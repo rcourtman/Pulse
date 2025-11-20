@@ -1097,16 +1097,15 @@ func defaultPortForNodeType(nodeType string) string {
 	}
 }
 
-// normalizeNodeHost ensures hosts always include a scheme and only adds a default port
-// when the user did not supply a scheme (e.g., bare hostname/IP inputs). If the user
-// explicitly provides http/https, we respect their choice and avoid forcing a port.
+// normalizeNodeHost ensures hosts always include a scheme and default port when one
+// isn't provided. Defaults align with Proxmox APIs (PVE/PMG: 8006, PBS: 8007) while
+// preserving any explicit scheme/port the user supplies.
 func normalizeNodeHost(rawHost, nodeType string) (string, error) {
 	host := strings.TrimSpace(rawHost)
 	if host == "" {
 		return "", fmt.Errorf("host is required")
 	}
 
-	userProvidedScheme := strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://")
 	scheme := "https"
 	if strings.HasPrefix(host, "http://") {
 		scheme = "http"
@@ -1137,7 +1136,7 @@ func normalizeNodeHost(rawHost, nodeType string) (string, error) {
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 
-	if parsed.Port() == "" && !userProvidedScheme {
+	if parsed.Port() == "" {
 		defaultPort := defaultPortForNodeType(nodeType)
 		if defaultPort != "" {
 			parsed.Host = net.JoinHostPort(parsed.Hostname(), defaultPort)
