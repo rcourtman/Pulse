@@ -185,8 +185,7 @@ func (h *ConfigHandlers) ValidateSetupToken(token string) bool {
 	defer h.codeMutex.RUnlock()
 
 	if code, exists := h.setupCodes[tokenHash]; exists {
-		// Allow tokens while they are valid or within a short grace period after use.
-		if now.Before(code.ExpiresAt.Add(2 * time.Minute)) {
+		if !code.Used && now.Before(code.ExpiresAt) {
 			return true
 		}
 	}
@@ -5555,8 +5554,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	log.Debug().
-		Str("authToken", req.AuthToken).
-		Str("authCode", authCode).
+		Bool("hasAuthToken", strings.TrimSpace(req.AuthToken) != "").
+		Bool("hasSetupCode", strings.TrimSpace(authCode) != "").
 		Bool("hasConfigToken", h.config.HasAPITokens()).
 		Msg("Checking authentication for auto-register")
 
@@ -5578,7 +5577,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			// Not the API token, check if it's a temporary setup code
 			codeHash := internalauth.HashAPIToken(authCode)
 			log.Debug().
-				Str("authCode", authCode).
+				Bool("hasAuthCode", true).
 				Str("codeHash", codeHash[:8]+"...").
 				Msg("Checking auth token as setup code")
 			h.codeMutex.Lock()
@@ -5593,10 +5592,9 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				// what's entered in the UI and what's provided in the setup script URL
 				if setupCode.NodeType == req.Type {
 					setupCode.Used = true // Mark as used immediately
-					// Allow the token to be reused for a brief grace period so the setup
-					// script can complete follow-up actions (temperature verification, etc).
-					graceExpiry := time.Now().Add(5 * time.Minute)
-					if setupCode.ExpiresAt.After(graceExpiry) {
+					// Allow a short grace period for follow-up actions without keeping tokens alive too long
+					graceExpiry := time.Now().Add(1 * time.Minute)
+					if setupCode.ExpiresAt.Before(graceExpiry) {
 						graceExpiry = setupCode.ExpiresAt
 					}
 					h.recentSetupTokens[codeHash] = graceExpiry
