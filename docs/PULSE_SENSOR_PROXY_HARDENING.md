@@ -726,8 +726,9 @@ python3 -c "import yaml; yaml.safe_load(open('/tmp/test-config.yaml'))"
    /tmp/pulse-sensor-proxy version
 
    # Install
-   sudo install -m 0755 -o root -g root /tmp/pulse-sensor-proxy /usr/local/bin/pulse-sensor-proxy
+   sudo install -D -m 0755 -o root -g root /tmp/pulse-sensor-proxy /opt/pulse/sensor-proxy/bin/pulse-sensor-proxy
    ```
+   The installer and cleanup routines now expect the binary under `/opt/pulse/sensor-proxy/bin` to support read-only `/usr` mounts while keeping self-heal paths consistent.
 
 2. **Install hardened systemd unit:**
    ```bash
