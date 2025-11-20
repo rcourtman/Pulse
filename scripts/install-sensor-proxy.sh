@@ -154,6 +154,16 @@ ensure_allowed_source_subnet() {
         return
     fi
 
+    # Use robust binary config management if available
+    if [[ -x "$BINARY_PATH" ]] && "$BINARY_PATH" config add-subnet --help >/dev/null 2>&1; then
+        if "$BINARY_PATH" config add-subnet "$subnet" --config "$CONFIG_FILE"; then
+            print_info "Added allowed_source_subnets entry ${subnet}"
+            return
+        else
+            print_warn "Failed to add subnet using binary; falling back to legacy method"
+        fi
+    fi
+
     local escaped_subnet="${subnet//\//\\/}"
     if grep -Eq "^[[:space:]]+-[[:space:]]*${escaped_subnet}([[:space:]]|$)" "$CONFIG_FILE"; then
         return
@@ -163,16 +173,24 @@ ensure_allowed_source_subnet() {
     tmp=$(mktemp)
 
     if grep -Eq "^[[:space:]]*allowed_source_subnets:" "$CONFIG_FILE"; then
-        awk -v subnet="$subnet" '
-/^allowed_source_subnets:/ {print; in_block=1; next}
+    awk -v subnet="$subnet" '
+/^allowed_source_subnets:/ {print; in_block=1; indent="    "; next}
+in_block && /^[[:space:]]+-/ {
+    # Capture indentation from existing items
+    if (!captured) {
+        match($0, /^[[:space:]]+/)
+        indent = substr($0, RSTART, RLENGTH)
+        captured = 1
+    }
+}
 in_block && /^[^[:space:]]/ {
-    if (!added) { printf("  - %s\n", subnet); added=1 }
+    if (!added) { printf("%s- %s\n", indent, subnet); added=1 }
     in_block=0
 }
 {print}
 END {
     if (in_block && !added) {
-        printf("  - %s\n", subnet)
+        printf("%s- %s\n", indent, subnet)
     }
 }
 ' "$CONFIG_FILE" > "$tmp"
@@ -181,7 +199,7 @@ END {
         {
             echo ""
             echo "allowed_source_subnets:"
-            echo "  - $subnet"
+            echo "    - $subnet"
         } >> "$tmp"
     fi
 
@@ -1659,6 +1677,17 @@ ensure_control_plane_config() {
         refresh=60
     fi
 
+    # Use robust binary config management if available
+    if [[ -x "$BINARY_PATH" ]] && "$BINARY_PATH" config set-control-plane --help >/dev/null 2>&1; then
+        if "$BINARY_PATH" config set-control-plane --url "$pulse_url" --token-file "/etc/pulse-sensor-proxy/.pulse-control-token" --refresh "$refresh" --config "$config_file"; then
+            chown pulse-sensor-proxy:pulse-sensor-proxy "$config_file"
+            chmod 0644 "$config_file"
+            return
+        else
+            print_warn "Failed to set control plane using binary; falling back to legacy method"
+        fi
+    fi
+
     if grep -q "^pulse_control_plane:" "$config_file" 2>/dev/null; then
         # Re-write the existing control-plane block with the latest URL/token path.
         local tmp
@@ -1970,16 +1999,30 @@ if [[ "$HTTP_MODE" == true ]]; then
 
     # Configure HTTP mode - check if already configured to avoid duplicates
     print_info "Configuring HTTP mode..."
-    if grep -q "^http_enabled:" "$CONFIG_FILE" 2>/dev/null; then
-        # HTTP mode already configured - only update the token (avoid duplicates)
-        sed -i "s|^http_auth_token:.*|http_auth_token: $HTTP_AUTH_TOKEN|" "$CONFIG_FILE"
-        for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
-            ensure_allowed_source_subnet "$subnet"
-        done
-        print_info "Updated HTTP auth token (existing HTTP mode configuration kept)"
-    else
-        # Fresh HTTP mode configuration - append to file
-        cat >> "$CONFIG_FILE" << EOF
+    if [[ -x "$BINARY_PATH" ]] && "$BINARY_PATH" config set-http --help >/dev/null 2>&1; then
+        if "$BINARY_PATH" config set-http \
+            --enabled=true \
+            --listen-addr="$HTTP_ADDR" \
+            --auth-token="$HTTP_AUTH_TOKEN" \
+            --tls-cert="/etc/pulse-sensor-proxy/tls/server.crt" \
+            --tls-key="/etc/pulse-sensor-proxy/tls/server.key" \
+            --config="$CONFIG_FILE"; then
+            
+            for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
+                ensure_allowed_source_subnet "$subnet"
+            done
+            print_info "HTTP mode configured successfully (using binary)"
+        else
+            print_warn "Failed to set HTTP config using binary; falling back to legacy method"
+            # Fallback to legacy logic
+            if grep -q "^http_enabled:" "$CONFIG_FILE" 2>/dev/null; then
+                sed -i "s|^http_auth_token:.*|http_auth_token: $HTTP_AUTH_TOKEN|" "$CONFIG_FILE"
+                for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
+                    ensure_allowed_source_subnet "$subnet"
+                done
+                print_info "Updated HTTP auth token (existing HTTP mode configuration kept)"
+            else
+                cat >> "$CONFIG_FILE" << EOF
 
 # HTTP Mode Configuration (External PVE Host)
 http_enabled: true
@@ -1991,9 +2034,37 @@ http_auth_token: "$HTTP_AUTH_TOKEN"
 # Allow HTTP connections from Pulse server, localhost, and this host
 allowed_source_subnets:
 EOF
-        for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
-            echo "  - $subnet" >> "$CONFIG_FILE"
-        done
+                for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
+                    echo "    - $subnet" >> "$CONFIG_FILE"
+                done
+            fi
+        fi
+    else
+        if grep -q "^http_enabled:" "$CONFIG_FILE" 2>/dev/null; then
+            # HTTP mode already configured - only update the token (avoid duplicates)
+            sed -i "s|^http_auth_token:.*|http_auth_token: $HTTP_AUTH_TOKEN|" "$CONFIG_FILE"
+            for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
+                ensure_allowed_source_subnet "$subnet"
+            done
+            print_info "Updated HTTP auth token (existing HTTP mode configuration kept)"
+        else
+            # Fresh HTTP mode configuration - append to file
+            cat >> "$CONFIG_FILE" << EOF
+
+# HTTP Mode Configuration (External PVE Host)
+http_enabled: true
+http_listen_addr: "$HTTP_ADDR"
+http_tls_cert: /etc/pulse-sensor-proxy/tls/server.crt
+http_tls_key: /etc/pulse-sensor-proxy/tls/server.key
+http_auth_token: "$HTTP_AUTH_TOKEN"
+
+# Allow HTTP connections from Pulse server, localhost, and this host
+allowed_source_subnets:
+EOF
+            for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
+                echo "    - $subnet" >> "$CONFIG_FILE"
+            done
+        fi
     fi
     chown pulse-sensor-proxy:pulse-sensor-proxy "$CONFIG_FILE"
     chmod 0644 "$CONFIG_FILE"
