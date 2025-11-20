@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - 'workflow-test-trigger'
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
