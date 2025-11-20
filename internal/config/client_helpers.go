@@ -1,12 +1,50 @@
 package config
 
 import (
+	"net"
+	"net/url"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+const (
+	defaultPVEPort = "8006"
+	defaultPBSPort = "8007"
+)
+
+// normalizeHostPort ensures we always have a scheme and explicit port when talking to
+// Proxmox APIs. It preserves existing ports/schemes and strips any path/query segments.
+func normalizeHostPort(host, defaultPort string) string {
+	trimmed := strings.TrimSpace(host)
+	if trimmed == "" || defaultPort == "" {
+		return trimmed
+	}
+
+	candidate := trimmed
+	if !strings.HasPrefix(candidate, "http://") && !strings.HasPrefix(candidate, "https://") {
+		candidate = "https://" + candidate
+	}
+
+	parsed, err := url.Parse(candidate)
+	if err != nil || parsed.Host == "" {
+		return trimmed
+	}
+
+	// Drop any path fragments so we only persist host:port
+	parsed.Path = ""
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+
+	if parsed.Port() == "" {
+		parsed.Host = net.JoinHostPort(parsed.Hostname(), defaultPort)
+	}
+
+	return parsed.Scheme + "://" + parsed.Host
+}
 
 // CreateProxmoxConfig creates a proxmox.ClientConfig from a PVEInstance
 func CreateProxmoxConfig(node *PVEInstance) proxmox.ClientConfig {
@@ -16,7 +54,7 @@ func CreateProxmoxConfig(node *PVEInstance) proxmox.ClientConfig {
 	}
 
 	return proxmox.ClientConfig{
-		Host:        node.Host,
+		Host:        normalizeHostPort(node.Host, defaultPVEPort),
 		User:        user,
 		Password:    node.Password,
 		TokenName:   node.TokenName,
@@ -29,7 +67,7 @@ func CreateProxmoxConfig(node *PVEInstance) proxmox.ClientConfig {
 // CreatePBSConfig creates a pbs.ClientConfig from a PBSInstance
 func CreatePBSConfig(node *PBSInstance) pbs.ClientConfig {
 	return pbs.ClientConfig{
-		Host:        node.Host,
+		Host:        normalizeHostPort(node.Host, defaultPBSPort),
 		User:        node.User,
 		Password:    node.Password,
 		TokenName:   node.TokenName,
@@ -42,7 +80,7 @@ func CreatePBSConfig(node *PBSInstance) pbs.ClientConfig {
 // CreatePMGConfig creates a pmg.ClientConfig from a PMGInstance
 func CreatePMGConfig(node *PMGInstance) pmg.ClientConfig {
 	return pmg.ClientConfig{
-		Host:        node.Host,
+		Host:        normalizeHostPort(node.Host, defaultPVEPort),
 		User:        node.User,
 		Password:    node.Password,
 		TokenName:   node.TokenName,
@@ -59,7 +97,7 @@ func CreateProxmoxConfigFromFields(host, user, password, tokenName, tokenValue, 
 	}
 
 	return proxmox.ClientConfig{
-		Host:        host,
+		Host:        normalizeHostPort(host, defaultPVEPort),
 		User:        user,
 		Password:    password,
 		TokenName:   tokenName,
@@ -72,7 +110,7 @@ func CreateProxmoxConfigFromFields(host, user, password, tokenName, tokenValue, 
 // CreatePBSConfigFromFields creates a pbs.ClientConfig from individual fields
 func CreatePBSConfigFromFields(host, user, password, tokenName, tokenValue, fingerprint string, verifySSL bool) pbs.ClientConfig {
 	return pbs.ClientConfig{
-		Host:        host,
+		Host:        normalizeHostPort(host, defaultPBSPort),
 		User:        user,
 		Password:    password,
 		TokenName:   tokenName,
@@ -85,7 +123,7 @@ func CreatePBSConfigFromFields(host, user, password, tokenName, tokenValue, fing
 // CreatePMGConfigFromFields creates a pmg.ClientConfig from individual fields
 func CreatePMGConfigFromFields(host, user, password, tokenName, tokenValue, fingerprint string, verifySSL bool) pmg.ClientConfig {
 	return pmg.ClientConfig{
-		Host:        host,
+		Host:        normalizeHostPort(host, defaultPVEPort),
 		User:        user,
 		Password:    password,
 		TokenName:   tokenName,
