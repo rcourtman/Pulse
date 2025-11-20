@@ -52,15 +52,21 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 
 	// Try to read existing key from new location
 	if data, err := os.ReadFile(keyPath); err == nil {
-		key := make([]byte, 32)
-		n, err := base64.StdEncoding.Decode(key, data)
-		if err == nil && n == 32 {
-			log.Debug().Msg("Found and loaded existing encryption key")
-			return key, nil
+		// Use DecodedLen to allocate sufficient space, then slice to actual length
+		// This prevents panics if the file contains more data than expected
+		decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
+		n, err := base64.StdEncoding.Decode(decoded, data)
+		if err == nil {
+			if n == 32 {
+				log.Debug().Msg("Found and loaded existing encryption key")
+				return decoded[:n], nil
+			}
+			log.Warn().
+				Int("decodedBytes", n).
+				Msg("Encryption key has invalid length (expected 32 bytes)")
 		} else {
 			log.Warn().
 				Err(err).
-				Int("decodedBytes", n).
 				Msg("Failed to decode encryption key")
 		}
 	} else {
@@ -70,9 +76,10 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	// Check for key in old location and migrate if found (only if paths differ)
 	if dataDir != "/etc/pulse" && keyPath != oldKeyPath {
 		if data, err := os.ReadFile(oldKeyPath); err == nil {
-			key := make([]byte, 32)
-			n, err := base64.StdEncoding.Decode(key, data)
+			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
+			n, err := base64.StdEncoding.Decode(decoded, data)
 			if err == nil && n == 32 {
+				key := decoded[:n]
 				// Migrate key to new location
 				if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
 					// Migration failed, but we can still use the old key
