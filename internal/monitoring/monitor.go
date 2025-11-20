@@ -577,6 +577,7 @@ type Monitor struct {
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
+	hostTokenBindings          map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
@@ -1107,6 +1108,18 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		}
 	}
 
+	if host.TokenID != "" {
+		m.mu.Lock()
+		if _, exists := m.hostTokenBindings[host.TokenID]; exists {
+			delete(m.hostTokenBindings, host.TokenID)
+			log.Debug().
+				Str("tokenID", host.TokenID).
+				Str("hostID", hostID).
+				Msg("Unbound host agent token from removed host")
+		}
+		m.mu.Unlock()
+	}
+
 	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)
 
 	log.Info().
@@ -1587,7 +1600,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			Str("dockerHostID", identifier).
 			Time("removedAt", removedAt).
 			Msg("Rejecting report from deliberately removed Docker host")
-		return models.DockerHost{}, fmt.Errorf("docker host %q was removed at %v and cannot report again", identifier, removedAt.Format(time.RFC3339))
+		return models.DockerHost{}, fmt.Errorf("docker host %q was removed at %v and cannot report again. Use Allow re-enroll in Settings -> Docker -> Removed hosts or rerun the installer with a docker:manage token to clear this block", identifier, removedAt.Format(time.RFC3339))
 	}
 
 	// Enforce token uniqueness: each token can only be bound to one agent
@@ -1966,6 +1979,64 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	existingHosts := m.state.GetHosts()
+
+	agentID := strings.TrimSpace(report.Agent.ID)
+	if agentID == "" {
+		agentID = identifier
+	}
+
+	if tokenRecord != nil && tokenRecord.ID != "" {
+		tokenID := strings.TrimSpace(tokenRecord.ID)
+		bindingID := agentID
+		if bindingID == "" {
+			bindingID = identifier
+		}
+
+		m.mu.Lock()
+		if m.hostTokenBindings == nil {
+			m.hostTokenBindings = make(map[string]string)
+		}
+		if boundID, exists := m.hostTokenBindings[tokenID]; exists && boundID != bindingID {
+			m.mu.Unlock()
+
+			conflictingHost := "unknown"
+			for _, candidate := range existingHosts {
+				if candidate.TokenID == tokenID || candidate.ID == boundID {
+					conflictingHost = candidate.Hostname
+					if candidate.DisplayName != "" {
+						conflictingHost = candidate.DisplayName
+					}
+					break
+				}
+			}
+
+			tokenHint := tokenHintFromRecord(tokenRecord)
+			if tokenHint != "" {
+				tokenHint = " (" + tokenHint + ")"
+			}
+
+			log.Warn().
+				Str("tokenID", tokenID).
+				Str("tokenHint", tokenHint).
+				Str("reportingAgentID", bindingID).
+				Str("boundAgentID", boundID).
+				Str("conflictingHost", conflictingHost).
+				Msg("Rejecting host report: token already bound to different agent")
+
+			return models.Host{}, fmt.Errorf("API token%s is already in use by host %q (agent: %s). Generate a new token or set --agent-id before reusing it", tokenHint, conflictingHost, boundID)
+		}
+
+		if _, exists := m.hostTokenBindings[tokenID]; !exists {
+			m.hostTokenBindings[tokenID] = bindingID
+			log.Debug().
+				Str("tokenID", tokenID).
+				Str("agentID", bindingID).
+				Str("hostname", hostname).
+				Msg("Bound host agent token to agent identity")
+		}
+		m.mu.Unlock()
+	}
+
 	var previous models.Host
 	var hasPrevious bool
 	for _, candidate := range existingHosts {
@@ -3740,6 +3811,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
+		hostTokenBindings:          make(map[string]string),
 		dockerCommands:             make(map[string]*dockerHostCommand),
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),

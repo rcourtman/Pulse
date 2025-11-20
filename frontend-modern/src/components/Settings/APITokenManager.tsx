@@ -626,7 +626,21 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                           class="px-5 py-3 text-gray-600 dark:text-gray-400"
                           title={usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined}
                         >
-                          {hostSummary}
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span>{hostSummary}</span>
+                            <Show when={hostUsageEntry && hostUsageEntry.count > 1}>
+                              <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                                <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                  <path
+                                    fill-rule="evenodd"
+                                    d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
+                                    clip-rule="evenodd"
+                                  />
+                                </svg>
+                                Host agents sharing this token ({hostUsageEntry!.count})
+                              </span>
+                            </Show>
+                          </div>
                         </td>
                         <td class="px-5 py-3 text-gray-600 dark:text-gray-400">
                           {formatRelativeTime(new Date(token.createdAt).getTime())}

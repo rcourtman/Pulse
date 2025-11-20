@@ -130,6 +130,69 @@ clear_pending_control_plane() {
     rm -f "$PENDING_CONTROL_PLANE_FILE" 2>/dev/null || true
 }
 
+format_ip_to_cidr() {
+    local ip="$1"
+    if [[ -z "$ip" ]]; then
+        return
+    fi
+
+    if [[ "$ip" == */* ]]; then
+        printf '%s' "$ip"
+        return
+    fi
+
+    if [[ "$ip" == *:* ]]; then
+        printf '%s/128' "$ip"
+    else
+        printf '%s/32' "$ip"
+    fi
+}
+
+ensure_allowed_source_subnet() {
+    local subnet="$1"
+    if [[ -z "$subnet" || ! -f "$CONFIG_FILE" ]]; then
+        return
+    fi
+
+    local escaped_subnet="${subnet//\//\\/}"
+    if grep -Eq "^[[:space:]]+-[[:space:]]*${escaped_subnet}([[:space:]]|$)" "$CONFIG_FILE"; then
+        return
+    fi
+
+    local tmp
+    tmp=$(mktemp)
+
+    if grep -Eq "^[[:space:]]*allowed_source_subnets:" "$CONFIG_FILE"; then
+        awk -v subnet="$subnet" '
+/^allowed_source_subnets:/ {print; in_block=1; next}
+in_block && /^[^[:space:]]/ {
+    if (!added) { printf("  - %s\n", subnet); added=1 }
+    in_block=0
+}
+{print}
+END {
+    if (in_block && !added) {
+        printf("  - %s\n", subnet)
+    }
+}
+' "$CONFIG_FILE" > "$tmp"
+    else
+        cat "$CONFIG_FILE" > "$tmp"
+        {
+            echo ""
+            echo "allowed_source_subnets:"
+            echo "  - $subnet"
+        } >> "$tmp"
+    fi
+
+    if mv "$tmp" "$CONFIG_FILE"; then
+        print_info "Added allowed_source_subnets entry ${subnet}"
+    else
+        rm -f "$tmp"
+        print_warn "Failed to update allowed_source_subnets with ${subnet}"
+    fi
+}
+
 
 configure_local_authorized_key() {
     local auth_line=$1
@@ -1833,10 +1896,10 @@ if [[ "$HTTP_MODE" == true ]]; then
     chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/.http-auth-token
 
     # Backup config and token files before modifying
-    if [[ -f /etc/pulse-sensor-proxy/config.yaml ]]; then
+    if [[ -f "$CONFIG_FILE" ]]; then
         BACKUP_TIMESTAMP="$(date +%s)"
-        BACKUP_CONFIG="/etc/pulse-sensor-proxy/config.yaml.backup.$BACKUP_TIMESTAMP"
-        cp /etc/pulse-sensor-proxy/config.yaml "$BACKUP_CONFIG"
+        BACKUP_CONFIG="${CONFIG_FILE}.backup.$BACKUP_TIMESTAMP"
+        cp "$CONFIG_FILE" "$BACKUP_CONFIG"
         print_info "Config backed up to: $BACKUP_CONFIG"
 
         # Also backup token files so rollback restores matching secrets
@@ -1846,10 +1909,10 @@ if [[ "$HTTP_MODE" == true ]]; then
         fi
 
         # Remove any existing HTTP configuration to prevent duplicates
-        if grep -q "^# HTTP Mode Configuration" /etc/pulse-sensor-proxy/config.yaml; then
+        if grep -q "^# HTTP Mode Configuration" "$CONFIG_FILE"; then
             print_info "Removing existing HTTP configuration..."
             # Remove from "# HTTP Mode Configuration" to end of file
-            sed -i '/^# HTTP Mode Configuration/,$ d' /etc/pulse-sensor-proxy/config.yaml
+            sed -i '/^# HTTP Mode Configuration/,$ d' "$CONFIG_FILE"
         fi
     fi
 
@@ -1866,15 +1929,38 @@ if [[ "$HTTP_MODE" == true ]]; then
 
     print_info "Pulse server detected at: $PULSE_IP"
 
+    HTTP_ALLOWED_SUBNETS=()
+    PULSE_HTTP_SUBNET="$(format_ip_to_cidr "$PULSE_IP")"
+    LOCAL_HTTP_SUBNET="$(format_ip_to_cidr "$PRIMARY_IP")"
+    LOOPBACK_HTTP_SUBNET="127.0.0.1/32"
+
+    [[ -n "$PULSE_HTTP_SUBNET" ]] && HTTP_ALLOWED_SUBNETS+=("$PULSE_HTTP_SUBNET")
+    HTTP_ALLOWED_SUBNETS+=("$LOOPBACK_HTTP_SUBNET")
+    [[ -n "$LOCAL_HTTP_SUBNET" ]] && HTTP_ALLOWED_SUBNETS+=("$LOCAL_HTTP_SUBNET")
+
+    declare -A HTTP_SUBNET_SEEN=()
+    deduped_http_subnets=()
+    for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
+        [[ -z "$subnet" ]] && continue
+        if [[ -z "${HTTP_SUBNET_SEEN[$subnet]+x}" ]]; then
+            HTTP_SUBNET_SEEN[$subnet]=1
+            deduped_http_subnets+=("$subnet")
+        fi
+    done
+    HTTP_ALLOWED_SUBNETS=("${deduped_http_subnets[@]}")
+
     # Configure HTTP mode - check if already configured to avoid duplicates
     print_info "Configuring HTTP mode..."
-    if grep -q "^http_enabled:" /etc/pulse-sensor-proxy/config.yaml 2>/dev/null; then
+    if grep -q "^http_enabled:" "$CONFIG_FILE" 2>/dev/null; then
         # HTTP mode already configured - only update the token (avoid duplicates)
-        sed -i "s|^http_auth_token:.*|http_auth_token: $HTTP_AUTH_TOKEN|" /etc/pulse-sensor-proxy/config.yaml
+        sed -i "s|^http_auth_token:.*|http_auth_token: $HTTP_AUTH_TOKEN|" "$CONFIG_FILE"
+        for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
+            ensure_allowed_source_subnet "$subnet"
+        done
         print_info "Updated HTTP auth token (existing HTTP mode configuration kept)"
     else
         # Fresh HTTP mode configuration - append to file
-        cat >> /etc/pulse-sensor-proxy/config.yaml << EOF
+        cat >> "$CONFIG_FILE" << EOF
 
 # HTTP Mode Configuration (External PVE Host)
 http_enabled: true
@@ -1883,14 +1969,15 @@ http_tls_cert: /etc/pulse-sensor-proxy/tls/server.crt
 http_tls_key: /etc/pulse-sensor-proxy/tls/server.key
 http_auth_token: "$HTTP_AUTH_TOKEN"
 
-# Allow HTTP connections from Pulse server and localhost (for self-monitoring)
+# Allow HTTP connections from Pulse server, localhost, and this host
 allowed_source_subnets:
-  - $PULSE_IP/32
-  - 127.0.0.1/32
 EOF
+        for subnet in "${HTTP_ALLOWED_SUBNETS[@]}"; do
+            echo "  - $subnet" >> "$CONFIG_FILE"
+        done
     fi
-    chown pulse-sensor-proxy:pulse-sensor-proxy /etc/pulse-sensor-proxy/config.yaml
-    chmod 0644 /etc/pulse-sensor-proxy/config.yaml
+    chown pulse-sensor-proxy:pulse-sensor-proxy "$CONFIG_FILE"
+    chmod 0644 "$CONFIG_FILE"
 
     print_success "HTTP mode configured successfully"
     echo ""
