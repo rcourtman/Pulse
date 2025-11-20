@@ -8,6 +8,7 @@
     transform: translateY(-100%);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -25,6 +26,7 @@
     transform: translateX(100%) scale(0.95);
     filter: blur(4px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0) scale(1);
@@ -80,7 +82,8 @@
   /* Slider thumb styles with value display */
   .threshold-slider::-webkit-slider-thumb {
     @apply appearance-none w-12 h-5 rounded-full cursor-pointer relative;
-    margin-top: -2.5px; /* Center thumb on track */
+    margin-top: -2.5px;
+    /* Center thumb on track */
     background: white;
     border: 2px solid currentColor;
     box-shadow:
@@ -99,15 +102,18 @@
 
   /* Color coding for different metrics */
   .threshold-slider.slider-cpu {
-    color: #3b82f6; /* blue-500 */
+    color: #3b82f6;
+    /* blue-500 */
   }
 
   .threshold-slider.slider-memory {
-    color: #10b981; /* green-500 */
+    color: #10b981;
+    /* green-500 */
   }
 
   .threshold-slider.slider-disk {
-    color: #f59e0b; /* amber-500 */
+    color: #f59e0b;
+    /* amber-500 */
   }
 
   /* Value display inside thumb */
@@ -227,20 +233,24 @@
 /* Global scrollbar styling */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(156, 163, 175, 0.5) transparent; /* gray-400 with transparency */
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  /* gray-400 with transparency */
 }
 
 .dark * {
-  scrollbar-color: rgba(55, 65, 81, 0.5) transparent; /* gray-700 with transparency */
+  scrollbar-color: rgba(55, 65, 81, 0.5) transparent;
+  /* gray-700 with transparency */
 }
 
 /* Make scrollbars even more subtle on hover */
 *:hover {
-  scrollbar-color: rgba(156, 163, 175, 0.7) rgba(243, 244, 246, 0.5); /* Slightly more visible on hover */
+  scrollbar-color: rgba(156, 163, 175, 0.7) rgba(243, 244, 246, 0.5);
+  /* Slightly more visible on hover */
 }
 
 .dark *:hover {
-  scrollbar-color: rgba(75, 85, 99, 0.7) rgba(31, 41, 55, 0.3); /* dark mode hover */
+  scrollbar-color: rgba(75, 85, 99, 0.7) rgba(31, 41, 55, 0.3);
+  /* dark mode hover */
 }
 
 *::-webkit-scrollbar {
@@ -311,20 +321,24 @@ body,
   0% {
     transform: scale(1);
   }
+
   25% {
     transform: scale(1.05);
   }
+
   50% {
     transform: scale(1);
   }
 }
 
 @keyframes pulse-ring {
+
   0%,
   100% {
     opacity: 0.92;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.6;
     transform: scale(1.1);
@@ -376,6 +390,7 @@ body,
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -387,6 +402,7 @@ body,
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -394,17 +410,19 @@ body,
 }
 
 @keyframes pulse-slow {
+
   0%,
   100% {
     opacity: 0.25;
   }
+
   50% {
     opacity: 0.75;
   }
 }
 
 .animate-fade-in {
-  animation: fade-in 0.6s ease-out;
+  animation: fade-in 0.6s ease-out forwards;
 }
 
 .animate-slide-up {
@@ -413,4 +431,51 @@ body,
 
 .animate-pulse-slow {
   animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* New Premium Animations */
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes gradient-x {
+
+  0%,
+  100% {
+    background-size: 200% 200%;
+    background-position: left center;
+  }
+
+  50% {
+    background-size: 200% 200%;
+    background-position: right center;
+  }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 3s ease infinite;
+}
+
+.delay-100 {
+  animation-delay: 100ms;
+}
+
+.delay-200 {
+  animation-delay: 200ms;
+}
+
+.delay-300 {
+  animation-delay: 300ms;
 }

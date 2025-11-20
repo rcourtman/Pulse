@@ -123,14 +123,14 @@ kill_port() {
 printf "[hot-dev] Cleaning up existing processes...\n"
 
 # Don't stop ourselves if we're running under systemd
-if [[ -z "${INVOCATION_ID:-}" ]]; then
+# if [[ -z "${INVOCATION_ID:-}" ]]; then
     # Not running under systemd, safe to stop the service
-    sudo systemctl stop pulse-hot-dev 2>/dev/null || true
-fi
+    # sudo systemctl stop pulse-hot-dev 2>/dev/null || true
+# fi
 
-sudo systemctl stop pulse-backend 2>/dev/null || true
-sudo systemctl stop pulse 2>/dev/null || true
-sudo systemctl stop pulse-frontend 2>/dev/null || true
+# sudo systemctl stop pulse-backend 2>/dev/null || true
+# sudo systemctl stop pulse 2>/dev/null || true
+# sudo systemctl stop pulse-frontend 2>/dev/null || true
 
 pkill -f "backend-watch.sh" 2>/dev/null || true
 pkill -f vite 2>/dev/null || true
@@ -271,47 +271,52 @@ printf "[hot-dev] Starting backend file watcher...\n"
     cd "${ROOT_DIR}"
     while true; do
         # Watch for changes to .go files (excluding vendor and node_modules)
-        inotifywait -r -e modify,create,delete,move \
-            --exclude '(vendor/|node_modules/|\.git/|\.swp$|\.tmp$|~$)' \
-            --format '%e %w%f' \
-            "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
-        while read -r event changed_file; do
-            # Rebuild on any .go file change OR any create/delete event (catches new files)
-            if [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED ]]; then
-                echo ""
-                echo "[hot-dev] 🔄 Change detected: $event $(basename "$changed_file")"
-                echo "[hot-dev] Rebuilding backend..."
+        if command -v inotifywait >/dev/null 2>&1; then
+            inotifywait -r -e modify,create,delete,move \
+                --exclude '(vendor/|node_modules/|\.git/|\.swp$|\.tmp$|~$)' \
+                --format '%e %w%f' \
+                "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
+            while read -r event changed_file; do
+                # Rebuild on any .go file change OR any create/delete event (catches new files)
+                if [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED ]]; then
+                    echo ""
+                    echo "[hot-dev] 🔄 Change detected: $event $(basename "$changed_file")"
+                    echo "[hot-dev] Rebuilding backend..."
 
-                # Rebuild the binary
-                if go build -o pulse ./cmd/pulse 2>&1 | grep -v "^#"; then
-                    echo "[hot-dev] ✓ Build successful, restarting backend..."
+                    # Rebuild the binary
+                    if go build -o pulse ./cmd/pulse 2>&1 | grep -v "^#"; then
+                        echo "[hot-dev] ✓ Build successful, restarting backend..."
 
-                    # Find and kill old backend
-                    OLD_PID=$(pgrep -f "^\./pulse$" || true)
-                    if [[ -n "$OLD_PID" ]]; then
-                        kill "$OLD_PID" 2>/dev/null || true
-                        sleep 1
-                        if kill -0 "$OLD_PID" 2>/dev/null; then
-                            kill -9 "$OLD_PID" 2>/dev/null || true
+                        # Find and kill old backend
+                        OLD_PID=$(pgrep -f "^\./pulse$" || true)
+                        if [[ -n "$OLD_PID" ]]; then
+                            kill "$OLD_PID" 2>/dev/null || true
+                            sleep 1
+                            if kill -0 "$OLD_PID" 2>/dev/null; then
+                                kill -9 "$OLD_PID" 2>/dev/null || true
+                            fi
                         fi
-                    fi
 
-                    # Start new backend with same environment
-                    FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} ./pulse &
-                    NEW_PID=$!
-                    sleep 1
+                        # Start new backend with same environment
+                        FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} ./pulse &
+                        NEW_PID=$!
+                        sleep 1
 
-                    if kill -0 "$NEW_PID" 2>/dev/null; then
-                        echo "[hot-dev] ✓ Backend restarted (PID: $NEW_PID)"
+                        if kill -0 "$NEW_PID" 2>/dev/null; then
+                            echo "[hot-dev] ✓ Backend restarted (PID: $NEW_PID)"
+                        else
+                            echo "[hot-dev] ✗ Backend failed to start!"
+                        fi
                     else
-                        echo "[hot-dev] ✗ Backend failed to start!"
+                        echo "[hot-dev] ✗ Build failed!"
                     fi
-                else
-                    echo "[hot-dev] ✗ Build failed!"
+                    echo "[hot-dev] Watching for changes..."
                 fi
-                echo "[hot-dev] Watching for changes..."
-            fi
-        done
+            done
+        else
+            echo "[hot-dev] inotifywait not found. Auto-rebuild disabled."
+            sleep 3600
+        fi
     done
 ) &
 WATCHER_PID=$!
