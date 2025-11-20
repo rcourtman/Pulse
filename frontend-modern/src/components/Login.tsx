@@ -368,7 +368,7 @@ const LoginForm: Component<{
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
         <div class="animate-fade-in">
-          <div class="flex justify-center mb-4">
+          <div class="flex justify-center mb-8">
             <div class="relative group">
               <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse-slow"></div>
               <img
@@ -378,10 +378,12 @@ const LoginForm: Component<{
               />
             </div>
           </div>
-          <h2 class="mt-6 text-center text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+
+          <h2 class="mt-6 text-center text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent animate-fade-in delay-100 pb-1">
             Welcome to Pulse
           </h2>
-          <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+
+          <p class="mt-3 text-center text-sm text-gray-600 dark:text-gray-400 animate-fade-in delay-200">
             Enter your credentials to continue
           </p>
         </div>
@@ -524,11 +526,10 @@ const LoginForm: Component<{
 
           <Show when={error()}>
             <div
-              class={`rounded-md p-4 ${
-                error().includes('locked')
-                  ? 'bg-orange-50 dark:bg-orange-900/20'
-                  : 'bg-red-50 dark:bg-red-900/20'
-              }`}
+              class={`rounded-md p-4 ${error().includes('locked')
+                ? 'bg-orange-50 dark:bg-orange-900/20'
+                : 'bg-red-50 dark:bg-red-900/20'
+                }`}
             >
               <div class="flex">
                 <div class="flex-shrink-0">
@@ -555,11 +556,10 @@ const LoginForm: Component<{
                 </div>
                 <div class="ml-3">
                   <p
-                    class={`text-sm ${
-                      error().includes('locked')
-                        ? 'text-orange-800 dark:text-orange-200'
-                        : 'text-red-800 dark:text-red-200'
-                    }`}
+                    class={`text-sm ${error().includes('locked')
+                      ? 'text-orange-800 dark:text-orange-200'
+                      : 'text-red-800 dark:text-red-200'
+                      }`}
                   >
                     {error()}
                   </p>
