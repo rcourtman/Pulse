@@ -1,60 +1,55 @@
 # Pulse Sensor Proxy Configuration
-# This file is optional. If not provided, the proxy will use sensible defaults.
+# This file is optional. Defaults are safe for most installs; use it when you
+# need to override CIDR allow lists, HTTP settings, or rate limits.
 
-# Network Configuration
-# Specify which networks are allowed to connect to the proxy
-# If not specified, the proxy will auto-detect host IP addresses
+# Network configuration
+# The installer auto-detects host CIDRs if this is empty.
 allowed_source_subnets:
-  - "127.0.0.1/32"       # Localhost
-  - "192.168.0.0/24"     # Local network
+  - "127.0.0.1/32"
+  - "192.168.0.0/24"
 
-# Peer Authorization
-# Specify which UIDs/GIDs are allowed to connect
-# A peer is authorized when its UID OR GID matches one of these entries
-# Required when running Pulse in a container (use mapped UID/GID from container)
-allowed_peer_uids: [100999]  # Legacy format; grants all capabilities unless overridden below
-allowed_peer_gids: [100996]
-
-# Preferred format with explicit capabilities (read, write, admin)
+# Peer authorization
+# Preferred capability-based format (legacy UID/GID lists still work)
 allowed_peers:
   - uid: 0
     capabilities: [read, write, admin]  # Host root retains full control
   - uid: 100999
-    capabilities: [read]  # Container peer limited to read-only RPCs
+    capabilities: [read]                # Container peer limited to read-only RPCs
+allowed_peer_uids: []
+allowed_peer_gids: []
 
-require_proxmox_hostkeys: false  # Enforce Proxmox-known host keys before falling back to ssh-keyscan
-
-# ID-Mapped Root Authentication
-# Allow connections from ID-mapped root users (for LXC containers)
+# ID-mapped root + namespaced users (LXC)
 allow_idmapped_root: true
 allowed_idmap_users:
   - root
 
-# Metrics Server
-# Address for Prometheus metrics endpoint
-metrics_address: "127.0.0.1:9127"
+# Logging and limits
+log_level: info
+metrics_address: "default"      # 127.0.0.1:9127 unless set otherwise
+read_timeout: 5s
+write_timeout: 10s
+max_ssh_output_bytes: 1048576   # 1 MiB
+require_proxmox_hostkeys: false # Only trust hosts in PVE known_hosts when true
 
-# Limit SSH output size (bytes) when fetching temperatures
-max_ssh_output_bytes: 1048576  # 1 MiB
+# Allow list persistence (managed by installer/control-plane/CLI)
+allowed_nodes_file: "/etc/pulse-sensor-proxy/allowed_nodes.yaml"
+strict_node_validation: false   # Set true to require allow list entries
 
-# Rate Limiting (Optional)
-# Control how frequently peers can make requests to prevent abuse
-# Adjust these values based on your deployment size:
-#   - Small (1-3 nodes): Use defaults (1000ms, burst 5)
-#   - Medium (4-10 nodes): 500ms, burst 10
-#   - Large (10-20 nodes): 250ms, burst 20
-#   - Very Large (30+ nodes): 100ms, burst 30-50
-#
-# Formula: To poll all nodes in one cycle, set burst >= node_count
-# For optimal performance: per_peer_interval_ms = (polling_interval_ms / node_count)
-# Example: 10 second polling with 30 nodes = 10000ms / 30 ≈ 300ms interval
+# Rate limiting (per calling UID)
 rate_limit:
-  per_peer_interval_ms: 1000  # Minimum milliseconds between requests per peer (1000ms = 1 qps = 60 requests/min)
-  per_peer_burst: 5            # Number of requests allowed in a burst (supports up to 5 simultaneous requests)
+  per_peer_interval_ms: 1000  # 1 request per second
+  per_peer_burst: 5           # Allow burst of 5
 
-# Default values if not specified:
-#   per_peer_interval_ms: 1000 (1 second = 1 qps = 60 requests/min)
-#   per_peer_burst: 5
-#
-# Security note: Lower intervals increase throughput but also increase exposure
-# to potential abuse. For production, keep interval >= 100ms unless necessary.
+# HTTPS mode (for remote nodes)
+http_enabled: false
+http_listen_addr: ":8443"
+http_tls_cert: "/etc/pulse-sensor-proxy/tls/server.crt"
+http_tls_key: "/etc/pulse-sensor-proxy/tls/server.key"
+http_auth_token: ""           # Populated by installer; keep secret
+
+# Control-plane sync (keeps allowed_nodes.yaml updated automatically)
+pulse_control_plane:
+  url: "https://pulse.example.com:7655"
+  token_file: "/etc/pulse-sensor-proxy/.pulse-control-token"
+  refresh_interval: 60
+  insecure_skip_verify: false

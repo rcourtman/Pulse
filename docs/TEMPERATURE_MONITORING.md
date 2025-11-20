@@ -224,8 +224,8 @@ When you need to provision the proxy yourself (for example via your own automati
 1. **Install the binary**
    ```bash
    curl -L https://github.com/rcourtman/Pulse/releases/download/<TAG>/pulse-sensor-proxy-linux-amd64 \
-     -o /usr/local/bin/pulse-sensor-proxy
-   chmod 0755 /usr/local/bin/pulse-sensor-proxy
+     -o /tmp/pulse-sensor-proxy
+   install -D -m 0755 /tmp/pulse-sensor-proxy /opt/pulse/sensor-proxy/bin/pulse-sensor-proxy
    ```
    Use the arm64/armv7 artefact if required.
 
@@ -242,18 +242,23 @@ When you need to provision the proxy yourself (for example via your own automati
    ```
 
 4. **(Optional) Add `/etc/pulse-sensor-proxy/config.yaml`**  
-   Only needed if you want explicit subnet/metrics settings; otherwise the proxy auto-detects host CIDRs.
+   Only needed if you want explicit subnet/metrics settings; otherwise the proxy auto-detects host CIDRs and registers with Pulse automatically.
    ```yaml
    allowed_source_subnets:
      - 192.168.1.0/24
    metrics_address: 0.0.0.0:9127   # use "disabled" to switch metrics off
-   http_enabled: true
+   allowed_nodes_file: /etc/pulse-sensor-proxy/allowed_nodes.yaml
+   http_enabled: true              # only when polling remote hosts over HTTPS
    http_listen_addr: ":8443"
    http_tls_cert: /etc/pulse-sensor-proxy/tls/server.crt
    http_tls_key: /etc/pulse-sensor-proxy/tls/server.key
+   pulse_control_plane:
+     url: https://pulse.example.com:7655
+     token_file: /etc/pulse-sensor-proxy/.pulse-control-token
+     refresh_interval: 60
    ```
 
-   Provide `http_auth_token` (32+ bytes of random data) and ensure the TLS files exist. Tokens configured here must match the value saved in Pulse for each node.
+   Provide `http_auth_token` (32+ bytes of random data) only when you cannot register through Pulse, and ensure the TLS files exist. Allowed nodes live in `/etc/pulse-sensor-proxy/allowed_nodes.yaml`—use `pulse-sensor-proxy config set-allowed-nodes` instead of editing it by hand.
 
 5. **Install the hardened systemd unit**  
    Copy the unit from `scripts/install-sensor-proxy.sh` or create `/etc/systemd/system/pulse-sensor-proxy.service` with:
@@ -267,16 +272,21 @@ When you need to provision the proxy yourself (for example via your own automati
    User=pulse-sensor-proxy
    Group=pulse-sensor-proxy
    WorkingDirectory=/var/lib/pulse-sensor-proxy
-   ExecStart=/usr/local/bin/pulse-sensor-proxy
+   ExecStartPre=/opt/pulse/sensor-proxy/bin/pulse-sensor-proxy config validate --config /etc/pulse-sensor-proxy/config.yaml
+   ExecStart=/opt/pulse/sensor-proxy/bin/pulse-sensor-proxy --config /etc/pulse-sensor-proxy/config.yaml
    Restart=on-failure
    RestartSec=5s
    RuntimeDirectory=pulse-sensor-proxy
    RuntimeDirectoryMode=0775
+   RuntimeDirectoryPreserve=yes
+   LogsDirectory=pulse/sensor-proxy
+   LogsDirectoryMode=0750
    UMask=0007
    NoNewPrivileges=true
    ProtectSystem=strict
    ProtectHome=read-only
    ReadWritePaths=/var/lib/pulse-sensor-proxy
+   ReadWritePaths=-/run/corosync
    ProtectKernelTunables=true
    ProtectKernelModules=true
    ProtectControlGroups=true
@@ -288,7 +298,7 @@ When you need to provision the proxy yourself (for example via your own automati
    LockPersonality=true
    RemoveIPC=true
    RestrictSUIDSGID=true
-   RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+   RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
    RestrictNamespaces=true
    SystemCallFilter=@system-service
    SystemCallErrorNumber=EPERM
@@ -814,8 +824,8 @@ If you can't run the installer script, create the configuration manually:
 **1. Download binary:**
 ```bash
 curl -L https://github.com/rcourtman/Pulse/releases/latest/download/pulse-sensor-proxy-linux-amd64 \
-  -o /usr/local/bin/pulse-sensor-proxy
-chmod 0755 /usr/local/bin/pulse-sensor-proxy
+  -o /tmp/pulse-sensor-proxy
+install -D -m 0755 /tmp/pulse-sensor-proxy /opt/pulse/sensor-proxy/bin/pulse-sensor-proxy
 ```
 
 **2. Create service user:**
@@ -834,16 +844,18 @@ install -d -o pulse-sensor-proxy -g pulse-sensor-proxy -m 0755 /etc/pulse-sensor
 **4. Create config (optional, for Docker):**
 ```yaml
 # /etc/pulse-sensor-proxy/config.yaml
+allowed_nodes_file: /etc/pulse-sensor-proxy/allowed_nodes.yaml
 allowed_peer_uids: [1000]  # Docker container UID
 allow_idmapped_root: true
 allowed_idmap_users:
   - root
 ```
+Allowed nodes live in `/etc/pulse-sensor-proxy/allowed_nodes.yaml`; change them via `pulse-sensor-proxy config set-allowed-nodes` so the proxy can lock and validate the file safely. Control-plane settings are added automatically when you register via Pulse, but you can supply them manually if you cannot reach the API (`pulse_control_plane.url`, `.token_file`, `.refresh_interval`).
 
 **5. Install systemd service:**
 ```bash
 # Download from: https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh
-# Extract the systemd unit from lines 630-730, or see systemd unit in installer script
+# Extract the systemd unit from the installer (ExecStartPre/ExecStart use /opt/pulse/sensor-proxy/bin)
 systemctl daemon-reload
 systemctl enable --now pulse-sensor-proxy
 ```
@@ -856,48 +868,57 @@ ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock
 
 #### Configuration File Format
 
-The proxy reads `/etc/pulse-sensor-proxy/config.yaml` (optional):
+The proxy reads `/etc/pulse-sensor-proxy/config.yaml` plus an allow-list in `/etc/pulse-sensor-proxy/allowed_nodes.yaml`:
 
 ```yaml
-# Allowed UIDs that can connect to the socket (default: [0] = root only)
-allowed_peer_uids: [0, 1000]  # Allow root and UID 1000 (typical Docker)
+allowed_source_subnets:
+  - 192.168.1.0/24
+  - 10.0.0.0/8
 
-# Allowed GIDs that can connect to the socket (peer is accepted when UID OR GID matches)
-allowed_peer_gids: [0]
-
-# Preferred capability-based allow-list (uids inherit read/write/admin as specified)
+# Capability-based access control (legacy UID/GID lists still work)
 allowed_peers:
   - uid: 0
     capabilities: [read, write, admin]
   - uid: 1000
     capabilities: [read]
-
-# Require host keys sourced from the Proxmox cluster known_hosts file (no ssh-keyscan fallback)
-require_proxmox_hostkeys: false
-
-# Allow ID-mapped root from LXC containers
+allowed_peer_uids: []
+allowed_peer_gids: []
 allow_idmapped_root: true
 allowed_idmap_users:
   - root
 
-# Source subnets for SSH key restrictions (auto-detected if not specified)
-allowed_source_subnets:
-  - 192.168.1.0/24
-  - 10.0.0.0/8
+log_level: info
+metrics_address: default
+read_timeout: 5s
+write_timeout: 10s
+max_ssh_output_bytes: 1048576
+require_proxmox_hostkeys: false
+
+# Allow list persistence (managed by installer/control-plane/CLI)
+allowed_nodes_file: /etc/pulse-sensor-proxy/allowed_nodes.yaml
+strict_node_validation: false
 
 # Rate limiting (per calling UID)
 rate_limit:
-  per_peer_interval_ms: 1000  # 1 request per second
-  per_peer_burst: 5           # Allow burst of 5
+  per_peer_interval_ms: 1000
+  per_peer_burst: 5
 
-# Metrics endpoint (default: 127.0.0.1:9127)
-metrics_address: 127.0.0.1:9127  # or "disabled"
+# HTTPS mode (for remote nodes)
+http_enabled: false
+http_listen_addr: ":8443"
+http_tls_cert: /etc/pulse-sensor-proxy/tls/server.crt
+http_tls_key: /etc/pulse-sensor-proxy/tls/server.key
+http_auth_token: ""  # Populated during registration
 
-# Maximum bytes accepted from SSH sensor output (default 1 MiB)
-max_ssh_output_bytes: 1048576
+# Control-plane sync (keeps allowed_nodes.yaml updated)
+pulse_control_plane:
+  url: https://pulse.example.com:7655
+  token_file: /etc/pulse-sensor-proxy/.pulse-control-token
+  refresh_interval: 60
+  insecure_skip_verify: false
 ```
 
-`allowed_peers` lets you scope access: grant the container UID only `read` to limit it to temperature fetching, while host-side automation can receive `[read, write, admin]`. Legacy `allowed_peer_uids`/`gids` remain for backward compatibility and imply full capabilities.
+`allowed_nodes.yaml` is the source of truth for valid nodes. Avoid editing it directly—use `pulse-sensor-proxy config set-allowed-nodes` so the proxy can lock, dedupe, and write atomically. `allowed_peers` scopes socket access; legacy UID/GID lists remain for backward compatibility and imply full capabilities.
 
 **Environment Variable Overrides:**
 
@@ -909,7 +930,15 @@ PULSE_SENSOR_PROXY_ALLOWED_SUBNETS=192.168.1.0/24,10.0.0.0/8
 
 # Allow/disallow ID-mapped root (overrides config file)
 PULSE_SENSOR_PROXY_ALLOW_IDMAPPED_ROOT=true
+
+# HTTP listener controls
+PULSE_SENSOR_PROXY_HTTP_ENABLED=true
+PULSE_SENSOR_PROXY_HTTP_ADDR=":8443"
+PULSE_SENSOR_PROXY_HTTP_TLS_CERT=/etc/pulse-sensor-proxy/tls/server.crt
+PULSE_SENSOR_PROXY_HTTP_TLS_KEY=/etc/pulse-sensor-proxy/tls/server.key
+PULSE_SENSOR_PROXY_HTTP_AUTH_TOKEN="$(cat /etc/pulse-sensor-proxy/.http-auth-token)"
 ```
+Additional overrides include `PULSE_SENSOR_PROXY_ALLOWED_PEER_UIDS`, `PULSE_SENSOR_PROXY_ALLOWED_PEER_GIDS`, `PULSE_SENSOR_PROXY_ALLOWED_NODES`, `PULSE_SENSOR_PROXY_READ_TIMEOUT`, `PULSE_SENSOR_PROXY_WRITE_TIMEOUT`, `PULSE_SENSOR_PROXY_METRICS_ADDR`, and `PULSE_SENSOR_PROXY_STRICT_NODE_VALIDATION`.
 
 Example systemd override:
 ```ini
@@ -1344,8 +1373,8 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 
 **Proxy Service Won't Start:**
 1. Check logs: `journalctl -u pulse-sensor-proxy -n 50`
-2. Verify binary exists: `ls -l /usr/local/bin/pulse-sensor-proxy`
-3. Test manually: `/usr/local/bin/pulse-sensor-proxy --version`
+2. Verify binary exists: `ls -l /opt/pulse/sensor-proxy/bin/pulse-sensor-proxy`
+3. Test manually: `/opt/pulse/sensor-proxy/bin/pulse-sensor-proxy --version`
 4. Check socket directory: `ls -ld /var/run`
 
 ### Future Improvements

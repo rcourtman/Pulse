@@ -232,7 +232,7 @@ journalctl -u pulse-sensor-proxy -n 100
 journalctl -u pulse-sensor-proxy | grep -i "validation\|corrupt\|duplicate"
 
 # Try starting in foreground for better errors
-sudo -u pulse-sensor-proxy /usr/local/bin/pulse-sensor-proxy
+sudo -u pulse-sensor-proxy /opt/pulse/sensor-proxy/bin/pulse-sensor-proxy  # legacy installs: /usr/local/bin/pulse-sensor-proxy
 ```
 
 **Fix:**
