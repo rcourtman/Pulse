@@ -127,11 +127,11 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 
 	if m.scheduler == nil {
 		tasks := make([]ScheduledTask, 0, len(descriptors))
-		interval := m.config.AdaptivePollingBaseInterval
-		if interval <= 0 {
-			interval = DefaultSchedulerConfig().BaseInterval
-		}
 		for _, desc := range descriptors {
+			interval := m.baseIntervalForInstanceType(desc.Type)
+			if interval <= 0 {
+				interval = DefaultSchedulerConfig().BaseInterval
+			}
 			tasks = append(tasks, ScheduledTask{
 				InstanceName: desc.Name,
 				InstanceType: desc.Type,

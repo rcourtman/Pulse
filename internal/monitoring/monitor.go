@@ -4183,6 +4183,19 @@ func (m *Monitor) getExecutor() PollExecutor {
 	return exec
 }
 
+func clampInterval(value, min, max time.Duration) time.Duration {
+	if value <= 0 {
+		return min
+	}
+	if min > 0 && value < min {
+		return min
+	}
+	if max > 0 && value > max {
+		return max
+	}
+	return value
+}
+
 func (m *Monitor) effectivePVEPollingInterval() time.Duration {
 	const minInterval = 10 * time.Second
 	const maxInterval = time.Hour
@@ -4198,6 +4211,27 @@ func (m *Monitor) effectivePVEPollingInterval() time.Duration {
 		interval = maxInterval
 	}
 	return interval
+}
+
+func (m *Monitor) baseIntervalForInstanceType(instanceType InstanceType) time.Duration {
+	if m == nil || m.config == nil {
+		return DefaultSchedulerConfig().BaseInterval
+	}
+
+	switch instanceType {
+	case InstanceTypePVE:
+		return m.effectivePVEPollingInterval()
+	case InstanceTypePBS:
+		return clampInterval(m.config.PBSPollingInterval, 10*time.Second, time.Hour)
+	case InstanceTypePMG:
+		return clampInterval(m.config.PMGPollingInterval, 10*time.Second, time.Hour)
+	default:
+		base := m.config.AdaptivePollingBaseInterval
+		if base <= 0 {
+			base = DefaultSchedulerConfig().BaseInterval
+		}
+		return clampInterval(base, time.Second, 0)
+	}
 }
 
 // Start begins the monitoring loop
@@ -4883,9 +4917,10 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 	}
 
 	if m.scheduler == nil {
+		baseInterval := m.baseIntervalForInstanceType(task.InstanceType)
 		nextInterval := task.Interval
-		if nextInterval <= 0 && m.config != nil {
-			nextInterval = m.config.AdaptivePollingBaseInterval
+		if nextInterval <= 0 {
+			nextInterval = baseInterval
 		}
 		if nextInterval <= 0 {
 			nextInterval = DefaultSchedulerConfig().BaseInterval
