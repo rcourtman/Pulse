@@ -130,7 +130,7 @@ jobs:
       - name: Build Docker images for integration tests
         run: |
           docker build -t pulse-mock-github:test tests/integration/mock-github-server
-          docker build -t pulse:test -f Dockerfile .
+          docker build -t pulse:test -f Dockerfile --target runtime --cache-from ghcr.io/${{ github.repository_owner }}/pulse:buildcache --build-arg BUILDKIT_INLINE_CACHE=1 .
 
       - name: Run update integration smoke tests
         working-directory: tests/integration
@@ -226,6 +226,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: runtime
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
