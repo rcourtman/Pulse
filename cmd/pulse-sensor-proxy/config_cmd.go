@@ -12,10 +12,21 @@ import (
 
 var (
 	// Config command flags
-	configPathFlag         string
-	allowedNodesPathFlag   string
-	mergeNodesFlag         []string
-	replaceMode            bool
+	configPathFlag       string
+	allowedNodesPathFlag string
+	mergeNodesFlag       []string
+	replaceMode          bool
+
+	// New flags for extended commands
+	controlPlaneURL     string
+	controlPlaneToken   string
+	controlPlaneRefresh int
+
+	httpEnabled   bool
+	httpAddr      string
+	httpAuthToken string
+	httpTLSCert   string
+	httpTLSKey    string
 )
 
 var configCmd = &cobra.Command{
@@ -139,11 +150,114 @@ Safe to run multiple times (idempotent).
 	},
 }
 
+var addSubnetCmd = &cobra.Command{
+	Use:   "add-subnet [subnet]",
+	Short: "Add an allowed source subnet",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		subnet := args[0]
+		cfgPath := configPathFlag
+		if cfgPath == "" {
+			cfgPath = defaultConfigPath
+		}
+
+		return updateConfigMap(cfgPath, func(config map[string]interface{}) error {
+			var subnets []string
+			if existing, ok := config["allowed_source_subnets"]; ok {
+				if list, ok := existing.([]interface{}); ok {
+					for _, item := range list {
+						if s, ok := item.(string); ok {
+							subnets = append(subnets, s)
+						}
+					}
+				}
+			}
+
+			// Check if already exists
+			for _, s := range subnets {
+				if s == subnet {
+					return nil // Already exists
+				}
+			}
+
+			subnets = append(subnets, subnet)
+			config["allowed_source_subnets"] = subnets
+			return nil
+		})
+	},
+}
+
+var setControlPlaneCmd = &cobra.Command{
+	Use:   "set-control-plane",
+	Short: "Configure Pulse control plane connection",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfgPath := configPathFlag
+		if cfgPath == "" {
+			cfgPath = defaultConfigPath
+		}
+
+		return updateConfigMap(cfgPath, func(config map[string]interface{}) error {
+			cp := make(map[string]interface{})
+			if existing, ok := config["pulse_control_plane"]; ok {
+				if m, ok := existing.(map[string]interface{}); ok {
+					cp = m
+				}
+			}
+
+			if controlPlaneURL != "" {
+				cp["url"] = controlPlaneURL
+			}
+			if controlPlaneToken != "" {
+				cp["token_file"] = controlPlaneToken
+			}
+			if controlPlaneRefresh > 0 {
+				cp["refresh_interval"] = controlPlaneRefresh
+			}
+
+			config["pulse_control_plane"] = cp
+			return nil
+		})
+	},
+}
+
+var setHTTPCmd = &cobra.Command{
+	Use:   "set-http",
+	Short: "Configure HTTP mode settings",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfgPath := configPathFlag
+		if cfgPath == "" {
+			cfgPath = defaultConfigPath
+		}
+
+		return updateConfigMap(cfgPath, func(config map[string]interface{}) error {
+			if cmd.Flags().Changed("enabled") {
+				config["http_enabled"] = httpEnabled
+			}
+			if httpAddr != "" {
+				config["http_listen_addr"] = httpAddr
+			}
+			if httpAuthToken != "" {
+				config["http_auth_token"] = httpAuthToken
+			}
+			if httpTLSCert != "" {
+				config["http_tls_cert"] = httpTLSCert
+			}
+			if httpTLSKey != "" {
+				config["http_tls_key"] = httpTLSKey
+			}
+			return nil
+		})
+	},
+}
+
 func init() {
 	// Add subcommands to config command
 	configCmd.AddCommand(validateCmd)
 	configCmd.AddCommand(setAllowedNodesCmd)
 	configCmd.AddCommand(migrateToFileCmd)
+	configCmd.AddCommand(addSubnetCmd)
+	configCmd.AddCommand(setControlPlaneCmd)
+	configCmd.AddCommand(setHTTPCmd)
 
 	// Validate command flags
 	validateCmd.Flags().StringVar(&configPathFlag, "config", "", "Path to config.yaml (default: /etc/pulse-sensor-proxy/config.yaml)")
@@ -158,8 +272,70 @@ func init() {
 	migrateToFileCmd.Flags().StringVar(&configPathFlag, "config", "", "Path to config.yaml (default: /etc/pulse-sensor-proxy/config.yaml)")
 	migrateToFileCmd.Flags().StringVar(&allowedNodesPathFlag, "allowed-nodes", "", "Path to allowed_nodes.yaml (default: same dir as config)")
 
+	// Add-subnet command flags
+	addSubnetCmd.Flags().StringVar(&configPathFlag, "config", "", "Path to config.yaml")
+
+	// Set-control-plane command flags
+	setControlPlaneCmd.Flags().StringVar(&configPathFlag, "config", "", "Path to config.yaml")
+	setControlPlaneCmd.Flags().StringVar(&controlPlaneURL, "url", "", "Control plane URL")
+	setControlPlaneCmd.Flags().StringVar(&controlPlaneToken, "token-file", "", "Path to token file")
+	setControlPlaneCmd.Flags().IntVar(&controlPlaneRefresh, "refresh", 0, "Refresh interval in seconds")
+
+	// Set-http command flags
+	setHTTPCmd.Flags().StringVar(&configPathFlag, "config", "", "Path to config.yaml")
+	setHTTPCmd.Flags().BoolVar(&httpEnabled, "enabled", false, "Enable HTTP mode")
+	setHTTPCmd.Flags().StringVar(&httpAddr, "listen-addr", "", "HTTP listen address")
+	setHTTPCmd.Flags().StringVar(&httpAuthToken, "auth-token", "", "HTTP auth token")
+	setHTTPCmd.Flags().StringVar(&httpTLSCert, "tls-cert", "", "TLS certificate path")
+	setHTTPCmd.Flags().StringVar(&httpTLSKey, "tls-key", "", "TLS key path")
+
 	// Add config command to root
 	rootCmd.AddCommand(configCmd)
+}
+
+// updateConfigMap safely updates the config file using a map representation
+func updateConfigMap(path string, updateFn func(map[string]interface{}) error) error {
+	lockPath := path + ".lock"
+	return withLockedFile(lockPath, func(f *os.File) error {
+		// Read current config
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				data = []byte("{}\n")
+			} else {
+				return fmt.Errorf("failed to read config: %w", err)
+			}
+		}
+
+		// Sanitize duplicate blocks before parsing
+		_, data = sanitizeDuplicateAllowedNodesBlocks(path, data)
+
+		var config map[string]interface{}
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("failed to parse config: %w", err)
+		}
+
+		if config == nil {
+			config = make(map[string]interface{})
+		}
+
+		// Apply updates
+		if err := updateFn(config); err != nil {
+			return err
+		}
+
+		// Write back
+		newData, err := yaml.Marshal(config)
+		if err != nil {
+			return fmt.Errorf("failed to marshal config: %w", err)
+		}
+
+		// Preserve header comment if possible (simple heuristic)
+		header := "# Managed by pulse-sensor-proxy config CLI\n"
+		finalData := []byte(header + string(newData))
+
+		return atomicWriteFile(path, finalData, 0644)
+	})
 }
 
 // validateConfigFile parses and validates the main config file
