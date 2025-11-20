@@ -18,11 +18,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
@@ -58,6 +60,7 @@ type Router struct {
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
 	wrapped                   http.Handler
+	serverVersion             string
 	projectRoot               string
 	// Cached system settings to avoid loading from disk on every request
 	settingsMu           sync.RWMutex
@@ -97,7 +100,7 @@ func isDirectLoopbackRequest(req *http.Request) bool {
 }
 
 // NewRouter creates a new router instance
-func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket.Hub, reloadFunc func() error) *Router {
+func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string) *Router {
 	// Initialize persistent session and CSRF stores
 	InitSessionStore(cfg.DataPath)
 	InitCSRFStore(cfg.DataPath)
@@ -125,6 +128,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		updateHistory: updateHistory,
 		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
 		persistence:   config.NewConfigPersistence(cfg.DataPath),
+		serverVersion: strings.TrimSpace(serverVersion),
 		projectRoot:   projectRoot,
 	}
 
@@ -3394,36 +3398,53 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	searchPaths := make([]string, 0, 12)
-	strictMode := platformParam != "" && archParam != ""
-
-	// Try platform-specific binary first
-	if strictMode {
-		searchPaths = append(searchPaths,
-			filepath.Join(pulseBinDir(), fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
-			filepath.Join("/opt/pulse", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
-			filepath.Join("/app", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
-		)
+	checkedPaths, served := r.tryServeHostAgentBinary(w, req, platformParam, archParam)
+	if served {
+		return
 	}
 
-	if platformParam != "" && !strictMode {
-		searchPaths = append(searchPaths,
-			filepath.Join(pulseBinDir(), "pulse-host-agent-"+platformParam),
-			filepath.Join("/opt/pulse", "pulse-host-agent-"+platformParam),
-			filepath.Join("/app", "pulse-host-agent-"+platformParam),
-		)
+	remainingMissing := agentbinaries.EnsureHostAgentBinaries(r.serverVersion)
+
+	afterRestorePaths, served := r.tryServeHostAgentBinary(w, req, platformParam, archParam)
+	checkedPaths = append(checkedPaths, afterRestorePaths...)
+	if served {
+		return
 	}
 
-	// Default locations (host architecture) - only when no platform/arch specified
-	if !strictMode && platformParam == "" {
-		searchPaths = append(searchPaths,
-			filepath.Join(pulseBinDir(), "pulse-host-agent"),
-			"/opt/pulse/pulse-host-agent",
-			filepath.Join("/app", "pulse-host-agent"),
-		)
+	// Build detailed error message with troubleshooting guidance
+	var errorMsg strings.Builder
+	errorMsg.WriteString(fmt.Sprintf("Host agent binary not found for %s/%s\n\n", platformParam, archParam))
+	errorMsg.WriteString("Troubleshooting:\n")
+	errorMsg.WriteString("1. If running in Docker: Rebuild the Docker image to include all platform binaries\n")
+	errorMsg.WriteString("2. If running bare metal: Run 'scripts/build-release.sh' to build all platform binaries\n")
+	errorMsg.WriteString("3. Build from source:\n")
+	errorMsg.WriteString(fmt.Sprintf("   GOOS=%s GOARCH=%s go build -o pulse-host-agent-%s-%s ./cmd/pulse-host-agent\n", platformParam, archParam, platformParam, archParam))
+	errorMsg.WriteString(fmt.Sprintf("   sudo mv pulse-host-agent-%s-%s /opt/pulse/bin/\n\n", platformParam, archParam))
+
+	if len(remainingMissing) > 0 {
+		errorMsg.WriteString("Automatic repair attempted but the following binaries are still missing:\n")
+		for _, key := range sortedHostAgentKeys(remainingMissing) {
+			errorMsg.WriteString(fmt.Sprintf("  - %s\n", key))
+		}
+		if r.serverVersion != "" {
+			errorMsg.WriteString(fmt.Sprintf("Release bundle used: %s\n\n", strings.TrimSpace(r.serverVersion)))
+		} else {
+			errorMsg.WriteString("\n")
+		}
 	}
 
+	errorMsg.WriteString("Searched locations:\n")
+	for _, path := range dedupeStrings(checkedPaths) {
+		errorMsg.WriteString(fmt.Sprintf("  - %s\n", path))
+	}
+
+	http.Error(w, errorMsg.String(), http.StatusNotFound)
+}
+
+func (r *Router) tryServeHostAgentBinary(w http.ResponseWriter, req *http.Request, platformParam, archParam string) ([]string, bool) {
+	searchPaths := hostAgentSearchCandidates(platformParam, archParam)
 	checkedPaths := make([]string, 0, len(searchPaths)*2)
+
 	shouldCheckWindowsExe := func(path string) bool {
 		base := strings.ToLower(filepath.Base(path))
 		return strings.Contains(base, "windows") && !strings.HasSuffix(base, ".exe")
@@ -3441,32 +3462,76 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 		for _, path := range pathsToCheck {
 			checkedPaths = append(checkedPaths, path)
 			if info, err := os.Stat(path); err == nil && !info.IsDir() {
-				// Check if this is a checksum request
 				if strings.HasSuffix(req.URL.Path, ".sha256") {
 					r.serveChecksum(w, req, path)
-					return
+					return checkedPaths, true
 				}
 				http.ServeFile(w, req, path)
-				return
+				return checkedPaths, true
 			}
 		}
 	}
 
-	// Build detailed error message with troubleshooting guidance
-	var errorMsg strings.Builder
-	errorMsg.WriteString(fmt.Sprintf("Host agent binary not found for %s/%s\n\n", platformParam, archParam))
-	errorMsg.WriteString("Troubleshooting:\n")
-	errorMsg.WriteString("1. If running in Docker: Rebuild the Docker image to include all platform binaries\n")
-	errorMsg.WriteString("2. If running bare metal: Run 'scripts/build-release.sh' to build all platform binaries\n")
-	errorMsg.WriteString("3. Build from source:\n")
-	errorMsg.WriteString(fmt.Sprintf("   GOOS=%s GOARCH=%s go build -o pulse-host-agent-%s-%s ./cmd/pulse-host-agent\n", platformParam, archParam, platformParam, archParam))
-	errorMsg.WriteString(fmt.Sprintf("   sudo mv pulse-host-agent-%s-%s /opt/pulse/bin/\n\n", platformParam, archParam))
-	errorMsg.WriteString("Searched locations:\n")
-	for _, path := range checkedPaths {
-		errorMsg.WriteString(fmt.Sprintf("  - %s\n", path))
+	return checkedPaths, false
+}
+
+func hostAgentSearchCandidates(platformParam, archParam string) []string {
+	searchPaths := make([]string, 0, 12)
+	strictMode := platformParam != "" && archParam != ""
+
+	if strictMode {
+		searchPaths = append(searchPaths,
+			filepath.Join(pulseBinDir(), fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
+			filepath.Join("/opt/pulse", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
+			filepath.Join("/app", fmt.Sprintf("pulse-host-agent-%s-%s", platformParam, archParam)),
+		)
 	}
 
-	http.Error(w, errorMsg.String(), http.StatusNotFound)
+	if platformParam != "" && !strictMode {
+		searchPaths = append(searchPaths,
+			filepath.Join(pulseBinDir(), "pulse-host-agent-"+platformParam),
+			filepath.Join("/opt/pulse", "pulse-host-agent-"+platformParam),
+			filepath.Join("/app", "pulse-host-agent-"+platformParam),
+		)
+	}
+
+	if !strictMode && platformParam == "" {
+		searchPaths = append(searchPaths,
+			filepath.Join(pulseBinDir(), "pulse-host-agent"),
+			"/opt/pulse/pulse-host-agent",
+			filepath.Join("/app", "pulse-host-agent"),
+		)
+	}
+
+	return searchPaths
+}
+
+func dedupeStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func sortedHostAgentKeys(missing map[string]agentbinaries.HostAgentBinary) []string {
+	if len(missing) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(missing))
+	for key := range missing {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // serveChecksum computes and serves the SHA256 checksum of a file

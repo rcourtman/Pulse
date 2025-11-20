@@ -1,4 +1,4 @@
-package main
+package agentbinaries
 
 import (
 	"archive/tar"
@@ -12,84 +12,47 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
-type hostAgentBinary struct {
-	platform  string
-	arch      string
-	filenames []string
+type HostAgentBinary struct {
+	Platform  string
+	Arch      string
+	Filenames []string
 }
 
-var requiredHostAgentBinaries = []hostAgentBinary{
-	{platform: "linux", arch: "amd64", filenames: []string{"pulse-host-agent-linux-amd64"}},
-	{platform: "linux", arch: "arm64", filenames: []string{"pulse-host-agent-linux-arm64"}},
-	{platform: "linux", arch: "armv7", filenames: []string{"pulse-host-agent-linux-armv7"}},
-	{platform: "darwin", arch: "amd64", filenames: []string{"pulse-host-agent-darwin-amd64"}},
-	{platform: "darwin", arch: "arm64", filenames: []string{"pulse-host-agent-darwin-arm64"}},
+var requiredHostAgentBinaries = []HostAgentBinary{
+	{Platform: "linux", Arch: "amd64", Filenames: []string{"pulse-host-agent-linux-amd64"}},
+	{Platform: "linux", Arch: "arm64", Filenames: []string{"pulse-host-agent-linux-arm64"}},
+	{Platform: "linux", Arch: "armv7", Filenames: []string{"pulse-host-agent-linux-armv7"}},
+	{Platform: "linux", Arch: "armv6", Filenames: []string{"pulse-host-agent-linux-armv6"}},
+	{Platform: "linux", Arch: "386", Filenames: []string{"pulse-host-agent-linux-386"}},
+	{Platform: "darwin", Arch: "amd64", Filenames: []string{"pulse-host-agent-darwin-amd64"}},
+	{Platform: "darwin", Arch: "arm64", Filenames: []string{"pulse-host-agent-darwin-arm64"}},
 	{
-		platform:  "windows",
-		arch:      "amd64",
-		filenames: []string{"pulse-host-agent-windows-amd64", "pulse-host-agent-windows-amd64.exe"},
+		Platform:  "windows",
+		Arch:      "amd64",
+		Filenames: []string{"pulse-host-agent-windows-amd64", "pulse-host-agent-windows-amd64.exe"},
 	},
 	{
-		platform:  "windows",
-		arch:      "arm64",
-		filenames: []string{"pulse-host-agent-windows-arm64", "pulse-host-agent-windows-arm64.exe"},
+		Platform:  "windows",
+		Arch:      "arm64",
+		Filenames: []string{"pulse-host-agent-windows-arm64", "pulse-host-agent-windows-arm64.exe"},
 	},
 	{
-		platform:  "windows",
-		arch:      "386",
-		filenames: []string{"pulse-host-agent-windows-386", "pulse-host-agent-windows-386.exe"},
+		Platform:  "windows",
+		Arch:      "386",
+		Filenames: []string{"pulse-host-agent-windows-386", "pulse-host-agent-windows-386.exe"},
 	},
 }
 
-func validateAgentBinaries() {
-	binDirs := hostAgentSearchPaths()
-	missing := findMissingHostAgentBinaries(binDirs)
-	if len(missing) == 0 {
-		log.Info().Msg("All host agent binaries available for download")
-		return
-	}
+var downloadMu sync.Mutex
 
-	missingPlatforms := make([]string, 0, len(missing))
-	for key := range missing {
-		missingPlatforms = append(missingPlatforms, key)
-	}
-	sort.Strings(missingPlatforms)
-
-	log.Warn().
-		Strs("missing_platforms", missingPlatforms).
-		Msg("Host agent binaries missing - attempting to download bundle from GitHub release")
-
-	if err := downloadAndInstallHostAgentBinaries(binDirs[0]); err != nil {
-		log.Error().
-			Err(err).
-			Str("target_dir", binDirs[0]).
-			Strs("missing_platforms", missingPlatforms).
-			Msg("Failed to automatically install host agent binaries; install script downloads will fail")
-		return
-	}
-
-	remaining := findMissingHostAgentBinaries(binDirs)
-	if len(remaining) == 0 {
-		log.Info().Msg("Host agent binaries restored from GitHub release bundle")
-		return
-	}
-
-	stillMissing := make([]string, 0, len(remaining))
-	for key := range remaining {
-		stillMissing = append(stillMissing, key)
-	}
-	sort.Strings(stillMissing)
-	log.Warn().
-		Strs("missing_platforms", stillMissing).
-		Msg("Host agent binaries still missing after automatic restoration attempt")
-}
-
-func hostAgentSearchPaths() []string {
+// HostAgentSearchPaths returns the directories to search for host agent binaries.
+func HostAgentSearchPaths() []string {
 	primary := strings.TrimSpace(os.Getenv("PULSE_BIN_DIR"))
 	if primary == "" {
 		primary = "/opt/pulse/bin"
@@ -109,32 +72,64 @@ func hostAgentSearchPaths() []string {
 	return result
 }
 
-func findMissingHostAgentBinaries(binDirs []string) map[string]hostAgentBinary {
-	missing := make(map[string]hostAgentBinary)
-	for _, binary := range requiredHostAgentBinaries {
-		if !hostAgentBinaryExists(binDirs, binary.filenames) {
-			key := fmt.Sprintf("%s-%s", binary.platform, binary.arch)
-			missing[key] = binary
-		}
+// EnsureHostAgentBinaries verifies that all host agent binaries are present locally.
+// If any are missing, it attempts to restore them from the matching GitHub release.
+// The returned map contains any binaries that remain missing after the attempt.
+func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
+	binDirs := HostAgentSearchPaths()
+	missing := findMissingHostAgentBinaries(binDirs)
+	if len(missing) == 0 {
+		return nil
 	}
-	return missing
+
+	downloadMu.Lock()
+	defer downloadMu.Unlock()
+
+	// Re-check after acquiring the lock in case another goroutine restored them.
+	missing = findMissingHostAgentBinaries(binDirs)
+	if len(missing) == 0 {
+		return nil
+	}
+
+	missingPlatforms := make([]string, 0, len(missing))
+	for key := range missing {
+		missingPlatforms = append(missingPlatforms, key)
+	}
+	sort.Strings(missingPlatforms)
+
+	log.Warn().
+		Strs("missing_platforms", missingPlatforms).
+		Msg("Host agent binaries missing - attempting to download bundle from GitHub release")
+
+	if err := DownloadAndInstallHostAgentBinaries(version, binDirs[0]); err != nil {
+		log.Error().
+			Err(err).
+			Str("target_dir", binDirs[0]).
+			Strs("missing_platforms", missingPlatforms).
+			Msg("Failed to automatically install host agent binaries; download endpoints will return 404s")
+		return missing
+	}
+
+	if remaining := findMissingHostAgentBinaries(binDirs); len(remaining) > 0 {
+		stillMissing := make([]string, 0, len(remaining))
+		for key := range remaining {
+			stillMissing = append(stillMissing, key)
+		}
+		sort.Strings(stillMissing)
+		log.Warn().
+			Strs("missing_platforms", stillMissing).
+			Msg("Host agent binaries still missing after automatic restoration attempt")
+		return remaining
+	}
+
+	log.Info().Msg("Host agent binaries restored from GitHub release bundle")
+	return nil
 }
 
-func hostAgentBinaryExists(binDirs, filenames []string) bool {
-	for _, dir := range binDirs {
-		for _, name := range filenames {
-			path := filepath.Join(dir, name)
-			if info, err := os.Stat(path); err == nil && !info.IsDir() {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func downloadAndInstallHostAgentBinaries(targetDir string) error {
-	version := strings.TrimSpace(Version)
-	if version == "" || strings.EqualFold(version, "dev") {
+// DownloadAndInstallHostAgentBinaries fetches the universal host agent bundle for the given version and installs it.
+func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error {
+	normalizedVersion := normalizeVersionTag(version)
+	if normalizedVersion == "" || strings.EqualFold(normalizedVersion, "vdev") {
 		return fmt.Errorf("cannot download host agent bundle for non-release version %q", version)
 	}
 
@@ -142,7 +137,7 @@ func downloadAndInstallHostAgentBinaries(targetDir string) error {
 		return fmt.Errorf("failed to ensure bin directory %s: %w", targetDir, err)
 	}
 
-	url := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%[1]s/pulse-%[1]s.tar.gz", version)
+	url := fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%[1]s/pulse-%[1]s.tar.gz", normalizedVersion)
 	tempFile, err := os.CreateTemp("", "pulse-host-agent-*.tar.gz")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary archive file: %w", err)
@@ -174,6 +169,38 @@ func downloadAndInstallHostAgentBinaries(targetDir string) error {
 	}
 
 	return nil
+}
+
+func findMissingHostAgentBinaries(binDirs []string) map[string]HostAgentBinary {
+	missing := make(map[string]HostAgentBinary)
+	for _, binary := range requiredHostAgentBinaries {
+		if !hostAgentBinaryExists(binDirs, binary.Filenames) {
+			key := fmt.Sprintf("%s-%s", binary.Platform, binary.Arch)
+			missing[key] = binary
+		}
+	}
+	return missing
+}
+
+func hostAgentBinaryExists(binDirs, filenames []string) bool {
+	for _, dir := range binDirs {
+		for _, name := range filenames {
+			path := filepath.Join(dir, name)
+			if info, err := os.Stat(path); err == nil && !info.IsDir() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func normalizeVersionTag(version string) string {
+	v := strings.TrimSpace(version)
+	if v == "" {
+		return ""
+	}
+	v = strings.TrimPrefix(v, "v")
+	return "v" + v
 }
 
 func extractHostAgentBinaries(archivePath, targetDir string) error {

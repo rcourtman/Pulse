@@ -79,10 +79,15 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		return monitor.GetState().ToFrontend()
 	})
 
+	version := readRuntimeVersion(t)
+	if version == "" {
+		version = "dev"
+	}
+
 	router := api.NewRouter(cfg, monitor, hub, func() error {
 		monitor.SyncAlertState()
 		return nil
-	})
+	}, version)
 
 	srv := httptest.NewServer(router.Handler())
 	t.Cleanup(func() {

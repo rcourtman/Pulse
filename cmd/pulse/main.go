@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -104,7 +105,7 @@ func runServer() {
 	log.Info().Msg("Starting Pulse monitoring server")
 
 	// Validate agent binaries are available for download
-	validateAgentBinaries()
+	agentbinaries.EnsureHostAgentBinaries(Version)
 
 	// Create context that cancels on interrupt
 	ctx, cancel := context.WithCancel(context.Background())
@@ -170,7 +171,7 @@ func runServer() {
 		}
 		return nil
 	}
-	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc)
+	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc, Version)
 
 	// Create HTTP server with unified configuration
 	// In production, serve everything (frontend + API) on the frontend port
