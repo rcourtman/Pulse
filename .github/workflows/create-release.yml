@@ -417,12 +417,20 @@ jobs:
 
           echo "Creating draft release for ${TAG}..."
 
-          # Tag already exists (pushed by user), so don't create it
-          # Just create the release pointing to the existing tag
+          # Create draft release and ensure it's bound to the tag (retry if GH API races)
           gh release create "${TAG}" \
             --draft \
             --title "Pulse ${TAG}" \
-            --notes-file "$NOTES_FILE"
+            --notes-file "$NOTES_FILE" || true
+
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release not indexed yet, retrying create..."
+            sleep 3
+            gh release create "${TAG}" \
+              --draft \
+              --title "Pulse ${TAG}" \
+              --notes-file "$NOTES_FILE"
+          fi
 
           rm -f "$NOTES_FILE"
 
@@ -464,10 +472,22 @@ jobs:
           RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
           if [ "$RELEASE_TAG" != "$TAG" ]; then
             echo "::warning::Release tag mismatch (got ${RELEASE_TAG}, expected ${TAG}). Updating tag name..."
-            RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-              -X PATCH \
-              -F tag_name="${TAG}")
-            UPDATED_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+            PATCH_ATTEMPTS=0
+            MAX_PATCH_ATTEMPTS=5
+            UPDATED_TAG="$RELEASE_TAG"
+            while [ $PATCH_ATTEMPTS -lt $MAX_PATCH_ATTEMPTS ]; do
+              PATCH_ATTEMPTS=$((PATCH_ATTEMPTS+1))
+              RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+                -X PATCH \
+                -F tag_name="${TAG}" \
+                -F target_commitish="${{ github.sha }}")
+              UPDATED_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+              if [ "$UPDATED_TAG" = "$TAG" ]; then
+                break
+              fi
+              echo "Patch attempt $PATCH_ATTEMPTS failed (tag still ${UPDATED_TAG}); retrying in 2s..."
+              sleep 2
+            done
             if [ "$UPDATED_TAG" != "$TAG" ]; then
               echo "::error::Failed to update release tag to ${TAG} (still ${UPDATED_TAG})"
               exit 1
