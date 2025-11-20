@@ -86,6 +86,35 @@ detect_proxy_version() {
     fi
 }
 
+config_command_supported() {
+    local subcommand="$1"
+    shift || true
+
+    if [[ ! -x "$BINARY_PATH" ]]; then
+        return 1
+    fi
+
+    local help_output
+    help_output="$("$BINARY_PATH" config --help 2>/dev/null || true)"
+    if ! grep -Eq "^[[:space:]]*${subcommand}([[:space:]]|$)" <<<"$help_output"; then
+        return 1
+    fi
+
+    if [[ "$#" -eq 0 ]]; then
+        return 0
+    fi
+
+    local sub_help
+    sub_help="$("$BINARY_PATH" config "$subcommand" --help 2>/dev/null || true)"
+    for flag in "$@"; do
+        if ! grep -q -- "$flag" <<<"$sub_help"; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
 determine_allowlist_mode() {
     INSTALLED_PROXY_VERSION="$(detect_proxy_version "$BINARY_PATH")"
 
@@ -155,7 +184,7 @@ ensure_allowed_source_subnet() {
     fi
 
     # Use robust binary config management if available
-    if [[ -x "$BINARY_PATH" ]] && "$BINARY_PATH" config add-subnet --help >/dev/null 2>&1; then
+    if config_command_supported "add-subnet"; then
         if "$BINARY_PATH" config add-subnet "$subnet" --config "$CONFIG_FILE"; then
             print_info "Added allowed_source_subnets entry ${subnet}"
             return
@@ -1678,7 +1707,7 @@ ensure_control_plane_config() {
     fi
 
     # Use robust binary config management if available
-    if [[ -x "$BINARY_PATH" ]] && "$BINARY_PATH" config set-control-plane --help >/dev/null 2>&1; then
+    if config_command_supported "set-control-plane" "--url" "--token-file" "--refresh"; then
         if "$BINARY_PATH" config set-control-plane --url "$pulse_url" --token-file "/etc/pulse-sensor-proxy/.pulse-control-token" --refresh "$refresh" --config "$config_file"; then
             chown pulse-sensor-proxy:pulse-sensor-proxy "$config_file"
             chmod 0644 "$config_file"
@@ -1999,7 +2028,7 @@ if [[ "$HTTP_MODE" == true ]]; then
 
     # Configure HTTP mode - check if already configured to avoid duplicates
     print_info "Configuring HTTP mode..."
-    if [[ -x "$BINARY_PATH" ]] && "$BINARY_PATH" config set-http --help >/dev/null 2>&1; then
+    if config_command_supported "set-http" "--enabled" "--listen-addr" "--auth-token" "--tls-cert" "--tls-key"; then
         if "$BINARY_PATH" config set-http \
             --enabled=true \
             --listen-addr="$HTTP_ADDR" \
