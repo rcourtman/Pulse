@@ -13,6 +13,9 @@ jobs:
     name: Preflight Release Checks (No Publish)
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Checkout repository
@@ -22,6 +25,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
 
       - name: Install frontend dependencies
         run: npm --prefix frontend-modern ci
@@ -45,6 +50,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: true
 
       - name: Run backend tests
         run: go test ./...
@@ -58,10 +64,20 @@ jobs:
       - name: Build Pulse binaries for integration tests
         run: make build
 
+      - name: Log in to GHCR for build cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GITHUB_TOKEN not available for GHCR login"
+            exit 1
+          fi
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Build Docker images for integration tests
         run: |
           docker build -t pulse-mock-github:test tests/integration/mock-github-server
-          docker build -t pulse:test -f Dockerfile .
+          docker build -t pulse:test -f Dockerfile --target runtime --cache-from ghcr.io/${{ github.repository_owner }}/pulse:buildcache --build-arg BUILDKIT_INLINE_CACHE=1 .
 
       - name: Run integration diagnostics
         working-directory: tests/integration
