@@ -152,6 +152,33 @@ export const HostAgents: Component = () => {
     return [...list].sort((a, b) => (a.hostname || '').localeCompare(b.hostname || ''));
   });
 
+  const hostTokenUsage = createMemo(() => {
+    type UsageHost = { id: string; label: string };
+    const usage = new Map<string, { count: number; hosts: UsageHost[] }>();
+    for (const host of allHosts()) {
+      const tokenId = host.tokenId;
+      if (!tokenId) continue;
+      const label = host.displayName?.trim() || host.hostname || host.id;
+      const prev = usage.get(tokenId);
+      if (prev) {
+        usage.set(tokenId, { count: prev.count + 1, hosts: [...prev.hosts, { id: host.id, label }] });
+      } else {
+        usage.set(tokenId, { count: 1, hosts: [{ id: host.id, label }] });
+      }
+    }
+    return usage;
+  });
+
+  const reusedTokens = createMemo(() => {
+    const entries: { tokenId: string; hosts: { id: string; label: string }[] }[] = [];
+    hostTokenUsage().forEach((value, tokenId) => {
+      if (value.count > 1) {
+        entries.push({ tokenId, hosts: value.hosts });
+      }
+    });
+    return entries;
+  });
+
   const renderTags = (host: Host) => {
     const tags = host.tags ?? [];
     if (!tags.length) return '—';
@@ -837,6 +864,56 @@ Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAct
             <span class="text-sm text-gray-500 dark:text-gray-400">{allHosts().length} connected</span>
           </div>
 
+          <Show when={reusedTokens().length > 0}>
+            <div class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100">
+              <div class="flex items-start gap-3">
+                <svg class="h-4 w-4 mt-0.5 text-amber-600 dark:text-amber-300" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fill-rule="evenodd"
+                    d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+                <div class="space-y-1">
+                  <p class="font-semibold">Token re-use detected across host agents.</p>
+                  <p class="leading-snug text-sm">
+                    Generate a new host-agent token per machine or set a unique <code class="rounded bg-amber-100 px-1 py-0.5 font-mono text-[11px] text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">--agent-id</code> to stop hosts from overwriting each other.
+                  </p>
+                  <Show when={requiresToken()}>
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-2 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-amber-500 dark:hover:bg-amber-400"
+                      disabled={isGeneratingToken()}
+                      onClick={() => {
+                        void handleGenerateToken();
+                      }}
+                    >
+                      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M11 17a1 1 0 01-2 0v-4.086l-1.293 1.293a1 1 0 11-1.414-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 12.914V17z" />
+                        <path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2h2a1 1 0 100-2H5V5h10v6h-2a1 1 0 100 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5z" />
+                      </svg>
+                      {isGeneratingToken() ? 'Generating…' : 'Generate fresh token'}
+                    </button>
+                  </Show>
+                  <div class="text-xs text-amber-800 dark:text-amber-200">
+                    <For each={reusedTokens()}>
+                      {(item) => (
+                        <div class="flex flex-wrap gap-1 py-0.5">
+                          <span class="rounded-full bg-amber-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                            token {item.tokenId.slice(0, 6)}…{item.tokenId.slice(-4)}
+                          </span>
+                          <span class="text-amber-900 dark:text-amber-100">
+                            used by {item.hosts.length} hosts: {item.hosts.map((host) => host.label).join(', ')}
+                          </span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Show>
+
           <Show
             when={allHosts().length > 0}
             fallback={
@@ -881,6 +958,8 @@ Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAct
                       const isStale = staleness.isStale;
                       const tokenRevokedAt = host.tokenRevokedAt;
                       const tokenRevoked = typeof tokenRevokedAt === 'number';
+                      const tokenUsageEntry = host.tokenId ? hostTokenUsage().get(host.tokenId) : undefined;
+                      const tokenReused = tokenUsageEntry ? tokenUsageEntry.count > 1 : false;
                       const status = (host.status || 'unknown').toLowerCase();
                       const isOnline =
                         status === 'online' || status === 'running' || status === 'healthy';
@@ -910,6 +989,18 @@ Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAct
                             <div class="text-xs text-gray-500 dark:text-gray-400">
                               {host.hostname}
                             </div>
+                            <Show when={tokenReused}>
+                              <div class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                                <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                  <path
+                                    fill-rule="evenodd"
+                                    d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
+                                    clip-rule="evenodd"
+                                  />
+                                </svg>
+                                Token reused ({tokenUsageEntry?.count})
+                              </div>
+                            </Show>
                             <Show when={host.agentVersion}>
                               <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">
                                 Agent {host.agentVersion}
