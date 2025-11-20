@@ -12,6 +12,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: release-${{ github.event.inputs.version || github.ref || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   extract_version:
     runs-on: ubuntu-latest
@@ -62,6 +66,9 @@ jobs:
     needs: version_guard
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
     env:
       FRONTEND_DIST: frontend-modern/dist
     steps:
@@ -126,6 +133,16 @@ jobs:
 
       - name: Build Pulse for integration tests
         run: make build
+
+      - name: Log in to GHCR for build cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GITHUB_TOKEN not available for GHCR login"
+            exit 1
+          fi
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Build Docker images for integration tests
         run: |
@@ -314,11 +331,14 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
 
       - name: Install dependencies
         run: |
@@ -326,8 +346,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zip
 
-          # Install Helm for chart packaging
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.15.2'
 
       - name: Build release artifacts
         run: |
