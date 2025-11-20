@@ -73,13 +73,15 @@ jobs:
           sed -i "s/^version: .*/version: $VERSION/" deploy/helm/pulse/Chart.yaml
           sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" deploy/helm/pulse/Chart.yaml
 
-          # Commit if changed (for manual workflow runs)
-          if ! git diff --quiet deploy/helm/pulse/Chart.yaml; then
+          # Commit only on workflow_dispatch (release runs are detached HEAD)
+          if [ "${GITHUB_EVENT_NAME}" != "release" ] && ! git diff --quiet deploy/helm/pulse/Chart.yaml; then
             git config user.name "$GITHUB_ACTOR"
             git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
             git add deploy/helm/pulse/Chart.yaml
             git commit -m "Auto-update Helm chart version to $VERSION"
             git push
+          elif [ "${GITHUB_EVENT_NAME}" = "release" ] && ! git diff --quiet deploy/helm/pulse/Chart.yaml; then
+            echo "Chart.yaml updated for packaging, skipping commit (detached HEAD on release event)."
           fi
 
       - name: Validate Helm chart
