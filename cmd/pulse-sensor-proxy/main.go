@@ -76,8 +76,42 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var keysCmd = &cobra.Command{
+	Use:   "keys",
+	Short: "Print SSH public keys",
+	Run: func(cmd *cobra.Command, args []string) {
+		sshDir := os.Getenv("PULSE_SENSOR_PROXY_SSH_DIR")
+		if sshDir == "" {
+			sshDir = defaultSSHKeyPath
+		}
+
+		pubKeyPath := filepath.Join(sshDir, "id_ed25519.pub")
+		pubKeyBytes, err := os.ReadFile(pubKeyPath)
+		if err != nil {
+			// Try to find the key in the working directory as fallback
+			if wd, wdErr := os.Getwd(); wdErr == nil {
+				localPath := filepath.Join(wd, "id_ed25519.pub")
+				if localBytes, localErr := os.ReadFile(localPath); localErr == nil {
+					pubKeyBytes = localBytes
+				} else {
+					fmt.Fprintf(os.Stderr, "Failed to read public key from %s: %v\n", pubKeyPath, err)
+					os.Exit(1)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "Failed to read public key from %s: %v\n", pubKeyPath, err)
+				os.Exit(1)
+			}
+		}
+		pubKey := strings.TrimSpace(string(pubKeyBytes))
+
+		fmt.Printf("Proxy Public Key: %s\n", pubKey)
+		fmt.Printf("Sensors Public Key: %s\n", pubKey)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(keysCmd)
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to configuration file (default: /etc/pulse-sensor-proxy/config.yaml)")
 }
 
