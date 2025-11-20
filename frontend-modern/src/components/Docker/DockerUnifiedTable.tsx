@@ -21,6 +21,7 @@ import {
   getDockerHostStatusIndicator,
   getDockerServiceStatusIndicator,
 } from '@/utils/status';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 
 const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
   switch (type) {
@@ -67,6 +68,46 @@ interface DockerUnifiedTableProps {
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
 }
 
+type SortKey =
+  | 'host'
+  | 'resource'
+  | 'type'
+  | 'image'
+  | 'status'
+  | 'cpu'
+  | 'memory'
+  | 'disk'
+  | 'tasks'
+  | 'updated';
+
+type SortDirection = 'asc' | 'desc';
+
+const SORT_KEYS: SortKey[] = [
+  'host',
+  'resource',
+  'type',
+  'image',
+  'status',
+  'cpu',
+  'memory',
+  'disk',
+  'tasks',
+  'updated',
+];
+
+const SORT_DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
+  host: 'asc',
+  resource: 'asc',
+  type: 'asc',
+  image: 'asc',
+  status: 'desc',
+  cpu: 'desc',
+  memory: 'desc',
+  disk: 'desc',
+  tasks: 'desc',
+  updated: 'desc',
+};
+
 // Global state for currently expanded drawer (only one drawer open at a time)
 const [currentlyExpandedRowId, setCurrentlyExpandedRowId] = createSignal<string | null>(null);
 
@@ -99,6 +140,132 @@ const parseSearchTerm = (term?: string): SearchToken[] => {
       }
       return { key: rawKey.toLowerCase(), value: rest.join(':').toLowerCase() };
     });
+};
+
+const getHostDisplayName = (host: DockerHost): string =>
+  host.customDisplayName || host.displayName || host.hostname || host.id || '';
+
+const compareStrings = (a: string, b: string) =>
+  a.localeCompare(b, undefined, { sensitivity: 'base' });
+
+const STATUS_SEVERITY: Record<string, number> = {
+  error: 3,
+  critical: 3,
+  danger: 3,
+  warning: 2,
+  degraded: 2,
+  offline: 2,
+  alert: 2,
+  info: 1,
+  success: 1,
+  ok: 1,
+  default: 0,
+};
+
+const getResourceName = (row: DockerRow) =>
+  row.kind === 'container'
+    ? row.container.name || row.container.id || ''
+    : row.service.name || row.service.id || '';
+
+const getImageKey = (row: DockerRow) =>
+  row.kind === 'container'
+    ? row.container.image || ''
+    : row.service.image || row.service.stack || '';
+
+const getTypeSortValue = (row: DockerRow) => (row.kind === 'container' ? 0 : 1);
+
+const getStatusSortValue = (row: DockerRow) => {
+  const indicator =
+    row.kind === 'container'
+      ? getDockerContainerStatusIndicator(row.container)
+      : getDockerServiceStatusIndicator(row.service);
+  return STATUS_SEVERITY[toLower(indicator.variant)] ?? 0;
+};
+
+const getContainerCpuSortValue = (container: DockerContainer) => {
+  const running = toLower(container.state) === 'running';
+  const value = Number.isFinite(container.cpuPercent) ? container.cpuPercent : Number.NEGATIVE_INFINITY;
+  if (!running || value <= 0) return Number.NEGATIVE_INFINITY;
+  return value;
+};
+
+const getContainerMemorySortValue = (container: DockerContainer) => {
+  const running = toLower(container.state) === 'running';
+  const value = Number.isFinite(container.memoryPercent)
+    ? container.memoryPercent
+    : Number.NEGATIVE_INFINITY;
+  if (!running || !container.memoryUsageBytes) return Number.NEGATIVE_INFINITY;
+  return value;
+};
+
+const getContainerDiskSortValue = (container: DockerContainer) => {
+  const total = container.rootFilesystemBytes ?? 0;
+  const used = container.writableLayerBytes ?? 0;
+  if (total <= 0 || used <= 0) return Number.NEGATIVE_INFINITY;
+  return Math.min(100, (used / total) * 100);
+};
+
+const getCpuSortValue = (row: DockerRow) =>
+  row.kind === 'container' ? getContainerCpuSortValue(row.container) : Number.NEGATIVE_INFINITY;
+
+const getMemorySortValue = (row: DockerRow) =>
+  row.kind === 'container' ? getContainerMemorySortValue(row.container) : Number.NEGATIVE_INFINITY;
+
+const getDiskSortValue = (row: DockerRow) =>
+  row.kind === 'container' ? getContainerDiskSortValue(row.container) : Number.NEGATIVE_INFINITY;
+
+const getTasksSortValue = (row: DockerRow) => {
+  if (row.kind === 'container') {
+    const restarts = Number.isFinite(row.container.restartCount)
+      ? row.container.restartCount
+      : 0;
+    return -restarts;
+  }
+
+  const desired = row.service.desiredTasks ?? 0;
+  const running = row.service.runningTasks ?? 0;
+  if (desired > 0) {
+    return running / desired;
+  }
+  if (running > 0) return 1;
+  return 0;
+};
+
+const getUpdatedSortValue = (row: DockerRow) => {
+  if (row.kind === 'container') {
+    const uptime = row.container.uptimeSeconds;
+    if (!Number.isFinite(uptime)) return Number.NEGATIVE_INFINITY;
+    return Date.now() - uptime * 1000;
+  }
+  const timestamp = ensureMs(row.service.updatedAt ?? row.service.createdAt);
+  return timestamp ?? Number.NEGATIVE_INFINITY;
+};
+
+const compareRowsByKey = (a: DockerRow, b: DockerRow, key: SortKey) => {
+  switch (key) {
+    case 'host':
+      return compareStrings(toLower(getHostDisplayName(a.host)), toLower(getHostDisplayName(b.host)));
+    case 'resource':
+      return compareStrings(toLower(getResourceName(a)), toLower(getResourceName(b)));
+    case 'type':
+      return getTypeSortValue(a) - getTypeSortValue(b);
+    case 'image':
+      return compareStrings(toLower(getImageKey(a)), toLower(getImageKey(b)));
+    case 'status':
+      return getStatusSortValue(a) - getStatusSortValue(b);
+    case 'cpu':
+      return getCpuSortValue(a) - getCpuSortValue(b);
+    case 'memory':
+      return getMemorySortValue(a) - getMemorySortValue(b);
+    case 'disk':
+      return getDiskSortValue(a) - getDiskSortValue(b);
+    case 'tasks':
+      return getTasksSortValue(a) - getTasksSortValue(b);
+    case 'updated':
+      return getUpdatedSortValue(a) - getUpdatedSortValue(b);
+    default:
+      return compareStrings(toLower(getResourceName(a)), toLower(getResourceName(b)));
+  }
 };
 
 interface PodmanMetadataItem {
@@ -534,9 +701,10 @@ const buildRowId = (host: DockerHost, row: DockerRow) => {
 };
 
 const GROUPED_RESOURCE_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
+const UNGROUPED_RESOURCE_INDENT = 'pl-4 sm:pl-5 lg:pl-6';
 
 const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = (props) => {
-  const displayName = props.host.customDisplayName || props.host.displayName || props.host.hostname || props.host.id;
+  const displayName = getHostDisplayName(props.host);
   const hostStatus = () => getDockerHostStatusIndicator(props.host);
   const isOnline = () => hostStatus().variant === 'success';
   return (
@@ -569,13 +737,18 @@ const DockerContainerRow: Component<{
   columns: number;
   customUrl?: string;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
+  showHostContext?: boolean;
+  resourceIndentClass?: string;
 }> = (props) => {
   const { host, container } = props.row;
   const runtimeInfo = resolveHostRuntime(host);
   const runtimeVersion = () => host.runtimeVersion || host.dockerVersion || null;
+  const hostStatus = createMemo(() => getDockerHostStatusIndicator(host));
+  const hostDisplayName = () => getHostDisplayName(host);
   const rowId = buildRowId(host, props.row);
   const resourceId = () => `${host.id}:container:${container.id || container.name}`;
   const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
+  const resourceIndent = () => props.resourceIndentClass ?? GROUPED_RESOURCE_INDENT;
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
@@ -882,7 +1055,7 @@ const DockerContainerRow: Component<{
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class={`${GROUPED_RESOURCE_INDENT} pr-2 py-0.5`}>
+        <td class={`${resourceIndent()} pr-2 py-0.5`}>
           <div class="flex items-center gap-1.5 min-w-0">
             <StatusDot
               variant={containerStatusIndicator().variant}
@@ -940,6 +1113,20 @@ const DockerContainerRow: Component<{
                           />
                         </svg>
                       </a>
+                    </Show>
+                    <Show when={props.showHostContext}>
+                      <span
+                        class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                        title={`Host: ${hostDisplayName()}`}
+                      >
+                        <StatusDot
+                          variant={hostStatus().variant}
+                          title={hostStatus().label}
+                          ariaLabel={hostStatus().label}
+                          size="xs"
+                        />
+                        <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
+                      </span>
                     </Show>
                   </div>
                 }
@@ -1423,11 +1610,16 @@ const DockerServiceRow: Component<{
   columns: number;
   customUrl?: string;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
+  showHostContext?: boolean;
+  resourceIndentClass?: string;
 }> = (props) => {
   const { host, service, tasks } = props.row;
   const rowId = buildRowId(host, props.row);
   const resourceId = () => `${host.id}:service:${service.id || service.name}`;
   const isEditingUrl = createMemo(() => currentlyEditingDockerResourceId() === resourceId());
+  const hostStatus = createMemo(() => getDockerHostStatusIndicator(host));
+  const hostDisplayName = () => getHostDisplayName(host);
+  const resourceIndent = () => props.resourceIndentClass ?? GROUPED_RESOURCE_INDENT;
 
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   const [shouldAnimateIcon, setShouldAnimateIcon] = createSignal(false);
@@ -1637,7 +1829,7 @@ const DockerServiceRow: Component<{
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class={`${GROUPED_RESOURCE_INDENT} pr-2 py-0.5`}>
+        <td class={`${resourceIndent()} pr-2 py-0.5`}>
           <div class="flex items-center gap-1.5 min-w-0">
             <StatusDot
               variant={serviceStatusIndicator().variant}
@@ -1687,6 +1879,20 @@ const DockerServiceRow: Component<{
                     <Show when={service.stack && !isEditingUrl()}>
                       <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
                         Stack: {service.stack}
+                      </span>
+                    </Show>
+                    <Show when={props.showHostContext}>
+                      <span
+                        class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                        title={`Host: ${hostDisplayName()}`}
+                      >
+                        <StatusDot
+                          variant={hostStatus().variant}
+                          title={hostStatus().label}
+                          ariaLabel={hostStatus().label}
+                          size="xs"
+                        />
+                        <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
                       </span>
                     </Show>
                   </div>
@@ -1910,12 +2116,51 @@ const DockerServiceRow: Component<{
 
 const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
   const tokens = createMemo(() => parseSearchTerm(props.searchTerm));
+  const [sortKey, setSortKey] = usePersistentSignal<SortKey>('dockerUnifiedSortKey', 'host', {
+    deserialize: (value) => (SORT_KEYS.includes(value as SortKey) ? (value as SortKey) : 'host'),
+  });
+  const [sortDirection, setSortDirection] = usePersistentSignal<SortDirection>(
+    'dockerUnifiedSortDirection',
+    'asc',
+    {
+      deserialize: (value) => (value === 'asc' || value === 'desc' ? value : 'asc'),
+    },
+  );
+
+  const isGroupedView = createMemo(() => sortKey() === 'host');
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey() === key) {
+      setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+    setSortKey(key);
+    setSortDirection(SORT_DEFAULT_DIRECTION[key]);
+  };
+
+  const renderSortIndicator = (key: SortKey) => {
+    if (sortKey() !== key) return null;
+    return sortDirection() === 'asc' ? '▲' : '▼';
+  };
+
+  const resetHostGrouping = () => {
+    setSortKey('host');
+    setSortDirection(SORT_DEFAULT_DIRECTION.host);
+  };
+
+  const ariaSort = (key: SortKey) => {
+    if (sortKey() !== key) {
+      if (sortKey() === 'host' && key === 'resource') return 'other';
+      return 'none';
+    }
+    return sortDirection() === 'asc' ? 'ascending' : 'descending';
+  };
 
   const sortedHosts = createMemo(() => {
     const hosts = props.hosts || [];
     return [...hosts].sort((a, b) => {
-      const aName = a.customDisplayName || a.displayName || a.hostname || a.id;
-      const bName = b.customDisplayName || b.displayName || b.hostname || b.id;
+      const aName = getHostDisplayName(a);
+      const bName = getHostDisplayName(b);
       return aName.localeCompare(bName);
     });
   });
@@ -2042,9 +2287,45 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
     return groups;
   });
 
-  const totalRows = createMemo(() =>
-    groupedRows().reduce((acc, group) => acc + group.rows.length, 0),
-  );
+  const flatRows = createMemo(() => groupedRows().flatMap((group) => group.rows));
+
+  const orderedGroups = createMemo(() => {
+    if (sortKey() !== 'host') {
+      return groupedRows();
+    }
+    if (sortDirection() === 'asc') return groupedRows();
+    const reversed = [...groupedRows()];
+    reversed.reverse();
+    return reversed;
+  });
+
+  const sortedRows = createMemo(() => {
+    if (sortKey() === 'host') {
+      return flatRows();
+    }
+
+    const rows = [...flatRows()];
+    const key = sortKey();
+    const dir = sortDirection();
+
+    rows.sort((a, b) => {
+      const primary = compareRowsByKey(a, b, key);
+      if (primary !== 0) {
+        return dir === 'asc' ? primary : -primary;
+      }
+
+      const byResource = compareRowsByKey(a, b, 'resource');
+      if (byResource !== 0) {
+        return byResource;
+      }
+
+      return compareRowsByKey(a, b, 'host');
+    });
+
+    return rows;
+  });
+
+  const totalRows = createMemo(() => flatRows().length);
 
   const totalContainers = createMemo(() =>
     (props.hosts || []).reduce((acc, host) => acc + (host.containers?.length ?? 0), 0),
@@ -2075,6 +2356,34 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
     }, 0),
   );
 
+  const renderRow = (row: DockerRow, grouped: boolean) => {
+    const resourceId =
+      row.kind === 'container'
+        ? `${row.host.id}:container:${row.container.id || row.container.name}`
+        : `${row.host.id}:service:${row.service.id || row.service.name}`;
+    const metadata = props.dockerMetadata?.[resourceId];
+
+    return row.kind === 'container' ? (
+      <DockerContainerRow
+        row={row}
+        columns={9}
+        customUrl={metadata?.customUrl}
+        onCustomUrlUpdate={props.onCustomUrlUpdate}
+        showHostContext={!grouped}
+        resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
+      />
+    ) : (
+      <DockerServiceRow
+        row={row}
+        columns={9}
+        customUrl={metadata?.customUrl}
+        onCustomUrlUpdate={props.onCustomUrlUpdate}
+        showHostContext={!grouped}
+        resourceIndentClass={grouped ? GROUPED_RESOURCE_INDENT : UNGROUPED_RESOURCE_INDENT}
+      />
+    );
+  };
+
   return (
     <div class="space-y-4">
       <Show
@@ -2099,68 +2408,167 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
             <table class="w-full min-w-[1080px] table-fixed border-collapse whitespace-nowrap">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                  <th class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
-                    Resource
+                  <th
+                    class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('resource')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('resource')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by resource ${sortKey() === 'resource' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('resource')}
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span>Resource</span>
+                      {renderSortIndicator('resource')}
+                      <Show when={sortKey() === 'host'}>
+                        <span class="text-[10px] font-medium text-gray-500 dark:text-gray-400">Grouped by host</span>
+                      </Show>
+                      <Show when={sortKey() !== 'host'}>
+                        <button
+                          type="button"
+                          class="ml-auto rounded bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700 transition hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            resetHostGrouping();
+                          }}
+                        >
+                          Group by host
+                        </button>
+                      </Show>
+                    </div>
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
-                    Type
+                  <th
+                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('type')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('type')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by type ${sortKey() === 'type' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('type')}
+                  >
+                    <div class="flex items-center gap-1">
+                      <span>Type</span>
+                      {renderSortIndicator('type')}
+                    </div>
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%]">
-                    Image / Stack
+                  <th
+                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('image')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('image')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by image or stack ${sortKey() === 'image' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('image')}
+                  >
+                    <div class="flex items-center gap-1">
+                      <span>Image / Stack</span>
+                      {renderSortIndicator('image')}
+                    </div>
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%]">
-                    Status
+                  <th
+                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('status')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('status')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by status ${sortKey() === 'status' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('status')}
+                  >
+                    <div class="flex items-center gap-1">
+                      <span>Status</span>
+                      {renderSortIndicator('status')}
+                    </div>
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] min-w-[150px]">
-                    CPU
+                  <th
+                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] min-w-[150px] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('cpu')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('cpu')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by CPU ${sortKey() === 'cpu' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('cpu')}
+                  >
+                    <div class="flex items-center gap-1">
+                      <span>CPU</span>
+                      {renderSortIndicator('cpu')}
+                    </div>
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] min-w-[210px]">
-                    Memory
+                  <th
+                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] min-w-[210px] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('memory')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('memory')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by memory ${sortKey() === 'memory' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('memory')}
+                  >
+                    <div class="flex items-center gap-1">
+                      <span>Memory</span>
+                      {renderSortIndicator('memory')}
+                    </div>
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] min-w-[200px]">
-                    Disk
+                  <th
+                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] min-w-[200px] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('disk')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('disk')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by disk ${sortKey() === 'disk' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('disk')}
+                  >
+                    <div class="flex items-center gap-1">
+                      <span>Disk</span>
+                      {renderSortIndicator('disk')}
+                    </div>
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
-                    Tasks / Restarts
+                  <th
+                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('tasks')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('tasks')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by tasks or restarts ${sortKey() === 'tasks' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('tasks')}
+                  >
+                    <div class="flex items-center gap-1">
+                      <span>Tasks / Restarts</span>
+                      {renderSortIndicator('tasks')}
+                    </div>
                   </th>
-                  <th class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
-                    Updated / Uptime
+                  <th
+                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    onClick={() => handleSort('updated')}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSort('updated')}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Sort by updated or uptime ${sortKey() === 'updated' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                    aria-sort={ariaSort('updated')}
+                  >
+                    <div class="flex items-center gap-1">
+                      <span>Updated / Uptime</span>
+                      {renderSortIndicator('updated')}
+                    </div>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                <For each={groupedRows()}>
-                  {(group) => (
-                    <>
-                      <DockerHostGroupHeader host={group.host} colspan={9} />
-                      <For each={group.rows}>
-                        {(row) => {
-                          // Build resource ID for metadata lookup
-                          const resourceId = row.kind === 'container'
-                            ? `${row.host.id}:container:${row.container.id || row.container.name}`
-                            : `${row.host.id}:service:${row.service.id || row.service.name}`;
-                          const metadata = props.dockerMetadata?.[resourceId];
-
-                          return row.kind === 'container' ? (
-                            <DockerContainerRow
-                              row={row}
-                              columns={9}
-                              customUrl={metadata?.customUrl}
-                              onCustomUrlUpdate={props.onCustomUrlUpdate}
-                            />
-                          ) : (
-                            <DockerServiceRow
-                              row={row}
-                              columns={9}
-                              customUrl={metadata?.customUrl}
-                              onCustomUrlUpdate={props.onCustomUrlUpdate}
-                            />
-                          );
-                        }}
-                      </For>
-                    </>
-                  )}
-                </For>
+                <Show
+                  when={isGroupedView()}
+                  fallback={
+                    <For each={sortedRows()}>
+                      {(row) => renderRow(row, false)}
+                    </For>
+                  }
+                >
+                  <For each={orderedGroups()}>
+                    {(group) => (
+                      <>
+                        <DockerHostGroupHeader host={group.host} colspan={9} />
+                        <For each={group.rows}>{(row) => renderRow(row, true)}</For>
+                      </>
+                    )}
+                  </For>
+                </Show>
               </tbody>
             </table>
           </ScrollableTable>
