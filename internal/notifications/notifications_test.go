@@ -570,6 +570,48 @@ func TestSendTestNotificationApprise(t *testing.T) {
 	}
 }
 
+func TestSendTestAppriseWithConfig(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	// Disabled config should fail
+	err := nm.SendTestAppriseWithConfig(AppriseConfig{
+		Enabled: false,
+		Targets: []string{"discord://token"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "not enabled") {
+		t.Fatalf("expected not enabled error, got %v", err)
+	}
+
+	done := make(chan struct{})
+	var cliPath string
+
+	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
+		cliPath = path
+		close(done)
+		return []byte("ok"), nil
+	}
+
+	err = nm.SendTestAppriseWithConfig(AppriseConfig{
+		Enabled: true,
+		Mode:    AppriseModeCLI,
+		Targets: []string{"discord://token"},
+	})
+	if err != nil {
+		t.Fatalf("expected no error for valid Apprise config, got %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for Apprise test execution")
+	}
+
+	if cliPath != "apprise" {
+		t.Fatalf("expected default CLI path 'apprise', got %q", cliPath)
+	}
+}
+
 func TestSendTestNotificationAppriseHTTP(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 

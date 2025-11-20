@@ -72,7 +72,7 @@ export interface AppriseConfig {
 
 export interface NotificationTestRequest {
   type: 'email' | 'webhook' | 'apprise';
-  config?: Record<string, unknown>; // Backend expects different format than frontend types
+  config?: Record<string, unknown> | AppriseConfig; // Backend expects different format than frontend types
   webhookId?: string;
 }
 
@@ -169,7 +169,7 @@ export class NotificationsAPI {
   static async testNotification(
     request: NotificationTestRequest,
   ): Promise<{ success: boolean; message?: string }> {
-    const body: { method: string; config?: Record<string, unknown>; webhookId?: string } = {
+    const body: { method: string; config?: Record<string, unknown> | AppriseConfig; webhookId?: string } = {
       method: request.type,
     };
 

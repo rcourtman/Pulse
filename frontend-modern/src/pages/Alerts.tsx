@@ -2650,10 +2650,28 @@ interface DestinationsTabProps {
 function DestinationsTab(props: DestinationsTabProps) {
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
   const [testingEmail, setTestingEmail] = createSignal(false);
+  const [testingApprise, setTestingApprise] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
   const appriseState = () => props.appriseConfig();
   const updateApprise = (partial: Partial<UIAppriseConfig>) => {
     props.setAppriseConfig({ ...props.appriseConfig(), ...partial });
+  };
+  const buildAppriseRequestConfig = (): AppriseConfig => {
+    const config = appriseState();
+    const serverUrl = (config.serverUrl || '').trim();
+    const apiKeyHeader = (config.apiKeyHeader || '').trim() || 'X-API-KEY';
+    return {
+      enabled: config.enabled,
+      mode: config.mode,
+      targets: parseAppriseTargets(config.targetsText),
+      cliPath: config.cliPath?.trim() || 'apprise',
+      timeoutSeconds: config.timeoutSeconds,
+      serverUrl,
+      configKey: config.configKey.trim(),
+      apiKey: config.apiKey,
+      apiKeyHeader,
+      skipTlsVerify: config.skipTlsVerify,
+    };
   };
   // Load webhooks on mount (email config is now loaded in parent)
   onMount(async () => {
@@ -2686,6 +2704,39 @@ function DestinationsTab(props: DestinationsTabProps) {
       showError('Failed to send test email', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setTestingEmail(false);
+    }
+  };
+
+  const testApprise = async () => {
+    setTestingApprise(true);
+    try {
+      const config = buildAppriseRequestConfig();
+
+      if (!config.enabled) {
+        throw new Error('Enable Apprise notifications before sending a test.');
+      }
+
+      const targets = config.targets || [];
+      if (config.mode === 'cli' && targets.length === 0) {
+        throw new Error('Add at least one Apprise target to test CLI delivery.');
+      }
+      if (config.mode === 'http' && !config.serverUrl) {
+        throw new Error('Enter an Apprise API server URL to test API delivery.');
+      }
+
+      await NotificationsAPI.testNotification({
+        type: 'apprise',
+        config,
+      });
+      showSuccess('Test Apprise notification sent successfully!');
+    } catch (err) {
+      logger.error('Failed to send test Apprise notification:', err);
+      showError(
+        'Failed to send test Apprise notification',
+        err instanceof Error ? err.message : 'Unknown error',
+      );
+    } finally {
+      setTestingApprise(false);
     }
   };
 
@@ -2750,21 +2801,30 @@ function DestinationsTab(props: DestinationsTabProps) {
 
       <SettingsPanel
         title="Apprise notifications"
-        description="Relay grouped alerts through the Apprise CLI."
+        description="Relay grouped alerts through Apprise via CLI or remote API."
         action={
-          <Toggle
-            checked={appriseState().enabled}
-            onChange={(e) => {
-              updateApprise({ enabled: e.currentTarget.checked });
-              props.setHasUnsavedChanges(true);
-            }}
-            containerClass="sm:self-start"
-            label={
-              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                {appriseState().enabled ? 'Enabled' : 'Disabled'}
-              </span>
-            }
-          />
+          <div class="flex items-center gap-3 sm:self-start">
+            <Toggle
+              checked={appriseState().enabled}
+              onChange={(e) => {
+                updateApprise({ enabled: e.currentTarget.checked });
+                props.setHasUnsavedChanges(true);
+              }}
+              containerClass=""
+              label={
+                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {appriseState().enabled ? 'Enabled' : 'Disabled'}
+                </span>
+              }
+            />
+            <button
+              class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+              disabled={!appriseState().enabled || testingApprise()}
+              onClick={testApprise}
+            >
+              {testingApprise() ? 'Testing...' : 'Send test'}
+            </button>
+          </div>
         }
         class="min-w-0"
         bodyClass="space-y-4"
