@@ -581,6 +581,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Error 500 with any "guest agent" message means VM-specific issue, not node failure
 		// Error 400 with "ds" parameter error means Proxmox 9.x doesn't support RRD data source filtering
 		// JSON unmarshal errors are data format issues, not connectivity problems
+		// Context deadline/timeout errors on storage endpoints mean storage issues, not node unreachability
 		if strings.Contains(errStr, "595") ||
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) ||
@@ -593,7 +594,9 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			(strings.Contains(errStr, "400") && strings.Contains(errStr, "\"ds\"") && strings.Contains(errStr, "property is not defined in schema")) ||
 			strings.Contains(errStr, "json: cannot unmarshal") ||
 			(strings.Contains(errStr, "storage '") && strings.Contains(errStr, "is not available on node")) ||
-			strings.Contains(errStr, "unexpected response format") {
+			strings.Contains(errStr, "unexpected response format") ||
+			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/storage/")) ||
+			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage/")) {
 			// This is likely a node-specific failure, not an endpoint failure
 			// Return the error but don't mark the endpoint as unhealthy
 			log.Debug().

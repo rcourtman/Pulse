@@ -808,6 +808,63 @@ func TestImportAcceptsVersion40Bundle(t *testing.T) {
 	assertJSONEqual(t, tokensAfter, baselineTokens, "api tokens unchanged for 4.0 import")
 }
 
+func TestLoadNodesConfigNormalizesPVEHostsAndClusterEndpoints(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	pveNodes := []config.PVEInstance{
+		{
+			Name: "pve-cluster",
+			Host: "https://pve.local",
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "pve1", Host: "https://pve1.local"},
+				{NodeName: "pve2", Host: "pve2.local"},
+			},
+		},
+	}
+
+	if err := cp.SaveNodesConfig(pveNodes, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(loaded.PVEInstances))
+	}
+
+	pve := loaded.PVEInstances[0]
+	if pve.Host != "https://pve.local:8006" {
+		t.Fatalf("expected primary host normalized with default port, got %q", pve.Host)
+	}
+
+	if len(pve.ClusterEndpoints) != 2 {
+		t.Fatalf("expected 2 cluster endpoints, got %d", len(pve.ClusterEndpoints))
+	}
+
+	if pve.ClusterEndpoints[0].Host != "https://pve1.local:8006" {
+		t.Fatalf("expected endpoint host normalized, got %q", pve.ClusterEndpoints[0].Host)
+	}
+	if pve.ClusterEndpoints[1].Host != "https://pve2.local:8006" {
+		t.Fatalf("expected endpoint host normalized, got %q", pve.ClusterEndpoints[1].Host)
+	}
+
+	// Second load should keep normalized values and not panic on migration.
+	loadedAgain, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig second read: %v", err)
+	}
+	if loadedAgain.PVEInstances[0].Host != "https://pve.local:8006" {
+		t.Fatalf("expected normalized host persisted, got %q", loadedAgain.PVEInstances[0].Host)
+	}
+}
+
 func mustDecodeExport(t *testing.T, payload, passphrase string) config.ExportData {
 	t.Helper()
 
