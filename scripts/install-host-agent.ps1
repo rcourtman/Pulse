@@ -12,6 +12,7 @@ param(
     [string]$Token = $env:PULSE_TOKEN,
     [string]$Interval = $env:PULSE_INTERVAL,
     [string]$InstallPath = "C:\Program Files\Pulse",
+    [string]$Arch = $env:PULSE_ARCH,
     [switch]$NoService
 )
 
@@ -95,7 +96,8 @@ function Test-AgentRegistration {
 
 function Resolve-PulseArchitectureCandidate {
     param(
-        [string]$CandidateValue
+        [string]$CandidateValue,
+        [string]$Source
     )
 
     if ([string]::IsNullOrWhiteSpace($CandidateValue)) {
@@ -105,50 +107,108 @@ function Resolve-PulseArchitectureCandidate {
     $normalized = $CandidateValue.Trim()
     $upper = $normalized.ToUpperInvariant()
 
+    $mapping = $null
     if ($upper -match 'ARM64|AARCH64') {
-        return [pscustomobject]@{ OsLabel = 'Arm64'; DownloadArch = 'arm64' }
+        $mapping = @{ OsLabel = 'Arm64'; DownloadArch = 'arm64' }
+    } elseif ($upper -match 'AMD64|X64|64-BIT') {
+        $mapping = @{ OsLabel = 'X64'; DownloadArch = 'amd64' }
+    } elseif ($upper -match 'X86|I386|IA32|32-BIT') {
+        $mapping = @{ OsLabel = 'X86'; DownloadArch = '386' }
     }
 
-    if ($upper -match 'AMD64|X64|64-BIT') {
-        return [pscustomobject]@{ OsLabel = 'X64'; DownloadArch = 'amd64' }
+    if (-not $mapping) {
+        return $null
     }
 
-    if ($upper -match 'X86|I386|IA32|32-BIT') {
-        return [pscustomobject]@{ OsLabel = 'X86'; DownloadArch = '386' }
+    return [pscustomobject]@{
+        OsLabel       = $mapping.OsLabel
+        DownloadArch  = $mapping.DownloadArch
+        RawValue      = $normalized
+        Source        = $Source
+        UsedHeuristic = $false
     }
-
-    return $null
 }
 
 function Get-PulseArchitecture {
-    $candidateSources = @(
-        { [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture },
-        { [System.Runtime.InteropServices.RuntimeInformation,mscorlib]::OSArchitecture },
-        { (Get-CimInstance -ClassName Win32_OperatingSystem -Property OSArchitecture -ErrorAction Stop).OSArchitecture },
-        { (Get-WmiObject -Class Win32_OperatingSystem -ErrorAction Stop).OSArchitecture },
-        { $env:PROCESSOR_ARCHITEW6432 },
-        { $env:PROCESSOR_ARCHITECTURE }
+    param(
+        [string]$OverrideArch
+    )
+
+    $observations = @()
+
+    $candidateSources = @()
+    if ($OverrideArch) {
+        $candidateSources += @{ Name = 'Override'; Getter = { $OverrideArch } }
+    }
+
+    $candidateSources += @(
+        @{ Name = 'RuntimeInformation.OSArchitecture'; Getter = { [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture } },
+        @{ Name = 'mscorlib.RuntimeInformation.OSArchitecture'; Getter = { [System.Runtime.InteropServices.RuntimeInformation,mscorlib]::OSArchitecture } },
+        @{ Name = 'Win32_OperatingSystem (CIM)'; Getter = { (Get-CimInstance -ClassName Win32_OperatingSystem -Property OSArchitecture -ErrorAction Stop).OSArchitecture } },
+        @{ Name = 'Win32_OperatingSystem (WMI)'; Getter = { (Get-WmiObject -Class Win32_OperatingSystem -ErrorAction Stop).OSArchitecture } },
+        @{ Name = 'PROCESSOR_ARCHITEW6432'; Getter = { $env:PROCESSOR_ARCHITEW6432 } },
+        @{ Name = 'PROCESSOR_ARCHITECTURE'; Getter = { $env:PROCESSOR_ARCHITECTURE } },
+        @{ Name = 'PROCESSOR_IDENTIFIER'; Getter = { $env:PROCESSOR_IDENTIFIER } }
     )
 
     foreach ($source in $candidateSources) {
         try {
-            $value = & $source
+            $value = & $source.Getter
         } catch {
             continue
         }
 
-        if (-not $value) {
+        if ([string]::IsNullOrWhiteSpace($value)) {
             continue
         }
 
-        $valueString = $value.ToString()
-        $resolved = Resolve-PulseArchitectureCandidate -CandidateValue $valueString
+        $valueString = $value.ToString().Trim()
+        $observations += [pscustomobject]@{ Source = $source.Name; Value = $valueString }
+
+        $resolved = Resolve-PulseArchitectureCandidate -CandidateValue $valueString -Source $source.Name
         if ($resolved) {
-            return [pscustomobject]@{
-                OsLabel = $resolved.OsLabel
-                DownloadArch = $resolved.DownloadArch
-                RawValue = $valueString.Trim()
-            }
+            $resolved.ObservedValues = $observations
+            return $resolved
+        }
+    }
+
+    $armHint = $observations | Where-Object { $_.Value -match 'ARM' } | Select-Object -First 1
+    if ($armHint) {
+        return [pscustomobject]@{
+            OsLabel       = 'Arm64'
+            DownloadArch  = 'arm64'
+            RawValue      = $armHint.Value
+            Source        = "$($armHint.Source) heuristic"
+            UsedHeuristic = $true
+            ObservedValues = $observations
+        }
+    }
+
+    $is64BitOS = $null
+    try { $is64BitOS = [Environment]::Is64BitOperatingSystem } catch { }
+    if ($is64BitOS -eq $null) {
+        $is64BitOS = [System.IntPtr]::Size -ge 8
+    }
+
+    if ($is64BitOS -eq $true) {
+        return [pscustomobject]@{
+            OsLabel        = 'X64'
+            DownloadArch   = 'amd64'
+            RawValue       = 'Environment.Is64BitOperatingSystem=True'
+            Source         = 'Environment heuristic'
+            UsedHeuristic  = $true
+            ObservedValues = $observations
+        }
+    }
+
+    if ($is64BitOS -eq $false) {
+        return [pscustomobject]@{
+            OsLabel        = 'X86'
+            DownloadArch   = '386'
+            RawValue       = 'Environment.Is64BitOperatingSystem=False'
+            Source         = 'Environment heuristic'
+            UsedHeuristic  = $true
+            ObservedValues = $observations
         }
     }
 
@@ -193,17 +253,38 @@ Write-Host "  Pulse URL: $PulseUrl"
 Write-Host "  Token: $(if ($Token) { '***' + $Token.Substring([Math]::Max(0, $Token.Length - 4)) } else { 'none' })"
 Write-Host "  Interval: $Interval"
 Write-Host "  Install Path: $InstallPath"
+if ($Arch) {
+    Write-Host "  Architecture Override: $Arch"
+}
 Write-Host ""
 
 # Determine architecture (support both legacy Windows PowerShell and pwsh)
-$archInfo = Get-PulseArchitecture
-if (-not $archInfo) {
+if ($Arch) {
+    if (-not (Resolve-PulseArchitectureCandidate -CandidateValue $Arch -Source "Override")) {
+        PulseError "Invalid architecture override '$Arch'. Supported values: amd64, arm64, 386"
+        exit 1
+    }
+}
+
+$archInfo = Get-PulseArchitecture -OverrideArch $Arch
+$observedSummary = $null
+if ($archInfo -and $archInfo.ObservedValues) {
+    $observedSummary = ($archInfo.ObservedValues | ForEach-Object { "$($_.Source)='$($_.Value)'" }) -join "; "
+}
+
+if (-not $archInfo -or -not $archInfo.DownloadArch) {
     PulseError "Unable to determine operating system architecture"
+    if ($observedSummary) {
+        PulseInfo "Observed architecture values: $observedSummary"
+    }
+    PulseInfo "Specify -Arch amd64|arm64|386 or set PULSE_ARCH to override detection."
     exit 1
 }
+
 $osArch = $archInfo.OsLabel
 $arch = $archInfo.DownloadArch
 $rawArchValue = $archInfo.RawValue
+$archSource = if ($archInfo.Source) { $archInfo.Source } else { "auto-detected" }
 $downloadUrl = "$PulseUrl/download/pulse-host-agent?platform=windows&arch=$arch"
 
 PulseInfo "System Information:"
@@ -212,9 +293,17 @@ if ($rawArchValue -and $rawArchValue -ne $osArch) {
 } else {
     Write-Host "  OS Architecture: $osArch"
 }
+Write-Host "  Detection Source: $archSource"
 Write-Host "  Download Architecture: $arch"
 Write-Host "  Download URL: $downloadUrl"
 Write-Host ""
+
+if ($archInfo.UsedHeuristic) {
+    PulseWarn "Architecture detected via fallback ($archSource). If this looks wrong, rerun with -Arch amd64|arm64|386 or set PULSE_ARCH."
+    if ($observedSummary) {
+        PulseInfo "Observed architecture values: $observedSummary"
+    }
+}
 
 PulseInfo "Downloading agent binary from $downloadUrl..."
 try {
