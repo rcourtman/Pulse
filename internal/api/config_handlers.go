@@ -4286,36 +4286,24 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
             INSTALLER_ARGS=""
             DETECTED_CTID=""
 
-            if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
-                # Live container detection succeeded
-                DETECTED_CTID="$PULSE_CTID"
-            elif [ -n "$SUMMARY_CTID" ]; then
-                # Fall back to CTID from install_summary.json (container might be offline)
-                DETECTED_CTID="$SUMMARY_CTID"
-            fi
+			if [ "$PULSE_IS_CONTAINERIZED" = true ] && [ -n "$PULSE_CTID" ]; then
+				# Live container detection succeeded
+				DETECTED_CTID="$PULSE_CTID"
+			elif [ -n "$SUMMARY_CTID" ]; then
+				# Verify the container actually exists before using the stale ID
+				if command -v pct >/dev/null 2>&1 && pct status "$SUMMARY_CTID" >/dev/null 2>&1; then
+					DETECTED_CTID="$SUMMARY_CTID"
+				fi
+			fi
 
-            if [ -n "$DETECTED_CTID" ]; then
-                # Was deployed for containerized Pulse - use --ctid mode
-                INSTALLER_ARGS="--ctid $DETECTED_CTID --pulse-server $PULSE_URL"
-            elif [ "$IS_STANDALONE_NODE" = true ]; then
-                # Standalone node - use --standalone --http-mode
-                INSTALLER_ARGS="--standalone --http-mode --pulse-server $PULSE_URL"
-            else
-                # Cannot determine deployment type - bail out
-                echo ""
-                echo "⚠️  Cannot determine proxy deployment type (no CTID, not standalone)"
-                echo "    Manual repair required. Run one of:"
-                echo ""
-                echo "      • For container:"
-                echo "        curl -fsSL $PULSE_URL/api/install/install-sensor-proxy.sh | bash -s -- --ctid <CTID> --pulse-server $PULSE_URL"
-                echo ""
-                echo "      • For standalone:"
-                echo "        curl -fsSL $PULSE_URL/api/install/install-sensor-proxy.sh | bash -s -- --standalone --http-mode --pulse-server $PULSE_URL"
-                echo ""
-                echo "    Keeping existing proxy configuration"
-                rm -f "$PROXY_INSTALLER"
-                INSTALLER_ARGS=""
-            fi
+			if [ -n "$DETECTED_CTID" ]; then
+				# Was deployed for containerized Pulse - use --ctid mode
+				INSTALLER_ARGS="--ctid $DETECTED_CTID --pulse-server $PULSE_URL"
+			else
+				# Fallback to host-mode installation (works for standalone nodes and cluster nodes with external Pulse)
+				# We use --standalone flag to indicate host-level installation without container integration
+				INSTALLER_ARGS="--standalone --http-mode --pulse-server $PULSE_URL"
+			fi
 
             if [ -n "$INSTALLER_ARGS" ]; then
                 # Check if service is already running
