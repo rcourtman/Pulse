@@ -4,10 +4,32 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
 
+# --- Helper Functions ---
+
+log_info() { printf "\033[0;34m[hot-dev]\033[0m %s\n" "$1"; }
+log_warn() { printf "\033[0;33m[hot-dev] WARNING:\033[0m %s\n" "$1"; }
+log_error() { printf "\033[0;31m[hot-dev] ERROR:\033[0m %s\n" "$1"; }
+
+check_dependencies() {
+    local missing=0
+    for cmd in go npm lsof; do
+        if ! command -v $cmd >/dev/null 2>&1; then
+            log_error "$cmd is not installed but is required."
+            missing=1
+        fi
+    done
+    
+    if [[ $missing -eq 1 ]]; then
+        exit 1
+    fi
+}
+
+# --- Configuration & Environment ---
+
 load_env_file() {
     local env_file=$1
     if [[ -f ${env_file} ]]; then
-        printf "[hot-dev] Loading %s\n" "${env_file}"
+        log_info "Loading ${env_file}"
         set +u
         set -a
         # shellcheck disable=SC1090
@@ -24,19 +46,14 @@ load_env_file "${ROOT_DIR}/.env.dev"
 FRONTEND_PORT=${FRONTEND_PORT:-${PORT:-7655}}
 PORT=${PORT:-${FRONTEND_PORT}}
 
-# Try to detect LAN IP
+# Detect LAN IP
 if [[ -z ${LAN_IP:-} ]]; then
-    # Try hostname -I (Linux)
     if command -v hostname >/dev/null 2>&1 && hostname -I >/dev/null 2>&1; then
         LAN_IP=$(hostname -I | awk '{print $1}')
     fi
-    
-    # Fallback for macOS
     if [[ -z ${LAN_IP:-} ]]; then
         LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || echo "")
     fi
-    
-    # Fallback to 0.0.0.0 if detection fails
     if [[ -z ${LAN_IP:-} ]]; then
         LAN_IP="0.0.0.0"
     fi
@@ -44,7 +61,6 @@ fi
 
 FRONTEND_DEV_HOST=${FRONTEND_DEV_HOST:-0.0.0.0}
 FRONTEND_DEV_PORT=${FRONTEND_DEV_PORT:-${FRONTEND_PORT}}
-# Use LAN IP for API host so other devices can connect
 PULSE_DEV_API_HOST=${PULSE_DEV_API_HOST:-${LAN_IP}}
 PULSE_DEV_API_PORT=${PULSE_DEV_API_PORT:-7656}
 
@@ -62,7 +78,6 @@ if [[ -z ${PULSE_DEV_WS_URL:-} ]]; then
     fi
 fi
 
-# Allow all origins for LAN access
 ALLOWED_ORIGINS="*"
 
 export FRONTEND_PORT PORT
@@ -70,30 +85,34 @@ export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
 export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
 export ALLOWED_ORIGINS
 
-# Auto-detect pulse-sensor-proxy socket if available
+# Proxy Socket Detection
 HOST_PROXY_SOCKET="/mnt/pulse-proxy/pulse-sensor-proxy.sock"
 CONTAINER_PROXY_SOCKET="/run/pulse-sensor-proxy/pulse-sensor-proxy.sock"
 
 if [[ -z ${PULSE_SENSOR_PROXY_SOCKET:-} ]]; then
     if [[ -S "${HOST_PROXY_SOCKET}" ]]; then
         export PULSE_SENSOR_PROXY_SOCKET="${HOST_PROXY_SOCKET}"
-        printf "[hot-dev] Detected pulse-sensor-proxy socket at %s\n" "${PULSE_SENSOR_PROXY_SOCKET}"
+        log_info "Detected pulse-sensor-proxy socket at ${PULSE_SENSOR_PROXY_SOCKET}"
     elif [[ -S "${CONTAINER_PROXY_SOCKET}" ]]; then
         export PULSE_SENSOR_PROXY_SOCKET="${CONTAINER_PROXY_SOCKET}"
-        printf "[hot-dev] WARNING: Using container-local pulse-sensor-proxy socket at %s\n" "${PULSE_SENSOR_PROXY_SOCKET}"
-        printf "[hot-dev] WARNING: Host proxy is missing; temperatures will not reach Pulse until it is reinstalled.\n"
+        log_warn "Using container-local pulse-sensor-proxy socket at ${PULSE_SENSOR_PROXY_SOCKET}"
+        log_warn "Host proxy is missing; temperatures will not reach Pulse until it is reinstalled."
     else
-        printf "[hot-dev] WARNING: No pulse-sensor-proxy socket detected. Temperatures will be unavailable.\n"
+        log_warn "No pulse-sensor-proxy socket detected. Temperatures will be unavailable."
     fi
 else
     if [[ ! -S "${PULSE_SENSOR_PROXY_SOCKET}" ]]; then
-        printf "[hot-dev] WARNING: Configured pulse-sensor-proxy socket not found at %s\n" "${PULSE_SENSOR_PROXY_SOCKET}"
+        log_warn "Configured pulse-sensor-proxy socket not found at ${PULSE_SENSOR_PROXY_SOCKET}"
     elif [[ "${PULSE_SENSOR_PROXY_SOCKET}" == "${CONTAINER_PROXY_SOCKET}" && ! -S "${HOST_PROXY_SOCKET}" ]]; then
-        printf "[hot-dev] WARNING: Using container-local proxy socket; reinstall host pulse-sensor-proxy for real telemetry.\n"
+        log_warn "Using container-local proxy socket; reinstall host pulse-sensor-proxy for real telemetry."
     fi
 fi
 
 EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
+
+# --- Startup Checks ---
+
+check_dependencies
 
 cat <<BANNER
 =========================================
@@ -116,26 +135,27 @@ BANNER
 
 kill_port() {
     local port=$1
-    printf "[hot-dev] Cleaning up port %s...\n" "${port}"
+    log_info "Cleaning up port ${port}..."
     lsof -i :"${port}" 2>/dev/null | awk 'NR>1 {print $2}' | xargs -r kill -9 2>/dev/null || true
 }
 
-printf "[hot-dev] Cleaning up existing processes...\n"
+log_info "Cleaning up existing processes..."
 
-# Don't stop ourselves if we're running under systemd
-# if [[ -z "${INVOCATION_ID:-}" ]]; then
-    # Not running under systemd, safe to stop the service
-    # sudo systemctl stop pulse-hot-dev 2>/dev/null || true
-# fi
-
-# sudo systemctl stop pulse-backend 2>/dev/null || true
-# sudo systemctl stop pulse 2>/dev/null || true
-# sudo systemctl stop pulse-frontend 2>/dev/null || true
+# OS-Specific Cleanup
+OS_NAME=$(uname -s)
+if [[ "$OS_NAME" == "Linux" ]]; then
+    if [[ -z "${INVOCATION_ID:-}" ]]; then
+        sudo systemctl stop pulse-hot-dev 2>/dev/null || true
+    fi
+    sudo systemctl stop pulse-backend 2>/dev/null || true
+    sudo systemctl stop pulse 2>/dev/null || true
+    sudo systemctl stop pulse-frontend 2>/dev/null || true
+fi
 
 pkill -f "backend-watch.sh" 2>/dev/null || true
-pkill -f vite 2>/dev/null || true
+# Only kill vite/npm processes that look like ours (simple check)
+pkill -f "vite" 2>/dev/null || true
 pkill -f "npm run dev" 2>/dev/null || true
-pkill -f "npm exec" 2>/dev/null || true
 
 pkill -x "pulse" 2>/dev/null || true
 sleep 1
@@ -145,50 +165,38 @@ kill_port "${FRONTEND_DEV_PORT}"
 kill_port "${PULSE_DEV_API_PORT}"
 kill_port "${EXTRA_CLEANUP_PORT}"
 
-sleep 3
+sleep 2
 
-# Temporarily disable pipefail for port checks (lsof returns 1 when port is free)
+# Verify ports are free
 set +o pipefail
-
-if lsof -i :"${FRONTEND_DEV_PORT}" 2>/dev/null | grep -q LISTEN; then
-    echo "ERROR: Port ${FRONTEND_DEV_PORT} is still in use after cleanup!"
-    kill_port "${FRONTEND_DEV_PORT}"
-    sleep 2
-    if lsof -i :"${FRONTEND_DEV_PORT}" 2>/dev/null | grep -q LISTEN; then
-        echo "FATAL: Cannot free port ${FRONTEND_DEV_PORT}. Please manually kill the process:"
-        lsof -i :"${FRONTEND_DEV_PORT}"
-        exit 1
+for port in "${FRONTEND_DEV_PORT}" "${PULSE_DEV_API_PORT}"; do
+    if lsof -i :"${port}" 2>/dev/null | grep -q LISTEN; then
+        log_error "Port ${port} is still in use after cleanup!"
+        kill_port "${port}"
+        sleep 2
+        if lsof -i :"${port}" 2>/dev/null | grep -q LISTEN; then
+            log_error "FATAL: Cannot free port ${port}. Please manually kill the process:"
+            lsof -i :"${port}"
+            exit 1
+        fi
     fi
-fi
-
-if lsof -i :"${PULSE_DEV_API_PORT}" 2>/dev/null | grep -q LISTEN; then
-    echo "ERROR: Port ${PULSE_DEV_API_PORT} is still in use after cleanup!"
-    kill_port "${PULSE_DEV_API_PORT}"
-    sleep 2
-    if lsof -i :"${PULSE_DEV_API_PORT}" 2>/dev/null | grep -q LISTEN; then
-        echo "FATAL: Cannot free port ${PULSE_DEV_API_PORT}. Please manually kill the process:"
-        lsof -i :"${PULSE_DEV_API_PORT}"
-        exit 1
-    fi
-fi
-
-# Re-enable pipefail
+done
 set -o pipefail
 
-echo "Ports are clean!"
+log_info "Ports are clean!"
+
+# --- Config Setup ---
 
 if [[ -f "${ROOT_DIR}/mock.env" ]]; then
     load_env_file "${ROOT_DIR}/mock.env"
-    # Load local overrides if they exist
     if [[ -f "${ROOT_DIR}/mock.env.local" ]]; then
         load_env_file "${ROOT_DIR}/mock.env.local"
-        echo "[hot-dev] Loaded mock.env.local overrides"
+        log_info "Loaded mock.env.local overrides"
     fi
     if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
         TOTAL_GUESTS=$((PULSE_MOCK_NODES * (PULSE_MOCK_VMS_PER_NODE + PULSE_MOCK_LXCS_PER_NODE)))
         echo "Mock mode ENABLED with ${PULSE_MOCK_NODES} nodes (${TOTAL_GUESTS} total guests)"
     else
-        # Sync production config when not in mock mode
         echo "Syncing production configuration..."
         DEV_DIR="${ROOT_DIR}/tmp/dev-config" "${ROOT_DIR}/scripts/sync-production-config.sh"
     fi
@@ -202,55 +210,52 @@ if [[ -f /etc/pulse/.env ]] && [[ -r /etc/pulse/.env ]]; then
     echo "Auth configuration loaded from /etc/pulse/.env"
 fi
 
-printf "[hot-dev] Starting backend on port %s...\n" "${PULSE_DEV_API_PORT}"
+# --- Start Backend ---
+
+log_info "Starting backend on port ${PULSE_DEV_API_PORT}..."
 cd "${ROOT_DIR}"
 
-# Ensure dummy frontend file exists for go:embed
 mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
 go build -o pulse ./cmd/pulse
 
-# CRITICAL: Export all required environment variables for the backend
-# Mock variables already exported via load_env_file (set -a)
-# But we must explicitly export PULSE_DATA_DIR to ensure dev mode uses correct config
 FRONTEND_PORT=${PULSE_DEV_API_PORT}
 PORT=${PULSE_DEV_API_PORT}
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT
 
-# Set data directory strategy for the backend
+# Data Directory Setup
 if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
     export PULSE_DATA_DIR="${ROOT_DIR}/tmp/mock-data"
     mkdir -p "$PULSE_DATA_DIR"
-    echo "[hot-dev] Mock mode: Using isolated data directory: ${PULSE_DATA_DIR}"
+    log_info "Mock mode: Using isolated data directory: ${PULSE_DATA_DIR}"
 else
     if [[ -n ${PULSE_DATA_DIR:-} ]]; then
-        echo "[hot-dev] Using preconfigured data directory: ${PULSE_DATA_DIR}"
+        log_info "Using preconfigured data directory: ${PULSE_DATA_DIR}"
     elif [[ ${HOT_DEV_USE_PROD_DATA:-false} == "true" ]]; then
         export PULSE_DATA_DIR=/etc/pulse
-        echo "[hot-dev] HOT_DEV_USE_PROD_DATA=true – using production data directory: ${PULSE_DATA_DIR}"
+        log_info "HOT_DEV_USE_PROD_DATA=true – using production data directory: ${PULSE_DATA_DIR}"
     else
         DEV_CONFIG_DIR="${ROOT_DIR}/tmp/dev-config"
         mkdir -p "$DEV_CONFIG_DIR"
         export PULSE_DATA_DIR="${DEV_CONFIG_DIR}"
-        echo "[hot-dev] Production mode: Using dev config directory: ${PULSE_DATA_DIR}"
+        log_info "Production mode: Using dev config directory: ${PULSE_DATA_DIR}"
     fi
 
-    # Attempt to load encryption key automatically when not explicitly provided
     if [[ -z ${PULSE_ENCRYPTION_KEY:-} ]]; then
         if [[ -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
             export PULSE_ENCRYPTION_KEY="$(<"${PULSE_DATA_DIR}/.encryption.key")"
-            echo "[hot-dev] Loaded encryption key from ${PULSE_DATA_DIR}/.encryption.key"
+            log_info "Loaded encryption key from ${PULSE_DATA_DIR}/.encryption.key"
         elif [[ ${PULSE_DATA_DIR} == "${ROOT_DIR}/tmp/dev-config" ]]; then
             DEV_KEY_FILE="${PULSE_DATA_DIR}/.encryption.key"
             if [[ ! -f "${DEV_KEY_FILE}" ]]; then
                 openssl rand -base64 32 > "${DEV_KEY_FILE}"
                 chmod 600 "${DEV_KEY_FILE}"
-                echo "[hot-dev] Generated dev encryption key at ${DEV_KEY_FILE}"
+                log_info "Generated dev encryption key at ${DEV_KEY_FILE}"
             fi
             export PULSE_ENCRYPTION_KEY="$(<"${DEV_KEY_FILE}")"
         else
-            echo "[hot-dev] WARNING: No encryption key found for ${PULSE_DATA_DIR}. Encrypted config may fail to load."
+            log_warn "No encryption key found for ${PULSE_DATA_DIR}. Encrypted config may fail to load."
         fi
     fi
 fi
@@ -261,96 +266,122 @@ BACKEND_PID=$!
 sleep 2
 
 if ! kill -0 "${BACKEND_PID}" 2>/dev/null; then
-    echo "ERROR: Backend failed to start!"
+    log_error "Backend failed to start!"
     exit 1
 fi
 
-# Start backend file watcher in background
-printf "[hot-dev] Starting backend file watcher...\n"
+# --- File Watcher ---
+
+log_info "Starting backend file watcher..."
 (
     cd "${ROOT_DIR}"
-    while true; do
-        # Watch for changes to .go files (excluding vendor and node_modules)
-        if command -v inotifywait >/dev/null 2>&1; then
-            inotifywait -r -e modify,create,delete,move \
-                --exclude '(vendor/|node_modules/|\.git/|\.swp$|\.tmp$|~$)' \
-                --format '%e %w%f' \
-                "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
-            while read -r event changed_file; do
-                # Rebuild on any .go file change OR any create/delete event (catches new files)
-                if [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED ]]; then
-                    echo ""
-                    echo "[hot-dev] 🔄 Change detected: $event $(basename "$changed_file")"
-                    echo "[hot-dev] Rebuilding backend..."
+    
+    rebuild_backend() {
+        local changed_file=$1
+        echo ""
+        log_info "🔄 Change detected: $(basename "$changed_file")"
+        log_info "Rebuilding backend..."
 
-                    # Rebuild the binary
-                    if go build -o pulse ./cmd/pulse 2>&1 | grep -v "^#"; then
-                        echo "[hot-dev] ✓ Build successful, restarting backend..."
+        if go build -o pulse ./cmd/pulse 2>&1 | grep -v "^#"; then
+            log_info "✓ Build successful, restarting backend..."
 
-                        # Find and kill old backend
-                        OLD_PID=$(pgrep -f "^\./pulse$" || true)
-                        if [[ -n "$OLD_PID" ]]; then
-                            kill "$OLD_PID" 2>/dev/null || true
-                            sleep 1
-                            if kill -0 "$OLD_PID" 2>/dev/null; then
-                                kill -9 "$OLD_PID" 2>/dev/null || true
-                            fi
-                        fi
-
-                        # Start new backend with same environment
-                        FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} ./pulse &
-                        NEW_PID=$!
-                        sleep 1
-
-                        if kill -0 "$NEW_PID" 2>/dev/null; then
-                            echo "[hot-dev] ✓ Backend restarted (PID: $NEW_PID)"
-                        else
-                            echo "[hot-dev] ✗ Backend failed to start!"
-                        fi
-                    else
-                        echo "[hot-dev] ✗ Build failed!"
-                    fi
-                    echo "[hot-dev] Watching for changes..."
+            OLD_PID=$(pgrep -f "^\./pulse$" || true)
+            if [[ -n "$OLD_PID" ]]; then
+                kill "$OLD_PID" 2>/dev/null || true
+                sleep 1
+                if kill -0 "$OLD_PID" 2>/dev/null; then
+                    kill -9 "$OLD_PID" 2>/dev/null || true
                 fi
-            done
+            fi
+
+            FRONTEND_PORT=${PULSE_DEV_API_PORT} PORT=${PULSE_DEV_API_PORT} PULSE_DATA_DIR=${PULSE_DATA_DIR} ./pulse &
+            NEW_PID=$!
+            sleep 1
+
+            if kill -0 "$NEW_PID" 2>/dev/null; then
+                log_info "✓ Backend restarted (PID: $NEW_PID)"
+            else
+                log_error "✗ Backend failed to start!"
+            fi
         else
-            echo "[hot-dev] inotifywait not found. Auto-rebuild disabled."
-            sleep 3600
+            log_error "✗ Build failed!"
         fi
-    done
+        log_info "Watching for changes..."
+    }
+
+    if command -v inotifywait >/dev/null 2>&1; then
+        # Linux: inotifywait
+        inotifywait -r -e modify,create,delete,move \
+            --exclude '(vendor/|node_modules/|\.git/|\.swp$|\.tmp$|~$)' \
+            --format '%e %w%f' \
+            "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
+        while read -r event changed_file; do
+            if [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED ]]; then
+                rebuild_backend "$changed_file"
+            fi
+        done
+    elif command -v fswatch >/dev/null 2>&1; then
+        # macOS: fswatch
+        log_info "Using fswatch for file monitoring"
+        fswatch -r --event Created --event Updated --event Removed --event Renamed \
+            --exclude '\.git/' --exclude 'vendor/' --exclude 'node_modules/' \
+            --include '\.go$' \
+            "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
+        while read -r changed_file; do
+            # fswatch sends absolute paths, simple check for .go extension
+            if [[ "$changed_file" == *.go ]]; then
+                rebuild_backend "$changed_file"
+            fi
+        done
+    else
+        log_warn "No supported file watcher found (inotifywait or fswatch). Auto-rebuild disabled."
+        sleep 3600
+    fi
 ) &
 WATCHER_PID=$!
 
+# --- Cleanup Handler ---
+
 cleanup() {
     echo ""
-    echo "Stopping services..."
+    log_info "Stopping services..."
+    
+    # Kill Watcher
     if [[ -n ${WATCHER_PID:-} ]] && kill -0 "${WATCHER_PID}" 2>/dev/null; then
         kill "${WATCHER_PID}" 2>/dev/null || true
     fi
-    if [[ -n ${BACKEND_PID:-} ]] && kill -0 "${BACKEND_PID}" 2>/dev/null; then
-        kill "${BACKEND_PID}" 2>/dev/null || true
+    
+    # Kill Backend
+    # We re-find the PID because it might have changed during restart
+    CURRENT_BACKEND_PID=$(pgrep -f "^\./pulse$" || true)
+    if [[ -n ${CURRENT_BACKEND_PID} ]]; then
+        kill "${CURRENT_BACKEND_PID}" 2>/dev/null || true
         sleep 1
-        if kill -0 "${BACKEND_PID}" 2>/dev/null; then
-            echo "Backend not responding to SIGTERM, force killing..."
-            kill -9 "${BACKEND_PID}" 2>/dev/null || true
+        if kill -0 "${CURRENT_BACKEND_PID}" 2>/dev/null; then
+            kill -9 "${CURRENT_BACKEND_PID}" 2>/dev/null || true
         fi
     fi
-    pkill -f vite 2>/dev/null || true
-    pkill -f "npm run dev" 2>/dev/null || true
-    pkill -9 -x "pulse" 2>/dev/null || true
+    
+    # Kill Frontend (Vite)
+    if [[ -n ${VITE_PID:-} ]] && kill -0 "${VITE_PID}" 2>/dev/null; then
+        kill "${VITE_PID}" 2>/dev/null || true
+    fi
+    
+    # Fallback cleanup
     pkill -f "inotifywait.*pulse" 2>/dev/null || true
-    echo "Hot-dev stopped. To restart normal service, run: sudo systemctl start pulse"
-    echo "(Legacy installs may use: sudo systemctl start pulse-backend)"
+    pkill -f "fswatch.*pulse" 2>/dev/null || true
+    
+    log_info "Hot-dev stopped."
 }
 trap cleanup INT TERM EXIT
 
-printf "[hot-dev] Starting frontend with hot-reload on port %s...\n" "${FRONTEND_DEV_PORT}"
-echo "If this fails, port ${FRONTEND_DEV_PORT} is still in use!"
+# --- Start Frontend ---
 
+log_info "Starting frontend with hot-reload on port ${FRONTEND_DEV_PORT}..."
 cd "${ROOT_DIR}/frontend-modern"
 
-npx vite --config vite.config.ts --host "${FRONTEND_DEV_HOST}" --port "${FRONTEND_DEV_PORT}" --clearScreen false
+# Run Vite in background and wait for it, so we can trap signals properly
+npx vite --config vite.config.ts --host "${FRONTEND_DEV_HOST}" --port "${FRONTEND_DEV_PORT}" --clearScreen false &
+VITE_PID=$!
 
-echo "ERROR: Vite exited unexpectedly!"
-echo "Dev mode will auto-restart in 5 seconds via systemd..."
-cleanup
+wait "$VITE_PID"
