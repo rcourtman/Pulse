@@ -142,3 +142,11 @@ jobs:
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CR_RELEASE_NAME_TEMPLATE: "helm-chart-{{ .Version }}"
+          CR_MAKE_RELEASE_LATEST: false
+
+      - name: Mark Helm chart release as pre-release (avoid latest override)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          TAG="helm-chart-${{ steps.version.outputs.version }}"
+          gh release edit "$TAG" --prerelease --latest=false || echo "No helm chart release to edit for $TAG"
