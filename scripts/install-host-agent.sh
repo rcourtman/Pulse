@@ -134,6 +134,15 @@ if [[ -f "$UNRAID_GO_FILE" ]] || [[ -f /etc/unraid-version ]]; then
     UNRAID=true
 fi
 
+TRUENAS=false
+TRUENAS_STATE_DIR="/data/pulse-host-agent"
+TRUENAS_LOG_DIR="$TRUENAS_STATE_DIR/logs"
+TRUENAS_SERVICE_STORAGE="$TRUENAS_STATE_DIR/pulse-host-agent.service"
+TRUENAS_BOOTSTRAP_SCRIPT="$TRUENAS_STATE_DIR/bootstrap-pulse-host-agent.sh"
+TRUENAS_ENV_FILE="$TRUENAS_STATE_DIR/pulse-host-agent.env"
+TRUENAS_INIT_COMMENT="Pulse host agent bootstrap"
+TRUENAS_SYSTEMD_LINK="/etc/systemd/system/pulse-host-agent.service"
+
 # Uninstall function
 if [[ "$UNINSTALL" == "true" ]]; then
     log_warn "The --uninstall flag is deprecated."
@@ -167,7 +176,7 @@ fi
 
 if [[ -z "$PULSE_URL" ]]; then
     log_error "Pulse URL is required"
-    echo "Usage: $0 --url <pulse-url> --token <api-token> [--interval 30s] [--agent-id <id>] [--platform linux|darwin|windows] [--force] [--no-keychain]"
+    echo "Usage: $0 --url <pulse-url> --token <api-token> [--interval 30s] [--agent-id <id>] [--platform linux|darwin|windows|truenas] [--force] [--no-keychain]"
     echo ""
     echo "  --force       Skip interactive prompts and accept secure defaults (including Keychain storage)."
     echo "  --agent-id    Override the identifier used to deduplicate hosts (defaults to machine-id)."
@@ -188,6 +197,19 @@ if [[ -z "$PULSE_TOKEN" ]] && [[ "$FORCE" == false ]]; then
     fi
 fi
 
+is_truenas_scale() {
+    if [[ -f /etc/truenas-version ]]; then
+        return 0
+    fi
+    if [[ -f /etc/version ]] && grep -qi "truenas" /etc/version 2>/dev/null; then
+        return 0
+    fi
+    if [[ -d /data/ix-applications ]] || [[ -d /etc/ix-apps.d ]]; then
+        return 0
+    fi
+    return 1
+}
+
 # Detect platform if not specified
 if [[ -z "$PLATFORM" ]]; then
     case "$(uname -s)" in
@@ -205,6 +227,11 @@ if [[ -z "$PLATFORM" ]]; then
             exit 1
             ;;
     esac
+fi
+PLATFORM=$(echo "$PLATFORM" | tr '[:upper:]' '[:lower:]')
+if [[ "$PLATFORM" == "truenas" ]]; then
+    PLATFORM="linux"
+    TRUENAS=true
 fi
 
 # Detect architecture
@@ -226,10 +253,23 @@ case "$ARCH" in
         ARCH="386"
         ;;
     *)
-        log_warn "Unknown architecture $ARCH, defaulting to amd64"
-        ARCH="amd64"
-        ;;
+    log_warn "Unknown architecture $ARCH, defaulting to amd64"
+    ARCH="amd64"
+    ;;
 esac
+
+if [[ "$PLATFORM" == "linux" && "$TRUENAS" == false ]]; then
+    if is_truenas_scale; then
+        TRUENAS=true
+    fi
+fi
+
+if [[ "$TRUENAS" == true ]]; then
+    AGENT_PATH="$TRUENAS_STATE_DIR/pulse-host-agent"
+    SYSTEMD_SERVICE="$TRUENAS_SYSTEMD_LINK"
+    LINUX_LOG_DIR="$TRUENAS_LOG_DIR"
+    LINUX_LOG_FILE="$LINUX_LOG_DIR/host-agent.log"
+fi
 
 log_info "Configuration:"
 echo "  Pulse URL: $PULSE_URL"
@@ -247,6 +287,9 @@ else
 fi
 echo "  Interval: $INTERVAL"
 echo "  Platform: $PLATFORM/$ARCH"
+if [[ "$TRUENAS" == true ]]; then
+    echo "  TrueNAS SCALE mode: enabled (immutable root detected)"
+fi
 echo ""
 
 log_info "Installing Pulse host agent for $PLATFORM/$ARCH..."
@@ -399,7 +442,7 @@ fi
 
 # Use install command instead of mv to ensure correct SELinux context
 # The install command creates a new file with the correct label for the target directory
-sudo install -m 0755 "$TEMP_BINARY" "$AGENT_PATH"
+sudo install -D -m 0755 "$TEMP_BINARY" "$AGENT_PATH"
 rm -f "$TEMP_BINARY"
 
 # On SELinux systems, explicitly restore context to ensure policy compliance
@@ -423,8 +466,150 @@ fi
 MANUAL_START_CMD="$AGENT_CMD"
 MANUAL_START_WRAPPED="nohup $MANUAL_START_CMD >$LINUX_LOG_FILE 2>&1 &"
 
+write_truenas_env_file() {
+    sudo install -d -m 0700 "$TRUENAS_STATE_DIR" "$TRUENAS_LOG_DIR"
+    local tmp_env
+    tmp_env=$(mktemp)
+    {
+        echo "PULSE_URL=$PULSE_URL"
+        echo "PULSE_INTERVAL=$INTERVAL"
+        echo "PULSE_LOG_FILE=$LINUX_LOG_FILE"
+        if [[ -n "$PULSE_TOKEN" ]]; then
+            echo "PULSE_TOKEN=$PULSE_TOKEN"
+        fi
+        if [[ -n "$AGENT_ID" ]]; then
+            echo "PULSE_AGENT_ID=$AGENT_ID"
+        fi
+    } > "$tmp_env"
+    sudo install -m 0600 "$tmp_env" "$TRUENAS_ENV_FILE"
+    rm -f "$tmp_env"
+}
+
+write_truenas_service_unit() {
+    local exec_start="$AGENT_PATH --url \$PULSE_URL --interval \$PULSE_INTERVAL"
+    if [[ -n "$PULSE_TOKEN" ]]; then
+        exec_start="$exec_start --token \$PULSE_TOKEN"
+    fi
+    if [[ -n "$AGENT_ID" ]]; then
+        exec_start="$exec_start --agent-id \$PULSE_AGENT_ID"
+    fi
+
+    sudo tee "$TRUENAS_SERVICE_STORAGE" > /dev/null <<EOF
+[Unit]
+Description=Pulse Host Agent (TrueNAS SCALE)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=$AGENT_PATH
+
+[Service]
+EnvironmentFile=$TRUENAS_ENV_FILE
+ExecStart=$exec_start
+Restart=always
+RestartSec=5s
+User=root
+Group=root
+StandardOutput=append:$LINUX_LOG_FILE
+StandardError=append:$LINUX_LOG_FILE
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+write_truenas_bootstrap_script() {
+    sudo tee "$TRUENAS_BOOTSTRAP_SCRIPT" > /dev/null <<EOF
+#!/bin/bash
+set -euo pipefail
+
+STATE_DIR="$TRUENAS_STATE_DIR"
+UNIT_SRC="$TRUENAS_SERVICE_STORAGE"
+UNIT_DST="$TRUENAS_SYSTEMD_LINK"
+LOG_DIR="$LINUX_LOG_DIR"
+AGENT_PATH="$AGENT_PATH"
+
+if [ ! -x "\$AGENT_PATH" ]; then
+    exit 0
+fi
+
+mkdir -p "\$LOG_DIR"
+ln -sf "\$UNIT_SRC" "\$UNIT_DST"
+systemctl daemon-reload
+if systemctl is-enabled pulse-host-agent >/dev/null 2>&1; then
+    systemctl restart pulse-host-agent >/dev/null 2>&1 || true
+else
+    systemctl enable --now pulse-host-agent >/dev/null 2>&1 || true
+fi
+EOF
+    sudo chmod 0755 "$TRUENAS_BOOTSTRAP_SCRIPT"
+}
+
+register_truenas_init_task() {
+    if ! command -v midclt >/dev/null 2>&1; then
+        log_warn "midclt not found - add a POSTINIT task for $TRUENAS_BOOTSTRAP_SCRIPT manually in the TrueNAS UI."
+        return
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        log_warn "python3 not found - cannot parse init task state; add the POSTINIT task manually if needed."
+        return
+    fi
+
+    local query existing_id payload
+    query='[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]'
+    local query_output
+    query_output=$(midclt call initshutdownscript.query "$query" 2>/dev/null || true)
+    existing_id=$(printf '%s' "$query_output" | python3 - <<'PY'
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data[0]["id"] if data else "")
+except Exception:
+    print("")
+PY
+)
+
+    payload=$(cat <<EOF
+{"type":"SCRIPT","script":"$TRUENAS_BOOTSTRAP_SCRIPT","when":"POSTINIT","enabled":true,"timeout":120,"comment":"$TRUENAS_INIT_COMMENT"}
+EOF
+)
+
+    if [[ -n "$existing_id" ]]; then
+        if midclt call initshutdownscript.update "$existing_id" "$payload" >/dev/null 2>&1; then
+            log_info "Updated existing TrueNAS init task (id $existing_id)"
+        else
+            log_warn "Failed to update existing TrueNAS init task (id $existing_id)"
+        fi
+    else
+        if midclt call initshutdownscript.create "$payload" >/dev/null 2>&1; then
+            log_success "Registered TrueNAS init task to restore the service on boot"
+        else
+            log_warn "Failed to register TrueNAS init task; add it manually via System Settings → Advanced → Init/Shutdown Scripts."
+        fi
+    fi
+}
+
+setup_truenas_service() {
+    log_info "Detected TrueNAS SCALE (immutable root). Storing agent under $TRUENAS_STATE_DIR"
+    write_truenas_env_file
+    write_truenas_service_unit
+    write_truenas_bootstrap_script
+
+    sudo ln -sf "$TRUENAS_SERVICE_STORAGE" "$TRUENAS_SYSTEMD_LINK"
+    sudo systemctl daemon-reload
+    if sudo systemctl is-enabled pulse-host-agent >/dev/null 2>&1; then
+        sudo systemctl restart pulse-host-agent || true
+    else
+        sudo systemctl enable --now pulse-host-agent || true
+    fi
+
+    register_truenas_init_task
+    SERVICE_MODE="truenas"
+    log_success "TrueNAS SCALE service installed and started"
+}
+
 # Set up service based on platform
-if [[ "$PLATFORM" == "linux" ]] && command -v systemctl &> /dev/null; then
+if [[ "$TRUENAS" == true ]]; then
+    setup_truenas_service
+elif [[ "$PLATFORM" == "linux" ]] && command -v systemctl &> /dev/null; then
     log_info "Setting up systemd service..."
 
     # Create log directory
@@ -811,7 +996,7 @@ VALIDATION_SUCCESS=false
 SERVICE_RUNNING=false
 
 # Check if service is running
-if [[ "$SERVICE_MODE" == "systemd" ]]; then
+if [[ "$SERVICE_MODE" == "systemd" || "$SERVICE_MODE" == "truenas" ]]; then
     SERVICE_STATUS=$(systemctl is-active pulse-host-agent 2>/dev/null || echo "inactive")
     if [[ "$SERVICE_STATUS" == "active" ]]; then
         SERVICE_RUNNING=true
@@ -902,10 +1087,13 @@ else
     echo ""
     log_info "Troubleshooting:"
     echo ""
-    if [[ "$SERVICE_MODE" == "systemd" ]]; then
+    if [[ "$SERVICE_MODE" == "systemd" || "$SERVICE_MODE" == "truenas" ]]; then
         echo "  View logs:    sudo journalctl -u pulse-host-agent -f"
         echo "  Check status: sudo systemctl status pulse-host-agent"
         echo "  Restart:      sudo systemctl restart pulse-host-agent"
+        if [[ "$SERVICE_MODE" == "truenas" ]]; then
+            echo "  Persist:      Confirm the POSTINIT task named \"$TRUENAS_INIT_COMMENT\" exists in the TrueNAS UI"
+        fi
     elif [[ "$SERVICE_MODE" == "launchd" ]]; then
         echo "  View logs:    tail -f $MACOS_LOG_FILE"
         echo "  Check status: launchctl list | grep pulse"
@@ -930,12 +1118,15 @@ fi
 print_footer
 
 log_info "Service Management Commands:"
-if [[ "$SERVICE_MODE" == "systemd" ]]; then
+if [[ "$SERVICE_MODE" == "systemd" || "$SERVICE_MODE" == "truenas" ]]; then
     echo "  Start:   sudo systemctl start pulse-host-agent"
     echo "  Stop:    sudo systemctl stop pulse-host-agent"
     echo "  Restart: sudo systemctl restart pulse-host-agent"
     echo "  Status:  sudo systemctl status pulse-host-agent"
     echo "  Logs:    sudo journalctl -u pulse-host-agent -f"
+    if [[ "$SERVICE_MODE" == "truenas" ]]; then
+        echo "  Persist: TrueNAS Init/Shutdown task stores $TRUENAS_BOOTSTRAP_SCRIPT as POSTINIT"
+    fi
 elif [[ "$SERVICE_MODE" == "launchd" ]]; then
     echo "  Start:   launchctl load $LAUNCHD_PLIST"
     echo "  Stop:    launchctl unload $LAUNCHD_PLIST"
