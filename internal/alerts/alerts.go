@@ -1422,6 +1422,20 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
+			containerName := strings.ToLower(strings.TrimSpace(alert.ResourceName))
+			containerID := ""
+			if alert.Metadata != nil {
+				if val, ok := alert.Metadata["containerId"].(string); ok {
+					containerID = strings.ToLower(strings.TrimSpace(val))
+				}
+				if val, ok := alert.Metadata["containerName"].(string); ok && containerName == "" {
+					containerName = strings.ToLower(strings.TrimSpace(val))
+				}
+			}
+			if matchesDockerIgnoredPrefix(containerName, containerID, m.config.DockerIgnoredContainerPrefixes) {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 			thresholds := ThresholdConfig{
 				CPU:    cloneThreshold(&m.config.DockerDefaults.CPU),
 				Memory: cloneThreshold(&m.config.DockerDefaults.Memory),
