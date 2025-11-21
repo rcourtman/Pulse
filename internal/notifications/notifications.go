@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"math"
 	"net"
@@ -40,6 +41,18 @@ const (
 	// Rate limiting settings
 	WebhookRateLimitWindow = 1 * time.Minute // Time window for rate limiting
 	WebhookRateLimitMax    = 10              // Max requests per window per webhook
+)
+
+const (
+	queueTypeSuffixResolved = "_resolved"
+	metadataResolvedAt      = "resolvedAt"
+)
+
+type notificationEvent string
+
+const (
+	eventAlert    notificationEvent = "alert"
+	eventResolved notificationEvent = "resolved"
 )
 
 // createSecureWebhookClient creates an HTTP client with security controls
@@ -112,6 +125,7 @@ type NotificationManager struct {
 	appriseConfig      AppriseConfig
 	enabled            bool
 	cooldown           time.Duration
+	notifyOnResolve    bool
 	lastNotified       map[string]notificationRecord
 	groupWindow        time.Duration
 	pendingAlerts      []*alerts.Alert
@@ -176,6 +190,17 @@ func copyAppriseConfig(cfg AppriseConfig) AppriseConfig {
 		copy.Targets = append([]string(nil), cfg.Targets...)
 	}
 	return copy
+}
+
+// annotateResolvedMetadata stores the resolution timestamp on the alert metadata for queue persistence.
+func annotateResolvedMetadata(alert *alerts.Alert, resolvedAt time.Time) {
+	if alert == nil {
+		return
+	}
+	if alert.Metadata == nil {
+		alert.Metadata = make(map[string]interface{})
+	}
+	alert.Metadata[metadataResolvedAt] = resolvedAt.Format(time.RFC3339)
 }
 
 // NormalizeAppriseConfig cleans and normalizes Apprise configuration values.
@@ -334,10 +359,11 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 	}
 
 	nm := &NotificationManager{
-		enabled:      true,
-		cooldown:     5 * time.Minute,
-		lastNotified: make(map[string]notificationRecord),
-		webhooks:     []WebhookConfig{},
+		enabled:         true,
+		cooldown:        5 * time.Minute,
+		notifyOnResolve: true,
+		lastNotified:    make(map[string]notificationRecord),
+		webhooks:        []WebhookConfig{},
 		appriseConfig: AppriseConfig{
 			Enabled:        false,
 			Mode:           AppriseModeCLI,
@@ -440,6 +466,25 @@ func (n *NotificationManager) SetCooldown(minutes int) {
 	}
 	n.cooldown = time.Duration(minutes) * time.Minute
 	log.Info().Int("minutes", minutes).Msg("Updated notification cooldown")
+}
+
+// SetNotifyOnResolve toggles whether resolved alerts send notifications.
+func (n *NotificationManager) SetNotifyOnResolve(enabled bool) {
+	n.mu.Lock()
+	was := n.notifyOnResolve
+	n.notifyOnResolve = enabled
+	n.mu.Unlock()
+
+	if was != enabled {
+		log.Info().Bool("enabled", enabled).Msg("Updated resolved alert notifications")
+	}
+}
+
+// GetNotifyOnResolve returns whether resolved alerts trigger notifications.
+func (n *NotificationManager) GetNotifyOnResolve() bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.notifyOnResolve
 }
 
 // SetGroupingWindow updates the grouping window duration
@@ -577,6 +622,48 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 			Int("pendingCount", len(n.pendingAlerts)).
 			Dur("groupWindow", n.groupWindow).
 			Msg("Started alert grouping timer")
+	}
+}
+
+// SendResolvedAlert delivers notifications for a resolved alert immediately.
+func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) {
+	if resolved == nil || resolved.Alert == nil {
+		return
+	}
+
+	// Clone the alert so downstream goroutines cannot mutate shared state.
+	alertCopy := resolved.Alert.Clone()
+	if alertCopy == nil {
+		return
+	}
+
+	resolvedAt := resolved.ResolvedTime
+	if resolvedAt.IsZero() {
+		resolvedAt = time.Now()
+	}
+	annotateResolvedMetadata(alertCopy, resolvedAt)
+
+	n.mu.RLock()
+	enabled := n.enabled && n.notifyOnResolve
+	emailConfig := copyEmailConfig(n.emailConfig)
+	webhooks := copyWebhookConfigs(n.webhooks)
+	appriseConfig := copyAppriseConfig(n.appriseConfig)
+	queue := n.queue
+	n.mu.RUnlock()
+
+	if !enabled {
+		log.Debug().
+			Str("alertID", alertCopy.ID).
+			Msg("Resolved notifications disabled, skipping")
+		return
+	}
+
+	alertsToSend := []*alerts.Alert{alertCopy}
+
+	if queue != nil {
+		n.enqueueResolvedNotifications(queue, emailConfig, webhooks, appriseConfig, alertsToSend, resolvedAt)
+	} else {
+		n.sendResolvedNotificationsDirect(emailConfig, webhooks, appriseConfig, alertsToSend, resolvedAt)
 	}
 }
 
@@ -765,6 +852,86 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 	}
 }
 
+// enqueueResolvedNotifications adds resolved notifications to the persistent queue.
+func (n *NotificationManager) enqueueResolvedNotifications(queue *NotificationQueue, emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert, resolvedAt time.Time) {
+	if queue == nil {
+		return
+	}
+
+	anyFailed := false
+
+	if emailConfig.Enabled {
+		configJSON, err := json.Marshal(emailConfig)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal email config for resolved queue")
+		} else {
+			notif := &QueuedNotification{
+				Type:        "email" + queueTypeSuffixResolved,
+				Alerts:      alertsToSend,
+				Config:      configJSON,
+				MaxAttempts: 3,
+			}
+			if err := queue.Enqueue(notif); err != nil {
+				log.Error().Err(err).Msg("Failed to enqueue resolved email notification - falling back to direct send")
+				anyFailed = true
+				go n.sendResolvedEmail(emailConfig, alertsToSend, resolvedAt)
+			} else {
+				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved email notification")
+			}
+		}
+	}
+
+	for _, webhook := range webhooks {
+		if !webhook.Enabled {
+			continue
+		}
+		webhookCopy := webhook
+		configJSON, err := json.Marshal(webhookCopy)
+		if err != nil {
+			log.Error().Err(err).Str("webhookName", webhookCopy.Name).Msg("Failed to marshal webhook config for resolved queue")
+			continue
+		}
+		notif := &QueuedNotification{
+			Type:        "webhook" + queueTypeSuffixResolved,
+			Alerts:      alertsToSend,
+			Config:      configJSON,
+			MaxAttempts: 3,
+		}
+		if err := queue.Enqueue(notif); err != nil {
+			log.Error().Err(err).Str("webhookName", webhookCopy.Name).Msg("Failed to enqueue resolved webhook notification - falling back to direct send")
+			anyFailed = true
+			go n.sendResolvedWebhook(webhookCopy, alertsToSend, resolvedAt)
+		} else {
+			log.Debug().Str("webhookName", webhookCopy.Name).Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved webhook notification")
+		}
+	}
+
+	if appriseConfig.Enabled {
+		configJSON, err := json.Marshal(appriseConfig)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal apprise config for resolved queue")
+		} else {
+			notif := &QueuedNotification{
+				Type:        "apprise" + queueTypeSuffixResolved,
+				Alerts:      alertsToSend,
+				Config:      configJSON,
+				MaxAttempts: 3,
+			}
+			if err := queue.Enqueue(notif); err != nil {
+				log.Error().Err(err).Msg("Failed to enqueue resolved Apprise notification - falling back to direct send")
+				anyFailed = true
+				go n.sendResolvedApprise(appriseConfig, alertsToSend, resolvedAt)
+			} else {
+				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved Apprise notification")
+			}
+		}
+	}
+
+	if anyFailed {
+		log.Debug().Msg("At least one resolved notification enqueue failed; direct sends were triggered")
+	}
+}
+
 // sendNotificationsDirect sends notifications without using the queue (fallback)
 func (n *NotificationManager) sendNotificationsDirect(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert) {
 	// Send notifications using the captured snapshots outside the lock to avoid blocking writers
@@ -794,6 +961,44 @@ func (n *NotificationManager) sendNotificationsDirect(emailConfig EmailConfig, w
 	}
 }
 
+// sendResolvedNotificationsDirect delivers resolved notifications without queue persistence.
+func (n *NotificationManager) sendResolvedNotificationsDirect(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert, resolvedAt time.Time) {
+	if len(alertsToSend) == 0 {
+		return
+	}
+
+	if emailConfig.Enabled {
+		go func() {
+			if err := n.sendResolvedEmail(emailConfig, alertsToSend, resolvedAt); err != nil {
+				log.Error().Err(err).Msg("Failed to send resolved email notification")
+			}
+		}()
+	}
+
+	for _, webhook := range webhooks {
+		if !webhook.Enabled {
+			continue
+		}
+		webhookCopy := webhook
+		go func() {
+			if err := n.sendResolvedWebhook(webhookCopy, alertsToSend, resolvedAt); err != nil {
+				log.Error().
+					Err(err).
+					Str("webhookName", webhookCopy.Name).
+					Msg("Failed to send resolved webhook notification")
+			}
+		}()
+	}
+
+	if appriseConfig.Enabled {
+		go func() {
+			if err := n.sendResolvedApprise(appriseConfig, alertsToSend, resolvedAt); err != nil {
+				log.Error().Err(err).Msg("Failed to send resolved Apprise notification")
+			}
+		}()
+	}
+}
+
 // sendGroupedEmail sends a grouped email notification
 func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*alerts.Alert) error {
 
@@ -804,6 +1009,19 @@ func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*
 	subject, htmlBody, textBody := EmailTemplate(alertList, false)
 
 	// Send using HTML-aware method
+	return n.sendHTMLEmailWithError(subject, htmlBody, textBody, config)
+}
+
+func (n *NotificationManager) sendResolvedEmail(config EmailConfig, alertList []*alerts.Alert, resolvedAt time.Time) error {
+	if len(alertList) == 0 {
+		return fmt.Errorf("no alerts to send")
+	}
+
+	subject, htmlBody, textBody := buildResolvedNotificationContent(alertList, resolvedAt, n.publicURL)
+	if subject == "" && textBody == "" {
+		return fmt.Errorf("failed to build resolved email content")
+	}
+
 	return n.sendHTMLEmailWithError(subject, htmlBody, textBody, config)
 }
 
@@ -889,6 +1107,81 @@ func buildApprisePayload(alertList []*alerts.Alert, publicURL string) (string, s
 	}
 
 	return title, bodyBuilder.String(), resolveAppriseNotificationType(validAlerts)
+}
+
+func buildResolvedNotificationContent(alertList []*alerts.Alert, resolvedAt time.Time, publicURL string) (string, string, string) {
+	validAlerts := make([]*alerts.Alert, 0, len(alertList))
+	var primary *alerts.Alert
+	for _, alert := range alertList {
+		if alert == nil {
+			continue
+		}
+		if primary == nil {
+			primary = alert
+		}
+		validAlerts = append(validAlerts, alert)
+	}
+
+	if len(validAlerts) == 0 || primary == nil {
+		return "", "", ""
+	}
+
+	if resolvedAt.IsZero() {
+		resolvedAt = time.Now()
+	}
+	resolvedLabel := resolvedAt.Format(time.RFC3339)
+
+	title := fmt.Sprintf("Pulse alert resolved: %s", primary.ResourceName)
+	if len(validAlerts) > 1 {
+		title = fmt.Sprintf("Pulse alerts resolved (%d)", len(validAlerts))
+	}
+
+	var bodyBuilder strings.Builder
+	bodyBuilder.WriteString("Resolved at ")
+	bodyBuilder.WriteString(resolvedLabel)
+	bodyBuilder.WriteString("\n\n")
+
+	for _, alert := range validAlerts {
+		bodyBuilder.WriteString(fmt.Sprintf("[%s] %s\n", strings.ToUpper(string(alert.Level)), alert.ResourceName))
+		if alert.Message != "" {
+			bodyBuilder.WriteString(alert.Message)
+			bodyBuilder.WriteString("\n")
+		}
+		if !alert.StartTime.IsZero() {
+			bodyBuilder.WriteString("Started: ")
+			bodyBuilder.WriteString(alert.StartTime.Format(time.RFC3339))
+			bodyBuilder.WriteString("\n")
+		}
+		bodyBuilder.WriteString("Cleared: ")
+		bodyBuilder.WriteString(resolvedLabel)
+		bodyBuilder.WriteString("\n")
+		if alert.Node != "" {
+			bodyBuilder.WriteString("Node: ")
+			bodyBuilder.WriteString(alert.Node)
+			bodyBuilder.WriteString("\n")
+		}
+		if alert.Instance != "" && alert.Instance != alert.Node {
+			bodyBuilder.WriteString("Instance: ")
+			bodyBuilder.WriteString(alert.Instance)
+			bodyBuilder.WriteString("\n")
+		}
+		if alert.Threshold != 0 || alert.Value != 0 {
+			bodyBuilder.WriteString(fmt.Sprintf("Last value %.2f (threshold %.2f)\n", alert.Value, alert.Threshold))
+		}
+		bodyBuilder.WriteString("\n")
+	}
+
+	if publicURL != "" {
+		bodyBuilder.WriteString("Dashboard: ")
+		bodyBuilder.WriteString(publicURL)
+		bodyBuilder.WriteString("\n")
+	}
+
+	textBody := bodyBuilder.String()
+	htmlBody := "<pre style=\"font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \\\"Liberation Mono\\\", \\\"Courier New\\\", monospace\">" +
+		html.EscapeString(textBody) + "</pre>"
+
+	return title, htmlBody, textBody
 }
 
 func resolveAppriseNotificationType(alertList []*alerts.Alert) string {
@@ -1041,6 +1334,45 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 			Msg("Apprise API response")
 	}
 
+	return nil
+}
+
+func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertList []*alerts.Alert, resolvedAt time.Time) error {
+	if len(alertList) == 0 {
+		return fmt.Errorf("no alerts to send")
+	}
+
+	cfg := NormalizeAppriseConfig(config)
+	if !cfg.Enabled {
+		return fmt.Errorf("apprise not enabled")
+	}
+
+	title, _, body := buildResolvedNotificationContent(alertList, resolvedAt, n.publicURL)
+	if title == "" && body == "" {
+		return fmt.Errorf("failed to build resolved apprise payload")
+	}
+
+	switch cfg.Mode {
+	case AppriseModeHTTP:
+		if err := n.sendAppriseViaHTTP(cfg, title, body, "info"); err != nil {
+			log.Warn().
+				Err(err).
+				Str("mode", string(cfg.Mode)).
+				Str("serverUrl", cfg.ServerURL).
+				Msg("Failed to send resolved Apprise notification via API")
+			return fmt.Errorf("apprise HTTP send failed: %w", err)
+		}
+	default:
+		if err := n.sendAppriseViaCLI(cfg, title, body); err != nil {
+			log.Warn().
+				Err(err).
+				Str("mode", string(cfg.Mode)).
+				Str("cliPath", cfg.CLIPath).
+				Strs("targets", cfg.Targets).
+				Msg("Failed to send resolved Apprise notification")
+			return fmt.Errorf("apprise CLI send failed: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -1404,6 +1736,49 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 
 	// Send using same request logic
 	return n.sendWebhookRequest(webhook, jsonData, "grouped")
+}
+
+func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertList []*alerts.Alert, resolvedAt time.Time) error {
+	if len(alertList) == 0 {
+		return fmt.Errorf("no alerts to send")
+	}
+
+	if !webhook.Enabled {
+		return fmt.Errorf("webhook is disabled")
+	}
+
+	if resolvedAt.IsZero() {
+		resolvedAt = time.Now()
+	}
+
+	payload := map[string]interface{}{
+		"event":         string(eventResolved),
+		"alerts":        alertList,
+		"count":         len(alertList),
+		"resolvedAt":    resolvedAt.Unix(),
+		"resolvedAtIso": resolvedAt.Format(time.RFC3339),
+		"source":        "pulse-monitoring",
+	}
+
+	if n.publicURL != "" {
+		payload["dashboard"] = n.publicURL
+	}
+
+	if len(alertList) == 1 && alertList[0] != nil {
+		payload["alertId"] = alertList[0].ID
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("webhook", webhook.Name).
+			Int("alertCount", len(alertList)).
+			Msg("Failed to marshal resolved webhook payload")
+		return fmt.Errorf("failed to marshal resolved webhook payload: %w", err)
+	}
+
+	return n.sendWebhookRequest(webhook, jsonData, "resolved")
 }
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits
@@ -2476,43 +2851,89 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 	}
 }
 
+func normalizeQueueType(notifType string) (string, notificationEvent) {
+	if strings.HasSuffix(notifType, queueTypeSuffixResolved) {
+		return strings.TrimSuffix(notifType, queueTypeSuffixResolved), eventResolved
+	}
+	return notifType, eventAlert
+}
+
+func resolvedTimeFromAlerts(alerts []*alerts.Alert) time.Time {
+	for _, alert := range alerts {
+		if alert == nil || alert.Metadata == nil {
+			continue
+		}
+		raw, ok := alert.Metadata[metadataResolvedAt]
+		if !ok {
+			continue
+		}
+		switch ts := raw.(type) {
+		case string:
+			if parsed, err := time.Parse(time.RFC3339, ts); err == nil {
+				return parsed
+			}
+		case float64:
+			if ts > 0 {
+				return time.Unix(int64(ts), 0)
+			}
+		}
+	}
+
+	return time.Now()
+}
+
 // ProcessQueuedNotification processes a notification from the persistent queue
 func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotification) error {
+	baseType, event := normalizeQueueType(notif.Type)
+
 	log.Debug().
 		Str("notificationID", notif.ID).
-		Str("type", notif.Type).
+		Str("type", baseType).
+		Str("event", string(event)).
 		Int("alertCount", len(notif.Alerts)).
 		Msg("Processing queued notification")
 
 	var err error
-	switch notif.Type {
+	switch baseType {
 	case "email":
 		var emailConfig EmailConfig
 		if err = json.Unmarshal(notif.Config, &emailConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal email config: %w", err)
 		}
-		err = n.sendGroupedEmail(emailConfig, notif.Alerts)
+		if event == eventResolved {
+			err = n.sendResolvedEmail(emailConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
+		} else {
+			err = n.sendGroupedEmail(emailConfig, notif.Alerts)
+		}
 
 	case "webhook":
 		var webhookConfig WebhookConfig
 		if err = json.Unmarshal(notif.Config, &webhookConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal webhook config: %w", err)
 		}
-		err = n.sendGroupedWebhook(webhookConfig, notif.Alerts)
+		if event == eventResolved {
+			err = n.sendResolvedWebhook(webhookConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
+		} else {
+			err = n.sendGroupedWebhook(webhookConfig, notif.Alerts)
+		}
 
 	case "apprise":
 		var appriseConfig AppriseConfig
 		if err = json.Unmarshal(notif.Config, &appriseConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal apprise config: %w", err)
 		}
-		err = n.sendGroupedApprise(appriseConfig, notif.Alerts)
+		if event == eventResolved {
+			err = n.sendResolvedApprise(appriseConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
+		} else {
+			err = n.sendGroupedApprise(appriseConfig, notif.Alerts)
+		}
 
 	default:
-		return fmt.Errorf("unknown notification type: %s", notif.Type)
+		return fmt.Errorf("unknown notification type: %s", baseType)
 	}
 
-	// Mark cooldown after successful send
-	if err == nil {
+	// Mark cooldown after successful send for active alerts only
+	if err == nil && event == eventAlert {
 		n.mu.Lock()
 		now := time.Now()
 		for _, alert := range notif.Alerts {

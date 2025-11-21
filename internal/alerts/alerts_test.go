@@ -1772,3 +1772,76 @@ func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 		t.Fatalf("expected pending alert entry to be cleared after disabling all storage")
 	}
 }
+
+func TestUpdateConfigPreservesZeroDockerThresholds(t *testing.T) {
+	t.Helper()
+
+	m := NewManager()
+	config := m.GetConfig()
+	config.DockerDefaults.Memory = HysteresisThreshold{Trigger: 0, Clear: 0}
+
+	m.UpdateConfig(config)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.config.DockerDefaults.Memory.Trigger != 0 {
+		t.Fatalf("expected docker memory trigger to remain 0 when disabled, got %.1f", m.config.DockerDefaults.Memory.Trigger)
+	}
+	if m.config.DockerDefaults.Memory.Clear != 0 {
+		t.Fatalf("expected docker memory clear to remain 0 when disabled, got %.1f", m.config.DockerDefaults.Memory.Clear)
+	}
+}
+
+func TestReevaluateClearsDockerContainerAlertWhenOverrideDisabled(t *testing.T) {
+	m := NewManager()
+
+	resourceID := "docker:host-1/container-1"
+	alertID := resourceID + "-memory"
+
+	resolved := make(chan string, 1)
+	m.SetResolvedCallback(func(id string) {
+		resolved <- id
+	})
+
+	m.mu.Lock()
+	m.activeAlerts[alertID] = &Alert{
+		ID:           alertID,
+		Type:         "memory",
+		ResourceID:   resourceID,
+		ResourceName: "qbittorrent",
+		Instance:     "Docker",
+		Metadata: map[string]interface{}{
+			"resourceType": "Docker Container",
+		},
+		Threshold: 80,
+		Value:     90,
+	}
+	m.mu.Unlock()
+
+	config := m.GetConfig()
+	config.Overrides = map[string]ThresholdConfig{
+		resourceID: {
+			Disabled: true,
+		},
+	}
+	config.ActivationState = ActivationActive
+
+	m.UpdateConfig(config)
+
+	select {
+	case got := <-resolved:
+		if got != alertID {
+			t.Fatalf("resolved callback fired for unexpected alert %s", got)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected alert to be resolved when docker container override is disabled")
+	}
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected docker container alert to be cleared when override is disabled")
+	}
+}

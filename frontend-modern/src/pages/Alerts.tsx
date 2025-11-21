@@ -280,10 +280,12 @@ export const createDefaultCooldown = (): CooldownConfig => ({
 
 export const createDefaultGrouping = (): GroupingConfig => ({
   enabled: true,
-  window: 5,
+  window: 1,
   byNode: true,
   byGuest: false,
 });
+
+export const createDefaultResolveNotifications = (): boolean => true;
 
 const createDefaultAppriseConfig = (): UIAppriseConfig => ({
   enabled: false,
@@ -518,6 +520,9 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
 
   const [scheduleEscalation, setScheduleEscalation] =
     createSignal<EscalationConfig>(createDefaultEscalation());
+
+  const [notifyOnResolve, setNotifyOnResolve] =
+    createSignal<boolean>(createDefaultResolveNotifications());
 
   // Set up destinationsRef.emailConfig function immediately
   destinationsRef.emailConfig = () => {
@@ -1082,26 +1087,34 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
           });
         }
 
-        if (config.schedule.grouping) {
+        if (config.schedule.grouping || config.schedule.groupingWindow !== undefined) {
+          const groupingConfig = config.schedule.grouping;
+          const rawGroupingWindowSeconds =
+            typeof groupingConfig?.window === 'number'
+              ? groupingConfig.window
+              : typeof config.schedule.groupingWindow === 'number'
+                ? config.schedule.groupingWindow
+                : 30;
+          const normalizedGroupingWindowSeconds = Math.max(0, rawGroupingWindowSeconds);
+          const groupingWindowMinutes = Math.round(normalizedGroupingWindowSeconds / 60);
+
           setScheduleGrouping({
-            enabled: config.schedule.grouping.enabled || false,
-            window: Math.floor((config.schedule.grouping.window || 300) / 60),
+            enabled:
+              groupingConfig?.enabled !== undefined
+                ? Boolean(groupingConfig.enabled)
+                : normalizedGroupingWindowSeconds > 0,
+            window: groupingWindowMinutes,
             byNode:
-              config.schedule.grouping.byNode !== undefined
-                ? config.schedule.grouping.byNode
-                : true,
+              groupingConfig?.byNode !== undefined ? groupingConfig.byNode : true,
             byGuest:
-              config.schedule.grouping.byGuest !== undefined
-                ? config.schedule.grouping.byGuest
-                : false,
+              groupingConfig?.byGuest !== undefined ? groupingConfig.byGuest : false,
           });
-        } else if (config.schedule.groupingWindow !== undefined) {
-          setScheduleGrouping({
-            enabled: config.schedule.groupingWindow > 0,
-            window: Math.floor(config.schedule.groupingWindow / 60),
-            byNode: true,
-            byGuest: false,
-          });
+        }
+
+        if (config.schedule.notifyOnResolve !== undefined) {
+          setNotifyOnResolve(Boolean(config.schedule.notifyOnResolve));
+        } else {
+          setNotifyOnResolve(createDefaultResolveNotifications());
         }
 
         if (config.schedule.escalation) {
@@ -1555,6 +1568,12 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       ? clampCooldownMinutes(scheduleCooldown().minutes)
                       : 0;
                     const normalizedMaxAlertsHour = clampMaxAlertsPerHour(scheduleCooldown().maxAlerts);
+                    const groupingState = scheduleGrouping();
+                    const groupingWindowSeconds =
+                      groupingState.enabled && groupingState.window >= 0
+                        ? groupingState.window * 60
+                        : 0;
+                    const groupingEnabled = groupingState.enabled && groupingWindowSeconds > 0;
 
                     const alertConfig = {
                       enabled: true,
@@ -1636,17 +1655,15 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
                       schedule: {
                         quietHours: scheduleQuietHours(),
                         cooldown: normalizedCooldownMinutes,
-                        groupingWindow:
-                          scheduleGrouping().enabled && scheduleGrouping().window
-                            ? scheduleGrouping().window * 60
-                            : 30, // Convert minutes to seconds
+                        groupingWindow: groupingWindowSeconds,
+                        notifyOnResolve: notifyOnResolve(),
                         maxAlertsHour: normalizedMaxAlertsHour,
                         escalation: scheduleEscalation(),
                         grouping: {
-                          enabled: scheduleGrouping().enabled,
-                          window: scheduleGrouping().window * 60, // Convert minutes to seconds
-                          byNode: scheduleGrouping().byNode,
-                          byGuest: scheduleGrouping().byGuest,
+                          enabled: groupingEnabled,
+                          window: groupingWindowSeconds, // Convert minutes to seconds
+                          byNode: groupingState.byNode,
+                          byGuest: groupingState.byGuest,
                         },
                       },
                       // Add missing required fields
@@ -1951,6 +1968,8 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               setCooldown={setScheduleCooldown}
               grouping={scheduleGrouping}
               setGrouping={setScheduleGrouping}
+              notifyOnResolve={notifyOnResolve}
+              setNotifyOnResolve={setNotifyOnResolve}
               escalation={scheduleEscalation}
               setEscalation={setScheduleEscalation}
             />
@@ -3042,6 +3061,8 @@ interface ScheduleTabProps {
   setCooldown: (value: CooldownConfig) => void;
   grouping: () => GroupingConfig;
   setGrouping: (value: GroupingConfig) => void;
+  notifyOnResolve: () => boolean;
+  setNotifyOnResolve: (value: boolean) => void;
   escalation: () => EscalationConfig;
   setEscalation: (value: EscalationConfig) => void;
 }
@@ -3054,12 +3075,15 @@ function ScheduleTab(props: ScheduleTabProps) {
   const setCooldown = props.setCooldown;
   const grouping = props.grouping;
   const setGrouping = props.setGrouping;
+  const notifyOnResolve = props.notifyOnResolve;
+  const setNotifyOnResolve = props.setNotifyOnResolve;
   const escalation = props.escalation;
   const setEscalation = props.setEscalation;
   const resetToDefaults = () => {
     setQuietHours(createDefaultQuietHours());
     setCooldown(createDefaultCooldown());
     setGrouping(createDefaultGrouping());
+    setNotifyOnResolve(createDefaultResolveNotifications());
     setEscalation(createDefaultEscalation());
     props.setHasUnsavedChanges(true);
   };
@@ -3526,7 +3550,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                 <div class="flex items-center gap-3">
                   <input
                     type="range"
-                    min="1"
+                    min="0"
                     max="30"
                     value={grouping().window}
                     onChange={(e) => {
@@ -3540,7 +3564,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </div>
                 </div>
                 <p class={`${formHelpText} mt-1`}>
-                  Alerts within this window are grouped together.
+                  Alerts within this window are grouped together. Set to 0 to send immediately.
                 </p>
               </div>
 
@@ -3632,6 +3656,32 @@ function ScheduleTab(props: ScheduleTabProps) {
               </div>
             </div>
           </Show>
+        </SettingsPanel>
+
+        {/* Recovery notifications */}
+        <SettingsPanel
+          title="Recovery notifications"
+          description="Send a follow-up when an alert returns to normal."
+          action={
+            <Toggle
+              checked={notifyOnResolve()}
+              onChange={(e) => {
+                setNotifyOnResolve(e.currentTarget.checked);
+                props.setHasUnsavedChanges(true);
+              }}
+              containerClass="sm:self-start"
+              label={
+                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {notifyOnResolve() ? 'Enabled' : 'Disabled'}
+                </span>
+              }
+            />
+          }
+          class="space-y-3"
+        >
+          <p class={formHelpText}>
+            Sends on the same channels as live alerts to confirm when a condition clears.
+          </p>
         </SettingsPanel>
 
         {/* Escalation Rules */}
@@ -3810,6 +3860,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                   .join(' and ')}
               </Show>
             </p>
+          </Show>
+          <Show when={notifyOnResolve()}>
+            <p>• Recovery notifications enabled when alerts clear</p>
           </Show>
           <Show when={escalation().enabled && escalation().levels.length > 0}>
             <p>
