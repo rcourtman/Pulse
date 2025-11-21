@@ -1845,3 +1845,54 @@ func TestReevaluateClearsDockerContainerAlertWhenOverrideDisabled(t *testing.T) 
 		t.Fatalf("expected docker container alert to be cleared when override is disabled")
 	}
 }
+
+func TestReevaluateClearsDockerContainerAlertWhenIgnoredPrefixAdded(t *testing.T) {
+	m := NewManager()
+
+	resourceID := "docker:host-2/container-abc123"
+	alertID := resourceID + "-cpu"
+
+	resolved := make(chan string, 1)
+	m.SetResolvedCallback(func(id string) {
+		resolved <- id
+	})
+
+	m.mu.Lock()
+	m.activeAlerts[alertID] = &Alert{
+		ID:           alertID,
+		Type:         "cpu",
+		ResourceID:   resourceID,
+		ResourceName: "qbittorrentvpn",
+		Instance:     "Docker",
+		Metadata: map[string]interface{}{
+			"resourceType":  "Docker Container",
+			"containerId":   "abc123",
+			"containerName": "qbittorrentvpn",
+		},
+		Threshold: 80,
+		Value:     95,
+	}
+	m.mu.Unlock()
+
+	config := m.GetConfig()
+	config.DockerIgnoredContainerPrefixes = []string{"qbit"}
+	config.ActivationState = ActivationActive
+
+	m.UpdateConfig(config)
+
+	select {
+	case got := <-resolved:
+		if got != alertID {
+			t.Fatalf("resolved callback fired for unexpected alert %s", got)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected alert to be resolved after adding ignored prefix")
+	}
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected docker container alert to be cleared when ignored prefix is configured")
+	}
+}
