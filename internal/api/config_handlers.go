@@ -3466,10 +3466,14 @@ pveum user token add pulse-monitor@pam "$TOKEN_NAME" --privsep 0
 # 2) Install or update pulse-sensor-proxy on the host
 curl -sSL "$PULSE_URL/api/install/install-sensor-proxy.sh" | bash -s -- --ctid ${CTID_DISPLAY} --pulse-server "$PULSE_URL"
 
-# 3) Ensure the proxy socket is mounted into this container
-NEXT_MP=\$(pct config ${CTID_DISPLAY} | awk '\$1 ~ /^mp[0-9]+:/ && index(\$0, "mp=/mnt/pulse-proxy") {gsub(":", "", \$1); print \$1; exit}')
-if [ -z "\$NEXT_MP" ]; then NEXT_MP="mp0"; fi
-pct set ${CTID_DISPLAY} -\${NEXT_MP} /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy,replicate=0
+# 3) Ensure the proxy socket is mounted into this container (migration-safe)
+LXC_CONF="/etc/pve/lxc/${CTID_DISPLAY}.conf"
+mkdir -p /run/pulse-sensor-proxy
+sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$LXC_CONF"
+if ! grep -q "^lxc.mount.entry: /run/pulse-sensor-proxy mnt/pulse-proxy none bind,create=dir 0 0\$" "$LXC_CONF"; then
+  echo 'lxc.mount.entry: /run/pulse-sensor-proxy mnt/pulse-proxy none bind,create=dir 0 0' >> "$LXC_CONF"
+fi
+pct stop ${CTID_DISPLAY} && sleep 2 && pct start ${CTID_DISPLAY}
 pct exec ${CTID_DISPLAY} -- test -S /mnt/pulse-proxy/pulse-sensor-proxy.sock && echo "Socket OK"
 
 EOF

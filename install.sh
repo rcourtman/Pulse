@@ -441,6 +441,50 @@ cleanup_sensor_proxy() {
     manual_sensor_proxy_cleanup
 }
 
+configure_proxy_socket_mount() {
+    local ctid="$1"
+    local host_source="/run/pulse-sensor-proxy"
+    local target_rel="mnt/pulse-proxy"
+    local desired_entry="lxc.mount.entry: ${host_source} ${target_rel} none bind,create=dir 0 0"
+    local lxc_config="/etc/pve/lxc/${ctid}.conf"
+
+    mkdir -p "$host_source"
+
+    if [[ ! -f "$lxc_config" ]]; then
+        print_error "Container config not found at $lxc_config; cannot configure pulse-sensor-proxy mount"
+        return 1
+    fi
+
+    local updated=false
+
+    if grep -Eq '^mp[0-9]+: .*pulse-sensor-proxy' "$lxc_config" 2>/dev/null; then
+        print_info "Removing mp entries for pulse-sensor-proxy to keep snapshots and migrations working"
+        sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$lxc_config"
+        updated=true
+    fi
+
+    if grep -q "^lxc.mount.entry: .*/pulse-sensor-proxy" "$lxc_config" 2>/dev/null; then
+        if ! grep -qxF "$desired_entry" "$lxc_config"; then
+            sed -i "s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${desired_entry}#" "$lxc_config"
+            updated=true
+        fi
+    else
+        echo "$desired_entry" >> "$lxc_config"
+        updated=true
+    fi
+
+    if ! pct config "$ctid" | grep -qxF "$desired_entry"; then
+        print_error "Failed to persist pulse-sensor-proxy mount entry in $lxc_config"
+        return 1
+    fi
+
+    if [[ "$updated" == true ]]; then
+        print_info "Configured migration-safe socket mount via lxc.mount.entry"
+    else
+        print_info "pulse-sensor-proxy mount already configured for migrations"
+    fi
+}
+
 # Prompt user about proxy installation
 # Returns 0 if user wants proxy, 1 if not
 prompt_proxy_installation() {
@@ -1335,10 +1379,7 @@ create_lxc_container() {
     fi
 
     if [[ "$PROXY_PREPARE_MOUNT" == "true" ]]; then
-        local PROXY_HOST_PATH="/run/pulse-sensor-proxy"
-        local PROXY_CONTAINER_PATH="/mnt/pulse-proxy"
-        mkdir -p "$PROXY_HOST_PATH"
-        CREATE_ARGS+=("--mp0" "${PROXY_HOST_PATH},mp=${PROXY_CONTAINER_PATH},replicate=0")
+        mkdir -p /run/pulse-sensor-proxy
     fi
 
     # Execute container creation (suppress verbose output)
@@ -1347,7 +1388,7 @@ create_lxc_container() {
         exit 1
     fi
     CONTAINER_CREATED_FOR_CLEANUP=true
-    
+
     # From this point on, cleanup container if we fail
     cleanup_on_error() {
         print_error "Installation failed, cleaning up container $CTID..."
@@ -1358,6 +1399,12 @@ create_lxc_container() {
         pct destroy $CTID 2>/dev/null || true
         exit 1
     }
+
+    if [[ "$PROXY_PREPARE_MOUNT" == "true" ]]; then
+        if ! configure_proxy_socket_mount "$CTID"; then
+            cleanup_on_error
+        fi
+    fi
     
     # Start container
     print_info "Starting container..."

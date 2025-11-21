@@ -147,7 +147,7 @@ The socket directory needs `0775` (not `0770`) to allow the container's unprivil
 | `lxc.idmap` | `u 0 100000 65536`<br>`g 0 100000 65536` | Unprivileged UID/GID mapping |
 | `lxc.apparmor.profile` | `generated` or custom | AppArmor confinement |
 | `lxc.cap.drop` | `sys_admin` (optional) | Drop dangerous capabilities |
-| `mpX` | `/run/pulse-sensor-proxy,mp=/mnt/pulse-proxy` | Socket access from container |
+| `lxc.mount.entry` | `/run/pulse-sensor-proxy mnt/pulse-proxy none bind,create=dir 0 0` | Socket access from container (migration-safe) |
 
 ### Sample LXC Configuration
 
@@ -164,27 +164,25 @@ lxc.apparmor.profile: generated
 lxc.cap.drop: sys_admin
 
 # Bind mount proxy socket directory (REQUIRED)
-# Note: Use an mp entry so Proxmox manages the bind mount automatically
-mp0: /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy
+# Use lxc.mount.entry to keep snapshots/migrations working with Proxmox bind mounts
+lxc.mount.entry: /run/pulse-sensor-proxy mnt/pulse-proxy none bind,create=dir 0 0
 ```
 
 **Key points:**
-- **Directory-level mount**: Mount `/run/pulse-sensor-proxy` directory, not the socket file itself
-- **Why directory mount?** Systemd recreates the socket on restart; socket-level mounts break on recreation
+- **Directory-level mount**: Mount `/run/pulse-sensor-proxy` directory, not the socket file itself (socket is recreated by systemd)
+- **lxc.mount.entry instead of mp**: Proxmox refuses snapshots/migrations when `mpX` bind mounts target `/run/pulse-sensor-proxy`; `lxc.mount.entry` keeps the bind mount without blocking those workflows
 - **Mode 0775**: Socket directory needs group+other execute permissions for container UID traversal
 - **Socket 0777**: Actual socket is world-writable; security enforced via `SO_PEERCRED` authentication
 
 ### Upgrading Existing Installations
 
-If you previously followed the legacy guide (manual `lxc.mount.entry` and `/run/pulse-sensor-proxy` inside the container), upgrade by **removing each node in Pulse and then re-adding it using the “Copy install script” flow in Settings → Nodes**. The script you copy from the UI now:
+If you previously used an `mpX` bind mount (e.g., `mp0: /run/pulse-sensor-proxy,mp=/mnt/pulse-proxy`), upgrade by **removing each node in Pulse and then re-adding it using the “Copy install script” flow in Settings → Nodes**. The installer now:
 
-- Cleans up any old `lxc.mount.entry` rows and replaces them with the managed `mp` mount.
-- Ensures the socket is mounted at `/mnt/pulse-proxy/pulse-sensor-proxy.sock` inside the container.
-- Adds the systemd override so the container backend (or hot-dev) automatically uses the mounted socket.
+- Removes `mp*` entries referencing `/run/pulse-sensor-proxy`
+- Writes the migration-safe `lxc.mount.entry: /run/pulse-sensor-proxy mnt/pulse-proxy none bind,create=dir 0 0`
+- Keeps the systemd override so the backend automatically uses `/mnt/pulse-proxy/pulse-sensor-proxy.sock`
 
-This is the same workflow you used originally—no extra commands are required. Just remove the node from Pulse, click “Copy install script,” run it on the Proxmox host, and add the node again.
-
-> **Advanced option**: If you’d rather refresh in place without removing the node, you can rerun the host-side installer directly (e.g. `sudo /opt/pulse/scripts/install-sensor-proxy.sh --ctid <id> --pulse-server http://<pulse-container-ip>:7655`). The script is idempotent, but re-adding through the UI guarantees the full host + Pulse configuration is rebuilt.
+This is the same workflow you used originally—no extra commands are required. Just remove the node from Pulse, click “Copy install script,” run it on the Proxmox host, and add the node again. If you prefer to refresh in place, rerun the host-side installer directly (e.g. `sudo /opt/pulse/scripts/install-sensor-proxy.sh --ctid <id> --pulse-server http://<pulse-container-ip>:7655`).
 
 ### Runtime Verification
 

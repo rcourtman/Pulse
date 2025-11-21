@@ -3134,203 +3134,181 @@ if [[ "$STANDALONE" == false ]]; then
     echo "  • Proxy on host manages all temperature collection"
     echo ""
 
-    # Ensure container mount via mp configuration
     print_info "Configuring socket bind mount..."
     MOUNT_TARGET="/mnt/pulse-proxy"
     HOST_SOCKET_SOURCE="/run/pulse-sensor-proxy"
     LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
+    LOCAL_MOUNT_ENTRY="lxc.mount.entry: ${HOST_SOCKET_SOURCE} mnt/pulse-proxy none bind,create=dir 0 0"
 
-# Back up container config before modifying
-LXC_CONFIG_BACKUP=$(mktemp)
-cp "$LXC_CONFIG" "$LXC_CONFIG_BACKUP" 2>/dev/null || {
-    print_warn "Could not back up container config (may not exist yet)"
-    LXC_CONFIG_BACKUP=""
-}
+    mkdir -p "$HOST_SOCKET_SOURCE"
 
-CONFIG_CONTENT=$(pct config "$CTID")
-CURRENT_MP=$(pct config "$CTID" | awk -v target="$MOUNT_TARGET" '$1 ~ /^mp[0-9]+:$/ && index($0, "mp=" target) {split($1, arr, ":"); print arr[1]; exit}')
-MOUNT_UPDATED=false
-HOTPLUG_FAILED=false
-CT_RUNNING=false
-if pct status "$CTID" 2>/dev/null | grep -q "running"; then
-    CT_RUNNING=true
-fi
+    # Back up container config before modifying
+    LXC_CONFIG_BACKUP=$(mktemp)
+    cp "$LXC_CONFIG" "$LXC_CONFIG_BACKUP" 2>/dev/null || {
+        print_warn "Could not back up container config (may not exist yet)"
+        LXC_CONFIG_BACKUP=""
+    }
 
-if [[ -z "$CURRENT_MP" ]]; then
-    for idx in $(seq 0 9); do
-        if ! printf "%s\n" "$CONFIG_CONTENT" | grep -q "^mp${idx}:"; then
-            CURRENT_MP="mp${idx}"
-            break
-        fi
-    done
-    if [[ -z "$CURRENT_MP" ]]; then
-        print_error "Unable to find available mp slot for container mount"
-        exit 1
+    MOUNT_UPDATED=false
+    CT_RUNNING=false
+    SKIP_CONTAINER_POST_STEPS=false
+    if pct status "$CTID" 2>/dev/null | grep -q "running"; then
+        CT_RUNNING=true
     fi
-    print_info "Configuring container mount using $CURRENT_MP..."
-    SET_ERROR=$(pct set "$CTID" -${CURRENT_MP} "${HOST_SOCKET_SOURCE},mp=${MOUNT_TARGET},replicate=0" 2>&1)
-    if [ $? -eq 0 ]; then
+
+    if grep -Eq '^mp[0-9]+: .*pulse-sensor-proxy' "$LXC_CONFIG" 2>/dev/null; then
+        print_info "Removing mp mounts for pulse-sensor-proxy to keep snapshots and migrations working"
+        sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$LXC_CONFIG"
         MOUNT_UPDATED=true
-    else
-        HOTPLUG_FAILED=true
-        if [ -n "$SET_ERROR" ]; then
-            print_warn "pct set failed: $SET_ERROR"
-        fi
     fi
-else
-    desired_pattern="^${CURRENT_MP}: ${HOST_SOCKET_SOURCE},mp=${MOUNT_TARGET}"
-    if pct config "$CTID" | grep -q "$desired_pattern"; then
-        print_info "Container already has socket mount configured ($CURRENT_MP)"
-    else
-        print_info "Updating container mount configuration ($CURRENT_MP)..."
-        SET_ERROR=$(pct set "$CTID" -${CURRENT_MP} "${HOST_SOCKET_SOURCE},mp=${MOUNT_TARGET},replicate=0" 2>&1)
-        if [ $? -eq 0 ]; then
+
+    if grep -q "^lxc.mount.entry: .*/pulse-sensor-proxy" "$LXC_CONFIG" 2>/dev/null; then
+        if ! grep -qxF "$LOCAL_MOUNT_ENTRY" "$LXC_CONFIG"; then
+            print_info "Updating existing lxc.mount.entry for pulse-sensor-proxy"
+            sed -i "s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${LOCAL_MOUNT_ENTRY}#" "$LXC_CONFIG"
             MOUNT_UPDATED=true
         else
-            HOTPLUG_FAILED=true
-            if [ -n "$SET_ERROR" ]; then
-                print_warn "pct set failed: $SET_ERROR"
+            print_info "Container already has migration-safe lxc.mount.entry for proxy"
+        fi
+    else
+        print_info "Adding lxc.mount.entry for pulse-sensor-proxy"
+        echo "$LOCAL_MOUNT_ENTRY" >> "$LXC_CONFIG"
+        MOUNT_UPDATED=true
+    fi
+
+    if ! pct config "$CTID" | grep -qxF "$LOCAL_MOUNT_ENTRY"; then
+        print_error "Failed to persist migration-safe socket mount in container config"
+        if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
+            print_warn "Rolling back container configuration changes..."
+            cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG"
+            rm -f "$LXC_CONFIG_BACKUP"
+        fi
+        exit 1
+    fi
+    print_info "✓ Mount configuration recorded in container config"
+
+    if [[ "$MOUNT_UPDATED" = true ]]; then
+        if [[ "$SKIP_RESTART" = true ]]; then
+            if [[ "$CT_RUNNING" = true ]]; then
+                print_info "Skipping container restart (--skip-restart provided). Changes apply on next restart."
+            else
+                print_info "Skipping automatic container start (--skip-restart provided)."
+            fi
+        else
+            print_info "Restarting container to activate secure communication..."
+            if [[ "$CT_RUNNING" = true ]]; then
+                pct stop "$CTID" && sleep 2 && pct start "$CTID"
+            else
+                pct start "$CTID"
+            fi
+            sleep 5
+            CT_RUNNING=true
+        fi
+    fi
+
+    # Verify socket directory and file inside container
+    if [[ "$SKIP_RESTART" = true && "$CT_RUNNING" = true && "$MOUNT_UPDATED" = true ]]; then
+        print_warn "Skipping socket verification until container $CTID is restarted."
+        print_warn "Please restart container and verify socket manually:"
+        print_warn "  pct stop $CTID && sleep 2 && pct start $CTID"
+        print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
+    elif [[ "$SKIP_RESTART" = true && "$CT_RUNNING" = false ]]; then
+        print_warn "Socket verification deferred. Start container $CTID and run:"
+        print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
+        SKIP_CONTAINER_POST_STEPS=true
+    elif [[ "$CT_RUNNING" = false ]]; then
+        print_warn "Container $CTID is stopped. Start it to verify the pulse-sensor-proxy socket:"
+        print_warn "  pct start $CTID && pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
+        SKIP_CONTAINER_POST_STEPS=true
+    else
+        if [[ ! -S "$SOCKET_PATH" ]]; then
+            print_warn "Host proxy socket not available yet; deferring container verification until service starts."
+            DEFER_SOCKET_VERIFICATION=true
+        else
+            print_info "Verifying secure communication channel..."
+            if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
+                print_info "✓ Secure socket communication ready"
+                # Clean up backup since verification succeeded
+                [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
+            else
+                print_error "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
+                print_error "Mount configuration verified but socket not accessible in container"
+                print_error "This indicates a mount or restart issue"
+
+                # Rollback container config changes
+                if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
+                    print_warn "Rolling back container configuration changes..."
+                    cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG"
+                    rm -f "$LXC_CONFIG_BACKUP"
+                    print_info "Container configuration restored to previous state"
+                fi
+                exit 1
             fi
         fi
     fi
-fi
 
-if [[ "$HOTPLUG_FAILED" = true ]]; then
-    print_warn "Hot-plugging socket mount failed (container may be running). Updating config directly."
-    CURRENT_MP_LINE="${CURRENT_MP}: ${HOST_SOCKET_SOURCE},mp=${MOUNT_TARGET},replicate=0"
-    if ! grep -q "^${CURRENT_MP}:" "$LXC_CONFIG" 2>/dev/null; then
-        echo "$CURRENT_MP_LINE" >> "$LXC_CONFIG"
-    else
-        sed -i "s#^${CURRENT_MP}:.*#${CURRENT_MP_LINE}#" "$LXC_CONFIG"
-    fi
-    MOUNT_UPDATED=true
-fi
+    if [[ "$SKIP_CONTAINER_POST_STEPS" != true ]]; then
+        # Configure Pulse backend environment override inside container
+        print_info "Configuring Pulse to use proxy..."
 
-# Verify mount configuration actually persisted
-if ! pct config "$CTID" | grep -q "^${CURRENT_MP}:"; then
-    print_error "Failed to persist mount configuration for $CURRENT_MP"
-    print_error "Expected mount not found in container config"
-    exit 1
-fi
-print_info "✓ Mount configuration verified in container config"
+        # Always make sure the Pulse .env file contains the proxy socket override.
+        configure_container_proxy_env
 
-# Remove legacy lxc.mount.entry directives if present
-if grep -q "lxc.mount.entry: ${HOST_SOCKET_SOURCE}" "$LXC_CONFIG"; then
-    print_info "Removing legacy lxc.mount.entry directives for pulse-sensor-proxy"
-    sed -i '/lxc\.mount\.entry: \/run\/pulse-sensor-proxy/d' "$LXC_CONFIG"
-    MOUNT_UPDATED=true
-fi
-
-# Restart container to apply mount if configuration changed or mount missing
-if [[ "$MOUNT_UPDATED" = true ]]; then
-    if [[ "$SKIP_RESTART" = true ]]; then
-        if [[ "$CT_RUNNING" = true ]]; then
-            print_info "Skipping container restart (--skip-restart provided)."
+        if ! pct exec "$CTID" -- systemctl status pulse >/dev/null 2>&1; then
+            print_warn "Pulse service not found in container $CTID; proxy socket configured but service restart deferred."
+            print_info "Install or restart Pulse inside the container to enable temperature monitoring."
         else
-            print_info "Skipping automatic container start (--skip-restart provided)."
-        fi
-    else
-        print_info "Restarting container to activate secure communication..."
-        if [[ "$CT_RUNNING" = true ]]; then
-            pct stop "$CTID" && sleep 2 && pct start "$CTID"
-        else
-            pct start "$CTID"
-        fi
-        sleep 5
-    fi
-fi
-
-# Verify socket directory and file inside container
-if [[ "$HOTPLUG_FAILED" = true && "$CT_RUNNING" = true ]]; then
-    print_warn "Skipping socket verification until container $CTID is restarted."
-    print_warn "Please restart container and verify socket manually:"
-    print_warn "  pct stop $CTID && sleep 2 && pct start $CTID"
-    print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
-elif [[ "$SKIP_RESTART" = true && "$CT_RUNNING" = false ]]; then
-    print_warn "Socket verification deferred. Start container $CTID and run:"
-    print_warn "  pct exec $CTID -- test -S ${MOUNT_TARGET}/pulse-sensor-proxy.sock && echo 'Socket OK'"
-else
-    if [[ ! -S "$SOCKET_PATH" ]]; then
-        print_warn "Host proxy socket not available yet; deferring container verification until service starts."
-        DEFER_SOCKET_VERIFICATION=true
-    else
-        print_info "Verifying secure communication channel..."
-        if pct exec "$CTID" -- test -S "${MOUNT_TARGET}/pulse-sensor-proxy.sock"; then
-            print_info "✓ Secure socket communication ready"
-            # Clean up backup since verification succeeded
-            [ -n "$LXC_CONFIG_BACKUP" ] && rm -f "$LXC_CONFIG_BACKUP"
-        else
-            print_error "Socket not visible at ${MOUNT_TARGET}/pulse-sensor-proxy.sock"
-            print_error "Mount configuration verified but socket not accessible in container"
-            print_error "This indicates a mount or restart issue"
-
-            # Rollback container config changes
-            if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
-                print_warn "Rolling back container configuration changes..."
-                cp "$LXC_CONFIG_BACKUP" "$LXC_CONFIG"
-                rm -f "$LXC_CONFIG_BACKUP"
-                print_info "Container configuration restored to previous state"
-            fi
-            exit 1
-        fi
-    fi
-fi
-
-# Configure Pulse backend environment override inside container
-print_info "Configuring Pulse to use proxy..."
-
-# Always make sure the Pulse .env file contains the proxy socket override.
-configure_container_proxy_env
-
-if ! pct exec "$CTID" -- systemctl status pulse >/dev/null 2>&1; then
-    print_warn "Pulse service not found in container $CTID; proxy socket configured but service restart deferred."
-    print_info "Install or restart Pulse inside the container to enable temperature monitoring."
-else
-    pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse.service.d"
-    pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse.service.d/10-pulse-proxy.conf
+            pct exec "$CTID" -- bash -lc "mkdir -p /etc/systemd/system/pulse.service.d"
+            pct exec "$CTID" -- bash -lc "cat <<'EOF' >/etc/systemd/system/pulse.service.d/10-pulse-proxy.conf
 [Service]
 Environment=PULSE_SENSOR_PROXY_SOCKET=${MOUNT_TARGET}/pulse-sensor-proxy.sock
 EOF"
-    pct exec "$CTID" -- systemctl daemon-reload || true
+            pct exec "$CTID" -- systemctl daemon-reload || true
 
-    # Restart Pulse service to apply the new environment variable
-    if pct exec "$CTID" -- systemctl is-active --quiet pulse 2>/dev/null; then
-        print_info "Restarting Pulse service to apply configuration..."
-        pct exec "$CTID" -- systemctl restart pulse
-        sleep 2
-        print_success "Pulse service restarted with proxy configuration"
-    fi
-fi
-
-# Test proxy status
-print_info "Testing proxy status..."
-if systemctl is-active --quiet pulse-sensor-proxy; then
-    print_info "${GREEN}✓${NC} pulse-sensor-proxy is running"
-else
-    print_error "pulse-sensor-proxy is not running"
-    print_info "Check logs: journalctl -u pulse-sensor-proxy -n 50"
-    exit 1
-fi
-
-# Check for and remove legacy SSH keys from container
-print_info "Checking for legacy SSH keys in container..."
-LEGACY_KEYS_FOUND=false
-for key_type in id_rsa id_dsa id_ecdsa id_ed25519; do
-    if pct exec "$CTID" -- test -f "/root/.ssh/$key_type" 2>/dev/null; then
-        LEGACY_KEYS_FOUND=true
-        if [ "$QUIET" != true ]; then
-            print_warn "Found legacy SSH key: /root/.ssh/$key_type"
+            # Restart Pulse service to apply the new environment variable
+            if pct exec "$CTID" -- systemctl is-active --quiet pulse 2>/dev/null; then
+                print_info "Restarting Pulse service to apply configuration..."
+                pct exec "$CTID" -- systemctl restart pulse
+                sleep 2
+                print_success "Pulse service restarted with proxy configuration"
+            fi
         fi
-        pct exec "$CTID" -- rm -f "/root/.ssh/$key_type" "/root/.ssh/${key_type}.pub"
-    print_info "  Removed /root/.ssh/$key_type"
-    fi
-done
 
-if [ "$LEGACY_KEYS_FOUND" = true ] && [ "$QUIET" != true ]; then
-    print_info ""
-    print_info "Legacy SSH keys removed from container for security"
-    print_info ""
-fi
+        # Check for and remove legacy SSH keys from container
+        print_info "Checking for legacy SSH keys in container..."
+        LEGACY_KEYS_FOUND=false
+        for key_type in id_rsa id_dsa id_ecdsa id_ed25519; do
+            if pct exec "$CTID" -- test -f "/root/.ssh/$key_type" 2>/dev/null; then
+                LEGACY_KEYS_FOUND=true
+                if [ "$QUIET" != true ]; then
+                    print_warn "Found legacy SSH key: /root/.ssh/$key_type"
+                fi
+                pct exec "$CTID" -- rm -f "/root/.ssh/$key_type" "/root/.ssh/${key_type}.pub"
+            print_info "  Removed /root/.ssh/$key_type"
+            fi
+        done
+
+        if [ "$LEGACY_KEYS_FOUND" = true ] && [ "$QUIET" != true ]; then
+            print_info ""
+            print_info "Legacy SSH keys removed from container for security"
+            print_info ""
+        fi
+    else
+        if [ -n "$LXC_CONFIG_BACKUP" ] && [ -f "$LXC_CONFIG_BACKUP" ]; then
+            rm -f "$LXC_CONFIG_BACKUP"
+        fi
+        print_warn "Skipping container-side configuration until container $CTID is running."
+    fi
+
+    # Test proxy status
+    print_info "Testing proxy status..."
+    if systemctl is-active --quiet pulse-sensor-proxy; then
+        print_info "${GREEN}✓${NC} pulse-sensor-proxy is running"
+    else
+        print_error "pulse-sensor-proxy is not running"
+        print_info "Check logs: journalctl -u pulse-sensor-proxy -n 50"
+        exit 1
+    fi
 fi  # End of container-specific configuration
 
 if [[ "$SKIP_SELF_HEAL_SETUP" == "true" ]]; then
