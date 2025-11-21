@@ -83,6 +83,8 @@ curl -fsSL http://pulse.example.local:7655/install-host-agent.sh | \
 
 The TrueNAS flow stores the binary, service unit, and logs under `/data/pulse-host-agent` and creates a POSTINIT entry in **System Settings → Advanced → Init/Shutdown Scripts** pointing at `/data/pulse-host-agent/bootstrap-pulse-host-agent.sh`. Uninstall with `/uninstall-host-agent.sh`; the script removes the init task and the persistent directory. SATA HDD temperatures are not collected yet; CPU/NVMe/GPU sensors continue to report when lm-sensors is available.
 
+- TrueNAS datasets often default to `exec=off`; the installer now fails fast if `/data` (or the chosen target) is noexec. If you hit a `203/EXEC` error or the installer reports noexec, enable exec on the dataset backing `/data` or choose an exec-capable path before retrying.
+
 - On systemd machines the script installs the binary, wires up `/etc/systemd/system/pulse-host-agent.service`, enables it, and tails the registration status.
 - On Unraid hosts it starts the agent under `nohup`, creates `/var/log/pulse`, and (optionally) inserts the auto-start line into `/boot/config/go`.
 - On minimalist distros without systemd (e.g. Alpine) it creates/updates `/etc/rc.local`, adds the background runner, and verifies it launches.
