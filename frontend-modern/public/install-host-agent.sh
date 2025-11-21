@@ -453,6 +453,7 @@ if command -v selinuxenabled &> /dev/null && selinuxenabled 2>/dev/null; then
 fi
 
 log_success "Agent binary installed to $AGENT_PATH"
+validate_agent_binary_executable "$AGENT_PATH"
 
 # Build reusable agent command strings
 AGENT_CMD="$AGENT_PATH --url $PULSE_URL"
@@ -465,6 +466,38 @@ if [[ -n "$AGENT_ID" ]]; then
 fi
 MANUAL_START_CMD="$AGENT_CMD"
 MANUAL_START_WRAPPED="nohup $MANUAL_START_CMD >$LINUX_LOG_FILE 2>&1 &"
+
+validate_agent_binary_executable() {
+    local path="$1"
+    local mount_opts=""
+
+    if command -v findmnt >/dev/null 2>&1; then
+        mount_opts=$(findmnt -no OPTIONS --target "$path" 2>/dev/null || true)
+        if echo "$mount_opts" | grep -Eq '(^|,)noexec(,|$)'; then
+            log_error "Install target $path is on a filesystem mounted noexec (options: $mount_opts)"
+            echo ""
+            log_info "Enable exec on that dataset or choose an exec-capable path, then rerun the installer."
+            exit 1
+        fi
+    fi
+
+    if command -v file >/dev/null 2>&1; then
+        local file_type=""
+        file_type=$(file -b "$path" 2>/dev/null || true)
+        if [[ -n "$file_type" ]] && ! echo "$file_type" | grep -qiE 'ELF|Mach-O|PE32'; then
+            log_error "Downloaded file at $path is not a recognizable executable (detected: $file_type)"
+            exit 1
+        fi
+    fi
+
+    if ! "$path" --version >/dev/null 2>&1; then
+        log_error "Installed agent at $path failed to execute; check for noexec mounts or download issues."
+        if [[ -n "$mount_opts" ]]; then
+            log_info "Filesystem options: $mount_opts"
+        fi
+        exit 1
+    fi
+}
 
 write_truenas_env_file() {
     sudo install -d -m 0700 "$TRUENAS_STATE_DIR" "$TRUENAS_LOG_DIR"
