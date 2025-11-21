@@ -74,6 +74,15 @@ curl -fsSL http://pulse.example.local:7655/install-host-agent.sh | \
   bash -s -- --url http://pulse.example.local:7655 --token <api-token>
 ```
 
+- **TrueNAS SCALE**: Use `--platform truenas` (or rely on auto-detect) so the installer writes everything to `/data/pulse-host-agent`, installs a systemd unit from that location, and registers a POSTINIT Init/Shutdown task that re-links and restarts the service on boot.
+
+```bash
+curl -fsSL http://pulse.example.local:7655/install-host-agent.sh | \
+  bash -s -- --platform truenas --url http://pulse.example.local:7655 --token <api-token>
+```
+
+The TrueNAS flow stores the binary, service unit, and logs under `/data/pulse-host-agent` and creates a POSTINIT entry in **System Settings → Advanced → Init/Shutdown Scripts** pointing at `/data/pulse-host-agent/bootstrap-pulse-host-agent.sh`. Uninstall with `/uninstall-host-agent.sh`; the script removes the init task and the persistent directory. SATA HDD temperatures are not collected yet; CPU/NVMe/GPU sensors continue to report when lm-sensors is available.
+
 - On systemd machines the script installs the binary, wires up `/etc/systemd/system/pulse-host-agent.service`, enables it, and tails the registration status.
 - On Unraid hosts it starts the agent under `nohup`, creates `/var/log/pulse`, and (optionally) inserts the auto-start line into `/boot/config/go`.
 - On minimalist distros without systemd (e.g. Alpine) it creates/updates `/etc/rc.local`, adds the background runner, and verifies it launches.
