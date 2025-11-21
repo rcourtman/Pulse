@@ -44,6 +44,33 @@ var transientRateLimitStatusCodes = map[int]struct{}{
 	504: {},
 }
 
+// isVMSpecificError reports whether an error string is scoped to a single VM/guest agent
+// and should not be treated as a node connectivity failure.
+func isVMSpecificError(errStr string) bool {
+	if errStr == "" {
+		return false
+	}
+	lower := strings.ToLower(errStr)
+
+	if strings.Contains(lower, "no qemu guest agent") ||
+		strings.Contains(lower, "qemu guest agent is not running") ||
+		strings.Contains(lower, "guest agent") {
+		return true
+	}
+
+	// QMP guest agent operations can time out or fail per-VM (e.g. guest-get-fsinfo).
+	// These aren't node connectivity issues and should not mark endpoints unhealthy.
+	if strings.Contains(lower, "qmp command") {
+		return true
+	}
+
+	if strings.Contains(lower, "guest-get-") {
+		return true
+	}
+
+	return false
+}
+
 // NewClusterClient creates a new cluster-aware client
 func NewClusterClient(name string, config ClientConfig, endpoints []string) *ClusterClient {
 	cc := &ClusterClient{
@@ -120,17 +147,9 @@ func (cc *ClusterClient) initialHealthCheck() {
 			cc.mu.Lock()
 
 			// Check if error is VM-specific (shouldn't affect health)
-			isVMSpecificError := false
-			if err != nil {
-				errStr := err.Error()
-				if strings.Contains(errStr, "No QEMU guest agent") ||
-					strings.Contains(errStr, "QEMU guest agent is not running") ||
-					strings.Contains(errStr, "guest agent") {
-					isVMSpecificError = true
-				}
-			}
+			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
 
-			if err == nil || isVMSpecificError {
+			if err == nil || vmSpecificErr {
 				// Node is healthy - create a proper client with full timeout for actual use
 				fullCfg := cc.config
 				fullCfg.Host = ep
@@ -149,7 +168,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 					delete(cc.lastError, ep)
 					cc.lastHealthCheck[ep] = time.Now()
 					cc.clients[ep] = fullClient // Store the full client, not test client
-					if isVMSpecificError {
+					if vmSpecificErr {
 						log.Debug().
 							Str("cluster", cc.name).
 							Str("endpoint", ep).
@@ -456,17 +475,9 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			cancel()
 
 			// Check if error is VM-specific (shouldn't prevent recovery)
-			isVMSpecificError := false
-			if err != nil {
-				errStr := err.Error()
-				if strings.Contains(errStr, "No QEMU guest agent") ||
-					strings.Contains(errStr, "QEMU guest agent is not running") ||
-					strings.Contains(errStr, "guest agent") {
-					isVMSpecificError = true
-				}
-			}
+			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
 
-			if err == nil || isVMSpecificError {
+			if err == nil || vmSpecificErr {
 				recoveredEndpoints <- ep
 
 				// Store the client with original timeout
@@ -480,7 +491,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				cc.clients[ep] = fullClient
 				cc.mu.Unlock()
 
-				if isVMSpecificError {
+				if vmSpecificErr {
 					log.Info().
 						Str("cluster", cc.name).
 						Str("endpoint", ep).
@@ -578,17 +589,14 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Error 403 for storage operations means permission issue, not node health issue
 		// Error 500 with "No QEMU guest agent configured" means VM-specific issue, not node failure
 		// Error 500 with "QEMU guest agent is not running" means VM-specific issue, not node failure
-		// Error 500 with any "guest agent" message means VM-specific issue, not node failure
+		// Error 500 with any guest agent/QMP message means VM-specific issue, not node failure
 		// Error 400 with "ds" parameter error means Proxmox 9.x doesn't support RRD data source filtering
 		// JSON unmarshal errors are data format issues, not connectivity problems
 		// Context deadline/timeout errors on storage endpoints mean storage issues, not node unreachability
-		if strings.Contains(errStr, "595") ||
+		if isVMSpecificError(errStr) ||
+			strings.Contains(errStr, "595") ||
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
 			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "No QEMU guest agent configured")) ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "QEMU guest agent is not running")) ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "guest agent")) ||
-			strings.Contains(errStr, "guest agent") ||
 			(strings.Contains(errStr, "403") && (strings.Contains(errStr, "storage") || strings.Contains(errStr, "datastore"))) ||
 			strings.Contains(errStr, "permission denied") ||
 			(strings.Contains(errStr, "400") && strings.Contains(errStr, "\"ds\"") && strings.Contains(errStr, "property is not defined in schema")) ||
