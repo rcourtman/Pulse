@@ -2438,7 +2438,7 @@ download_pulse() {
             print_warn "Host agent binary not found in archive; skipping installation"
         fi
 
-        install_additional_agent_binaries "$LATEST_RELEASE"
+        install_additional_agent_binaries "$LATEST_RELEASE" "$TEMP_EXTRACT"
 
         # Install all agent scripts
         deploy_agent_scripts "$TEMP_EXTRACT"
@@ -2487,7 +2487,7 @@ download_pulse() {
                     ln -sf "$INSTALL_DIR/bin/pulse-docker-agent" /usr/local/bin/pulse-docker-agent
                 fi
 
-                install_additional_agent_binaries "$LATEST_RELEASE"
+                install_additional_agent_binaries "$LATEST_RELEASE" "$TEMP_EXTRACT2"
 
                 deploy_agent_scripts "$TEMP_EXTRACT2"
                 
@@ -2512,26 +2512,74 @@ download_pulse() {
     fi  # End of SKIP_DOWNLOAD check
 }
 
+copy_host_agent_binaries_from_dir() {
+    local source_dir="$1"
+
+    if [[ -z "$source_dir" ]] || [[ ! -d "$source_dir/bin" ]]; then
+        return 1
+    fi
+
+    local copied=0
+    shopt -s nullglob
+    for agent_file in "$source_dir"/bin/pulse-host-agent-*; do
+        [[ -e "$agent_file" ]] || continue
+
+        local base
+        base=$(basename "$agent_file")
+        if [[ "$base" == "pulse-host-agent" ]]; then
+            continue
+        fi
+
+        cp -a "$agent_file" "$INSTALL_DIR/bin/$base"
+        if [[ ! -L "$INSTALL_DIR/bin/$base" ]]; then
+            chmod +x "$INSTALL_DIR/bin/$base"
+        fi
+        chown -h pulse:pulse "$INSTALL_DIR/bin/$base" || true
+        copied=1
+    done
+    shopt -u nullglob
+
+    if [[ $copied -eq 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
 install_additional_agent_binaries() {
     local version="$1"
+    local source_dir="${2:-}"
 
     if [[ -z "$version" ]]; then
         return
     fi
 
-    local targets=("linux-amd64" "linux-arm64" "linux-armv7")
-    local docker_missing=0
-    local host_missing=0
-    for target in "${targets[@]}"; do
+    local docker_targets=("linux-amd64" "linux-arm64" "linux-armv7")
+    local host_targets=("linux-amd64" "linux-arm64" "linux-armv7" "linux-armv6" "linux-386" "darwin-amd64" "darwin-arm64" "windows-amd64" "windows-arm64" "windows-386")
+
+    # Prefer locally available host agents from the extracted archive to avoid network reliance
+    copy_host_agent_binaries_from_dir "$source_dir" || true
+
+    local docker_missing_targets=()
+    for target in "${docker_targets[@]}"; do
         if [[ ! -f "$INSTALL_DIR/bin/pulse-docker-agent-$target" ]]; then
-            docker_missing=1
-        fi
-        if [[ ! -f "$INSTALL_DIR/bin/pulse-host-agent-$target" ]]; then
-            host_missing=1
+            docker_missing_targets+=("$target")
         fi
     done
 
-    if [[ $docker_missing -eq 0 ]] && [[ $host_missing -eq 0 ]]; then
+    local host_missing_targets=()
+    for target in "${host_targets[@]}"; do
+        if [[ "$target" == windows-* ]]; then
+            if [[ ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target" && ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target.exe" ]]; then
+                host_missing_targets+=("$target")
+            fi
+        else
+            if [[ ! -e "$INSTALL_DIR/bin/pulse-host-agent-$target" ]]; then
+                host_missing_targets+=("$target")
+            fi
+        fi
+    done
+
+    if [[ ${#docker_missing_targets[@]} -eq 0 ]] && [[ ${#host_missing_targets[@]} -eq 0 ]]; then
         return
     fi
 
@@ -2582,20 +2630,10 @@ install_additional_agent_binaries() {
         fi
     done
 
-    # Install host agent binaries
-    for agent_file in "$temp_dir"/bin/pulse-host-agent-*; do
-        if [[ -f "$agent_file" ]]; then
-            local base
-            base=$(basename "$agent_file")
-            # Don't copy the wrapper script, only platform-specific binaries
-            if [[ "$base" == pulse-host-agent-linux-* ]] || [[ "$base" == pulse-host-agent-darwin-* ]] || [[ "$base" == pulse-host-agent-windows-* ]]; then
-                cp -f "$agent_file" "$INSTALL_DIR/bin/$base"
-                chmod +x "$INSTALL_DIR/bin/$base"
-                chown pulse:pulse "$INSTALL_DIR/bin/$base"
-                host_installed=1
-            fi
-        fi
-    done
+    # Install host agent binaries (preserve symlinks for Windows targets)
+    if copy_host_agent_binaries_from_dir "$temp_dir"; then
+        host_installed=1
+    fi
 
     if [[ $docker_installed -eq 1 ]]; then
         print_success "Additional Docker agent binaries installed"

@@ -21,6 +21,11 @@ error() {
     echo -e "${RED}[ERROR]${NC} $*" >&2
 }
 
+section() {
+    echo ""
+    echo -e "${BLUE}=== ${1} ===${NC}"
+}
+
 success() {
     echo -e "${GREEN}[✓]${NC} $*"
 }
@@ -31,6 +36,37 @@ info() {
 
 warn() {
     echo -e "${YELLOW}[WARN]${NC} $*"
+}
+
+with_network_blocked() {
+    # Drop outbound traffic inside container by adding a reject route; avoids needing elevated host perms.
+    # Caller supplies: container name, command...
+    local container="$1"
+    shift
+    docker exec "$container" sh -c "ip route add blackhole 0.0.0.0/0 || true" && "$@"
+}
+
+check_tar_entries_nonempty() {
+    local tarball="$1"
+    shift
+    for entry in "$@"; do
+        if ! tar -tzf "$tarball" "$entry" >/dev/null 2>&1; then
+            error "$(basename "$tarball") missing entry: $entry"
+            exit 1
+        fi
+        # Examine type; skip size enforcement for symlinks
+        local type
+        type=$(tar -tvf "$tarball" "$entry" 2>/dev/null | awk 'NR==1 {print substr($0,1,1)}')
+        if [ "$type" = "l" ]; then
+            continue
+        fi
+        local size
+        size=$(tar -xOf "$tarball" "$entry" 2>/dev/null | wc -c | tr -d '[:space:]')
+        if [ -z "$size" ] || [ "$size" -le 0 ]; then
+            error "$(basename "$tarball") missing or empty entry: $entry"
+            exit 1
+        fi
+    done
 }
 
 if [ $# -lt 1 ]; then
@@ -73,7 +109,8 @@ fi
 
 # Create temp directory for extractions
 tmp_root=$(mktemp -d)
-trap 'rm -rf "$tmp_root"' EXIT
+smoke_container=""
+trap 'rm -rf "$tmp_root"; if [ -n "$smoke_container" ]; then docker rm -f "$smoke_container" >/dev/null 2>&1 || true; fi' EXIT
 
 info "Validating Pulse $PULSE_TAG release artifacts"
 info "Image: $IMAGE"
@@ -88,7 +125,7 @@ if [ "$SKIP_DOCKER" = false ]; then
 
     # Validate VERSION file in container
     info "Checking VERSION file in Docker image..."
-    docker run --rm --entrypoint /bin/sh -e EXPECTED_VERSION="$PULSE_VERSION" "$IMAGE" -c 'set -euo pipefail; actual=$(cat /VERSION | tr -d "\r\n"); [ "$actual" = "$EXPECTED_VERSION" ] || { echo "VERSION mismatch: expected=$EXPECTED_VERSION actual=$actual" >&2; exit 1; }' || { error "VERSION file mismatch in Docker image"; exit 1; }
+    docker run --rm --entrypoint /bin/sh -e EXPECTED_VERSION="$PULSE_VERSION" "$IMAGE" -c 'set -euo pipefail; for path in /VERSION /app/VERSION; do if [ -f "$path" ]; then actual=$(cat "$path" | tr -d "\r\n"); [ "$actual" = "$EXPECTED_VERSION" ] && exit 0 || { echo "VERSION mismatch at $path: expected=$EXPECTED_VERSION actual=$actual" >&2; exit 1; }; fi; done; echo "VERSION file not found in image" >&2; exit 1' || { error "VERSION file mismatch in Docker image"; exit 1; }
     success "VERSION file correct: $PULSE_VERSION"
 
     # Validate all required scripts exist and are executable
@@ -120,6 +157,124 @@ if [ "$SKIP_DOCKER" = false ]; then
     docker run --rm --entrypoint /bin/sh -e EXPECTED_TAG="$PULSE_TAG" "$IMAGE" -c 'set -euo pipefail; grep -aF "$EXPECTED_TAG" /opt/pulse/bin/pulse-docker-agent-linux-amd64 >/dev/null' || { error "Docker agent version string not found"; exit 1; }
     success "Docker agent version embedded: $PULSE_TAG"
 
+    # Smoke test download endpoints from a running container
+    info "Running download endpoint smoke tests..."
+    HOST_PORT=8765
+    SMOKE_CONTAINER="pulse-download-smoke-$$"
+    smoke_container="$SMOKE_CONTAINER"
+
+    docker run -d --rm \
+        --name "$SMOKE_CONTAINER" \
+        -p "$HOST_PORT:7655" \
+        -e PULSE_MOCK_MODE=true \
+        -e PULSE_ALLOW_DOCKER_UPDATES=true \
+        -e PULSE_AUTH_USER=admin \
+        -e PULSE_AUTH_PASS=admin \
+        "$IMAGE" >/dev/null
+
+    for i in $(seq 1 30); do
+        if curl -fsS "http://127.0.0.1:${HOST_PORT}/api/health" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 2
+        if [ "$i" -eq 30 ]; then
+            docker logs "$SMOKE_CONTAINER" || true
+            error "Pulse container did not become healthy for download smoke tests"
+            exit 1
+        fi
+    done
+
+    download_matrix=(
+        "linux amd64"
+        "linux arm64"
+        "linux armv7"
+        "linux armv6"
+        "linux 386"
+        "darwin amd64"
+        "darwin arm64"
+        "windows amd64"
+        "windows arm64"
+        "windows 386"
+    )
+
+    for entry in "${download_matrix[@]}"; do
+        set -- $entry
+        platform=$1
+        arch=$2
+        url="http://127.0.0.1:${HOST_PORT}/download/pulse-host-agent?platform=${platform}&arch=${arch}"
+        tmp_file=$(mktemp)
+        if ! curl -fsS -o "$tmp_file" "$url"; then
+            docker logs "$SMOKE_CONTAINER" || true
+            error "Download failed for $platform/$arch"
+            exit 1
+        fi
+        if [ ! -s "$tmp_file" ]; then
+            error "Downloaded empty binary for $platform/$arch"
+            exit 1
+        fi
+        rm -f "$tmp_file"
+    done
+    success "Download endpoints returned binaries for all platforms/architectures"
+
+    checksum_url="http://127.0.0.1:${HOST_PORT}/download/pulse-host-agent.sha256?platform=linux&arch=amd64"
+    checksum_tmp=$(mktemp)
+    if curl -fsS -o "$checksum_tmp" "$checksum_url"; then
+        if ! grep -Eq '^[0-9a-f]{64}$' "$checksum_tmp"; then
+            error "Invalid checksum response from $checksum_url"
+            exit 1
+        fi
+        success "Checksum endpoint responded with SHA256"
+    else
+        warn "Checksum endpoint unavailable (non-blocking): $checksum_url"
+    fi
+    rm -f "$checksum_tmp"
+
+    docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+    smoke_container=""
+
+    echo ""
+
+    # Offline self-heal check: run with no outbound network and confirm download endpoint still serves binaries
+    section "Offline self-heal smoke test"
+    SMOKE_CONTAINER="pulse-offline-smoke-$$"
+    smoke_container="$SMOKE_CONTAINER"
+    docker run -d --rm \
+        --name "$SMOKE_CONTAINER" \
+        --network none \
+        -e PULSE_MOCK_MODE=true \
+        -e PULSE_ALLOW_DOCKER_UPDATES=true \
+        -e PULSE_AUTH_USER=admin \
+        -e PULSE_AUTH_PASS=admin \
+        "$IMAGE" >/dev/null
+
+    for i in $(seq 1 30); do
+        if docker exec "$SMOKE_CONTAINER" wget -qO- http://127.0.0.1:7655/api/health >/dev/null 2>&1; then
+            break
+        fi
+        sleep 2
+        if [ "$i" -eq 30 ]; then
+            docker logs "$SMOKE_CONTAINER" || true
+            error "Pulse container did not become healthy for offline smoke tests"
+            exit 1
+        fi
+    done
+
+    offline_tmp=$(mktemp)
+    if ! docker exec "$SMOKE_CONTAINER" wget -qO- "http://127.0.0.1:7655/download/pulse-host-agent?platform=linux&arch=amd64" > "$offline_tmp"; then
+        docker logs "$SMOKE_CONTAINER" || true
+        error "Offline self-heal failed: download endpoint returned error with no outbound network"
+        exit 1
+    fi
+    if [ ! -s "$offline_tmp" ]; then
+        error "Offline self-heal failed: downloaded binary is empty"
+        exit 1
+    fi
+    rm -f "$offline_tmp"
+    success "Offline self-heal: download endpoint works without outbound network"
+
+    docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
+    smoke_container=""
+
     echo ""
 else
     warn "=== Skipping Docker Image Validation (--skip-docker flag provided) ==="
@@ -141,6 +296,7 @@ info "Checking required release assets..."
 required_assets=(
     "install.sh"
     "checksums.txt"
+    "host-agent-manifest.json"
     "pulse-v${PULSE_VERSION}.tar.gz"
     "pulse-v${PULSE_VERSION}-linux-amd64.tar.gz"
     "pulse-v${PULSE_VERSION}-linux-arm64.tar.gz"
@@ -168,9 +324,92 @@ if [ $missing_count -gt 0 ]; then
 fi
 success "All ${#required_assets[@]} required release assets present"
 
+# Validate host-agent manifest matches expected set
+section "Validating host-agent manifest"
+host_agent_manifest="host-agent-manifest.json"
+python3 - "$host_agent_manifest" "$PULSE_VERSION" <<'EOF' || { error "Host-agent manifest validation failed"; exit 1; }
+import json
+import sys
+import os
+
+manifest_path = sys.argv[1]
+version = sys.argv[2]
+
+with open(manifest_path, "r", encoding="utf-8") as handle:
+    manifest = json.load(handle)
+
+expected_agents = {
+    "pulse-host-agent-linux-amd64",
+    "pulse-host-agent-linux-arm64",
+    "pulse-host-agent-linux-armv7",
+    "pulse-host-agent-linux-armv6",
+    "pulse-host-agent-linux-386",
+    "pulse-host-agent-darwin-amd64",
+    "pulse-host-agent-darwin-arm64",
+    "pulse-host-agent-windows-amd64.exe",
+    "pulse-host-agent-windows-arm64.exe",
+    "pulse-host-agent-windows-386.exe",
+    "pulse-host-agent-windows-amd64",
+    "pulse-host-agent-windows-arm64",
+    "pulse-host-agent-windows-386",
+}
+
+def check_set(name, found):
+    missing = expected_agents - set(found)
+    extra = set(found) - expected_agents
+    if missing or extra:
+        msg = []
+        if missing:
+            msg.append(f"{name} missing: {sorted(missing)}")
+        if extra:
+            msg.append(f"{name} unexpected: {sorted(extra)}")
+        print(" ; ".join(msg))
+        return False
+    return True
+
+ok = True
+
+if manifest.get("version") != version:
+    print(f"Manifest version mismatch: expected {version}, got {manifest.get('version')}")
+    ok = False
+
+universal = manifest.get("universal", [])
+if not check_set("universal", universal):
+    ok = False
+
+for arch in ["linux-amd64","linux-arm64","linux-armv7","linux-armv6","linux-386"]:
+    found = manifest.get("tarballs", {}).get(arch)
+    if found is None:
+        print(f"Missing tarball entry in manifest for {arch}")
+        ok = False
+        continue
+    if not check_set(arch, found):
+        ok = False
+
+if not ok:
+    sys.exit(1)
+EOF
+success "Host-agent manifest matches expected platform/arch matrix"
+
 # Validate tarball contents
-info "Validating tarball contents..."
-for arch in linux-amd64 linux-arm64 linux-armv7; do
+section "Validating tarball contents"
+tar_arches=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386)
+host_agent_entries=(
+    ./bin/pulse-host-agent-linux-amd64
+    ./bin/pulse-host-agent-linux-arm64
+    ./bin/pulse-host-agent-linux-armv7
+    ./bin/pulse-host-agent-linux-armv6
+    ./bin/pulse-host-agent-linux-386
+    ./bin/pulse-host-agent-darwin-amd64
+    ./bin/pulse-host-agent-darwin-arm64
+    ./bin/pulse-host-agent-windows-amd64.exe
+    ./bin/pulse-host-agent-windows-arm64.exe
+    ./bin/pulse-host-agent-windows-386.exe
+    ./bin/pulse-host-agent-windows-amd64
+    ./bin/pulse-host-agent-windows-arm64
+    ./bin/pulse-host-agent-windows-386
+)
+for arch in "${tar_arches[@]}"; do
     tarball="pulse-v${PULSE_VERSION}-${arch}.tar.gz"
 
     # Check binaries (note: tarballs use ./  prefix)
@@ -179,31 +418,24 @@ for arch in linux-amd64 linux-arm64 linux-armv7; do
         exit 1
     fi
 
+    check_tar_entries_nonempty "$tarball" "${host_agent_entries[@]}"
+
     # Check scripts
     tar -tzf "$tarball" ./scripts/install-docker-agent.sh ./scripts/install-container-agent.sh ./scripts/install-host-agent.sh ./scripts/install-host-agent.ps1 ./scripts/uninstall-host-agent.sh ./scripts/uninstall-host-agent.ps1 ./scripts/install-sensor-proxy.sh ./scripts/install-docker.sh >/dev/null 2>&1 || { error "$(basename $tarball) missing scripts"; exit 1; }
 
     # Check VERSION file
     tar -tzf "$tarball" ./VERSION >/dev/null 2>&1 || { error "$(basename $tarball) missing VERSION file"; exit 1; }
 done
-success "Platform-specific tarballs contain all required files"
+success "Platform-specific tarballs contain all required files (including cross-platform host agents)"
 
 # Validate universal tarball
+section "Validating universal tarball"
 tar -tzf "pulse-v${PULSE_VERSION}.tar.gz" ./VERSION >/dev/null 2>&1 || { error "Universal tarball missing VERSION file"; exit 1; }
 
-# Validate universal tarball contains Windows/macOS binaries for download endpoint
-info "Validating universal tarball contains Windows/macOS binaries..."
-for binary in \
-    ./bin/pulse-host-agent-darwin-amd64 \
-    ./bin/pulse-host-agent-darwin-arm64 \
-    ./bin/pulse-host-agent-windows-amd64.exe \
-    ./bin/pulse-host-agent-windows-arm64.exe \
-    ./bin/pulse-host-agent-windows-386.exe \
-    ./bin/pulse-host-agent-windows-amd64 \
-    ./bin/pulse-host-agent-windows-arm64 \
-    ./bin/pulse-host-agent-windows-386; do
-    tar -tzf "pulse-v${PULSE_VERSION}.tar.gz" "$binary" >/dev/null 2>&1 || { error "Universal tarball missing $binary"; exit 1; }
-done
-success "Universal tarball validated (includes Windows/macOS binaries)"
+# Validate universal tarball contains all host agent binaries for download endpoint
+info "Validating universal tarball contains all host agent binaries..."
+check_tar_entries_nonempty "pulse-v${PULSE_VERSION}.tar.gz" "${host_agent_entries[@]}"
+success "Universal tarball validated (includes cross-platform host agents)"
 
 # Validate macOS tarball
 tar -tzf "pulse-host-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz" pulse-host-agent-darwin-arm64 >/dev/null 2>&1 || { error "macOS tarball validation failed"; exit 1; }

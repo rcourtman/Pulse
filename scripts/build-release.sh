@@ -34,7 +34,37 @@ rm -rf internal/api/frontend-modern
 mkdir -p internal/api/frontend-modern
 cp -r frontend-modern/dist internal/api/frontend-modern/
 
-# Build for different architectures
+# Build host agents for every supported platform/architecture so download endpoints work offline
+echo "Building host agents for all platforms..."
+declare -A host_agent_builds=(
+    ["linux-amd64"]="GOOS=linux GOARCH=amd64"
+    ["linux-arm64"]="GOOS=linux GOARCH=arm64"
+    ["linux-armv7"]="GOOS=linux GOARCH=arm GOARM=7"
+    ["linux-armv6"]="GOOS=linux GOARCH=arm GOARM=6"
+    ["linux-386"]="GOOS=linux GOARCH=386"
+    ["darwin-amd64"]="GOOS=darwin GOARCH=amd64"
+    ["darwin-arm64"]="GOOS=darwin GOARCH=arm64"
+    ["windows-amd64"]="GOOS=windows GOARCH=amd64"
+    ["windows-arm64"]="GOOS=windows GOARCH=arm64"
+    ["windows-386"]="GOOS=windows GOARCH=386"
+)
+host_agent_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64 windows-386)
+
+for target in "${host_agent_order[@]}"; do
+    build_env="${host_agent_builds[$target]}"
+    output_path="$BUILD_DIR/pulse-host-agent-$target"
+    if [[ "$target" == windows-* ]]; then
+        output_path="${output_path}.exe"
+    fi
+
+    env $build_env go build \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
+        -trimpath \
+        -o "$output_path" \
+        ./cmd/pulse-host-agent
+done
+
+# Build for different architectures (server + docker agent + sensor proxy)
 declare -A builds=(
     ["linux-amd64"]="GOOS=linux GOARCH=amd64"
     ["linux-arm64"]="GOOS=linux GOARCH=arm64"
@@ -42,11 +72,11 @@ declare -A builds=(
     ["linux-armv6"]="GOOS=linux GOARCH=arm GOARM=6"
     ["linux-386"]="GOOS=linux GOARCH=386"
 )
+build_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386)
 
-for build_name in "${!builds[@]}"; do
+for build_name in "${build_order[@]}"; do
     echo "Building for $build_name..."
     
-    # Get build environment
     build_env="${builds[$build_name]}"
     
     build_time=$(date -u '+%Y-%m-%d_%H:%M:%S')
@@ -66,34 +96,43 @@ for build_name in "${!builds[@]}"; do
         -o "$BUILD_DIR/pulse-docker-agent-$build_name" \
         ./cmd/pulse-docker-agent
 
-    # Build host agent binary
-    env $build_env go build \
-        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
-        -trimpath \
-        -o "$BUILD_DIR/pulse-host-agent-$build_name" \
-        ./cmd/pulse-host-agent
-
     # Build temperature proxy binary
     env $build_env go build \
         -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit}" \
         -trimpath \
         -o "$BUILD_DIR/pulse-sensor-proxy-$build_name" \
         ./cmd/pulse-sensor-proxy
-    
-    # Create release archive with proper structure
+done
+
+# Create platform-specific tarballs that include all host agent binaries for download endpoints
+for build_name in "${build_order[@]}"; do
+    echo "Packaging release for $build_name..."
+
     tar_name="pulse-v${VERSION}-${build_name}.tar.gz"
-    
-    # Create staging directory
     staging_dir="$BUILD_DIR/staging-$build_name"
     rm -rf "$staging_dir"
     mkdir -p "$staging_dir/bin"
     mkdir -p "$staging_dir/scripts"
-    
-    # Copy binaries and VERSION file
+
+    # Copy architecture-specific runtime binaries
     cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$staging_dir/bin/pulse-docker-agent"
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$staging_dir/bin/pulse-host-agent"
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$staging_dir/bin/pulse-sensor-proxy"
+
+    # Copy host agent binaries for every supported platform/architecture
+    for target in "${host_agent_order[@]}"; do
+        src="$BUILD_DIR/pulse-host-agent-$target"
+        dest="$staging_dir/bin/pulse-host-agent-$target"
+        if [[ "$target" == windows-* ]]; then
+            src="${src}.exe"
+            dest="${dest}.exe"
+        fi
+        cp "$src" "$dest"
+    done
+    ( cd "$staging_dir/bin" && ln -sf pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 && ln -sf pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 && ln -sf pulse-host-agent-windows-386.exe pulse-host-agent-windows-386 )
+
+    # Copy scripts and VERSION metadata
     cp "scripts/install-docker-agent.sh" "$staging_dir/scripts/install-docker-agent.sh"
     cp "scripts/install-container-agent.sh" "$staging_dir/scripts/install-container-agent.sh"
     cp "scripts/install-host-agent.sh" "$staging_dir/scripts/install-host-agent.sh"
@@ -104,15 +143,13 @@ for build_name in "${!builds[@]}"; do
     cp "scripts/install-docker.sh" "$staging_dir/scripts/install-docker.sh"
     chmod 755 "$staging_dir/scripts/"*.sh "$staging_dir/scripts/"*.ps1
     echo "$VERSION" > "$staging_dir/VERSION"
-    
+
     # Create tarball from staging directory
     cd "$staging_dir"
     tar -czf "../../$RELEASE_DIR/$tar_name" .
     cd ../..
-    
-    # Cleanup staging
+
     rm -rf "$staging_dir"
-    
     echo "Created $RELEASE_DIR/$tar_name"
 done
 
@@ -124,7 +161,7 @@ mkdir -p "$universal_dir/bin"
 mkdir -p "$universal_dir/scripts"
 
 # Copy all binaries to bin/ directory to maintain consistent structure
-for build_name in "${!builds[@]}"; do
+for build_name in "${build_order[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/pulse-${build_name}"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$universal_dir/bin/pulse-docker-agent-${build_name}"
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$universal_dir/bin/pulse-host-agent-${build_name}"
@@ -237,43 +274,6 @@ chmod +x "$universal_dir/bin/pulse-host-agent"
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
 
-# Build host agent for macOS
-echo "Building host agent for macOS amd64..."
-env GOOS=darwin GOARCH=amd64 go build \
-    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
-    -trimpath \
-    -o "$BUILD_DIR/pulse-host-agent-darwin-amd64" \
-    ./cmd/pulse-host-agent
-
-echo "Building host agent for macOS arm64..."
-env GOOS=darwin GOARCH=arm64 go build \
-    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
-    -trimpath \
-    -o "$BUILD_DIR/pulse-host-agent-darwin-arm64" \
-    ./cmd/pulse-host-agent
-
-# Build host agent for Windows
-echo "Building host agent for Windows amd64..."
-env GOOS=windows GOARCH=amd64 go build \
-    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
-    -trimpath \
-    -o "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" \
-    ./cmd/pulse-host-agent
-
-echo "Building host agent for Windows arm64..."
-env GOOS=windows GOARCH=arm64 go build \
-    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
-    -trimpath \
-    -o "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" \
-    ./cmd/pulse-host-agent
-
-echo "Building host agent for Windows 386..."
-env GOOS=windows GOARCH=386 go build \
-    -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v${VERSION}" \
-    -trimpath \
-    -o "$BUILD_DIR/pulse-host-agent-windows-386.exe" \
-    ./cmd/pulse-host-agent
-
 # Package standalone host agent binaries
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-amd64
 tar -czf "$RELEASE_DIR/pulse-host-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-host-agent-darwin-arm64
@@ -358,3 +358,76 @@ echo
 echo "Release build complete!"
 echo "Archives created in $RELEASE_DIR/"
 ls -lh $RELEASE_DIR/
+
+# Create host-agent manifest (per tarball) for validation/debugging
+manifest_path="$RELEASE_DIR/host-agent-manifest.json"
+echo "Generating host-agent manifest at $manifest_path..."
+python3 - <<'EOF' "$RELEASE_DIR" "$VERSION" "$manifest_path"
+import json
+import os
+import sys
+import tarfile
+
+release_dir = sys.argv[1]
+version = sys.argv[2]
+manifest_path = sys.argv[3]
+
+tar_arches = [
+    "linux-amd64",
+    "linux-arm64",
+    "linux-armv7",
+    "linux-armv6",
+    "linux-386",
+]
+
+host_agents = [
+    "pulse-host-agent-linux-amd64",
+    "pulse-host-agent-linux-arm64",
+    "pulse-host-agent-linux-armv7",
+    "pulse-host-agent-linux-armv6",
+    "pulse-host-agent-linux-386",
+    "pulse-host-agent-darwin-amd64",
+    "pulse-host-agent-darwin-arm64",
+    "pulse-host-agent-windows-amd64.exe",
+    "pulse-host-agent-windows-arm64.exe",
+    "pulse-host-agent-windows-386.exe",
+    "pulse-host-agent-windows-amd64",
+    "pulse-host-agent-windows-arm64",
+    "pulse-host-agent-windows-386",
+]
+
+manifest = {
+    "version": version,
+    "tarballs": {},
+    "universal": [],
+}
+
+def collect_agents(tar_path):
+    found = []
+    try:
+        with tarfile.open(tar_path, "r:gz") as tf:
+            names = set(m.name for m in tf.getmembers() if (m.isfile() or m.issym()))
+            for agent in host_agents:
+                target = f"./bin/{agent}"
+                if target in names:
+                    found.append(agent)
+    except Exception as exc:
+        print(f"Failed to read {tar_path}: {exc}", file=sys.stderr)
+    return sorted(found)
+
+# Platform tarballs
+for arch in tar_arches:
+    tarball = os.path.join(release_dir, f"pulse-v{version}-{arch}.tar.gz")
+    if os.path.exists(tarball):
+        manifest["tarballs"][arch] = collect_agents(tarball)
+
+# Universal tarball
+universal_tar = os.path.join(release_dir, f"pulse-v{version}.tar.gz")
+if os.path.exists(universal_tar):
+    manifest["universal"] = collect_agents(universal_tar)
+
+with open(manifest_path, "w", encoding="utf-8") as handle:
+    json.dump(manifest, handle, indent=2)
+
+print(json.dumps(manifest, indent=2))
+EOF
