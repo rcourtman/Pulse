@@ -138,6 +138,27 @@ func TestTempWrapperPrefersSensorsOutput(t *testing.T) {
 	}
 }
 
+func TestTempWrapperPrefersOverrideWrapper(t *testing.T) {
+	scriptPath, _, binDir, baseDir := setupTempWrapper(t)
+
+	overrideDir := filepath.Join(baseDir, "override")
+	if err := os.MkdirAll(overrideDir, 0o755); err != nil {
+		t.Fatalf("failed to create override directory: %v", err)
+	}
+
+	overridePath := filepath.Join(overrideDir, "pulse-sensor-wrapper.sh")
+	expectedOutput := `{"smart":[{"device":"/dev/test","temperature":42}]}`
+	overrideScript := fmt.Sprintf("#!/bin/sh\nprintf '%s'\n", expectedOutput)
+	if err := os.WriteFile(overridePath, []byte(overrideScript), 0o755); err != nil {
+		t.Fatalf("failed to write override wrapper: %v", err)
+	}
+
+	output := runTempWrapper(t, scriptPath, binDir, "PULSE_SENSOR_WRAPPER="+overridePath)
+	if strings.TrimSpace(string(output)) != expectedOutput {
+		t.Fatalf("expected override wrapper output %s, got %s", expectedOutput, strings.TrimSpace(string(output)))
+	}
+}
+
 func TestReadAllWithLimit(t *testing.T) {
 	reader := bytes.NewBufferString("abcdefg")
 	data, exceeded, err := readAllWithLimit(reader, 4)
