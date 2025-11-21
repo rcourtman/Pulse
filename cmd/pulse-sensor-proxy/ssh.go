@@ -25,6 +25,19 @@ const (
 	tempWrapperScript = `#!/bin/sh
 set -eu
 
+WRAPPER_PATH="${PULSE_SENSOR_WRAPPER:-/opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh}"
+
+# Prefer the full wrapper when available so SMART disk temperatures are included
+if [ -x "$WRAPPER_PATH" ]; then
+    exec "$WRAPPER_PATH"
+fi
+
+# Legacy locations (for older installations)
+if [ -x /usr/local/bin/pulse-sensor-wrapper.sh ]; then
+    exec /usr/local/bin/pulse-sensor-wrapper.sh
+fi
+
+# Fallback to basic lm-sensors output (no SMART data)
 if command -v sensors >/dev/null 2>&1; then
     OUTPUT="$(sensors -j 2>/dev/null || true)"
     if [ -n "$OUTPUT" ]; then
@@ -575,12 +588,10 @@ func (p *Proxy) testSSHConnection(nodeHost string) error {
 func (p *Proxy) getTemperatureViaSSH(ctx context.Context, nodeHost string) (string, error) {
 	startTime := time.Now()
 	nodeLabel := sanitizeNodeLabel(nodeHost)
+	localNode := isLocalNode(nodeHost)
 
-	// Check if we're requesting the local node (self-monitoring)
-	// For standalone nodes, avoid SSH and run sensors directly
-	if isLocalNode(nodeHost) {
-		log.Debug().Str("node", nodeHost).Msg("Self-monitoring detected, collecting temperatures locally")
-		return p.getTemperatureLocal(ctx)
+	if localNode {
+		log.Debug().Str("node", nodeHost).Msg("Self-monitoring detected, using SSH wrapper for SMART temperatures")
 	}
 
 	privKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519")
@@ -617,6 +628,19 @@ func (p *Proxy) getTemperatureViaSSH(ctx context.Context, nodeHost string) (stri
 	}
 
 	if err != nil {
+		if localNode {
+			log.Warn().
+				Str("node", nodeHost).
+				Err(err).
+				Msg("SSH temperature collection failed on local node, falling back to direct sensors")
+
+			if fallback, localErr := p.getTemperatureLocal(ctx); localErr == nil && strings.TrimSpace(fallback) != "" {
+				p.metrics.sshRequests.WithLabelValues(nodeLabel, "success").Inc()
+				p.metrics.sshLatency.WithLabelValues(nodeLabel).Observe(time.Since(startTime).Seconds())
+				return fallback, nil
+			}
+		}
+
 		p.metrics.sshRequests.WithLabelValues(nodeLabel, "error").Inc()
 		p.metrics.sshLatency.WithLabelValues(nodeLabel).Observe(time.Since(startTime).Seconds())
 		stderrMsg := strings.TrimSpace(stderr)
