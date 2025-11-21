@@ -91,6 +91,7 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 		config.Schedule.Grouping.ByNode,
 		config.Schedule.Grouping.ByGuest,
 	)
+	h.monitor.GetNotificationManager().SetNotifyOnResolve(config.Schedule.NotifyOnResolve)
 
 	// Save to persistent storage
 	if err := h.monitor.GetConfigPersistence().SaveAlertConfig(config); err != nil {

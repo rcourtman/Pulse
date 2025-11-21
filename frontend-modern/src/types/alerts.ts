@@ -185,6 +185,7 @@ export interface AlertConfig {
     cooldown?: number;
     groupingWindow?: number;
     maxAlertsHour?: number;
+    notifyOnResolve?: boolean;
     grouping?: {
       enabled: boolean;
       window: number;

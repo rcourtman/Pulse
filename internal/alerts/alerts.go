@@ -218,12 +218,13 @@ type GroupingConfig struct {
 
 // ScheduleConfig represents alerting schedule configuration
 type ScheduleConfig struct {
-	QuietHours     QuietHours       `json:"quietHours"`
-	Cooldown       int              `json:"cooldown"`       // minutes
-	GroupingWindow int              `json:"groupingWindow"` // seconds (deprecated, use Grouping.Window)
-	MaxAlertsHour  int              `json:"maxAlertsHour"`  // max alerts per hour per resource
-	Escalation     EscalationConfig `json:"escalation"`
-	Grouping       GroupingConfig   `json:"grouping"`
+	QuietHours      QuietHours       `json:"quietHours"`
+	Cooldown        int              `json:"cooldown"`        // minutes
+	GroupingWindow  int              `json:"groupingWindow"`  // seconds (deprecated, use Grouping.Window)
+	MaxAlertsHour   int              `json:"maxAlertsHour"`   // max alerts per hour per resource
+	NotifyOnResolve bool             `json:"notifyOnResolve"` // Send notification when alert clears
+	Escalation      EscalationConfig `json:"escalation"`
+	Grouping        GroupingConfig   `json:"grouping"`
 }
 
 // FilterCondition represents a single filter condition
@@ -604,9 +605,10 @@ func NewManager() *Manager {
 					},
 					Suppress: QuietHoursSuppression{},
 				},
-				Cooldown:       5,  // ON - 5 minutes prevents spam
-				GroupingWindow: 30, // ON - 30 seconds groups related alerts
-				MaxAlertsHour:  10, // ON - 10 alerts/hour prevents flooding
+				Cooldown:        5,  // ON - 5 minutes prevents spam
+				GroupingWindow:  30, // ON - 30 seconds groups related alerts
+				MaxAlertsHour:   10, // ON - 10 alerts/hour prevents flooding
+				NotifyOnResolve: true,
 				Escalation: EscalationConfig{
 					Enabled: false, // OFF - requires user configuration
 					Levels: []EscalationLevel{
@@ -904,16 +906,37 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		config.StorageDefault.Clear = 80
 	}
 
-	// Initialize Docker defaults if missing/zero
-	if config.DockerDefaults.CPU.Trigger <= 0 {
-		config.DockerDefaults.CPU = HysteresisThreshold{Trigger: 80, Clear: 75}
+	// Initialize Docker defaults while allowing explicit disables (trigger == 0)
+	normalizeDockerThreshold := func(th HysteresisThreshold, defaultTrigger float64, metricName string) HysteresisThreshold {
+		normalized := th
+
+		// Negative triggers are treated as unset and replaced with defaults.
+		if normalized.Trigger < 0 {
+			normalized.Trigger = defaultTrigger
+		}
+
+		// Explicit disable: keep trigger at 0 and clamp clear to 0.
+		if normalized.Trigger == 0 {
+			if normalized.Clear < 0 {
+				normalized.Clear = 0
+			}
+			return normalized
+		}
+
+		if normalized.Clear <= 0 {
+			normalized.Clear = normalized.Trigger - 5
+			if normalized.Clear < 0 {
+				normalized.Clear = 0
+			}
+		}
+
+		ensureValidHysteresis(&normalized, metricName)
+		return normalized
 	}
-	if config.DockerDefaults.Memory.Trigger <= 0 {
-		config.DockerDefaults.Memory = HysteresisThreshold{Trigger: 85, Clear: 80}
-	}
-	if config.DockerDefaults.Disk.Trigger <= 0 {
-		config.DockerDefaults.Disk = HysteresisThreshold{Trigger: 85, Clear: 80}
-	}
+
+	config.DockerDefaults.CPU = normalizeDockerThreshold(config.DockerDefaults.CPU, 80, "docker.cpu")
+	config.DockerDefaults.Memory = normalizeDockerThreshold(config.DockerDefaults.Memory, 85, "docker.memory")
+	config.DockerDefaults.Disk = normalizeDockerThreshold(config.DockerDefaults.Disk, 85, "docker.disk")
 	if config.DockerDefaults.RestartCount <= 0 {
 		config.DockerDefaults.RestartCount = 3
 	}
@@ -1399,8 +1422,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.config.GuestDefaults
+			thresholds := ThresholdConfig{
+				CPU:    cloneThreshold(&m.config.DockerDefaults.CPU),
+				Memory: cloneThreshold(&m.config.DockerDefaults.Memory),
+				Disk:   cloneThreshold(&m.config.DockerDefaults.Disk),
+			}
 			if override, exists := m.config.Overrides[resourceID]; exists {
+				if override.Disabled {
+					alertsToResolve = append(alertsToResolve, alertID)
+					continue
+				}
 				thresholds = m.applyThresholdOverride(thresholds, override)
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
@@ -5661,6 +5692,22 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 		})
 	}
 	return resolved
+}
+
+// GetResolvedAlert returns a copy of a recently resolved alert by ID.
+func (m *Manager) GetResolvedAlert(alertID string) *ResolvedAlert {
+	m.resolvedMutex.RLock()
+	defer m.resolvedMutex.RUnlock()
+
+	resolved, ok := m.recentlyResolved[alertID]
+	if !ok || resolved == nil || resolved.Alert == nil {
+		return nil
+	}
+
+	return &ResolvedAlert{
+		Alert:        resolved.Alert.Clone(),
+		ResolvedTime: resolved.ResolvedTime,
+	}
 }
 
 // GetAlertHistory returns alert history

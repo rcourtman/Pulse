@@ -3865,6 +3865,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 			alertConfig.Schedule.Grouping.ByNode,
 			alertConfig.Schedule.Grouping.ByGuest,
 		)
+		m.notificationMgr.SetNotifyOnResolve(alertConfig.Schedule.NotifyOnResolve)
 	} else {
 		log.Warn().Err(err).Msg("Failed to load alert configuration")
 	}
@@ -4288,6 +4289,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.alertManager.SetResolvedCallback(func(alertID string) {
 		wsHub.BroadcastAlertResolved(alertID)
 		m.notificationMgr.CancelAlert(alertID)
+		if m.notificationMgr.GetNotifyOnResolve() {
+			if resolved := m.alertManager.GetResolvedAlert(alertID); resolved != nil {
+				go m.notificationMgr.SendResolvedAlert(resolved)
+			}
+		}
 		// Don't broadcast full state here - it causes a cascade with many guests.
 		// The frontend will get the updated alerts through the regular broadcast ticker.
 	})
