@@ -186,6 +186,63 @@ func TestParseSensorsJSON_RPiWrapper(t *testing.T) {
 	}
 }
 
+func TestParseSensorsJSON_SMARTWithNullTemperature(t *testing.T) {
+	collector := &TemperatureCollector{}
+
+	lastUpdated := time.Now().UTC().Truncate(time.Second).Format(time.RFC3339)
+	jsonStr := fmt.Sprintf(`{
+		"sensors": {
+			"coretemp-isa-0000": {
+				"Package id 0": {"temp1_input": 55.0}
+			}
+		},
+		"smart": [
+			{
+				"device": "/dev/sda",
+				"serial": "S1",
+				"wwn": "WWN1",
+				"model": "Model1",
+				"type": "sat",
+				"temperature": 34,
+				"lastUpdated": "%s",
+				"standbySkipped": false
+			},
+			{
+				"device": "/dev/zd0",
+				"temperature": null,
+				"standbySkipped": true
+			}
+		]
+	}`, lastUpdated)
+
+	temp, err := collector.parseSensorsJSON(jsonStr)
+	if err != nil {
+		t.Fatalf("unexpected error parsing SMART wrapper output: %v", err)
+	}
+
+	if temp == nil || !temp.Available {
+		t.Fatalf("expected temperature data to be available when SMART data present")
+	}
+	if !temp.HasSMART {
+		t.Fatalf("expected HasSMART to be true when SMART data present")
+	}
+	if len(temp.SMART) != 2 {
+		t.Fatalf("expected two SMART entries, got %d", len(temp.SMART))
+	}
+	if temp.SMART[0].Temperature != 34 {
+		t.Fatalf("expected first SMART temperature 34, got %d", temp.SMART[0].Temperature)
+	}
+	if temp.SMART[0].LastUpdated.IsZero() {
+		t.Fatalf("expected first SMART entry to include parsed lastUpdated timestamp")
+	}
+	if temp.SMART[1].Temperature != 0 {
+		t.Fatalf("expected standby SMART entry to default to temperature 0, got %d", temp.SMART[1].Temperature)
+	}
+	if !temp.SMART[1].StandbySkipped {
+		t.Fatalf("expected standbySkipped to be true for second SMART entry")
+	}
+}
+
 func TestShouldDisableProxy(t *testing.T) {
 	collector := &TemperatureCollector{}
 

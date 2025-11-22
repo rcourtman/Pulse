@@ -2483,11 +2483,12 @@ refresh_smart_cache() {
     for dev in "${disks[@]}"; do
         # Use smartctl with standby check to avoid waking sleeping drives
         # -n standby: skip if drive is in standby/sleep mode
+        # -i: include identity data (serial/WWN/model)
         # --json=o: output original smartctl JSON format
         # timeout: prevent hanging on problematic drives
 
         local output
-        if output=$(timeout ${MAX_SMARTCTL_TIME}s smartctl -n standby -A --json=o "$dev" 2>/dev/null); then
+        if output=$(timeout ${MAX_SMARTCTL_TIME}s smartctl -n standby -i -A --json=o "$dev" 2>/dev/null); then
             # Parse the JSON output
             local temp=$(echo "$output" | jq -r '
                 .temperature.current //
