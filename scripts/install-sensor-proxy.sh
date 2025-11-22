@@ -3166,13 +3166,13 @@ if [[ "$STANDALONE" == false ]]; then
     # Extract line number where snapshots start (first line starting with [)
     SNAPSHOT_START=$(grep -n '^\[' "$TEMP_CONFIG" | head -1 | cut -d: -f1)
 
-    if grep -Eq '^mp[0-9]+: .*pulse-sensor-proxy' "$TEMP_CONFIG" 2>/dev/null; then
+    if grep -Eq '^mp[0-9]+:.*pulse-sensor-proxy|^mp[0-9]+:.*mnt/pulse-proxy' "$TEMP_CONFIG" 2>/dev/null; then
         print_info "Removing mp mounts for pulse-sensor-proxy to keep snapshots and migrations working"
         if [ -n "$SNAPSHOT_START" ]; then
             # Only modify main section (before snapshots)
-            sed -i "1,$((SNAPSHOT_START-1)) { /^mp[0-9]\+: .*pulse-sensor-proxy/d }" "$TEMP_CONFIG"
+            sed -i "1,$((SNAPSHOT_START-1)) { /^mp[0-9]\+:.*pulse-sensor-proxy/d; /^mp[0-9]\+:.*mnt\/pulse-proxy/d }" "$TEMP_CONFIG"
         else
-            sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$TEMP_CONFIG"
+            sed -i '/^mp[0-9]\+:.*pulse-sensor-proxy/d; /^mp[0-9]\+:.*mnt\/pulse-proxy/d' "$TEMP_CONFIG"
         fi
         MOUNT_UPDATED=true
     fi
