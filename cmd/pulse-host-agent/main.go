@@ -29,7 +29,9 @@ func (m *multiValue) Set(value string) error {
 func main() {
 	cfg := loadConfig()
 
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	zerolog.SetGlobalLevel(cfg.LogLevel)
+
+	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
 	cfg.Logger = &logger
 
 	// Check if we should run as a Windows service
@@ -69,6 +71,7 @@ func loadConfig() hostagent.Config {
 	envInsecure := utils.GetenvTrim("PULSE_INSECURE_SKIP_VERIFY")
 	envTags := utils.GetenvTrim("PULSE_TAGS")
 	envRunOnce := utils.GetenvTrim("PULSE_ONCE")
+	envLogLevel := utils.GetenvTrim("LOG_LEVEL")
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -85,6 +88,7 @@ func loadConfig() hostagent.Config {
 	insecureFlag := flag.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS certificate verification")
 	runOnceFlag := flag.Bool("once", utils.ParseBool(envRunOnce), "Collect and send a single report, then exit")
 	showVersion := flag.Bool("version", false, "Print the agent version and exit")
+	logLevelFlag := flag.String("log-level", defaultLogLevel(envLogLevel), "Log level: debug, info, warn, error")
 
 	var tagFlags multiValue
 	flag.Var(&tagFlags, "tag", "Tag to apply to this host (repeatable)")
@@ -112,6 +116,12 @@ func loadConfig() hostagent.Config {
 		interval = 30 * time.Second
 	}
 
+	logLevel, err := parseLogLevel(*logLevelFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
 	tags := gatherTags(envTags, tagFlags)
 
 	return hostagent.Config{
@@ -123,6 +133,7 @@ func loadConfig() hostagent.Config {
 		Tags:               tags,
 		InsecureSkipVerify: *insecureFlag,
 		RunOnce:            *runOnceFlag,
+		LogLevel:           logLevel,
 	}
 }
 
@@ -143,4 +154,28 @@ func gatherTags(env string, flags []string) []string {
 		}
 	}
 	return tags
+}
+
+func parseLogLevel(value string) (zerolog.Level, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return zerolog.InfoLevel, nil
+	}
+
+	level, err := zerolog.ParseLevel(normalized)
+	if err != nil {
+		return zerolog.InfoLevel, fmt.Errorf("invalid log level %q: must be debug, info, warn, or error", value)
+	}
+	if level < zerolog.DebugLevel || level > zerolog.ErrorLevel {
+		return zerolog.InfoLevel, fmt.Errorf("invalid log level %q: must be debug, info, warn, or error", value)
+	}
+
+	return level, nil
+}
+
+func defaultLogLevel(envValue string) string {
+	if strings.TrimSpace(envValue) == "" {
+		return "info"
+	}
+	return envValue
 }

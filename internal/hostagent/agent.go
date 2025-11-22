@@ -30,6 +30,7 @@ type Config struct {
 	Tags               []string
 	InsecureSkipVerify bool
 	RunOnce            bool
+	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
 }
 
@@ -61,12 +62,20 @@ func New(cfg Config) (*Agent, error) {
 		cfg.Interval = defaultInterval
 	}
 
+	if zerolog.GlobalLevel() == zerolog.DebugLevel && cfg.LogLevel != zerolog.DebugLevel {
+		zerolog.SetGlobalLevel(cfg.LogLevel)
+	}
+
 	if cfg.Logger == nil {
-		defaultLogger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
+		defaultLogger := zerolog.New(zerolog.NewConsoleWriter()).
+			Level(cfg.LogLevel).
+			With().
+			Timestamp().
+			Logger()
 		cfg.Logger = &defaultLogger
 	}
 
-	logger := cfg.Logger.With().Str("component", "host-agent").Logger()
+	logger := cfg.Logger.Level(cfg.LogLevel).With().Str("component", "host-agent").Logger()
 
 	if strings.TrimSpace(cfg.APIToken) == "" {
 		return nil, fmt.Errorf("api token is required")
