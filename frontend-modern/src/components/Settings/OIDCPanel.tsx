@@ -20,6 +20,7 @@ interface OIDCConfigResponse {
   allowedGroups: string[];
   allowedDomains: string[];
   allowedEmails: string[];
+  caBundle?: string;
   clientSecretSet: boolean;
   envOverrides?: Record<string, boolean>;
   defaultRedirect: string;
@@ -55,6 +56,7 @@ export const OIDCPanel: Component<Props> = (props) => {
     allowedGroups: '',
     allowedDomains: '',
     allowedEmails: '',
+    caBundle: '',
     clientSecret: '',
     clearSecret: false,
   });
@@ -79,6 +81,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         allowedGroups: '',
         allowedDomains: '',
         allowedEmails: '',
+        caBundle: '',
         clientSecret: '',
         clearSecret: false,
       });
@@ -98,6 +101,7 @@ export const OIDCPanel: Component<Props> = (props) => {
       allowedGroups: listToString(data.allowedGroups),
       allowedDomains: listToString(data.allowedDomains),
       allowedEmails: listToString(data.allowedEmails),
+      caBundle: data.caBundle || '',
       clientSecret: '',
       clearSecret: false,
     });
@@ -150,6 +154,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         allowedGroups: splitList(form.allowedGroups),
         allowedDomains: splitList(form.allowedDomains),
         allowedEmails: splitList(form.allowedEmails),
+        caBundle: form.caBundle.trim(),
       };
 
       if (form.clientSecret.trim() !== '') {
@@ -374,6 +379,21 @@ export const OIDCPanel: Component<Props> = (props) => {
                     disabled={isEnvLocked() || saving()}
                   />
                   <p class={formHelpText}>Space-separated list of scopes requested during login.</p>
+                </div>
+                <div class={formField}>
+                  <label class={labelClass()}>CA bundle path</label>
+                  <input
+                    type="text"
+                    value={form.caBundle}
+                    onInput={(event) => setForm('caBundle', event.currentTarget.value)}
+                    placeholder="/etc/ssl/certs/oidc-ca.pem"
+                    class={controlClass()}
+                    disabled={isEnvLocked() || saving()}
+                  />
+                  <p class={formHelpText}>
+                    Optional path to a PEM bundle containing your IdP&apos;s root certificates. Mount
+                    the file into the container; leave blank to use the system trust store.
+                  </p>
                 </div>
                 <div class={formField}>
                   <label class={labelClass()}>Username claim</label>

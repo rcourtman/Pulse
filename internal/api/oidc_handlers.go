@@ -119,6 +119,7 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	ctx, cancel := context.WithTimeout(req.Context(), 15*time.Second)
 	defer cancel()
+	ctx = service.contextWithHTTPClient(ctx)
 
 	token, err := service.exchangeCode(ctx, code, entry)
 	if err != nil {
