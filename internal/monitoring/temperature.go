@@ -358,6 +358,56 @@ func (tc *TemperatureCollector) disableLegacySSHOnAuthFailure(err error, nodeNam
 	return true
 }
 
+type smartEntryRaw struct {
+	Device         string `json:"device"`
+	Serial         string `json:"serial,omitempty"`
+	WWN            string `json:"wwn,omitempty"`
+	Model          string `json:"model,omitempty"`
+	Type           string `json:"type,omitempty"`
+	Temperature    *int   `json:"temperature"`
+	LastUpdated    string `json:"lastUpdated,omitempty"`
+	StandbySkipped bool   `json:"standbySkipped,omitempty"`
+}
+
+func normalizeSMARTEntries(raw []smartEntryRaw) []models.DiskTemp {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	normalized := make([]models.DiskTemp, 0, len(raw))
+	for _, entry := range raw {
+		dev := strings.TrimSpace(entry.Device)
+		if dev == "" {
+			continue
+		}
+
+		var lastUpdated time.Time
+		if entry.LastUpdated != "" {
+			if parsed, err := time.Parse(time.RFC3339, entry.LastUpdated); err == nil {
+				lastUpdated = parsed
+			}
+		}
+
+		tempVal := 0
+		if entry.Temperature != nil {
+			tempVal = *entry.Temperature
+		}
+
+		normalized = append(normalized, models.DiskTemp{
+			Device:         dev,
+			Serial:         strings.TrimSpace(entry.Serial),
+			WWN:            strings.TrimSpace(entry.WWN),
+			Model:          strings.TrimSpace(entry.Model),
+			Type:           strings.TrimSpace(entry.Type),
+			Temperature:    tempVal,
+			LastUpdated:    lastUpdated,
+			StandbySkipped: entry.StandbySkipped,
+		})
+	}
+
+	return normalized
+}
+
 // parseSensorsJSON parses the JSON output from the sensor wrapper
 func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temperature, error) {
 	if strings.TrimSpace(jsonStr) == "" {
@@ -368,25 +418,31 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 	// Fall back to legacy format for backward compatibility
 	var wrapperData struct {
 		Sensors map[string]interface{} `json:"sensors"`
-		SMART   []models.DiskTemp      `json:"smart"`
+		SMART   []smartEntryRaw        `json:"smart"`
 	}
 
 	var sensorsData map[string]interface{}
-	var smartData []models.DiskTemp
+	var smartRaw []smartEntryRaw
+	var parsedWrapper bool
 
 	if err := json.Unmarshal([]byte(jsonStr), &wrapperData); err == nil && wrapperData.Sensors != nil {
 		// New wrapper format
 		sensorsData = wrapperData.Sensors
-		smartData = wrapperData.SMART
-		log.Debug().
-			Int("smartDisks", len(smartData)).
-			Msg("Parsed new wrapper format with SMART data")
+		smartRaw = wrapperData.SMART
+		parsedWrapper = true
 	} else {
 		// Legacy format: direct sensors -j output
 		if err := json.Unmarshal([]byte(jsonStr), &sensorsData); err != nil {
 			return nil, fmt.Errorf("failed to parse sensors JSON: %w", err)
 		}
 		log.Debug().Msg("Parsed legacy sensors format (no SMART data)")
+	}
+
+	smartData := normalizeSMARTEntries(smartRaw)
+	if parsedWrapper {
+		log.Debug().
+			Int("smartDisks", len(smartData)).
+			Msg("Parsed new wrapper format with SMART data")
 	}
 
 	temp := &models.Temperature{
