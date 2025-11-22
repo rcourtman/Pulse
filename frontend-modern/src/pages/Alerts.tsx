@@ -216,6 +216,11 @@ const COOLDOWN_DEFAULT_MINUTES = 30;
 const MAX_ALERTS_MIN = 1;
 const MAX_ALERTS_MAX = 10;
 const MAX_ALERTS_DEFAULT = 3;
+const GROUPING_WINDOW_DEFAULT_SECONDS = 30; // Keep in sync with backend default in internal/alerts/alerts.go
+const GROUPING_WINDOW_DEFAULT_MINUTES = Math.max(
+  0,
+  Math.round(GROUPING_WINDOW_DEFAULT_SECONDS / 60),
+);
 
 export const clampCooldownMinutes = (value?: number): number => {
   const numericValue = typeof value === 'number' ? value : Number.NaN;
@@ -280,7 +285,7 @@ export const createDefaultCooldown = (): CooldownConfig => ({
 
 export const createDefaultGrouping = (): GroupingConfig => ({
   enabled: true,
-  window: 1,
+  window: GROUPING_WINDOW_DEFAULT_MINUTES,
   byNode: true,
   byGuest: false,
 });
@@ -1094,7 +1099,7 @@ const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
               ? groupingConfig.window
               : typeof config.schedule.groupingWindow === 'number'
                 ? config.schedule.groupingWindow
-                : 30;
+                : GROUPING_WINDOW_DEFAULT_SECONDS;
           const normalizedGroupingWindowSeconds = Math.max(0, rawGroupingWindowSeconds);
           const groupingWindowMinutes = Math.round(normalizedGroupingWindowSeconds / 60);
 
