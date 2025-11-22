@@ -15,6 +15,15 @@ const (
 	defaultPBSPort = "8007"
 )
 
+const (
+	// DefaultPVEPort is the standard API port for Proxmox VE.
+	DefaultPVEPort = defaultPVEPort
+	// DefaultPBSPort is the standard API port for Proxmox Backup Server.
+	DefaultPBSPort = defaultPBSPort
+	// DefaultPMGPort reuses the PVE API port.
+	DefaultPMGPort = defaultPVEPort
+)
+
 // normalizeHostPort ensures we always have a scheme and explicit port when talking to
 // Proxmox APIs. It preserves existing ports/schemes and strips any path/query segments.
 func normalizeHostPort(host, defaultPort string) string {
@@ -48,13 +57,28 @@ func normalizeHostPort(host, defaultPort string) string {
 
 // CreateProxmoxConfig creates a proxmox.ClientConfig from a PVEInstance
 func CreateProxmoxConfig(node *PVEInstance) proxmox.ClientConfig {
+	return createProxmoxConfigWithHost(node, node.Host, true)
+}
+
+// CreateProxmoxConfigWithHost builds a proxmox.ClientConfig using an explicit host.
+// When normalizeHost is true, the host will be normalized (scheme + default port);
+// when false, the host is used verbatim (useful for fallback attempts).
+func CreateProxmoxConfigWithHost(node *PVEInstance, host string, normalizeHost bool) proxmox.ClientConfig {
+	return createProxmoxConfigWithHost(node, host, normalizeHost)
+}
+
+func createProxmoxConfigWithHost(node *PVEInstance, host string, normalizeHost bool) proxmox.ClientConfig {
 	user := node.User
 	if node.TokenName == "" && node.TokenValue == "" && user != "" && !strings.Contains(user, "@") {
 		user = user + "@pam"
 	}
 
+	if normalizeHost {
+		host = normalizeHostPort(host, defaultPVEPort)
+	}
+
 	return proxmox.ClientConfig{
-		Host:        normalizeHostPort(node.Host, defaultPVEPort),
+		Host:        host,
 		User:        user,
 		Password:    node.Password,
 		TokenName:   node.TokenName,
@@ -131,4 +155,33 @@ func CreatePMGConfigFromFields(host, user, password, tokenName, tokenValue, fing
 		VerifySSL:   verifySSL,
 		Fingerprint: fingerprint,
 	}
+}
+
+// StripDefaultPort removes the supplied defaultPort from a host URL if it matches.
+// Useful for retrying portless endpoints (e.g., reverse proxies on 443) when the
+// normalized :8006/:8007 host is unreachable.
+func StripDefaultPort(host, defaultPort string) string {
+	trimmed := strings.TrimSpace(host)
+	if trimmed == "" || defaultPort == "" {
+		return trimmed
+	}
+
+	candidate := trimmed
+	if !strings.HasPrefix(candidate, "http://") && !strings.HasPrefix(candidate, "https://") {
+		candidate = "https://" + candidate
+	}
+
+	parsed, err := url.Parse(candidate)
+	if err != nil || parsed.Host == "" {
+		return trimmed
+	}
+
+	if parsed.Port() != defaultPort {
+		return trimmed
+	}
+
+	parsed.Host = parsed.Hostname()
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.Scheme + "://" + parsed.Host + strings.TrimSuffix(parsed.Path, "/")
 }
