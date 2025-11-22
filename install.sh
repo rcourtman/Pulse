@@ -466,12 +466,12 @@ configure_proxy_socket_mount() {
     # Extract line number where snapshots start (first line starting with [)
     local snapshot_start=$(grep -n '^\[' "$temp_config" | head -1 | cut -d: -f1)
 
-    if grep -Eq '^mp[0-9]+: .*pulse-sensor-proxy' "$temp_config" 2>/dev/null; then
+    if grep -Eq '^mp[0-9]+:.*pulse-sensor-proxy|^mp[0-9]+:.*mnt/pulse-proxy' "$temp_config" 2>/dev/null; then
         print_info "Removing mp entries for pulse-sensor-proxy to keep snapshots and migrations working"
         if [ -n "$snapshot_start" ]; then
-            sed -i "1,$((snapshot_start-1)) { /^mp[0-9]\+: .*pulse-sensor-proxy/d }" "$temp_config"
+            sed -i "1,$((snapshot_start-1)) { /^mp[0-9]\+:.*pulse-sensor-proxy/d; /^mp[0-9]\+:.*mnt\/pulse-proxy/d }" "$temp_config"
         else
-            sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$temp_config"
+            sed -i '/^mp[0-9]\+:.*pulse-sensor-proxy/d; /^mp[0-9]\+:.*mnt\/pulse-proxy/d' "$temp_config"
         fi
         updated=true
     fi
