@@ -875,7 +875,7 @@ if [[ -n "${AGENT_DOWNLOAD_SOURCE:-}" ]]; then
 fi
 
 if ! common::is_dry_run; then
-    chmod +x "$AGENT_PATH"
+    chmod 0755 "$AGENT_PATH"
 fi
 log_success "Agent binary installed"
 

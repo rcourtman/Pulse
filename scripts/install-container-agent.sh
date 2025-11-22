@@ -515,7 +515,7 @@ download_agent() {
   fi
 
   mv "$tmp" "$AGENT_PATH"
-  chmod +x "$AGENT_PATH"
+  chmod 0755 "$AGENT_PATH"
   log_success "Agent installed at $AGENT_PATH"
 }
 
