@@ -5,7 +5,6 @@ import { formatRelativeTime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { DockerHost, Host } from '@/types/api';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
-import { setApiToken as setApiClientToken } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -262,8 +261,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       });
       showSuccess('New API token generated. Copy it below while it is still visible.');
       props.onTokensChanged?.();
-
-      setApiClientToken(token);
     } catch (err) {
       logger.error('Failed to generate API token', err);
       showError('Failed to generate API token');

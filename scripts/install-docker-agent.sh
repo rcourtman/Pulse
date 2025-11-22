@@ -1745,7 +1745,7 @@ if [[ -n "$DOWNLOAD_SUCCESS_URL" ]]; then
     fi
 fi
 
-chmod +x "$AGENT_PATH"
+chmod 0755 "$AGENT_PATH"
 log_success "Agent binary installed"
 
 allow_reenroll_if_needed() {
