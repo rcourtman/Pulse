@@ -220,6 +220,8 @@ docker run -d \
   ghcr.io/rcourtman/pulse-docker-agent:latest
 ```
 
+Add `-e LOG_LEVEL=warn` when your container logs feed into journald or another centralized collector and you want quieter steady-state logging.
+
 > **Note**: Official images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/rcourtman/pulse-docker-agent`. To test local changes, run `docker build --target agent_runtime -t pulse-docker-agent:test .` from the repository root.
 
 `--pid=host`, `--uts=host`, and the `/etc/machine-id` bind keep host metadata stable so Pulse doesn’t think the container itself is the Docker host. Auto-update is disabled in the image by default; rebuild or override `PULSE_NO_AUTO_UPDATE=false` only if you manage upgrades outside of your orchestrator. Expect to grant the container the same level of Docker socket access as the systemd service—running inside Docker doesn’t sandbox the agent from the host.
@@ -232,6 +234,7 @@ docker run -d \
 | `--token`, `PULSE_TOKEN`| Pulse API token with `docker:report` scope (required).    | —               |
 | `--target`, `PULSE_TARGETS` | One or more `url|token[|insecure]` entries to fan-out reports to multiple Pulse servers. Separate entries with `;` or repeat the flag. | — |
 | `--interval`, `PULSE_INTERVAL` | Reporting cadence (supports `30s`, `1m`, etc.).     | `30s`           |
+| `--log-level`, `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`). Use `debug` only while actively troubleshooting to avoid noisy journals. | `info` |
 | `--runtime`, `PULSE_RUNTIME` | Container runtime to target (`docker`, `podman`, `auto`). | `docker` |
 | `--container-socket`, `PULSE_CONTAINER_SOCKET` / `CONTAINER_HOST` | Explicit runtime socket path or `unix://` URI. | Runtime default |
 | `--rootless`, `PULSE_RUNTIME_ROOTLESS` | Install/manage the agent as a user service (Podman). | Auto (rootful) |
@@ -260,6 +263,7 @@ Need the alerts but at a different tone? The same Containers tab exposes global 
 ## Testing and troubleshooting
 
 - Run with `--interval 15s --insecure` in a terminal to see log output while testing.
+- Adjust verbosity with `--log-level` or `LOG_LEVEL` (`info` by default). Drop to `warn` for quiet steady-state logs; use `debug` only when actively debugging.
 - Ensure the Pulse API token has not expired or been regenerated.
 - If `pulse-docker-agent` reports `Cannot connect to the Docker daemon`, verify the socket path and permissions.
 - Check Pulse (`/containers` tab) for the latest heartbeat time. Hosts are marked offline if they stop reporting for >4× the configured interval.
