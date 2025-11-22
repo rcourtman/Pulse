@@ -1098,6 +1098,9 @@ func Load() (*Config, error) {
 	if val := os.Getenv("OIDC_ALLOWED_EMAILS"); val != "" {
 		oidcEnv["OIDC_ALLOWED_EMAILS"] = val
 	}
+	if val := os.Getenv("OIDC_CA_BUNDLE"); val != "" {
+		oidcEnv["OIDC_CA_BUNDLE"] = val
+	}
 	if len(oidcEnv) > 0 {
 		cfg.OIDC.MergeFromEnv(oidcEnv)
 	}

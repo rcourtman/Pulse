@@ -4,9 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +31,7 @@ type OIDCService struct {
 	oauth2Cfg  *oauth2.Config
 	verifier   *oidc.IDTokenVerifier
 	stateStore *oidcStateStore
+	httpClient *http.Client
 }
 
 type oidcSnapshot struct {
@@ -34,6 +40,8 @@ type oidcSnapshot struct {
 	clientSecret string
 	redirectURL  string
 	scopes       []string
+	caBundle     string
+	caBundleHash string
 }
 
 // NewOIDCService fetches provider metadata and prepares helper structures.
@@ -49,7 +57,15 @@ func NewOIDCService(ctx context.Context, cfg *config.OIDCConfig) (*OIDCService, 
 		Str("issuer", cfg.IssuerURL).
 		Str("redirect_url", cfg.RedirectURL).
 		Strs("scopes", cfg.Scopes).
+		Str("ca_bundle", cfg.CABundle).
 		Msg("Initializing OIDC provider")
+
+	httpClient, caHash, err := newOIDCHTTPClient(cfg.CABundle)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build OIDC HTTP client: %w", err)
+	}
+
+	ctx = oidc.ClientContext(ctx, httpClient)
 
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
@@ -78,6 +94,8 @@ func NewOIDCService(ctx context.Context, cfg *config.OIDCConfig) (*OIDCService, 
 		clientSecret: cfg.ClientSecret,
 		redirectURL:  cfg.RedirectURL,
 		scopes:       append([]string{}, cfg.Scopes...),
+		caBundle:     cfg.CABundle,
+		caBundleHash: caHash,
 	}
 
 	service := &OIDCService{
@@ -86,6 +104,7 @@ func NewOIDCService(ctx context.Context, cfg *config.OIDCConfig) (*OIDCService, 
 		oauth2Cfg:  oauth2Cfg,
 		verifier:   verifier,
 		stateStore: newOIDCStateStore(),
+		httpClient: httpClient,
 	}
 
 	return service, nil
@@ -108,6 +127,18 @@ func (s *OIDCService) Matches(cfg *config.OIDCConfig) bool {
 	}
 	if s.snapshot.redirectURL != cfg.RedirectURL {
 		return false
+	}
+	if s.snapshot.caBundle != cfg.CABundle {
+		return false
+	}
+	if cfg.CABundle != "" {
+		currentHash, err := hashCABundle(cfg.CABundle)
+		if err != nil {
+			return false
+		}
+		if s.snapshot.caBundleHash != currentHash {
+			return false
+		}
 	}
 	if len(s.snapshot.scopes) != len(cfg.Scopes) {
 		return false
@@ -164,11 +195,72 @@ func (s *OIDCService) authCodeURL(state string, entry *oidcStateEntry) string {
 }
 
 func (s *OIDCService) exchangeCode(ctx context.Context, code string, entry *oidcStateEntry) (*oauth2.Token, error) {
+	ctx = s.contextWithHTTPClient(ctx)
 	opts := []oauth2.AuthCodeOption{}
 	if entry.CodeVerifier != "" {
 		opts = append(opts, oauth2.SetAuthURLParam("code_verifier", entry.CodeVerifier))
 	}
 	return s.oauth2Cfg.Exchange(ctx, code, opts...)
+}
+
+func (s *OIDCService) contextWithHTTPClient(ctx context.Context) context.Context {
+	if s.httpClient == nil {
+		return ctx
+	}
+	return oidc.ClientContext(ctx, s.httpClient)
+}
+
+func newOIDCHTTPClient(caBundle string) (*http.Client, string, error) {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	var clone *http.Transport
+	if ok && transport != nil {
+		clone = transport.Clone()
+	} else {
+		clone = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		}
+	}
+	if strings.TrimSpace(caBundle) == "" {
+		return &http.Client{Transport: clone}, "", nil
+	}
+
+	caData, err := os.ReadFile(caBundle)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read OIDC CA bundle: %w", err)
+	}
+
+	pool, err := x509.SystemCertPool()
+	if err != nil || pool == nil {
+		pool = x509.NewCertPool()
+	}
+
+	if ok := pool.AppendCertsFromPEM(caData); !ok {
+		return nil, "", fmt.Errorf("OIDC CA bundle does not contain any certificates")
+	}
+
+	if clone.TLSClientConfig == nil {
+		clone.TLSClientConfig = &tls.Config{}
+	}
+	clone.TLSClientConfig.MinVersion = tls.VersionTLS12
+	clone.TLSClientConfig.RootCAs = pool
+
+	sum := sha256.Sum256(caData)
+	caHash := fmt.Sprintf("%x", sum[:])
+
+	return &http.Client{Transport: clone}, caHash, nil
+}
+
+func hashCABundle(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum[:]), nil
 }
 
 // oidcStateStore keeps short-lived authorization state tokens.

@@ -27,6 +27,7 @@ type OIDCConfig struct {
 	AllowedGroups  []string        `json:"allowedGroups,omitempty"`
 	AllowedDomains []string        `json:"allowedDomains,omitempty"`
 	AllowedEmails  []string        `json:"allowedEmails,omitempty"`
+	CABundle       string          `json:"caBundle,omitempty"`
 	EnvOverrides   map[string]bool `json:"-"`
 }
 
@@ -48,6 +49,7 @@ func (c *OIDCConfig) Clone() *OIDCConfig {
 	clone.AllowedGroups = append([]string{}, c.AllowedGroups...)
 	clone.AllowedDomains = append([]string{}, c.AllowedDomains...)
 	clone.AllowedEmails = append([]string{}, c.AllowedEmails...)
+	clone.CABundle = c.CABundle
 	if c.EnvOverrides != nil {
 		clone.EnvOverrides = make(map[string]bool, len(c.EnvOverrides))
 		for k, v := range c.EnvOverrides {
@@ -62,6 +64,8 @@ func (c *OIDCConfig) ApplyDefaults(publicURL string) {
 	if c == nil {
 		return
 	}
+
+	c.CABundle = strings.TrimSpace(c.CABundle)
 
 	if len(c.Scopes) == 0 {
 		c.Scopes = append([]string{}, defaultOIDCScopes...)
@@ -226,5 +230,9 @@ func (c *OIDCConfig) MergeFromEnv(env map[string]string) {
 	if val, ok := env["OIDC_ALLOWED_EMAILS"]; ok {
 		c.AllowedEmails = parseDelimited(val)
 		c.EnvOverrides["allowedEmails"] = true
+	}
+	if val, ok := env["OIDC_CA_BUNDLE"]; ok {
+		c.CABundle = val
+		c.EnvOverrides["caBundle"] = true
 	}
 }

@@ -113,6 +113,30 @@ This matches the bundled Dex mock server:
 
 All configuration can be provided via environment variables (see [`docs/CONFIGURATION.md`](./CONFIGURATION.md#oidc-variables-optional-overrides)). When any `OIDC_*` variable is present the UI is placed in read-only mode and values must be changed from the deployment configuration instead.
 
+## Self-signed / private CA issuers
+
+Pulse validates OIDC discovery, JWKS fetches, and token exchanges with the container trust store. For self-signed or private PKI issuers, mount your IdP root CA into the container and point `OIDC_CA_BUNDLE` at that PEM file.
+
+Example Helm override:
+
+```yaml
+server:
+  extraVolumes:
+    - name: oidc-ca
+      secret:
+        secretName: oidc-ca
+  extraVolumeMounts:
+    - name: oidc-ca
+      mountPath: /etc/ssl/certs/oidc-ca.pem
+      subPath: oidc-ca.pem
+      readOnly: true
+  extraEnv:
+    - name: OIDC_CA_BUNDLE
+      value: /etc/ssl/certs/oidc-ca.pem
+```
+
+This keeps TLS verification enabled while trusting your internal CA. Avoid disabling verification; use a CA bundle instead.
+
 ## Login Flow
 
 - The login screen shows a **Continue with Single Sign-On** button when OIDC is enabled.
@@ -130,6 +154,7 @@ All configuration can be provided via environment variables (see [`docs/CONFIGUR
 | Users see `single sign-on failed` | Check `journalctl -u pulse.service` for detailed OIDC audit logs. Common causes include mismatched client IDs, incorrect redirect URLs, or group/domain restrictions. |
 | UI shows "OIDC settings are managed by environment variables" | Remove the relevant `OIDC_*` environment variables or update them directly in your deployment. |
 | Provider discovery fails | Verify the issuer URL is reachable from the Pulse server and returns valid OIDC discovery metadata at `/.well-known/openid-configuration`. |
+| `tls: failed to verify certificate: x509: certificate signed by unknown authority` | Mount your IdP CA into the container and set `OIDC_CA_BUNDLE` to that PEM path (see self-signed section above). |
 | Group restrictions not working | Enable debug logging to see which groups the IdP is sending and verify the `groups_claim` setting matches your IdP's claim name. |
 | Auto-redirect to OIDC when password auth still enabled | This is expected behavior when OIDC is enabled. Users can still use password auth by clicking "Use your admin credentials to sign in below" on the login page. To disable auto-redirect, comment out the auto-redirect code in the frontend. |
 

@@ -54,6 +54,7 @@ func (r *Router) handleUpdateOIDCConfig(w http.ResponseWriter, req *http.Request
 		AllowedDomains    []string `json:"allowedDomains"`
 		AllowedEmails     []string `json:"allowedEmails"`
 		ClearClientSecret bool     `json:"clearClientSecret"`
+		CABundle          *string  `json:"caBundle"`
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
@@ -74,6 +75,7 @@ func (r *Router) handleUpdateOIDCConfig(w http.ResponseWriter, req *http.Request
 		AllowedGroups:  append([]string{}, payload.AllowedGroups...),
 		AllowedDomains: append([]string{}, payload.AllowedDomains...),
 		AllowedEmails:  append([]string{}, payload.AllowedEmails...),
+		CABundle:       strings.TrimSpace(cfg.CABundle),
 		EnvOverrides:   make(map[string]bool),
 	}
 
@@ -84,6 +86,9 @@ func (r *Router) handleUpdateOIDCConfig(w http.ResponseWriter, req *http.Request
 	}
 	if payload.ClientSecret != nil {
 		updated.ClientSecret = strings.TrimSpace(*payload.ClientSecret)
+	}
+	if payload.CABundle != nil {
+		updated.CABundle = strings.TrimSpace(*payload.CABundle)
 	}
 
 	updated.ApplyDefaults(r.config.PublicURL)
@@ -122,6 +127,7 @@ type oidcResponse struct {
 	AllowedGroups   []string        `json:"allowedGroups"`
 	AllowedDomains  []string        `json:"allowedDomains"`
 	AllowedEmails   []string        `json:"allowedEmails"`
+	CABundle        string          `json:"caBundle"`
 	ClientSecretSet bool            `json:"clientSecretSet"`
 	DefaultRedirect string          `json:"defaultRedirect"`
 	EnvOverrides    map[string]bool `json:"envOverrides,omitempty"`
@@ -146,6 +152,7 @@ func makeOIDCResponse(cfg *config.OIDCConfig, publicURL string) oidcResponse {
 		AllowedGroups:   append([]string{}, cfg.AllowedGroups...),
 		AllowedDomains:  append([]string{}, cfg.AllowedDomains...),
 		AllowedEmails:   append([]string{}, cfg.AllowedEmails...),
+		CABundle:        cfg.CABundle,
 		ClientSecretSet: cfg.ClientSecret != "",
 		DefaultRedirect: config.DefaultRedirectURL(publicURL),
 	}
