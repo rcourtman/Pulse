@@ -77,3 +77,45 @@ func TestCreateConfigHelpersNormalizeHosts(t *testing.T) {
 		t.Fatalf("expected default port on host built from fields, got %q", fromFields.Host)
 	}
 }
+
+func TestStripDefaultPort(t *testing.T) {
+	tests := []struct {
+		name        string
+		host        string
+		defaultPort string
+		want        string
+	}{
+		{
+			name:        "removes default PVE port",
+			host:        "https://pve.local:8006",
+			defaultPort: defaultPVEPort,
+			want:        "https://pve.local",
+		},
+		{
+			name:        "keeps non-default port",
+			host:        "https://pve.local:8443",
+			defaultPort: defaultPVEPort,
+			want:        "https://pve.local:8443",
+		},
+		{
+			name:        "preserves http scheme when removing port",
+			host:        "http://pve.local:8006",
+			defaultPort: defaultPVEPort,
+			want:        "http://pve.local",
+		},
+		{
+			name:        "returns trimmed host unchanged when parse fails",
+			host:        "://bad",
+			defaultPort: defaultPVEPort,
+			want:        "://bad",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StripDefaultPort(tt.host, tt.defaultPort); got != tt.want {
+				t.Fatalf("StripDefaultPort(%q, %q) = %q, want %q", tt.host, tt.defaultPort, got, tt.want)
+			}
+		})
+	}
+}

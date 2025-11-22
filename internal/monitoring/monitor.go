@@ -5526,12 +5526,40 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 
 	// Switch to the working host for the remainder of the poll (and future polls)
 	primaryHost := instanceCfg.Host
-	instanceCfg.Host = fallbackHost
+
+	// Persist with an explicit port to avoid re-normalization back to :8006 on reloads.
+	persistHost := fallbackHost
+	if parsed, err := url.Parse(fallbackHost); err == nil && parsed.Host != "" && parsed.Port() == "" {
+		port := "443"
+		if strings.EqualFold(parsed.Scheme, "http") {
+			port = "80"
+		}
+		parsed.Host = net.JoinHostPort(parsed.Hostname(), port)
+		persistHost = parsed.Scheme + "://" + parsed.Host
+	}
+
+	instanceCfg.Host = persistHost
 	m.pveClients[instanceName] = fallbackClient
+
+	// Update in-memory config so subsequent polls build clients against the working port.
+	for i := range m.config.PVEInstances {
+		if m.config.PVEInstances[i].Name == instanceName {
+			m.config.PVEInstances[i].Host = persistHost
+			break
+		}
+	}
+
+	// Persist to disk so restarts keep the working endpoint.
+	if m.persistence != nil {
+		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
+			log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to persist fallback PVE host")
+		}
+	}
+
 	log.Warn().
 		Str("instance", instanceName).
 		Str("primary", primaryHost).
-		Str("fallback", fallbackHost).
+		Str("fallback", persistHost).
 		Msg("Primary PVE host failed; using fallback without default port")
 
 	return fallbackNodes, fallbackClient, nil
