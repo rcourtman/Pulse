@@ -125,7 +125,7 @@ describe('default schedule helpers', () => {
   it('creates grouping defaults', () => {
     expect(createDefaultGrouping()).toEqual({
       enabled: true,
-      window: 5,
+      window: 1,
       byNode: true,
       byGuest: false,
     });
