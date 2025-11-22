@@ -732,12 +732,13 @@ func discoverClusterNodes() ([]string, error) {
 	}
 
 	// Parse output to extract IP addresses
-	// Format example:
-	// 0x00000001          1 192.168.0.134
-	// 0x00000003          1 192.168.0.5 (local)
+	return parseClusterNodes(out.String())
+}
 
+// parseClusterNodes parses pvecm status output to extract IP addresses
+func parseClusterNodes(output string) ([]string, error) {
 	var nodes []string
-	lines := strings.Split(out.String(), "\n")
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		// Look for lines with hex ID and IP address
 		if !strings.Contains(line, "0x") {
@@ -750,11 +751,18 @@ func discoverClusterNodes() ([]string, error) {
 			continue
 		}
 
-		// Third field should be the IP address
-		ip := fields[2]
-		// Basic validation that it looks like an IP
-		if strings.Contains(ip, ".") {
-			nodes = append(nodes, ip)
+		// Iterate through fields to find the IP address
+		for _, field := range fields {
+			// Skip hex ID
+			if strings.HasPrefix(field, "0x") {
+				continue
+			}
+
+			// Check if it's a valid IP
+			if ip := net.ParseIP(field); ip != nil {
+				nodes = append(nodes, field)
+				break
+			}
 		}
 	}
 
