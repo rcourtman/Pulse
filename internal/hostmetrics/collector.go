@@ -16,6 +16,18 @@ import (
 	gonet "github.com/shirou/gopsutil/v4/net"
 )
 
+// System call wrappers for testing
+var (
+	cpuCounts      = gocpu.CountsWithContext
+	cpuPercent     = gocpu.PercentWithContext
+	loadAvg        = goload.AvgWithContext
+	virtualMemory  = gomem.VirtualMemoryWithContext
+	diskPartitions = godisk.PartitionsWithContext
+	diskUsage      = godisk.UsageWithContext
+	netInterfaces  = gonet.InterfacesWithContext
+	netIOCounters  = gonet.IOCountersWithContext
+)
+
 // Snapshot represents a host resource utilisation sample.
 type Snapshot struct {
 	CPUUsagePercent float64
@@ -33,7 +45,7 @@ func Collect(ctx context.Context) (Snapshot, error) {
 
 	var snapshot Snapshot
 
-	if cpuCount, err := gocpu.CountsWithContext(collectCtx, true); err == nil {
+	if cpuCount, err := cpuCounts(collectCtx, true); err == nil {
 		snapshot.CPUCount = cpuCount
 	}
 
@@ -41,11 +53,11 @@ func Collect(ctx context.Context) (Snapshot, error) {
 		snapshot.CPUUsagePercent = cpuUsage
 	}
 
-	if loadAvg, err := goload.AvgWithContext(collectCtx); err == nil && loadAvg != nil {
+	if loadAvg, err := loadAvg(collectCtx); err == nil && loadAvg != nil {
 		snapshot.LoadAverage = []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
 	}
 
-	memStats, err := gomem.VirtualMemoryWithContext(collectCtx)
+	memStats, err := virtualMemory(collectCtx)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("memory stats: %w", err)
 	}
@@ -71,7 +83,7 @@ func Collect(ctx context.Context) (Snapshot, error) {
 }
 
 func collectCPUUsage(ctx context.Context) (float64, error) {
-	percentages, err := gocpu.PercentWithContext(ctx, time.Second, false)
+	percentages, err := cpuPercent(ctx, time.Second, false)
 	if err != nil {
 		return 0, err
 	}
@@ -90,7 +102,7 @@ func collectCPUUsage(ctx context.Context) (float64, error) {
 }
 
 func collectDisks(ctx context.Context) []agentshost.Disk {
-	partitions, err := godisk.PartitionsWithContext(ctx, true)
+	partitions, err := diskPartitions(ctx, true)
 	if err != nil {
 		return nil
 	}
@@ -108,7 +120,7 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 		}
 		seen[part.Mountpoint] = struct{}{}
 
-		usage, err := godisk.UsageWithContext(ctx, part.Mountpoint)
+		usage, err := diskUsage(ctx, part.Mountpoint)
 		if err != nil {
 			continue
 		}
@@ -116,7 +128,7 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 			continue
 		}
 
-		if part.Fstype == "zfs" {
+		if strings.EqualFold(part.Fstype, "zfs") || strings.EqualFold(part.Fstype, "fuse.zfs") {
 			pool := zfsPoolFromDevice(part.Device)
 			if pool == "" {
 				continue
@@ -162,12 +174,12 @@ func collectDisks(ctx context.Context) []agentshost.Disk {
 }
 
 func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
-	ifaces, err := gonet.InterfacesWithContext(ctx)
+	ifaces, err := netInterfaces(ctx)
 	if err != nil {
 		return nil
 	}
 
-	ioCounters, err := gonet.IOCountersWithContext(ctx, true)
+	ioCounters, err := netIOCounters(ctx, true)
 	if err != nil {
 		ioCounters = nil
 	}
