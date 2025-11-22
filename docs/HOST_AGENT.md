@@ -204,6 +204,7 @@ Start-Service -Name PulseHostAgent
 | `--url` | Pulse base URL (defaults to `http://localhost:7655`) |
 | `--token` | API token with the `host-agent:report` scope |
 | `--interval` | Polling interval (`30s` default) |
+| `--log-level` | Log verbosity (`debug`, `info`, `warn`, `error`; defaults to `info`). Also respects `LOG_LEVEL`. Use `warn` on noisy journald setups. |
 | `--hostname` | Override reported hostname |
 | `--agent-id` | Override agent identifier (used as dedupe key) |
 | `--tag` | Optional tag(s) to annotate the host (repeatable) |
