@@ -5478,6 +5478,65 @@ func isTransientError(err error) bool {
 	return false
 }
 
+func shouldTryPortlessFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "no such host") ||
+		strings.Contains(msg, "client.timeout exceeded") ||
+		strings.Contains(msg, "i/o timeout") ||
+		strings.Contains(msg, "context deadline exceeded") {
+		return true
+	}
+	return false
+}
+
+// retryPVEPortFallback handles the case where a normalized :8006 host is unreachable
+// because the actual endpoint is fronted by a reverse proxy on 443. If the initial
+// GetNodes call fails with a connection error and the host has the default PVE port,
+// retry without the default port to hit the proxy. On success, swap the client so
+// subsequent polls reuse the working endpoint.
+func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string, instanceCfg *config.PVEInstance, currentClient PVEClientInterface, cause error) ([]proxmox.Node, PVEClientInterface, error) {
+	if instanceCfg == nil || !shouldTryPortlessFallback(cause) {
+		return nil, currentClient, cause
+	}
+
+	fallbackHost := config.StripDefaultPort(instanceCfg.Host, config.DefaultPVEPort)
+	if fallbackHost == "" || fallbackHost == instanceCfg.Host {
+		return nil, currentClient, cause
+	}
+
+	clientCfg := config.CreateProxmoxConfigWithHost(instanceCfg, fallbackHost, false)
+	if clientCfg.Timeout <= 0 {
+		clientCfg.Timeout = m.config.ConnectionTimeout
+	}
+
+	fallbackClient, err := proxmox.NewClient(clientCfg)
+	if err != nil {
+		return nil, currentClient, cause
+	}
+
+	fallbackNodes, err := fallbackClient.GetNodes(ctx)
+	if err != nil {
+		return nil, currentClient, cause
+	}
+
+	// Switch to the working host for the remainder of the poll (and future polls)
+	primaryHost := instanceCfg.Host
+	instanceCfg.Host = fallbackHost
+	m.pveClients[instanceName] = fallbackClient
+	log.Warn().
+		Str("instance", instanceName).
+		Str("primary", primaryHost).
+		Str("fallback", fallbackHost).
+		Msg("Primary PVE host failed; using fallback without default port")
+
+	return fallbackNodes, fallbackClient, nil
+}
+
 // pollPVEInstance polls a single PVE instance
 func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, client PVEClientInterface) {
 	defer recoverFromPanic(fmt.Sprintf("pollPVEInstance-%s", instanceName))
@@ -5541,16 +5600,21 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Poll nodes
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
-		monErr := errors.WrapConnectionError("poll_nodes", instanceName, err)
-		pollErr = monErr
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes")
-		m.state.SetConnectionHealth(instanceName, false)
+		if fallbackNodes, fallbackClient, fallbackErr := m.retryPVEPortFallback(ctx, instanceName, instanceCfg, client, err); fallbackErr == nil {
+			client = fallbackClient
+			nodes = fallbackNodes
+		} else {
+			monErr := errors.WrapConnectionError("poll_nodes", instanceName, err)
+			pollErr = monErr
+			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes")
+			m.state.SetConnectionHealth(instanceName, false)
 
-		// Track auth failure if it's an authentication error
-		if errors.IsAuthError(err) {
-			m.recordAuthFailure(instanceName, "pve")
+			// Track auth failure if it's an authentication error
+			if errors.IsAuthError(err) {
+				m.recordAuthFailure(instanceName, "pve")
+			}
+			return
 		}
-		return
 	}
 
 	// Reset auth failures on successful connection
