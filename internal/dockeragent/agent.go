@@ -57,6 +57,7 @@ type Config struct {
 	IncludeTasks       bool
 	IncludeContainers  bool
 	CollectDiskMetrics bool
+	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
 }
 
@@ -81,20 +82,20 @@ const (
 
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
-	cfg              Config
-	docker           *client.Client
-	daemonHost       string
-	runtime          RuntimeKind
-	runtimeVer       string
-	supportsSwarm    bool
-	httpClients      map[bool]*http.Client
-	logger           zerolog.Logger
-	machineID        string
-	hostName         string
-	cpuCount         int
-	targets          []TargetConfig
-	allowedStates    map[string]struct{}
-	stateFilters     []string
+	cfg                 Config
+	docker              *client.Client
+	daemonHost          string
+	runtime             RuntimeKind
+	runtimeVer          string
+	supportsSwarm       bool
+	httpClients         map[bool]*http.Client
+	logger              zerolog.Logger
+	machineID           string
+	hostName            string
+	cpuCount            int
+	targets             []TargetConfig
+	allowedStates       map[string]struct{}
+	stateFilters        []string
 	hostID              string
 	prevContainerCPU    map[string]cpuSample
 	preCPUStatsFailures int
@@ -158,8 +159,12 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	logger := cfg.Logger
+	if zerolog.GlobalLevel() == zerolog.DebugLevel && cfg.LogLevel != zerolog.DebugLevel {
+		zerolog.SetGlobalLevel(cfg.LogLevel)
+	}
+
 	if logger == nil {
-		defaultLogger := zerolog.New(os.Stdout).With().Timestamp().Str("component", "pulse-docker-agent").Logger()
+		defaultLogger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Str("component", "pulse-docker-agent").Logger()
 		logger = &defaultLogger
 	} else {
 		scoped := logger.With().Str("component", "pulse-docker-agent").Logger()

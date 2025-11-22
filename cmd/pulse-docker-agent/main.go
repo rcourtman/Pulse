@@ -50,7 +50,9 @@ func main() {
 
 	cfg := loadConfig()
 
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	zerolog.SetGlobalLevel(cfg.LogLevel)
+
+	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
 	cfg.Logger = &logger
 
 	agent, err := dockeragent.New(cfg)
@@ -87,6 +89,7 @@ func loadConfig() dockeragent.Config {
 	envSwarmTasks := utils.GetenvTrim("PULSE_SWARM_TASKS")
 	envIncludeContainers := utils.GetenvTrim("PULSE_INCLUDE_CONTAINERS")
 	envCollectDisk := utils.GetenvTrim("PULSE_COLLECT_DISK")
+	envLogLevel := utils.GetenvTrim("LOG_LEVEL")
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -120,6 +123,11 @@ func loadConfig() dockeragent.Config {
 		collectDiskDefault = utils.ParseBool(envCollectDisk)
 	}
 
+	logLevelDefault := "info"
+	if envLogLevel != "" {
+		logLevelDefault = envLogLevel
+	}
+
 	urlFlag := flag.String("url", envURL, "Pulse server URL (e.g. http://pulse:7655)")
 	tokenFlag := flag.String("token", envToken, "Pulse API token (required)")
 	intervalFlag := flag.Duration("interval", defaultInterval, "Reporting interval (e.g. 30s)")
@@ -128,6 +136,7 @@ func loadConfig() dockeragent.Config {
 	insecureFlag := flag.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS certificate verification")
 	noAutoUpdateFlag := flag.Bool("no-auto-update", utils.ParseBool(envNoAutoUpdate), "Disable automatic agent updates")
 	runtimeFlag := flag.String("runtime", envRuntime, "Container runtime to expect (auto, docker, podman)")
+	logLevelFlag := flag.String("log-level", logLevelDefault, "Log level: debug, info, warn, error")
 	var targetFlags stringFlagList
 	flag.Var(&targetFlags, "target", "Pulse target in url|token[|insecure] format. Repeat to send to multiple Pulse instances")
 	var containerStateFlags stringFlagList
@@ -211,6 +220,12 @@ func loadConfig() dockeragent.Config {
 		interval = 30 * time.Second
 	}
 
+	logLevel, err := parseLogLevel(*logLevelFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
 	containerStates := make([]string, 0)
 	if len(containerStateFlags) > 0 {
 		containerStates = append(containerStates, containerStateFlags.Values()...)
@@ -235,7 +250,22 @@ func loadConfig() dockeragent.Config {
 		IncludeTasks:       *includeTasksFlag,
 		IncludeContainers:  *includeContainersFlag,
 		CollectDiskMetrics: *collectDiskFlag,
+		LogLevel:           logLevel,
 	}
+}
+
+func parseLogLevel(value string) (zerolog.Level, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return zerolog.InfoLevel, nil
+	}
+
+	level, err := zerolog.ParseLevel(normalized)
+	if err != nil {
+		return zerolog.InfoLevel, fmt.Errorf("invalid log level %q: must be debug, info, warn, or error", value)
+	}
+
+	return level, nil
 }
 
 func parseTargetSpecs(specs []string) ([]dockeragent.TargetConfig, error) {
