@@ -3157,25 +3157,54 @@ if [[ "$STANDALONE" == false ]]; then
         CT_RUNNING=true
     fi
 
-    if grep -Eq '^mp[0-9]+: .*pulse-sensor-proxy' "$LXC_CONFIG" 2>/dev/null; then
+    # /etc/pve is a FUSE filesystem (pmxcfs) - direct sed/echo don't work reliably
+    # Must use temp file and copy back to trigger cluster sync
+    # Also, config file contains snapshots sections - only modify main section (before first [)
+    TEMP_CONFIG=$(mktemp)
+    cp "$LXC_CONFIG" "$TEMP_CONFIG"
+
+    # Extract line number where snapshots start (first line starting with [)
+    SNAPSHOT_START=$(grep -n '^\[' "$TEMP_CONFIG" | head -1 | cut -d: -f1)
+
+    if grep -Eq '^mp[0-9]+: .*pulse-sensor-proxy' "$TEMP_CONFIG" 2>/dev/null; then
         print_info "Removing mp mounts for pulse-sensor-proxy to keep snapshots and migrations working"
-        sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$LXC_CONFIG"
+        if [ -n "$SNAPSHOT_START" ]; then
+            # Only modify main section (before snapshots)
+            sed -i "1,$((SNAPSHOT_START-1)) { /^mp[0-9]\+: .*pulse-sensor-proxy/d }" "$TEMP_CONFIG"
+        else
+            sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$TEMP_CONFIG"
+        fi
         MOUNT_UPDATED=true
     fi
 
-    if grep -q "^lxc.mount.entry: .*/pulse-sensor-proxy" "$LXC_CONFIG" 2>/dev/null; then
-        if ! grep -qxF "$LOCAL_MOUNT_ENTRY" "$LXC_CONFIG"; then
+    if grep -q "^lxc.mount.entry: .*/pulse-sensor-proxy" "$TEMP_CONFIG" 2>/dev/null; then
+        if ! grep -qxF "$LOCAL_MOUNT_ENTRY" "$TEMP_CONFIG"; then
             print_info "Updating existing lxc.mount.entry for pulse-sensor-proxy"
-            sed -i "s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${LOCAL_MOUNT_ENTRY}#" "$LXC_CONFIG"
+            if [ -n "$SNAPSHOT_START" ]; then
+                sed -i "1,$((SNAPSHOT_START-1)) { s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${LOCAL_MOUNT_ENTRY}# }" "$TEMP_CONFIG"
+            else
+                sed -i "s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${LOCAL_MOUNT_ENTRY}#" "$TEMP_CONFIG"
+            fi
             MOUNT_UPDATED=true
         else
             print_info "Container already has migration-safe lxc.mount.entry for proxy"
         fi
     else
         print_info "Adding lxc.mount.entry for pulse-sensor-proxy"
-        echo "$LOCAL_MOUNT_ENTRY" >> "$LXC_CONFIG"
+        # Insert before snapshot section if it exists, otherwise append
+        if [ -n "$SNAPSHOT_START" ]; then
+            sed -i "${SNAPSHOT_START}i ${LOCAL_MOUNT_ENTRY}" "$TEMP_CONFIG"
+        else
+            echo "$LOCAL_MOUNT_ENTRY" >> "$TEMP_CONFIG"
+        fi
         MOUNT_UPDATED=true
     fi
+
+    # Copy back to trigger pmxcfs sync
+    if [[ "$MOUNT_UPDATED" = true ]]; then
+        cp "$TEMP_CONFIG" "$LXC_CONFIG"
+    fi
+    rm -f "$TEMP_CONFIG"
 
     if ! pct config "$CTID" | grep -qxF "$LOCAL_MOUNT_ENTRY"; then
         print_error "Failed to persist migration-safe socket mount in container config"

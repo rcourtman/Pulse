@@ -457,21 +457,49 @@ configure_proxy_socket_mount() {
 
     local updated=false
 
-    if grep -Eq '^mp[0-9]+: .*pulse-sensor-proxy' "$lxc_config" 2>/dev/null; then
+    # /etc/pve is a FUSE filesystem (pmxcfs) - direct sed/echo don't work reliably
+    # Must use temp file and copy back to trigger cluster sync
+    # Also, config file contains snapshots sections - only modify main section (before first [)
+    local temp_config=$(mktemp)
+    cp "$lxc_config" "$temp_config"
+
+    # Extract line number where snapshots start (first line starting with [)
+    local snapshot_start=$(grep -n '^\[' "$temp_config" | head -1 | cut -d: -f1)
+
+    if grep -Eq '^mp[0-9]+: .*pulse-sensor-proxy' "$temp_config" 2>/dev/null; then
         print_info "Removing mp entries for pulse-sensor-proxy to keep snapshots and migrations working"
-        sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$lxc_config"
+        if [ -n "$snapshot_start" ]; then
+            sed -i "1,$((snapshot_start-1)) { /^mp[0-9]\+: .*pulse-sensor-proxy/d }" "$temp_config"
+        else
+            sed -i '/^mp[0-9]\+: .*pulse-sensor-proxy/d' "$temp_config"
+        fi
         updated=true
     fi
 
-    if grep -q "^lxc.mount.entry: .*/pulse-sensor-proxy" "$lxc_config" 2>/dev/null; then
-        if ! grep -qxF "$desired_entry" "$lxc_config"; then
-            sed -i "s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${desired_entry}#" "$lxc_config"
+    if grep -q "^lxc.mount.entry: .*/pulse-sensor-proxy" "$temp_config" 2>/dev/null; then
+        if ! grep -qxF "$desired_entry" "$temp_config"; then
+            if [ -n "$snapshot_start" ]; then
+                sed -i "1,$((snapshot_start-1)) { s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${desired_entry}# }" "$temp_config"
+            else
+                sed -i "s#^lxc.mount.entry: .*pulse-sensor-proxy.*#${desired_entry}#" "$temp_config"
+            fi
             updated=true
         fi
     else
-        echo "$desired_entry" >> "$lxc_config"
+        # Insert before snapshot section if it exists, otherwise append
+        if [ -n "$snapshot_start" ]; then
+            sed -i "${snapshot_start}i ${desired_entry}" "$temp_config"
+        else
+            echo "$desired_entry" >> "$temp_config"
+        fi
         updated=true
     fi
+
+    # Copy back to trigger pmxcfs sync
+    if [[ "$updated" == true ]]; then
+        cp "$temp_config" "$lxc_config"
+    fi
+    rm -f "$temp_config"
 
     if ! pct config "$ctid" | grep -qxF "$desired_entry"; then
         print_error "Failed to persist pulse-sensor-proxy mount entry in $lxc_config"
