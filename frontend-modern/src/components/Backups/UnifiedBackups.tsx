@@ -58,6 +58,7 @@ const UnifiedBackups: Component = () => {
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [typeFilter, setTypeFilter] = createSignal<'all' | FilterableGuestType>('all');
   const [backupTypeFilter, setBackupTypeFilter] = createSignal<'all' | BackupType>('all');
+  const [statusFilter, setStatusFilter] = createSignal<'all' | 'verified' | 'unverified'>('all');
   const [groupByMode, setGroupByMode] = createSignal<'date' | 'guest'>('date');
 
   // Convert between UI filter and internal filter for BackupsFilter component
@@ -429,6 +430,7 @@ const UnifiedBackups: Component = () => {
     const search = searchTerm().toLowerCase();
     const type = typeFilter();
     const backupType = backupTypeFilter();
+    const status = statusFilter();
     const dateRange = selectedDateRange();
     const nodeFilter = selectedNode();
 
@@ -531,6 +533,15 @@ const UnifiedBackups: Component = () => {
     // Backup type filter
     if (backupType !== 'all') {
       data = data.filter((item) => item.backupType === backupType);
+    }
+
+    // Status filter
+    if (status !== 'all') {
+      data = data.filter((item) => {
+        if (status === 'verified') return item.verified === true;
+        if (status === 'unverified') return item.verified === false;
+        return true;
+      });
     }
 
     // Sort
@@ -734,6 +745,7 @@ const UnifiedBackups: Component = () => {
     setIsSearchLocked(false);
     setTypeFilter('all');
     setBackupTypeFilter('all');
+    setStatusFilter('all');
     setGroupByMode('date');
     setSortKey('backupTime');
     setSortDirection('desc');
@@ -764,6 +776,7 @@ const UnifiedBackups: Component = () => {
           selectedNode() ||
           typeFilter() !== 'all' ||
           backupTypeFilter() !== 'all' ||
+          statusFilter() !== 'all' ||
           selectedDateRange() !== null ||
           sortKey() !== 'backupTime' ||
           sortDirection() !== 'desc'
@@ -1149,9 +1162,8 @@ const UnifiedBackups: Component = () => {
 
                     return (
                       <tr
-                        class={`hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors ${
-                          isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                        }`}
+                        class={`hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                          }`}
                         onClick={() => {
                           const currentSearch = searchTerm();
                           const nodeFilter = `node:${pbs.name}`;
@@ -1199,9 +1211,8 @@ const UnifiedBackups: Component = () => {
                         <td class="p-0.5 px-1.5 whitespace-nowrap">
                           <div class="flex items-center gap-1">
                             <span
-                              class={`h-2 w-2 rounded-full ${
-                                isOnline() ? 'bg-green-500' : 'bg-red-500'
-                              }`}
+                              class={`h-2 w-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'
+                                }`}
                             />
                             <span class="text-xs text-gray-600 dark:text-gray-400">
                               {isOnline() ? 'Online' : 'Offline'}
@@ -1341,44 +1352,40 @@ const UnifiedBackups: Component = () => {
                     <button
                       type="button"
                       onClick={() => setChartTimeRange(7)}
-                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
-                        chartTimeRange() === 7
+                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${chartTimeRange() === 7
                           ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                           : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
+                        }`}
                     >
                       7d
                     </button>
                     <button
                       type="button"
                       onClick={() => setChartTimeRange(30)}
-                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
-                        chartTimeRange() === 30
+                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${chartTimeRange() === 30
                           ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                           : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
+                        }`}
                     >
                       30d
                     </button>
                     <button
                       type="button"
                       onClick={() => setChartTimeRange(90)}
-                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
-                        chartTimeRange() === 90
+                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${chartTimeRange() === 90
                           ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                           : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
+                        }`}
                     >
                       90d
                     </button>
                     <button
                       type="button"
                       onClick={() => setChartTimeRange(365)}
-                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
-                        chartTimeRange() === 365
+                      class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${chartTimeRange() === 365
                           ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                           : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
+                        }`}
                     >
                       1y
                     </button>
@@ -1695,9 +1702,8 @@ const UnifiedBackups: Component = () => {
                             let tooltipText = `${formattedDate}`;
 
                             if (d.total > 0) {
-                              tooltipText += `\nAvailable: ${d.total} backup${
-                                d.total > 1 ? 's' : ''
-                              }`;
+                              tooltipText += `\nAvailable: ${d.total} backup${d.total > 1 ? 's' : ''
+                                }`;
 
                               const breakdown: string[] = [];
                               if (d.snapshots > 0) breakdown.push(`Snapshots: ${d.snapshots}`);
@@ -1846,6 +1852,8 @@ const UnifiedBackups: Component = () => {
           searchInputRef={(el) => (searchInputRef = el)}
           typeFilter={typeFilter}
           setTypeFilter={setTypeFilter}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
           hasHostBackups={hasHostBackups}
           sortOptions={sortKeyOptions}
           sortKey={sortKey}
@@ -1945,11 +1953,10 @@ const UnifiedBackups: Component = () => {
                               <div class="flex items-center justify-between gap-2 mb-1">
                                 <div class="flex items-center gap-2 min-w-0 flex-1">
                                   <span
-                                    class={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
-                                      item.type === 'VM'
+                                    class={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${item.type === 'VM'
                                         ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                                         : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                    }`}
+                                      }`}
                                   >
                                     {item.type}
                                   </span>
@@ -1960,13 +1967,12 @@ const UnifiedBackups: Component = () => {
                                 </div>
                                 <div class="flex items-center gap-2 shrink-0">
                                   <span
-                                    class={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                      item.backupType === 'snapshot'
+                                    class={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${item.backupType === 'snapshot'
                                         ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
                                         : item.backupType === 'local'
                                           ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                                           : 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200'
-                                    }`}
+                                      }`}
                                   >
                                     {item.backupType === 'snapshot'
                                       ? 'SNAP'
@@ -2157,13 +2163,12 @@ const UnifiedBackups: Component = () => {
                                 <td class="p-0.5 pl-5 pr-1.5 text-sm align-middle">{item.vmid}</td>
                                 <td class="p-0.5 px-1.5 align-middle">
                                   <span
-                                    class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
-                                      item.type === 'VM'
+                                    class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${item.type === 'VM'
                                         ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
                                         : item.type === 'Host'
                                           ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
                                           : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                                    }`}
+                                      }`}
                                   >
                                     {item.type}
                                   </span>
@@ -2196,13 +2201,12 @@ const UnifiedBackups: Component = () => {
                                 <td class="p-0.5 px-1.5 align-middle">
                                   <div class="flex items-center gap-1">
                                     <span
-                                      class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
-                                        item.backupType === 'snapshot'
+                                      class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${item.backupType === 'snapshot'
                                           ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
                                           : item.backupType === 'local'
                                             ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
                                             : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                                      }`}
+                                        }`}
                                     >
                                       {item.backupType === 'snapshot'
                                         ? 'Snapshot'
