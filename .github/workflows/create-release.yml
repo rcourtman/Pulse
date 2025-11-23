@@ -414,68 +414,35 @@ jobs:
         run: |
           TAG="${{ needs.extract_version.outputs.tag }}"
           NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
-          TITLE="Pulse ${TAG}"
 
-          echo "Managing release for ${TAG}..."
+          echo "Creating draft release for ${TAG}..."
 
-          # 1. Try to find existing release by Tag
-          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" --jq .id 2>/dev/null || echo "")
-
-          # 2. If not found by tag, try to find by Title (handles untagged drafts)
-          if [ -z "$RELEASE_ID" ]; then
-            echo "Release not found by tag, checking by title '${TITLE}'..."
-            RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases" --paginate --jq ".[] | select(.name == \"${TITLE}\") | .id" | head -n 1)
-          fi
-
-          # 3. Create or Update
-          if [ -n "$RELEASE_ID" ]; then
-            echo "Found existing release (ID: ${RELEASE_ID}). Updating notes..."
-            # Update the release notes
-            gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" -X PATCH -F body="$(cat $NOTES_FILE)" > /dev/null
-          else
-            echo "Creating new draft release for ${TAG}..."
-            # Create the release
-            gh release create "${TAG}" \
-              --draft \
-              --title "${TITLE}" \
-              --notes-file "$NOTES_FILE"
-            
-            # Fetch the ID of the newly created release
-            # We search by Title to be safe against untagged creation
-            echo "Waiting for release to be indexed..."
-            for i in {1..10}; do
-              RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases" --paginate --jq ".[] | select(.name == \"${TITLE}\") | .id" | head -n 1)
-              if [ -n "$RELEASE_ID" ]; then 
-                echo "✓ Found new release ID: ${RELEASE_ID}"
-                break
-              fi
-              sleep 2
-            done
-          fi
+          # Create the tag and release together
+          # gh release create will create both the tag and the release
+          gh release create "${TAG}" \
+            --draft \
+            --title "Pulse ${TAG}" \
+            --notes-file "$NOTES_FILE" \
+            --target "${{ github.sha }}"
 
           rm -f "$NOTES_FILE"
 
-          if [ -z "$RELEASE_ID" ]; then
-            echo "::error::Failed to find or create release for ${TAG}"
+          # Get the release ID
+          echo "Fetching release details..."
+          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}")
+
+          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
+          RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "::error::Failed to extract release ID from API response"
             exit 1
           fi
 
-          # 4. Ensure Tag is correct (Fixes "untagged" issue)
-          CURRENT_TAG=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" --jq .tag_name)
-          if [ "$CURRENT_TAG" != "$TAG" ]; then
-            echo "::warning::Release ${RELEASE_ID} has tag '${CURRENT_TAG}', expected '${TAG}'. Fixing..."
-            gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" -X PATCH -F tag_name="${TAG}"
-            echo "✓ Release tag updated to ${TAG}"
-          else
-            echo "✓ Release tag is correct: ${TAG}"
-          fi
-
-          # Get HTML URL for output
-          HTML_URL=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" --jq .html_url)
-          
-          echo "release_url=${HTML_URL}" >> $GITHUB_OUTPUT
+          echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
 
+          echo "✓ Release created: ${TAG} (ID: ${RELEASE_ID})"
       - name: Upload checksums.txt
         env:
           GH_TOKEN: ${{ github.token }}
