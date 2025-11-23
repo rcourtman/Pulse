@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -3389,7 +3390,19 @@ func (r *Router) handleDownloadHostAgentInstallScript(w http.ResponseWriter, req
 	w.Header().Set("Expires", "0")
 
 	scriptPath := "/opt/pulse/scripts/install-host-agent.sh"
-	http.ServeFile(w, req, scriptPath)
+	content, err := os.ReadFile(scriptPath)
+	if err != nil {
+		// Fallback to project root (dev environment)
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "install-host-agent.sh")
+		content, err = os.ReadFile(scriptPath)
+		if err != nil {
+			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read host agent installer script")
+			http.Error(w, "Failed to read installer script", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	http.ServeContent(w, req, "install-host-agent.sh", time.Now(), bytes.NewReader(content))
 }
 
 // handleDownloadHostAgentInstallScriptPS serves the PowerShell installation script for Windows
