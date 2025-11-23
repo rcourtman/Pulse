@@ -1805,7 +1805,7 @@ if command -v curl &> /dev/null || command -v wget &> /dev/null; then
 
     if [[ -n "$SERVER_INFO" ]] && echo "$SERVER_INFO" | grep -q '"isDevelopment"[[:space:]]*:[[:space:]]*true'; then
         NO_AUTO_UPDATE_FLAG=" --no-auto-update"
-        log_info 'Development server detected – auto-update disabled'
+        log_warn "Server is in development mode; disabling agent auto-update"
     fi
 
     if [[ -n "$NO_AUTO_UPDATE_FLAG" ]] && ! "$AGENT_PATH" --help 2>&1 | grep -q -- '--no-auto-update'; then
