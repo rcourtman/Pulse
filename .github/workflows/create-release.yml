@@ -407,15 +407,6 @@ jobs:
           echo "Release notes content:"
           cat "$NOTES_FILE"
 
-      - name: Create git tag
-        run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
-
-          echo "Creating git tag ${TAG}..."
-          git tag "${TAG}" "${{ github.sha }}"
-          git push origin "${TAG}"
-          echo "✓ Tag ${TAG} created and pushed"
-
       - name: Create draft release
         id: create_release
         env:
@@ -426,9 +417,8 @@ jobs:
 
           echo "Creating draft release for ${TAG}..."
 
-          # Use GitHub API directly to create release with existing tag
-          # gh release create has issues when tag already exists
-          # Must include target_commitish to link to existing tag
+          # GitHub API creates both the tag and release
+          # If tag exists, it creates "untagged" release - so DON'T create tag first
           RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
             -X POST \
             -F tag_name="${TAG}" \
