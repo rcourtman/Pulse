@@ -52,6 +52,14 @@ func TestParseClusterNodes(t *testing.T) {
 			output:  "some random text",
 			wantErr: true,
 		},
+		{
+			name: "numeric node id format",
+			output: `Membership information
+----------------------
+    Nodeid      Votes Name
+1 10.0.0.5 2`,
+			want: []string{"10.0.0.5"},
+		},
 	}
 
 	for _, tt := range tests {
