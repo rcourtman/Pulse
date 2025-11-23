@@ -545,21 +545,4 @@ jobs:
       draft: true
       target_commitish: ${{ needs.create_release.outputs.target_commitish }}
 
-  publish_release:
-    needs:
-      - extract_version
-      - create_release
-      - validate_release_assets
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ needs.extract_version.outputs.tag }}"
-          echo "Publishing release ${TAG}..."
-          gh release edit "${TAG}" --draft=false --repo ${{ github.repository }}
-          echo "✅ Release ${TAG} has been published!"
+
