@@ -476,6 +476,7 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 			strings.Contains(chipLower, "w83627") || // Winbond W83627 SuperIO series
 			strings.Contains(chipLower, "f71882") || // Fintek F71882 SuperIO
 			strings.Contains(chipLower, "cpu_thermal") || // Raspberry Pi CPU temperature
+			strings.Contains(chipLower, "rp1_adc") || // Raspberry Pi RP1 ADC
 			strings.Contains(chipLower, "rpitemp") {
 			foundCPUChip = true
 			log.Debug().
