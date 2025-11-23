@@ -6168,16 +6168,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			shouldCollect := true
 
 			if modelNode.IsClusterMember && instanceCfg.IsCluster {
-				// For cluster members, wait until we have validated endpoints
-				// This prevents collecting wrong temperature data during initialization
-				if len(instanceCfg.ClusterEndpoints) == 0 {
-					tempCancel()
-					log.Debug().
-						Str("node", node.Node).
-						Str("instance", instanceCfg.Name).
-						Msg("Skipping temperature collection - cluster endpoints not yet validated")
-					shouldCollect = false
-				} else {
+				// Try to find specific endpoint configuration for this node
+				if len(instanceCfg.ClusterEndpoints) > 0 {
 					hasFingerprint := instanceCfg.Fingerprint != ""
 					for _, ep := range instanceCfg.ClusterEndpoints {
 						if strings.EqualFold(ep.NodeName, node.Node) {
@@ -6188,18 +6180,15 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							break
 						}
 					}
+				}
 
-					// If this node is a cluster member but we didn't find its specific endpoint,
-					// skip temperature collection to avoid using wrong endpoint
-					if !foundNodeEndpoint {
-						tempCancel()
-						log.Debug().
-							Str("node", node.Node).
-							Str("instance", instanceCfg.Name).
-							Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
-							Msg("Skipping temperature collection - node endpoint not found in cluster metadata")
-						shouldCollect = false
-					}
+				// If no specific endpoint found, fall back to node name
+				if !foundNodeEndpoint {
+					sshHost = node.Node
+					log.Debug().
+						Str("node", node.Node).
+						Str("instance", instanceCfg.Name).
+						Msg("Node endpoint not found in cluster metadata - falling back to node name for temperature collection")
 				}
 			}
 
