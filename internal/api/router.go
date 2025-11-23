@@ -991,7 +991,7 @@ func (r *Router) setupRoutes() {
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// Docker agent download endpoints
-	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript)
+	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript) // Serves the Docker agent install script
 	r.mux.HandleFunc("/install-container-agent.sh", r.handleDownloadContainerAgentInstallScript)
 	r.mux.HandleFunc("/download/pulse-docker-agent", r.handleDownloadAgent)
 
@@ -1494,6 +1494,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// We handle routing manually to avoid this issue
 
 		// Check if this is an API or WebSocket route
+		log.Debug().Str("path", req.URL.Path).Msg("Routing request")
 		if strings.HasPrefix(req.URL.Path, "/api/") ||
 			strings.HasPrefix(req.URL.Path, "/ws") ||
 			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
@@ -3290,7 +3291,19 @@ func (r *Router) handleDownloadInstallScript(w http.ResponseWriter, req *http.Re
 	w.Header().Set("Expires", "0")
 
 	scriptPath := "/opt/pulse/scripts/install-docker-agent.sh"
-	http.ServeFile(w, req, scriptPath)
+	content, err := os.ReadFile(scriptPath)
+	if err != nil {
+		// Fallback to project root (dev environment)
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "install-docker-agent.sh")
+		content, err = os.ReadFile(scriptPath)
+		if err != nil {
+			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read Docker agent installer script")
+			http.Error(w, "Failed to read installer script", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	http.ServeContent(w, req, "install-docker-agent.sh", time.Now(), bytes.NewReader(content))
 }
 
 // handleDownloadContainerAgentInstallScript serves the container agent install script
@@ -3328,7 +3341,8 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 		searchPaths = append(searchPaths,
 			filepath.Join(pulseBinDir(), "pulse-docker-agent-"+normalized),
 			filepath.Join("/opt/pulse", "pulse-docker-agent-"+normalized),
-			filepath.Join("/app", "pulse-docker-agent-"+normalized), // legacy Docker image layout
+			filepath.Join("/app", "pulse-docker-agent-"+normalized),               // legacy Docker image layout
+			filepath.Join(r.projectRoot, "bin", "pulse-docker-agent-"+normalized), // dev environment
 		)
 	}
 
@@ -3336,7 +3350,8 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 	searchPaths = append(searchPaths,
 		filepath.Join(pulseBinDir(), "pulse-docker-agent"),
 		"/opt/pulse/pulse-docker-agent",
-		filepath.Join("/app", "pulse-docker-agent"), // legacy Docker image layout
+		filepath.Join("/app", "pulse-docker-agent"),               // legacy Docker image layout
+		filepath.Join(r.projectRoot, "bin", "pulse-docker-agent"), // dev environment
 	)
 
 	for _, candidate := range searchPaths {
@@ -3374,7 +3389,7 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	http.Error(w, "Agent binary not found", http.StatusNotFound)
+	http.Error(w, "Agent binary not found", http.StatusNotFound) // Agent binary not found
 }
 
 // handleDownloadHostAgentInstallScript serves the Host agent installation script
