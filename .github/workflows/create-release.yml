@@ -428,9 +428,11 @@ jobs:
 
           # Use GitHub API directly to create release with existing tag
           # gh release create has issues when tag already exists
+          # Must include target_commitish to link to existing tag
           RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
             -X POST \
             -F tag_name="${TAG}" \
+            -F target_commitish="${{ github.sha }}" \
             -F name="Pulse ${TAG}" \
             -F body="$(cat $NOTES_FILE)" \
             -F draft=true)
