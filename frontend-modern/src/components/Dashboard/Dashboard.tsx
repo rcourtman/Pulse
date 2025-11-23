@@ -196,7 +196,7 @@ interface DashboardProps {
 }
 
 type ViewMode = 'all' | 'vm' | 'lxc';
-type StatusMode = 'all' | 'running' | 'stopped';
+type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 type GroupingMode = 'grouped' | 'flat';
 
 export function Dashboard(props: DashboardProps) {
@@ -232,7 +232,9 @@ export function Dashboard(props: DashboardProps) {
 
   const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>('dashboardStatusMode', 'all', {
     deserialize: (raw) =>
-      raw === 'all' || raw === 'running' || raw === 'stopped' ? raw : ('all' as StatusMode),
+      raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
+        ? (raw as StatusMode)
+        : 'all',
   });
 
   // Grouping mode - grouped by node or flat list
@@ -487,6 +489,14 @@ export function Dashboard(props: DashboardProps) {
     // Filter by status
     if (statusMode() === 'running') {
       guests = guests.filter((g) => g.status === 'running');
+    } else if (statusMode() === 'degraded') {
+      guests = guests.filter((g) => {
+        const status = (g.status || '').toLowerCase();
+        return (
+          DEGRADED_HEALTH_STATUSES.has(status) ||
+          (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status))
+        );
+      });
     } else if (statusMode() === 'stopped') {
       guests = guests.filter((g) => g.status !== 'running');
     }

@@ -11,8 +11,8 @@ interface DashboardFilterProps {
   isSearchLocked: () => boolean;
   viewMode: () => 'all' | 'vm' | 'lxc';
   setViewMode: (value: 'all' | 'vm' | 'lxc') => void;
-  statusMode: () => 'all' | 'running' | 'stopped';
-  setStatusMode: (value: 'all' | 'running' | 'stopped') => void;
+  statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
+  setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
   groupingMode: () => 'grouped' | 'flat';
   setGroupingMode: (value: 'grouped' | 'flat') => void;
   setSortKey: (value: string) => void;
@@ -292,33 +292,30 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <button
               type="button"
               onClick={() => props.setViewMode('all')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'all'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'all'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               All
             </button>
             <button
               type="button"
               onClick={() => props.setViewMode(props.viewMode() === 'vm' ? 'all' : 'vm')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'vm'
-                  ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'vm'
+                ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               VMs
             </button>
             <button
               type="button"
               onClick={() => props.setViewMode(props.viewMode() === 'lxc' ? 'all' : 'lxc')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'lxc'
-                  ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'lxc'
+                ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               LXCs
             </button>
@@ -331,33 +328,40 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <button
               type="button"
               onClick={() => props.setStatusMode('all')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.statusMode() === 'all'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusMode() === 'all'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               All
             </button>
             <button
               type="button"
               onClick={() => props.setStatusMode(props.statusMode() === 'running' ? 'all' : 'running')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.statusMode() === 'running'
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusMode() === 'running'
                   ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+                }`}
             >
               Running
             </button>
             <button
               type="button"
+              onClick={() => props.setStatusMode(props.statusMode() === 'degraded' ? 'all' : 'degraded')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusMode() === 'degraded'
+                  ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              Degraded
+            </button>
+            <button
+              type="button"
               onClick={() => props.setStatusMode(props.statusMode() === 'stopped' ? 'all' : 'stopped')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.statusMode() === 'stopped'
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusMode() === 'stopped'
                   ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+                }`}
             >
               Stopped
             </button>
@@ -370,11 +374,10 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <button
               type="button"
               onClick={() => props.setGroupingMode('grouped')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.groupingMode() === 'grouped'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupingMode() === 'grouped'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
               title="Group by node"
             >
               Grouped
@@ -382,11 +385,10 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <button
               type="button"
               onClick={() => props.setGroupingMode(props.groupingMode() === 'flat' ? 'grouped' : 'flat')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.groupingMode() === 'flat'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupingMode() === 'flat'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
               title="Flat list view"
             >
               List
@@ -411,14 +413,13 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               props.setGroupingMode('grouped');
             }}
             title="Reset all filters"
-            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
-              props.search() ||
+            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${props.search() ||
               props.viewMode() !== 'all' ||
               props.statusMode() !== 'all' ||
               props.groupingMode() !== 'grouped'
-                ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
-                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+              ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
+              : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
           >
             <svg
               width="14"

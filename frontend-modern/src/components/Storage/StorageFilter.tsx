@@ -15,6 +15,8 @@ interface StorageFilterProps {
   setSortDirection: (value: 'asc' | 'desc') => void;
   sortOptions?: { value: string; label: string }[];
   searchInputRef?: (el: HTMLInputElement) => void;
+  statusFilter?: () => 'all' | 'available' | 'offline';
+  setStatusFilter?: (value: 'all' | 'available' | 'offline') => void;
 }
 
 export const StorageFilter: Component<StorageFilterProps> = (props) => {
@@ -299,28 +301,61 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               <button
                 type="button"
                 onClick={() => props.setGroupBy!('node')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                  props.groupBy!() === 'node'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'node'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
               >
                 By Node
               </button>
               <button
                 type="button"
                 onClick={() => props.setGroupBy!(props.groupBy!() === 'storage' ? 'node' : 'storage')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                  props.groupBy!() === 'storage'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'storage'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
               >
                 By Storage
               </button>
             </div>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
           </Show>
+
+          {/* Status Filter */}
+          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('all')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'all'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('available')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'available'
+                ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              Available
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('offline')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'offline'
+                ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              Offline
+            </button>
+          </div>
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
           {/* Sort controls */}
           <div class="flex items-center gap-2">
@@ -368,16 +403,17 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               props.setSortKey('name');
               props.setSortDirection('asc');
               if (props.setGroupBy) props.setGroupBy('node');
+              if (props.setStatusFilter) props.setStatusFilter('all');
             }}
             title="Reset all filters"
-            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
-              props.search().trim() !== '' ||
-              props.sortKey() !== 'name' ||
-              props.sortDirection() !== 'asc' ||
-              (props.groupBy && props.groupBy!() !== 'node')
+            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${props.search().trim() !== '' ||
+                props.sortKey() !== 'name' ||
+                props.sortDirection() !== 'asc' ||
+                (props.groupBy && props.groupBy!() !== 'node') ||
+                (props.statusFilter && props.statusFilter!() !== 'all')
                 ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
                 : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+              }`}
           >
             <svg
               width="14"

@@ -67,6 +67,7 @@ export interface DockerSummaryStats {
   containers: {
     total: number;
     running: number;
+    degraded: number;
     stopped: number;
     error: number;
   };
@@ -123,6 +124,7 @@ export const DockerSummaryStatsBar: Component<DockerSummaryStatsProps> = (props)
     // Container stats
     let totalContainers = 0;
     let runningContainers = 0;
+    let degradedContainers = 0;
     let stoppedContainers = 0;
     let errorContainers = 0;
 
@@ -144,8 +146,15 @@ export const DockerSummaryStatsBar: Component<DockerSummaryStatsProps> = (props)
 
       containers.forEach(container => {
         const state = container.state?.toLowerCase();
+        const health = container.health?.toLowerCase();
+
         if (state === 'running') {
-          runningContainers++;
+          if (health === 'unhealthy') {
+            degradedContainers++;
+          } else {
+            runningContainers++;
+          }
+
           // Sum CPU/Memory for running containers
           if (typeof container.cpuPercent === 'number' && !Number.isNaN(container.cpuPercent)) {
             totalCpu += container.cpuPercent;
@@ -187,6 +196,7 @@ export const DockerSummaryStatsBar: Component<DockerSummaryStatsProps> = (props)
       containers: {
         total: totalContainers,
         running: runningContainers,
+        degraded: degradedContainers,
         stopped: stoppedContainers,
         error: errorContainers,
       },
@@ -304,6 +314,16 @@ export const DockerSummaryStatsBar: Component<DockerSummaryStatsProps> = (props)
           onClick={() => props.onFilterChange?.({ type: 'container-state', value: 'running' })}
           isActive={isActive('container-state', 'running')}
         />
+
+        <Show when={summary().containers.degraded > 0}>
+          <StatCard
+            label="Degraded"
+            value={summary().containers.degraded}
+            variant="warning"
+            onClick={() => props.onFilterChange?.({ type: 'container-state', value: 'degraded' })}
+            isActive={isActive('container-state', 'degraded')}
+          />
+        </Show>
 
         <Show when={summary().containers.stopped > 0}>
           <StatCard

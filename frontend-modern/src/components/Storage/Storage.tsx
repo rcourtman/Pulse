@@ -49,6 +49,14 @@ const Storage: Component = () => {
       deserialize: (raw) => (raw === 'desc' ? 'desc' : 'asc'),
     },
   );
+  const [statusFilter, setStatusFilter] = usePersistentSignal<'all' | 'available' | 'offline'>(
+    'storageStatusFilter',
+    'all',
+    {
+      deserialize: (raw) =>
+        raw === 'all' || raw === 'available' || raw === 'offline' ? raw : 'all',
+    },
+  );
 
   // Create a mapping from node instance ID to node object
   const nodeByInstance = createMemo(() => {
@@ -316,6 +324,18 @@ const Storage: Component = () => {
       }
     }
 
+    // Apply status filter
+    if (statusFilter() !== 'all') {
+      storage = storage.filter((s) => {
+        if (statusFilter() === 'available') {
+          return s.status === 'available';
+        } else {
+          // Offline includes anything not available
+          return s.status !== 'available';
+        }
+      });
+    }
+
     // Apply search filter
     let search = searchTerm().toLowerCase().trim();
     if (search) {
@@ -477,6 +497,7 @@ const Storage: Component = () => {
     setViewMode('node');
     setSortKey('name');
     setSortDirection('asc');
+    setStatusFilter('all');
   };
 
   // Handle keyboard shortcuts
@@ -495,7 +516,12 @@ const Storage: Component = () => {
       // Escape key behavior
       if (e.key === 'Escape') {
         // Clear search and reset filters
-        if (searchTerm().trim() || selectedNode() || viewMode() !== 'node') {
+        if (
+          searchTerm().trim() ||
+          selectedNode() ||
+          viewMode() !== 'node' ||
+          statusFilter() !== 'all'
+        ) {
           resetFilters();
 
           // Blur the search input if it's focused
@@ -539,22 +565,20 @@ const Storage: Component = () => {
           <button
             onClick={() => setTabView('pools')}
             type="button"
-            class={`inline-flex items-center px-2 sm:px-3 py-1 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
-              tabView() === 'pools'
+            class={`inline-flex items-center px-2 sm:px-3 py-1 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${tabView() === 'pools'
                 ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
                 : 'hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
-            }`}
+              }`}
           >
             Storage Pools
           </button>
           <button
             onClick={() => setTabView('disks')}
             type="button"
-            class={`inline-flex items-center px-2 sm:px-3 py-1 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
-              tabView() === 'disks'
+            class={`inline-flex items-center px-2 sm:px-3 py-1 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${tabView() === 'disks'
                 ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
                 : 'hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
-            }`}
+              }`}
           >
             Physical Disks
           </button>
@@ -573,6 +597,8 @@ const Storage: Component = () => {
           setSortKey={setSortKey}
           sortDirection={sortDirection}
           setSortDirection={setSortDirection}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
           searchInputRef={(el) => (searchInputRef = el)}
         />
       </Show>
@@ -777,527 +803,521 @@ const Storage: Component = () => {
                               {(validNode) => <NodeGroupHeader node={validNode()} colspan={9} />}
                             </Show>
 
-                          {/* Storage Rows */}
-                          <For each={storages} fallback={<></>}>
-                            {(storage) => {
-                              const usagePercent =
-                                storage.total > 0 ? (storage.used / storage.total) * 100 : 0;
-                              const isDisabled = storage.status !== 'available';
-                              const pbsNamesDisplay = createMemo(() => {
-                                const names = storage.pbsNames?.filter(
-                                  (name): name is string => Boolean(name),
-                                );
-                                if (!names || names.length === 0) return '';
-                                return [...names].sort((a, b) => a.localeCompare(b)).join(', ');
-                              });
-
-                              const nodeListDisplay = createMemo(() => {
-                                const nodes =
-                                  storage.nodes && storage.nodes.length > 0
-                                    ? storage.nodes.filter((node): node is string => Boolean(node))
-                                    : [storage.node].filter((node): node is string => Boolean(node));
-                                return nodes.join(', ');
-                              });
-
-                              const alertStyles = createMemo(() =>
-                                getAlertStyles(
-                                  storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
-                                  activeAlerts,
-                                  alertsEnabled(),
-                                ),
-                              );
-
-                              const parentNodeOnline = createMemo(() => {
-                                if (viewMode() === 'node' && node) {
-                                  return node.status === 'online' && (node.uptime || 0) > 0;
-                                }
-                                return true;
-                              });
-
-                              const showAlertHighlight = createMemo(
-                                () => alertStyles().hasUnacknowledgedAlert && parentNodeOnline(),
-                              );
-
-                              const isCephStorage = createMemo(() => isCephType(storage.type));
-                              const canExpand = createMemo(() => isCephStorage());
-                              const zfsPool = storage.zfsPool;
-                              const storageRowId = createMemo(
-                                () => storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
-                              );
-                              const cephCluster = createMemo(
-                                () => cephClusterByInstance()[storage.instance],
-                              );
-                              const cephInstanceStorages = createMemo(() =>
-                                (state.storage || []).filter(
-                                  (item) =>
-                                    item.instance === storage.instance && isCephType(item.type),
-                                ),
-                              );
-                              const cephHealthLabel = createMemo(() => {
-                                const health = (cephCluster()?.health || '').toUpperCase();
-                                if (!health || health === 'HEALTH_UNKNOWN') {
-                                  return '';
-                                }
-                                return getCephHealthLabel(health);
-                              });
-                              const cephHealthClass = createMemo(() => {
-                                const health = (cephCluster()?.health || '').toUpperCase();
-                                if (!health || health === 'HEALTH_UNKNOWN') {
-                                  return '';
-                                }
-                                return getCephHealthStyles(health);
-                              });
-                              const drawerDisabled = createMemo(
-                                () => isDisabled || !parentNodeOnline(),
-                              );
-                              const cephSummaryText = createMemo(() => {
-                                const cluster = cephCluster();
-                                const parts: string[] = [];
-
-                                if (cluster && Number.isFinite(cluster.totalBytes)) {
-                                  const total = Math.max(0, cluster.totalBytes || 0);
-                                  const used = Math.max(0, cluster.usedBytes || 0);
-                                  const percent = total > 0 ? (used / total) * 100 : 0;
-                                  parts.push(
-                                    `${formatBytes(used, 0)} / ${formatBytes(total, 0)} (${formatPercent(percent)})`,
+                            {/* Storage Rows */}
+                            <For each={storages} fallback={<></>}>
+                              {(storage) => {
+                                const usagePercent =
+                                  storage.total > 0 ? (storage.used / storage.total) * 100 : 0;
+                                const isDisabled = storage.status !== 'available';
+                                const pbsNamesDisplay = createMemo(() => {
+                                  const names = storage.pbsNames?.filter(
+                                    (name): name is string => Boolean(name),
                                   );
-                                  if (
-                                    Number.isFinite(cluster.numOsds) &&
-                                    Number.isFinite(cluster.numOsdsUp)
-                                  ) {
-                                    parts.push(`OSDs ${cluster.numOsdsUp}/${cluster.numOsds}`);
+                                  if (!names || names.length === 0) return '';
+                                  return [...names].sort((a, b) => a.localeCompare(b)).join(', ');
+                                });
+
+                                const nodeListDisplay = createMemo(() => {
+                                  const nodes =
+                                    storage.nodes && storage.nodes.length > 0
+                                      ? storage.nodes.filter((node): node is string => Boolean(node))
+                                      : [storage.node].filter((node): node is string => Boolean(node));
+                                  return nodes.join(', ');
+                                });
+
+                                const alertStyles = createMemo(() =>
+                                  getAlertStyles(
+                                    storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
+                                    activeAlerts,
+                                    alertsEnabled(),
+                                  ),
+                                );
+
+                                const parentNodeOnline = createMemo(() => {
+                                  if (viewMode() === 'node' && node) {
+                                    return node.status === 'online' && (node.uptime || 0) > 0;
                                   }
-                                  if (Number.isFinite(cluster.numPGs) && cluster.numPGs > 0) {
-                                    parts.push(`PGs ${cluster.numPGs.toLocaleString()}`);
+                                  return true;
+                                });
+
+                                const showAlertHighlight = createMemo(
+                                  () => alertStyles().hasUnacknowledgedAlert && parentNodeOnline(),
+                                );
+
+                                const isCephStorage = createMemo(() => isCephType(storage.type));
+                                const canExpand = createMemo(() => isCephStorage());
+                                const zfsPool = storage.zfsPool;
+                                const storageRowId = createMemo(
+                                  () => storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
+                                );
+                                const cephCluster = createMemo(
+                                  () => cephClusterByInstance()[storage.instance],
+                                );
+                                const cephInstanceStorages = createMemo(() =>
+                                  (state.storage || []).filter(
+                                    (item) =>
+                                      item.instance === storage.instance && isCephType(item.type),
+                                  ),
+                                );
+                                const cephHealthLabel = createMemo(() => {
+                                  const health = (cephCluster()?.health || '').toUpperCase();
+                                  if (!health || health === 'HEALTH_UNKNOWN') {
+                                    return '';
                                   }
-                                } else {
-                                  const storages = cephInstanceStorages();
-                                  if (storages.length > 0) {
-                                    const totals = storages.reduce(
-                                      (acc, item) => {
-                                        acc.total += Math.max(0, item.total || 0);
-                                        acc.used += Math.max(0, item.used || 0);
-                                        return acc;
-                                      },
-                                      { total: 0, used: 0 },
+                                  return getCephHealthLabel(health);
+                                });
+                                const cephHealthClass = createMemo(() => {
+                                  const health = (cephCluster()?.health || '').toUpperCase();
+                                  if (!health || health === 'HEALTH_UNKNOWN') {
+                                    return '';
+                                  }
+                                  return getCephHealthStyles(health);
+                                });
+                                const drawerDisabled = createMemo(
+                                  () => isDisabled || !parentNodeOnline(),
+                                );
+                                const cephSummaryText = createMemo(() => {
+                                  const cluster = cephCluster();
+                                  const parts: string[] = [];
+
+                                  if (cluster && Number.isFinite(cluster.totalBytes)) {
+                                    const total = Math.max(0, cluster.totalBytes || 0);
+                                    const used = Math.max(0, cluster.usedBytes || 0);
+                                    const percent = total > 0 ? (used / total) * 100 : 0;
+                                    parts.push(
+                                      `${formatBytes(used, 0)} / ${formatBytes(total, 0)} (${formatPercent(percent)})`,
                                     );
-                                    if (totals.total > 0) {
-                                      const percent = (totals.used / totals.total) * 100;
-                                      parts.push(
-                                        `${formatBytes(totals.used, 0)} / ${formatBytes(totals.total, 0)} (${formatPercent(percent)})`,
+                                    if (
+                                      Number.isFinite(cluster.numOsds) &&
+                                      Number.isFinite(cluster.numOsdsUp)
+                                    ) {
+                                      parts.push(`OSDs ${cluster.numOsdsUp}/${cluster.numOsds}`);
+                                    }
+                                    if (Number.isFinite(cluster.numPGs) && cluster.numPGs > 0) {
+                                      parts.push(`PGs ${cluster.numPGs.toLocaleString()}`);
+                                    }
+                                  } else {
+                                    const storages = cephInstanceStorages();
+                                    if (storages.length > 0) {
+                                      const totals = storages.reduce(
+                                        (acc, item) => {
+                                          acc.total += Math.max(0, item.total || 0);
+                                          acc.used += Math.max(0, item.used || 0);
+                                          return acc;
+                                        },
+                                        { total: 0, used: 0 },
                                       );
+                                      if (totals.total > 0) {
+                                        const percent = (totals.used / totals.total) * 100;
+                                        parts.push(
+                                          `${formatBytes(totals.used, 0)} / ${formatBytes(totals.total, 0)} (${formatPercent(percent)})`,
+                                        );
+                                      }
                                     }
                                   }
-                                }
 
-                                return parts.join(' • ');
-                              });
-                              const cephPoolsText = createMemo(() => {
-                                const cluster = cephCluster();
-                                if (cluster && cluster.pools && cluster.pools.length > 0) {
-                                  return cluster.pools
+                                  return parts.join(' • ');
+                                });
+                                const cephPoolsText = createMemo(() => {
+                                  const cluster = cephCluster();
+                                  if (cluster && cluster.pools && cluster.pools.length > 0) {
+                                    return cluster.pools
+                                      .slice(0, 2)
+                                      .map((pool) => {
+                                        if (!pool) return '';
+                                        const total = Math.max(1, pool.storedBytes + pool.availableBytes);
+                                        const percent = total > 0 ? (pool.storedBytes / total) * 100 : 0;
+                                        return `${pool.name}: ${formatPercent(percent)}`;
+                                      })
+                                      .filter(Boolean)
+                                      .join(', ');
+                                  }
+
+                                  const storages = cephInstanceStorages();
+                                  if (storages.length === 0) {
+                                    return '';
+                                  }
+
+                                  return storages
                                     .slice(0, 2)
-                                    .map((pool) => {
-                                      if (!pool) return '';
-                                      const total = Math.max(1, pool.storedBytes + pool.availableBytes);
-                                      const percent = total > 0 ? (pool.storedBytes / total) * 100 : 0;
-                                      return `${pool.name}: ${formatPercent(percent)}`;
+                                    .map((item) => {
+                                      const total = Math.max(1, item.total || 0);
+                                      const used = Math.max(0, item.used || 0);
+                                      const percent = total > 0 ? (used / total) * 100 : 0;
+                                      return `${item.name}: ${formatPercent(percent)}`;
                                     })
                                     .filter(Boolean)
                                     .join(', ');
-                                }
-
-                                const storages = cephInstanceStorages();
-                                if (storages.length === 0) {
+                                });
+                                const cephHealthMessage = createMemo(() => {
+                                  const cluster = cephCluster();
+                                  if (cluster?.healthMessage) {
+                                    return cluster.healthMessage;
+                                  }
+                                  if (cluster && cluster.health && cluster.health !== 'HEALTH_UNKNOWN') {
+                                    return '';
+                                  }
+                                  if (cephInstanceStorages().length > 0) {
+                                    return 'Derived from storage metrics – live Ceph telemetry unavailable.';
+                                  }
                                   return '';
-                                }
-
-                                return storages
-                                  .slice(0, 2)
-                                  .map((item) => {
-                                    const total = Math.max(1, item.total || 0);
-                                    const used = Math.max(0, item.used || 0);
-                                    const percent = total > 0 ? (used / total) * 100 : 0;
-                                    return `${item.name}: ${formatPercent(percent)}`;
-                                  })
-                                  .filter(Boolean)
-                                  .join(', ');
-                              });
-                              const cephHealthMessage = createMemo(() => {
-                                const cluster = cephCluster();
-                                if (cluster?.healthMessage) {
-                                  return cluster.healthMessage;
-                                }
-                                if (cluster && cluster.health && cluster.health !== 'HEALTH_UNKNOWN') {
-                                  return '';
-                                }
-                                if (cephInstanceStorages().length > 0) {
-                                  return 'Derived from storage metrics – live Ceph telemetry unavailable.';
-                                }
-                                return '';
-                              });
-                              const isExpanded = createMemo(
-                                () => expandedStorage() === storageRowId(),
-                              );
-
-                              const hasAcknowledgedOnlyAlert = createMemo(
-                                () => alertStyles().hasAcknowledgedOnlyAlert && parentNodeOnline(),
-                              );
-
-                              const rowClass = createMemo(() => {
-                                const classes = [
-                                  'transition-all duration-200',
-                                  'hover:bg-gray-50 dark:hover:bg-gray-700/30',
-                                  'hover:shadow-sm',
-                                ];
-
-                                if (showAlertHighlight()) {
-                                  classes.push(
-                                    alertStyles().severity === 'critical'
-                                      ? 'bg-red-50 dark:bg-red-950/30'
-                                      : 'bg-yellow-50 dark:bg-yellow-950/20',
-                                  );
-                                } else if (hasAcknowledgedOnlyAlert()) {
-                                  classes.push('bg-gray-50/40 dark:bg-gray-800/40');
-                                }
-
-                                if (isDisabled || !parentNodeOnline()) {
-                                  classes.push('opacity-60');
-                                }
-
-                                if (canExpand()) {
-                                  classes.push('cursor-pointer');
-                                }
-
-                                if (canExpand() && isExpanded()) {
-                                  classes.push('bg-gray-50 dark:bg-gray-800/40');
-                                }
-
-                                return classes.join(' ');
-                              });
-
-                              const rowStyle = createMemo(() => {
-                                if (showAlertHighlight()) {
-                                  const color =
-                                    alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
-                                  return {
-                                    'box-shadow': `inset 4px 0 0 0 ${color}`,
-                                  };
-                                }
-                                if (hasAcknowledgedOnlyAlert()) {
-                                  return {
-                                    'box-shadow': 'inset 4px 0 0 0 rgba(156, 163, 175, 0.8)',
-                                  };
-                                }
-                                return {} as Record<string, string>;
-                              });
-
-                              const firstCellHasIndicator = createMemo(
-                                () => showAlertHighlight() || hasAcknowledgedOnlyAlert(),
-                              );
-
-                              const firstCellClass = createMemo(() => {
-                                if (viewMode() === 'node') {
-                                  return firstCellHasIndicator()
-                                    ? 'p-0.5 pl-7 pr-1.5'
-                                    : 'p-0.5 pl-8 pr-1.5';
-                                }
-                                return firstCellHasIndicator()
-                                  ? 'p-0.5 pl-3 pr-1.5'
-                                  : 'p-0.5 pl-3 pr-1.5';
-                              });
-
-                              const toggleDrawer = () => {
-                                if (!canExpand()) return;
-                                setExpandedStorage((prev) =>
-                                  prev === storageRowId() ? null : storageRowId(),
+                                });
+                                const isExpanded = createMemo(
+                                  () => expandedStorage() === storageRowId(),
                                 );
-                              };
 
-                              return (
-                                <>
-                                  <tr
-                                    class={`${rowClass()} transition-colors`}
-                                    style={rowStyle()}
-                                    onClick={toggleDrawer}
-                                    aria-expanded={canExpand() && isExpanded() ? 'true' : 'false'}
-                                  >
-                                    <td class={`${firstCellClass()} align-middle`}>
-                                      <div class="flex items-center gap-2 min-w-0">
-                                        <span
-                                          class={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate ${
-                                            canExpand() ? 'max-w-[180px]' : 'max-w-[200px]'
-                                          }`}
-                                          title={storage.name}
-                                        >
-                                          {storage.name}
-                                        </span>
-                                        {/* ZFS Health Badge */}
-                                        <Show when={zfsPool && zfsPool.state !== 'ONLINE'}>
+                                const hasAcknowledgedOnlyAlert = createMemo(
+                                  () => alertStyles().hasAcknowledgedOnlyAlert && parentNodeOnline(),
+                                );
+
+                                const rowClass = createMemo(() => {
+                                  const classes = [
+                                    'transition-all duration-200',
+                                    'hover:bg-gray-50 dark:hover:bg-gray-700/30',
+                                    'hover:shadow-sm',
+                                  ];
+
+                                  if (showAlertHighlight()) {
+                                    classes.push(
+                                      alertStyles().severity === 'critical'
+                                        ? 'bg-red-50 dark:bg-red-950/30'
+                                        : 'bg-yellow-50 dark:bg-yellow-950/20',
+                                    );
+                                  } else if (hasAcknowledgedOnlyAlert()) {
+                                    classes.push('bg-gray-50/40 dark:bg-gray-800/40');
+                                  }
+
+                                  if (isDisabled || !parentNodeOnline()) {
+                                    classes.push('opacity-60');
+                                  }
+
+                                  if (canExpand()) {
+                                    classes.push('cursor-pointer');
+                                  }
+
+                                  if (canExpand() && isExpanded()) {
+                                    classes.push('bg-gray-50 dark:bg-gray-800/40');
+                                  }
+
+                                  return classes.join(' ');
+                                });
+
+                                const rowStyle = createMemo(() => {
+                                  if (showAlertHighlight()) {
+                                    const color =
+                                      alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
+                                    return {
+                                      'box-shadow': `inset 4px 0 0 0 ${color}`,
+                                    };
+                                  }
+                                  if (hasAcknowledgedOnlyAlert()) {
+                                    return {
+                                      'box-shadow': 'inset 4px 0 0 0 rgba(156, 163, 175, 0.8)',
+                                    };
+                                  }
+                                  return {} as Record<string, string>;
+                                });
+
+                                const firstCellHasIndicator = createMemo(
+                                  () => showAlertHighlight() || hasAcknowledgedOnlyAlert(),
+                                );
+
+                                const firstCellClass = createMemo(() => {
+                                  if (viewMode() === 'node') {
+                                    return firstCellHasIndicator()
+                                      ? 'p-0.5 pl-7 pr-1.5'
+                                      : 'p-0.5 pl-8 pr-1.5';
+                                  }
+                                  return firstCellHasIndicator()
+                                    ? 'p-0.5 pl-3 pr-1.5'
+                                    : 'p-0.5 pl-3 pr-1.5';
+                                });
+
+                                const toggleDrawer = () => {
+                                  if (!canExpand()) return;
+                                  setExpandedStorage((prev) =>
+                                    prev === storageRowId() ? null : storageRowId(),
+                                  );
+                                };
+
+                                return (
+                                  <>
+                                    <tr
+                                      class={`${rowClass()} transition-colors`}
+                                      style={rowStyle()}
+                                      onClick={toggleDrawer}
+                                      aria-expanded={canExpand() && isExpanded() ? 'true' : 'false'}
+                                    >
+                                      <td class={`${firstCellClass()} align-middle`}>
+                                        <div class="flex items-center gap-2 min-w-0">
                                           <span
-                                            class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                              zfsPool?.state === 'DEGRADED'
-                                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                                                : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                                            }`}
+                                            class={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate ${canExpand() ? 'max-w-[180px]' : 'max-w-[200px]'
+                                              }`}
+                                            title={storage.name}
                                           >
-                                            {zfsPool?.state}
+                                            {storage.name}
                                           </span>
-                                        </Show>
-                                        {/* ZFS Error Badge */}
-                                        <Show
-                                          when={
-                                            zfsPool &&
-                                            (zfsPool.readErrors > 0 ||
-                                              zfsPool.writeErrors > 0 ||
-                                              zfsPool.checksumErrors > 0)
-                                          }
-                                        >
-                                          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
-                                            ERRORS
-                                          </span>
-                                        </Show>
-                                        <Show when={viewMode() === 'storage'}>
-                                          <Show when={storage.pbsNames}>
+                                          {/* ZFS Health Badge */}
+                                          <Show when={zfsPool && zfsPool.state !== 'ONLINE'}>
                                             <span
-                                              class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[240px]"
-                                              title={pbsNamesDisplay()}
+                                              class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${zfsPool?.state === 'DEGRADED'
+                                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                                  : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                                }`}
                                             >
-                                              ({pbsNamesDisplay()})
+                                              {zfsPool?.state}
                                             </span>
                                           </Show>
-                                          <Show when={!storage.pbsNames}>
-                                            <span
-                                              class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[240px]"
-                                              title={nodeListDisplay()}
-                                            >
-                                              ({nodeListDisplay()})
+                                          {/* ZFS Error Badge */}
+                                          <Show
+                                            when={
+                                              zfsPool &&
+                                              (zfsPool.readErrors > 0 ||
+                                                zfsPool.writeErrors > 0 ||
+                                                zfsPool.checksumErrors > 0)
+                                            }
+                                          >
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                                              ERRORS
                                             </span>
                                           </Show>
-                                        </Show>
-                                        <Show when={isCephStorage() && cephHealthLabel()}>
-                                          <span
-                                            class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cephHealthClass()}`}
-                                            title={cephCluster()?.healthMessage}
-                                          >
-                                            {cephHealthLabel()}
-                                          </span>
-                                        </Show>
-                                      </div>
-                                    </td>
-                                    <td class="p-0.5 px-1.5 hidden md:table-cell">
-                                      <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                        {storage.type}
-                                      </span>
-                                    </td>
-                                    <td class="p-0.5 px-1.5 hidden lg:table-cell">
-                                      <span
-                                        class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap truncate max-w-[220px]"
-                                        title={storage.content || '-'}
-                                      >
-                                        {storage.content || '-'}
-                                      </span>
-                                    </td>
-                                    <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
-                                      <span
-                                        class={`${
-                                          storage.status === 'available'
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-red-600 dark:text-red-400'
-                                        }`}
-                                      >
-                                        {storage.status || 'unknown'}
-                                      </span>
-                                    </td>
-                                    <Show when={viewMode() === 'node'}>
-                                      <td class="p-0.5 px-1.5 hidden lg:table-cell">
-                                        <span class="text-xs text-gray-600 dark:text-gray-400">
-                                          {storage.shared ? '✓' : '-'}
+                                          <Show when={viewMode() === 'storage'}>
+                                            <Show when={storage.pbsNames}>
+                                              <span
+                                                class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[240px]"
+                                                title={pbsNamesDisplay()}
+                                              >
+                                                ({pbsNamesDisplay()})
+                                              </span>
+                                            </Show>
+                                            <Show when={!storage.pbsNames}>
+                                              <span
+                                                class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[240px]"
+                                                title={nodeListDisplay()}
+                                              >
+                                                ({nodeListDisplay()})
+                                              </span>
+                                            </Show>
+                                          </Show>
+                                          <Show when={isCephStorage() && cephHealthLabel()}>
+                                            <span
+                                              class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cephHealthClass()}`}
+                                              title={cephCluster()?.healthMessage}
+                                            >
+                                              {cephHealthLabel()}
+                                            </span>
+                                          </Show>
+                                        </div>
+                                      </td>
+                                      <td class="p-0.5 px-1.5 hidden md:table-cell">
+                                        <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                          {storage.type}
                                         </span>
                                       </td>
-                                    </Show>
-
-                                    <td class="p-0.5 px-1.5">
-                                      <div class="relative min-w-[200px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
-                                        <div
-                                          class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
-                                          style={{ width: `${usagePercent}%` }}
-                                        />
-                                        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                                          <span class="whitespace-nowrap px-0.5">
-                                            {formatPercent(usagePercent)} (
-                                            {formatBytes(storage.used || 0, 0)}/
-                                            {formatBytes(storage.total || 0, 0)})
-                                          </span>
-                                        </span>
-                                      </div>
-                                    </td>
-                                    <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
-                                      {formatBytes(storage.free || 0, 0)}
-                                    </td>
-                                    <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
-                                      {formatBytes(storage.total || 0, 0)}
-                                    </td>
-                                    <td class="p-0.5 px-1.5"></td>
-                                  </tr>
-                                  <Show when={isCephStorage() && isExpanded()}>
-                                    <tr
-                                      class={`text-[11px] border-t border-gray-200 dark:border-gray-700 ${
-                                        drawerDisabled()
-                                          ? 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
-                                          : 'bg-gray-50/60 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300'
-                                      }`}
-                                    >
-                                      <td colSpan={9} class="px-4 py-3">
-                                        <div
-                                          class={`grid gap-3 md:grid-cols-2 xl:grid-cols-2 ${
-                                            drawerDisabled() ? 'opacity-60 pointer-events-none' : ''
-                                          }`}
+                                      <td class="p-0.5 px-1.5 hidden lg:table-cell">
+                                        <span
+                                          class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap truncate max-w-[220px]"
+                                          title={storage.content || '-'}
                                         >
-                                          <div class="rounded-lg border border-gray-200 bg-white/80 p-4 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30">
-                                            <div class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-200">
-                                              <span>Ceph Cluster</span>
-                                              <span>{cephCluster()?.name || storage.instance}</span>
-                                              <Show when={cephHealthLabel()}>
-                                                <span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cephHealthClass()}`}>
-                                                  {cephHealthLabel()}
+                                          {storage.content || '-'}
+                                        </span>
+                                      </td>
+                                      <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
+                                        <span
+                                          class={`${storage.status === 'available'
+                                              ? 'text-green-600 dark:text-green-400'
+                                              : 'text-red-600 dark:text-red-400'
+                                            }`}
+                                        >
+                                          {storage.status || 'unknown'}
+                                        </span>
+                                      </td>
+                                      <Show when={viewMode() === 'node'}>
+                                        <td class="p-0.5 px-1.5 hidden lg:table-cell">
+                                          <span class="text-xs text-gray-600 dark:text-gray-400">
+                                            {storage.shared ? '✓' : '-'}
+                                          </span>
+                                        </td>
+                                      </Show>
+
+                                      <td class="p-0.5 px-1.5">
+                                        <div class="relative min-w-[200px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+                                          <div
+                                            class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
+                                            style={{ width: `${usagePercent}%` }}
+                                          />
+                                          <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
+                                            <span class="whitespace-nowrap px-0.5">
+                                              {formatPercent(usagePercent)} (
+                                              {formatBytes(storage.used || 0, 0)}/
+                                              {formatBytes(storage.total || 0, 0)})
+                                            </span>
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
+                                        {formatBytes(storage.free || 0, 0)}
+                                      </td>
+                                      <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
+                                        {formatBytes(storage.total || 0, 0)}
+                                      </td>
+                                      <td class="p-0.5 px-1.5"></td>
+                                    </tr>
+                                    <Show when={isCephStorage() && isExpanded()}>
+                                      <tr
+                                        class={`text-[11px] border-t border-gray-200 dark:border-gray-700 ${drawerDisabled()
+                                            ? 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
+                                            : 'bg-gray-50/60 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300'
+                                          }`}
+                                      >
+                                        <td colSpan={9} class="px-4 py-3">
+                                          <div
+                                            class={`grid gap-3 md:grid-cols-2 xl:grid-cols-2 ${drawerDisabled() ? 'opacity-60 pointer-events-none' : ''
+                                              }`}
+                                          >
+                                            <div class="rounded-lg border border-gray-200 bg-white/80 p-4 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30">
+                                              <div class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                                                <span>Ceph Cluster</span>
+                                                <span>{cephCluster()?.name || storage.instance}</span>
+                                                <Show when={cephHealthLabel()}>
+                                                  <span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cephHealthClass()}`}>
+                                                    {cephHealthLabel()}
+                                                  </span>
+                                                </Show>
+                                              </div>
+                                              <Show when={cephSummaryText()}>
+                                                <div class="mt-2 text-[12px] text-gray-600 dark:text-gray-300">
+                                                  {cephSummaryText()}
+                                                </div>
+                                              </Show>
+                                              <Show when={cephHealthMessage()}>
+                                                <div class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                                                  {cephHealthMessage()}
+                                                </div>
+                                              </Show>
+                                            </div>
+                                            <div class="rounded-lg border border-gray-200 bg-white/80 p-4 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30 text-gray-600 dark:text-gray-300">
+                                              <div class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                                                Pools
+                                              </div>
+                                              <Show
+                                                when={cephPoolsText()}
+                                                fallback={
+                                                  <div class="mt-2 text-[12px] text-gray-500 dark:text-gray-400">
+                                                    No pool data available
+                                                  </div>
+                                                }
+                                              >
+                                                <div class="mt-2 text-[12px]">{cephPoolsText()}</div>
+                                              </Show>
+                                            </div>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    </Show>
+                                    <Show
+                                      when={
+                                        storage.zfsPool &&
+                                        (storage.zfsPool.state !== 'ONLINE' ||
+                                          storage.zfsPool.readErrors > 0 ||
+                                          storage.zfsPool.writeErrors > 0 ||
+                                          storage.zfsPool.checksumErrors > 0)
+                                      }
+                                    >
+                                      <tr class="bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500">
+                                        <td colspan="9" class="p-2">
+                                          <div class="text-xs space-y-1">
+                                            <div class="flex items-center gap-2">
+                                              <span class="font-semibold text-yellow-700 dark:text-yellow-400">
+                                                ZFS Pool Status:
+                                              </span>
+                                              <span
+                                                class={`px-1.5 py-0.5 rounded text-xs font-medium ${storage.zfsPool!.state === 'ONLINE'
+                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                    : storage.zfsPool!.state === 'DEGRADED'
+                                                      ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                                      : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                                  }`}
+                                              >
+                                                {storage.zfsPool!.state}
+                                              </span>
+                                              <Show
+                                                when={
+                                                  storage.zfsPool!.readErrors > 0 ||
+                                                  storage.zfsPool!.writeErrors > 0 ||
+                                                  storage.zfsPool!.checksumErrors > 0
+                                                }
+                                              >
+                                                <span class="text-red-600 dark:text-red-400">
+                                                  Errors: {storage.zfsPool!.readErrors} read,{' '}
+                                                  {storage.zfsPool!.writeErrors} write,{' '}
+                                                  {storage.zfsPool!.checksumErrors} checksum
                                                 </span>
                                               </Show>
                                             </div>
-                                            <Show when={cephSummaryText()}>
-                                              <div class="mt-2 text-[12px] text-gray-600 dark:text-gray-300">
-                                                {cephSummaryText()}
-                                              </div>
-                                            </Show>
-                                            <Show when={cephHealthMessage()}>
-                                              <div class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                                                {cephHealthMessage()}
-                                              </div>
-                                            </Show>
-                                          </div>
-                                          <div class="rounded-lg border border-gray-200 bg-white/80 p-4 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30 text-gray-600 dark:text-gray-300">
-                                            <div class="text-xs font-semibold text-gray-700 dark:text-gray-200">
-                                              Pools
-                                            </div>
                                             <Show
-                                              when={cephPoolsText()}
-                                              fallback={
-                                                <div class="mt-2 text-[12px] text-gray-500 dark:text-gray-400">
-                                                  No pool data available
-                                                </div>
-                                              }
+                                              when={storage.zfsPool!.devices.some(
+                                                (d) =>
+                                                  d.state !== 'ONLINE' ||
+                                                  d.readErrors > 0 ||
+                                                  d.writeErrors > 0 ||
+                                                  d.checksumErrors > 0,
+                                              )}
                                             >
-                                              <div class="mt-2 text-[12px]">{cephPoolsText()}</div>
-                                            </Show>
-                                          </div>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      storage.zfsPool &&
-                                      (storage.zfsPool.state !== 'ONLINE' ||
-                                        storage.zfsPool.readErrors > 0 ||
-                                        storage.zfsPool.writeErrors > 0 ||
-                                        storage.zfsPool.checksumErrors > 0)
-                                    }
-                                  >
-                                    <tr class="bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500">
-                                      <td colspan="9" class="p-2">
-                                        <div class="text-xs space-y-1">
-                                          <div class="flex items-center gap-2">
-                                            <span class="font-semibold text-yellow-700 dark:text-yellow-400">
-                                              ZFS Pool Status:
-                                            </span>
-                                            <span
-                                              class={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                                storage.zfsPool!.state === 'ONLINE'
-                                                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                                  : storage.zfsPool!.state === 'DEGRADED'
-                                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                                                    : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                                              }`}
-                                            >
-                                              {storage.zfsPool!.state}
-                                            </span>
-                                            <Show
-                                              when={
-                                                storage.zfsPool!.readErrors > 0 ||
-                                                storage.zfsPool!.writeErrors > 0 ||
-                                                storage.zfsPool!.checksumErrors > 0
-                                              }
-                                            >
-                                              <span class="text-red-600 dark:text-red-400">
-                                                Errors: {storage.zfsPool!.readErrors} read,{' '}
-                                                {storage.zfsPool!.writeErrors} write,{' '}
-                                                {storage.zfsPool!.checksumErrors} checksum
-                                              </span>
-                                            </Show>
-                                          </div>
-                                          <Show
-                                            when={storage.zfsPool!.devices.some(
-                                              (d) =>
-                                                d.state !== 'ONLINE' ||
-                                                d.readErrors > 0 ||
-                                                d.writeErrors > 0 ||
-                                                d.checksumErrors > 0,
-                                            )}
-                                          >
-                                            <div class="ml-4 space-y-0.5">
-                                              <For
-                                                each={storage.zfsPool!.devices.filter(
-                                                  (d) =>
-                                                    d.state !== 'ONLINE' ||
-                                                    d.readErrors > 0 ||
-                                                    d.writeErrors > 0 ||
-                                                    d.checksumErrors > 0,
-                                                )}
-                                              >
-                                                {(device) => (
-                                                  <div class="flex items-center gap-2 text-xs">
-                                                    <span class="text-gray-600 dark:text-gray-400">
-                                                      Device {device.name}:
-                                                    </span>
-                                                    <span
-                                                      class={`${device.state !== 'ONLINE' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}
-                                                    >
-                                                      {device.state}
-                                                      <Show
-                                                        when={
-                                                          device.readErrors > 0 ||
-                                                          device.writeErrors > 0 ||
-                                                          device.checksumErrors > 0
-                                                        }
+                                              <div class="ml-4 space-y-0.5">
+                                                <For
+                                                  each={storage.zfsPool!.devices.filter(
+                                                    (d) =>
+                                                      d.state !== 'ONLINE' ||
+                                                      d.readErrors > 0 ||
+                                                      d.writeErrors > 0 ||
+                                                      d.checksumErrors > 0,
+                                                  )}
+                                                >
+                                                  {(device) => (
+                                                    <div class="flex items-center gap-2 text-xs">
+                                                      <span class="text-gray-600 dark:text-gray-400">
+                                                        Device {device.name}:
+                                                      </span>
+                                                      <span
+                                                        class={`${device.state !== 'ONLINE' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}
                                                       >
-                                                        <span class="ml-1">
-                                                          ({device.readErrors}R/{device.writeErrors}
-                                                          W/{device.checksumErrors}C errors)
-                                                        </span>
-                                                      </Show>
-                                                      <Show when={device.message?.trim()}>
-                                                        {(message) => (
-                                                          <span class="ml-1 text-gray-500 dark:text-gray-400">
-                                                            {message()}
+                                                        {device.state}
+                                                        <Show
+                                                          when={
+                                                            device.readErrors > 0 ||
+                                                            device.writeErrors > 0 ||
+                                                            device.checksumErrors > 0
+                                                          }
+                                                        >
+                                                          <span class="ml-1">
+                                                            ({device.readErrors}R/{device.writeErrors}
+                                                            W/{device.checksumErrors}C errors)
                                                           </span>
-                                                        )}
-                                                      </Show>
-                                                    </span>
-                                                  </div>
-                                                )}
-                                              </For>
-                                            </div>
-                                          </Show>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  </Show>
-                                </>
-                              );
-                            }}
-                          </For>
-                        </>
-                      );
+                                                        </Show>
+                                                        <Show when={device.message?.trim()}>
+                                                          {(message) => (
+                                                            <span class="ml-1 text-gray-500 dark:text-gray-400">
+                                                              {message()}
+                                                            </span>
+                                                          )}
+                                                        </Show>
+                                                      </span>
+                                                    </div>
+                                                  )}
+                                                </For>
+                                              </div>
+                                            </Show>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    </Show>
+                                  </>
+                                );
+                              }}
+                            </For>
+                          </>
+                        );
                       }}
                     </For>
                   </tbody>

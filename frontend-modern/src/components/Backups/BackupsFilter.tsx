@@ -21,6 +21,8 @@ interface BackupsFilterProps {
   setSortDirection: (value: 'asc' | 'desc') => void;
   sortOptions?: { value: string; label: string }[];
   onReset?: () => void;
+  statusFilter?: () => 'all' | 'verified' | 'unverified';
+  setStatusFilter?: (value: 'all' | 'verified' | 'unverified') => void;
 }
 
 export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
@@ -305,44 +307,40 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
             <button
               type="button"
               onClick={() => props.setViewMode('all')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'all'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'all'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               All
             </button>
             <button
               type="button"
               onClick={() => props.setViewMode(props.viewMode() === 'snapshot' ? 'all' : 'snapshot')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'snapshot'
-                  ? 'bg-white dark:bg-gray-800 text-yellow-600 dark:text-yellow-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'snapshot'
+                ? 'bg-white dark:bg-gray-800 text-yellow-600 dark:text-yellow-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               Snapshots
             </button>
             <button
               type="button"
               onClick={() => props.setViewMode(props.viewMode() === 'pve' ? 'all' : 'pve')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'pve'
-                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'pve'
+                ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               PVE
             </button>
             <button
               type="button"
               onClick={() => props.setViewMode(props.viewMode() === 'pbs' ? 'all' : 'pbs')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'pbs'
-                  ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.viewMode() === 'pbs'
+                ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               PBS
             </button>
@@ -363,44 +361,40 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
               <button
                 type="button"
                 onClick={() => props.setTypeFilter!('all')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                  props.typeFilter!() === 'all'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.typeFilter!() === 'all'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
               >
                 All Types
               </button>
               <button
                 type="button"
                 onClick={() => props.setTypeFilter!(props.typeFilter!() === 'VM' ? 'all' : 'VM')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                  props.typeFilter!() === 'VM'
-                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.typeFilter!() === 'VM'
+                  ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
               >
                 VM
               </button>
               <button
                 type="button"
                 onClick={() => props.setTypeFilter!(props.typeFilter!() === 'LXC' ? 'all' : 'LXC')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                  props.typeFilter!() === 'LXC'
-                    ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.typeFilter!() === 'LXC'
+                  ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
               >
                 LXC
               </button>
               <button
                 type="button"
                 onClick={() => props.setTypeFilter!(props.typeFilter!() === 'Host' ? 'all' : 'Host')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                  props.typeFilter!() === 'Host'
-                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.typeFilter!() === 'Host'
+                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
               >
                 PMG
               </button>
@@ -413,22 +407,20 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
             <button
               type="button"
               onClick={() => props.setGroupBy('date')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.groupBy() === 'date'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy() === 'date'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               By Date
             </button>
             <button
               type="button"
               onClick={() => props.setGroupBy(props.groupBy() === 'guest' ? 'date' : 'guest')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.groupBy() === 'guest'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy() === 'guest'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
             >
               By Guest
             </button>
@@ -476,6 +468,42 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
+          {/* Status Filter */}
+          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('all')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'all'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('verified')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'verified'
+                ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              Verified
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('unverified')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'unverified'
+                ? 'bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              Unverified
+            </button>
+          </div>
+
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+
           {/* Reset Button */}
           <button
             onClick={() => {
@@ -485,19 +513,20 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
                 props.setSearch('');
                 props.setViewMode('all');
                 props.setGroupBy('date');
+                if (props.setStatusFilter) props.setStatusFilter('all');
               }
             }}
             title="Reset all filters"
-            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
-              props.search().trim() !== '' ||
-              props.viewMode() !== 'all' ||
-              props.groupBy() !== 'date' ||
-              props.sortKey() !== 'backupTime' ||
-              props.sortDirection() !== 'desc' ||
-              (props.typeFilter && props.typeFilter() !== 'all')
+            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${props.search().trim() !== '' ||
+                props.viewMode() !== 'all' ||
+                props.groupBy() !== 'date' ||
+                props.sortKey() !== 'backupTime' ||
+                props.sortDirection() !== 'desc' ||
+                (props.typeFilter && props.typeFilter() !== 'all') ||
+                (props.statusFilter && props.statusFilter() !== 'all')
                 ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
                 : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+              }`}
           >
             <svg
               width="14"
