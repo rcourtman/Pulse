@@ -414,71 +414,67 @@ jobs:
         run: |
           TAG="${{ needs.extract_version.outputs.tag }}"
           NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
+          TITLE="Pulse ${TAG}"
 
-          echo "Creating draft release for ${TAG}..."
+          echo "Managing release for ${TAG}..."
 
-          # Tag already exists (pushed by user), so don't create it
-          # Just create the release pointing to the existing tag
-          gh release create "${TAG}" \
-            --draft \
-            --title "Pulse ${TAG}" \
-            --notes-file "$NOTES_FILE"
+          # 1. Try to find existing release by Tag
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" --jq .id 2>/dev/null || echo "")
+
+          # 2. If not found by tag, try to find by Title (handles untagged drafts)
+          if [ -z "$RELEASE_ID" ]; then
+            echo "Release not found by tag, checking by title '${TITLE}'..."
+            RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases" --paginate --jq ".[] | select(.name == \"${TITLE}\") | .id" | head -n 1)
+          fi
+
+          # 3. Create or Update
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Found existing release (ID: ${RELEASE_ID}). Updating notes..."
+            # Update the release notes
+            gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" -X PATCH -F body="$(cat $NOTES_FILE)" > /dev/null
+          else
+            echo "Creating new draft release for ${TAG}..."
+            # Create the release
+            gh release create "${TAG}" \
+              --draft \
+              --title "${TITLE}" \
+              --notes-file "$NOTES_FILE"
+            
+            # Fetch the ID of the newly created release
+            # We search by Title to be safe against untagged creation
+            echo "Waiting for release to be indexed..."
+            for i in {1..10}; do
+              RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases" --paginate --jq ".[] | select(.name == \"${TITLE}\") | .id" | head -n 1)
+              if [ -n "$RELEASE_ID" ]; then 
+                echo "✓ Found new release ID: ${RELEASE_ID}"
+                break
+              fi
+              sleep 2
+            done
+          fi
 
           rm -f "$NOTES_FILE"
 
-          # Get the release ID
-          echo "Waiting for release to appear in GitHub API..."
-          MAX_ATTEMPTS=10
-          ATTEMPT=1
-          RELEASE_JSON=""
-
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Looking for release ${TAG}..."
-            RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" --paginate | jq ".[] | select(.tag_name == \"${TAG}\")")
-
-            if [ -n "$RELEASE_JSON" ]; then
-              echo "✓ Found release in API"
-              break
-            fi
-
-            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-              echo "Release not indexed yet, waiting 2 seconds..."
-              sleep 2
-            fi
-
-            ATTEMPT=$((ATTEMPT + 1))
-          done
-
-          if [ -z "$RELEASE_JSON" ]; then
-            echo "::error::Failed to find release ${TAG} in API after $MAX_ATTEMPTS attempts"
+          if [ -z "$RELEASE_ID" ]; then
+            echo "::error::Failed to find or create release for ${TAG}"
             exit 1
           fi
 
-          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
-
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "::error::Failed to extract release ID from API response"
-            exit 1
+          # 4. Ensure Tag is correct (Fixes "untagged" issue)
+          CURRENT_TAG=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" --jq .tag_name)
+          if [ "$CURRENT_TAG" != "$TAG" ]; then
+            echo "::warning::Release ${RELEASE_ID} has tag '${CURRENT_TAG}', expected '${TAG}'. Fixing..."
+            gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" -X PATCH -F tag_name="${TAG}"
+            echo "✓ Release tag updated to ${TAG}"
+          else
+            echo "✓ Release tag is correct: ${TAG}"
           fi
 
-          RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-          if [ "$RELEASE_TAG" != "$TAG" ]; then
-            echo "::warning::Release tag mismatch (got ${RELEASE_TAG}, expected ${TAG}). Updating tag name..."
-            RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-              -X PATCH \
-              -F tag_name="${TAG}")
-            UPDATED_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-            if [ "$UPDATED_TAG" != "$TAG" ]; then
-              echo "::error::Failed to update release tag to ${TAG} (still ${UPDATED_TAG})"
-              exit 1
-            fi
-            echo "✓ Release tag normalized to ${UPDATED_TAG}"
-          fi
-
-          echo "release_url=$(echo "$RELEASE_JSON" | jq -r '.html_url')" >> $GITHUB_OUTPUT
+          # Get HTML URL for output
+          HTML_URL=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" --jq .html_url)
+          
+          echo "release_url=${HTML_URL}" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
-
-          echo "✓ Release ID: ${RELEASE_ID}"
 
       - name: Upload checksums.txt
         env:
