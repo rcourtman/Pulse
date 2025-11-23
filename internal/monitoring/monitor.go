@@ -6160,7 +6160,6 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 		if effectiveStatus == "online" && m.tempCollector != nil && tempMonitoringEnabled {
 			tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
-			defer tempCancel()
 
 			// Determine SSH hostname to use (most robust approach):
 			// Prefer the resolved host for this node, with cluster overrides when available.
@@ -6200,6 +6199,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 				// Use HTTP proxy if configured for this instance, otherwise fall back to socket/SSH
 				temp, err := m.tempCollector.CollectTemperatureWithProxy(tempCtx, sshHost, node.Node, instanceCfg.TemperatureProxyURL, instanceCfg.TemperatureProxyToken)
+				tempCancel()
 
 				if err == nil && temp != nil && temp.Available {
 					// Get the current CPU temperature (prefer package, fall back to max)
