@@ -740,24 +740,14 @@ func parseClusterNodes(output string) ([]string, error) {
 	var nodes []string
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
-		// Look for lines with hex ID and IP address
-		if !strings.Contains(line, "0x") {
-			continue
-		}
-
 		fields := strings.Fields(line)
-		// Need at least 3 fields: hex_id votes ip [optional:(local)]
-		if len(fields) < 3 {
+		// Need at least 2 fields to be a valid node line (id + ip/name)
+		if len(fields) < 2 {
 			continue
 		}
 
 		// Iterate through fields to find the IP address
 		for _, field := range fields {
-			// Skip hex ID
-			if strings.HasPrefix(field, "0x") {
-				continue
-			}
-
 			// Check if it's a valid IP
 			if ip := net.ParseIP(field); ip != nil {
 				nodes = append(nodes, field)
