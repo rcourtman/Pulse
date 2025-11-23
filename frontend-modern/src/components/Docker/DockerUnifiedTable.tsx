@@ -46,18 +46,18 @@ type SearchToken = { key?: string; value: string };
 
 type DockerRow =
   | {
-      kind: 'container';
-      id: string;
-      host: DockerHost;
-      container: DockerContainer;
-    }
+    kind: 'container';
+    id: string;
+    host: DockerHost;
+    container: DockerContainer;
+  }
   | {
-      kind: 'service';
-      id: string;
-      host: DockerHost;
-      service: DockerService;
-      tasks: DockerTask[];
-    };
+    kind: 'service';
+    id: string;
+    host: DockerHost;
+    service: DockerService;
+    tasks: DockerTask[];
+  };
 
 interface DockerUnifiedTableProps {
   hosts: DockerHost[];
@@ -283,36 +283,36 @@ const PODMAN_METADATA_GROUPS: Array<{
   prefixes?: string[];
   keys?: string[];
 }> = [
-  {
-    title: 'Pod',
-    prefixes: ['io.podman.annotations.pod.', 'io.podman.pod.', 'net.containers.podman.pod.'],
-  },
-  {
-    title: 'Compose',
-    prefixes: ['io.podman.compose.'],
-  },
-  {
-    title: 'Auto Update',
-    prefixes: ['io.containers.autoupdate.'],
-    keys: ['io.containers.autoupdate'],
-  },
-  {
-    title: 'User Namespace',
-    keys: ['io.podman.annotations.userns', 'io.containers.userns'],
-  },
-  {
-    title: 'Capabilities',
-    keys: ['io.containers.capabilities', 'io.containers.selinux', 'io.containers.seccomp'],
-  },
-  {
-    title: 'Podman Annotations',
-    prefixes: ['io.podman.annotations.'],
-  },
-  {
-    title: 'Container Settings',
-    prefixes: ['io.containers.'],
-  },
-];
+    {
+      title: 'Pod',
+      prefixes: ['io.podman.annotations.pod.', 'io.podman.pod.', 'net.containers.podman.pod.'],
+    },
+    {
+      title: 'Compose',
+      prefixes: ['io.podman.compose.'],
+    },
+    {
+      title: 'Auto Update',
+      prefixes: ['io.containers.autoupdate.'],
+      keys: ['io.containers.autoupdate'],
+    },
+    {
+      title: 'User Namespace',
+      keys: ['io.podman.annotations.userns', 'io.containers.userns'],
+    },
+    {
+      title: 'Capabilities',
+      keys: ['io.containers.capabilities', 'io.containers.selinux', 'io.containers.seccomp'],
+    },
+    {
+      title: 'Podman Annotations',
+      prefixes: ['io.podman.annotations.'],
+    },
+    {
+      title: 'Container Settings',
+      prefixes: ['io.containers.'],
+    },
+  ];
 
 const humanizePodmanKey = (raw: string): string => {
   if (!raw) return 'Value';
@@ -1049,9 +1049,8 @@ const DockerContainerRow: Component<{
   return (
     <>
       <tr
-        class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${
-          hasDrawerContent() ? 'cursor-pointer' : ''
-        } ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
+        class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''
+          } ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
@@ -1539,11 +1538,10 @@ const DockerContainerRow: Component<{
                             </Show>
                             <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
                               <span
-                                class={`rounded px-1.5 py-0.5 ${
-                                  mount.rw === false
+                                class={`rounded px-1.5 py-0.5 ${mount.rw === false
                                     ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
                                     : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                }`}
+                                  }`}
                               >
                                 {rw}
                               </span>
@@ -1819,13 +1817,11 @@ const DockerServiceRow: Component<{
   return (
     <>
       <tr
-        class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${
-          hasTasks() ? 'cursor-pointer' : ''
-        } ${
-          expanded()
+        class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''
+          } ${expanded()
             ? 'bg-gray-50 dark:bg-gray-800/40'
             : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
-        } ${!isHealthy() ? 'opacity-60' : ''}`}
+          } ${!isHealthy() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
@@ -2356,6 +2352,31 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
     }, 0),
   );
 
+  const degradedContainers = createMemo(() =>
+    groupedRows().reduce((acc, group) => {
+      return (
+        acc +
+        group.rows
+          .filter((row): row is Extract<typeof row, { kind: 'container' }> => row.kind === 'container')
+          .filter((row) => {
+            const state = toLower(row.container.state);
+            const health = toLower(row.container.health);
+
+            // Explicitly degraded/error states
+            if (ERROR_CONTAINER_STATES.has(state)) return true;
+
+            // Running but unhealthy
+            if (state === 'running' && health === 'unhealthy') return true;
+
+            // Any other state that is NOT running and NOT stopped
+            if (state !== 'running' && !STOPPED_CONTAINER_STATES.has(state)) return true;
+
+            return false;
+          }).length
+      );
+    }, 0),
+  );
+
   const renderRow = (row: DockerRow, grouped: boolean) => {
     const resourceId =
       row.kind === 'container'
@@ -2579,6 +2600,13 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
             <span class="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
             {runningContainers()} running
           </span>
+          <Show when={degradedContainers() > 0}>
+            <span class="text-gray-400">|</span>
+            <span class="flex items-center gap-1">
+              <span class="h-2 w-2 rounded-full bg-orange-500" aria-hidden="true" />
+              {degradedContainers()} degraded
+            </span>
+          </Show>
           <span class="text-gray-400">|</span>
           <span class="flex items-center gap-1">
             <span class="h-2 w-2 rounded-full bg-gray-400" aria-hidden="true" />

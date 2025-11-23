@@ -16,7 +16,7 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
-import { isNodeOnline } from '@/utils/status';
+import { isNodeOnline, OFFLINE_HEALTH_STATUSES, DEGRADED_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
@@ -683,12 +683,22 @@ export function Dashboard(props: DashboardProps) {
   const totalStats = createMemo(() => {
     const guests = filteredGuests();
     const running = guests.filter((g) => g.status === 'running').length;
+    const degraded = guests.filter((g) => {
+      const status = (g.status || '').toLowerCase();
+      // Count as degraded if explicitly in degraded list, or if not running and not offline/stopped
+      return (
+        DEGRADED_HEALTH_STATUSES.has(status) ||
+        (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status))
+      );
+    }).length;
+    const stopped = guests.length - running - degraded;
     const vms = guests.filter((g) => g.type === 'qemu').length;
     const containers = guests.filter((g) => g.type === 'lxc').length;
     return {
       total: guests.length,
       running,
-      stopped: guests.length - running,
+      degraded,
+      stopped,
       vms,
       containers,
     };
@@ -1026,38 +1036,38 @@ export function Dashboard(props: DashboardProps) {
                       const node = nodeByInstance()[instanceId];
 
                       return (
-                      <>
-                        <Show when={node && groupingMode() === 'grouped'}>
-                          <NodeGroupHeader node={node!} colspan={11} />
-                        </Show>
-                        <For each={guests} fallback={<></>}>
-                          {(guest) => {
-                            // Match backend ID generation logic: stable format is "instance-vmid"
-                            const guestId =
-                              guest.id || `${guest.instance}-${guest.vmid}`;
-                            const metadata =
-                              guestMetadata()[guestId] ||
-                              guestMetadata()[`${guest.node}-${guest.vmid}`];
-                            const parentNode = node ?? resolveParentNode(guest);
-                            const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
-                            return (
-                              <ComponentErrorBoundary name="GuestRow">
-                                <GuestRow
-                                  guest={guest}
-                                  alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
-                                  customUrl={metadata?.customUrl}
-                                  onTagClick={handleTagClick}
-                                  activeSearch={search()}
-                                  parentNodeOnline={parentNodeOnline}
-                                  onCustomUrlUpdate={handleCustomUrlUpdate}
-                                  isGroupedView={groupingMode() === 'grouped'}
-                                />
-                              </ComponentErrorBoundary>
-                            );
-                          }}
-                        </For>
-                      </>
-                    );
+                        <>
+                          <Show when={node && groupingMode() === 'grouped'}>
+                            <NodeGroupHeader node={node!} colspan={11} />
+                          </Show>
+                          <For each={guests} fallback={<></>}>
+                            {(guest) => {
+                              // Match backend ID generation logic: stable format is "instance-vmid"
+                              const guestId =
+                                guest.id || `${guest.instance}-${guest.vmid}`;
+                              const metadata =
+                                guestMetadata()[guestId] ||
+                                guestMetadata()[`${guest.node}-${guest.vmid}`];
+                              const parentNode = node ?? resolveParentNode(guest);
+                              const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
+                              return (
+                                <ComponentErrorBoundary name="GuestRow">
+                                  <GuestRow
+                                    guest={guest}
+                                    alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
+                                    customUrl={metadata?.customUrl}
+                                    onTagClick={handleTagClick}
+                                    activeSearch={search()}
+                                    parentNodeOnline={parentNodeOnline}
+                                    onCustomUrlUpdate={handleCustomUrlUpdate}
+                                    isGroupedView={groupingMode() === 'grouped'}
+                                  />
+                                </ComponentErrorBoundary>
+                              );
+                            }}
+                          </For>
+                        </>
+                      );
                     }}
                   </For>
                 </tbody>
@@ -1110,6 +1120,13 @@ export function Dashboard(props: DashboardProps) {
               <span class="h-2 w-2 bg-green-500 rounded-full"></span>
               {totalStats().running} running
             </span>
+            <Show when={totalStats().degraded > 0}>
+              <span class="text-gray-400">|</span>
+              <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+                <span class="h-2 w-2 bg-orange-500 rounded-full"></span>
+                {totalStats().degraded} degraded
+              </span>
+            </Show>
             <span class="text-gray-400">|</span>
             <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
               <span class="h-2 w-2 bg-red-500 rounded-full"></span>
