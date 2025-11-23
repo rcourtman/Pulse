@@ -427,3 +427,41 @@ func TestDiscoverServersCancelledContext(t *testing.T) {
 		t.Fatalf("expected no servers on cancelled context")
 	}
 }
+
+func TestPBSDiscoveryWithUnauthorizedVersion(t *testing.T) {
+	// Handler that simulates PBS requiring auth for version endpoint
+	// and NOT providing any helpful headers initially to test the port+auth heuristic
+	pbsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api2/json/version" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	server := startTLSServerOn(t, "127.0.0.1:8007", pbsHandler)
+	_ = server
+
+	scanner := newTestScanner(&http.Client{
+		Timeout:   500 * time.Millisecond,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	// Probe port 8007
+	probe := scanner.ProbeProxmoxService(ctx, "127.0.0.1", 8007)
+
+	if probe == nil {
+		t.Fatal("ProbeProxmoxService returned nil")
+	}
+
+	if !probe.Positive {
+		t.Errorf("Expected positive identification for PBS on port 8007 with 401 version response, got negative. Score: %f", probe.PrimaryScore)
+	}
+
+	if probe.PrimaryProduct != ProductPBS {
+		t.Errorf("Expected product %q, got %q", ProductPBS, probe.PrimaryProduct)
+	}
+}

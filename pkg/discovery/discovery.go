@@ -51,13 +51,13 @@ type DiscoveryResult struct {
 // friendlyPhaseName converts technical phase names to user-friendly descriptions
 func friendlyPhaseName(phase string) string {
 	friendlyNames := map[string]string{
-		"lxc_container_network":      "Container network",
-		"docker_bridge_network":      "Docker bridge network",
-		"docker_container_network":   "Docker container network",
-		"host_local_network":         "Local network",
-		"inferred_gateway_network":   "Gateway network",
-		"extra_targets":              "Additional targets",
-		"proxmox_cluster_network":    "Proxmox cluster network",
+		"lxc_container_network":    "Container network",
+		"docker_bridge_network":    "Docker bridge network",
+		"docker_container_network": "Docker container network",
+		"host_local_network":       "Local network",
+		"inferred_gateway_network": "Gateway network",
+		"extra_targets":            "Additional targets",
+		"proxmox_cluster_network":  "Proxmox cluster network",
 	}
 
 	if friendly, ok := friendlyNames[phase]; ok {
@@ -1193,9 +1193,12 @@ func (s *Scanner) applyPBSHeuristics(ctx context.Context, address string, result
 		}
 	case http.StatusUnauthorized, http.StatusForbidden:
 		if versionFinding.ProductGuess == productPBS {
-			result.addConfidence(productPBS, "auth headers indicated PBS", 0.45, true)
+			result.addConfidence(productPBS, "auth headers indicated PBS", 0.55, true)
 		} else {
-			result.addConfidence(productPBS, "version endpoint on PBS port requires auth", 0.35, true)
+			// High confidence: Port 8007 + api2/json/version exists (even if auth required) is a very strong signal.
+			// We bump this to ensure we cross the threshold and avoid probing other endpoints (status/datastore)
+			// which would generate "authentication failure" logs on the server.
+			result.addConfidence(productPBS, "version endpoint on PBS port requires auth", 0.55, true)
 		}
 	default:
 		if result.Reachable && result.ProductScores[productPBS] < 0.25 {
