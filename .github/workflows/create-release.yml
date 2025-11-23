@@ -407,6 +407,15 @@ jobs:
           echo "Release notes content:"
           cat "$NOTES_FILE"
 
+      - name: Create git tag
+        run: |
+          TAG="${{ needs.extract_version.outputs.tag }}"
+
+          echo "Creating git tag ${TAG}..."
+          git tag "${TAG}" "${{ github.sha }}"
+          git push origin "${TAG}"
+          echo "✓ Tag ${TAG} created and pushed"
+
       - name: Create draft release
         id: create_release
         env:
@@ -417,13 +426,11 @@ jobs:
 
           echo "Creating draft release for ${TAG}..."
 
-          # Create the tag and release together
-          # gh release create will create both the tag and the release
+          # Tag now exists, so gh release create will attach to it
           gh release create "${TAG}" \
             --draft \
             --title "Pulse ${TAG}" \
-            --notes-file "$NOTES_FILE" \
-            --target "${{ github.sha }}"
+            --notes-file "$NOTES_FILE"
 
           rm -f "$NOTES_FILE"
 
