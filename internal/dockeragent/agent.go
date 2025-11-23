@@ -1536,7 +1536,7 @@ func detectHostRemovedError(body []byte) string {
 func (a *Agent) checkForUpdates(ctx context.Context) {
 	// Skip updates if disabled via config
 	if a.cfg.DisableAutoUpdate {
-		a.logger.Debug().Msg("Skipping update check - auto-update disabled")
+		a.logger.Info().Msg("Skipping update check - auto-update disabled")
 		return
 	}
 
