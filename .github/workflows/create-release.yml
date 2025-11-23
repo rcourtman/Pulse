@@ -426,17 +426,16 @@ jobs:
 
           echo "Creating draft release for ${TAG}..."
 
-          # Tag now exists, so gh release create will attach to it
-          gh release create "${TAG}" \
-            --draft \
-            --title "Pulse ${TAG}" \
-            --notes-file "$NOTES_FILE"
+          # Use GitHub API directly to create release with existing tag
+          # gh release create has issues when tag already exists
+          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
+            -X POST \
+            -F tag_name="${TAG}" \
+            -F name="Pulse ${TAG}" \
+            -F body="$(cat $NOTES_FILE)" \
+            -F draft=true)
 
           rm -f "$NOTES_FILE"
-
-          # Get the release ID
-          echo "Fetching release details..."
-          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}")
 
           RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
           RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
