@@ -623,20 +623,18 @@ func TestDisableLegacySSHOnAuthFailure(t *testing.T) {
 	collector := &TemperatureCollector{}
 
 	if !collector.disableLegacySSHOnAuthFailure(fmt.Errorf("ssh command failed: Permission denied (publickey)."), "node-1", "host-1") {
-		t.Fatalf("expected authentication errors to disable legacy SSH")
+		t.Fatalf("expected authentication errors to be detected")
 	}
-	if !collector.legacySSHDisabled.Load() {
-		t.Fatalf("expected legacy SSH to be marked disabled")
-	}
+	// legacySSHDisabled check removed as we no longer globally disable SSH
 
-	// Repeated auth errors should still return true but not change the flag.
+	// Repeated auth errors should still return true
 	if !collector.disableLegacySSHOnAuthFailure(fmt.Errorf("permission denied"), "node-1", "host-1") {
-		t.Fatalf("expected repeated authentication errors to continue reporting disabled state")
+		t.Fatalf("expected repeated authentication errors to be detected")
 	}
 
-	// Non-authentication errors should not trigger disablement.
+	// Non-authentication errors should not trigger detection
 	if collector.disableLegacySSHOnAuthFailure(fmt.Errorf("connection timed out"), "node-1", "host-1") {
-		t.Fatalf("expected non-authentication errors to leave legacy SSH enabled")
+		t.Fatalf("expected non-authentication errors to be ignored")
 	}
 }
 

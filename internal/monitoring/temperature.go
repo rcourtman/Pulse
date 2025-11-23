@@ -45,7 +45,6 @@ type TemperatureCollector struct {
 	proxyCooldownUntil time.Time
 	proxyHostStates    map[string]*proxyHostState
 	missingKeyWarned   atomic.Bool
-	legacySSHDisabled  atomic.Bool
 }
 
 type proxyHostState struct {
@@ -181,10 +180,6 @@ func (tc *TemperatureCollector) CollectTemperatureWithProxy(ctx context.Context,
 			log.Warn().
 				Str("node", nodeName).
 				Msg("Temperature collection disabled: containerized Pulse requires pulse-sensor-proxy. Mount /run/pulse-sensor-proxy or set PULSE_DEV_ALLOW_CONTAINER_SSH=true for development only")
-			return &models.Temperature{Available: false}, nil
-		}
-
-		if tc.legacySSHDisabled.Load() {
 			return &models.Temperature{Available: false}, nil
 		}
 
@@ -347,13 +342,12 @@ func (tc *TemperatureCollector) disableLegacySSHOnAuthFailure(err error, nodeNam
 		return false
 	}
 
-	if tc.legacySSHDisabled.CompareAndSwap(false, true) {
-		log.Warn().
-			Str("node", nodeName).
-			Str("host", host).
-			Err(err).
-			Msg("Disabling legacy SSH temperature collection after authentication failure; configure pulse-sensor-proxy or adjust SSH access.")
-	}
+	// Do not disable globally on single node failure
+	log.Warn().
+		Str("node", nodeName).
+		Str("host", host).
+		Err(err).
+		Msg("SSH temperature collection failed due to authentication error; check SSH keys")
 
 	return true
 }
