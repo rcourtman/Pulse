@@ -101,17 +101,45 @@ if [ -f "$NOTES_FILE" ]; then
     NOTES_FILE=""
   fi
 else
+else
   echo "No release notes file found at ${NOTES_FILE}"
   echo ""
-  echo "Create release notes manually or let the workflow prompt you."
+  read -p "Generate release notes automatically? [Y/n] " -n 1 -r
   echo ""
-  read -p "Continue without release notes file? [y/N] " -n 1 -r
-  echo ""
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted"
-    exit 1
+  if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+      echo "Generating release notes..."
+      # Try to find previous tag for better context
+      PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+      
+      if ./scripts/generate-release-notes.sh "$VERSION" "$PREV_TAG" > "$NOTES_FILE"; then
+          echo "Release notes generated at ${NOTES_FILE}"
+          echo ""
+          # Show first few lines
+          head -n 20 "$NOTES_FILE"
+          echo "... (truncated)"
+          echo ""
+          read -p "Use these release notes? [Y/n] " -n 1 -r
+          echo ""
+          if [[ $REPLY =~ ^[Nn]$ ]]; then
+              echo "Release notes rejected."
+              rm "$NOTES_FILE"
+              NOTES_FILE=""
+          fi
+      else
+          echo "Failed to generate release notes."
+          NOTES_FILE=""
+      fi
+  else
+      NOTES_FILE=""
   fi
-  NOTES_FILE=""
+fi
+
+if [ -z "$NOTES_FILE" ]; then
+    echo "❌ Error: Release notes are required"
+    echo ""
+    echo "Create ${NOTES_FILE} manually, then run this script again."
+    echo ""
+    exit 1
 fi
 
 # Trigger the workflow
@@ -122,11 +150,8 @@ if [ -n "$NOTES_FILE" ]; then
     -f version="${VERSION}" \
     -f release_notes="$(cat "$NOTES_FILE")"
 else
-  echo ""
+  # This should be unreachable due to check above, but kept for safety
   echo "❌ Error: Release notes are required"
-  echo ""
-  echo "Create ${NOTES_FILE} with your release notes, then run this script again."
-  echo ""
   exit 1
 fi
 
