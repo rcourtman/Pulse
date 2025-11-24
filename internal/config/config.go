@@ -129,6 +129,7 @@ type Config struct {
 	DemoMode               bool             `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
 	AllowedOrigins         string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	IframeEmbeddingAllow   string           `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
+	HideLocalLogin         bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 
 	// Proxy authentication settings
 	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
@@ -771,6 +772,16 @@ func Load() (*Config, error) {
 			log.Warn().
 				Str("value", enabledStr).
 				Msg("Invalid ENABLE_TEMPERATURE_MONITORING value, ignoring")
+		}
+	}
+
+	if hideLocalLoginStr := utils.GetenvTrim("PULSE_AUTH_HIDE_LOCAL_LOGIN"); hideLocalLoginStr != "" {
+		if hide, err := strconv.ParseBool(hideLocalLoginStr); err == nil {
+			cfg.HideLocalLogin = hide
+			cfg.EnvOverrides["PULSE_AUTH_HIDE_LOCAL_LOGIN"] = true
+			log.Info().Bool("hide", hide).Msg("Overriding hide local login setting from environment")
+		} else {
+			log.Warn().Str("value", hideLocalLoginStr).Msg("Invalid PULSE_AUTH_HIDE_LOCAL_LOGIN value, ignoring")
 		}
 	}
 

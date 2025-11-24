@@ -486,6 +486,7 @@ func (r *Router) setupRoutes() {
 				"authUsername":                "",
 				"authLastModified":            "",
 				"oidcUsername":                oidcUsername,
+				"hideLocalLogin":              r.config.HideLocalLogin,
 			}
 
 			if isAuthenticated {
