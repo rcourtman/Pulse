@@ -1001,6 +1001,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/uninstall-host-agent.sh", r.handleDownloadHostAgentUninstallScript)
 	r.mux.HandleFunc("/uninstall-host-agent.ps1", r.handleDownloadHostAgentUninstallScriptPS)
 	r.mux.HandleFunc("/download/pulse-host-agent", r.handleDownloadHostAgent)
+	r.mux.HandleFunc("/download/pulse-host-agent.sha256", r.handleDownloadHostAgent)
 
 	r.mux.HandleFunc("/api/agent/version", r.handleAgentVersion)
 	r.mux.HandleFunc("/api/server/info", r.handleServerInfo)
