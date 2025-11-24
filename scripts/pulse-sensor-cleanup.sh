@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# pulse-sensor-cleanup.sh - Removes Pulse SSH keys from Proxmox nodes when they're removed from Pulse
+# pulse-sensor-cleanup.sh - Complete Pulse footprint removal when nodes are removed
+# Removes: SSH keys, proxy service, binaries, API tokens, and LXC bind mounts
 # This script is triggered by systemd path unit when cleanup-request.json is created
 
 set -euo pipefail
@@ -8,7 +9,9 @@ set -euo pipefail
 # Configuration
 WORK_DIR="/var/lib/pulse-sensor-proxy"
 CLEANUP_REQUEST="${WORK_DIR}/cleanup-request.json"
+LOCKFILE="${WORK_DIR}/cleanup.lock"
 LOG_TAG="pulse-sensor-cleanup"
+INSTALLER_PATH="/opt/pulse/sensor-proxy/install-sensor-proxy.sh"
 
 # Logging functions
 log_info() {
@@ -26,6 +29,13 @@ log_error() {
     echo "[ERROR] $1" >&2
 }
 
+# Acquire exclusive lock to prevent concurrent cleanup runs
+exec 200>"$LOCKFILE"
+if ! flock -n 200; then
+    log_info "Another cleanup instance is running, exiting"
+    exit 0
+fi
+
 # Check if cleanup request file exists
 if [[ ! -f "$CLEANUP_REQUEST" ]]; then
     log_info "No cleanup request found at $CLEANUP_REQUEST"
@@ -41,8 +51,12 @@ REQUESTED_AT=$(echo "$CLEANUP_DATA" | grep -o '"requestedAt":"[^"]*"' | cut -d'"
 
 log_info "Cleanup requested at: ${REQUESTED_AT:-unknown}"
 
-# Remove the cleanup request file immediately to prevent re-processing
-rm -f "$CLEANUP_REQUEST"
+# Rename request file to .processing to prevent re-triggering while allowing retry on failure
+PROCESSING_FILE="${CLEANUP_REQUEST}.processing"
+mv "$CLEANUP_REQUEST" "$PROCESSING_FILE" 2>/dev/null || {
+    log_warn "Failed to rename cleanup request file, may have been processed by another instance"
+    exit 0
+}
 
 # If no specific host was provided, clean up all known nodes
 if [[ -z "$HOST" ]]; then
@@ -50,7 +64,7 @@ if [[ -z "$HOST" ]]; then
 
     # Discover cluster nodes
     if command -v pvecm >/dev/null 2>&1; then
-        CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}')
+        CLUSTER_NODES=$(pvecm status 2>/dev/null | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
 
         if [[ -n "$CLUSTER_NODES" ]]; then
             for node_ip in $CLUSTER_NODES; do
@@ -79,13 +93,16 @@ if [[ -z "$HOST" ]]; then
 else
     log_info "Cleaning up specific host: $HOST"
 
-    # Extract IP from host URL
+    # Extract hostname/IP from host URL
     HOST_CLEAN=$(echo "$HOST" | sed -e 's|^https\?://||' -e 's|:.*$||')
 
-    # Check if this is localhost
+    # Check if this is localhost (by IP, hostname, or FQDN)
     LOCAL_IPS=$(hostname -I 2>/dev/null || echo "")
+    LOCAL_HOSTNAME=$(hostname 2>/dev/null || echo "")
+    LOCAL_FQDN=$(hostname -f 2>/dev/null || echo "")
     IS_LOCAL=false
 
+    # Check against all local IPs
     for local_ip in $LOCAL_IPS; do
         if [[ "$HOST_CLEAN" == "$local_ip" ]]; then
             IS_LOCAL=true
@@ -93,15 +110,143 @@ else
         fi
     done
 
-    if [[ "$HOST_CLEAN" == "127.0.0.1" || "$HOST_CLEAN" == "localhost" ]]; then
+    # Check against hostname and FQDN
+    if [[ "$HOST_CLEAN" == "127.0.0.1" || "$HOST_CLEAN" == "localhost" || \
+          "$HOST_CLEAN" == "$LOCAL_HOSTNAME" || "$HOST_CLEAN" == "$LOCAL_FQDN" ]]; then
         IS_LOCAL=true
     fi
 
     if [[ "$IS_LOCAL" == true ]]; then
-        log_info "Cleaning up localhost SSH keys"
+        log_info "Performing full cleanup on localhost"
+
+        # 1. Remove SSH keys
+        log_info "Removing SSH keys from authorized_keys"
         sed -i -e '/# pulse-managed-key$/d' -e '/# pulse-proxy-key$/d' /root/.ssh/authorized_keys 2>&1 | \
             logger -t "$LOG_TAG" -p user.info || \
-            log_warn "Failed to clean up SSH keys on localhost"
+            log_warn "Failed to clean up SSH keys"
+
+        # 2. Delete API tokens and user
+        log_info "Removing Proxmox API tokens and pulse-monitor user"
+        if command -v pveum >/dev/null 2>&1; then
+            # Try JSON output first (pveum with --output-format json)
+            TOKEN_IDS=""
+            if command -v python3 >/dev/null 2>&1; then
+                # Try pveum with JSON output
+                if TOKEN_JSON=$(pveum user token list pulse-monitor@pam --output-format json 2>/dev/null); then
+                    TOKEN_IDS=$(echo "$TOKEN_JSON" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    if isinstance(data, list):
+        for item in data:
+            if "tokenid" in item:
+                print(item["tokenid"])
+except: pass
+' || true)
+                fi
+            fi
+
+            # Fall back to pvesh JSON API if pveum JSON didn't work
+            if [[ -z "$TOKEN_IDS" ]] && command -v pvesh >/dev/null 2>&1; then
+                if TOKEN_JSON=$(pvesh get /access/users/pulse-monitor@pam/token 2>/dev/null); then
+                    TOKEN_IDS=$(echo "$TOKEN_JSON" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    if isinstance(data, dict) and "data" in data:
+        for item in data["data"]:
+            if "tokenid" in item:
+                print(item["tokenid"])
+except: pass
+' 2>/dev/null || true)
+                fi
+            fi
+
+            # Last resort: parse table output with better filtering
+            if [[ -z "$TOKEN_IDS" ]]; then
+                TOKEN_IDS=$(pveum user token list pulse-monitor@pam 2>/dev/null | \
+                    awk 'NR>1 && /^[[:space:]]*pulse/ {print $1}' | grep -v '^[│┌└╞─]' | grep -v '^$' || true)
+            fi
+
+            if [[ -n "$TOKEN_IDS" ]]; then
+                for token_id in $TOKEN_IDS; do
+                    log_info "Deleting API token: $token_id"
+                    pveum user token remove pulse-monitor@pam "${token_id}" 2>&1 | \
+                        logger -t "$LOG_TAG" -p user.info || \
+                        log_warn "Failed to delete token $token_id"
+                done
+            else
+                log_info "No API tokens found for pulse-monitor@pam"
+            fi
+
+            # Remove the pulse-monitor user
+            log_info "Removing pulse-monitor@pam user"
+            pveum user delete pulse-monitor@pam 2>&1 | \
+                logger -t "$LOG_TAG" -p user.info || \
+                log_warn "pulse-monitor@pam user not found or already removed"
+        else
+            log_warn "pveum command not available, skipping API token cleanup"
+        fi
+
+        # 3. Remove LXC bind mounts
+        log_info "Removing LXC bind mounts from container configs"
+        if command -v pct >/dev/null 2>&1; then
+            for ctid in $(pct list 2>/dev/null | awk 'NR>1 {print $1}' || true); do
+                CONF_FILE="/etc/pve/lxc/${ctid}.conf"
+                if [[ -f "$CONF_FILE" ]]; then
+                    # Find pulse-sensor-proxy mount points and remove them using pct
+                    for mp_key in $(grep -o "^mp[0-9]\+:" "$CONF_FILE" | grep -f <(grep "pulse-sensor-proxy" "$CONF_FILE" | grep -o "^mp[0-9]\+:") || true); do
+                        mp_num="${mp_key%:}"
+                        log_info "Removing ${mp_num} (pulse-sensor-proxy) from container $ctid"
+                        if pct set "$ctid" -delete "${mp_num}" 2>&1 | logger -t "$LOG_TAG" -p user.info; then
+                            log_info "Successfully removed ${mp_num} from container $ctid"
+                        else
+                            log_warn "Failed to remove ${mp_num} from container $ctid"
+                        fi
+                    done
+                fi
+            done
+        fi
+
+        # 4. Uninstall proxy service and remove binaries via isolated transient unit
+        log_info "Starting full uninstallation (service, binaries, configs)"
+        if [[ -x "$INSTALLER_PATH" ]]; then
+            # Use systemd-run to create isolated transient unit that won't be killed
+            # when we stop pulse-sensor-proxy.service
+            if command -v systemd-run >/dev/null 2>&1; then
+                # Use UUID for unique unit name (prevents same-second collisions)
+                UNINSTALL_UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s%N)
+                UNINSTALL_UNIT="pulse-uninstall-${UNINSTALL_UUID}"
+                log_info "Spawning isolated uninstaller unit: $UNINSTALL_UNIT"
+
+                systemd-run \
+                    --unit="${UNINSTALL_UNIT}" \
+                    --property="Type=oneshot" \
+                    --property="Conflicts=pulse-sensor-proxy.service" \
+                    --collect \
+                    --wait \
+                    --quiet \
+                    -- bash -c "$INSTALLER_PATH --uninstall --purge --quiet >> /var/log/pulse/sensor-proxy/uninstall.log 2>&1" \
+                    2>&1 | logger -t "$LOG_TAG" -p user.info
+
+                UNINSTALL_EXIT=$?
+                if [[ $UNINSTALL_EXIT -eq 0 ]]; then
+                    log_info "Uninstaller completed successfully"
+                else
+                    log_error "Uninstaller failed with exit code $UNINSTALL_EXIT"
+                    exit 1
+                fi
+            else
+                log_warn "systemd-run not available, attempting direct uninstall (may fail)"
+                bash "$INSTALLER_PATH" --uninstall --quiet >> /var/log/pulse/sensor-proxy/uninstall.log 2>&1 || \
+                    log_error "Uninstaller failed - manual cleanup may be required"
+            fi
+        else
+            log_warn "Installer not found at $INSTALLER_PATH, cannot run uninstaller"
+            log_info "Manual cleanup required: systemctl stop pulse-sensor-proxy && systemctl disable pulse-sensor-proxy"
+        fi
+
+        log_info "Localhost cleanup initiated (uninstaller running in background)"
     else
         log_info "Cleaning up remote host: $HOST_CLEAN"
 
@@ -134,56 +279,8 @@ else
     fi
 fi
 
-# Full cleanup: uninstall proxy service, remove bind mounts, delete API tokens
-log_info "Starting full cleanup: uninstalling proxy service and removing remaining artifacts"
+# Remove processing file on success
+rm -f "$PROCESSING_FILE"
 
-# 1. Run the proxy uninstaller if available
-INSTALLER_PATH="/usr/local/share/pulse/install-sensor-proxy.sh"
-if [[ -x "$INSTALLER_PATH" ]]; then
-    log_info "Running proxy uninstaller to remove service and bind mounts"
-    if "$INSTALLER_PATH" --uninstall --quiet; then
-        log_info "Proxy service uninstalled successfully"
-    else
-        log_warn "Proxy uninstaller reported errors (may already be removed)"
-    fi
-else
-    log_warn "Proxy uninstaller not found at $INSTALLER_PATH - manual cleanup may be required"
-fi
-
-# 2. Delete Proxmox API tokens
-log_info "Removing Proxmox API tokens for pulse-monitor user"
-
-# Find all API tokens for pulse-monitor user
-if command -v pveum >/dev/null 2>&1; then
-    # List tokens for pulse-monitor user
-    TOKENS=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk 'NR>1 {print $1}' || echo "")
-
-    if [[ -n "$TOKENS" ]]; then
-        for token_id in $TOKENS; do
-            log_info "Removing API token: pulse-monitor@pam!${token_id}"
-            if pveum user token remove pulse-monitor@pam "${token_id}" 2>/dev/null; then
-                log_info "Successfully removed token: ${token_id}"
-            else
-                log_warn "Failed to remove token: ${token_id}"
-            fi
-        done
-    else
-        log_info "No API tokens found for pulse-monitor@pam user"
-    fi
-
-    # Remove the pulse-monitor user entirely
-    if pveum user list 2>/dev/null | grep -q "pulse-monitor@pam"; then
-        log_info "Removing pulse-monitor@pam user"
-        if pveum user delete pulse-monitor@pam 2>/dev/null; then
-            log_info "Successfully removed pulse-monitor@pam user"
-        else
-            log_warn "Failed to remove pulse-monitor@pam user"
-        fi
-    fi
-else
-    log_warn "pveum command not available - cannot remove API tokens automatically"
-    log_info "Manual cleanup: pveum user delete pulse-monitor@pam"
-fi
-
-log_info "Full cleanup completed successfully"
+log_info "Cleanup completed successfully"
 exit 0
