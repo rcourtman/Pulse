@@ -1,0 +1,46 @@
+# Binary files - don't attempt to diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.otf binary
+*.pdf binary
+
+# Lockfiles - don't generate diffs
+package-lock.json -diff
+pnpm-lock.yaml -diff
+go.sum -diff
+
+# Generated files
+*.min.js -diff
+*.min.css -diff
+
+# Shell scripts - ensure LF line endings
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Go files - ensure LF line endings
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+
+# Frontend files - ensure LF line endings
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Dockerfile - ensure LF line endings
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
