@@ -740,6 +740,9 @@ func parseClusterNodes(output string) ([]string, error) {
 	var nodes []string
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
+		if strings.Contains(strings.ToLower(line), "qdevice") {
+			continue
+		}
 		fields := strings.Fields(line)
 		// Need at least 2 fields to be a valid node line (id + ip/name)
 		if len(fields) < 2 {
