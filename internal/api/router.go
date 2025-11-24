@@ -1201,6 +1201,9 @@ func (r *Router) SetConfig(cfg *config.Config) {
 		return
 	}
 
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+
 	if r.config == nil {
 		r.config = cfg
 	} else {
@@ -2838,6 +2841,9 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
 
 	// Return public configuration
 	config := map[string]interface{}{

@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
@@ -28,6 +30,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
+
+// Mu protects concurrent access to the configuration,
+// particularly for fields updated by the config watcher (AuthUser, AuthPass, APITokens).
+var Mu sync.RWMutex
 
 const (
 	DefaultGuestMetadataMinRefresh    = 2 * time.Minute

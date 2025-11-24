@@ -310,6 +310,9 @@ func (cw *ConfigWatcher) reloadConfig() {
 	}
 
 	// Apply auth user
+	Mu.Lock()
+	defer Mu.Unlock()
+
 	newUser := strings.Trim(envMap["PULSE_AUTH_USER"], "'\"")
 	if newUser != oldAuthUser {
 		cw.config.AuthUser = newUser
@@ -485,6 +488,8 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	}
 
 	// Only update if we successfully loaded tokens
+	Mu.Lock()
+	defer Mu.Unlock()
 	cw.config.APITokens = tokens
 	cw.config.SortAPITokens()
 	cw.config.APITokenEnabled = len(tokens) > 0
