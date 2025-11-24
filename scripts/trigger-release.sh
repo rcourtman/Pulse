@@ -118,7 +118,7 @@ fi
 echo ""
 echo "Triggering release workflow..."
 if [ -n "$NOTES_FILE" ]; then
-  gh workflow run release.yml \
+  gh workflow run create-release.yml \
     -f version="${VERSION}" \
     -f release_notes="$(cat "$NOTES_FILE")"
 else
@@ -134,6 +134,6 @@ echo ""
 echo "✓ Release workflow triggered"
 echo ""
 echo "Monitor progress:"
-echo "  gh run list --workflow=release.yml --limit 1"
+echo "  gh run list --workflow=create-release.yml --limit 1"
 echo "  gh run watch <run-id>"
 echo ""
