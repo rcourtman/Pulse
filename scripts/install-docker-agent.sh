@@ -38,6 +38,10 @@ log_warn() {
     printf '[WARN] %s\n' "$1" >&2
 }
 
+log_error() {
+    printf '[ERROR] %s\n' "$1" >&2
+}
+
 log_header() {
     printf '\n== %s ==\n' "$1"
 }
@@ -1715,7 +1719,7 @@ verify_agent_checksum() {
         return 0
     fi
 
-    if [[ "$FETCHED_CHECKSUM" != "$CALCULATED_CHECKSUM" ]]; then
+    if [[ "$(echo "$FETCHED_CHECKSUM" | tr -d '\r\n')" != "$(echo "$CALCULATED_CHECKSUM" | tr -d '\r\n')" ]]; then
         rm -f "$AGENT_PATH"
         log_error "Checksum mismatch. Expected $FETCHED_CHECKSUM but downloaded $CALCULATED_CHECKSUM"
         return 1
