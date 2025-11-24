@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -25,6 +27,7 @@ type ConfigWatcher struct {
 	stopChan             chan struct{}
 	stopOnce             sync.Once // Ensures Stop() can only close channel once
 	lastModTime          time.Time
+	lastEnvHash          string
 	mockLastModTime      time.Time
 	apiTokensLastModTime time.Time
 	mu                   sync.RWMutex
@@ -114,9 +117,13 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		stopChan:      make(chan struct{}),
 	}
 
-	// Get initial mod times
+	// Get initial mod times and hash
 	if stat, err := os.Stat(envPath); err == nil {
 		cw.lastModTime = stat.ModTime()
+		if content, err := os.ReadFile(envPath); err == nil {
+			hash := sha256.Sum256(content)
+			cw.lastEnvHash = hex.EncodeToString(hash[:])
+		}
 	}
 	if mockEnvPath != "" {
 		if stat, err := os.Stat(mockEnvPath); err == nil {
@@ -195,9 +202,19 @@ func (cw *ConfigWatcher) watchForChanges() {
 			// Check if the event is for our .env file
 			if filepath.Base(event.Name) == ".env" || event.Name == cw.envPath {
 				// Debounce - wait a bit for write to complete
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+					// Check if content actually changed to prevent restart loops on touch
+					newHash, err := cw.calculateFileHash(cw.envPath)
+					if err == nil {
+						if newHash == cw.lastEnvHash {
+							log.Debug().Msg("Detected .env file touch but content unchanged, skipping reload")
+							continue
+						}
+						cw.lastEnvHash = newHash
+					}
+
 					log.Info().Str("event", event.Op.String()).Msg("Detected .env file change")
 					cw.reloadConfig()
 				}
@@ -279,6 +296,16 @@ func (cw *ConfigWatcher) pollForChanges() {
 			return
 		}
 	}
+}
+
+// calculateFileHash returns the SHA256 hash of a file
+func (cw *ConfigWatcher) calculateFileHash(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(content)
+	return hex.EncodeToString(hash[:]), nil
 }
 
 // reloadConfig reloads the config from the .env file
