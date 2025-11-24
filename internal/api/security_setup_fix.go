@@ -275,11 +275,13 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 
 		// Update runtime config immediately with hashed token - no restart needed!
+		config.Mu.Lock()
 		r.config.AuthUser = setupRequest.Username
 		r.config.AuthPass = hashedPassword
 		r.config.APITokens = []config.APITokenRecord{*tokenRecord}
 		r.config.SortAPITokens()
 		r.config.APITokenEnabled = true
+		config.Mu.Unlock()
 
 		if r.persistence != nil {
 			if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
@@ -539,9 +541,11 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		return
 	}
 
+	config.Mu.Lock()
 	r.config.APITokens = []config.APITokenRecord{*tokenRecord}
 	r.config.SortAPITokens()
 	r.config.APITokenEnabled = true
+	config.Mu.Unlock()
 	log.Info().Msg("Runtime config updated with new API token - active immediately")
 
 	if r.persistence != nil {
@@ -672,7 +676,9 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 	}
 
 	// Validate the token (compare hash)
+	config.Mu.RLock()
 	_, isValid := r.config.ValidateAPIToken(validateRequest.Token)
+	config.Mu.RUnlock()
 
 	// Log validation attempt without logging the token itself
 	if isValid {

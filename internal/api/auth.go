@@ -196,6 +196,9 @@ func min(a, b int) int {
 
 // CheckAuth checks both basic auth and API token
 func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool {
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+
 	// Check proxy auth first if configured
 	if cfg.ProxyAuthSecret != "" {
 		if valid, username, _ := CheckProxyAuth(cfg, r); valid {

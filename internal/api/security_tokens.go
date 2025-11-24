@@ -91,6 +91,9 @@ func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+
 	tokens := make([]apiTokenDTO, 0, len(r.config.APITokens))
 	for _, record := range r.config.APITokens {
 		tokens = append(tokens, toAPITokenDTO(record))
@@ -147,6 +150,9 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+
 	r.config.APITokens = append(r.config.APITokens, *record)
 	r.config.SortAPITokens()
 	r.config.APITokenEnabled = true
@@ -180,6 +186,9 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Token ID required", http.StatusBadRequest)
 		return
 	}
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
 
 	removed := r.config.RemoveAPIToken(id)
 	if !removed {
