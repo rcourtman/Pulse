@@ -112,11 +112,32 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 	}
 
 	if !found && hostname != "" {
+		// First pass: exact match (case-insensitive)
 		for _, candidate := range state.Hosts {
 			if strings.EqualFold(candidate.Hostname, hostname) || strings.EqualFold(candidate.DisplayName, hostname) {
 				host = candidate
 				found = true
 				break
+			}
+		}
+
+		// Second pass: short hostname match (if exact match failed)
+		if !found {
+			// Helper to get short hostname (before first dot)
+			getShortName := func(h string) string {
+				if idx := strings.Index(h, "."); idx != -1 {
+					return h[:idx]
+				}
+				return h
+			}
+
+			shortLookup := getShortName(hostname)
+			for _, candidate := range state.Hosts {
+				if strings.EqualFold(getShortName(candidate.Hostname), shortLookup) {
+					host = candidate
+					found = true
+					break
+				}
 			}
 		}
 	}
