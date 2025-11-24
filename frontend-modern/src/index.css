@@ -126,9 +126,9 @@
 @layer components {
   .pulse-shell {
     width: 100%;
-    max-width: clamp(95rem, 92vw, 120rem);
+    max-width: 100%;
     margin-inline: auto;
-    padding-inline: clamp(1rem, 3vw, 3.25rem);
+    padding-inline: clamp(1rem, 1.5vw, 2rem);
     transition: padding-inline 0.3s ease;
   }
 
