@@ -1508,6 +1508,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			req.URL.Path == "/install-container-agent.sh" ||
 			req.URL.Path == "/install-host-agent.sh" ||
 			req.URL.Path == "/install-host-agent.ps1" ||
+			req.URL.Path == "/uninstall-host-agent.sh" ||
 			req.URL.Path == "/uninstall-host-agent.ps1" {
 			// Use the mux for API and special routes
 			r.mux.ServeHTTP(w, req)
@@ -3287,7 +3288,7 @@ func (r *Router) backgroundUpdateChecker() {
 
 // handleDownloadInstallScript serves the Docker agent installation script
 func (r *Router) handleDownloadInstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -3315,7 +3316,7 @@ func (r *Router) handleDownloadInstallScript(w http.ResponseWriter, req *http.Re
 
 // handleDownloadContainerAgentInstallScript serves the container agent install script
 func (r *Router) handleDownloadContainerAgentInstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -3331,7 +3332,7 @@ func (r *Router) handleDownloadContainerAgentInstallScript(w http.ResponseWriter
 
 // handleDownloadAgent serves the Docker agent binary
 func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -3401,7 +3402,7 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 
 // handleDownloadHostAgentInstallScript serves the Host agent installation script
 func (r *Router) handleDownloadHostAgentInstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -3429,7 +3430,7 @@ func (r *Router) handleDownloadHostAgentInstallScript(w http.ResponseWriter, req
 
 // handleDownloadHostAgentInstallScriptPS serves the PowerShell installation script for Windows
 func (r *Router) handleDownloadHostAgentInstallScriptPS(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -3446,7 +3447,7 @@ func (r *Router) handleDownloadHostAgentInstallScriptPS(w http.ResponseWriter, r
 
 // handleDownloadHostAgentUninstallScript serves the bash uninstallation script for Linux/macOS
 func (r *Router) handleDownloadHostAgentUninstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -3462,7 +3463,7 @@ func (r *Router) handleDownloadHostAgentUninstallScript(w http.ResponseWriter, r
 
 // handleDownloadHostAgentUninstallScriptPS serves the PowerShell uninstallation script for Windows
 func (r *Router) handleDownloadHostAgentUninstallScriptPS(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -3479,7 +3480,7 @@ func (r *Router) handleDownloadHostAgentUninstallScriptPS(w http.ResponseWriter,
 
 // handleDownloadHostAgent serves the Host agent binary
 func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -3783,7 +3784,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 }
 
 func (r *Router) handleDownloadPulseSensorProxy(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
 		return
 	}
@@ -3909,7 +3910,7 @@ func (r *Router) handleDownloadPulseSensorProxy(w http.ResponseWriter, req *http
 }
 
 func (r *Router) handleDownloadInstallerScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
 		return
 	}
@@ -3936,7 +3937,7 @@ func (r *Router) handleDownloadInstallerScript(w http.ResponseWriter, req *http.
 }
 
 func (r *Router) handleDownloadDockerInstallerScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
 		return
 	}
@@ -3963,7 +3964,7 @@ func (r *Router) handleDownloadDockerInstallerScript(w http.ResponseWriter, req 
 }
 
 func (r *Router) handleDownloadMigrationScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
 		return
 	}
@@ -3988,7 +3989,7 @@ func (r *Router) handleDownloadMigrationScript(w http.ResponseWriter, req *http.
 }
 
 func (r *Router) handleDownloadTemperatureProxyMigrationScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
 		return
 	}

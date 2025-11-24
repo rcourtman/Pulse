@@ -91,3 +91,29 @@ func TestHandleDownloadHostAgentServesChecksumForWindowsExe(t *testing.T) {
 		t.Fatalf("unexpected checksum body: got %q want %q", got, expected)
 	}
 }
+
+func TestHandleDownloadHostAgentAllowsHEAD(t *testing.T) {
+	binDir := setupTempPulseBin(t)
+	filePath := filepath.Join(binDir, "pulse-host-agent-linux-amd64")
+	if err := os.WriteFile(filePath, []byte("binary"), 0o755); err != nil {
+		t.Fatalf("failed to write test binary: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodHead, "/download/pulse-host-agent?platform=linux&arch=amd64", nil)
+	rr := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleDownloadHostAgent(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for HEAD, got %d", rr.Code)
+	}
+
+	// HEAD response should have Content-Length but no body
+	// Note: httptest.ResponseRecorder might capture body even for HEAD if handler writes it,
+	// but standard http.Server suppresses it.
+	// However, our handler uses http.ServeContent which respects HEAD.
+	if rr.Body.Len() > 0 {
+		t.Fatalf("expected empty body for HEAD, got %d bytes", rr.Body.Len())
+	}
+}
