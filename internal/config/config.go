@@ -71,9 +71,9 @@ func IsPasswordHashed(password string) bool {
 // NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
 	// Server settings
-	BackendHost  string `envconfig:"BACKEND_HOST" default:"0.0.0.0"`
+	BackendHost  string `envconfig:"BACKEND_HOST" default:""`
 	BackendPort  int    `envconfig:"BACKEND_PORT" default:"3000"`
-	FrontendHost string `envconfig:"FRONTEND_HOST" default:"0.0.0.0"`
+	FrontendHost string `envconfig:"FRONTEND_HOST" default:""`
 	FrontendPort int    `envconfig:"FRONTEND_PORT" default:"7655"`
 	ConfigPath   string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
 	DataPath     string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
@@ -523,9 +523,9 @@ func Load() (*Config, error) {
 
 	// Initialize config with defaults
 	cfg := &Config{
-		BackendHost:                     "0.0.0.0",
+		BackendHost:                     "",
 		BackendPort:                     3000,
-		FrontendHost:                    "0.0.0.0",
+		FrontendHost:                    "",
 		FrontendPort:                    7655,
 		ConfigPath:                      dataDir,
 		DataPath:                        dataDir,

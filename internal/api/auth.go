@@ -482,7 +482,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 									w.Write([]byte(fmt.Sprintf(`{"error":"Invalid credentials","attempts":%d,"remaining":%d,"maxAttempts":%d}`,
 										attempts, remaining, maxFailedAttempts)))
 								} else {
-									w.Write([]byte(fmt.Sprintf(`{"error":"Invalid credentials","locked":true,"message":"Account locked for 15 minutes"}`)))
+									w.Write([]byte(`{"error":"Invalid credentials","locked":true,"message":"Account locked for 15 minutes"}`))
 								}
 								return false
 							}

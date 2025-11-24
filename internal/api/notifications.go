@@ -156,7 +156,7 @@ func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Reques
 		}
 
 		// Mask headers - only show keys, not values
-		if webhook.Headers != nil && len(webhook.Headers) > 0 {
+		if len(webhook.Headers) > 0 {
 			maskedHeaders := make(map[string]string)
 			for key := range webhook.Headers {
 				maskedHeaders[key] = "***REDACTED***"
@@ -165,7 +165,7 @@ func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Reques
 		}
 
 		// Mask custom fields - only show keys, not values
-		if webhook.CustomFields != nil && len(webhook.CustomFields) > 0 {
+		if len(webhook.CustomFields) > 0 {
 			maskedFields := make(map[string]string)
 			for key := range webhook.CustomFields {
 				maskedFields[key] = "***REDACTED***"

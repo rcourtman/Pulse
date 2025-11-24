@@ -82,7 +82,7 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 			"id":   cmd.ID,
 			"type": cmd.Type,
 		}
-		if payload != nil && len(payload) > 0 {
+		if len(payload) > 0 {
 			commandResponse["payload"] = payload
 		}
 		response["commands"] = []map[string]any{commandResponse}

@@ -455,11 +455,24 @@ if (-not $NoService) {
         if ($status -eq 'Running') {
             PulseSuccess "Service started successfully!"
 
-            PulseInfo "Waiting 10 seconds to validate agent reporting..."
-            Start-Sleep -Seconds 10
+            PulseInfo "Waiting for agent to register with Pulse (up to 30s)..."
+            
+            $maxRetries = 15
+            $retryDelay = 2
+            $lookupHost = $null
+            
+            for ($i = 1; $i -le $maxRetries; $i++) {
+                Start-Sleep -Seconds $retryDelay
+                $hostname = $env:COMPUTERNAME
+                $lookupHost = Test-AgentRegistration -PulseUrl $PulseUrl -Hostname $hostname -Token $Token
+                
+                if ($lookupHost) {
+                    break
+                }
+                Write-Host "." -NoNewline
+            }
+            Write-Host "" # Newline after dots
 
-            $hostname = $env:COMPUTERNAME
-            $lookupHost = Test-AgentRegistration -PulseUrl $PulseUrl -Hostname $hostname -Token $Token
             if ($lookupHost) {
                 PulseSuccess "Agent successfully registered with Pulse (host '$hostname')."
                 if ($lookupHost.status) {

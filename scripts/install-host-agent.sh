@@ -1087,14 +1087,31 @@ if [[ "$SERVICE_MODE" != "manual" && "$SERVICE_RUNNING" == true ]]; then
     if [[ -z "$PULSE_TOKEN" ]]; then
         log_info "Registration check skipped (no API token available for lookup)."
     elif command -v curl &> /dev/null; then
-        log_info "Verifying agent registration with Pulse server..."
-        LOOKUP_RESPONSE=$(curl -fsSL \
-            -H "Authorization: Bearer $PULSE_TOKEN" \
-            --get \
-            --data-urlencode "hostname=$HOSTNAME" \
-            "$PULSE_URL/api/agents/host/lookup" 2>/dev/null || true)
+        log_info "Verifying agent registration with Pulse server (up to 30s)..."
+        
+        MAX_RETRIES=15
+        RETRY_DELAY=2
+        LOOKUP_SUCCESS=false
+        
+        for ((i=1; i<=MAX_RETRIES; i++)); do
+            LOOKUP_RESPONSE=$(curl -fsSL \
+                -H "Authorization: Bearer $PULSE_TOKEN" \
+                --get \
+                --data-urlencode "hostname=$HOSTNAME" \
+                "$PULSE_URL/api/agents/host/lookup" 2>/dev/null || true)
 
-        if [[ "$LOOKUP_RESPONSE" == *'"success":true'* ]]; then
+            if [[ "$LOOKUP_RESPONSE" == *'"success":true'* ]]; then
+                LOOKUP_SUCCESS=true
+                break
+            fi
+            
+            # Print a dot without newline to show progress
+            printf "."
+            sleep $RETRY_DELAY
+        done
+        echo "" # Newline after dots
+
+        if [[ "$LOOKUP_SUCCESS" == true ]]; then
             host_status=$(printf '%s' "$LOOKUP_RESPONSE" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
             last_seen=$(printf '%s' "$LOOKUP_RESPONSE" | sed -n 's/.*"lastSeen":"\([^"]*\)".*/\1/p')
             log_success "Agent successfully registered with Pulse server!"
@@ -1102,7 +1119,7 @@ if [[ "$SERVICE_MODE" != "manual" && "$SERVICE_RUNNING" == true ]]; then
                 log_info "Pulse reports status: $host_status (last seen $last_seen)"
             fi
         else
-            log_warn "Agent lookup did not confirm registration yet (response: ${LOOKUP_RESPONSE:-no data})."
+            log_warn "Agent lookup did not confirm registration after 30s (response: ${LOOKUP_RESPONSE:-no data})."
             log_info "Service is running; metrics should appear shortly."
         fi
     else
