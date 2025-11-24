@@ -1250,10 +1250,9 @@ func (r *Router) reloadSystemSettings() {
 
 // ServeHTTP implements http.Handler
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// Prevent path traversal attacks by cleaning the path
-	cleanPath := filepath.Clean(req.URL.Path)
-	// Reject requests with path traversal attempts
-	if strings.Contains(req.URL.Path, "..") || cleanPath != req.URL.Path {
+	// Prevent path traversal attacks
+	// We strictly block ".." to prevent directory traversal
+	if strings.Contains(req.URL.Path, "..") {
 		// Return 401 for API paths to match expected test behavior
 		if strings.HasPrefix(req.URL.Path, "/api/") {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -1263,7 +1262,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		log.Warn().
 			Str("ip", req.RemoteAddr).
 			Str("path", req.URL.Path).
-			Str("clean_path", cleanPath).
 			Msg("Path traversal attempt blocked")
 		return
 	}
@@ -1507,10 +1505,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			req.URL.Path == "/simple-stats" ||
 			req.URL.Path == "/install-docker-agent.sh" ||
 			req.URL.Path == "/install-container-agent.sh" ||
-			req.URL.Path == "/install-host-agent.sh" ||
-			req.URL.Path == "/install-host-agent.ps1" ||
-			req.URL.Path == "/uninstall-host-agent.sh" ||
-			req.URL.Path == "/uninstall-host-agent.ps1" {
+			path.Clean(req.URL.Path) == "/install-host-agent.sh" ||
+			path.Clean(req.URL.Path) == "/install-host-agent.ps1" ||
+			path.Clean(req.URL.Path) == "/uninstall-host-agent.sh" ||
+			path.Clean(req.URL.Path) == "/uninstall-host-agent.ps1" {
 			// Use the mux for API and special routes
 			r.mux.ServeHTTP(w, req)
 		} else {
