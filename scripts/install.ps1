@@ -70,6 +70,26 @@ try {
     Exit 1
 }
 
+# --- Legacy Cleanup ---
+# Remove old agents if they exist to prevent conflicts
+Write-Host "Checking for legacy agents..." -ForegroundColor Cyan
+
+if (Get-Service "PulseHostAgent" -ErrorAction SilentlyContinue) {
+    Write-Host "Removing legacy PulseHostAgent..." -ForegroundColor Yellow
+    Stop-Service "PulseHostAgent" -Force -ErrorAction SilentlyContinue
+    sc.exe delete "PulseHostAgent" | Out-Null
+    Remove-Item "C:\Program Files\Pulse\pulse-host-agent.exe" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
+if (Get-Service "PulseDockerAgent" -ErrorAction SilentlyContinue) {
+    Write-Host "Removing legacy PulseDockerAgent..." -ForegroundColor Yellow
+    Stop-Service "PulseDockerAgent" -Force -ErrorAction SilentlyContinue
+    sc.exe delete "PulseDockerAgent" | Out-Null
+    Remove-Item "C:\Program Files\Pulse\pulse-docker-agent.exe" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
 # --- Service Installation ---
 Write-Host "Configuring Windows Service..." -ForegroundColor Cyan
 
