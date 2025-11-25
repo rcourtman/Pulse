@@ -1,70 +1,54 @@
-# Pulse Documentation Index
+# 📚 Pulse Documentation
 
-Use this index to navigate the documentation bundled with the repository. Each
-section groups related guides so you can jump straight to the material you need.
+Welcome to the Pulse documentation portal. Here you'll find everything you need to install, configure, and master Pulse.
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
-- [INSTALL.md](INSTALL.md) – Installation guide covering script, Docker, and Helm paths.
-- [FAQ.md](FAQ.md) – Common questions and troubleshooting quick answers.
-- [MIGRATION.md](MIGRATION.md) – Export/import process for moving between hosts.
-- [DEV-QUICK-START.md](../DEV-QUICK-START.md) – Hot reload workflow for local development.
-- **Post-install checklist**
-  - [operations/audit-log-rotation.md](operations/audit-log-rotation.md) – Schedule regular sensor proxy log rotations after your first installation.
-  - [operations/sensor-proxy-log-forwarding.md](operations/sensor-proxy-log-forwarding.md) – Forward audit/proxy logs to your SIEM as soon as compliance retention is required.
-  - [operations/auto-update.md](operations/auto-update.md) – Enable and verify the `pulse-update` timer before handing the system to on-call.
-  - [operations/ADAPTIVE_POLLING_ROLLOUT.md](operations/ADAPTIVE_POLLING_ROLLOUT.md) – Plan the rollout when turning on adaptive polling beyond lab environments.
+- **[Installation Guide](INSTALL.md)**  
+  Step-by-step guides for Proxmox LXC, Docker, Kubernetes, and bare metal.
+- **[Configuration](CONFIGURATION.md)**  
+  Learn how to configure authentication, notifications (Email, Discord, etc.), and system settings.
+- **[Migration Guide](MIGRATION.md)**  
+  Moving to a new server? Here's how to export and import your data safely.
+- **[FAQ](FAQ.md)**  
+  Common questions and quick answers.
 
-## Deployment Guides
+## 🛠️ Deployment & Operations
 
-- [DOCKER.md](DOCKER.md) – Container deployment walkthroughs and compose samples.
-- [KUBERNETES.md](KUBERNETES.md) – Helm chart usage, ingress, persistence.
-- [REVERSE_PROXY.md](REVERSE_PROXY.md) – nginx, Caddy, Apache, Traefik, HAProxy recipes.
-- [DOCKER_MONITORING.md](DOCKER_MONITORING.md) – Docker/Podman agent installation.
-- [HOST_AGENT.md](HOST_AGENT.md) – Host agent installers for Linux, macOS, Windows.
-- [PORT_CONFIGURATION.md](PORT_CONFIGURATION.md) – Changing default ports and listeners.
+- **[Docker Guide](DOCKER.md)** – Advanced Docker & Compose configurations.
+- **[Kubernetes](KUBERNETES.md)** – Helm charts, ingress, and HA setups.
+- **[Reverse Proxy](REVERSE_PROXY.md)** – Nginx, Caddy, Traefik, and Cloudflare Tunnel recipes.
+- **[Port Configuration](PORT_CONFIGURATION.md)** – Changing default ports.
+- **[Troubleshooting](TROUBLESHOOTING.md)** – Deep dive into common issues and logs.
 
-## Operations & Monitoring
+## 🔐 Security
 
-- [CONFIGURATION.md](CONFIGURATION.md) – Detailed breakdown of config files and env vars.
-- [TEMPERATURE_MONITORING.md](TEMPERATURE_MONITORING.md) – Sensor proxy setup and hardening.
-- [VM_DISK_MONITORING.md](VM_DISK_MONITORING.md) – Enabling guest-agent disk telemetry.
-- [monitoring/](monitoring/) – Adaptive polling and Prometheus metric references.
-- [WEBHOOKS.md](WEBHOOKS.md) – Notification providers and payload templates.
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) – Deep dive into common operational issues.
-- [../cmd/pulse-sensor-proxy/README.md](../cmd/pulse-sensor-proxy/README.md) – Host-side sensor proxy installation and operations guide.
+- **[Security Policy](../SECURITY.md)** – The core security model (Encryption, Auth, API Scopes).
+- **[Proxy Authentication](PROXY_AUTH.md)** – SSO integration with Authentik, Authelia, etc.
+- **[Sensor Hardening](PULSE_SENSOR_PROXY_HARDENING.md)** – Securing the remote agents.
 
-## Security
+## 📡 Monitoring & Agents
 
-- [SECURITY.md](../SECURITY.md) – Canonical security policy (root-level document).
-- [docs/security/](security/) – Sensor proxy network and hardening guidance.
-- [PROXY_AUTH.md](PROXY_AUTH.md) – Authenticating via Authentik, Authelia, etc.
-- [TEMPERATURE_MONITORING_SECURITY.md](TEMPERATURE_MONITORING_SECURITY.md) – Legacy SSH considerations.
+- **[Docker Monitoring](DOCKER_MONITORING.md)** – Installing the lightweight agent for container metrics.
+- **[Host Agent](HOST_AGENT.md)** – Monitoring standalone Linux/Windows/macOS servers.
+- **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
+- **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Setting up hardware sensors.
+- **[Webhooks](WEBHOOKS.md)** – Custom notification payloads.
 
-## Operations Runbooks
+## 💻 Development
 
-- [operations/sensor-proxy-config-management.md](operations/sensor-proxy-config-management.md) – Safe configuration updates using the built-in CLI, migration from inline config, and troubleshooting corruption issues.
-- [operations/audit-log-rotation.md](operations/audit-log-rotation.md) – Monthly/incident log rotation procedure that preserves the hash chain and validates scheduler health afterward.
-- [operations/ADAPTIVE_POLLING_ROLLOUT.md](operations/ADAPTIVE_POLLING_ROLLOUT.md) – Rollout/rollback plan for enabling adaptive polling in staging or production.
-- [operations/auto-update.md](operations/auto-update.md) – Lifecycle of the `pulse-update` timer/service: enablement, manual trigger, rollback, and observability.
-- [operations/sensor-proxy-log-forwarding.md](operations/sensor-proxy-log-forwarding.md) – Configure rsyslog + RELP/TLS to ship sensor proxy audit/proxy logs to centralized logging.
+- **[API Reference](API.md)** – Complete REST API documentation.
+- **[Dev Quick Start](../DEV-QUICK-START.md)** – Hot-reload workflow for contributors.
+- **[Contributing](../CONTRIBUTING.md)** – How to contribute to Pulse.
+- **[Mock Mode](development/MOCK_MODE.md)** – Developing without real infrastructure.
 
-## Reference
+---
 
-- [API.md](API.md) – REST API overview with examples.
-- [api/SCHEDULER_HEALTH.md](api/SCHEDULER_HEALTH.md) – Adaptive scheduler API schema.
-- [RELEASE_NOTES.md](RELEASE_NOTES.md) – Latest feature highlights and changes.
-- [SCREENSHOTS.md](SCREENSHOTS.md) – UI tour with annotated screenshots.
-- [DOCKER_HUB_README.md](DOCKER_HUB_README.md) – Summarised feature list for registries.
-
-## Development & Contribution
-
-- [CONTRIBUTING.md](../CONTRIBUTING.md) – Repository-wide contribution guide.
-- [script-library-guide.md](script-library-guide.md) – Working with shared Bash modules.
-- [development/MOCK_MODE.md](development/MOCK_MODE.md) – Using mock data while developing.
-- [MIGRATION_SCAFFOLDING.md](../MIGRATION_SCAFFOLDING.md) – Tracking temporary migration code.
-
-Have an idea for a new guide? Update this index when you add documentation so
-discoverability stays high.
+<div align="center">
+  <p>Found a bug or have a suggestion?</p>
+  <a href="https://github.com/rcourtman/Pulse/issues">
+    <img src="https://img.shields.io/badge/GitHub-Issues-green" alt="GitHub Issues" />
+  </a>
+</div>

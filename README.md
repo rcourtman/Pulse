@@ -19,7 +19,7 @@ Pulse is a modern, unified dashboard for your **Proxmox** and **Docker** estate.
 
 Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" without the complexity of enterprise monitoring stacks.
 
-![Pulse Dashboard](https://github.com/user-attachments/assets/41ac125c-59e3-4bdc-bfd2-e300109aa1f7)
+![Pulse Dashboard](docs/images/01-dashboard.png)
 
 ## ✨ Features
 
@@ -56,7 +56,7 @@ Access the dashboard at `http://<your-ip>:7655`.
 
 - **[Installation Guide](docs/INSTALL.md)**: Detailed instructions for Docker, Kubernetes, and bare metal.
 - **[Configuration](docs/CONFIGURATION.md)**: Setup authentication, notifications, and advanced settings.
-- **[Security](docs/SECURITY.md)**: Learn about Pulse's security model and best practices.
+- **[Security](SECURITY.md)**: Learn about Pulse's security model and best practices.
 - **[API Reference](docs/API.md)**: Integrate Pulse with your own tools.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 
