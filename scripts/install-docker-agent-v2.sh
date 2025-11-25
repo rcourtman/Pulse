@@ -804,7 +804,7 @@ fetch_checksum_header() {
     fi
 
     local checksum_line
-    checksum_line=$(printf '%s\n' "$header" | awk 'BEGIN{IGNORECASE=1} /^ *X-Checksum-Sha256:/{print $0; exit}')
+    checksum_line=$(printf '%s\n' "$header" | grep -i "^ *X-Checksum-Sha256:" | head -n 1)
     if [[ -z "$checksum_line" ]]; then
         return 1
     fi
