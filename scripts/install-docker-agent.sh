@@ -1,5 +1,1001 @@
-#!/bin/bash
-set -e
+# Generated file. Do not edit.
+# Bundled on: 2025-11-25T08:34:41Z
+# Manifest: scripts/bundle.manifest
+
+# === Begin: scripts/lib/common.sh ===
+#!/usr/bin/env bash
+#
+# Shared common utilities for Pulse shell scripts.
+# Provides logging, privilege escalation, command execution helpers, and cleanup management.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+shopt -s extglob
+
+declare -gA COMMON__LOG_LEVELS=(
+  [debug]=10
+  [info]=20
+  [warn]=30
+  [error]=40
+)
+
+declare -g COMMON__SCRIPT_PATH=""
+declare -g COMMON__SCRIPT_DIR=""
+declare -g COMMON__ORIGINAL_ARGS=()
+
+declare -g COMMON__LOG_LEVEL="info"
+declare -g COMMON__LOG_LEVEL_NUM=20
+declare -g COMMON__DEBUG=false
+declare -g COMMON__COLOR_ENABLED=true
+
+declare -g COMMON__DRY_RUN=false
+
+declare -ag COMMON__CLEANUP_DESCRIPTIONS=()
+declare -ag COMMON__CLEANUP_COMMANDS=()
+declare -g COMMON__CLEANUP_REGISTERED=false
+
+# shellcheck disable=SC2034
+declare -g COMMON__ANSI_RESET=""
+# shellcheck disable=SC2034
+declare -g COMMON__ANSI_INFO=""
+# shellcheck disable=SC2034
+declare -g COMMON__ANSI_WARN=""
+# shellcheck disable=SC2034
+declare -g COMMON__ANSI_ERROR=""
+# shellcheck disable=SC2034
+declare -g COMMON__ANSI_DEBUG=""
+
+# common::init
+# Initializes the common library. Call at the top of every script.
+# Sets script metadata, log level, color handling, traps, and stores original args.
+common::init() {
+  COMMON__SCRIPT_PATH="$(common::__resolve_script_path)"
+  COMMON__SCRIPT_DIR="$(dirname "${COMMON__SCRIPT_PATH}")"
+  COMMON__ORIGINAL_ARGS=("$@")
+
+  common::__configure_color
+  common::__configure_log_level
+
+  if [[ "${COMMON__DEBUG}" == true ]]; then
+    common::log_debug "Debug mode enabled"
+  fi
+
+  if [[ "${COMMON__CLEANUP_REGISTERED}" == false ]]; then
+    trap common::cleanup_run EXIT
+    COMMON__CLEANUP_REGISTERED=true
+  fi
+}
+
+# common::log_info "message"
+# Logs informational messages. Printed to stdout.
+common::log_info() {
+  common::__log "info" "$@"
+}
+
+# common::log_warn "message"
+# Logs warning messages. Printed to stderr.
+common::log_warn() {
+  common::__log "warn" "$@"
+}
+
+# common::log_error "message"
+# Logs error messages. Printed to stderr.
+common::log_error() {
+  common::__log "error" "$@"
+}
+
+# common::log_debug "message"
+# Logs debug messages when log level is debug. Printed to stderr.
+common::log_debug() {
+  common::__log "debug" "$@"
+}
+
+# common::fail "message" [--code N]
+# Logs an error message and exits with provided code (default 1).
+common::fail() {
+  local exit_code=1
+  local message_parts=()
+  while (($#)); do
+    case "$1" in
+      --code)
+        shift
+        exit_code="${1:-1}"
+        ;;
+      *)
+        message_parts+=("$1")
+        ;;
+    esac
+    shift || break
+  done
+  local message="${message_parts[*]}"
+  common::log_error "${message}"
+  exit "${exit_code}"
+}
+
+# common::require_command cmd1 [cmd2 ...]
+# Verifies that required commands exist. Fails if any are missing.
+common::require_command() {
+  local missing=()
+  local cmd
+  for cmd in "$@"; do
+    if ! command -v "${cmd}" >/dev/null 2>&1; then
+      missing+=("${cmd}")
+    fi
+  done
+
+  if ((${#missing[@]} > 0)); then
+    common::fail "Missing required command(s): ${missing[*]}"
+  fi
+}
+
+# common::is_interactive
+# Returns success when running in an interactive TTY or PULSE_FORCE_INTERACTIVE=1.
+common::is_interactive() {
+  if [[ "${PULSE_FORCE_INTERACTIVE:-0}" == "1" ]]; then
+    return 0
+  fi
+  [[ -t 0 && -t 1 ]]
+}
+
+# common::ensure_root [--allow-sudo] [--args "${COMMON__ORIGINAL_ARGS[@]}"]
+# Ensures the script is running with root privileges. Optionally re-execs with sudo.
+common::ensure_root() {
+  local allow_sudo=false
+  local reexec_args=()
+
+  while (($#)); do
+    case "$1" in
+      --allow-sudo)
+        allow_sudo=true
+        ;;
+      --args)
+        shift
+        reexec_args=("$@")
+        break
+        ;;
+      *)
+        common::log_warn "Unknown argument to common::ensure_root: $1"
+        ;;
+    esac
+    shift || break
+  done
+
+  if [[ "${EUID}" -eq 0 ]]; then
+    return 0
+  fi
+
+  if [[ "${allow_sudo}" == true ]]; then
+    if common::is_interactive; then
+      common::log_info "Escalating privileges with sudo..."
+      common::sudo_exec "${COMMON__SCRIPT_PATH}" "${reexec_args[@]}"
+      exit 0
+    fi
+    common::fail "Root privileges required; rerun with sudo or as root."
+  fi
+
+  common::fail "Root privileges required."
+}
+
+# common::sudo_exec command [args...]
+# Executes a command via sudo, providing user guidance on failure.
+common::sudo_exec() {
+  local sudo_cmd="${PULSE_SUDO_CMD:-sudo}"
+  if command -v "${sudo_cmd}" >/dev/null 2>&1; then
+    exec "${sudo_cmd}" -- "$@"
+  fi
+
+  cat <<'EOF' >&2
+Unable to escalate privileges automatically because sudo is unavailable.
+Please install sudo or rerun this script as root.
+EOF
+  exit 1
+}
+
+# common::run [--label desc] [--retries N] [--backoff "1 2 4"] command [args...]
+# Executes a command, respecting dry-run mode and retry policies.
+common::run() {
+  local label=""
+  local retries=1
+  local backoff=()
+  local -a cmd=()
+
+  while (($#)); do
+    case "$1" in
+      --label)
+        label="$2"
+        shift 2
+        continue
+        ;;
+      --retries)
+        retries="$2"
+        shift 2
+        continue
+        ;;
+      --backoff)
+        read -r -a backoff <<<"$2"
+        shift 2
+        continue
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        common::log_warn "Unknown flag for common::run: $1"
+        shift
+        continue
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  cmd=("$@")
+  [[ -z "${label}" ]] && label="${cmd[*]}"
+
+  if [[ "${COMMON__DRY_RUN}" == true ]]; then
+    common::log_info "[dry-run] ${label}"
+    return 0
+  fi
+
+  local attempt=1
+  local exit_code=0
+
+  while (( attempt <= retries )); do
+    if "${cmd[@]}"; then
+      return 0
+    fi
+
+    exit_code=$?
+    if (( attempt == retries )); then
+      common::log_error "Command failed (${exit_code}): ${label}"
+      return "${exit_code}"
+    fi
+
+    local sleep_time="${backoff[$((attempt - 1))]:-1}"
+    common::log_warn "Command failed (${exit_code}): ${label} — retrying in ${sleep_time}s (attempt ${attempt}/${retries})"
+    sleep "${sleep_time}"
+    ((attempt++))
+  done
+
+  return "${exit_code}"
+}
+
+# common::run_capture [--label desc] command [args...]
+# Executes a command and captures stdout. Respects dry-run mode.
+common::run_capture() {
+  local label=""
+
+  while (($#)); do
+    case "$1" in
+      --label)
+        label="$2"
+        shift 2
+        continue
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        common::log_warn "Unknown flag for common::run_capture: $1"
+        shift
+        continue
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  local -a cmd=("$@")
+  [[ -z "${label}" ]] && label="${cmd[*]}"
+
+  if [[ "${COMMON__DRY_RUN}" == true ]]; then
+    common::log_info "[dry-run] ${label}"
+    echo ""
+    return 0
+  fi
+
+  "${cmd[@]}"
+}
+
+# common::temp_dir <var> [--prefix name]
+# Creates a temporary directory tracked for cleanup and assigns it to <var>.
+common::temp_dir() {
+  local var_name=""
+  local prefix="pulse-"
+
+  if (($#)) && [[ $1 != --* ]]; then
+    var_name="$1"
+    shift
+  fi
+
+  while (($#)); do
+    case "$1" in
+      --prefix)
+        prefix="$2"
+        shift 2
+        continue
+        ;;
+      *)
+        common::log_warn "Unknown argument to common::temp_dir: $1"
+        shift
+        continue
+        ;;
+    esac
+  done
+
+  local dir
+  dir="$(mktemp -d -t "${prefix}XXXXXX")"
+  if (( "${BASH_SUBSHELL:-0}" > 0 )); then
+    common::log_warn "common::temp_dir invoked in subshell; cleanup handlers will not be registered automatically for ${dir}"
+  else
+    common::cleanup_push "Remove temp dir ${dir}" "rm -rf ${dir@Q}"
+  fi
+
+  if [[ -n "${var_name}" ]]; then
+    printf -v "${var_name}" '%s' "${dir}"
+  else
+    printf '%s\n' "${dir}"
+  fi
+}
+
+# common::cleanup_push "description" "command"
+# Adds a cleanup handler executed in LIFO order on exit.
+common::cleanup_push() {
+  local description="${1:-}"
+  local command="${2:-}"
+
+  if [[ -z "${command}" ]]; then
+    common::log_warn "Ignoring cleanup handler without command"
+    return
+  fi
+
+  COMMON__CLEANUP_DESCRIPTIONS+=("${description}")
+  COMMON__CLEANUP_COMMANDS+=("${command}")
+}
+
+# common::cleanup_run
+# Executes registered cleanup handlers. Called automatically via EXIT trap.
+common::cleanup_run() {
+  local idx=$(( ${#COMMON__CLEANUP_COMMANDS[@]} - 1 ))
+  while (( idx >= 0 )); do
+    local command="${COMMON__CLEANUP_COMMANDS[$idx]}"
+    local description="${COMMON__CLEANUP_DESCRIPTIONS[$idx]}"
+    if [[ -n "${description}" ]]; then
+      common::log_debug "Running cleanup: ${description}"
+    fi
+    eval "${command}"
+    ((idx--))
+  done
+
+  COMMON__CLEANUP_COMMANDS=()
+  COMMON__CLEANUP_DESCRIPTIONS=()
+}
+
+# common::set_dry_run true|false
+# Enables or disables global dry-run mode.
+common::set_dry_run() {
+  local flag="${1:-false}"
+  case "${flag}" in
+    true|1|yes)
+      COMMON__DRY_RUN=true
+      ;;
+    false|0|no)
+      COMMON__DRY_RUN=false
+      ;;
+    *)
+      common::log_warn "Unknown dry-run flag: ${flag}"
+      COMMON__DRY_RUN=true
+      ;;
+  esac
+}
+
+# common::is_dry_run
+# Returns success when dry-run mode is active.
+common::is_dry_run() {
+  [[ "${COMMON__DRY_RUN}" == true ]]
+}
+
+# Internal helper: configure color output.
+common::__configure_color() {
+  if [[ "${PULSE_NO_COLOR:-0}" == "1" || ! -t 1 ]]; then
+    COMMON__COLOR_ENABLED=false
+  fi
+
+  if [[ "${COMMON__COLOR_ENABLED}" == true ]]; then
+    COMMON__ANSI_RESET=$'\033[0m'
+    COMMON__ANSI_INFO=$'\033[1;34m'
+    COMMON__ANSI_WARN=$'\033[1;33m'
+    COMMON__ANSI_ERROR=$'\033[1;31m'
+    COMMON__ANSI_DEBUG=$'\033[1;35m'
+  else
+    COMMON__ANSI_RESET=""
+    COMMON__ANSI_INFO=""
+    COMMON__ANSI_WARN=""
+    COMMON__ANSI_ERROR=""
+    COMMON__ANSI_DEBUG=""
+  fi
+}
+
+# Internal helper: set log level and debug flag.
+common::__configure_log_level() {
+  if [[ "${PULSE_DEBUG:-0}" == "1" ]]; then
+    COMMON__DEBUG=true
+    COMMON__LOG_LEVEL="debug"
+  else
+    COMMON__LOG_LEVEL="${PULSE_LOG_LEVEL:-info}"
+  fi
+
+  COMMON__LOG_LEVEL="${COMMON__LOG_LEVEL,,}"
+  COMMON__LOG_LEVEL_NUM="${COMMON__LOG_LEVELS[${COMMON__LOG_LEVEL}]:-20}"
+}
+
+# Internal helper: generic logger.
+common::__log() {
+  local level="$1"
+  shift
+  local message="$*"
+
+  local level_num="${COMMON__LOG_LEVELS[${level}]:-20}"
+  if (( level_num < COMMON__LOG_LEVEL_NUM )); then
+    return 0
+  fi
+
+  local timestamp
+  timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  local color=""
+
+  case "${level}" in
+    info) color="${COMMON__ANSI_INFO}" ;;
+    warn) color="${COMMON__ANSI_WARN}" ;;
+    error) color="${COMMON__ANSI_ERROR}" ;;
+    debug) color="${COMMON__ANSI_DEBUG}" ;;
+  esac
+
+  local formatted="[$timestamp] [${level^^}] ${message}"
+  if [[ "${level}" == "info" ]]; then
+    printf '%s%s%s\n' "${color}" "${formatted}" "${COMMON__ANSI_RESET}"
+  else
+    printf '%s%s%s\n' "${color}" "${formatted}" "${COMMON__ANSI_RESET}" >&2
+  fi
+}
+
+# Internal helper: determine absolute script path.
+common::__resolve_script_path() {
+  local source="${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}"
+  if [[ -z "${source}" ]]; then
+    pwd
+    return
+  fi
+
+  if [[ "${source}" == /* ]]; then
+    printf '%s\n' "${source}"
+    return
+  fi
+
+  printf '%s\n' "$(cd "$(dirname "${source}")" && pwd)/$(basename "${source}")"
+}
+# === End: scripts/lib/common.sh ===
+
+# === Begin: scripts/lib/systemd.sh ===
+#!/usr/bin/env bash
+#
+# Systemd management helpers for Pulse shell scripts.
+
+set -euo pipefail
+
+# Ensure the common library is available when sourced directly.
+if ! declare -F common::log_info >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+fi
+
+declare -g SYSTEMD_TIMEOUT_SEC="${SYSTEMD_TIMEOUT_SEC:-20}"
+
+# systemd::safe_systemctl args...
+# Executes systemctl with sensible defaults and optional timeout guards.
+systemd::safe_systemctl() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    common::fail "systemctl not available on this host"
+  fi
+
+  local -a cmd
+  systemd::__build_cmd cmd "$@"
+  systemd::__wrap_timeout cmd
+
+  local label="systemctl $*"
+  common::run --label "${label}" -- "${cmd[@]}"
+}
+
+# systemd::detect_service_name [service...]
+# Returns the first existing service name from the provided list.
+systemd::detect_service_name() {
+  local -a candidates=("$@")
+  if ((${#candidates[@]} == 0)); then
+    candidates=(pulse.service pulse-backend.service pulse-docker-agent.service pulse-hot-dev.service)
+  fi
+
+  local name
+  for name in "${candidates[@]}"; do
+    if systemd::service_exists "${name}"; then
+      printf '%s\n' "$(systemd::__normalize_unit "${name}")"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# systemd::service_exists service
+# Returns success if the given service unit exists.
+systemd::service_exists() {
+  local unit
+  unit="$(systemd::__normalize_unit "${1:-}")" || return 1
+
+  if command -v systemctl >/dev/null 2>&1 && ! common::is_dry_run; then
+    local -a cmd
+    systemd::__build_cmd cmd "list-unit-files" "${unit}"
+    systemd::__wrap_timeout cmd
+    local output=""
+    if output="$("${cmd[@]}" 2>/dev/null)"; then
+      [[ "${output}" =~ ^${unit}[[:space:]] ]] && return 0
+    fi
+  fi
+
+  local paths=(
+    "/etc/systemd/system/${unit}"
+    "/lib/systemd/system/${unit}"
+    "/usr/lib/systemd/system/${unit}"
+  )
+  local path
+  for path in "${paths[@]}"; do
+    if [[ -f "${path}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# systemd::is_active service
+# Checks whether the given service is active.
+systemd::is_active() {
+  local unit
+  unit="$(systemd::__normalize_unit "${1:-}")" || return 1
+
+  if common::is_dry_run; then
+    return 1
+  fi
+
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local -a cmd
+  systemd::__build_cmd cmd "is-active" "--quiet" "${unit}"
+  systemd::__wrap_timeout cmd
+  if "${cmd[@]}" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+# systemd::create_service /path/to/unit.service
+# Reads unit file content from stdin and writes it to the supplied path.
+systemd::create_service() {
+  local target="${1:-}"
+  local mode="${2:-0644}"
+  if [[ -z "${target}" ]]; then
+    common::fail "systemd::create_service requires a target path"
+  fi
+
+  local content
+  content="$(cat)"
+
+  if common::is_dry_run; then
+    common::log_info "[dry-run] Would write systemd unit ${target}"
+    common::log_debug "${content}"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "${target}")"
+  printf '%s' "${content}" > "${target}"
+  chmod "${mode}" "${target}"
+  common::log_info "Wrote unit file: ${target}"
+}
+
+# systemd::enable_and_start service
+# Reloads systemd, enables, and starts the given service.
+systemd::enable_and_start() {
+  local unit
+  unit="$(systemd::__normalize_unit "${1:-}")" || common::fail "Invalid systemd unit name"
+
+  systemd::safe_systemctl daemon-reload
+  systemd::safe_systemctl enable "${unit}"
+  systemd::safe_systemctl start "${unit}"
+}
+
+# systemd::restart service
+# Safely restarts the given service.
+systemd::restart() {
+  local unit
+  unit="$(systemd::__normalize_unit "${1:-}")" || common::fail "Invalid systemd unit name"
+  systemd::safe_systemctl restart "${unit}"
+}
+
+# Internal: build systemctl command array.
+systemd::__build_cmd() {
+  local -n ref=$1
+  shift
+  ref=("systemctl" "--no-ask-password" "--no-pager")
+  ref+=("$@")
+}
+
+# Internal: wrap command with timeout if necessary.
+systemd::__wrap_timeout() {
+  local -n ref=$1
+  if ! command -v timeout >/dev/null 2>&1; then
+    return
+  fi
+  if systemd::__should_timeout; then
+    local -a wrapped=("timeout" "${SYSTEMD_TIMEOUT_SEC}s")
+    wrapped+=("${ref[@]}")
+    ref=("${wrapped[@]}")
+  fi
+}
+
+# Internal: determine if we are in a container environment.
+systemd::__should_timeout() {
+  if [[ -f /run/systemd/container ]]; then
+    return 0
+  fi
+  if command -v systemd-detect-virt >/dev/null 2>&1; then
+    if systemd-detect-virt --quiet --container; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# Internal: normalize service names to include .service suffix.
+systemd::__normalize_unit() {
+  local unit="${1:-}"
+  if [[ -z "${unit}" ]]; then
+    return 1
+  fi
+  if [[ "${unit}" != *.service ]]; then
+    unit="${unit}.service"
+  fi
+  printf '%s\n' "${unit}"
+}
+# === End: scripts/lib/systemd.sh ===
+
+# === Begin: scripts/lib/http.sh ===
+#!/usr/bin/env bash
+#
+# HTTP helpers for Pulse shell scripts (downloads, API calls, GitHub queries).
+
+set -euo pipefail
+
+# Ensure common library is loaded when sourced directly.
+if ! declare -F common::log_info >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+fi
+
+declare -g HTTP_DEFAULT_RETRIES="${HTTP_DEFAULT_RETRIES:-3}"
+declare -g HTTP_DEFAULT_BACKOFF="${HTTP_DEFAULT_BACKOFF:-1 3 5}"
+
+# http::detect_download_tool
+# Emits the preferred download tool (curl/wget) or fails if neither exist.
+http::detect_download_tool() {
+  if command -v curl >/dev/null 2>&1; then
+    printf 'curl\n'
+    return 0
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    printf 'wget\n'
+    return 0
+  fi
+  return 1
+}
+
+# http::download --url URL --output PATH [--insecure] [--quiet] [--header "Name: value"]
+#               [--retries N] [--backoff "1 3 5"]
+# Downloads the specified URL to PATH using curl or wget.
+http::download() {
+  local url=""
+  local output=""
+  local insecure=false
+  local quiet=false
+  local retries="${HTTP_DEFAULT_RETRIES}"
+  local backoff="${HTTP_DEFAULT_BACKOFF}"
+  local -a headers=()
+
+  while (($#)); do
+    case "$1" in
+      --url)
+        url="$2"
+        shift 2
+        ;;
+      --output)
+        output="$2"
+        shift 2
+        ;;
+      --insecure)
+        insecure=true
+        shift
+        ;;
+      --quiet)
+        quiet=true
+        shift
+        ;;
+      --header)
+        headers+=("$2")
+        shift 2
+        ;;
+      --retries)
+        retries="$2"
+        shift 2
+        ;;
+      --backoff)
+        backoff="$2"
+        shift 2
+        ;;
+      *)
+        common::log_warn "Unknown flag for http::download: $1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "${url}" || -z "${output}" ]]; then
+    common::fail "http::download requires --url and --output"
+  fi
+
+  if common::is_dry_run; then
+    common::log_info "[dry-run] Download ${url} -> ${output}"
+    return 0
+  fi
+
+  local tool
+  if ! tool="$(http::detect_download_tool)"; then
+    common::fail "No download tool available (install curl or wget)"
+  fi
+
+  mkdir -p "$(dirname "${output}")"
+
+  local -a cmd
+  if [[ "${tool}" == "curl" ]]; then
+    cmd=(curl -fL --connect-timeout 15)
+    if [[ "${quiet}" == true ]]; then
+      cmd+=(-sS)
+    else
+      cmd+=(--progress-bar)
+    fi
+    if [[ "${insecure}" == true ]]; then
+      cmd+=(-k)
+    fi
+    local header
+    for header in "${headers[@]}"; do
+      cmd+=(-H "${header}")
+    done
+    cmd+=(-o "${output}" "${url}")
+  else
+    cmd=(wget --tries=3)
+    if [[ "${quiet}" == true ]]; then
+      cmd+=(-q)
+    else
+      cmd+=(--progress=bar:force)
+    fi
+    if [[ "${insecure}" == true ]]; then
+      cmd+=(--no-check-certificate)
+    fi
+    local header
+    for header in "${headers[@]}"; do
+      cmd+=(--header="${header}")
+    done
+    cmd+=(-O "${output}" "${url}")
+  fi
+
+  local -a run_args=(--label "download ${url}")
+  [[ -n "${retries}" ]] && run_args+=(--retries "${retries}")
+  [[ -n "${backoff}" ]] && run_args+=(--backoff "${backoff}")
+
+  common::run "${run_args[@]}" -- "${cmd[@]}"
+}
+
+# http::api_call --url URL [--method METHOD] [--token TOKEN] [--bearer TOKEN]
+#                [--body DATA] [--header "Name: value"] [--insecure]
+# Performs an API request and prints the response body.
+http::api_call() {
+  local url=""
+  local method="GET"
+  local token=""
+  local bearer=""
+  local body=""
+  local insecure=false
+  local -a headers=()
+
+  while (($#)); do
+    case "$1" in
+      --url)
+        url="$2"
+        shift 2
+        ;;
+      --method)
+        method="$2"
+        shift 2
+        ;;
+      --token)
+        token="$2"
+        shift 2
+        ;;
+      --bearer)
+        bearer="$2"
+        shift 2
+        ;;
+      --body)
+        body="$2"
+        shift 2
+        ;;
+      --header)
+        headers+=("$2")
+        shift 2
+        ;;
+      --insecure)
+        insecure=true
+        shift
+        ;;
+      *)
+        common::log_warn "Unknown flag for http::api_call: $1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "${url}" ]]; then
+    common::fail "http::api_call requires --url"
+  fi
+
+  if common::is_dry_run; then
+    common::log_info "[dry-run] API ${method} ${url}"
+    return 0
+  fi
+
+  local tool
+  if ! tool="$(http::detect_download_tool)"; then
+    common::fail "No HTTP client available (install curl or wget)"
+  fi
+
+  local -a cmd
+  if [[ "${tool}" == "curl" ]]; then
+    cmd=(curl -fsSL)
+    [[ "${insecure}" == true ]] && cmd+=(-k)
+    [[ -n "${method}" ]] && cmd+=(-X "${method}")
+    if [[ -n "${body}" ]]; then
+      cmd+=(-d "${body}")
+    fi
+    if [[ -n "${token}" ]]; then
+      headers+=("X-API-Token: ${token}")
+    fi
+    if [[ -n "${bearer}" ]]; then
+      headers+=("Authorization: Bearer ${bearer}")
+    fi
+    local header
+    for header in "${headers[@]}"; do
+      cmd+=(-H "${header}")
+    done
+    cmd+=("${url}")
+  else
+    cmd=(wget -qO-)
+    [[ "${insecure}" == true ]] && cmd+=(--no-check-certificate)
+    [[ -n "${method}" ]] && cmd+=(--method="${method}")
+    if [[ -n "${body}" ]]; then
+      cmd+=(--body-data="${body}")
+    fi
+    if [[ -n "${token}" ]]; then
+      cmd+=(--header="X-API-Token: ${token}")
+    fi
+    if [[ -n "${bearer}" ]]; then
+      cmd+=(--header="Authorization: Bearer ${bearer}")
+    fi
+    local header
+    for header in "${headers[@]}"; do
+      cmd+=(--header="${header}")
+    done
+    cmd+=("${url}")
+  fi
+
+  common::run_capture --label "api ${method} ${url}" -- "${cmd[@]}"
+}
+
+# http::get_github_latest_release owner/repo
+# Echoes the latest release tag for a GitHub repository.
+http::get_github_latest_release() {
+  local repo="${1:-}"
+  if [[ -z "${repo}" ]]; then
+    common::fail "http::get_github_latest_release requires owner/repo argument"
+  fi
+
+  local response
+  response="$(http::api_call --url "https://api.github.com/repos/${repo}/releases/latest" --header "Accept: application/vnd.github+json" 2>/dev/null || true)"
+  if [[ -z "${response}" ]]; then
+    return 1
+  fi
+
+  if [[ "${response}" =~ \"tag_name\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  if [[ "${response}" =~ \"name\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  common::log_warn "Unable to parse GitHub release tag for ${repo}"
+  return 1
+}
+
+# http::parse_bool value
+# Parses truthy/falsy strings and prints canonical true/false.
+http::parse_bool() {
+  local input="${1:-}"
+  local lowered="${input,,}"
+  case "${lowered}" in
+    1|true|yes|y|on)
+      printf 'true\n'
+      return 0
+      ;;
+    0|false|no|n|off|"")
+      printf 'false\n'
+      return 0
+      ;;
+  esac
+  return 1
+}
+# === End: scripts/lib/http.sh ===
+
+# === Begin: scripts/install-docker-agent-v2.sh ===
+#!/usr/bin/env bash
+#
+# Pulse Docker Agent Installer/Uninstaller (v2)
+# Refactored to leverage shared script libraries.
+
+set -euo pipefail
+
+LIB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${LIB_ROOT}/lib"
+if [[ -f "${LIB_DIR}/common.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "${LIB_DIR}/common.sh"
+  # shellcheck disable=SC1090
+  source "${LIB_DIR}/systemd.sh"
+  # shellcheck disable=SC1090
+  source "${LIB_DIR}/http.sh"
+fi
+
+common::init "$@"
+
+log_info() {
+    common::log_info "$1"
+}
+
+log_warn() {
+    common::log_warn "$1"
+}
+
+log_error() {
+    common::log_error "$1"
+}
+
+log_success() {
+    common::log_info "[ OK ] $1"
+}
 
 trim() {
     local value="$1"
@@ -26,22 +1022,6 @@ determine_agent_identifier() {
     printf '%s' "$agent_id"
 }
 
-log_info() {
-    printf '[INFO] %s\n' "$1"
-}
-
-log_success() {
-    printf '[ OK ] %s\n' "$1"
-}
-
-log_warn() {
-    printf '[WARN] %s\n' "$1" >&2
-}
-
-log_error() {
-    printf '[ERROR] %s\n' "$1" >&2
-}
-
 log_header() {
     printf '\n== %s ==\n' "$1"
 }
@@ -53,21 +1033,12 @@ quote_shell_arg() {
 }
 
 parse_bool() {
-    local value
-    value=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
-    case "$value" in
-        1|true|yes|y|on)
-            PARSED_BOOL="true"
-            return 0
-            ;;
-        0|false|no|n|off|"")
-            PARSED_BOOL="false"
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+    local result
+    if result="$(http::parse_bool "${1:-}")"; then
+        PARSED_BOOL="$result"
+        return 0
+    fi
+    return 1
 }
 
 parse_target_spec() {
@@ -116,6 +1087,43 @@ split_targets_from_env() {
         fi
     done
 }
+
+# Early runtime detection to hand off Podman installs to the container-aware script.
+ORIGINAL_ARGS=("$@")
+DETECTED_RUNTIME="${PULSE_RUNTIME:-}"
+if [[ -z "$DETECTED_RUNTIME" ]]; then
+    idx=0
+    total_args=${#ORIGINAL_ARGS[@]}
+    while [[ $idx -lt $total_args ]]; do
+        arg="${ORIGINAL_ARGS[$idx]}"
+        case "$arg" in
+            --runtime)
+                if (( idx + 1 < total_args )); then
+                    DETECTED_RUNTIME="${ORIGINAL_ARGS[$((idx + 1))]}"
+                fi
+                ((idx += 2))
+                continue
+                ;;
+            --runtime=*)
+                DETECTED_RUNTIME="${arg#--runtime=}"
+                ;;
+        esac
+        ((idx += 1))
+    done
+    unset total_args
+fi
+
+if [[ -n "$DETECTED_RUNTIME" ]]; then
+    runtime_lower=$(printf '%s' "$DETECTED_RUNTIME" | tr '[:upper:]' '[:lower:]')
+    if [[ "$runtime_lower" == "podman" ]]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [[ -f "${SCRIPT_DIR}/install-container-agent.sh" ]]; then
+            exec "${SCRIPT_DIR}/install-container-agent.sh" "${ORIGINAL_ARGS[@]}"
+        fi
+        common::log_error "Podman runtime requested but install-container-agent.sh not found."
+        exit 1
+    fi
+fi
 
 extract_targets_from_service() {
     local file="$1"
@@ -293,7 +1301,7 @@ select_agent_path_for_install() {
         if [[ -z "$candidate" || "$candidate" != /* ]]; then
             continue
         fi
-        if [[ -n "${seen[$candidate]}" ]]; then
+        if [[ -n "${seen[$candidate]:-}" ]]; then
             continue
         fi
         seen["$candidate"]=1
@@ -347,648 +1355,6 @@ resolve_agent_path_for_uninstall() {
     printf '%s' "$DEFAULT_AGENT_PATH"
 }
 
-ensure_service_user() {
-    SERVICE_USER_ACTUAL="$SERVICE_USER"
-    SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
-    SERVICE_USER_AVAILABLE="true"
-
-    if [[ "$SERVICE_USER" == "root" ]]; then
-        SERVICE_GROUP_ACTUAL="root"
-        SERVICE_USER_AVAILABLE="false"
-        return
-    fi
-
-    if id -u "$SERVICE_USER" >/dev/null 2>&1; then
-        if getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
-            SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
-        else
-            SERVICE_GROUP_ACTUAL="$(id -gn "$SERVICE_USER")"
-        fi
-        local existing_home
-        existing_home=$(get_user_home_path "$SERVICE_USER")
-        if [[ -n "$existing_home" ]]; then
-            SERVICE_HOME="$existing_home"
-        fi
-        if ! service_user_managed_by_installer; then
-            if [[ "$SERVICE_HOME" == "$SERVICE_HOME_DEFAULT" ]] || [[ "$SERVICE_HOME" == "$SERVICE_HOME_LEGACY" ]] || [[ "$SERVICE_HOME" == "/home/$SERVICE_USER" ]]; then
-                write_service_user_marker "$SERVICE_USER" "$SERVICE_HOME"
-            fi
-        fi
-        return
-    fi
-
-    if command -v useradd >/dev/null 2>&1; then
-        if useradd --system --home-dir "$SERVICE_HOME" --shell /usr/sbin/nologin "$SERVICE_USER" >/dev/null 2>&1; then
-            SERVICE_USER_CREATED="true"
-        fi
-    elif command -v adduser >/dev/null 2>&1; then
-        if adduser --system --home "$SERVICE_HOME" --shell /usr/sbin/nologin "$SERVICE_USER" >/dev/null 2>&1; then
-            SERVICE_USER_CREATED="true"
-        fi
-    else
-        log_warn "Unable to create dedicated service user; running agent as root"
-        SERVICE_USER_ACTUAL="root"
-        SERVICE_GROUP_ACTUAL="root"
-        SERVICE_USER_AVAILABLE="false"
-        return
-    fi
-
-    if id -u "$SERVICE_USER" >/dev/null 2>&1; then
-        SERVICE_USER_ACTUAL="$SERVICE_USER"
-        if getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
-            SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
-        else
-            SERVICE_GROUP_ACTUAL="$(id -gn "$SERVICE_USER")"
-        fi
-        local created_home
-        created_home=$(get_user_home_path "$SERVICE_USER")
-        if [[ -n "$created_home" ]]; then
-            SERVICE_HOME="$created_home"
-        fi
-        if [[ "$SERVICE_USER_CREATED" == "true" ]]; then
-            log_success "Created service user: $SERVICE_USER"
-            write_service_user_marker "$SERVICE_USER_ACTUAL" "$SERVICE_HOME"
-        fi
-        return
-    fi
-
-    log_warn "Failed to create service user; falling back to root"
-    SERVICE_USER_ACTUAL="root"
-    SERVICE_GROUP_ACTUAL="root"
-    SERVICE_USER_AVAILABLE="false"
-}
-
-ensure_service_home() {
-    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
-        return
-    fi
-
-    if [[ -z "$SERVICE_HOME" ]]; then
-        return
-    fi
-
-    if [[ ! -d "$SERVICE_HOME" ]]; then
-        mkdir -p "$SERVICE_HOME"
-    fi
-
-    chown "$SERVICE_USER_ACTUAL":"$SERVICE_GROUP_ACTUAL" "$SERVICE_HOME" >/dev/null 2>&1 || true
-    chmod 750 "$SERVICE_HOME" >/dev/null 2>&1 || true
-}
-
-get_user_home_path() {
-    local user="$1"
-    if [[ -z "$user" ]]; then
-        return
-    fi
-
-    local entry
-    entry=$(getent passwd "$user" 2>/dev/null || true)
-    if [[ -z "$entry" ]]; then
-        return
-    fi
-
-    local home_path
-    home_path=$(printf '%s\n' "$entry" | awk -F: '{print $6}')
-    if [[ -n "$home_path" ]]; then
-        printf '%s\n' "$home_path"
-    fi
-}
-
-write_service_user_marker() {
-    local user="$1"
-    local home="$2"
-    local dir
-    dir=$(dirname "$SERVICE_USER_MARKER")
-    mkdir -p "$dir"
-
-    local tmp
-    if command -v mktemp >/dev/null 2>&1; then
-        tmp=$(mktemp "${SERVICE_USER_MARKER}.XXXXXX")
-    else
-        tmp="${SERVICE_USER_MARKER}.tmp.$$"
-    fi
-    {
-        printf 'user=%s\n' "$user"
-        if [[ -n "$home" ]]; then
-            printf 'home=%s\n' "$home"
-        fi
-    } > "$tmp"
-    chmod 600 "$tmp" >/dev/null 2>&1 || true
-    mv "$tmp" "$SERVICE_USER_MARKER"
-}
-
-service_user_managed_by_installer() {
-    if [[ ! -f "$SERVICE_USER_MARKER" ]]; then
-        return 1
-    fi
-
-    local recorded_user
-    recorded_user=$(grep -m1 '^user=' "$SERVICE_USER_MARKER" 2>/dev/null | cut -d= -f2-)
-    if [[ "$recorded_user" == "$SERVICE_USER" ]]; then
-        return 0
-    fi
-
-    return 1
-}
-
-remove_service_user_if_managed() {
-    if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
-        rm -f "$SERVICE_USER_MARKER" >/dev/null 2>&1 || true
-        return
-    fi
-
-    if ! service_user_managed_by_installer; then
-        log_info "Preserving existing service user $SERVICE_USER (not created by installer)"
-        return
-    fi
-
-    if command -v pgrep >/dev/null 2>&1; then
-        if pgrep -u "$SERVICE_USER" >/dev/null 2>&1; then
-            log_warn "Service user $SERVICE_USER still owns running processes; skipping removal"
-            return
-        fi
-    fi
-
-    if command -v userdel >/dev/null 2>&1; then
-        if userdel -r "$SERVICE_USER" >/dev/null 2>&1; then
-            log_success "Removed service user: $SERVICE_USER"
-            rm -f "$SERVICE_USER_MARKER" >/dev/null 2>&1 || true
-            return
-        fi
-    elif command -v deluser >/dev/null 2>&1; then
-        if deluser --remove-home "$SERVICE_USER" >/dev/null 2>&1; then
-            log_success "Removed service user: $SERVICE_USER"
-            rm -f "$SERVICE_USER_MARKER" >/dev/null 2>&1 || true
-            return
-        fi
-    fi
-
-    log_warn "Failed to remove service user $SERVICE_USER; remove manually if desired"
-}
-
-ensure_snap_home_compatibility() {
-    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
-        return
-    fi
-
-    detect_snap_docker
-    if [[ "$SNAP_DOCKER_DETECTED" != "true" ]]; then
-        return
-    fi
-
-    local current_home
-    current_home=$(get_user_home_path "$SERVICE_USER_ACTUAL")
-    if [[ -z "$current_home" ]]; then
-        return
-    fi
-
-    if [[ "$current_home" == /home/* ]]; then
-        SERVICE_HOME="$current_home"
-        return
-    fi
-
-    local desired_home="/home/$SERVICE_USER_ACTUAL"
-    if ! command -v usermod >/dev/null 2>&1; then
-        log_warn "Snap Docker detected but usermod is unavailable to relocate $SERVICE_USER_ACTUAL."
-        log_warn "Refer to https://snapcraft.io/docs/home-outside-home to allow non-/home directories."
-        return
-    fi
-
-    log_info "Snap Docker detected; relocating $SERVICE_USER_ACTUAL home to $desired_home"
-    if usermod -d "$desired_home" -m "$SERVICE_USER_ACTUAL" >/dev/null 2>&1; then
-        SERVICE_HOME="$desired_home"
-        log_success "Moved $SERVICE_USER_ACTUAL home to $desired_home for Snap compatibility"
-        return
-    fi
-
-    log_warn "Failed to relocate $SERVICE_USER_ACTUAL home for Snap Docker."
-    log_warn "See https://snapcraft.io/docs/home-outside-home for manual remediation."
-}
-
-detect_snap_docker() {
-    SNAP_DOCKER_DETECTED="false"
-
-    local docker_cmd docker_resolved
-    docker_cmd="$(command -v docker 2>/dev/null || true)"
-    if [[ -n "$docker_cmd" ]]; then
-        if [[ "$docker_cmd" == /snap/* ]] || [[ "$docker_cmd" == /var/lib/snapd/snap/* ]]; then
-            SNAP_DOCKER_DETECTED="true"
-        fi
-
-        docker_resolved=$(readlink -f "$docker_cmd" 2>/dev/null || echo "")
-        if [[ "$docker_resolved" == /snap/* ]] || [[ "$docker_resolved" == /var/lib/snapd/snap/* ]]; then
-            SNAP_DOCKER_DETECTED="true"
-        fi
-    fi
-
-    if [[ "$SNAP_DOCKER_DETECTED" != "true" ]] && command -v snap >/dev/null 2>&1; then
-        if snap list docker >/dev/null 2>&1; then
-            SNAP_DOCKER_DETECTED="true"
-        fi
-    fi
-}
-
-ensure_docker_group_membership() {
-    SYSTEMD_SUPPLEMENTARY_GROUPS_LINE=""
-    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
-        return
-    fi
-
-    # Detect Snap Docker installation
-    detect_snap_docker
-
-    # If docker group doesn't exist and Snap Docker is detected, create it
-    if ! getent group docker >/dev/null 2>&1; then
-        if [[ "$SNAP_DOCKER_DETECTED" == "true" ]]; then
-            log_info "Snap-installed Docker detected without docker group; creating system docker group"
-            if command -v addgroup >/dev/null 2>&1; then
-                if addgroup --system docker >/dev/null 2>&1; then
-                    log_success "Created docker system group for Snap Docker"
-                    SNAP_DOCKER_GROUP_CREATED="true"
-                else
-                    log_warn "Failed to create docker group; socket access may fail"
-                fi
-            elif command -v groupadd >/dev/null 2>&1; then
-                if groupadd -r docker >/dev/null 2>&1; then
-                    log_success "Created docker system group for Snap Docker"
-                    SNAP_DOCKER_GROUP_CREATED="true"
-                else
-                    log_warn "Failed to create docker group; socket access may fail"
-                fi
-            else
-                log_warn "Unable to create docker group; ensure $SERVICE_USER_ACTUAL can access /var/run/docker.sock"
-            fi
-        else
-            log_warn "docker group not found; ensure the agent user can access /var/run/docker.sock"
-        fi
-    fi
-
-    if getent group docker >/dev/null 2>&1; then
-        DOCKER_GROUP_PRESENT="true"
-        if ! id -nG "$SERVICE_USER_ACTUAL" 2>/dev/null | tr ' ' '\n' | grep -Fxq "docker"; then
-            if command -v usermod >/dev/null 2>&1; then
-                usermod -a -G docker "$SERVICE_USER_ACTUAL" >/dev/null 2>&1 || log_warn "Failed to add $SERVICE_USER_ACTUAL to docker group; adjust socket permissions manually."
-            elif command -v adduser >/dev/null 2>&1; then
-                adduser "$SERVICE_USER_ACTUAL" docker >/dev/null 2>&1 || log_warn "Failed to add $SERVICE_USER_ACTUAL to docker group; adjust socket permissions manually."
-            else
-                log_warn "Unable to manage docker group membership; ensure $SERVICE_USER_ACTUAL can access /var/run/docker.sock"
-            fi
-
-            # Verify group membership was actually applied
-            if ! id -nG "$SERVICE_USER_ACTUAL" 2>/dev/null | tr ' ' '\n' | grep -Fxq "docker"; then
-                log_warn "Failed to verify docker group membership for $SERVICE_USER_ACTUAL"
-                log_warn "Group changes may not have taken effect; socket access validation will catch this"
-            fi
-        fi
-
-        if id -nG "$SERVICE_USER_ACTUAL" 2>/dev/null | tr ' ' '\n' | grep -Fxq "docker"; then
-            SYSTEMD_SUPPLEMENTARY_GROUPS_LINE="SupplementaryGroups=docker"
-            log_success "Ensured docker group access for $SERVICE_USER_ACTUAL"
-
-            # If we created the group for Snap Docker, restart the snap to refresh socket ACLs
-            if [[ "$SNAP_DOCKER_DETECTED" == "true" && "$SNAP_DOCKER_GROUP_CREATED" == "true" ]]; then
-                if command -v snap >/dev/null 2>&1; then
-                    log_info "Restarting Snap Docker to apply group permissions"
-                    if snap restart docker >/dev/null 2>&1; then
-                        log_success "Snap Docker restarted successfully"
-                    else
-                        log_warn "Failed to restart Snap Docker; socket permissions may not apply until manual restart"
-                    fi
-                fi
-            fi
-        else
-            log_warn "Service user $SERVICE_USER_ACTUAL is not in docker group; ensure the Docker socket ACL grants access."
-        fi
-    else
-        log_warn "docker group not found; ensure the agent user can access /var/run/docker.sock"
-    fi
-}
-
-write_env_file() {
-    local target="$ENV_FILE"
-    local dir
-    dir=$(dirname "$target")
-    mkdir -p "$dir"
-
-    local tmp
-    tmp=$(mktemp "${target}.XXXXXX")
-    chmod 600 "$tmp"
-
-    {
-        if [[ -n "$PRIMARY_URL" ]]; then
-            printf 'PULSE_URL=%q\n' "$PRIMARY_URL"
-        fi
-        if [[ -n "$PRIMARY_TOKEN" ]]; then
-            printf 'PULSE_TOKEN=%q\n' "$PRIMARY_TOKEN"
-        fi
-        if [[ -n "$JOINED_TARGETS" ]]; then
-            printf 'PULSE_TARGETS=%q\n' "$JOINED_TARGETS"
-        fi
-        if [[ -n "$PRIMARY_INSECURE" ]]; then
-            printf 'PULSE_INSECURE_SKIP_VERIFY=%q\n' "$PRIMARY_INSECURE"
-        fi
-        if [[ -n "$INTERVAL" ]]; then
-            printf 'PULSE_INTERVAL=%q\n' "$INTERVAL"
-        fi
-        if [[ -n "$NO_AUTO_UPDATE_FLAG" ]]; then
-            printf 'PULSE_NO_AUTO_UPDATE=true\n'
-        fi
-    } > "$tmp"
-
-    chown root:root "$tmp"
-    chmod 600 "$tmp"
-    mv "$tmp" "$target"
-    log_success "Wrote environment file: $target"
-}
-
-detect_docker_socket_paths() {
-    DOCKER_SOCKET_PATHS="/var/run/docker.sock"
-
-    # If /var/run/docker.sock is a symlink, include the real path too
-    if [[ -L /var/run/docker.sock ]]; then
-        local target
-        target=$(readlink -f /var/run/docker.sock 2>/dev/null || echo "")
-        if [[ -n "$target" && "$target" != "/var/run/docker.sock" ]]; then
-            DOCKER_SOCKET_PATHS="/var/run/docker.sock $target"
-        fi
-    fi
-}
-
-configure_polkit_rule() {
-    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
-        return
-    fi
-
-    local polkit_dir="/etc/polkit-1/rules.d"
-    if [[ ! -d "$polkit_dir" ]]; then
-        log_warn "polkit not detected; remote stop commands may require manual sudo access"
-        return
-    fi
-
-    local rule_path="${polkit_dir}/90-pulse-docker-agent.rules"
-    local tmp
-    tmp=$(mktemp "${rule_path}.XXXXXX")
-    cat > "$tmp" <<EOF
-// Pulse Docker agent installer managed rule
-polkit.addRule(function(action, subject) {
-  if ((action.id == "org.freedesktop.systemd1.manage-units" ||
-       action.id == "org.freedesktop.systemd1.manage-unit-files") &&
-      subject.user == "$SERVICE_USER_ACTUAL") {
-    return polkit.Result.YES;
-  }
-});
-EOF
-
-    chown root:root "$tmp" 2>/dev/null || true
-    chmod 0644 "$tmp"
-
-    if [[ -f "$rule_path" ]]; then
-        if command -v cmp >/dev/null 2>&1 && cmp -s "$tmp" "$rule_path" 2>/dev/null; then
-            rm -f "$tmp"
-            log_info "polkit rule already present for $SERVICE_USER_ACTUAL"
-            return
-        fi
-    fi
-
-    mv "$tmp" "$rule_path"
-    log_success "Configured polkit rule allowing $SERVICE_USER_ACTUAL to manage pulse-docker-agent service"
-}
-
-validate_docker_socket_access() {
-    if [[ "$SERVICE_USER_ACTUAL" == "root" ]]; then
-        return 0
-    fi
-
-    log_header 'Validating Docker socket access'
-
-    # Source the env file to test with the exact configuration the service will use
-    if [[ -f "$ENV_FILE" ]]; then
-        set -a
-        source "$ENV_FILE" 2>/dev/null || true
-        set +a
-    fi
-
-    # If we just restarted Snap Docker, give it a moment to come back up
-    if [[ "$SNAP_DOCKER_DETECTED" == "true" && "$SNAP_DOCKER_GROUP_CREATED" == "true" ]]; then
-        log_info "Waiting for Snap Docker to restart"
-        sleep 3
-    fi
-
-    # Build env prefix for sudo (portable across sudo variants)
-    local env_prefix=""
-    [[ -n "${DOCKER_HOST:-}" ]] && env_prefix+="DOCKER_HOST='$DOCKER_HOST' "
-    [[ -n "${PULSE_URL:-}" ]] && env_prefix+="PULSE_URL='$PULSE_URL' "
-    [[ -n "${PULSE_TOKEN:-}" ]] && env_prefix+="PULSE_TOKEN='$PULSE_TOKEN' "
-    [[ -n "${PULSE_TARGETS:-}" ]] && env_prefix+="PULSE_TARGETS='$PULSE_TARGETS' "
-
-    # Test socket access
-    local test_output
-    local test_exitcode
-    local had_errexit=false
-    if [[ $- == *e* ]]; then
-        had_errexit=true
-        set +e
-    fi
-    test_output=$(eval "env $env_prefix sudo -u $SERVICE_USER_ACTUAL docker version --format '{{.Server.Version}}'" 2>&1)
-    test_exitcode=$?
-    if [[ "$had_errexit" == "true" ]]; then
-        set -e
-    fi
-
-    if [[ $test_exitcode -eq 0 ]]; then
-        log_success "Docker socket access confirmed for $SERVICE_USER_ACTUAL"
-        return 0
-    fi
-
-    # Validation failed
-    log_warn "Docker socket access test failed for $SERVICE_USER_ACTUAL"
-    echo "" >&2
-    echo "Validation output:" >&2
-    echo "$test_output" >&2
-    echo "" >&2
-
-    if [[ "$SNAP_DOCKER_DETECTED" == "true" ]]; then
-        echo "Snap-installed Docker detected. Common solutions:" >&2
-        echo "  1. Ensure the docker group exists: getent group docker" >&2
-        echo "  2. Ensure $SERVICE_USER_ACTUAL is in the docker group: id -nG $SERVICE_USER_ACTUAL" >&2
-        echo "  3. Check if Snap Docker is running: snap services docker.dockerd" >&2
-        echo "  4. Confirm the $SERVICE_USER_ACTUAL home lives under /home (snapd blocks other paths)" >&2
-        echo "     See https://snapcraft.io/docs/home-outside-home for alternate locations" >&2
-        echo "  5. Restart Snap Docker to refresh permissions: snap restart docker" >&2
-    else
-        echo "Common solutions:" >&2
-        echo "  1. Ensure $SERVICE_USER_ACTUAL is in the docker group: id -nG $SERVICE_USER_ACTUAL" >&2
-        echo "  2. Check Docker socket permissions: ls -la /var/run/docker.sock" >&2
-        echo "  3. Verify Docker is running: docker ps" >&2
-    fi
-    echo "" >&2
-
-    read -p "Continue with installation anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Installation aborted. Fix socket access and re-run the installer." >&2
-        exit 1
-    fi
-
-    log_warn "Proceeding despite failed validation; service may not start correctly"
-    return 0
-}
-
-remove_polkit_rule() {
-    local polkit_dir="/etc/polkit-1/rules.d"
-    local rule_path="${polkit_dir}/90-pulse-docker-agent.rules"
-    if [[ -f "$rule_path" ]] && grep -q 'Pulse Docker agent installer managed rule' "$rule_path" 2>/dev/null; then
-        rm -f "$rule_path"
-        log_success "Removed polkit rule: $rule_path"
-    fi
-}
-
-# Auto-detect container runtime if not explicitly specified
-detect_container_runtime() {
-    local has_podman=false
-    local has_docker=false
-
-    # Check if Podman is available and accessible
-    if command -v podman &>/dev/null && podman info &>/dev/null 2>&1; then
-        has_podman=true
-    fi
-
-    # Check if Docker is available and accessible
-    if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
-        has_docker=true
-    fi
-
-    # If both are available, ask the user
-    if [[ "$has_podman" == "true" && "$has_docker" == "true" ]]; then
-        echo "" >&2
-        echo "Both Docker and Podman are detected on this system." >&2
-        echo "Which container runtime would you like to monitor?" >&2
-        echo "" >&2
-        echo "  1) Docker" >&2
-        echo "  2) Podman" >&2
-        echo "" >&2
-
-        # Read user choice
-        while true; do
-            printf "Enter choice [1-2]: " >&2
-            read -r choice
-            case "$choice" in
-                1|docker|Docker)
-                    printf 'docker'
-                    return 0
-                    ;;
-                2|podman|Podman)
-                    printf 'podman'
-                    return 0
-                    ;;
-                *)
-                    echo "Invalid choice. Please enter 1 or 2." >&2
-                    ;;
-            esac
-        done
-    fi
-
-    # Only one is available - use it automatically
-    if [[ "$has_podman" == "true" ]]; then
-        printf 'podman'
-        return 0
-    fi
-
-    if [[ "$has_docker" == "true" ]]; then
-        printf 'docker'
-        return 0
-    fi
-
-    # Default to docker if nothing detected
-    printf 'docker'
-}
-
-# Early runtime detection so we can chain to the container-aware installer.
-ORIGINAL_ARGS=("$@")
-
-# Check for explicit --runtime flag
-DETECTED_RUNTIME="${PULSE_RUNTIME:-}"
-if [[ -z "$DETECTED_RUNTIME" ]]; then
-    idx=0
-    total_args=${#ORIGINAL_ARGS[@]}
-    while [[ $idx -lt $total_args ]]; do
-        arg="${ORIGINAL_ARGS[$idx]}"
-        case "$arg" in
-            --runtime)
-                if (( idx + 1 < total_args )); then
-                    DETECTED_RUNTIME="${ORIGINAL_ARGS[$((idx + 1))]}"
-                fi
-                ((idx += 2))
-                continue
-                ;;
-            --runtime=*)
-                DETECTED_RUNTIME="${arg#--runtime=}"
-                ;;
-        esac
-        ((idx += 1))
-    done
-    unset total_args
-fi
-
-# If still not set, auto-detect
-if [[ -z "$DETECTED_RUNTIME" ]]; then
-    DETECTED_RUNTIME="$(detect_container_runtime)"
-fi
-
-if [[ -n "$DETECTED_RUNTIME" ]]; then
-    runtime_lower=$(printf '%s' "$DETECTED_RUNTIME" | tr '[:upper:]' '[:lower:]')
-    if [[ "$runtime_lower" == "podman" ]]; then
-        # Try to find the script locally first (for development)
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        if [[ -f "${SCRIPT_DIR}/install-container-agent.sh" ]]; then
-            exec "${SCRIPT_DIR}/install-container-agent.sh" "${ORIGINAL_ARGS[@]}"
-        fi
-
-        # Extract Pulse URL from arguments to download the container agent script
-        PULSE_URL=""
-        idx=0
-        total_args=${#ORIGINAL_ARGS[@]}
-        while [[ $idx -lt $total_args ]]; do
-            arg="${ORIGINAL_ARGS[$idx]}"
-            case "$arg" in
-                --url)
-                    if (( idx + 1 < total_args )); then
-                        PULSE_URL="${ORIGINAL_ARGS[$((idx + 1))]}"
-                        break
-                    fi
-                    ;;
-                --url=*)
-                    PULSE_URL="${arg#--url=}"
-                    break
-                    ;;
-            esac
-            ((idx += 1))
-        done
-
-        if [[ -n "$PULSE_URL" ]]; then
-            log_info "Detected Podman runtime, downloading container agent installer..."
-            CONTAINER_SCRIPT="/tmp/pulse-install-container-agent-$$.sh"
-            if command -v curl &>/dev/null; then
-                if curl -fsSL "${PULSE_URL%/}/install-container-agent.sh" -o "$CONTAINER_SCRIPT" 2>/dev/null; then
-                    chmod +x "$CONTAINER_SCRIPT"
-                    exec bash "$CONTAINER_SCRIPT" "${ORIGINAL_ARGS[@]}"
-                fi
-            elif command -v wget &>/dev/null; then
-                if wget -q -O "$CONTAINER_SCRIPT" "${PULSE_URL%/}/install-container-agent.sh" 2>/dev/null; then
-                    chmod +x "$CONTAINER_SCRIPT"
-                    exec bash "$CONTAINER_SCRIPT" "${ORIGINAL_ARGS[@]}"
-                fi
-            fi
-            echo "[ERROR] Failed to download install-container-agent.sh from $PULSE_URL" >&2
-            exit 1
-        fi
-
-        echo "[ERROR] Podman detected but no --url provided to download container agent installer." >&2
-        echo "[INFO] Please provide --url parameter or use --runtime docker to force Docker mode." >&2
-        exit 1
-    fi
-fi
-
 # Pulse Docker Agent Installer/Uninstaller
 # Install (single target):
 #   curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
@@ -1002,7 +1368,7 @@ fi
 #     rm -f /tmp/pulse-install-docker-agent.sh
 # Uninstall:
 #   curl -fSL http://pulse.example.com/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \
-#     sudo bash /tmp/pulse-install-docker-agent.sh --uninstall [--purge] && \
+#     sudo bash /tmp/pulse-install-docker-agent.sh --uninstall && \
 #     rm -f /tmp/pulse-install-docker-agent.sh
 
 PULSE_URL=""
@@ -1022,12 +1388,10 @@ DEFAULT_AGENT_PATH_WRITABLE="unknown"
 EXISTING_AGENT_PATH=""
 AGENT_PATH=""
 SERVICE_PATH="/etc/systemd/system/pulse-docker-agent.service"
-ENV_FILE="/etc/pulse/pulse-docker-agent.env"
 UNRAID_STARTUP="/boot/config/go.d/pulse-docker-agent.sh"
 LOG_PATH="/var/log/pulse-docker-agent.log"
 INTERVAL="30s"
 UNINSTALL=false
-PURGE=false
 TOKEN="${PULSE_TOKEN:-}"
 DOWNLOAD_ARCH=""
 TARGET_SPECS=()
@@ -1038,21 +1402,6 @@ PRIMARY_TOKEN=""
 PRIMARY_INSECURE="false"
 JOINED_TARGETS=""
 ORIGINAL_ARGS=("$@")
-SERVICE_USER="pulse-docker"
-SERVICE_GROUP="$SERVICE_USER"
-SERVICE_HOME_DEFAULT="/home/pulse-docker-agent"
-SERVICE_HOME_LEGACY="/var/lib/pulse-docker-agent"
-SERVICE_HOME="$SERVICE_HOME_DEFAULT"
-SERVICE_USER_ACTUAL="$SERVICE_USER"
-SERVICE_GROUP_ACTUAL="$SERVICE_GROUP"
-SERVICE_USER_CREATED="false"
-SERVICE_USER_AVAILABLE="true"
-DOCKER_GROUP_PRESENT="false"
-SYSTEMD_SUPPLEMENTARY_GROUPS_LINE=""
-SNAP_DOCKER_DETECTED="false"
-SNAP_DOCKER_GROUP_CREATED="false"
-DOCKER_SOCKET_PATHS="/var/run/docker.sock"
-SERVICE_USER_MARKER="/etc/pulse/.pulse-docker-agent.user"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -1082,244 +1431,27 @@ while [[ $# -gt 0 ]]; do
       OVERRIDE_SPECIFIED="true"
       shift 2
       ;;
-    --purge)
-      PURGE=true
+    --dry-run)
+      common::set_dry_run true
       shift
       ;;
     *)
       echo "Unknown option: $1"
       echo "Usage: $0 --url <Pulse URL> --token <API token> [--interval 30s]"
       echo "       $0 --agent-path /custom/path/pulse-docker-agent"
-      echo "       $0 --uninstall [--purge]"
+      echo "       $0 --uninstall"
       exit 1
       ;;
   esac
 done
 
-# Validate purge usage
-if [[ "$PURGE" = true && "$UNINSTALL" != true ]]; then
-    log_warn "--purge is only valid together with --uninstall; ignoring"
-    PURGE=false
-fi
-
 # Normalize PULSE_URL - strip trailing slashes to prevent double-slash issues
 PULSE_URL="${PULSE_URL%/}"
 
-ORIGINAL_ARGS_STRING=""
-if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
-    __quoted_original_args=()
-    for __arg in "${ORIGINAL_ARGS[@]}"; do
-        __quoted_original_args+=("$(quote_shell_arg "$__arg")")
-    done
-    ORIGINAL_ARGS_STRING="${__quoted_original_args[*]}"
-fi
-unset __quoted_original_args __arg
-
-ORIGINAL_ARGS_ESCAPED=""
-if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
-    __command_args=()
-    for __arg in "${ORIGINAL_ARGS[@]}"; do
-        __command_args+=("$(printf '%q' "$__arg")")
-    done
-    ORIGINAL_ARGS_ESCAPED="${__command_args[*]}"
-fi
-unset __command_args __arg
-
-INSTALLER_URL_HINT="${PULSE_INSTALLER_URL_HINT:-}"
-if [[ -z "$INSTALLER_URL_HINT" && -n "$PULSE_URL" ]]; then
-    INSTALLER_URL_HINT="${PULSE_URL%/}/install-docker-agent.sh"
-fi
-if [[ -z "$INSTALLER_URL_HINT" && ${#TARGET_SPECS[@]} -gt 0 ]]; then
-    if parse_target_spec "${TARGET_SPECS[0]}" >/dev/null 2>&1; then
-        if [[ -n "$PARSED_TARGET_URL" ]]; then
-            INSTALLER_URL_HINT="${PARSED_TARGET_URL%/}/install-docker-agent.sh"
-        fi
-    fi
-fi
-
-if [[ -z "$INSTALLER_URL_HINT" && -f "$SERVICE_PATH" ]]; then
-    mapfile -t __service_targets_for_hint < <(extract_targets_from_service "$SERVICE_PATH")
-    if [[ ${#__service_targets_for_hint[@]} -gt 0 ]]; then
-        if parse_target_spec "${__service_targets_for_hint[0]}" >/dev/null 2>&1; then
-            if [[ -n "$PARSED_TARGET_URL" ]]; then
-                INSTALLER_URL_HINT="${PARSED_TARGET_URL%/}/install-docker-agent.sh"
-            fi
-        fi
-    fi
-    unset __service_targets_for_hint
-fi
-
-if [[ -z "$INSTALLER_URL_HINT" && -n "${PPID:-}" ]]; then
-    PARENT_CMD=$(ps -o command= -p "$PPID" 2>/dev/null || true)
-    if [[ -n "$PARENT_CMD" ]]; then
-        if [[ "$PARENT_CMD" =~ (https?://[^[:space:]\"\'\|]+/install-docker-agent\.sh) ]]; then
-            INSTALLER_URL_HINT="${BASH_REMATCH[1]}"
-        elif [[ "$PARENT_CMD" =~ (https?://[^[:space:]\|]+install-docker-agent\.sh) ]]; then
-            INSTALLER_URL_HINT="${BASH_REMATCH[1]}"
-        fi
-        if [[ -n "$INSTALLER_URL_HINT" ]]; then
-            INSTALLER_URL_HINT="${INSTALLER_URL_HINT#\"}"
-            INSTALLER_URL_HINT="${INSTALLER_URL_HINT#\'}"
-            INSTALLER_URL_HINT="${INSTALLER_URL_HINT%\"}"
-            INSTALLER_URL_HINT="${INSTALLER_URL_HINT%\'}"
-        fi
-    fi
-    unset PARENT_CMD
-fi
-
-PIPELINE_COMMAND=""
-PIPELINE_COMMAND_SUDO_C=""
-PIPELINE_COMMAND_INNER=""
-if [[ -n "$INSTALLER_URL_HINT" ]]; then
-    INSTALLER_URL_QUOTED=$(quote_shell_arg "$INSTALLER_URL_HINT")
-    INSTALLER_URL_ESCAPED=$(printf '%q' "$INSTALLER_URL_HINT")
-    TMP_INSTALLER_PATH="/tmp/pulse-install-docker-agent.sh"
-    TMP_INSTALLER_QUOTED=$(quote_shell_arg "$TMP_INSTALLER_PATH")
-    PIPELINE_PREFIX="curl -fSL ${INSTALLER_URL_QUOTED} -o ${TMP_INSTALLER_QUOTED} && sudo bash ${TMP_INSTALLER_QUOTED}"
-    PIPELINE_INNER_PREFIX="curl -fSL ${INSTALLER_URL_ESCAPED} -o ${TMP_INSTALLER_QUOTED} && bash ${TMP_INSTALLER_QUOTED}"
-    PIPELINE_SUFFIX=" && rm -f ${TMP_INSTALLER_QUOTED}"
-    PIPELINE_COMMAND="${PIPELINE_PREFIX}"
-    PIPELINE_COMMAND_INNER="${PIPELINE_INNER_PREFIX}"
-    if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
-        PIPELINE_COMMAND+=" -- ${ORIGINAL_ARGS_STRING}"
-        PIPELINE_COMMAND_INNER+=" -- ${ORIGINAL_ARGS_ESCAPED}"
-    fi
-    PIPELINE_COMMAND+="${PIPELINE_SUFFIX}"
-    PIPELINE_COMMAND_INNER+="${PIPELINE_SUFFIX}"
-    PIPELINE_COMMAND_SUDO_C="sudo bash -c $(quote_shell_arg "$PIPELINE_COMMAND_INNER")"
-    unset INSTALLER_URL_ESCAPED INSTALLER_URL_QUOTED TMP_INSTALLER_PATH TMP_INSTALLER_QUOTED PIPELINE_PREFIX PIPELINE_INNER_PREFIX PIPELINE_SUFFIX
-fi
-
-SCRIPT_SOURCE_HINT=""
-if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
-    __script_source_candidate="${BASH_SOURCE[0]}"
-    if [[ -n "$__script_source_candidate" && -f "$__script_source_candidate" ]]; then
-        if command -v realpath >/dev/null 2>&1; then
-            __resolved_source=$(realpath "$__script_source_candidate" 2>/dev/null || true)
-        elif command -v readlink >/dev/null 2>&1; then
-            __resolved_source=$(readlink -f "$__script_source_candidate" 2>/dev/null || true)
-        else
-            __resolved_source=""
-        fi
-        if [[ -z "$__resolved_source" ]]; then
-            if [[ "$__script_source_candidate" == /* ]]; then
-                __resolved_source="$__script_source_candidate"
-            else
-                __resolved_source="$(pwd)/$__script_source_candidate"
-            fi
-        fi
-        SCRIPT_SOURCE_HINT="$__resolved_source"
-    fi
-fi
-unset __script_source_candidate __resolved_source
-
-LOCAL_COMMAND=""
-if [[ -n "$SCRIPT_SOURCE_HINT" ]]; then
-    LOCAL_COMMAND="sudo bash $(quote_shell_arg "$SCRIPT_SOURCE_HINT")"
-    if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
-        LOCAL_COMMAND+=" ${ORIGINAL_ARGS_STRING}"
-    fi
-fi
-
-# Check if running as root
-if [[ $EUID -ne 0 ]]; then
-   AUTO_SUDO_ATTEMPTED="false"
-   AUTO_SUDO_EXIT_CODE=0
-   if [[ -z "${PULSE_AUTO_SUDO_ATTEMPTED:-}" ]]; then
-       PULSE_AUTO_SUDO_ATTEMPTED=1
-       export PULSE_AUTO_SUDO_ATTEMPTED
-       if command -v sudo >/dev/null 2>&1; then
-           if [[ -n "$SCRIPT_SOURCE_HINT" ]]; then
-               AUTO_SUDO_ATTEMPTED="true"
-               echo "Requesting sudo to continue installation..."
-               if sudo bash "$SCRIPT_SOURCE_HINT" "${ORIGINAL_ARGS[@]}"; then
-                   exit 0
-               else
-                   AUTO_SUDO_EXIT_CODE=$?
-               fi
-           elif [[ -n "$PIPELINE_COMMAND_INNER" ]]; then
-               AUTO_SUDO_ATTEMPTED="true"
-               echo "Requesting sudo to continue installation..."
-               if sudo bash -c "$PIPELINE_COMMAND_INNER"; then
-                   exit 0
-               else
-                   AUTO_SUDO_EXIT_CODE=$?
-               fi
-           fi
-       fi
-   fi
-
-   if [[ "$AUTO_SUDO_ATTEMPTED" == "true" ]]; then
-       echo "WARN: Automatic sudo elevation failed (exit code ${AUTO_SUDO_EXIT_CODE})."
-       echo ""
-       if [[ -n "$PIPELINE_COMMAND" ]]; then
-           echo "Retry manually with sudo:"
-           echo "  $PIPELINE_COMMAND"
-           if [[ -n "$PIPELINE_COMMAND_SUDO_C" ]]; then
-               echo ""
-           fi
-       fi
-       if [[ -n "$PIPELINE_COMMAND_SUDO_C" ]]; then
-           echo "Or run the entire pipeline under sudo:"
-           echo "  $PIPELINE_COMMAND_SUDO_C"
-           if [[ -n "$LOCAL_COMMAND" ]]; then
-               echo ""
-           fi
-       fi
-       if [[ -n "$LOCAL_COMMAND" ]]; then
-           echo "If you downloaded the script locally:"
-           echo "  $LOCAL_COMMAND"
-           echo ""
-       fi
-       if [[ -z "$PIPELINE_COMMAND" && -z "$LOCAL_COMMAND" ]]; then
-        echo "Please re-run the installer with elevated privileges, for example:"
-        if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
-            echo "  curl -fSL <URL>/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \\"
-            echo "    sudo bash /tmp/pulse-install-docker-agent.sh -- ${ORIGINAL_ARGS_STRING} && \\"
-            echo "    rm -f /tmp/pulse-install-docker-agent.sh"
-        else
-            echo "  curl -fSL <URL>/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \\"
-            echo "    sudo bash /tmp/pulse-install-docker-agent.sh && \\"
-            echo "    rm -f /tmp/pulse-install-docker-agent.sh"
-        fi
-       fi
-       exit "${AUTO_SUDO_EXIT_CODE:-1}"
-   fi
-
-   echo "Error: This script must be run as root"
-   echo ""
-   if [[ -n "$PIPELINE_COMMAND" ]]; then
-       echo "Re-run with sudo using the same arguments:"
-       echo "  $PIPELINE_COMMAND"
-       if [[ -n "$PIPELINE_COMMAND_SUDO_C" ]]; then
-           echo ""
-       fi
-   fi
-   if [[ -n "$PIPELINE_COMMAND_SUDO_C" ]]; then
-       echo "Or run the entire pipeline under sudo:"
-       echo "  $PIPELINE_COMMAND_SUDO_C"
-       if [[ -n "$LOCAL_COMMAND" ]]; then
-           echo ""
-       fi
-   fi
-   if [[ -n "$LOCAL_COMMAND" ]]; then
-       echo "If you downloaded the script locally:"
-       echo "  $LOCAL_COMMAND"
-       echo ""
-   fi
-   if [[ -z "$PIPELINE_COMMAND" && -z "$LOCAL_COMMAND" ]]; then
-    echo "Please re-run the installer with elevated privileges, for example:"
-    if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
-        echo "  curl -fSL <URL>/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \\"
-        echo "    sudo bash /tmp/pulse-install-docker-agent.sh -- ${ORIGINAL_ARGS_STRING} && \\"
-        echo "    rm -f /tmp/pulse-install-docker-agent.sh"
-    else
-        echo "  curl -fSL <URL>/install-docker-agent.sh -o /tmp/pulse-install-docker-agent.sh && \\"
-        echo "    sudo bash /tmp/pulse-install-docker-agent.sh && \\"
-        echo "    rm -f /tmp/pulse-install-docker-agent.sh"
-    fi
-   fi
-   exit 1
+if ! common::is_dry_run; then
+    common::ensure_root --allow-sudo --args "${ORIGINAL_ARGS[@]}"
+else
+    common::log_debug "Skipping privilege escalation due to dry-run mode"
 fi
 
 AGENT_PATH_OVERRIDE=$(trim "$AGENT_PATH_OVERRIDE")
@@ -1342,76 +1474,54 @@ fi
 
 # Handle uninstall
 if [ "$UNINSTALL" = true ]; then
-    log_header "Pulse Docker Agent Uninstaller"
+    echo "==================================="
+    echo "Pulse Docker Agent Uninstaller"
+    echo "==================================="
+    echo ""
 
-    existing_service_home=$(get_user_home_path "$SERVICE_USER")
-    if [[ -n "$existing_service_home" ]]; then
-        SERVICE_HOME="$existing_service_home"
-    fi
-
-    if command -v systemctl &> /dev/null; then
-        log_info "Stopping pulse-docker-agent service"
+    # Stop and disable systemd service
+    if command -v systemctl &> /dev/null && [ -f "$SERVICE_PATH" ]; then
+        echo "Stopping systemd service..."
         systemctl stop pulse-docker-agent 2>/dev/null || true
-        log_info "Disabling pulse-docker-agent service"
         systemctl disable pulse-docker-agent 2>/dev/null || true
-        if [ -f "$SERVICE_PATH" ]; then
-            rm -f "$SERVICE_PATH"
-            log_success "Removed unit file: $SERVICE_PATH"
-        else
-            log_info "Unit file not present at $SERVICE_PATH"
-        fi
-        systemctl daemon-reload 2>/dev/null || true
-    else
-        log_warn "systemctl not found; skipping service disable"
+        rm -f "$SERVICE_PATH"
+        systemctl daemon-reload
+        echo "✓ Systemd service removed"
     fi
 
-    if [ -f "$ENV_FILE" ]; then
-        rm -f "$ENV_FILE"
-        log_success "Removed environment file: $ENV_FILE"
-    fi
-
-    if pgrep -f pulse-docker-agent > /dev/null 2>&1; then
-        log_info "Stopping running agent processes"
-        pkill -f pulse-docker-agent 2>/dev/null || true
+    # Stop running agent process
+    if pgrep -f pulse-docker-agent > /dev/null; then
+        echo "Stopping agent process..."
+        pkill -f pulse-docker-agent || true
         sleep 1
+        echo "✓ Agent process stopped"
     fi
 
+    # Remove binary
     if [ -f "$AGENT_PATH" ]; then
         rm -f "$AGENT_PATH"
-        log_success "Removed agent binary: $AGENT_PATH"
-    else
-        log_info "Agent binary not found at $AGENT_PATH"
+        echo "✓ Agent binary removed"
     fi
 
+    # Remove Unraid startup script
     if [ -f "$UNRAID_STARTUP" ]; then
         rm -f "$UNRAID_STARTUP"
-        log_success "Removed Unraid startup script: $UNRAID_STARTUP"
+        echo "✓ Unraid startup script removed"
     fi
 
-    remove_polkit_rule
-
-    if [ "$PURGE" = true ]; then
-        if [ -f "$LOG_PATH" ]; then
-            rm -f "$LOG_PATH"
-            log_success "Removed agent log file: $LOG_PATH"
-        else
-            log_info "Agent log file already absent: $LOG_PATH"
-        fi
-        remove_service_user_if_managed
-        if [[ -n "$SERVICE_HOME" && "$SERVICE_HOME" != "/" && -d "$SERVICE_HOME" ]]; then
-            rm -rf "$SERVICE_HOME"
-            log_success "Removed service home directory: $SERVICE_HOME"
-        fi
-        if [[ -n "$SERVICE_HOME_LEGACY" && "$SERVICE_HOME_LEGACY" != "$SERVICE_HOME" && -d "$SERVICE_HOME_LEGACY" ]]; then
-            rm -rf "$SERVICE_HOME_LEGACY"
-            log_success "Removed legacy service home directory: $SERVICE_HOME_LEGACY"
-        fi
-    elif [ -f "$LOG_PATH" ]; then
-        log_info "Preserving agent log file at $LOG_PATH (use --purge to remove)"
+    # Remove log file
+    if [ -f "$LOG_PATH" ]; then
+        rm -f "$LOG_PATH"
+        echo "✓ Log file removed"
     fi
 
-    log_success "Uninstall complete"
-    log_info "The Pulse Docker agent has been removed from this system."
+    echo ""
+    echo "==================================="
+    echo "✓ Uninstall complete!"
+    echo "==================================="
+    echo ""
+    echo "The Pulse Docker agent has been removed from this system."
+    echo ""
     exit 0
 fi
 
@@ -1480,7 +1590,7 @@ if [[ "$UNINSTALL" != true ]]; then
       PRIMARY_INSECURE="$PARSED_TARGET_INSECURE"
     fi
 
-    if [[ -n "${SEEN_TARGETS[$local_normalized]}" ]]; then
+    if [[ -n "${SEEN_TARGETS[$local_normalized]:-}" ]]; then
       continue
     fi
 
@@ -1547,12 +1657,6 @@ if [[ "$UNINSTALL" != true ]]; then
     armv7l|armhf|armv7)
       DOWNLOAD_ARCH="linux-armv7"
       ;;
-    armv6l)
-      DOWNLOAD_ARCH="linux-armv6"
-      ;;
-    i386|i686)
-      DOWNLOAD_ARCH="linux-386"
-      ;;
     *)
       DOWNLOAD_ARCH=""
       log_warn "Unknown architecture '$ARCH'. Falling back to default agent binary."
@@ -1563,25 +1667,21 @@ fi
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
     log_warn 'Docker not found. The agent requires Docker to be installed.'
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+    if common::is_dry_run; then
+        log_warn 'Dry-run mode: skipping Docker enforcement.'
+    else
+        read -p "Continue anyway? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
     fi
 fi
 
-if [[ "$UNINSTALL" != true ]]; then
-    if command -v systemctl &> /dev/null; then
-        if systemctl list-unit-files pulse-docker-agent.service &> /dev/null; then
-            if systemctl is-active --quiet pulse-docker-agent; then
-                systemctl stop pulse-docker-agent
-            fi
-        fi
-    else
-        if pgrep -f pulse-docker-agent > /dev/null 2>&1; then
-            log_info "Stopping running agent process"
-            pkill -f pulse-docker-agent 2>/dev/null || true
-            sleep 1
+if [[ "$UNINSTALL" != true ]] && command -v systemctl >/dev/null 2>&1; then
+    if systemd::service_exists "pulse-docker-agent"; then
+        if systemd::is_active "pulse-docker-agent"; then
+            systemd::safe_systemctl stop "pulse-docker-agent"
         fi
     fi
 fi
@@ -1594,57 +1694,51 @@ if [[ -n "$DOWNLOAD_ARCH" ]]; then
     DOWNLOAD_URL="$DOWNLOAD_URL?arch=$DOWNLOAD_ARCH"
 fi
 
-if ! command -v wget &> /dev/null && ! command -v curl &> /dev/null; then
-    echo "Error: Neither wget nor curl found. Please install one of them."
-    exit 1
-fi
-
-WGET_IS_BUSYBOX="false"
-if command -v wget &> /dev/null; then
-    if wget --help 2>&1 | grep -qi "busybox"; then
-        WGET_IS_BUSYBOX="true"
-    fi
-fi
-
-download_agent_from_url() {
-    local url="$1"
-    local wget_success="false"
-
-    if command -v wget &> /dev/null; then
-        local wget_args=(-O "$AGENT_PATH" "$url")
-        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-            wget_args=(--no-check-certificate "${wget_args[@]}")
-        fi
-        if [[ "$WGET_IS_BUSYBOX" == "true" ]]; then
-            wget_args=(-q "${wget_args[@]}")
-        else
-            wget_args=(-q --show-progress "${wget_args[@]}")
-        fi
-
-        if wget "${wget_args[@]}"; then
-            wget_success="true"
-        else
-            rm -f "$AGENT_PATH"
-        fi
+download_agent_binary() {
+    local primary_url="$1"
+    local fallback_url="$2"
+    local -a download_args=(--url "${primary_url}" --output "${AGENT_PATH}" --retries 3 --backoff "1 3 5")
+    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+        download_args+=(--insecure)
     fi
 
-    if [[ "$wget_success" == "true" ]]; then
+    if http::download "${download_args[@]}"; then
+        AGENT_DOWNLOAD_SOURCE="${primary_url}"
         return 0
     fi
 
-    if command -v curl &> /dev/null; then
-        local curl_args=(-fL --progress-bar -o "$AGENT_PATH" "$url")
+    if ! common::is_dry_run; then
+        rm -f "$AGENT_PATH" 2>/dev/null || true
+    fi
+
+    if [[ "${fallback_url}" != "${primary_url}" && -n "${fallback_url}" ]]; then
+        log_info 'Falling back to server default agent binary'
+        download_args=(--url "${fallback_url}" --output "${AGENT_PATH}" --retries 3 --backoff "1 3 5")
         if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-            curl_args=(-k "${curl_args[@]}")
+            download_args+=(--insecure)
         fi
-        if curl "${curl_args[@]}"; then
+        if http::download "${download_args[@]}"; then
+            AGENT_DOWNLOAD_SOURCE="${fallback_url}"
             return 0
         fi
-        rm -f "$AGENT_PATH"
+
+        if ! common::is_dry_run; then
+            rm -f "$AGENT_PATH" 2>/dev/null || true
+        fi
     fi
 
     return 1
 }
+
+unset AGENT_DOWNLOAD_SOURCE
+
+if download_agent_binary "$DOWNLOAD_URL" "$DOWNLOAD_URL_BASE"; then
+    :
+else
+    log_warn 'Failed to download agent binary'
+    log_warn "Ensure the Pulse server is reachable at $PRIMARY_URL"
+    exit 1
+fi
 
 fetch_checksum_header() {
     local url="$1"
@@ -1712,6 +1806,12 @@ calculate_sha256() {
 
 verify_agent_checksum() {
     local url="$1"
+
+    if common::is_dry_run; then
+        log_info '[dry-run] Skipping checksum verification'
+        return 0
+    fi
+
     if ! fetch_checksum_header "$url"; then
         log_warn 'Agent download did not include X-Checksum-Sha256 header; skipping verification'
         return 0
@@ -1740,26 +1840,16 @@ verify_agent_checksum() {
     return 0
 }
 
-DOWNLOAD_SUCCESS_URL=""
-if download_agent_from_url "$DOWNLOAD_URL"; then
-    DOWNLOAD_SUCCESS_URL="$DOWNLOAD_URL"
-elif [[ "$DOWNLOAD_URL" != "$DOWNLOAD_URL_BASE" ]] && download_agent_from_url "$DOWNLOAD_URL_BASE"; then
-    log_info 'Falling back to server default agent binary'
-    DOWNLOAD_SUCCESS_URL="$DOWNLOAD_URL_BASE"
-else
-    log_warn 'Failed to download agent binary'
-    log_warn "Ensure the Pulse server is reachable at $PRIMARY_URL"
-    exit 1
-fi
-
-if [[ -n "$DOWNLOAD_SUCCESS_URL" ]]; then
-    if ! verify_agent_checksum "$DOWNLOAD_SUCCESS_URL"; then
+if [[ -n "${AGENT_DOWNLOAD_SOURCE:-}" ]]; then
+    if ! verify_agent_checksum "$AGENT_DOWNLOAD_SOURCE"; then
         log_error 'Agent download failed checksum verification'
         exit 1
     fi
 fi
 
-chmod 0755 "$AGENT_PATH"
+if ! common::is_dry_run; then
+    chmod 0755 "$AGENT_PATH"
+fi
 log_success "Agent binary installed"
 
 allow_reenroll_if_needed() {
@@ -1769,64 +1859,21 @@ allow_reenroll_if_needed() {
     fi
 
     local endpoint="$PRIMARY_URL/api/agents/docker/hosts/${host_id}/allow-reenroll"
-    local success="false"
-
-    if command -v curl &> /dev/null; then
-        local curl_args=(-fsSL -X POST -H "X-API-Token: $PRIMARY_TOKEN" "$endpoint")
-        if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-            curl_args=(-k "${curl_args[@]}")
-        fi
-        if curl "${curl_args[@]}" >/dev/null 2>&1; then
-            success="true"
-        fi
+    local -a api_args=(--url "${endpoint}" --method POST --token "${PRIMARY_TOKEN}")
+    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+        api_args+=(--insecure)
     fi
 
-    if [[ "$success" != "true" ]]; then
-        if command -v wget &> /dev/null; then
-            local wget_args=(--method=POST --header="X-API-Token: $PRIMARY_TOKEN" -q -O /dev/null "$endpoint")
-            if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-                wget_args=(--no-check-certificate "${wget_args[@]}")
-            fi
-            if wget "${wget_args[@]}" >/dev/null 2>&1; then
-                success="true"
-            fi
-        fi
-    fi
-
-    if [[ "$success" == "true" ]]; then
-        log_success "Cleared previous removal block via Pulse API"
+    if http::api_call "${api_args[@]}" >/dev/null 2>&1; then
+        log_success "Cleared any previous stop block for host"
     else
-        log_warn 'Pulse still considers this host removed.'
-        log_warn 'If you just reinstalled, visit Pulse → Docker → Removed Hosts and allow re-enroll,'
-        log_warn 'or rerun this installer with an API token that includes the docker:manage scope.'
+        log_warn "Unable to confirm removal block clearance (continuing)"
     fi
 
     return 0
 }
 
 allow_reenroll_if_needed "$AGENT_IDENTIFIER"
-
-# Determine whether to disable auto-update (development server)
-NO_AUTO_UPDATE_FLAG=""
-if command -v curl &> /dev/null || command -v wget &> /dev/null; then
-    SERVER_INFO_URL="$PRIMARY_URL/api/server/info"
-    SERVER_INFO=""
-    if command -v curl &> /dev/null; then
-        SERVER_INFO=$(curl -fsSL "$SERVER_INFO_URL" 2>/dev/null || true)
-    else
-        SERVER_INFO=$(wget -qO- "$SERVER_INFO_URL" 2>/dev/null || true)
-    fi
-
-    if [[ -n "$SERVER_INFO" ]] && echo "$SERVER_INFO" | grep -q '"isDevelopment"[[:space:]]*:[[:space:]]*true'; then
-        NO_AUTO_UPDATE_FLAG=" --no-auto-update"
-        log_warn "Server is in development mode; disabling agent auto-update"
-    fi
-
-    if [[ -n "$NO_AUTO_UPDATE_FLAG" ]] && ! "$AGENT_PATH" --help 2>&1 | grep -q -- '--no-auto-update'; then
-        log_warn 'Agent binary lacks --no-auto-update flag; keeping auto-update enabled'
-        NO_AUTO_UPDATE_FLAG=""
-    fi
-fi
 
 # Check if systemd is available
 if ! command -v systemctl &> /dev/null || [ ! -d /etc/systemd/system ]; then
@@ -1856,149 +1903,59 @@ EOF
         log_info 'Log file             : /var/log/pulse-docker-agent.log'
         log_info 'Host visible in Pulse: ~30 seconds'
         exit 0
-    elif command -v rc-service >/dev/null 2>&1 && command -v rc-update >/dev/null 2>&1; then
-        # Alpine Linux and other OpenRC-based systems
-        IS_ALPINE="false"
-        if [ -f /etc/alpine-release ] || grep -qi 'alpine' /etc/os-release 2>/dev/null; then
-            IS_ALPINE="true"
-            log_info 'Detected Alpine Linux with OpenRC'
-        else
-            log_info 'Detected OpenRC environment'
-        fi
-
-        log_header 'Preparing service environment'
-        ensure_service_user
-        ensure_snap_home_compatibility
-        ensure_service_home
-        ensure_docker_group_membership
-        write_env_file
-
-        OPENRC_SERVICE="/etc/init.d/pulse-docker-agent"
-        OPENRC_PIDFILE="/run/pulse-docker-agent.pid"
-        OPENRC_PIDDIR=$(dirname "$OPENRC_PIDFILE")
-        OPENRC_LOG="/var/log/pulse-docker-agent.log"
-        OPENRC_ENV_FILE="$ENV_FILE"
-        OPENRC_OWNER="$SERVICE_USER_ACTUAL:$SERVICE_GROUP_ACTUAL"
-
-        mkdir -p "$(dirname "$OPENRC_LOG")"
-        if [[ ! -f "$OPENRC_LOG" ]]; then
-            touch "$OPENRC_LOG"
-        fi
-        chown "$SERVICE_USER_ACTUAL":"$SERVICE_GROUP_ACTUAL" "$OPENRC_LOG" >/dev/null 2>&1 || true
-        chmod 0640 "$OPENRC_LOG" >/dev/null 2>&1 || true
-
-        cat > "$OPENRC_SERVICE" <<EOF
-#!/sbin/openrc-run
-
-description="Pulse Docker Agent"
-command="$AGENT_PATH"
-command_args="--url $PRIMARY_URL --interval $INTERVAL$NO_AUTO_UPDATE_FLAG"
-command_user="$SERVICE_USER_ACTUAL:$SERVICE_GROUP_ACTUAL"
-pidfile="$OPENRC_PIDFILE"
-supervisor="supervise-daemon"
-output_log="$OPENRC_LOG"
-error_log="$OPENRC_LOG"
-
-env_file="$OPENRC_ENV_FILE"
-log_owner="$OPENRC_OWNER"
-pid_dir="$OPENRC_PIDDIR"
-
-depend() {
-    need localmount
-    use net docker
-    after docker
-}
-
-start_pre() {
-    if [ -f "\$env_file" ]; then
-        set -a
-        . "\$env_file"
-        set +a
-    fi
-    checkpath --directory --mode 0755 "\$pid_dir"
-    checkpath --file --owner "\$log_owner" --mode 0640 "$OPENRC_LOG"
-    return 0
-}
-EOF
-
-        chmod +x "$OPENRC_SERVICE"
-
-        if rc-service pulse-docker-agent status >/dev/null 2>&1; then
-            rc-service pulse-docker-agent stop >/dev/null 2>&1 || true
-        fi
-
-        if rc-update add pulse-docker-agent default >/dev/null 2>&1; then
-            log_success 'Added pulse-docker-agent to OpenRC default runlevel'
-        else
-            log_warn 'Failed to add service to default runlevel; run: rc-update add pulse-docker-agent default'
-        fi
-
-        if rc-service pulse-docker-agent start >/dev/null 2>&1; then
-            log_success 'Started pulse-docker-agent service'
-        else
-            log_warn 'Failed to start pulse-docker-agent service; run: rc-service pulse-docker-agent start'
-        fi
-
-        log_header 'Installation complete'
-        log_info 'Agent service enabled via OpenRC'
-        log_info 'Check status          : rc-service pulse-docker-agent status'
-        log_info 'Follow logs           : tail -f /var/log/pulse-docker-agent.log'
-        log_info 'Host visible in Pulse : ~30 seconds'
-        exit 0
     fi
 
     log_info 'Manual startup environment detected'
     log_info "Binary location      : $AGENT_PATH"
-    printf '\n'
-    log_warn 'No supported init system detected (systemd, OpenRC, or Unraid).'
-    log_warn 'You must start the agent manually and configure it to start on boot.'
-    printf '\n'
-    log_info 'Start the agent in the background with:'
-    printf '  PULSE_URL=%s PULSE_TOKEN=%s \\\n' "$(quote_shell_arg "$PRIMARY_URL")" "$(quote_shell_arg "$PRIMARY_TOKEN")"
-    if [[ ${#TARGETS[@]} -gt 1 ]]; then
-        printf '  PULSE_TARGETS=%s \\\n' "$(quote_shell_arg "$JOINED_TARGETS")"
-    fi
-    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-        printf '  PULSE_INSECURE_SKIP_VERIFY=true \\\n'
-    fi
-    printf '  %s --url %s --token %s --interval %s%s > /var/log/pulse-docker-agent.log 2>&1 &\n' \
-        "$AGENT_PATH" \
-        "$(quote_shell_arg "$PRIMARY_URL")" \
-        "$(quote_shell_arg "$PRIMARY_TOKEN")" \
-        "$INTERVAL" \
-        "$NO_AUTO_UPDATE_FLAG"
-    printf '\n'
-    log_info 'Check if running: ps aux | grep pulse-docker-agent'
-    log_info 'View logs       : tail -f /var/log/pulse-docker-agent.log'
-    printf '\n'
-    log_warn 'IMPORTANT: Add the command above to your system startup scripts'
-    log_warn 'to ensure the agent starts automatically after reboots.'
+    log_info 'Start manually with  :'
+    printf '  PULSE_URL=%s PULSE_TOKEN=<api-token> \\n' "$PRIMARY_URL"
+    printf '  PULSE_TARGETS="%s" \\n' "https://pulse.example.com|<token>[;https://pulse-alt.example.com|<token2>]"
+    printf '  %s --interval %s &
+' "$AGENT_PATH" "$INTERVAL"
+    log_info 'Add the same command to your init system to start automatically.'
     exit 0
 
 fi
 
-log_header 'Preparing service environment'
-ensure_service_user
-ensure_snap_home_compatibility
-ensure_service_home
-ensure_docker_group_membership
-write_env_file
-configure_polkit_rule
-detect_docker_socket_paths
 
-# Build ReadWritePaths line for systemd unit
-SYSTEMD_READ_WRITE_PATHS=""
-for socket_path in $DOCKER_SOCKET_PATHS; do
-    if [[ -n "$SYSTEMD_READ_WRITE_PATHS" ]]; then
-        SYSTEMD_READ_WRITE_PATHS="$SYSTEMD_READ_WRITE_PATHS $socket_path"
-    else
-        SYSTEMD_READ_WRITE_PATHS="$socket_path"
+# Check if server is in development mode
+NO_AUTO_UPDATE_FLAG=""
+if http::detect_download_tool >/dev/null 2>&1; then
+    SERVER_INFO_URL="$PRIMARY_URL/api/server/info"
+    IS_DEV="false"
+
+    SERVER_INFO=""
+    declare -a __server_info_args=(--url "$SERVER_INFO_URL")
+    if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+        __server_info_args+=(--insecure)
     fi
-done
+    SERVER_INFO="$(http::api_call "${__server_info_args[@]}" 2>/dev/null || true)"
+    unset __server_info_args
+
+if [[ -n "$SERVER_INFO" ]] && echo "$SERVER_INFO" | grep -q '"isDevelopment"[[:space:]]*:[[:space:]]*true'; then
+    IS_DEV="true"
+    NO_AUTO_UPDATE_FLAG=" --no-auto-update"
+    log_info 'Development server detected – auto-update disabled'
+fi
+
+if [[ -n "$NO_AUTO_UPDATE_FLAG" ]]; then
+    if ! "$AGENT_PATH" --help 2>&1 | grep -q -- '--no-auto-update'; then
+        log_warn 'Agent binary lacks --no-auto-update flag; keeping auto-update enabled'
+        NO_AUTO_UPDATE_FLAG=""
+    fi
+fi
+fi
 
 # Create systemd service
 log_header 'Configuring systemd service'
-cat > "$SERVICE_PATH" << EOF
+SYSTEMD_ENV_TARGETS_LINE=""
+if [[ -n "$JOINED_TARGETS" ]]; then
+SYSTEMD_ENV_TARGETS_LINE="Environment=\"PULSE_TARGETS=$JOINED_TARGETS\""
+fi
+SYSTEMD_ENV_URL_LINE="Environment=\"PULSE_URL=$PRIMARY_URL\""
+SYSTEMD_ENV_TOKEN_LINE="Environment=\"PULSE_TOKEN=$PRIMARY_TOKEN\""
+SYSTEMD_ENV_INSECURE_LINE="Environment=\"PULSE_INSECURE_SKIP_VERIFY=$PRIMARY_INSECURE\""
+systemd::create_service "$SERVICE_PATH" <<EOF
 [Unit]
 Description=Pulse Docker Agent
 After=network-online.target docker.socket docker.service
@@ -2006,30 +1963,28 @@ Wants=network-online.target docker.socket
 
 [Service]
 Type=simple
-EnvironmentFile=-$ENV_FILE
+$SYSTEMD_ENV_URL_LINE
+$SYSTEMD_ENV_TOKEN_LINE
+$SYSTEMD_ENV_TARGETS_LINE
+$SYSTEMD_ENV_INSECURE_LINE
 ExecStart=$AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"$NO_AUTO_UPDATE_FLAG
 Restart=on-failure
 RestartSec=5s
-StartLimitIntervalSec=120
-StartLimitBurst=5
-User=$SERVICE_USER_ACTUAL
-Group=$SERVICE_GROUP_ACTUAL
-$SYSTEMD_SUPPLEMENTARY_GROUPS_LINE
-UMask=0077
-NoNewPrivileges=yes
-RestrictSUIDSGID=yes
-RestrictRealtime=yes
-PrivateTmp=yes
+User=root
 ProtectSystem=full
 ProtectHome=read-only
 ProtectControlGroups=yes
 ProtectKernelModules=yes
 ProtectKernelTunables=yes
 ProtectKernelLogs=yes
-LockPersonality=yes
+UMask=0077
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+PrivateTmp=yes
 MemoryDenyWriteExecute=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-ReadWritePaths=$SYSTEMD_READ_WRITE_PATHS
+ReadWritePaths=/var/run/docker.sock
 ProtectHostname=yes
 ProtectClock=yes
 
@@ -2039,17 +1994,14 @@ EOF
 
 log_success "Wrote unit file: $SERVICE_PATH"
 
-# Validate socket access before starting the service
-validate_docker_socket_access
-
 # Reload systemd and start service
 log_info 'Starting service'
-systemctl daemon-reload
-systemctl enable pulse-docker-agent
-systemctl start pulse-docker-agent
+systemd::enable_and_start "pulse-docker-agent"
 
 log_header 'Installation complete'
 log_info 'Agent service enabled and started'
 log_info 'Check status          : systemctl status pulse-docker-agent'
 log_info 'Follow logs           : journalctl -u pulse-docker-agent -f'
 log_info 'Host visible in Pulse : ~30 seconds'
+# === End: scripts/install-docker-agent-v2.sh ===
+
