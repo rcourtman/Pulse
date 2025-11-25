@@ -5005,13 +5005,8 @@ if [ "$IS_STANDALONE_NODE" = true ] && [ "$TEMPERATURE_ENABLED" = true ] && [ "$
         echo "  from this node using secure SSH with forced commands."
         echo ""
     else
-        echo "  ℹ️  Could not retrieve proxy public key from Pulse server"
-        echo ""
-        echo "This is normal if:"
-        echo "  • Pulse is not running in a container (uses direct SSH)"
-        echo "  • The temperature proxy service is not installed on the host"
-        echo ""
-        echo "Temperature monitoring will use the standard SSH key configured earlier."
+        echo "  ℹ️  Using standard SSH key (proxy key not available)"
+        echo "      (This is normal for non-containerized Pulse)"
         echo ""
     fi
 fi
