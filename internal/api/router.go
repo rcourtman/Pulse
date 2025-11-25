@@ -207,6 +207,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/install/migrate-sensor-proxy-control-plane.sh", r.handleDownloadMigrationScript)
 	r.mux.HandleFunc("/api/install/migrate-temperature-proxy.sh", r.handleDownloadTemperatureProxyMigrationScript)
 	r.mux.HandleFunc("/api/install/install-docker.sh", r.handleDownloadDockerInstallerScript)
+	r.mux.HandleFunc("/api/install/install.sh", r.handleDownloadUnifiedInstallScript)
+	r.mux.HandleFunc("/api/install/install.ps1", r.handleDownloadUnifiedInstallScriptPS)
 	r.mux.HandleFunc("/api/config", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleConfig)))
 	r.mux.HandleFunc("/api/backups", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackups)))
 	r.mux.HandleFunc("/api/backups/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleBackups)))
