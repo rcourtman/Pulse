@@ -436,17 +436,18 @@ const Settings: Component<SettingsProps> = (props) => {
   const deriveTabFromPath = (path: string): SettingsTab => {
     if (path.includes('/settings/proxmox')) return 'proxmox';
     if (path.includes('/settings/agent-hub')) return 'proxmox';
-    if (path.includes('/settings/docker')) return 'docker';
-    if (path.includes('/settings/containers')) return 'docker';
+    if (path.includes('/settings/docker')) return 'agents';
+    if (path.includes('/settings/containers')) return 'agents';
     if (
       path.includes('/settings/hosts') ||
       path.includes('/settings/host-agents') ||
       path.includes('/settings/servers') ||
       path.includes('/settings/linuxServers') ||
       path.includes('/settings/windowsServers') ||
-      path.includes('/settings/macServers')
+      path.includes('/settings/macServers') ||
+      path.includes('/settings/agents')
     )
-      return 'hosts';
+      return 'agents';
     if (path.includes('/settings/system-general')) return 'system-general';
     if (path.includes('/settings/system-network')) return 'system-network';
     if (path.includes('/settings/system-updates')) return 'system-updates';
