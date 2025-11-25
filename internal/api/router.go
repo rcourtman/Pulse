@@ -1004,6 +1004,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/download/pulse-host-agent", r.handleDownloadHostAgent)
 	r.mux.HandleFunc("/download/pulse-host-agent.sha256", r.handleDownloadHostAgent)
 
+	// Unified Agent endpoints
+	r.mux.HandleFunc("/install.sh", r.handleDownloadUnifiedInstallScript)
+	r.mux.HandleFunc("/install.ps1", r.handleDownloadUnifiedInstallScriptPS)
+	r.mux.HandleFunc("/download/pulse-agent", r.handleDownloadUnifiedAgent)
+
 	r.mux.HandleFunc("/api/agent/version", r.handleAgentVersion)
 	r.mux.HandleFunc("/api/server/info", r.handleServerInfo)
 
@@ -1339,6 +1344,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/uninstall-host-agent.sh",                           // Host agent uninstall script must be public
 				"/uninstall-host-agent.ps1",                          // Host agent uninstall script must be public
 				"/download/pulse-host-agent",                         // Host agent binary download should not require auth
+				"/install.sh",                                        // Unified agent installer
+				"/install.ps1",                                       // Unified agent Windows installer
+				"/download/pulse-agent",                              // Unified agent binary
 				"/api/agent/version",                                 // Agent update checks need to work before auth
 				"/api/server/info",                                   // Server info for installer script
 				"/api/install/install-sensor-proxy.sh",               // Temperature proxy installer fallback
@@ -1364,7 +1372,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				req.URL.Path != "/install-container-agent.sh" &&
 				req.URL.Path != "/install-host-agent.sh" &&
 				req.URL.Path != "/install-host-agent.ps1" &&
-				req.URL.Path != "/uninstall-host-agent.ps1"
+				req.URL.Path != "/install-host-agent.ps1" &&
+				req.URL.Path != "/uninstall-host-agent.ps1" &&
+				req.URL.Path != "/install.sh" &&
+				req.URL.Path != "/install.ps1"
 
 			isStaticAsset := strings.HasPrefix(req.URL.Path, "/assets/") ||
 				strings.HasPrefix(req.URL.Path, "/@vite/") ||
@@ -1508,7 +1519,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			path.Clean(req.URL.Path) == "/install-host-agent.sh" ||
 			path.Clean(req.URL.Path) == "/install-host-agent.ps1" ||
 			path.Clean(req.URL.Path) == "/uninstall-host-agent.sh" ||
-			path.Clean(req.URL.Path) == "/uninstall-host-agent.ps1" {
+			path.Clean(req.URL.Path) == "/uninstall-host-agent.ps1" ||
+			path.Clean(req.URL.Path) == "/install.sh" ||
+			path.Clean(req.URL.Path) == "/install.ps1" {
 			// Use the mux for API and special routes
 			r.mux.ServeHTTP(w, req)
 		} else {
@@ -3522,7 +3535,7 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 	errorMsg.WriteString(fmt.Sprintf("Host agent binary not found for %s/%s\n\n", platformParam, archParam))
 	errorMsg.WriteString("Troubleshooting:\n")
 	errorMsg.WriteString("1. If running in Docker: Rebuild the Docker image to include all platform binaries\n")
-	errorMsg.WriteString("2. If running bare metal: Run 'scripts/build-release.sh' to build all platform binaries\n")
+	errorMsg.WriteString("2. If running from source: Run 'scripts/build-release.sh' to build all platform binaries\n")
 	errorMsg.WriteString("3. Build from source:\n")
 	errorMsg.WriteString(fmt.Sprintf("   GOOS=%s GOARCH=%s go build -o pulse-host-agent-%s-%s ./cmd/pulse-host-agent\n", platformParam, archParam, platformParam, archParam))
 	errorMsg.WriteString(fmt.Sprintf("   sudo mv pulse-host-agent-%s-%s /opt/pulse/bin/\n\n", platformParam, archParam))

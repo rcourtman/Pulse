@@ -391,6 +391,18 @@ try {
     $manualCommand = "& `"$agentPath`" $($agentArgs -join ' ')"
 } catch {
     PulseError "Failed to download agent: $_"
+    
+    # Try to show a popup if running in a GUI environment
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.MessageBox]::Show("Failed to download agent.`n`n$_", "Pulse Installation Failed", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+    } catch {
+        # Ignore if GUI not available
+    }
+
+    Write-Host ""
+    Write-Host "Press Enter to exit..." -ForegroundColor Yellow
+    Read-Host
     exit 1
 }
 

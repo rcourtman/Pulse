@@ -422,6 +422,13 @@ if [[ "$DOWNLOAD_SUCCESS" == false ]]; then
     echo "4. Check firewall/network settings blocking the connection"
     echo ""
     rm -f "$TEMP_BINARY"
+
+    echo ""
+    if [[ -t 0 ]]; then
+        read -p "Press Enter to exit..."
+    elif [[ -e /dev/tty ]]; then
+        read -p "Press Enter to exit..." < /dev/tty
+    fi
     exit 1
 fi
 

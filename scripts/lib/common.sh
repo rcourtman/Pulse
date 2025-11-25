@@ -106,6 +106,16 @@ common::fail() {
   done
   local message="${message_parts[*]}"
   common::log_error "${message}"
+
+  if common::is_interactive; then
+    echo ""
+    if [[ -t 0 ]]; then
+        read -p "Press Enter to exit..."
+    elif [[ -e /dev/tty ]]; then
+        read -p "Press Enter to exit..." < /dev/tty
+    fi
+  fi
+
   exit "${exit_code}"
 }
 
