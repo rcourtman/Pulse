@@ -9,26 +9,26 @@ import (
 
 // State represents the current state of all monitored resources
 type State struct {
-	mu                 sync.RWMutex
-	Nodes              []Node              `json:"nodes"`
-	VMs                []VM                `json:"vms"`
-	Containers         []Container         `json:"containers"`
-	DockerHosts        []DockerHost        `json:"dockerHosts"`
-	RemovedDockerHosts []RemovedDockerHost `json:"removedDockerHosts"`
-	Hosts              []Host              `json:"hosts"`
-	Storage            []Storage           `json:"storage"`
-	CephClusters       []CephCluster       `json:"cephClusters"`
-	PhysicalDisks      []PhysicalDisk      `json:"physicalDisks"`
-	PBSInstances       []PBSInstance       `json:"pbs"`
-	PMGInstances       []PMGInstance       `json:"pmg"`
-	PBSBackups         []PBSBackup         `json:"pbsBackups"`
-	PMGBackups         []PMGBackup         `json:"pmgBackups"`
-	Backups            Backups             `json:"backups"`
-	ReplicationJobs    []ReplicationJob    `json:"replicationJobs"`
-	Metrics            []Metric            `json:"metrics"`
-	PVEBackups         PVEBackups          `json:"pveBackups"`
-	Performance        Performance         `json:"performance"`
-	ConnectionHealth   map[string]bool     `json:"connectionHealth"`
+	mu                           sync.RWMutex
+	Nodes                        []Node              `json:"nodes"`
+	VMs                          []VM                `json:"vms"`
+	Containers                   []Container         `json:"containers"`
+	DockerHosts                  []DockerHost        `json:"dockerHosts"`
+	RemovedDockerHosts           []RemovedDockerHost `json:"removedDockerHosts"`
+	Hosts                        []Host              `json:"hosts"`
+	Storage                      []Storage           `json:"storage"`
+	CephClusters                 []CephCluster       `json:"cephClusters"`
+	PhysicalDisks                []PhysicalDisk      `json:"physicalDisks"`
+	PBSInstances                 []PBSInstance       `json:"pbs"`
+	PMGInstances                 []PMGInstance       `json:"pmg"`
+	PBSBackups                   []PBSBackup         `json:"pbsBackups"`
+	PMGBackups                   []PMGBackup         `json:"pmgBackups"`
+	Backups                      Backups             `json:"backups"`
+	ReplicationJobs              []ReplicationJob    `json:"replicationJobs"`
+	Metrics                      []Metric            `json:"metrics"`
+	PVEBackups                   PVEBackups          `json:"pveBackups"`
+	Performance                  Performance         `json:"performance"`
+	ConnectionHealth             map[string]bool     `json:"connectionHealth"`
 	Stats                        Stats               `json:"stats"`
 	ActiveAlerts                 []Alert             `json:"activeAlerts"`
 	RecentlyResolved             []ResolvedAlert     `json:"recentlyResolved"`
@@ -62,28 +62,28 @@ type ResolvedAlert struct {
 
 // Node represents a Proxmox VE node
 type Node struct {
-	ID               string       `json:"id"`
-	Name             string       `json:"name"`
-	DisplayName      string       `json:"displayName,omitempty"`
-	Instance         string       `json:"instance"`
-	Host             string       `json:"host"`     // Full host URL from config
-	GuestURL         string       `json:"guestURL"` // Optional guest-accessible URL (for navigation)
-	Status           string       `json:"status"`
-	Type             string       `json:"type"`
-	CPU              float64      `json:"cpu"`
-	Memory           Memory       `json:"memory"`
-	Disk             Disk         `json:"disk"`
-	Uptime           int64        `json:"uptime"`
-	LoadAverage      []float64    `json:"loadAverage"`
-	KernelVersion    string       `json:"kernelVersion"`
-	PVEVersion       string       `json:"pveVersion"`
-	CPUInfo          CPUInfo      `json:"cpuInfo"`
+	ID                           string       `json:"id"`
+	Name                         string       `json:"name"`
+	DisplayName                  string       `json:"displayName,omitempty"`
+	Instance                     string       `json:"instance"`
+	Host                         string       `json:"host"`     // Full host URL from config
+	GuestURL                     string       `json:"guestURL"` // Optional guest-accessible URL (for navigation)
+	Status                       string       `json:"status"`
+	Type                         string       `json:"type"`
+	CPU                          float64      `json:"cpu"`
+	Memory                       Memory       `json:"memory"`
+	Disk                         Disk         `json:"disk"`
+	Uptime                       int64        `json:"uptime"`
+	LoadAverage                  []float64    `json:"loadAverage"`
+	KernelVersion                string       `json:"kernelVersion"`
+	PVEVersion                   string       `json:"pveVersion"`
+	CPUInfo                      CPUInfo      `json:"cpuInfo"`
 	Temperature                  *Temperature `json:"temperature,omitempty"`                  // CPU/NVMe temperatures
 	TemperatureMonitoringEnabled *bool        `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
 	LastSeen                     time.Time    `json:"lastSeen"`
 	ConnectionHealth             string       `json:"connectionHealth"`
-	IsClusterMember  bool         `json:"isClusterMember"` // True if part of a cluster
-	ClusterName      string       `json:"clusterName"`     // Name of cluster (empty if standalone)
+	IsClusterMember              bool         `json:"isClusterMember"` // True if part of a cluster
+	ClusterName                  string       `json:"clusterName"`     // Name of cluster (empty if standalone)
 }
 
 // VM represents a virtual machine
@@ -174,6 +174,7 @@ type Host struct {
 	TokenHint         string                 `json:"tokenHint,omitempty"`
 	TokenLastUsedAt   *time.Time             `json:"tokenLastUsedAt,omitempty"`
 	Tags              []string               `json:"tags,omitempty"`
+	IsLegacy          bool                   `json:"isLegacy,omitempty"`
 }
 
 // HostNetworkInterface describes a host network adapter summary.
@@ -254,6 +255,7 @@ type DockerHost struct {
 	Hidden            bool                     `json:"hidden"`
 	PendingUninstall  bool                     `json:"pendingUninstall"`
 	Command           *DockerHostCommandStatus `json:"command,omitempty"`
+	IsLegacy          bool                     `json:"isLegacy,omitempty"`
 }
 
 // RemovedDockerHost tracks a docker host that was deliberately removed and blocked from reporting.

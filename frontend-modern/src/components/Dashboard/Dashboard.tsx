@@ -6,7 +6,6 @@ import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
-import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { DashboardFilter } from './DashboardFilter';
@@ -926,163 +925,157 @@ export function Dashboard(props: DashboardProps) {
       {/* Table View */}
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
-          <Card padding="none" class="mb-4 overflow-hidden">
-            <ScrollableTable minWidth="600px">
-              <table class="w-full min-w-[600px] table-fixed border-collapse">
-                <thead>
-                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                    <th
-                      class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 w-auto"
-                      onClick={() => handleSort('name')}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
-                      tabindex="0"
-                      role="button"
-                      aria-label={`Sort by name ${sortKey() === 'name' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    >
-                      Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[5%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('type')}
-                      title="Type"
-                    >
-                      <span class="hidden xl:inline">Type</span>
-                      <span class="xl:hidden" aria-label="Type">Typ</span>{' '}
-                      {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="hidden lg:table-cell px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[5%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('vmid')}
-                      title="VM/Container ID"
-                    >
-                      <span class="hidden xl:inline">VMID</span>
-                      <span class="xl:hidden" aria-label="VM ID">ID</span>{' '}
-                      {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="hidden sm:table-cell px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('uptime')}
-                      title="Uptime"
-                    >
-                      <span class="hidden lg:inline">Uptime</span>
-                      <span class="lg:hidden" aria-label="Uptime">Up</span>{' '}
-                      {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('cpu')}
-                    >
-                      CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('memory')}
-                      title="Memory"
-                    >
-                      <span class="hidden lg:inline">Memory</span>
-                      <span class="lg:hidden" aria-label="Memory">Mem</span>{' '}
-                      {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="hidden sm:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('disk')}
-                    >
-                      Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('diskRead')}
-                      title="Disk Read"
-                    >
-                      <span class="hidden lg:inline">Disk Read</span>
-                      <span class="lg:hidden" aria-label="Disk Read">D Rd</span>{' '}
-                      {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('diskWrite')}
-                      title="Disk Write"
-                    >
-                      <span class="hidden lg:inline">Disk Write</span>
-                      <span class="lg:hidden" aria-label="Disk Write">D Wr</span>{' '}
-                      {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('networkIn')}
-                      title="Network In"
-                    >
-                      <span class="hidden lg:inline">Net In</span>
-                      <span class="lg:hidden" aria-label="Network In">N In</span>{' '}
-                      {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                    <th
-                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => handleSort('networkOut')}
-                      title="Network Out"
-                    >
-                      <span class="hidden lg:inline">Net Out</span>
-                      <span class="lg:hidden" aria-label="Network Out">N Out</span>{' '}
-                      {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                  <For
-                    each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
-                      // Sort by friendly node name first, falling back to instance ID for stability
-                      const nodeA = nodeByInstance()[instanceIdA];
-                      const nodeB = nodeByInstance()[instanceIdB];
-                      const labelA = nodeA ? getNodeDisplayName(nodeA) : instanceIdA;
-                      const labelB = nodeB ? getNodeDisplayName(nodeB) : instanceIdB;
-                      const nameCompare = labelA.localeCompare(labelB);
-                      if (nameCompare !== 0) return nameCompare;
-                      // If labels match (unlikely), fall back to the instance IDs
-                      return instanceIdA.localeCompare(instanceIdB);
-                    })}
-                    fallback={<></>}
-                  >
-                    {([instanceId, guests]) => {
-                      const node = nodeByInstance()[instanceId];
+          <Card padding="none" class="mb-4 overflow-hidden bg-white dark:bg-gray-800">
+            {/* Desktop Header - Hidden on mobile/tablet, visible on xl+ */}
+            <div class="flex md:grid md:grid-cols-[minmax(150px,1fr)_60px_60px_80px_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)] xl:grid-cols-[minmax(200px,1fr)_80px_80px_100px_minmax(150px,1.5fr)_minmax(150px,1.5fr)_minmax(150px,1.5fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20">
+              {/* Name Header - Sticky on mobile */}
+              <div
+                class="pl-4 pr-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center sticky left-0 z-30 bg-gray-50 dark:bg-gray-700/50 w-[160px] sm:w-[200px] md:w-full flex-shrink-0 border-r md:border-r-0 border-gray-200 dark:border-gray-700"
+                onClick={() => handleSort('name')}
+              >
+                Name
+                {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
 
-                      return (
-                        <>
-                          <Show when={node && groupingMode() === 'grouped'}>
-                            <NodeGroupHeader node={node!} colspan={11} />
-                          </Show>
-                          <For each={guests} fallback={<></>}>
-                            {(guest) => {
-                              // Match backend ID generation logic: stable format is "instance-vmid"
-                              const guestId =
-                                guest.id || `${guest.instance}-${guest.vmid}`;
-                              const metadata =
-                                guestMetadata()[guestId] ||
-                                guestMetadata()[`${guest.node}-${guest.vmid}`];
-                              const parentNode = node ?? resolveParentNode(guest);
-                              const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
-                              return (
-                                <ComponentErrorBoundary name="GuestRow">
-                                  <GuestRow
-                                    guest={guest}
-                                    alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
-                                    customUrl={metadata?.customUrl}
-                                    onTagClick={handleTagClick}
-                                    activeSearch={search()}
-                                    parentNodeOnline={parentNodeOnline}
-                                    onCustomUrlUpdate={handleCustomUrlUpdate}
-                                    isGroupedView={groupingMode() === 'grouped'}
-                                  />
-                                </ComponentErrorBoundary>
-                              );
-                            }}
-                          </For>
-                        </>
-                      );
-                    }}
-                  </For>
-                </tbody>
-              </table>
-            </ScrollableTable>
+              {/* Metrics Headers - Scrollable on mobile */}
+              <div class="flex-1 overflow-hidden md:contents">
+                <div class="flex md:contents min-w-full md:min-w-0">
+                  <div
+                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[30px] md:w-full"
+                    onClick={() => handleSort('type')}
+                  >
+                    <span class="md:hidden" title="Type">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                    </span>
+                    <span class="hidden md:inline">Type</span>
+                    {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[30px] md:w-full"
+                    onClick={() => handleSort('vmid')}
+                  >
+                    <span class="md:hidden" title="ID">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>
+                    </span>
+                    <span class="hidden md:inline">VMID</span>
+                    {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[40px] md:w-full"
+                    onClick={() => handleSort('uptime')}
+                  >
+                    <span class="md:hidden" title="Uptime">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </span>
+                    <span class="hidden md:inline">Uptime</span>
+                    {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="flex-1 px-0.5 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[35px] md:w-full"
+                    onClick={() => handleSort('cpu')}
+                  >
+                    <span class="md:hidden" title="CPU">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
+                    </span>
+                    <span class="hidden md:inline">CPU</span>
+                    {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[35px] md:w-full"
+                    onClick={() => handleSort('memory')}
+                  >
+                    <span class="md:hidden" title="Memory">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    </span>
+                    <span class="hidden md:inline">Memory</span>
+                    {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[35px] md:w-full"
+                    onClick={() => handleSort('disk')}
+                  >
+                    <span class="md:hidden" title="Disk">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
+                    </span>
+                    <span class="hidden md:inline">Disk</span>
+                    {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="hidden xl:flex px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 items-center w-full"
+                    onClick={() => handleSort('diskRead')}
+                  >
+                    D Read {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="hidden xl:flex px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 items-center w-full"
+                    onClick={() => handleSort('diskWrite')}
+                  >
+                    D Write {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="hidden xl:flex px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 items-center w-full"
+                    onClick={() => handleSort('networkIn')}
+                  >
+                    Net In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                  <div
+                    class="hidden xl:flex px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 items-center w-full"
+                    onClick={() => handleSort('networkOut')}
+                  >
+                    Net Out {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Guest List */}
+            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+              <For
+                each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
+                  const nodeA = nodeByInstance()[instanceIdA];
+                  const nodeB = nodeByInstance()[instanceIdB];
+                  const labelA = nodeA ? getNodeDisplayName(nodeA) : instanceIdA;
+                  const labelB = nodeB ? getNodeDisplayName(nodeB) : instanceIdB;
+                  return labelA.localeCompare(labelB) || instanceIdA.localeCompare(instanceIdB);
+                })}
+                fallback={<></>}
+              >
+                {([instanceId, guests]) => {
+                  const node = nodeByInstance()[instanceId];
+                  return (
+                    <>
+                      <Show when={node && groupingMode() === 'grouped'}>
+                        <NodeGroupHeader node={node!} />
+                      </Show>
+                      <For each={guests} fallback={<></>}>
+                        {(guest) => {
+                          const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
+                          const metadata =
+                            guestMetadata()[guestId] ||
+                            guestMetadata()[`${guest.node}-${guest.vmid}`];
+                          const parentNode = node ?? resolveParentNode(guest);
+                          const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
+                          return (
+                            <ComponentErrorBoundary name="GuestRow">
+                              <GuestRow
+                                guest={guest}
+                                alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
+                                customUrl={metadata?.customUrl}
+                                onTagClick={handleTagClick}
+                                activeSearch={search()}
+                                parentNodeOnline={parentNodeOnline}
+                                onCustomUrlUpdate={handleCustomUrlUpdate}
+                                isGroupedView={groupingMode() === 'grouped'}
+                              />
+                            </ComponentErrorBoundary>
+                          );
+                        }}
+                      </For>
+                    </>
+                  );
+                }}
+              </For>
+            </div>
           </Card>
         </ComponentErrorBoundary>
       </Show>

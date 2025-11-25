@@ -800,7 +800,7 @@ const Storage: Component = () => {
                           <>
                             {/* Group Header */}
                             <Show when={viewMode() === 'node' && node}>
-                              {(validNode) => <NodeGroupHeader node={validNode()} colspan={9} />}
+                              {(validNode) => <NodeGroupHeader node={validNode()} colspan={9} renderAs="tr" />}
                             </Show>
 
                             {/* Storage Rows */}

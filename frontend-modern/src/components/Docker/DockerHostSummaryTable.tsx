@@ -141,12 +141,12 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
 
   return (
     <Card padding="none" class="mb-4 overflow-hidden">
-      <ScrollableTable minWidth="720px" persistKey="docker-host-summary">
+      <ScrollableTable minWidth="300px" persistKey="docker-host-summary">
         <table class="w-full table-fixed border-collapse sm:whitespace-nowrap">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
               <th
-                class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 whitespace-nowrap"
+                class="pl-3 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[35%] md:w-[18%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 whitespace-nowrap"
                 onClick={() => handleSort('name')}
                 onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                 tabIndex={0}
@@ -155,47 +155,47 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
               >
                 Host {renderSortIndicator('name')}
               </th>
-              <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%] whitespace-nowrap">
+              <th class="px-0.5 md:px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] md:w-[6%] whitespace-nowrap">
                 Status
               </th>
               <th
-                class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                class="px-0.5 md:px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] md:w-[12%] min-w-[35px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                 onClick={() => handleSort('cpu')}
               >
                 CPU {renderSortIndicator('cpu')}
               </th>
               <th
-                class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                class="px-0.5 md:px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] md:w-[12%] min-w-[35px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                 onClick={() => handleSort('memory')}
               >
                 Memory {renderSortIndicator('memory')}
               </th>
               <th
-                class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                class="px-0.5 md:px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] md:w-[12%] min-w-[35px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                 onClick={() => handleSort('disk')}
               >
                 Disk {renderSortIndicator('disk')}
               </th>
               <th
-                class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[11%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                class="px-0.5 md:px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] md:w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
                 onClick={() => handleSort('running')}
               >
                 Containers {renderSortIndicator('running')}
               </th>
               <th
-                class="hidden px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap sm:table-cell"
+                class="hidden px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider md:w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap sm:table-cell"
                 onClick={() => handleSort('uptime')}
               >
                 Uptime {renderSortIndicator('uptime')}
               </th>
               <th
-                class="hidden px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[12%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap sm:table-cell"
+                class="hidden px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider md:w-[12%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap sm:table-cell"
                 onClick={() => handleSort('lastSeen')}
               >
                 Last Update {renderSortIndicator('lastSeen')}
               </th>
               <th
-                class="hidden px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap sm:table-cell"
+                class="hidden px-2 py-1 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider md:w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap sm:table-cell"
                 onClick={() => handleSort('agent')}
               >
                 Agent {renderSortIndicator('agent')}
@@ -322,44 +322,59 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                         </Show>
                       </div>
                     </td>
-                    <td class="px-2 py-1 align-middle">
+                    <td class="px-0.5 md:px-2 py-1 align-middle">
                       <div class="flex justify-center items-center h-full w-full max-w-[180px] whitespace-nowrap">
                         {renderDockerStatusBadge(summary.host.status)}
                       </div>
                     </td>
-                    <td class="px-2 py-1 align-middle">
+                    <td class="px-0.5 md:px-2 py-1 align-middle">
                       <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                        <MetricBar
-                          value={summary.cpuPercent}
-                          label={formatPercent(summary.cpuPercent)}
-                          type="cpu"
-                          resourceId={metricsKey}
-                        />
+                        <div class={`md:hidden text-xs text-center ${summary.cpuPercent >= 90 ? 'text-red-600 dark:text-red-400 font-bold' : summary.cpuPercent >= 80 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                          {formatPercent(summary.cpuPercent)}
+                        </div>
+                        <div class="hidden md:block">
+                          <MetricBar
+                            value={summary.cpuPercent}
+                            label={formatPercent(summary.cpuPercent)}
+                            type="cpu"
+                            resourceId={metricsKey}
+                          />
+                        </div>
                       </Show>
                     </td>
-                    <td class="px-2 py-1 align-middle">
+                    <td class="px-0.5 md:px-2 py-1 align-middle">
                       <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                        <MetricBar
-                          value={summary.memoryPercent}
-                          label={formatPercent(summary.memoryPercent)}
-                          sublabel={summary.memoryLabel}
-                          type="memory"
-                          resourceId={metricsKey}
-                        />
+                        <div class={`md:hidden text-xs text-center ${summary.memoryPercent >= 85 ? 'text-red-600 dark:text-red-400 font-bold' : summary.memoryPercent >= 75 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                          {formatPercent(summary.memoryPercent)}
+                        </div>
+                        <div class="hidden md:block">
+                          <MetricBar
+                            value={summary.memoryPercent}
+                            label={formatPercent(summary.memoryPercent)}
+                            sublabel={summary.memoryLabel}
+                            type="memory"
+                            resourceId={metricsKey}
+                          />
+                        </div>
                       </Show>
                     </td>
-                    <td class="px-2 py-1 align-middle">
+                    <td class="px-0.5 md:px-2 py-1 align-middle">
                       <Show when={summary.diskLabel} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                        <MetricBar
-                          value={summary.diskPercent}
-                          label={formatPercent(summary.diskPercent)}
-                          sublabel={summary.diskLabel}
-                          type="disk"
-                          resourceId={metricsKey}
-                        />
+                        <div class={`md:hidden text-xs text-center ${summary.diskPercent >= 90 ? 'text-red-600 dark:text-red-400 font-bold' : summary.diskPercent >= 80 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                          {formatPercent(summary.diskPercent)}
+                        </div>
+                        <div class="hidden md:block">
+                          <MetricBar
+                            value={summary.diskPercent}
+                            label={formatPercent(summary.diskPercent)}
+                            sublabel={summary.diskLabel}
+                            type="disk"
+                            resourceId={metricsKey}
+                          />
+                        </div>
                       </Show>
                     </td>
-                    <td class="px-2 py-1 align-middle">
+                    <td class="px-0.5 md:px-2 py-1 align-middle">
                       <div class="flex justify-center items-center h-full whitespace-nowrap">
                         <Show
                           when={summary.totalCount > 0}
@@ -411,11 +426,10 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                                   ? 'px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-medium'
                                   : 'px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium'
                               }
-                              title={`${
-                                agentOutdated
-                                  ? 'Agent is outdated on this host'
-                                  : 'Agent is up to date'
-                              }${summary.host.intervalSeconds ? `\nReporting interval: ${summary.host.intervalSeconds}s` : ''}`}
+                              title={`${agentOutdated
+                                ? 'Agent is outdated on this host'
+                                : 'Agent is up to date'
+                                }${summary.host.intervalSeconds ? `\nReporting interval: ${summary.host.intervalSeconds}s` : ''}`}
                             >
                               v{version()}
                             </span>

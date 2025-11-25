@@ -6,7 +6,7 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
-import type { Host, HostLookupResponse, DockerHost } from '@/types/api';
+import type { HostLookupResponse } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
 import { HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -252,8 +252,8 @@ export const UnifiedAgents: Component = () => {
             types: ('host' | 'docker')[];
             status: string;
             version?: string;
-            lastSeen?: number | string;
-            ip?: string;
+            lastSeen?: number;
+            isLegacy?: boolean;
         }>();
 
         // Process Host Agents
@@ -267,7 +267,7 @@ export const UnifiedAgents: Component = () => {
                 status: h.status || 'unknown',
                 version: h.agentVersion,
                 lastSeen: h.lastSeen,
-                ip: h.ip
+                isLegacy: h.isLegacy
             });
         });
 
@@ -280,7 +280,8 @@ export const UnifiedAgents: Component = () => {
                     existing.types.push('docker');
                 }
                 // Update version/status if newer
-                if (!existing.version && d.version) existing.version = d.version;
+                if (!existing.version && d.agentVersion) existing.version = d.agentVersion;
+                if (d.isLegacy) existing.isLegacy = true;
             } else {
                 unified.set(key, {
                     id: d.id,
@@ -288,8 +289,9 @@ export const UnifiedAgents: Component = () => {
                     displayName: d.displayName,
                     types: ['docker'],
                     status: d.status || 'unknown',
-                    version: d.version || d.dockerVersion,
+                    version: d.agentVersion || d.dockerVersion,
                     lastSeen: d.lastSeen,
+                    isLegacy: d.isLegacy,
                 });
             }
         });
@@ -620,8 +622,8 @@ export const UnifiedAgents: Component = () => {
                                                 <For each={agent.types}>
                                                     {(type) => (
                                                         <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${type === 'host'
-                                                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                                                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                                                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
                                                             }`}>
                                                             {type === 'host' ? 'Host' : 'Docker'}
                                                         </span>
@@ -631,17 +633,22 @@ export const UnifiedAgents: Component = () => {
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-sm">
                                             <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${connectedFromStatus(agent.status)
-                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                                                 }`}>
                                                 {agent.status}
                                             </span>
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                                             {agent.version || '—'}
+                                            <Show when={agent.isLegacy}>
+                                                <span class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" title="This agent is using an old version. Please update to the unified agent.">
+                                                    Legacy
+                                                </span>
+                                            </Show>
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                                            {formatRelativeTime(agent.lastSeen)}
+                                            {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : '—'}
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
                                             <button
