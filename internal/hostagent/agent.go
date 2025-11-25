@@ -27,6 +27,7 @@ type Config struct {
 	Interval           time.Duration
 	HostnameOverride   string
 	AgentID            string
+	AgentType          string // "unified" when running as part of pulse-agent, empty for standalone
 	Tags               []string
 	InsecureSkipVerify bool
 	RunOnce            bool
@@ -241,6 +242,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
 			Version:         Version,
+			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.interval / time.Second),
 			Hostname:        a.hostname,
 		},

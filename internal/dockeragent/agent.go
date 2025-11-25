@@ -47,6 +47,7 @@ type Config struct {
 	Interval           time.Duration
 	HostnameOverride   string
 	AgentID            string
+	AgentType          string // "unified" when running as part of pulse-agent, empty for standalone
 	InsecureSkipVerify bool
 	DisableAutoUpdate  bool
 	Targets            []TargetConfig
@@ -656,6 +657,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 		Agent: agentsdocker.AgentInfo{
 			ID:              agentID,
 			Version:         Version,
+			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.cfg.Interval / time.Second),
 		},
 		Host: agentsdocker.HostInfo{

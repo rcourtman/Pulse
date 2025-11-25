@@ -1,5 +1,19 @@
 # Pulse Host Agent Installation Script for Windows
 #
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │  DEPRECATED: This script installs the legacy pulse-host-agent.              │
+# │  Please use the unified agent instead:                                      │
+# │                                                                             │
+# │    $env:PULSE_URL="http://pulse-server:7655"                                │
+# │    $env:PULSE_TOKEN="your-token"                                            │
+# │    irm http://pulse-server:7655/install.ps1 | iex                           │
+# │                                                                             │
+# │  The unified agent provides:                                                │
+# │    - Combined host + Docker monitoring in one binary                        │
+# │    - Automatic updates                                                      │
+# │    - Simplified management                                                  │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
 # Usage:
 #   iwr -useb http://pulse-server:7656/install-host-agent.ps1 | iex
 #   OR with parameters:

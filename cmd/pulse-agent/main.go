@@ -81,6 +81,7 @@ func main() {
 			Interval:           cfg.Interval,
 			HostnameOverride:   cfg.HostnameOverride,
 			AgentID:            cfg.AgentID, // Shared ID? Or separate? Usually separate for now.
+			AgentType:          "unified",
 			Tags:               cfg.Tags,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			LogLevel:           cfg.LogLevel,
@@ -101,7 +102,7 @@ func main() {
 		})
 	}
 
-	// 5. Start Docker Agent (if enabled)
+	// 6. Start Docker Agent (if enabled)
 	if cfg.EnableDocker {
 		dockerCfg := dockeragent.Config{
 			PulseURL:           cfg.PulseURL,
@@ -109,8 +110,9 @@ func main() {
 			Interval:           cfg.Interval,
 			HostnameOverride:   cfg.HostnameOverride,
 			AgentID:            cfg.AgentID,
+			AgentType:          "unified",
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
-			DisableAutoUpdate:  true, // Unified agent handles updates (future)
+			DisableAutoUpdate:  true, // Unified agent handles updates
 			LogLevel:           cfg.LogLevel,
 			Logger:             &logger,
 			// Docker specific defaults
