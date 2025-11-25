@@ -1,0 +1,139 @@
+# Pulse Unified Agent
+
+The unified agent (`pulse-agent`) combines host and Docker monitoring into a single binary. It replaces the separate `pulse-host-agent` and `pulse-docker-agent` for simpler deployment and management.
+
+## Quick Start
+
+Generate an installation command in the UI:
+**Settings > Agents > "Install New Agent"**
+
+### Linux (systemd)
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+```
+
+### macOS
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+```
+
+### Synology NAS
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+```
+
+## Features
+
+- **Host Metrics**: CPU, memory, disk, network I/O, temperatures
+- **Docker Monitoring**: Container metrics, health checks, Swarm support (when enabled)
+- **Auto-Update**: Automatically updates when a new version is released
+- **Multi-Platform**: Linux, macOS, Windows support
+
+## Configuration
+
+| Flag | Env Var | Description | Default |
+|------|---------|-------------|---------|
+| `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
+| `--token` | `PULSE_TOKEN` | API token | *(required)* |
+| `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
+| `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
+| `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker metrics | `false` |
+| `--disable-auto-update` | `PULSE_DISABLE_AUTO_UPDATE` | Disable auto-updates | `false` |
+| `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
+| `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
+| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
+
+## Installation Options
+
+### Host Monitoring Only (default)
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token>
+```
+
+### Host + Docker Monitoring
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker
+```
+
+### Docker Monitoring Only
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-host --enable-docker
+```
+
+## Auto-Update
+
+The unified agent automatically checks for updates every hour. When a new version is available:
+
+1. Agent downloads the new binary from the Pulse server
+2. Verifies the checksum
+3. Replaces itself atomically (with backup)
+4. Restarts with the same configuration
+
+To disable auto-updates:
+```bash
+# During installation
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-auto-update
+
+# Or set environment variable
+PULSE_DISABLE_AUTO_UPDATE=true
+```
+
+## Uninstall
+
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | bash -s -- --uninstall
+```
+
+This removes:
+- The agent binary
+- The systemd/launchd service
+- Any legacy agents (pulse-host-agent, pulse-docker-agent)
+
+## Migration from Legacy Agents
+
+The install script automatically removes legacy agents when installing the unified agent:
+- `pulse-host-agent` service is stopped and removed
+- `pulse-docker-agent` service is stopped and removed
+- Binaries are deleted from `/usr/local/bin/`
+
+No manual cleanup is required.
+
+## Troubleshooting
+
+### Agent Not Updating
+- Check logs: `journalctl -u pulse-agent -f`
+- Verify network connectivity to Pulse server
+- Ensure auto-update is not disabled
+
+### Duplicate Hosts
+If cloned VMs appear as the same host:
+```bash
+sudo rm /etc/machine-id && sudo systemd-machine-id-setup
+```
+
+Or set a unique agent ID:
+```bash
+--agent-id my-unique-host-id
+```
+
+### Permission Denied (Docker)
+Ensure the agent can access the Docker socket:
+```bash
+sudo usermod -aG docker $USER
+```
+
+### Check Status
+```bash
+# Linux
+systemctl status pulse-agent
+
+# macOS
+launchctl list | grep pulse
+```

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -52,9 +53,27 @@ func main() {
 		Str("pulse_url", cfg.PulseURL).
 		Bool("host_agent", cfg.EnableHost).
 		Bool("docker_agent", cfg.EnableDocker).
+		Bool("auto_update", !cfg.DisableAutoUpdate).
 		Msg("Starting Pulse Unified Agent")
 
-	// 4. Start Host Agent (if enabled)
+	// 4. Start Auto-Updater
+	updater := agentupdate.New(agentupdate.Config{
+		PulseURL:           cfg.PulseURL,
+		APIToken:           cfg.APIToken,
+		AgentName:          "pulse-agent",
+		CurrentVersion:     Version,
+		CheckInterval:      1 * time.Hour,
+		InsecureSkipVerify: cfg.InsecureSkipVerify,
+		Logger:             &logger,
+		Disabled:           cfg.DisableAutoUpdate,
+	})
+
+	g.Go(func() error {
+		updater.RunLoop(ctx)
+		return nil
+	})
+
+	// 5. Start Host Agent (if enabled)
 	if cfg.EnableHost {
 		hostCfg := hostagent.Config{
 			PulseURL:           cfg.PulseURL,
@@ -138,6 +157,9 @@ type Config struct {
 	// Module flags
 	EnableHost   bool
 	EnableDocker bool
+
+	// Auto-update
+	DisableAutoUpdate bool
 }
 
 func loadConfig() Config {
@@ -152,6 +174,7 @@ func loadConfig() Config {
 	envLogLevel := utils.GetenvTrim("LOG_LEVEL")
 	envEnableHost := utils.GetenvTrim("PULSE_ENABLE_HOST")
 	envEnableDocker := utils.GetenvTrim("PULSE_ENABLE_DOCKER")
+	envDisableAutoUpdate := utils.GetenvTrim("PULSE_DISABLE_AUTO_UPDATE")
 
 	// Defaults
 	defaultInterval := 30 * time.Second
@@ -182,11 +205,18 @@ func loadConfig() Config {
 
 	enableHostFlag := flag.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
 	enableDockerFlag := flag.Bool("enable-docker", defaultEnableDocker, "Enable Docker Agent module")
+	disableAutoUpdateFlag := flag.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
+	showVersion := flag.Bool("version", false, "Print the agent version and exit")
 
 	var tagFlags multiValue
 	flag.Var(&tagFlags, "tag", "Tag to apply (repeatable)")
 
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
 
 	// Validation
 	pulseURL := strings.TrimSpace(*urlFlag)
@@ -218,6 +248,7 @@ func loadConfig() Config {
 		LogLevel:           logLevel,
 		EnableHost:         *enableHostFlag,
 		EnableDocker:       *enableDockerFlag,
+		DisableAutoUpdate:  *disableAutoUpdateFlag,
 	}
 }
 

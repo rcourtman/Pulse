@@ -136,6 +136,51 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -trimpath \
       -o pulse-host-agent-windows-386.exe ./cmd/pulse-host-agent
 
+# Build unified agent binaries for all platforms (for download endpoint)
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    VERSION="v$(cat VERSION | tr -d '\n')" && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-linux-amd64 ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-linux-arm64 ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-linux-armv7 ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-linux-armv6 ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=386 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-linux-386 ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-darwin-amd64 ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-darwin-arm64 ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-windows-amd64.exe ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-windows-arm64.exe ./cmd/pulse-agent && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=386 go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -trimpath \
+      -o pulse-agent-windows-386.exe ./cmd/pulse-agent
+
 # Build pulse-sensor-proxy for all Linux architectures (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
@@ -224,7 +269,9 @@ COPY scripts/uninstall-host-agent.sh /opt/pulse/scripts/uninstall-host-agent.sh
 COPY scripts/uninstall-host-agent.ps1 /opt/pulse/scripts/uninstall-host-agent.ps1
 COPY scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-sensor-proxy.sh
 COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
-RUN chmod 755 /opt/pulse/scripts/install-docker-agent.sh /opt/pulse/scripts/install-container-agent.sh /opt/pulse/scripts/install-host-agent.sh /opt/pulse/scripts/install-host-agent.ps1 /opt/pulse/scripts/uninstall-host-agent.sh /opt/pulse/scripts/uninstall-host-agent.ps1 /opt/pulse/scripts/install-sensor-proxy.sh /opt/pulse/scripts/install-docker.sh
+COPY scripts/install.sh /opt/pulse/scripts/install.sh
+COPY scripts/install.ps1 /opt/pulse/scripts/install.ps1
+RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1
 
 # Copy all binaries for download endpoint
 RUN mkdir -p /opt/pulse/bin
@@ -255,6 +302,22 @@ COPY --from=backend-builder /app/pulse-host-agent-windows-386.exe /opt/pulse/bin
 RUN ln -s pulse-host-agent-windows-amd64.exe /opt/pulse/bin/pulse-host-agent-windows-amd64 && \
     ln -s pulse-host-agent-windows-arm64.exe /opt/pulse/bin/pulse-host-agent-windows-arm64 && \
     ln -s pulse-host-agent-windows-386.exe /opt/pulse/bin/pulse-host-agent-windows-386
+
+# Unified agent binaries (all platforms and architectures)
+COPY --from=backend-builder /app/pulse-agent-linux-amd64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-linux-arm64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-linux-armv7 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-linux-armv6 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-linux-386 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-darwin-amd64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-darwin-arm64 /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-windows-amd64.exe /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-windows-arm64.exe /opt/pulse/bin/
+COPY --from=backend-builder /app/pulse-agent-windows-386.exe /opt/pulse/bin/
+# Create symlinks for Windows without .exe extension
+RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
+    ln -s pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \
+    ln -s pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386
 
 # Sensor proxy binaries (all Linux architectures)
 COPY --from=backend-builder /app/pulse-sensor-proxy-linux-amd64 /opt/pulse/bin/

@@ -107,10 +107,16 @@ ARCH=$(uname -m)
 case "$ARCH" in
     x86_64) ARCH="amd64" ;;
     aarch64|arm64) ARCH="arm64" ;;
+    armv7l|armhf) ARCH="armv7" ;;
+    armv6l) ARCH="armv6" ;;
+    i386|i686) ARCH="386" ;;
     *) fail "Unsupported architecture: $ARCH" ;;
 esac
 
-DOWNLOAD_URL="${PULSE_URL}/download/${BINARY_NAME}?os=${OS}&arch=${ARCH}"
+# Construct arch param in format expected by download endpoint (e.g., linux-amd64)
+ARCH_PARAM="${OS}-${ARCH}"
+
+DOWNLOAD_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${ARCH_PARAM}"
 log_info "Downloading agent from ${DOWNLOAD_URL}..."
 
 # Create temp file
@@ -169,6 +175,28 @@ if [[ "$OS" == "darwin" ]]; then
     PLIST="/Library/LaunchDaemons/com.pulse.agent.plist"
     log_info "Configuring Launchd service at $PLIST..."
 
+    # Build program arguments array
+    PLIST_ARGS="        <string>${INSTALL_DIR}/${BINARY_NAME}</string>
+        <string>--url</string>
+        <string>${PULSE_URL}</string>
+        <string>--token</string>
+        <string>${PULSE_TOKEN}</string>
+        <string>--interval</string>
+        <string>${INTERVAL}</string>"
+
+    if [[ "$ENABLE_HOST" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--enable-host</string>"
+    fi
+    if [[ "$ENABLE_DOCKER" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--enable-docker</string>"
+    fi
+    if [[ "$INSECURE" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--insecure</string>"
+    fi
+
     cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -178,16 +206,7 @@ if [[ "$OS" == "darwin" ]]; then
     <string>com.pulse.agent</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${INSTALL_DIR}/${BINARY_NAME}</string>
-        <string>--url</string>
-        <string>${PULSE_URL}</string>
-        <string>--token</string>
-        <string>${PULSE_TOKEN}</string>
-        <string>--interval</string>
-        <string>${INTERVAL}</string>
-        <string>--enable-host=${ENABLE_HOST}</string>
-        <string>--enable-docker=${ENABLE_DOCKER}</string>
-        <string>--insecure=${INSECURE}</string>
+${PLIST_ARGS}
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -212,6 +231,12 @@ if [[ -d /usr/syno/etc/rc.sysv ]]; then
     CONF="/etc/init/${AGENT_NAME}.conf"
     log_info "Configuring Upstart service at $CONF..."
 
+    # Build command line args
+    EXEC_ARGS="--url \"${PULSE_URL}\" --token \"${PULSE_TOKEN}\" --interval \"${INTERVAL}\""
+    [[ "$ENABLE_HOST" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --enable-host"
+    [[ "$ENABLE_DOCKER" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --enable-docker"
+    [[ "$INSECURE" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --insecure"
+
     cat > "$CONF" <<EOF
 description "Pulse Unified Agent"
 author "Pulse"
@@ -222,14 +247,7 @@ stop on runlevel [06]
 respawn
 respawn limit 5 10
 
-exec ${INSTALL_DIR}/${BINARY_NAME} \
-    --url "${PULSE_URL}" \
-    --token "${PULSE_TOKEN}" \
-    --interval "${INTERVAL}" \
-    --enable-host=${ENABLE_HOST} \
-    --enable-docker=${ENABLE_DOCKER} \
-    --insecure=${INSECURE} \
-    >> ${LOG_FILE} 2>&1
+exec ${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS} >> ${LOG_FILE} 2>&1
 EOF
     initctl stop "${AGENT_NAME}" 2>/dev/null || true
     initctl start "${AGENT_NAME}"
@@ -242,6 +260,12 @@ if command -v systemctl >/dev/null 2>&1; then
     UNIT="/etc/systemd/system/${AGENT_NAME}.service"
     log_info "Configuring Systemd service at $UNIT..."
 
+    # Build command line args
+    EXEC_ARGS="--url ${PULSE_URL} --token ${PULSE_TOKEN} --interval ${INTERVAL}"
+    [[ "$ENABLE_HOST" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --enable-host"
+    [[ "$ENABLE_DOCKER" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --enable-docker"
+    [[ "$INSECURE" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --insecure"
+
     cat > "$UNIT" <<EOF
 [Unit]
 Description=Pulse Unified Agent
@@ -250,13 +274,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} \
-    --url "${PULSE_URL}" \
-    --token "${PULSE_TOKEN}" \
-    --interval "${INTERVAL}" \
-    --enable-host=${ENABLE_HOST} \
-    --enable-docker=${ENABLE_DOCKER} \
-    --insecure=${INSECURE}
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}
 Restart=always
 RestartSec=5s
 User=root

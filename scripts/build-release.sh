@@ -64,6 +64,22 @@ for target in "${host_agent_order[@]}"; do
         ./cmd/pulse-host-agent
 done
 
+# Build unified agents for every supported platform/architecture
+echo "Building unified agents for all platforms..."
+for target in "${host_agent_order[@]}"; do
+    build_env="${host_agent_builds[$target]}"
+    output_path="$BUILD_DIR/pulse-agent-$target"
+    if [[ "$target" == windows-* ]]; then
+        output_path="${output_path}.exe"
+    fi
+
+    env $build_env go build \
+        -ldflags="-s -w -X main.Version=v${VERSION}" \
+        -trimpath \
+        -o "$output_path" \
+        ./cmd/pulse-agent
+done
+
 # Build for different architectures (server + docker agent + sensor proxy)
 declare -A builds=(
     ["linux-amd64"]="GOOS=linux GOARCH=amd64"
@@ -132,6 +148,18 @@ for build_name in "${build_order[@]}"; do
     done
     ( cd "$staging_dir/bin" && ln -sf pulse-host-agent-windows-amd64.exe pulse-host-agent-windows-amd64 && ln -sf pulse-host-agent-windows-arm64.exe pulse-host-agent-windows-arm64 && ln -sf pulse-host-agent-windows-386.exe pulse-host-agent-windows-386 )
 
+    # Copy unified agent binaries for every supported platform/architecture
+    for target in "${host_agent_order[@]}"; do
+        src="$BUILD_DIR/pulse-agent-$target"
+        dest="$staging_dir/bin/pulse-agent-$target"
+        if [[ "$target" == windows-* ]]; then
+            src="${src}.exe"
+            dest="${dest}.exe"
+        fi
+        cp "$src" "$dest"
+    done
+    ( cd "$staging_dir/bin" && ln -sf pulse-agent-windows-amd64.exe pulse-agent-windows-amd64 && ln -sf pulse-agent-windows-arm64.exe pulse-agent-windows-arm64 && ln -sf pulse-agent-windows-386.exe pulse-agent-windows-386 )
+
     # Copy scripts and VERSION metadata
     cp "scripts/install-docker-agent.sh" "$staging_dir/scripts/install-docker-agent.sh"
     cp "scripts/install-container-agent.sh" "$staging_dir/scripts/install-container-agent.sh"
@@ -141,7 +169,10 @@ for build_name in "${build_order[@]}"; do
     cp "scripts/uninstall-host-agent.ps1" "$staging_dir/scripts/uninstall-host-agent.ps1"
     cp "scripts/install-sensor-proxy.sh" "$staging_dir/scripts/install-sensor-proxy.sh"
     cp "scripts/install-docker.sh" "$staging_dir/scripts/install-docker.sh"
-    chmod 755 "$staging_dir/scripts/"*.sh "$staging_dir/scripts/"*.ps1
+    cp "scripts/install.sh" "$staging_dir/scripts/install.sh"
+    [ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$staging_dir/scripts/install.ps1"
+    chmod 755 "$staging_dir/scripts/"*.sh
+    chmod 755 "$staging_dir/scripts/"*.ps1 2>/dev/null || true
     echo "$VERSION" > "$staging_dir/VERSION"
 
     # Create tarball from staging directory
@@ -165,6 +196,7 @@ for build_name in "${build_order[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/pulse-${build_name}"
     cp "$BUILD_DIR/pulse-docker-agent-$build_name" "$universal_dir/bin/pulse-docker-agent-${build_name}"
     cp "$BUILD_DIR/pulse-host-agent-$build_name" "$universal_dir/bin/pulse-host-agent-${build_name}"
+    cp "$BUILD_DIR/pulse-agent-$build_name" "$universal_dir/bin/pulse-agent-${build_name}"
     cp "$BUILD_DIR/pulse-sensor-proxy-$build_name" "$universal_dir/bin/pulse-sensor-proxy-${build_name}"
 done
 
@@ -176,7 +208,10 @@ cp "scripts/uninstall-host-agent.sh" "$universal_dir/scripts/uninstall-host-agen
 cp "scripts/uninstall-host-agent.ps1" "$universal_dir/scripts/uninstall-host-agent.ps1"
 cp "scripts/install-sensor-proxy.sh" "$universal_dir/scripts/install-sensor-proxy.sh"
 cp "scripts/install-docker.sh" "$universal_dir/scripts/install-docker.sh"
-chmod 755 "$universal_dir/scripts/"*.sh "$universal_dir/scripts/"*.ps1
+cp "scripts/install.sh" "$universal_dir/scripts/install.sh"
+[ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$universal_dir/scripts/install.ps1"
+chmod 755 "$universal_dir/scripts/"*.sh
+chmod 755 "$universal_dir/scripts/"*.ps1 2>/dev/null || true
 
 # Create a detection script that creates the pulse symlink based on architecture
 cat > "$universal_dir/bin/pulse" << 'EOF'
@@ -271,6 +306,29 @@ esac
 EOF
 chmod +x "$universal_dir/bin/pulse-host-agent"
 
+cat > "$universal_dir/bin/pulse-agent" << 'EOF'
+#!/bin/sh
+# Auto-detect architecture and run appropriate pulse-agent binary
+
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        exec "$(dirname "$0")/pulse-agent-linux-amd64" "$@"
+        ;;
+    aarch64|arm64)
+        exec "$(dirname "$0")/pulse-agent-linux-arm64" "$@"
+        ;;
+    armv7l|armhf)
+        exec "$(dirname "$0")/pulse-agent-linux-armv7" "$@"
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH" >&2
+        exit 1
+        ;;
+esac
+EOF
+chmod +x "$universal_dir/bin/pulse-agent"
+
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
 
@@ -281,6 +339,13 @@ zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-host-agent-windows-arm64.exe"
 zip -j "$RELEASE_DIR/pulse-host-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-host-agent-windows-386.exe"
 
+# Package standalone unified agent binaries
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-agent-darwin-amd64
+tar -czf "$RELEASE_DIR/pulse-agent-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-agent-darwin-arm64
+zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-agent-windows-amd64.exe"
+zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-agent-windows-arm64.exe"
+zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-agent-windows-386.exe"
+
 # Copy Windows and macOS binaries into universal tarball for /download/ endpoint
 echo "Adding Windows and macOS binaries to universal tarball..."
 cp "$BUILD_DIR/pulse-host-agent-darwin-amd64" "$universal_dir/bin/"
@@ -289,10 +354,20 @@ cp "$BUILD_DIR/pulse-host-agent-windows-amd64.exe" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-host-agent-windows-arm64.exe" "$universal_dir/bin/"
 cp "$BUILD_DIR/pulse-host-agent-windows-386.exe" "$universal_dir/bin/"
 
+cp "$BUILD_DIR/pulse-agent-darwin-amd64" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-agent-darwin-arm64" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-agent-windows-amd64.exe" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-agent-windows-arm64.exe" "$universal_dir/bin/"
+cp "$BUILD_DIR/pulse-agent-windows-386.exe" "$universal_dir/bin/"
+
 # Create symlinks for Windows binaries without .exe extension (required for download endpoint)
 ln -s pulse-host-agent-windows-amd64.exe "$universal_dir/bin/pulse-host-agent-windows-amd64"
 ln -s pulse-host-agent-windows-arm64.exe "$universal_dir/bin/pulse-host-agent-windows-arm64"
 ln -s pulse-host-agent-windows-386.exe "$universal_dir/bin/pulse-host-agent-windows-386"
+
+ln -s pulse-agent-windows-amd64.exe "$universal_dir/bin/pulse-agent-windows-amd64"
+ln -s pulse-agent-windows-arm64.exe "$universal_dir/bin/pulse-agent-windows-arm64"
+ln -s pulse-agent-windows-386.exe "$universal_dir/bin/pulse-agent-windows-386"
 
 # Create universal tarball
 cd "$universal_dir"
