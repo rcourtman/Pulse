@@ -355,387 +355,384 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   return (
     <>
       <Card padding="none" class="mb-4 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[600px] table-fixed border-collapse">
-          <thead>
-            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-              <th
-                class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 whitespace-nowrap"
-                onClick={() => handleSort('name')}
-                onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
-                tabindex="0"
-                role="button"
-                aria-label={`Sort by name ${
-                  sortKey() === 'name' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''
-                }`}
-              >
-                {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}{' '}
-                {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
-              </th>
-              <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                onClick={() => handleSort('uptime')}
-              >
-                Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
-              </th>
-              <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                onClick={() => handleSort('cpu')}
-              >
-                CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
-              </th>
-              <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                onClick={() => handleSort('memory')}
-              >
-                Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
-              </th>
-              <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                onClick={() => handleSort('disk')}
-              >
-                {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}{' '}
-                {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
-              </th>
-              <Show when={hasAnyTemperatureData()}>
+        <div class="overflow-x-auto">
+          <table class="w-full table-fixed border-collapse">
+            <thead>
+              <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                 <th
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                  onClick={() => handleSort('temperature')}
+                  class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 whitespace-nowrap"
+                  onClick={() => handleSort('name')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
+                  tabindex="0"
+                  role="button"
+                  aria-label={`Sort by name ${sortKey() === 'name' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''
+                    }`}
                 >
-                  Temp{' '}
-                  {sortKey() === 'temperature' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}{' '}
+                  {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
-              </Show>
-              <For each={countColumns()}>
-                {(column) => (
+                <th
+                  class="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[12%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  onClick={() => handleSort('uptime')}
+                >
+                  Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </th>
+                <th
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[25%] sm:w-[15%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  onClick={() => handleSort('cpu')}
+                >
+                  CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </th>
+                <th
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[25%] sm:w-[15%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  onClick={() => handleSort('memory')}
+                >
+                  Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </th>
+                <th
+                  class="hidden md:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                  onClick={() => handleSort('disk')}
+                >
+                  {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}{' '}
+                  {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </th>
+                <Show when={hasAnyTemperatureData()}>
                   <th
-                    class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
-                    onClick={() => handleSort(column.key)}
+                    class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                    onClick={() => handleSort('temperature')}
                   >
-                    {column.header}{' '}
-                    {sortKey() === column.key && (sortDirection() === 'asc' ? '▲' : '▼')}
+                    Temp{' '}
+                    {sortKey() === 'temperature' && (sortDirection() === 'asc' ? '▲' : '▼')}
                   </th>
-                )}
-              </For>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <For each={sortedItems()}>
-              {(item) => {
-                const isPVE = item.type === 'pve';
-                const isPBS = item.type === 'pbs';
-                const node = isPVE ? (item.data as Node) : null;
-                const pbs = isPBS ? (item.data as PBSInstance) : null;
-
-                const online = isItemOnline(item);
-                const statusIndicator = createMemo(() =>
-                  isPVE ? getNodeStatusIndicator(node as Node) : getPBSStatusIndicator(pbs as PBSInstance),
-                );
-                const cpuPercentValue = getCpuPercent(item);
-                const memoryPercentValue = getMemoryPercent(item);
-                const diskPercentValue = getDiskPercent(item);
-                const diskSublabel = getDiskSublabel(item);
-                const cpuTemperatureValue = getCpuTemperatureValue(item);
-                const uptimeValue = isPVE ? node?.uptime ?? 0 : isPBS ? pbs?.uptime ?? 0 : 0;
-                const displayName = () => {
-                  if (isPVE) return getNodeDisplayName(node as Node);
-                  return (pbs as PBSInstance).name;
-                };
-                const showActualName = () => isPVE && hasAlternateDisplayName(node as Node);
-
-                // Use unique node ID (not hostname) to handle duplicate node names
-                const nodeId = isPVE ? node!.id : pbs!.name;
-                const isSelected = () => props.selectedNode === nodeId;
-                // Use the full resource ID for alert matching
-                const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;
-                // Use namespaced metric key for sparklines
-                const metricsKey = buildMetricKey('node', resourceId);
-                const alertStyles = createMemo(() =>
-                  getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
-                );
-                const showAlertHighlight = createMemo(
-                  () => alertStyles().hasUnacknowledgedAlert && online,
-                );
-
-                const rowStyle = createMemo(() => {
-                  const styles: Record<string, string> = {};
-                  const shadows: string[] = [];
-
-                  if (showAlertHighlight()) {
-                    const color = alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
-                    shadows.push(`inset 4px 0 0 0 ${color}`);
-                  }
-
-                  if (isSelected()) {
-                    shadows.push('0 0 0 1px rgba(59, 130, 246, 0.5)');
-                    shadows.push('0 2px 4px -1px rgba(0, 0, 0, 0.1)');
-                  }
-
-                  if (shadows.length > 0) {
-                    styles['box-shadow'] = shadows.join(', ');
-                  }
-
-                  return styles;
-                });
-
-                const rowClass = createMemo(() => {
-                  const baseHover = 'cursor-pointer transition-all duration-200 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm';
-
-                  if (isSelected()) {
-                    return `cursor-pointer transition-all duration-200 relative bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:shadow-sm z-10`;
-                  }
-
-                  if (showAlertHighlight()) {
-                    return alertStyles().severity === 'critical'
-                      ? 'cursor-pointer transition-all duration-200 relative bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/40 hover:shadow-sm'
-                      : 'cursor-pointer transition-all duration-200 relative bg-yellow-50 dark:bg-yellow-950/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/30 hover:shadow-sm';
-                  }
-
-                  let className = baseHover;
-
-                  if (props.selectedNode && props.selectedNode !== nodeId) {
-                    className += ' opacity-50 hover:opacity-80';
-                  }
-
-                  if (!online) {
-                    className += ' opacity-60';
-                  }
-
-                  return className;
-                });
-
-                return (
-                  <tr
-                    class={rowClass()}
-                    style={rowStyle()}
-                    onClick={() => props.onNodeClick(nodeId, item.type)}
-                  >
-                    <td
-                      class={`pr-2 py-0.5 whitespace-nowrap ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}
+                </Show>
+                <For each={countColumns()}>
+                  {(column) => (
+                    <th
+                      class="hidden lg:table-cell px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap"
+                      onClick={() => handleSort(column.key)}
                     >
-                      <div class="flex items-center gap-1.5">
-                        <StatusDot
-                          variant={statusIndicator().variant}
-                          title={statusIndicator().label}
-                          ariaLabel={statusIndicator().label}
-                          size="xs"
-                        />
-                        <a
-                          href={
-                            isPVE
-                              ? node!.guestURL || node!.host || `https://${node!.name}:8006`
-                              : pbs!.host || `https://${pbs!.name}:8007`
-                          }
-                          target="_blank"
-                          onClick={(e) => e.stopPropagation()}
-                          class="font-medium text-[11px] text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
-                        >
-                          {displayName()}
-                        </a>
-                        <Show when={showActualName()}>
-                          <span class="text-[9px] text-gray-500 dark:text-gray-400">
-                            ({(node as Node).name})
-                          </span>
-                        </Show>
-                        <Show when={isPVE}>
-                          <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
-                            PVE
-                          </span>
-                        </Show>
-                        <Show when={isPVE && node!.pveVersion}>
-                          <span class="text-[9px] text-gray-500 dark:text-gray-400">
-                            v{node!.pveVersion.split('/')[1] || node!.pveVersion}
-                          </span>
-                        </Show>
-                        <Show when={isPVE && node!.isClusterMember !== undefined}>
-                          <span
-                            class={`text-[9px] px-1 py-0 rounded text-[8px] font-medium whitespace-nowrap ${
-                              node!.isClusterMember
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
-                            }`}
-                          >
-                            {node!.isClusterMember ? node!.clusterName : 'Standalone'}
-                          </span>
-                        </Show>
-                        <Show when={isPBS}>
-                          <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                            PBS
-                          </span>
-                        </Show>
-                        <Show when={isPBS && pbs!.version}>
-                          <span class="text-[9px] text-gray-500 dark:text-gray-400">
-                            v{pbs!.version}
-                          </span>
-                        </Show>
-                      </div>
-                    </td>
-                    <td class="px-2 py-0.5 whitespace-nowrap">
-                      <span
-                        class={`text-xs ${
-                          isPVE && (node?.uptime ?? 0) < 3600
-                            ? 'text-orange-500'
-                            : 'text-gray-600 dark:text-gray-400'
-                        }`}
+                      {column.header}{' '}
+                      {sortKey() === column.key && (sortDirection() === 'asc' ? '▲' : '▼')}
+                    </th>
+                  )}
+                </For>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+              <For each={sortedItems()}>
+                {(item) => {
+                  const isPVE = item.type === 'pve';
+                  const isPBS = item.type === 'pbs';
+                  const node = isPVE ? (item.data as Node) : null;
+                  const pbs = isPBS ? (item.data as PBSInstance) : null;
+
+                  const online = isItemOnline(item);
+                  const statusIndicator = createMemo(() =>
+                    isPVE ? getNodeStatusIndicator(node as Node) : getPBSStatusIndicator(pbs as PBSInstance),
+                  );
+                  const cpuPercentValue = getCpuPercent(item);
+                  const memoryPercentValue = getMemoryPercent(item);
+                  const diskPercentValue = getDiskPercent(item);
+                  const diskSublabel = getDiskSublabel(item);
+                  const cpuTemperatureValue = getCpuTemperatureValue(item);
+                  const uptimeValue = isPVE ? node?.uptime ?? 0 : isPBS ? pbs?.uptime ?? 0 : 0;
+                  const displayName = () => {
+                    if (isPVE) return getNodeDisplayName(node as Node);
+                    return (pbs as PBSInstance).name;
+                  };
+                  const showActualName = () => isPVE && hasAlternateDisplayName(node as Node);
+
+                  // Use unique node ID (not hostname) to handle duplicate node names
+                  const nodeId = isPVE ? node!.id : pbs!.name;
+                  const isSelected = () => props.selectedNode === nodeId;
+                  // Use the full resource ID for alert matching
+                  const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;
+                  // Use namespaced metric key for sparklines
+                  const metricsKey = buildMetricKey('node', resourceId);
+                  const alertStyles = createMemo(() =>
+                    getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
+                  );
+                  const showAlertHighlight = createMemo(
+                    () => alertStyles().hasUnacknowledgedAlert && online,
+                  );
+
+                  const rowStyle = createMemo(() => {
+                    const styles: Record<string, string> = {};
+                    const shadows: string[] = [];
+
+                    if (showAlertHighlight()) {
+                      const color = alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
+                      shadows.push(`inset 4px 0 0 0 ${color}`);
+                    }
+
+                    if (isSelected()) {
+                      shadows.push('0 0 0 1px rgba(59, 130, 246, 0.5)');
+                      shadows.push('0 2px 4px -1px rgba(0, 0, 0, 0.1)');
+                    }
+
+                    if (shadows.length > 0) {
+                      styles['box-shadow'] = shadows.join(', ');
+                    }
+
+                    return styles;
+                  });
+
+                  const rowClass = createMemo(() => {
+                    const baseHover = 'cursor-pointer transition-all duration-200 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm';
+
+                    if (isSelected()) {
+                      return `cursor-pointer transition-all duration-200 relative bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:shadow-sm z-10`;
+                    }
+
+                    if (showAlertHighlight()) {
+                      return alertStyles().severity === 'critical'
+                        ? 'cursor-pointer transition-all duration-200 relative bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/40 hover:shadow-sm'
+                        : 'cursor-pointer transition-all duration-200 relative bg-yellow-50 dark:bg-yellow-950/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/30 hover:shadow-sm';
+                    }
+
+                    let className = baseHover;
+
+                    if (props.selectedNode && props.selectedNode !== nodeId) {
+                      className += ' opacity-50 hover:opacity-80';
+                    }
+
+                    if (!online) {
+                      className += ' opacity-60';
+                    }
+
+                    return className;
+                  });
+
+                  return (
+                    <tr
+                      class={rowClass()}
+                      style={rowStyle()}
+                      onClick={() => props.onNodeClick(nodeId, item.type)}
+                    >
+                      <td
+                        class={`pr-2 py-0.5 whitespace-nowrap ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}
                       >
-                        <Show
-                          when={online && uptimeValue}
-                          fallback="-"
-                        >
-                          {formatUptime(uptimeValue)}
-                        </Show>
-                      </span>
-                    </td>
-                    <td class="px-2 py-0.5">
-                      <Show
-                        when={online && cpuPercentValue !== null}
-                        fallback={<span class="text-xs text-gray-500 dark:text-gray-400">-</span>}
-                      >
-                        <MetricBar
-                          value={cpuPercentValue ?? 0}
-                          label={formatPercent(cpuPercentValue ?? 0)}
-                          sublabel={
-                            isPVE && node!.cpuInfo?.cores
-                              ? `${node!.cpuInfo.cores} cores`
-                              : undefined
-                          }
-                          type="cpu"
-                          resourceId={metricsKey}
-                        />
-                      </Show>
-                    </td>
-                    <td class="px-2 py-0.5">
-                      <Show
-                        when={online && memoryPercentValue !== null}
-                        fallback={<span class="text-xs text-gray-500 dark:text-gray-400">-</span>}
-                      >
-                        <MetricBar
-                          value={memoryPercentValue ?? 0}
-                          label={formatPercent(memoryPercentValue ?? 0)}
-                          sublabel={
-                            isPVE && node!.memory
-                              ? `${formatBytes(node!.memory.used, 0)}/${formatBytes(node!.memory.total, 0)}`
-                              : isPBS && pbs!.memoryTotal
-                                ? `${formatBytes(pbs!.memoryUsed, 0)}/${formatBytes(pbs!.memoryTotal, 0)}`
-                                : undefined
-                          }
-                          type="memory"
-                          resourceId={metricsKey}
-                        />
-                      </Show>
-                    </td>
-                    <td class="px-2 py-0.5">
-                      <Show
-                        when={online && diskPercentValue !== null}
-                        fallback={<span class="text-xs text-gray-500 dark:text-gray-400">-</span>}
-                      >
-                        <MetricBar
-                          value={diskPercentValue ?? 0}
-                          label={formatPercent(diskPercentValue ?? 0)}
-                          sublabel={diskSublabel}
-                          type="disk"
-                          resourceId={metricsKey}
-                        />
-                      </Show>
-                    </td>
-                    <Show when={hasAnyTemperatureData()}>
-                      <td class="px-2 py-0.5 whitespace-nowrap text-center">
-                        <Show
-                          when={
-                            online &&
-                            isPVE &&
-                            cpuTemperatureValue !== null &&
-                            (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
-                            isTemperatureMonitoringEnabled(node!)
-                          }
-                          fallback={
-                            <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
-                          }
-                        >
-                          {(() => {
-                            const value = cpuTemperatureValue as number;
-                            const severityClass =
-                              value >= 80
-                                ? 'text-red-600 dark:text-red-400'
-                                : value >= 70
-                                  ? 'text-yellow-600 dark:text-yellow-400'
-                                  : 'text-green-600 dark:text-green-400';
-
-                            const temp = node!.temperature;
-                            const cpuMinValue =
-                              typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
-                            const cpuMaxValue =
-                              typeof temp?.cpuMaxRecord === 'number' && temp.cpuMaxRecord > 0
-                                ? temp.cpuMaxRecord
-                                : null;
-                            const hasMinMax = cpuMinValue !== null && cpuMaxValue !== null;
-
-                            const gpus = temp?.gpu ?? [];
-                            const hasGPU = gpus.length > 0;
-
-                            if (hasMinMax || hasGPU) {
-                              const min = Math.round(cpuMinValue!);
-                              const max = Math.round(cpuMaxValue!);
-
-                              const getTooltipColor = (temp: number) => {
-                                if (temp >= 80) return 'text-red-400';
-                                if (temp >= 70) return 'text-yellow-400';
-                                return 'text-green-400';
-                              };
-
-                              return (
-                                <span class="relative inline-block group">
-                                  <span class={`text-xs font-medium ${severityClass} cursor-help`}>
-                                    {value}°C
-                                  </span>
-                                  <span class="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs whitespace-nowrap bg-gray-900 dark:bg-gray-700 text-white rounded shadow-lg z-50 pointer-events-none">
-                                    {hasMinMax && (
-                                      <div>
-                                        <span class="text-gray-300">CPU:</span> <span class={getTooltipColor(min)}>{min}</span>-<span class={getTooltipColor(max)}>{max}</span>°C
-                                      </div>
-                                    )}
-                                    {hasGPU && gpus.map((gpu) => {
-                                      const gpuTemp = gpu.edge ?? gpu.junction ?? gpu.mem ?? 0;
-                                      return (
-                                        <div>
-                                          <span class="text-gray-300">GPU:</span> <span class={getTooltipColor(gpuTemp)}>{Math.round(gpuTemp)}</span>°C
-                                          {gpu.edge && ` E:${Math.round(gpu.edge)}`}
-                                          {gpu.junction && ` J:${Math.round(gpu.junction)}`}
-                                          {gpu.mem && ` M:${Math.round(gpu.mem)}`}
-                                        </div>
-                                      );
-                                    })}
-                                  </span>
-                                </span>
-                              );
+                        <div class="flex items-center gap-1.5">
+                          <StatusDot
+                            variant={statusIndicator().variant}
+                            title={statusIndicator().label}
+                            ariaLabel={statusIndicator().label}
+                            size="xs"
+                          />
+                          <a
+                            href={
+                              isPVE
+                                ? node!.guestURL || node!.host || `https://${node!.name}:8006`
+                                : pbs!.host || `https://${pbs!.name}:8007`
                             }
-
-                            return <span class={`text-xs font-medium ${severityClass}`}>{value}°C</span>;
-                          })()}
+                            target="_blank"
+                            onClick={(e) => e.stopPropagation()}
+                            class="font-medium text-[11px] text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
+                          >
+                            {displayName()}
+                          </a>
+                          <Show when={showActualName()}>
+                            <span class="text-[9px] text-gray-500 dark:text-gray-400">
+                              ({(node as Node).name})
+                            </span>
+                          </Show>
+                          <Show when={isPVE}>
+                            <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                              PVE
+                            </span>
+                          </Show>
+                          <Show when={isPVE && node!.pveVersion}>
+                            <span class="text-[9px] text-gray-500 dark:text-gray-400">
+                              v{node!.pveVersion.split('/')[1] || node!.pveVersion}
+                            </span>
+                          </Show>
+                          <Show when={isPVE && node!.isClusterMember !== undefined}>
+                            <span
+                              class={`text-[9px] px-1 py-0 rounded text-[8px] font-medium whitespace-nowrap ${node!.isClusterMember
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
+                                }`}
+                            >
+                              {node!.isClusterMember ? node!.clusterName : 'Standalone'}
+                            </span>
+                          </Show>
+                          <Show when={isPBS}>
+                            <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                              PBS
+                            </span>
+                          </Show>
+                          <Show when={isPBS && pbs!.version}>
+                            <span class="text-[9px] text-gray-500 dark:text-gray-400">
+                              v{pbs!.version}
+                            </span>
+                          </Show>
+                        </div>
+                      </td>
+                      <td class="hidden sm:table-cell px-2 py-0.5 whitespace-nowrap">
+                        <span
+                          class={`text-xs ${isPVE && (node?.uptime ?? 0) < 3600
+                              ? 'text-orange-500'
+                              : 'text-gray-600 dark:text-gray-400'
+                            }`}
+                        >
+                          <Show
+                            when={online && uptimeValue}
+                            fallback="-"
+                          >
+                            {formatUptime(uptimeValue)}
+                          </Show>
+                        </span>
+                      </td>
+                      <td class="px-2 py-0.5">
+                        <Show
+                          when={online && cpuPercentValue !== null}
+                          fallback={<span class="text-xs text-gray-500 dark:text-gray-400">-</span>}
+                        >
+                          <MetricBar
+                            value={cpuPercentValue ?? 0}
+                            label={formatPercent(cpuPercentValue ?? 0)}
+                            sublabel={
+                              isPVE && node!.cpuInfo?.cores
+                                ? `${node!.cpuInfo.cores} cores`
+                                : undefined
+                            }
+                            type="cpu"
+                            resourceId={metricsKey}
+                          />
                         </Show>
                       </td>
-                    </Show>
-                    <For each={countColumns()}>
-                      {(column) => {
-                        const value = getCountValue(item, column.key);
-                        const display = online ? value ?? '-' : '-';
-                        const textClass = online
-                          ? 'text-xs text-gray-700 dark:text-gray-300'
-                          : 'text-xs text-gray-400 dark:text-gray-500';
-                        return (
-                          <td class="px-2 py-0.5 whitespace-nowrap text-center">
-                            <span class={textClass}>{display}</span>
-                          </td>
-                        );
-                      }}
-                    </For>
-                  </tr>
-                );
-              }}
-            </For>
-          </tbody>
-        </table>
-      </div>
+                      <td class="px-2 py-0.5">
+                        <Show
+                          when={online && memoryPercentValue !== null}
+                          fallback={<span class="text-xs text-gray-500 dark:text-gray-400">-</span>}
+                        >
+                          <MetricBar
+                            value={memoryPercentValue ?? 0}
+                            label={formatPercent(memoryPercentValue ?? 0)}
+                            sublabel={
+                              isPVE && node!.memory
+                                ? `${formatBytes(node!.memory.used, 0)}/${formatBytes(node!.memory.total, 0)}`
+                                : isPBS && pbs!.memoryTotal
+                                  ? `${formatBytes(pbs!.memoryUsed, 0)}/${formatBytes(pbs!.memoryTotal, 0)}`
+                                  : undefined
+                            }
+                            type="memory"
+                            resourceId={metricsKey}
+                          />
+                        </Show>
+                      </td>
+                      <td class="hidden md:table-cell px-2 py-0.5">
+                        <Show
+                          when={online && diskPercentValue !== null}
+                          fallback={<span class="text-xs text-gray-500 dark:text-gray-400">-</span>}
+                        >
+                          <MetricBar
+                            value={diskPercentValue ?? 0}
+                            label={formatPercent(diskPercentValue ?? 0)}
+                            sublabel={diskSublabel}
+                            type="disk"
+                            resourceId={metricsKey}
+                          />
+                        </Show>
+                      </td>
+                      <Show when={hasAnyTemperatureData()}>
+                        <td class="hidden lg:table-cell px-2 py-0.5 whitespace-nowrap text-center">
+                          <Show
+                            when={
+                              online &&
+                              isPVE &&
+                              cpuTemperatureValue !== null &&
+                              (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
+                              isTemperatureMonitoringEnabled(node!)
+                            }
+                            fallback={
+                              <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
+                            }
+                          >
+                            {(() => {
+                              const value = cpuTemperatureValue as number;
+                              const severityClass =
+                                value >= 80
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : value >= 70
+                                    ? 'text-yellow-600 dark:text-yellow-400'
+                                    : 'text-green-600 dark:text-green-400';
+
+                              const temp = node!.temperature;
+                              const cpuMinValue =
+                                typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
+                              const cpuMaxValue =
+                                typeof temp?.cpuMaxRecord === 'number' && temp.cpuMaxRecord > 0
+                                  ? temp.cpuMaxRecord
+                                  : null;
+                              const hasMinMax = cpuMinValue !== null && cpuMaxValue !== null;
+
+                              const gpus = temp?.gpu ?? [];
+                              const hasGPU = gpus.length > 0;
+
+                              if (hasMinMax || hasGPU) {
+                                const min = Math.round(cpuMinValue!);
+                                const max = Math.round(cpuMaxValue!);
+
+                                const getTooltipColor = (temp: number) => {
+                                  if (temp >= 80) return 'text-red-400';
+                                  if (temp >= 70) return 'text-yellow-400';
+                                  return 'text-green-400';
+                                };
+
+                                return (
+                                  <span class="relative inline-block group">
+                                    <span class={`text-xs font-medium ${severityClass} cursor-help`}>
+                                      {value}°C
+                                    </span>
+                                    <span class="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs whitespace-nowrap bg-gray-900 dark:bg-gray-700 text-white rounded shadow-lg z-50 pointer-events-none">
+                                      {hasMinMax && (
+                                        <div>
+                                          <span class="text-gray-300">CPU:</span> <span class={getTooltipColor(min)}>{min}</span>-<span class={getTooltipColor(max)}>{max}</span>°C
+                                        </div>
+                                      )}
+                                      {hasGPU && gpus.map((gpu) => {
+                                        const gpuTemp = gpu.edge ?? gpu.junction ?? gpu.mem ?? 0;
+                                        return (
+                                          <div>
+                                            <span class="text-gray-300">GPU:</span> <span class={getTooltipColor(gpuTemp)}>{Math.round(gpuTemp)}</span>°C
+                                            {gpu.edge && ` E:${Math.round(gpu.edge)}`}
+                                            {gpu.junction && ` J:${Math.round(gpu.junction)}`}
+                                            {gpu.mem && ` M:${Math.round(gpu.mem)}`}
+                                          </div>
+                                        );
+                                      })}
+                                    </span>
+                                  </span>
+                                );
+                              }
+
+                              return <span class={`text-xs font-medium ${severityClass}`}>{value}°C</span>;
+                            })()}
+                          </Show>
+                        </td>
+                      </Show>
+                      <For each={countColumns()}>
+                        {(column) => {
+                          const value = getCountValue(item, column.key);
+                          const display = online ? value ?? '-' : '-';
+                          const textClass = online
+                            ? 'text-xs text-gray-700 dark:text-gray-300'
+                            : 'text-xs text-gray-400 dark:text-gray-500';
+                          return (
+                            <td class="hidden lg:table-cell px-2 py-0.5 whitespace-nowrap text-center">
+                              <span class={textClass}>{display}</span>
+                            </td>
+                          );
+                        }}
+                      </For>
+                    </tr>
+                  );
+                }}
+              </For>
+            </tbody>
+          </table>
+        </div>
       </Card>
     </>
   );

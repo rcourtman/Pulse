@@ -1182,7 +1182,7 @@ const DockerContainerRow: Component<{
             </div>
           </div>
         </td>
-        <td class="px-2 py-0.5">
+        <td class="hidden sm:table-cell px-2 py-0.5">
           <span
             class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${runtimeInfo.badgeClass}`}
             title={
@@ -1194,7 +1194,7 @@ const DockerContainerRow: Component<{
             {runtimeInfo.label}
           </span>
         </td>
-        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+        <td class="hidden lg:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <span title={container.image}>
             {container.image || '—'}
           </span>
@@ -1204,7 +1204,7 @@ const DockerContainerRow: Component<{
             {statusLabel()}
           </span>
         </td>
-        <td class="px-2 py-0.5 min-w-[180px]">
+        <td class="hidden md:table-cell px-2 py-0.5">
           <Show
             when={isRunning() && container.cpuPercent && container.cpuPercent > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -1217,7 +1217,7 @@ const DockerContainerRow: Component<{
             />
           </Show>
         </td>
-        <td class="px-2 py-0.5 min-w-[240px]">
+        <td class="hidden md:table-cell px-2 py-0.5">
           <Show
             when={isRunning() && container.memoryUsageBytes && container.memoryUsageBytes > 0}
             fallback={<span class="text-xs text-gray-400">—</span>}
@@ -1231,7 +1231,7 @@ const DockerContainerRow: Component<{
             />
           </Show>
         </td>
-        <td class="px-2 py-0.5 min-w-[220px]">
+        <td class="hidden xl:table-cell px-2 py-0.5">
           <Show when={hasDiskStats()} fallback={<span class="text-xs text-gray-400">—</span>}>
             <Show
               when={diskPercent() !== null}
@@ -1247,13 +1247,13 @@ const DockerContainerRow: Component<{
             </Show>
           </Show>
         </td>
-        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+        <td class="hidden lg:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
             {restarts()}
             <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
           </Show>
         </td>
-        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+        <td class="hidden sm:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
             {uptime()}
           </Show>
@@ -1539,8 +1539,8 @@ const DockerContainerRow: Component<{
                             <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
                               <span
                                 class={`rounded px-1.5 py-0.5 ${mount.rw === false
-                                    ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                  ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
+                                  : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                   }`}
                               >
                                 {rw}
@@ -1946,12 +1946,12 @@ const DockerServiceRow: Component<{
             </div>
           </div>
         </td>
-        <td class="px-2 py-0.5">
+        <td class="hidden sm:table-cell px-2 py-0.5">
           <span class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass('service')}`}>
             Service
           </span>
         </td>
-        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+        <td class="hidden lg:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
           <span title={service.image}>
             {service.image || '—'}
           </span>
@@ -1961,16 +1961,16 @@ const DockerServiceRow: Component<{
             {badge.label}
           </span>
         </td>
-        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[150px]">—</td>
-        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[210px]">—</td>
-        <td class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500 min-w-[200px]">—</td>
-        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+        <td class="hidden md:table-cell px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="hidden md:table-cell px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="hidden xl:table-cell px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
+        <td class="hidden lg:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <span class="font-semibold text-gray-900 dark:text-gray-100">
             {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
           </span>
           <span class="ml-1 text-gray-500 dark:text-gray-400">tasks</span>
         </td>
-        <td class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+        <td class="hidden sm:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <Show when={updatedAt} fallback="—">
             {(timestamp) => (
               <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
@@ -2425,12 +2425,12 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         }
       >
         <Card padding="none" class="overflow-hidden">
-          <ScrollableTable minWidth="1080px">
-            <table class="w-full min-w-[1080px] table-fixed border-collapse whitespace-nowrap">
+          <ScrollableTable>
+            <table class="w-full table-fixed border-collapse whitespace-nowrap">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                   <th
-                    class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     onClick={() => handleSort('resource')}
                     onKeyDown={(e) => e.key === 'Enter' && handleSort('resource')}
                     tabIndex={0}
@@ -2459,7 +2459,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                     </div>
                   </th>
                   <th
-                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    class="hidden sm:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     onClick={() => handleSort('type')}
                     onKeyDown={(e) => e.key === 'Enter' && handleSort('type')}
                     tabIndex={0}
@@ -2473,7 +2473,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                     </div>
                   </th>
                   <th
-                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     onClick={() => handleSort('image')}
                     onKeyDown={(e) => e.key === 'Enter' && handleSort('image')}
                     tabIndex={0}
@@ -2501,7 +2501,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                     </div>
                   </th>
                   <th
-                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] min-w-[150px] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    class="hidden md:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     onClick={() => handleSort('cpu')}
                     onKeyDown={(e) => e.key === 'Enter' && handleSort('cpu')}
                     tabIndex={0}
@@ -2515,7 +2515,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                     </div>
                   </th>
                   <th
-                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] min-w-[210px] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    class="hidden md:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     onClick={() => handleSort('memory')}
                     onKeyDown={(e) => e.key === 'Enter' && handleSort('memory')}
                     tabIndex={0}
@@ -2529,7 +2529,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                     </div>
                   </th>
                   <th
-                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] min-w-[200px] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    class="hidden xl:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     onClick={() => handleSort('disk')}
                     onKeyDown={(e) => e.key === 'Enter' && handleSort('disk')}
                     tabIndex={0}
@@ -2543,7 +2543,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                     </div>
                   </th>
                   <th
-                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     onClick={() => handleSort('tasks')}
                     onKeyDown={(e) => e.key === 'Enter' && handleSort('tasks')}
                     tabIndex={0}
@@ -2557,7 +2557,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                     </div>
                   </th>
                   <th
-                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                    class="hidden sm:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                     onClick={() => handleSort('updated')}
                     onKeyDown={(e) => e.key === 'Enter' && handleSort('updated')}
                     tabIndex={0}

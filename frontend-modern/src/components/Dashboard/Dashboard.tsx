@@ -927,12 +927,12 @@ export function Dashboard(props: DashboardProps) {
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" class="mb-4 overflow-hidden">
-            <ScrollableTable minWidth="750px">
-              <table class="w-full min-w-[750px] md:min-w-[840px] lg:min-w-[970px] table-fixed border-collapse">
+            <ScrollableTable minWidth="600px">
+              <table class="w-full min-w-[600px] table-fixed border-collapse">
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                     <th
-                      class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                      class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 w-auto"
                       onClick={() => handleSort('name')}
                       onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                       tabindex="0"
@@ -942,7 +942,7 @@ export function Dashboard(props: DashboardProps) {
                       Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[52px] sm:w-[58px] lg:w-[64px] xl:w-[70px] 2xl:w-[87px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[5%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('type')}
                       title="Type"
                     >
@@ -951,7 +951,7 @@ export function Dashboard(props: DashboardProps) {
                       {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[50px] sm:w-[56px] lg:w-[62px] xl:w-[70px] 2xl:w-[92px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="hidden lg:table-cell px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[5%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('vmid')}
                       title="VM/Container ID"
                     >
@@ -960,7 +960,7 @@ export function Dashboard(props: DashboardProps) {
                       {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[56px] sm:w-[64px] lg:w-[72px] xl:w-[84px] 2xl:w-[125px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="hidden sm:table-cell px-1.5 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wide w-[8%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('uptime')}
                       title="Uptime"
                     >
@@ -969,13 +969,13 @@ export function Dashboard(props: DashboardProps) {
                       {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('cpu')}
                     >
                       CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('memory')}
                       title="Memory"
                     >
@@ -984,13 +984,13 @@ export function Dashboard(props: DashboardProps) {
                       {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="hidden sm:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('disk')}
                     >
                       Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('diskRead')}
                       title="Disk Read"
                     >
@@ -999,7 +999,7 @@ export function Dashboard(props: DashboardProps) {
                       {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('diskWrite')}
                       title="Disk Write"
                     >
@@ -1008,7 +1008,7 @@ export function Dashboard(props: DashboardProps) {
                       {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('networkIn')}
                       title="Network In"
                     >
@@ -1017,7 +1017,7 @@ export function Dashboard(props: DashboardProps) {
                       {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
                     </th>
                     <th
-                      class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                      class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                       onClick={() => handleSort('networkOut')}
                       title="Network Out"
                     >
