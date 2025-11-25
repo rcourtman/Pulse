@@ -6,7 +6,7 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
-import type { Host, HostLookupResponse } from '@/types/api';
+import type { Host, HostLookupResponse, DockerHost } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
 import { HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -238,6 +238,79 @@ export const UnifiedAgents: Component = () => {
 
     const getUninstallCommand = () => {
         return `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --uninstall`;
+    };
+
+    const allHosts = createMemo(() => {
+        const hosts = state.hosts || [];
+        const dockerHosts = state.dockerHosts || [];
+
+        // Create a unified list
+        const unified = new Map<string, {
+            id: string;
+            hostname: string;
+            displayName?: string;
+            types: ('host' | 'docker')[];
+            status: string;
+            version?: string;
+            lastSeen?: number | string;
+            ip?: string;
+        }>();
+
+        // Process Host Agents
+        hosts.forEach(h => {
+            const key = h.hostname || h.id;
+            unified.set(key, {
+                id: h.id,
+                hostname: h.hostname || 'Unknown',
+                displayName: h.displayName,
+                types: ['host'],
+                status: h.status || 'unknown',
+                version: h.agentVersion,
+                lastSeen: h.lastSeen,
+                ip: h.ip
+            });
+        });
+
+        // Process Docker Agents (merge if same hostname)
+        dockerHosts.forEach(d => {
+            const key = d.hostname || d.id;
+            const existing = unified.get(key);
+            if (existing) {
+                if (!existing.types.includes('docker')) {
+                    existing.types.push('docker');
+                }
+                // Update version/status if newer
+                if (!existing.version && d.version) existing.version = d.version;
+            } else {
+                unified.set(key, {
+                    id: d.id,
+                    hostname: d.hostname || 'Unknown',
+                    displayName: d.displayName,
+                    types: ['docker'],
+                    status: d.status || 'unknown',
+                    version: d.version || d.dockerVersion,
+                    lastSeen: d.lastSeen,
+                });
+            }
+        });
+
+        return Array.from(unified.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
+    });
+
+    const handleRemoveAgent = async (id: string, type: 'host' | 'docker') => {
+        if (!confirm('Are you sure you want to remove this agent? This will stop monitoring but will not uninstall the agent from the remote machine.')) return;
+
+        try {
+            if (type === 'host') {
+                await MonitoringAPI.deleteHostAgent(id);
+            } else {
+                await MonitoringAPI.deleteDockerHost(id);
+            }
+            notificationStore.success('Agent removed from Pulse');
+        } catch (err) {
+            logger.error('Failed to remove agent', err);
+            notificationStore.error('Failed to remove agent');
+        }
     };
 
     return (
@@ -505,6 +578,86 @@ export const UnifiedAgents: Component = () => {
                     </Show>
                 </div>
             </Card>
-        </div>
+
+            <Card padding="lg" class="space-y-4">
+                <div class="space-y-1">
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Managed Agents</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Overview of all agents currently reporting to Pulse.
+                    </p>
+                </div>
+
+                <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Hostname</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Type</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Version</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Last Seen</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                            <For each={allHosts()} fallback={
+                                <tr>
+                                    <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                        No agents installed yet.
+                                    </td>
+                                </tr>
+                            }>
+                                {(agent) => (
+                                    <tr>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                            {agent.displayName || agent.hostname}
+                                            <Show when={agent.displayName && agent.displayName !== agent.hostname}>
+                                                <span class="ml-2 text-xs text-gray-500">({agent.hostname})</span>
+                                            </Show>
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="flex gap-1">
+                                                <For each={agent.types}>
+                                                    {(type) => (
+                                                        <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${type === 'host'
+                                                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                                                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                                            }`}>
+                                                            {type === 'host' ? 'Host' : 'Docker'}
+                                                        </span>
+                                                    )}
+                                                </For>
+                                            </div>
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm">
+                                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${connectedFromStatus(agent.status)
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                }`}>
+                                                {agent.status}
+                                            </span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                            {agent.version || '—'}
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                            {formatRelativeTime(agent.lastSeen)}
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
+                                            <button
+                                                onClick={() => handleRemoveAgent(agent.id, agent.types[0])}
+                                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                            >
+                                                Remove
+                                            </button>
+                                        </td>
+                                    </tr>
+                                )}
+                            </For>
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+        </div >
     );
 };
