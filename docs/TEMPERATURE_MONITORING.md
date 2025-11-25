@@ -324,7 +324,7 @@ journalctl -u pulse-sensor-proxy -f
 ```
 
 Forward these logs off-host for retention by following
-[operations/sensor-proxy-log-forwarding.md](operations/sensor-proxy-log-forwarding.md).
+[operations/SENSOR_PROXY_LOGS.md](operations/SENSOR_PROXY_LOGS.md).
 
 In the Pulse container, check the logs at startup:
 ```bash
@@ -718,7 +718,7 @@ pulse-sensor-proxy config set-allowed-nodes --replace --merge 192.168.0.1
 - Installer uses CLI (no more shell/Python divergence)
 
 **See also:**
-- [Sensor Proxy Config Management Guide](operations/sensor-proxy-config-management.md) - Complete runbook
+- [Sensor Proxy Config Management Guide](operations/SENSOR_PROXY_CONFIG.md) - Complete runbook
 - [Sensor Proxy CLI Reference](/opt/pulse/cmd/pulse-sensor-proxy/README.md) - Full command documentation
 
 ## Control-Plane Sync & Migration
