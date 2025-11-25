@@ -1,0 +1,42 @@
+# 💾 ZFS Pool Monitoring
+
+Pulse automatically detects and monitors ZFS pools on your Proxmox nodes.
+
+## 🚀 Features
+
+*   **Auto-Detection**: No configuration needed.
+*   **Health Status**: Tracks `ONLINE`, `DEGRADED`, and `FAULTED` states.
+*   **Error Tracking**: Monitors read, write, and checksum errors.
+*   **Alerts**: Notifies you of degraded pools or failing devices.
+
+## ⚙️ Requirements
+
+The Pulse user needs `Sys.Audit` permission on `/nodes/{node}/disks` (included in the standard Pulse role).
+
+```bash
+# Grant permission manually if needed
+pveum acl modify /nodes -user pulse-monitor@pam -role PVEAuditor
+```
+
+## 🔧 Configuration
+
+ZFS monitoring is **enabled by default**. To disable it:
+
+```bash
+# Add to /opt/pulse/.env
+PULSE_DISABLE_ZFS_MONITORING=true
+```
+
+## 🚨 Alerts
+
+| Severity | Condition |
+| :--- | :--- |
+| **Warning** | Pool `DEGRADED` or any read/write/checksum errors. |
+| **Critical** | Pool `FAULTED` or `UNAVAIL`. |
+
+## 🔍 Troubleshooting
+
+**No ZFS Data?**
+1.  Check permissions: `pveum user permissions pulse-monitor@pam`.
+2.  Verify pools exist: `zpool list`.
+3.  Check logs: `grep ZFS /opt/pulse/pulse.log`.
