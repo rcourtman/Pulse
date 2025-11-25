@@ -129,6 +129,39 @@ log_info "Installing binary to ${INSTALL_DIR}/${BINARY_NAME}..."
 mkdir -p "$INSTALL_DIR"
 mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
 
+# --- Legacy Cleanup ---
+# Remove old agents if they exist to prevent conflicts
+log_info "Checking for legacy agents..."
+
+# Legacy Host Agent
+if command -v systemctl >/dev/null 2>&1; then
+    if systemctl is-active --quiet pulse-host-agent 2>/dev/null || systemctl is-enabled --quiet pulse-host-agent 2>/dev/null; then
+        log_warn "Removing legacy pulse-host-agent..."
+        systemctl stop pulse-host-agent 2>/dev/null || true
+        systemctl disable pulse-host-agent 2>/dev/null || true
+        rm -f /etc/systemd/system/pulse-host-agent.service
+        rm -f /usr/local/bin/pulse-host-agent
+    fi
+    if systemctl is-active --quiet pulse-docker-agent 2>/dev/null || systemctl is-enabled --quiet pulse-docker-agent 2>/dev/null; then
+        log_warn "Removing legacy pulse-docker-agent..."
+        systemctl stop pulse-docker-agent 2>/dev/null || true
+        systemctl disable pulse-docker-agent 2>/dev/null || true
+        rm -f /etc/systemd/system/pulse-docker-agent.service
+        rm -f /usr/local/bin/pulse-docker-agent
+    fi
+    systemctl daemon-reload 2>/dev/null || true
+fi
+
+# Legacy macOS
+if [[ "$OS" == "darwin" ]]; then
+    if launchctl list | grep -q "com.pulse.host-agent"; then
+        log_warn "Removing legacy com.pulse.host-agent..."
+        launchctl unload /Library/LaunchDaemons/com.pulse.host-agent.plist 2>/dev/null || true
+        rm -f /Library/LaunchDaemons/com.pulse.host-agent.plist
+        rm -f /usr/local/bin/pulse-host-agent
+    fi
+fi
+
 # --- Service Installation ---
 
 # 1. macOS (Launchd)
