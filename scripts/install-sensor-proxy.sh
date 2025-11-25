@@ -3517,7 +3517,13 @@ else
     print_info "Temperature monitoring will use the secure host-side proxy"
     print_info ""
 
-    if [[ "$STANDALONE" == true ]]; then
+    # Only show Docker configuration instructions if Pulse is actually running in Docker on this host
+    IS_PULSE_DOCKER=false
+    if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^pulse$'; then
+        IS_PULSE_DOCKER=true
+    fi
+
+    if [[ "$STANDALONE" == true ]] && [[ "$IS_PULSE_DOCKER" == true ]]; then
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "  Docker Container Configuration Required"
