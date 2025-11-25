@@ -28,7 +28,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
@@ -1374,7 +1373,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				req.URL.Path != "/install-container-agent.sh" &&
 				req.URL.Path != "/install-host-agent.sh" &&
 				req.URL.Path != "/install-host-agent.ps1" &&
-				req.URL.Path != "/install-host-agent.ps1" &&
+				req.URL.Path != "/uninstall-host-agent.sh" &&
 				req.URL.Path != "/uninstall-host-agent.ps1" &&
 				req.URL.Path != "/install.sh" &&
 				req.URL.Path != "/install.ps1"
@@ -2475,17 +2474,18 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// handleAgentVersion returns the current Docker agent version for update checks
+// handleAgentVersion returns the current server version for agent update checks.
+// Agents compare this to their own version to determine if an update is available.
 func (r *Router) handleAgentVersion(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Current agent version - matches the version baked into the Docker agent binary
-	version := strings.TrimSpace(dockeragent.Version)
-	if version == "" {
-		version = "dev"
+	// Return the server version - all agents should match the server version
+	version := "dev"
+	if versionInfo, err := updates.GetCurrentVersion(); err == nil {
+		version = versionInfo.Version
 	}
 
 	response := AgentVersionResponse{
@@ -2503,13 +2503,15 @@ func (r *Router) handleServerInfo(w http.ResponseWriter, req *http.Request) {
 
 	versionInfo, err := updates.GetCurrentVersion()
 	isDev := true
+	version := "dev"
 	if err == nil {
 		isDev = versionInfo.IsDevelopment
+		version = versionInfo.Version
 	}
 
 	response := map[string]interface{}{
 		"isDevelopment": isDev,
-		"version":       dockeragent.Version,
+		"version":       version,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

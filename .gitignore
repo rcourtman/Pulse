@@ -7,6 +7,8 @@
 /pulse-test
 /pulse-host-agent
 /pulse-host-agent-*
+/pulse-agent
+/pulse-agent-*
 
 # Logs
 *.log

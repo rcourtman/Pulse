@@ -40,7 +40,10 @@ if ([string]::IsNullOrWhiteSpace($Url) -or [string]::IsNullOrWhiteSpace($Token))
 }
 
 # --- Download ---
-$DownloadUrl = "$Url/download/pulse-agent?os=windows&arch=amd64"
+# Determine architecture
+$Arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
+$ArchParam = "windows-$Arch"
+$DownloadUrl = "$Url/download/pulse-agent?arch=$ArchParam"
 Write-Host "Downloading agent from $DownloadUrl..." -ForegroundColor Cyan
 
 if (-not (Test-Path $InstallDir)) {
@@ -76,7 +79,11 @@ if (Get-Service $AgentName -ErrorAction SilentlyContinue) {
     Start-Sleep -Seconds 2
 }
 
-$Args = "--url `"$Url`" --token `"$Token`" --interval `"$Interval`" --enable-host=$EnableHost --enable-docker=$EnableDocker --insecure=$Insecure"
+# Build command line args
+$Args = "--url `"$Url`" --token `"$Token`" --interval `"$Interval`""
+if ($EnableHost) { $Args += " --enable-host" }
+if ($EnableDocker) { $Args += " --enable-docker" }
+if ($Insecure) { $Args += " --insecure" }
 $BinPath = "`"$DestPath`" $Args"
 
 # Create Service

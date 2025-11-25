@@ -1,7 +1,9 @@
 package api
 
 import (
-	"fmt"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,6 +54,35 @@ func (r *Router) handleDownloadUnifiedInstallScriptPS(w http.ResponseWriter, req
 	http.ServeFile(w, req, scriptPath)
 }
 
+// normalizeUnifiedAgentArch normalizes architecture strings for the unified agent.
+func normalizeUnifiedAgentArch(arch string) string {
+	arch = strings.ToLower(strings.TrimSpace(arch))
+	switch arch {
+	case "linux-amd64", "amd64", "x86_64":
+		return "linux-amd64"
+	case "linux-arm64", "arm64", "aarch64":
+		return "linux-arm64"
+	case "linux-armv7", "armv7", "armv7l", "armhf":
+		return "linux-armv7"
+	case "linux-armv6", "armv6":
+		return "linux-armv6"
+	case "linux-386", "386", "i386", "i686":
+		return "linux-386"
+	case "darwin-amd64", "macos-amd64":
+		return "darwin-amd64"
+	case "darwin-arm64", "macos-arm64":
+		return "darwin-arm64"
+	case "windows-amd64":
+		return "windows-amd64"
+	case "windows-arm64":
+		return "windows-arm64"
+	case "windows-386":
+		return "windows-386"
+	default:
+		return ""
+	}
+}
+
 // handleDownloadUnifiedAgent serves the pulse-agent binary
 func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
@@ -59,52 +90,65 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	// For now, we only have the locally built binary.
-	// In production, this would look up the correct binary for the requested OS/Arch.
-	// Query params: ?os=linux&arch=amd64
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
-	osName := req.URL.Query().Get("os")
-	arch := req.URL.Query().Get("arch")
+	archParam := strings.TrimSpace(req.URL.Query().Get("arch"))
+	searchPaths := make([]string, 0, 6)
 
-	if osName == "" {
-		osName = "linux" // Default
-	}
-	if arch == "" {
-		arch = "amd64" // Default
-	}
-
-	// Normalize OS
-	osName = strings.ToLower(osName)
-	if osName == "darwin" {
-		osName = "macos"
+	if normalized := normalizeUnifiedAgentArch(archParam); normalized != "" {
+		searchPaths = append(searchPaths,
+			filepath.Join(pulseBinDir(), "pulse-agent-"+normalized),
+			filepath.Join("/opt/pulse", "pulse-agent-"+normalized),
+			filepath.Join("/app", "pulse-agent-"+normalized),
+			filepath.Join(r.projectRoot, "bin", "pulse-agent-"+normalized),
+		)
 	}
 
-	// In dev mode, we just serve the binary we built in the root
-	// In prod, we'd look in a dist folder
-	binaryName := "pulse-agent"
-	if osName == "windows" {
-		binaryName = "pulse-agent.exe"
-	}
+	// Default locations (host architecture)
+	searchPaths = append(searchPaths,
+		filepath.Join(pulseBinDir(), "pulse-agent"),
+		"/opt/pulse/pulse-agent",
+		filepath.Join("/app", "pulse-agent"),
+		filepath.Join(r.projectRoot, "bin", "pulse-agent"),
+	)
 
-	// Try to find the binary
-	// 1. Check root (dev)
-	binaryPath := filepath.Join(r.config.AppRoot, binaryName)
-	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-		// 2. Check dist folder (prod/build)
-		binaryPath = filepath.Join(r.config.AppRoot, "dist", fmt.Sprintf("%s-%s", osName, arch), binaryName)
-		if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-			// Fallback for dev: just serve the root binary regardless of requested OS/Arch
-			// This allows testing the flow even if cross-compilation hasn't happened
-			binaryPath = filepath.Join(r.config.AppRoot, "pulse-agent")
-			if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-				log.Error().Str("path", binaryPath).Msg("Unified agent binary not found")
-				http.Error(w, "Agent binary not found", http.StatusNotFound)
-				return
-			}
+	for _, candidate := range searchPaths {
+		if candidate == "" {
+			continue
 		}
+
+		info, err := os.Stat(candidate)
+		if err != nil || info.IsDir() {
+			continue
+		}
+
+		file, err := os.Open(candidate)
+		if err != nil {
+			log.Error().Err(err).Str("path", candidate).Msg("Failed to open unified agent binary for download")
+			continue
+		}
+
+		hasher := sha256.New()
+		if _, err := io.Copy(hasher, file); err != nil {
+			file.Close()
+			log.Error().Err(err).Str("path", candidate).Msg("Failed to hash unified agent binary")
+			continue
+		}
+
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			file.Close()
+			log.Error().Err(err).Str("path", candidate).Msg("Failed to rewind unified agent binary")
+			continue
+		}
+
+		w.Header().Set("X-Checksum-Sha256", hex.EncodeToString(hasher.Sum(nil)))
+		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
+		file.Close()
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", binaryName))
-	http.ServeFile(w, req, binaryPath)
+	http.Error(w, "Agent binary not found", http.StatusNotFound)
 }
