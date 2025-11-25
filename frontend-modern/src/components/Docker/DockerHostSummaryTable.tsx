@@ -1,7 +1,6 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
-import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
 import { resolveHostRuntime } from './runtimeDisplay';
 import { formatPercent, formatUptime } from '@/utils/format';
@@ -9,6 +8,8 @@ import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getDockerHostStatusIndicator } from '@/utils/status';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
 
 export interface DockerHostSummary {
   host: DockerHost;
@@ -47,6 +48,7 @@ const getDisplayName = (host: DockerHost) => {
 export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (props) => {
   const [sortKey, setSortKey] = createSignal<SortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<SortDirection>('asc');
+  const { isMobile } = useBreakpoint();
 
   const handleSort = (key: SortKey) => {
     if (sortKey() === key) {
@@ -328,51 +330,33 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                       </div>
                     </td>
                     <td class="px-0.5 md:px-2 py-1 align-middle">
-                      <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                        <div class={`md:hidden text-xs text-center ${summary.cpuPercent >= 90 ? 'text-red-600 dark:text-red-400 font-bold' : summary.cpuPercent >= 80 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-                          {formatPercent(summary.cpuPercent)}
-                        </div>
-                        <div class="hidden md:block">
-                          <MetricBar
-                            value={summary.cpuPercent}
-                            label={formatPercent(summary.cpuPercent)}
-                            type="cpu"
-                            resourceId={metricsKey}
-                          />
-                        </div>
-                      </Show>
+                      <ResponsiveMetricCell
+                        value={summary.cpuPercent}
+                        type="cpu"
+                        resourceId={metricsKey}
+                        isRunning={online}
+                        showMobile={isMobile()}
+                      />
                     </td>
                     <td class="px-0.5 md:px-2 py-1 align-middle">
-                      <Show when={online} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                        <div class={`md:hidden text-xs text-center ${summary.memoryPercent >= 85 ? 'text-red-600 dark:text-red-400 font-bold' : summary.memoryPercent >= 75 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-                          {formatPercent(summary.memoryPercent)}
-                        </div>
-                        <div class="hidden md:block">
-                          <MetricBar
-                            value={summary.memoryPercent}
-                            label={formatPercent(summary.memoryPercent)}
-                            sublabel={summary.memoryLabel}
-                            type="memory"
-                            resourceId={metricsKey}
-                          />
-                        </div>
-                      </Show>
+                      <ResponsiveMetricCell
+                        value={summary.memoryPercent}
+                        type="memory"
+                        sublabel={summary.memoryLabel}
+                        resourceId={metricsKey}
+                        isRunning={online}
+                        showMobile={isMobile()}
+                      />
                     </td>
                     <td class="px-0.5 md:px-2 py-1 align-middle">
-                      <Show when={summary.diskLabel} fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}>
-                        <div class={`md:hidden text-xs text-center ${summary.diskPercent >= 90 ? 'text-red-600 dark:text-red-400 font-bold' : summary.diskPercent >= 80 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-                          {formatPercent(summary.diskPercent)}
-                        </div>
-                        <div class="hidden md:block">
-                          <MetricBar
-                            value={summary.diskPercent}
-                            label={formatPercent(summary.diskPercent)}
-                            sublabel={summary.diskLabel}
-                            type="disk"
-                            resourceId={metricsKey}
-                          />
-                        </div>
-                      </Show>
+                      <ResponsiveMetricCell
+                        value={summary.diskPercent}
+                        type="disk"
+                        sublabel={summary.diskLabel}
+                        resourceId={metricsKey}
+                        isRunning={!!summary.diskLabel}
+                        showMobile={isMobile()}
+                      />
                     </td>
                     <td class="px-0.5 md:px-2 py-1 align-middle">
                       <div class="flex justify-center items-center h-full whitespace-nowrap">

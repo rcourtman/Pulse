@@ -1,9 +1,7 @@
 import { GuestDrawer } from './GuestDrawer';
-import { createMemo, createSignal, createEffect, Show } from 'solid-js';
+import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
 import type { VM, Container } from '@/types/api';
-import { formatBytes, formatPercent, formatUptime } from '@/utils/format';
-import { MetricBar } from './MetricBar';
-import { IOMetric } from './IOMetric';
+import { formatBytes, formatUptime, formatSpeed } from '@/utils/format';
 import { TagBadges } from './TagBadges';
 
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -12,6 +10,8 @@ import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import { buildMetricKey } from '@/utils/metricsKeys';
+import { type ColumnPriority } from '@/hooks/useBreakpoint';
+import { ResponsiveMetricCell, useGridTemplate } from '@/components/shared/responsive';
 
 type Guest = VM | Container;
 
@@ -36,6 +36,31 @@ const buildGuestId = (guest: Guest) => {
 const isVM = (guest: Guest): guest is VM => {
   return guest.type === 'qemu';
 };
+
+// Column configuration using the priority system
+interface ColumnDef {
+  id: string;
+  label: string;
+  priority: ColumnPriority;
+  minWidth?: string;
+  maxWidth?: string;
+  flex?: number;
+}
+
+const GUEST_COLUMNS: ColumnDef[] = [
+  { id: 'name', label: 'Name', priority: 'essential', minWidth: '100px', flex: 1.5 },
+  { id: 'type', label: 'Type', priority: 'essential', minWidth: '24px', maxWidth: '32px' },
+  { id: 'vmid', label: 'VMID', priority: 'essential', minWidth: '28px', maxWidth: '36px' },
+  { id: 'uptime', label: 'Uptime', priority: 'essential', minWidth: '28px', maxWidth: '50px' },
+  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '50px', flex: 1 },
+  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '50px', flex: 1 },
+  { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '50px', flex: 1 },
+  // I/O columns - fixed width, no flex
+  { id: 'diskRead', label: 'D Read', priority: 'essential', minWidth: '44px', maxWidth: '54px' },
+  { id: 'diskWrite', label: 'D Write', priority: 'essential', minWidth: '44px', maxWidth: '54px' },
+  { id: 'netIn', label: 'Net In', priority: 'essential', minWidth: '44px', maxWidth: '54px' },
+  { id: 'netOut', label: 'Net Out', priority: 'essential', minWidth: '44px', maxWidth: '54px' },
+];
 
 interface GuestRowProps {
   guest: Guest;
@@ -64,6 +89,9 @@ interface GuestRowProps {
 export function GuestRow(props: GuestRowProps) {
   const guestId = createMemo(() => buildGuestId(props.guest));
   const isEditingUrl = createMemo(() => currentlyEditingGuestId() === guestId());
+
+  // Use the responsive grid template hook for dynamic column visibility
+  const { gridTemplate, visibleColumns, isMobile } = useGridTemplate({ columns: GUEST_COLUMNS });
 
   // Create namespaced metrics key
   const metricsKey = createMemo(() => {
@@ -108,12 +136,9 @@ export function GuestRow(props: GuestRowProps) {
     }
   });
 
-
-
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
   const memPercent = createMemo(() => {
     if (!props.guest.memory) return 0;
-    // Use the pre-calculated usage percentage from the backend
     return props.guest.memory.usage || 0;
   });
   const memoryUsageLabel = createMemo(() => {
@@ -166,17 +191,14 @@ export function GuestRow(props: GuestRowProps) {
     if (target.closest('a, button, input, [data-prevent-toggle]')) {
       return;
     }
-    // Toggle: if this guest is currently expanded, close it; otherwise open it (closing any other)
     setCurrentlyExpandedGuestId(prev => prev === guestId() ? null : guestId());
   };
 
   const startEditingUrl = (event: MouseEvent) => {
     event.stopPropagation();
 
-    // If another guest is being edited, save it first
     const currentEditing = currentlyEditingGuestId();
     if (currentEditing !== null && currentEditing !== guestId()) {
-      // Find the input for the currently editing guest and blur it
       const currentInput = document.querySelector(`input[data-guest-id="${currentEditing}"]`) as HTMLInputElement;
       if (currentInput) {
         currentInput.blur();
@@ -188,7 +210,6 @@ export function GuestRow(props: GuestRowProps) {
     setCurrentlyEditingGuestId(guestId());
   };
 
-  // Auto-focus the input when editing starts
   createEffect(() => {
     if (isEditingUrl() && urlInputRef) {
       urlInputRef.focus();
@@ -196,21 +217,16 @@ export function GuestRow(props: GuestRowProps) {
     }
   });
 
-  // Track if we're currently editing to prevent cleanup during re-renders
   let isCurrentlyMounted = true;
 
-  // Add global click handler to close editor and prevent clicks while editing
   createEffect(() => {
     if (isEditingUrl() && isCurrentlyMounted) {
       const handleGlobalClick = (e: MouseEvent) => {
-        // Double-check we're still the editing guest
         if (currentlyEditingGuestId() !== guestId()) return;
 
         const target = e.target as HTMLElement;
-        // Allow clicking another guest name to switch editing
         const isClickingGuestName = target.closest('[data-guest-name-editable]');
 
-        // If clicking outside the editor (and not another guest name), close it and prevent the click
         if (!target.closest('[data-url-editor]') && !isClickingGuestName) {
           e.preventDefault();
           e.stopPropagation();
@@ -220,7 +236,6 @@ export function GuestRow(props: GuestRowProps) {
       };
 
       const handleGlobalMouseDown = (e: MouseEvent) => {
-        // Double-check we're still the editing guest
         if (currentlyEditingGuestId() !== guestId()) return;
 
         const target = e.target as HTMLElement;
@@ -233,7 +248,6 @@ export function GuestRow(props: GuestRowProps) {
         }
       };
 
-      // Use capture phase to intercept clicks before they bubble
       document.addEventListener('mousedown', handleGlobalMouseDown, true);
       document.addEventListener('click', handleGlobalClick, true);
       return () => {
@@ -244,23 +258,19 @@ export function GuestRow(props: GuestRowProps) {
   });
 
   const saveUrl = async () => {
-    // Only save if this guest is the one being edited
     if (currentlyEditingGuestId() !== guestId()) return;
 
     const newUrl = (editingValues.get(guestId()) || '').trim();
 
-    // Clear global editing state
     editingValues.delete(guestId());
     setEditingValuesVersion(v => v + 1);
     setCurrentlyEditingGuestId(null);
 
-    // If URL hasn't changed, don't save
     if (newUrl === (customUrl() || '')) return;
 
     try {
       await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: newUrl });
 
-      // Animate if transitioning from no URL to having a URL
       const hadUrl = !!customUrl();
       if (!hadUrl && newUrl) {
         setShouldAnimateIcon(true);
@@ -269,7 +279,6 @@ export function GuestRow(props: GuestRowProps) {
 
       setCustomUrl(newUrl || undefined);
 
-      // Notify parent to update metadata
       if (props.onCustomUrlUpdate) {
         props.onCustomUrlUpdate(guestId(), newUrl);
       }
@@ -286,21 +295,17 @@ export function GuestRow(props: GuestRowProps) {
   };
 
   const deleteUrl = async () => {
-    // Only process if this guest is the one being edited
     if (currentlyEditingGuestId() !== guestId()) return;
 
-    // Clear global editing state
     editingValues.delete(guestId());
     setEditingValuesVersion(v => v + 1);
     setCurrentlyEditingGuestId(null);
 
-    // If there was a URL set, delete it
     if (customUrl()) {
       try {
         await GuestMetadataAPI.updateMetadata(guestId(), { customUrl: '' });
         setCustomUrl(undefined);
 
-        // Notify parent to update metadata
         if (props.onCustomUrlUpdate) {
           props.onCustomUrlUpdate(guestId(), '');
         }
@@ -314,17 +319,15 @@ export function GuestRow(props: GuestRowProps) {
   };
 
   const cancelEditingUrl = () => {
-    // Only cancel if this guest is the one being edited
     if (currentlyEditingGuestId() !== guestId()) return;
 
-    // Just close without saving
     editingValues.delete(guestId());
     setEditingValuesVersion(v => v + 1);
     setCurrentlyEditingGuestId(null);
   };
+
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
-    // Check if usage is -1 (unknown/no guest agent)
     if (props.guest.disk.usage === -1) return -1;
     return (props.guest.disk.used / props.guest.disk.total) * 100;
   });
@@ -339,7 +342,6 @@ export function GuestRow(props: GuestRowProps) {
   const guestStatus = createMemo(() => getGuestPowerIndicator(props.guest, parentOnline()));
   const lockLabel = createMemo(() => (props.guest.lock || '').trim());
 
-  // Get helpful tooltip for disk status
   const getDiskStatusTooltip = () => {
     if (!isVM(props.guest)) return 'Disk stats unavailable';
 
@@ -382,9 +384,6 @@ export function GuestRow(props: GuestRowProps) {
     return '#9ca3af';
   });
 
-
-
-  // Get row styling - include alert styles if present
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200 relative';
     const hover = 'hover:shadow-sm';
@@ -404,9 +403,6 @@ export function GuestRow(props: GuestRowProps) {
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${expanded}`;
   });
 
-
-
-  // Get row styles including box-shadow for alert border
   const rowStyle = createMemo(() => {
     if (!showAlertHighlight()) return {};
     const color = alertAccentColor();
@@ -416,265 +412,287 @@ export function GuestRow(props: GuestRowProps) {
     };
   });
 
+  // Render cell content based on column type
+  const renderCell = (column: ColumnDef) => {
+    switch (column.id) {
+      case 'name':
+        return (
+          <div class={`px-1 py-1 flex items-center min-w-0 ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
+            <div class="flex items-center gap-2 min-w-0 w-full">
+              <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                <StatusDot
+                  variant={guestStatus().variant}
+                  title={guestStatus().label}
+                  ariaLabel={guestStatus().label}
+                  size="xs"
+                />
+                <div class="flex-1 min-w-0">
+                  <Show
+                    when={isEditingUrl()}
+                    fallback={
+                      <div class="flex items-center gap-1.5 min-w-0">
+                        <span
+                          class="text-xs font-medium text-gray-900 dark:text-gray-100 cursor-text select-none overflow-hidden text-ellipsis whitespace-nowrap"
+                          style="cursor: text;"
+                          title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                          onClick={startEditingUrl}
+                          data-guest-name-editable
+                        >
+                          {props.guest.name}
+                        </span>
+                        <Show when={customUrl()}>
+                          <a
+                            href={customUrl()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                            title="Open in new tab"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <svg
+                              class="w-3.5 h-3.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                              />
+                            </svg>
+                          </a>
+                        </Show>
+                      </div>
+                    }
+                  >
+                    <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                      <input
+                        ref={urlInputRef}
+                        type="text"
+                        value={editingUrlValue()}
+                        data-guest-id={guestId()}
+                        onInput={(e) => {
+                          editingValues.set(guestId(), e.currentTarget.value);
+                          setEditingValuesVersion(v => v + 1);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            saveUrl();
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelEditingUrl();
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        placeholder="https://192.168.1.100:8006"
+                        class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        data-url-editor-button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          saveUrl();
+                        }}
+                        class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        title="Save (or press Enter)"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        type="button"
+                        data-url-editor-button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteUrl();
+                        }}
+                        class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        title="Delete URL"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+
+              <Show when={!isEditingUrl()}>
+                <div class="hidden md:flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
+                  <TagBadges
+                    tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+                    maxVisible={3}
+                    onTagClick={props.onTagClick}
+                    activeSearch={props.activeSearch}
+                  />
+                </div>
+              </Show>
+
+              <Show when={lockLabel()}>
+                <span
+                  class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+                  title={`Guest is locked (${lockLabel()})`}
+                >
+                  Lock: {lockLabel()}
+                </span>
+              </Show>
+            </div>
+          </div>
+        );
+
+      case 'type':
+        return (
+          <div class="px-0.5 py-1 flex justify-center items-center">
+            <span
+              class={`inline-block px-1 py-0.5 text-[10px] font-medium rounded ${props.guest.type === 'qemu'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                }`}
+              title={isVM(props.guest) ? 'Virtual Machine' : 'LXC Container'}
+            >
+              {isVM(props.guest) ? 'VM' : 'LXC'}
+            </span>
+          </div>
+        );
+
+      case 'vmid':
+        return (
+          <div class="flex-1 px-0.5 py-1 md:px-1.5 md:py-0 w-auto min-w-[30px] md:w-full flex justify-center md:justify-start items-center text-xs text-gray-600 dark:text-gray-400">
+            {props.guest.vmid}
+          </div>
+        );
+
+      case 'uptime':
+        return (
+          <div class="flex-1 px-0.5 py-1 md:px-1.5 md:py-0 w-auto min-w-[40px] md:w-full flex justify-center md:justify-start items-center">
+            <div class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
+              <Show when={isRunning()} fallback="-">
+                <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
+                  {formatUptime(props.guest.uptime, true)}
+                </Show>
+              </Show>
+            </div>
+          </div>
+        );
+
+      case 'cpu':
+        return (
+          <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
+            <ResponsiveMetricCell
+              value={cpuPercent()}
+              type="cpu"
+              resourceId={metricsKey()}
+              sublabel={
+                props.guest.cpus
+                  ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
+                  : undefined
+              }
+              isRunning={isRunning()}
+              showMobile={isMobile()}
+              class="w-full"
+            />
+          </div>
+        );
+
+      case 'memory':
+        return (
+          <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
+            <div title={memoryTooltip() ?? undefined} class="w-full text-center xl:text-left">
+              <ResponsiveMetricCell
+                value={memPercent()}
+                type="memory"
+                resourceId={metricsKey()}
+                sublabel={memoryUsageLabel()}
+                isRunning={isRunning()}
+                showMobile={isMobile()}
+                class="w-full"
+              />
+            </div>
+          </div>
+        );
+
+      case 'disk':
+        return (
+          <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
+            <Show
+              when={hasDiskUsage()}
+              fallback={
+                <span class="text-xs text-gray-400 cursor-help" title={getDiskStatusTooltip()}>
+                  -
+                </span>
+              }
+            >
+              <ResponsiveMetricCell
+                value={diskPercent()}
+                type="disk"
+                resourceId={metricsKey()}
+                sublabel={
+                  props.guest.disk
+                    ? `${formatBytes(props.guest.disk.used, 0)}/${formatBytes(props.guest.disk.total, 0)}`
+                    : undefined
+                }
+                isRunning={true}
+                showMobile={isMobile()}
+                class="w-full"
+              />
+            </Show>
+          </div>
+        );
+
+      case 'diskRead':
+        return (
+          <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
+            <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
+              <span class="text-gray-600 dark:text-gray-400">{formatSpeed(props.guest.diskRead)}</span>
+            </Show>
+          </div>
+        );
+
+      case 'diskWrite':
+        return (
+          <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
+            <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
+              <span class="text-gray-600 dark:text-gray-400">{formatSpeed(props.guest.diskWrite)}</span>
+            </Show>
+          </div>
+        );
+
+      case 'netIn':
+        return (
+          <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
+            <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
+              <span class="text-gray-600 dark:text-gray-400">{formatSpeed(props.guest.networkIn)}</span>
+            </Show>
+          </div>
+        );
+
+      case 'netOut':
+        return (
+          <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
+            <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
+              <span class="text-gray-600 dark:text-gray-400">{formatSpeed(props.guest.networkOut)}</span>
+            </Show>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
       <div
-        class={`${rowClass()} flex md:grid md:grid-cols-[minmax(150px,1fr)_60px_60px_80px_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)] xl:grid-cols-[minmax(200px,1fr)_80px_80px_100px_minmax(150px,1.5fr)_minmax(150px,1.5fr)_minmax(150px,1.5fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)] items-center`}
-        style={rowStyle()}
+        class={`${rowClass()} grid items-center`}
+        style={{ ...rowStyle(), 'grid-template-columns': gridTemplate() }}
         onClick={toggleDrawer}
         aria-expanded={drawerOpen()}
       >
-        {/* Name Section - Sticky on mobile */}
-        <div class={`p-2 md:py-0 md:pl-4 md:pr-2 flex items-center sticky left-0 z-10 bg-inherit w-[160px] sm:w-[200px] md:w-full flex-shrink-0 border-r md:border-r-0 border-gray-100 dark:border-gray-700 ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
-          <div class="flex items-center gap-2 min-w-0 w-full">
-            <div class="flex items-center gap-1.5 flex-1 min-w-0">
-              <StatusDot
-                variant={guestStatus().variant}
-                title={guestStatus().label}
-                ariaLabel={guestStatus().label}
-                size="xs"
-              />
-              <div class="flex-1 min-w-0">
-                <Show
-                  when={isEditingUrl()}
-                  fallback={
-                    <div class="flex items-center gap-1.5 min-w-0">
-                      <span
-                        class="text-xs font-medium text-gray-900 dark:text-gray-100 cursor-text select-none overflow-hidden text-ellipsis whitespace-nowrap"
-                        style="cursor: text;"
-                        title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                        onClick={startEditingUrl}
-                        data-guest-name-editable
-                      >
-                        {props.guest.name}
-                      </span>
-                      <Show when={customUrl()}>
-                        <a
-                          href={customUrl()}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                          title="Open in new tab"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <svg
-                            class="w-3.5 h-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                            />
-                          </svg>
-                        </a>
-                      </Show>
-                    </div>
-                  }
-                >
-                  <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-                    <input
-                      ref={urlInputRef}
-                      type="text"
-                      value={editingUrlValue()}
-                      data-guest-id={guestId()}
-                      onInput={(e) => {
-                        editingValues.set(guestId(), e.currentTarget.value);
-                        setEditingValuesVersion(v => v + 1);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          saveUrl();
-                        } else if (e.key === 'Escape') {
-                          e.preventDefault();
-                          cancelEditingUrl();
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      placeholder="https://192.168.1.100:8006"
-                      class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      type="button"
-                      data-url-editor-button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        saveUrl();
-                      }}
-                      class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                      title="Save (or press Enter)"
-                    >
-                      ✓
-                    </button>
-                    <button
-                      type="button"
-                      data-url-editor-button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteUrl();
-                      }}
-                      class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                      title="Delete URL"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </Show>
-              </div>
-            </div>
-
-            <Show when={!isEditingUrl()}>
-              <div class="hidden md:flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
-                <TagBadges
-                  tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-                  maxVisible={3}
-                  onTagClick={props.onTagClick}
-                  activeSearch={props.activeSearch}
-                />
-              </div>
-            </Show>
-
-            <Show when={lockLabel()}>
-              <span
-                class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-                title={`Guest is locked (${lockLabel()})`}
-              >
-                Lock: {lockLabel()}
-              </span>
-            </Show>
-          </div>
-        </div>
-
-        {/* Metrics Section - Scrollable on mobile */}
-        <div class="flex-1 overflow-x-auto md:contents no-scrollbar">
-          <div class="flex md:contents min-w-full md:min-w-0 divide-x md:divide-none divide-gray-100 dark:divide-gray-800">
-            {/* Type */}
-            <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[30px] md:w-full flex justify-center md:justify-start items-center">
-              <span
-                class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${props.guest.type === 'qemu'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                  }`}
-              >
-                {isVM(props.guest) ? 'VM' : 'LXC'}
-              </span>
-            </div>
-
-            {/* VMID */}
-            <div class="flex-1 px-0.5 py-1 md:px-1.5 md:py-0 w-auto min-w-[30px] md:w-full flex justify-center md:justify-start items-center text-xs text-gray-600 dark:text-gray-400">
-              {props.guest.vmid}
-            </div>
-
-            {/* Uptime */}
-            <div class="flex-1 px-0.5 py-1 md:px-1.5 md:py-0 w-auto min-w-[40px] md:w-full flex justify-center md:justify-start items-center">
-              <div class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
-                <Show when={isRunning()} fallback="-">
-                  <span class="md:hidden">{formatUptime(props.guest.uptime, true)}</span>
-                  <span class="hidden md:inline">{formatUptime(props.guest.uptime)}</span>
-                </Show>
-              </div>
-            </div>
-
-            {/* CPU */}
-            <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <div class={`md:hidden text-xs ${cpuPercent() >= 90 ? 'text-red-600 dark:text-red-400 font-bold' : cpuPercent() >= 80 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-                  {formatPercent(cpuPercent())}
-                </div>
-                <div class="hidden md:block w-full">
-                  <MetricBar
-                    value={cpuPercent()}
-                    label={formatPercent(cpuPercent())}
-                    sublabel={
-                      props.guest.cpus
-                        ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
-                        : undefined
-                    }
-                    type="cpu"
-                    resourceId={metricsKey()}
-                  />
-                </div>
-              </Show>
-            </div>
-
-            {/* Memory */}
-            <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
-              <div title={memoryTooltip() ?? undefined} class="w-full text-center xl:text-left">
-                <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                  <div class={`md:hidden text-xs ${memPercent() >= 85 ? 'text-red-600 dark:text-red-400 font-bold' : memPercent() >= 75 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-                    {formatPercent(memPercent())}
-                  </div>
-                  <div class="hidden md:block w-full">
-                    <MetricBar
-                      value={memPercent()}
-                      label={formatPercent(memPercent())}
-                      sublabel={memoryUsageLabel()}
-                      type="memory"
-                      resourceId={metricsKey()}
-                    />
-                  </div>
-                </Show>
-              </div>
-            </div>
-
-            {/* Disk */}
-            <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
-              <Show
-                when={hasDiskUsage()}
-                fallback={
-                  <span class="text-xs text-gray-400 cursor-help" title={getDiskStatusTooltip()}>
-                    -
-                  </span>
-                }
-              >
-                <div class={`md:hidden text-xs ${diskPercent() >= 90 ? 'text-red-600 dark:text-red-400 font-bold' : diskPercent() >= 80 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-                  {formatPercent(diskPercent())}
-                </div>
-                <div class="hidden md:block w-full">
-                  <MetricBar
-                    value={diskPercent()}
-                    label={formatPercent(diskPercent())}
-                    sublabel={
-                      props.guest.disk
-                        ? `${formatBytes(props.guest.disk.used, 0)}/${formatBytes(props.guest.disk.total, 0)}`
-                        : undefined
-                    }
-                    type="disk"
-                    resourceId={metricsKey()}
-                  />
-                </div>
-              </Show>
-            </div>
-
-            {/* Disk I/O */}
-            <div class="hidden xl:flex px-2 py-1 xl:px-2 xl:py-0 w-auto min-w-[60px] xl:w-full justify-start items-center">
-              <div class="flex h-[24px] items-center w-full justify-start">
-                <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
-              </div>
-            </div>
-            <div class="hidden xl:flex px-2 py-1 xl:px-2 xl:py-0 w-auto min-w-[60px] xl:w-full justify-start items-center">
-              <div class="flex h-[24px] items-center w-full justify-start">
-                <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
-              </div>
-            </div>
-
-            {/* Network I/O */}
-            <div class="hidden xl:flex px-2 py-1 xl:px-2 xl:py-0 w-auto min-w-[60px] xl:w-full justify-start items-center">
-              <div class="flex h-[24px] items-center w-full justify-start">
-                <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
-              </div>
-            </div>
-            <div class="hidden xl:flex px-2 py-1 xl:px-2 xl:py-0 w-auto min-w-[60px] xl:w-full justify-start items-center">
-              <div class="flex h-[24px] items-center w-full justify-start">
-                <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
-              </div>
-            </div>
-          </div>
-        </div>
+        <For each={visibleColumns()}>
+          {(column) => renderCell(column)}
+        </For>
       </div>
 
       <Show when={drawerOpen() && canShowDrawer()}>
@@ -690,4 +708,4 @@ export function GuestRow(props: GuestRowProps) {
       </Show>
     </>
   );
-};
+}

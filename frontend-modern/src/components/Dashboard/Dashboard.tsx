@@ -925,111 +925,93 @@ export function Dashboard(props: DashboardProps) {
       {/* Table View */}
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
-          <Card padding="none" class="mb-4 overflow-hidden bg-white dark:bg-gray-800">
-            {/* Desktop Header - Hidden on mobile/tablet, visible on xl+ */}
-            <div class="flex md:grid md:grid-cols-[minmax(150px,1fr)_60px_60px_80px_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)] xl:grid-cols-[minmax(200px,1fr)_80px_80px_100px_minmax(150px,1.5fr)_minmax(150px,1.5fr)_minmax(150px,1.5fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20">
-              {/* Name Header - Sticky on mobile */}
+          <Card padding="none" class="mb-4 bg-white dark:bg-gray-800">
+            <div class="overflow-x-auto">
+            {/* Desktop Header */}
+            <div class="grid grid-cols-[minmax(100px,1.5fr)_minmax(24px,32px)_minmax(28px,36px)_minmax(28px,50px)_minmax(50px,1fr)_minmax(50px,1fr)_minmax(50px,1fr)_minmax(44px,54px)_minmax(44px,54px)_minmax(44px,54px)_minmax(44px,54px)] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[520px] md:min-w-0">
+              {/* Name Header */}
               <div
-                class="pl-4 pr-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center sticky left-0 z-30 bg-gray-50 dark:bg-gray-700/50 w-[160px] sm:w-[200px] md:w-full flex-shrink-0 border-r md:border-r-0 border-gray-200 dark:border-gray-700"
+                class="pl-4 pr-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center"
                 onClick={() => handleSort('name')}
               >
                 Name
                 {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </div>
 
-              {/* Metrics Headers - Scrollable on mobile */}
-              <div class="flex-1 overflow-hidden md:contents">
-                <div class="flex md:contents min-w-full md:min-w-0">
-                  <div
-                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[30px] md:w-full"
-                    onClick={() => handleSort('type')}
-                  >
-                    <span class="md:hidden" title="Type">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                    </span>
-                    <span class="hidden md:inline">Type</span>
-                    {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[30px] md:w-full"
-                    onClick={() => handleSort('vmid')}
-                  >
-                    <span class="md:hidden" title="ID">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>
-                    </span>
-                    <span class="hidden md:inline">VMID</span>
-                    {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[40px] md:w-full"
-                    onClick={() => handleSort('uptime')}
-                  >
-                    <span class="md:hidden" title="Uptime">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </span>
-                    <span class="hidden md:inline">Uptime</span>
-                    {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="flex-1 px-0.5 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[35px] md:w-full"
-                    onClick={() => handleSort('cpu')}
-                  >
-                    <span class="md:hidden" title="CPU">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
-                    </span>
-                    <span class="hidden md:inline">CPU</span>
-                    {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[35px] md:w-full"
-                    onClick={() => handleSort('memory')}
-                  >
-                    <span class="md:hidden" title="Memory">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    </span>
-                    <span class="hidden md:inline">Memory</span>
-                    {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="flex-1 px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center md:justify-start w-auto min-w-[35px] md:w-full"
-                    onClick={() => handleSort('disk')}
-                  >
-                    <span class="md:hidden" title="Disk">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
-                    </span>
-                    <span class="hidden md:inline">Disk</span>
-                    {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="hidden xl:flex px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 items-center w-full"
-                    onClick={() => handleSort('diskRead')}
-                  >
-                    D Read {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="hidden xl:flex px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 items-center w-full"
-                    onClick={() => handleSort('diskWrite')}
-                  >
-                    D Write {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="hidden xl:flex px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 items-center w-full"
-                    onClick={() => handleSort('networkIn')}
-                  >
-                    Net In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                  <div
-                    class="hidden xl:flex px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 items-center w-full"
-                    onClick={() => handleSort('networkOut')}
-                  >
-                    Net Out {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </div>
-                </div>
+              {/* Type */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('type')}
+              >
+                Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* VMID */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('vmid')}
+              >
+                ID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* Uptime */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('uptime')}
+              >
+                Up {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* CPU */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('cpu')}
+              >
+                CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* Memory */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('memory')}
+              >
+                Mem {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* Disk */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('disk')}
+              >
+                Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* Disk Read */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('diskRead')}
+              >
+                D Rd {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* Disk Write */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('diskWrite')}
+              >
+                D Wr {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* Net In */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('networkIn')}
+              >
+                N In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
+              </div>
+              {/* Net Out */}
+              <div
+                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                onClick={() => handleSort('networkOut')}
+              >
+                N Out {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </div>
             </div>
 
             {/* Guest List */}
-            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+            <div class="divide-y divide-gray-200 dark:divide-gray-700 min-w-[520px] md:min-w-0">
               <For
                 each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
                   const nodeA = nodeByInstance()[instanceIdA];
@@ -1075,6 +1057,7 @@ export function Dashboard(props: DashboardProps) {
                   );
                 }}
               </For>
+            </div>
             </div>
           </Card>
         </ComponentErrorBoundary>
