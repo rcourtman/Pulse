@@ -638,10 +638,16 @@ const Settings: Component<SettingsProps> = (props) => {
   const [temperatureMonitoringEnabled, setTemperatureMonitoringEnabled] = createSignal(true);
   const [savingTemperatureSetting, setSavingTemperatureSetting] = createSignal(false);
   const [hostProxyStatus, setHostProxyStatus] = createSignal<HostProxyStatusResponse | null>(null);
+  const [hideLocalLogin, setHideLocalLogin] = createSignal(false);
+  const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
+
   const temperatureMonitoringLocked = () =>
     Boolean(
       envOverrides().temperatureMonitoringEnabled || envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
     );
+  const hideLocalLoginLocked = () =>
+    Boolean(envOverrides().hideLocalLogin || envOverrides()['PULSE_AUTH_HIDE_LOCAL_LOGIN']);
+
   const pvePollingEnvLocked = () =>
     Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
   let discoverySubnetInputRef: HTMLInputElement | undefined;
@@ -703,6 +709,35 @@ const Settings: Component<SettingsProps> = (props) => {
         return valueNumber >= 0 && valueNumber <= 255;
       });
     });
+  };
+
+  const handleHideLocalLoginChange = async (enabled: boolean): Promise<void> => {
+    if (hideLocalLoginLocked() || savingHideLocalLogin()) {
+      return;
+    }
+
+    const previous = hideLocalLogin();
+    setHideLocalLogin(enabled);
+    setSavingHideLocalLogin(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ hideLocalLogin: enabled });
+      if (enabled) {
+        notificationStore.success('Local login hidden', 2000);
+      } else {
+        notificationStore.info('Local login visible', 2000);
+      }
+      // Reload security status to reflect changes
+      await loadSecurityStatus();
+    } catch (error) {
+      logger.error('Failed to update hide local login setting', error);
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to update hide local login setting',
+      );
+      setHideLocalLogin(previous);
+    } finally {
+      setSavingHideLocalLogin(false);
+    }
   };
 
   const applySavedDiscoverySubnet = (subnet?: string | null) => {
@@ -980,8 +1015,8 @@ const Settings: Component<SettingsProps> = (props) => {
       diag.temperatureProxy.socketFound && diag.temperatureProxy.proxyReachable
         ? 'healthy'
         : diag.temperatureProxy.socketFound
-        ? 'error'
-        : 'missing';
+          ? 'error'
+          : 'missing';
     const cooldowns: Record<string, TemperatureSocketCooldownInfo> = {};
     const socketHosts = diag.temperatureProxy.socketHostCooldowns || [];
     (socketHosts as TemperatureProxySocketHost[]).forEach((entry) => {
@@ -1018,11 +1053,11 @@ const Settings: Component<SettingsProps> = (props) => {
       setHostProxyStatus(
         diag?.temperatureProxy?.hostProxySummary
           ? {
-              hostSocketPresent: Boolean(diag.temperatureProxy?.socketFound),
-              containerSocketPresent:
-                diag.temperatureProxy?.hostProxySummary?.containerSocketPresent ?? undefined,
-              summary: diag.temperatureProxy?.hostProxySummary ?? undefined,
-            }
+            hostSocketPresent: Boolean(diag.temperatureProxy?.socketFound),
+            containerSocketPresent:
+              diag.temperatureProxy?.hostProxySummary?.containerSocketPresent ?? undefined,
+            summary: diag.temperatureProxy?.hostProxySummary ?? undefined,
+          }
           : null,
       );
     } catch (err) {
@@ -1090,10 +1125,10 @@ const Settings: Component<SettingsProps> = (props) => {
 
       const nodes = Array.isArray(data.nodes)
         ? (data.nodes as Array<Record<string, unknown>>).map((node) => ({
-            name: typeof node.name === 'string' ? node.name : 'unknown',
-            sshReady: Boolean(node.ssh_ready),
-            error: typeof node.error === 'string' ? node.error : undefined,
-          }))
+          name: typeof node.name === 'string' ? node.name : 'unknown',
+          sshReady: Boolean(node.ssh_ready),
+          error: typeof node.error === 'string' ? node.error : undefined,
+        }))
         : [];
 
       setProxyRegisterSummary(nodes);
@@ -1191,83 +1226,83 @@ const Settings: Component<SettingsProps> = (props) => {
       disabled?: boolean;
     }[];
   }[] = [
-    {
-      id: 'platforms',
-      label: 'Platforms',
-      items: [
-        { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
-        { id: 'docker', label: 'Docker', icon: Boxes },
-        { id: 'hosts', label: 'Hosts', icon: Monitor, iconProps: { strokeWidth: 2 } },
-      ],
-    },
-    {
-      id: 'operations',
-      label: 'Operations',
-      items: [
-        { id: 'api', label: 'API Tokens', icon: BadgeCheck },
-        {
-          id: 'diagnostics',
-          label: 'Diagnostics',
-          icon: Activity,
-          iconProps: { strokeWidth: 2 },
-        },
-      ],
-    },
-    {
-      id: 'system',
-      label: 'System',
-      items: [
-        {
-          id: 'system-general',
-          label: 'General',
-          icon: Sliders,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'system-network',
-          label: 'Network',
-          icon: Network,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'system-updates',
-          label: 'Updates',
-          icon: RefreshCw,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'system-backups',
-          label: 'Backups',
-          icon: Clock,
-          iconProps: { strokeWidth: 2 },
-        },
-      ],
-    },
-    {
-      id: 'security',
-      label: 'Security',
-      items: [
-        {
-          id: 'security-overview',
-          label: 'Overview',
-          icon: Shield,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'security-auth',
-          label: 'Authentication',
-          icon: Lock,
-          iconProps: { strokeWidth: 2 },
-        },
-        {
-          id: 'security-sso',
-          label: 'Single Sign-On',
-          icon: Key,
-          iconProps: { strokeWidth: 2 },
-        },
-      ],
-    },
-  ];
+      {
+        id: 'platforms',
+        label: 'Platforms',
+        items: [
+          { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
+          { id: 'docker', label: 'Docker', icon: Boxes },
+          { id: 'hosts', label: 'Hosts', icon: Monitor, iconProps: { strokeWidth: 2 } },
+        ],
+      },
+      {
+        id: 'operations',
+        label: 'Operations',
+        items: [
+          { id: 'api', label: 'API Tokens', icon: BadgeCheck },
+          {
+            id: 'diagnostics',
+            label: 'Diagnostics',
+            icon: Activity,
+            iconProps: { strokeWidth: 2 },
+          },
+        ],
+      },
+      {
+        id: 'system',
+        label: 'System',
+        items: [
+          {
+            id: 'system-general',
+            label: 'General',
+            icon: Sliders,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-network',
+            label: 'Network',
+            icon: Network,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-updates',
+            label: 'Updates',
+            icon: RefreshCw,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-backups',
+            label: 'Backups',
+            icon: Clock,
+            iconProps: { strokeWidth: 2 },
+          },
+        ],
+      },
+      {
+        id: 'security',
+        label: 'Security',
+        items: [
+          {
+            id: 'security-overview',
+            label: 'Overview',
+            icon: Shield,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-auth',
+            label: 'Authentication',
+            icon: Lock,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-sso',
+            label: 'Single Sign-On',
+            icon: Key,
+            iconProps: { strokeWidth: 2 },
+          },
+        ],
+      },
+    ];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
 
@@ -1960,6 +1995,9 @@ const Settings: Component<SettingsProps> = (props) => {
             ? systemSettings.temperatureMonitoringEnabled
             : true,
         );
+        // Load hideLocalLogin setting
+        setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
+
         // Backup polling controls
         if (typeof systemSettings.backupPollingEnabled === 'boolean') {
           setBackupPollingEnabled(systemSettings.backupPollingEnabled);
@@ -2558,15 +2596,13 @@ const Settings: Component<SettingsProps> = (props) => {
                                 type="button"
                                 aria-current={isActive() ? 'page' : undefined}
                                 disabled={item.disabled}
-                                class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${
-                                  sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'
-                                } text-sm font-medium transition-colors ${
-                                  item.disabled
+                                class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'
+                                  } text-sm font-medium transition-colors ${item.disabled
                                     ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
                                     : isActive()
                                       ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
                                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
-                                }`}
+                                  }`}
                                 onClick={() => {
                                   if (item.disabled) return;
                                   setActiveTab(item.id);
@@ -2604,13 +2640,12 @@ const Settings: Component<SettingsProps> = (props) => {
                         <button
                           type="button"
                           disabled={disabled}
-                          class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                            disabled
-                              ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
-                              : isActive
-                                ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
-                                : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
-                          }`}
+                          class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${disabled
+                            ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
+                            : isActive
+                              ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
+                              : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
+                            }`}
                           onClick={() => {
                             if (disabled) return;
                             setActiveTab(tab.id);
@@ -2803,7 +2838,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               Last scan{' '}
                               {formatRelativeTime(
                                 discoveryScanStatus().lastResultAt ??
-                                  discoveryScanStatus().lastScanStartedAt,
+                                discoveryScanStatus().lastScanStartedAt,
                               )}
                             </span>
                           </Show>
@@ -3090,7 +3125,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               Last scan{' '}
                               {formatRelativeTime(
                                 discoveryScanStatus().lastResultAt ??
-                                  discoveryScanStatus().lastScanStartedAt,
+                                discoveryScanStatus().lastScanStartedAt,
                               )}
                             </span>
                           </Show>
@@ -3374,7 +3409,7 @@ const Settings: Component<SettingsProps> = (props) => {
                               Last scan{' '}
                               {formatRelativeTime(
                                 discoveryScanStatus().lastResultAt ??
-                                  discoveryScanStatus().lastScanStartedAt,
+                                discoveryScanStatus().lastScanStartedAt,
                               )}
                             </span>
                           </Show>
@@ -3584,8 +3619,8 @@ const Settings: Component<SettingsProps> = (props) => {
                           Current cadence: {pvePollingInterval()} seconds (
                           {pvePollingInterval() >= 60
                             ? `${(pvePollingInterval() / 60).toFixed(
-                                pvePollingInterval() % 60 === 0 ? 0 : 1,
-                              )} minute${pvePollingInterval() / 60 === 1 ? '' : 's'}`
+                              pvePollingInterval() % 60 === 0 ? 0 : 1,
+                            )} minute${pvePollingInterval() / 60 === 1 ? '' : 's'}`
                             : 'under a minute'}
                           ).
                         </p>
@@ -3596,11 +3631,10 @@ const Settings: Component<SettingsProps> = (props) => {
                             {(option) => (
                               <button
                                 type="button"
-                                class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                                  pvePollingSelection() === option.value
-                                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
-                                    : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
-                                } ${pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${pvePollingSelection() === option.value
+                                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
+                                  } ${pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 disabled={pvePollingEnvLocked()}
                                 onClick={() => {
                                   if (pvePollingEnvLocked()) return;
@@ -3615,11 +3649,10 @@ const Settings: Component<SettingsProps> = (props) => {
                           </For>
                           <button
                             type="button"
-                            class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                              pvePollingSelection() === 'custom'
-                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
-                                : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
-                            } ${pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            class={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${pvePollingSelection() === 'custom'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-200'
+                              } ${pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                             disabled={pvePollingEnvLocked()}
                             onClick={() => {
                               if (pvePollingEnvLocked()) return;
@@ -3792,11 +3825,10 @@ const Settings: Component<SettingsProps> = (props) => {
                               </legend>
                               <div class="space-y-2">
                                 <label
-                                  class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${
-                                    discoveryMode() === 'auto'
-                                      ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
-                                      : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
-                                  }`}
+                                  class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${discoveryMode() === 'auto'
+                                    ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
+                                    : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
+                                    }`}
                                 >
                                   <input
                                     type="radio"
@@ -3825,11 +3857,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                 </label>
 
                                 <label
-                                  class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${
-                                    discoveryMode() === 'custom'
-                                      ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
-                                      : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
-                                  }`}
+                                  class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${discoveryMode() === 'custom'
+                                    ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
+                                    : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
+                                    }`}
                                 >
                                   <input
                                     type="radio"
@@ -3869,11 +3900,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                         return (
                                           <button
                                             type="button"
-                                            class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${
-                                              isActive
-                                                ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                                : 'border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
-                                            }`}
+                                            class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive
+                                              ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
+                                              : 'border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
+                                              }`}
                                             onClick={async () => {
                                               if (envOverrides().discoverySubnet) {
                                                 return;
@@ -3958,11 +3988,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                     ? 'auto (scan every network phase)'
                                     : '192.168.1.0/24, 10.0.0.0/24'
                                 }
-                                class={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                  envOverrides().discoverySubnet
-                                    ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200 cursor-not-allowed opacity-60'
-                                    : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/70'
-                                }`}
+                                class={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${envOverrides().discoverySubnet
+                                  ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200 cursor-not-allowed opacity-60'
+                                  : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/70'
+                                  }`}
                                 disabled={envOverrides().discoverySubnet}
                                 onInput={(e) => {
                                   if (envOverrides().discoverySubnet) {
@@ -4084,11 +4113,10 @@ const Settings: Component<SettingsProps> = (props) => {
                               }}
                               disabled={envOverrides().allowedOrigins}
                               placeholder="* or https://example.com"
-                              class={`w-full px-3 py-1.5 text-sm border rounded-lg ${
-                                envOverrides().allowedOrigins
-                                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
-                                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
-                              }`}
+                              class={`w-full px-3 py-1.5 text-sm border rounded-lg ${envOverrides().allowedOrigins
+                                ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
+                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                                }`}
                             />
                             {envOverrides().allowedOrigins && (
                               <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
@@ -4305,11 +4333,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                 versionInfo()?.isDocker ||
                                 versionInfo()?.isSourceBuild
                               }
-                              class={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${
-                                versionInfo()?.isDocker || versionInfo()?.isSourceBuild
-                                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                  : 'bg-blue-600 text-white hover:bg-blue-700'
-                              }`}
+                              class={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${versionInfo()?.isDocker || versionInfo()?.isSourceBuild
+                                ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
                             >
                               {checkingForUpdates() ? (
                                 <>
@@ -5125,6 +5152,18 @@ const Settings: Component<SettingsProps> = (props) => {
                           </div>
                         </div>
 
+                        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <Toggle
+                            label="Hide local login form"
+                            description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."
+                            checked={hideLocalLogin()}
+                            onChange={(e: ToggleChangeEvent) => handleHideLocalLoginChange(e.target.checked)}
+                            disabled={hideLocalLoginLocked() || savingHideLocalLogin()}
+                            locked={hideLocalLoginLocked()}
+                            lockedMessage="This setting is managed by the PULSE_AUTH_HIDE_LOCAL_LOGIN environment variable"
+                          />
+                        </div>
+
                         <Show when={!authDisabledByEnv() && showQuickSecurityWizard()}>
                           <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                             <QuickSecuritySetup
@@ -5503,9 +5542,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                     <div class="flex items-center justify-between">
                                       <span>Proxy socket</span>
                                       <span
-                                        class={`px-2 py-0.5 rounded text-white text-xs ${
-                                          temp().socketFound ? 'bg-green-500' : 'bg-red-500'
-                                        }`}
+                                        class={`px-2 py-0.5 rounded text-white text-xs ${temp().socketFound ? 'bg-green-500' : 'bg-red-500'
+                                          }`}
                                       >
                                         {temp().socketFound ? 'Detected' : 'Missing'}
                                       </span>
@@ -5513,9 +5551,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                     <div class="flex items-center justify-between">
                                       <span>Daemon</span>
                                       <span
-                                        class={`px-2 py-0.5 rounded text-white text-xs ${
-                                          temp().proxyReachable ? 'bg-green-500' : 'bg-yellow-500'
-                                        }`}
+                                        class={`px-2 py-0.5 rounded text-white text-xs ${temp().proxyReachable ? 'bg-green-500' : 'bg-yellow-500'
+                                          }`}
                                       >
                                         {temp().proxyReachable ? 'Responding' : 'No response'}
                                       </span>
@@ -5546,71 +5583,70 @@ const Settings: Component<SettingsProps> = (props) => {
                                     <Show when={typeof temp().legacySshKeyCount === 'number'}>
                                       <div>Legacy SSH keys: {temp().legacySshKeyCount ?? 0}</div>
                                     </Show>
-                                  <Show when={temp().legacySSHDetected}>
-                                    <div class="text-red-500">
-                                      Legacy SSH temperature collection detected
+                                    <Show when={temp().legacySSHDetected}>
+                                      <div class="text-red-500">
+                                        Legacy SSH temperature collection detected
+                                      </div>
+                                    </Show>
+                                  </div>
+                                  <Show
+                                    when={
+                                      temp().controlPlaneStates &&
+                                      (temp().controlPlaneStates as TemperatureProxyControlPlaneState[]).length > 0
+                                    }
+                                  >
+                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
+                                      <div class="flex items-center justify-between">
+                                        <div class="font-semibold text-gray-700 dark:text-gray-200">
+                                          Control plane sync
+                                        </div>
+                                        <span
+                                          class={`px-2 py-0.5 rounded text-white text-xs ${temp().controlPlaneEnabled ? 'bg-green-500' : 'bg-gray-500'
+                                            }`}
+                                        >
+                                          {temp().controlPlaneEnabled ? 'Enabled' : 'Disabled'}
+                                        </span>
+                                      </div>
+                                      <For each={temp().controlPlaneStates || []}>
+                                        {(state) => (
+                                          <div class="rounded border border-gray-200 dark:border-gray-700 px-2 py-1.5 space-y-1">
+                                            <div class="flex items-center justify-between">
+                                              <div class="font-medium text-gray-700 dark:text-gray-200">
+                                                {state.instance || 'Proxy'}
+                                              </div>
+                                              <span
+                                                class={`px-2 py-0.5 rounded text-white text-xs ${controlPlaneStatusClass(
+                                                  state.status,
+                                                )}`}
+                                              >
+                                                {controlPlaneStatusLabel(state.status)}
+                                              </span>
+                                            </div>
+                                            <Show when={state.lastSync}>
+                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                                Last sync: {formatIsoRelativeTime(state.lastSync)}
+                                              </div>
+                                            </Show>
+                                            <Show when={typeof state.secondsBehind === 'number' && (state.secondsBehind || 0) > 0}>
+                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                                Behind by ~{formatUptime(state.secondsBehind || 0)}
+                                              </div>
+                                            </Show>
+                                            <Show when={state.refreshIntervalSeconds}>
+                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                                Target interval: {formatUptime(state.refreshIntervalSeconds || 0)}
+                                              </div>
+                                            </Show>
+                                          </div>
+                                        )}
+                                      </For>
                                     </div>
                                   </Show>
-                                </div>
-                                <Show
-                                  when={
-                                    temp().controlPlaneStates &&
-                                    (temp().controlPlaneStates as TemperatureProxyControlPlaneState[]).length > 0
-                                  }
-                                >
-                                  <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                    <div class="flex items-center justify-between">
-                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                        Control plane sync
-                                      </div>
-                                      <span
-                                        class={`px-2 py-0.5 rounded text-white text-xs ${
-                                          temp().controlPlaneEnabled ? 'bg-green-500' : 'bg-gray-500'
-                                        }`}
-                                      >
-                                        {temp().controlPlaneEnabled ? 'Enabled' : 'Disabled'}
-                                      </span>
-                                    </div>
-                                    <For each={temp().controlPlaneStates || []}>
-                                      {(state) => (
-                                        <div class="rounded border border-gray-200 dark:border-gray-700 px-2 py-1.5 space-y-1">
-                                          <div class="flex items-center justify-between">
-                                            <div class="font-medium text-gray-700 dark:text-gray-200">
-                                              {state.instance || 'Proxy'}
-                                            </div>
-                                            <span
-                                              class={`px-2 py-0.5 rounded text-white text-xs ${controlPlaneStatusClass(
-                                                state.status,
-                                              )}`}
-                                            >
-                                              {controlPlaneStatusLabel(state.status)}
-                                            </span>
-                                          </div>
-                                          <Show when={state.lastSync}>
-                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                              Last sync: {formatIsoRelativeTime(state.lastSync)}
-                                            </div>
-                                          </Show>
-                                          <Show when={typeof state.secondsBehind === 'number' && (state.secondsBehind || 0) > 0}>
-                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                              Behind by ~{formatUptime(state.secondsBehind || 0)}
-                                            </div>
-                                          </Show>
-                                          <Show when={state.refreshIntervalSeconds}>
-                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                              Target interval: {formatUptime(state.refreshIntervalSeconds || 0)}
-                                            </div>
-                                          </Show>
-                                        </div>
-                                      )}
-                                    </For>
-                                  </div>
-                                </Show>
-                                    <Show
-                                      when={
-                                        temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
-                                      }
-                                    >
+                                  <Show
+                                    when={
+                                      temp().httpProxies && (temp().httpProxies as TemperatureProxyHTTPStatus[]).length > 0
+                                    }
+                                  >
                                     <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
                                       <div class="font-semibold text-gray-700 dark:text-gray-200">
                                         HTTPS proxies
@@ -5630,9 +5666,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                                 </Show>
                                               </div>
                                               <span
-                                                class={`px-2 py-0.5 rounded text-white text-xs ${
-                                                  proxy.reachable ? 'bg-green-500' : 'bg-red-500'
-                                                }`}
+                                                class={`px-2 py-0.5 rounded text-white text-xs ${proxy.reachable ? 'bg-green-500' : 'bg-red-500'
+                                                  }`}
                                               >
                                                 {proxy.reachable ? 'Healthy' : 'Error'}
                                               </span>
@@ -5658,49 +5693,49 @@ const Settings: Component<SettingsProps> = (props) => {
                                       </a>
                                     </div>
                                   </Show>
-                                <Show
-                                  when={
-                                    temp().socketHostCooldowns &&
-                                    (temp().socketHostCooldowns as TemperatureProxySocketHost[]).length > 0
-                                  }
-                                >
-                                  <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                    <div class="font-semibold text-gray-700 dark:text-gray-200">
-                                      Socket cooldowns
-                                    </div>
-                                    <For each={temp().socketHostCooldowns || []}>
-                                      {(entry) => (
-                                        <div class="rounded border border-amber-200 dark:border-amber-700 px-2 py-1.5 space-y-1">
-                                          <div class="flex items-center justify-between">
-                                            <div>
-                                              <div class="font-medium text-gray-700 dark:text-gray-200">
-                                                {entry.node || entry.host || 'Host'}
-                                              </div>
-                                              <Show when={entry.cooldownUntil}>
-                                                <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                                  Until {entry.cooldownUntil}
+                                  <Show
+                                    when={
+                                      temp().socketHostCooldowns &&
+                                      (temp().socketHostCooldowns as TemperatureProxySocketHost[]).length > 0
+                                    }
+                                  >
+                                    <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 space-y-2">
+                                      <div class="font-semibold text-gray-700 dark:text-gray-200">
+                                        Socket cooldowns
+                                      </div>
+                                      <For each={temp().socketHostCooldowns || []}>
+                                        {(entry) => (
+                                          <div class="rounded border border-amber-200 dark:border-amber-700 px-2 py-1.5 space-y-1">
+                                            <div class="flex items-center justify-between">
+                                              <div>
+                                                <div class="font-medium text-gray-700 dark:text-gray-200">
+                                                  {entry.node || entry.host || 'Host'}
                                                 </div>
-                                              </Show>
+                                                <Show when={entry.cooldownUntil}>
+                                                  <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                                    Until {entry.cooldownUntil}
+                                                  </div>
+                                                </Show>
+                                              </div>
+                                              <span class="px-2 py-0.5 rounded text-white text-xs bg-amber-500">
+                                                Cooling
+                                              </span>
                                             </div>
-                                            <span class="px-2 py-0.5 rounded text-white text-xs bg-amber-500">
-                                              Cooling
-                                            </span>
+                                            <Show when={typeof entry.secondsRemaining === 'number'}>
+                                              <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
+                                                Retrying in ~{formatUptime(entry.secondsRemaining || 0)}
+                                              </div>
+                                            </Show>
+                                            <Show when={entry.lastError}>
+                                              <div class="text-[0.65rem] text-red-500">
+                                                {entry.lastError}
+                                              </div>
+                                            </Show>
                                           </div>
-                                          <Show when={typeof entry.secondsRemaining === 'number'}>
-                                            <div class="text-[0.65rem] text-gray-500 dark:text-gray-400">
-                                              Retrying in ~{formatUptime(entry.secondsRemaining || 0)}
-                                            </div>
-                                          </Show>
-                                          <Show when={entry.lastError}>
-                                            <div class="text-[0.65rem] text-red-500">
-                                              {entry.lastError}
-                                            </div>
-                                          </Show>
-                                        </div>
-                                      )}
-                                    </For>
-                                  </div>
-                                </Show>
+                                        )}
+                                      </For>
+                                    </div>
+                                  </Show>
                                   <Show
                                     when={proxyNodeChecksSupported()}
                                     fallback={
@@ -5848,11 +5883,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                   <div class="text-xs space-y-2 text-gray-600 dark:text-gray-400">
                                     <div class="flex flex-wrap gap-2">
                                       <span
-                                        class={`px-2 py-0.5 rounded text-xs ${
-                                          apiDiag().enabled
-                                            ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                        }`}
+                                        class={`px-2 py-0.5 rounded text-xs ${apiDiag().enabled
+                                          ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
+                                          }`}
                                       >
                                         {apiDiag().enabled
                                           ? 'Token auth enabled'
@@ -5911,8 +5945,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                                 Last used:{' '}
                                                 {token.lastUsedAt
                                                   ? formatRelativeTime(
-                                                      new Date(token.lastUsedAt).getTime(),
-                                                    )
+                                                    new Date(token.lastUsedAt).getTime(),
+                                                  )
                                                   : 'Never'}
                                               </div>
                                             </div>
@@ -6005,11 +6039,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                                 {entry.name}
                                               </span>
                                               <span
-                                                class={`px-2 py-0.5 rounded text-xs ${
-                                                  entry.status === 'online'
-                                                    ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                                    : 'bg-red-100 text-red-700 dark:bg-red-700/40 dark:text-red-100'
-                                                }`}
+                                                class={`px-2 py-0.5 rounded text-xs ${entry.status === 'online'
+                                                  ? 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                                  : 'bg-red-100 text-red-700 dark:bg-red-700/40 dark:text-red-100'
+                                                  }`}
                                               >
                                                 {entry.status || 'unknown'}
                                               </span>
@@ -6128,11 +6161,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                   <div class="text-xs text-gray-600 dark:text-gray-400 space-y-2">
                                     <div class="flex flex-wrap gap-2">
                                       <span
-                                        class={`px-2 py-0.5 rounded text-xs ${
-                                          alerts().legacyThresholdsDetected
-                                            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                            : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                        }`}
+                                        class={`px-2 py-0.5 rounded text-xs ${alerts().legacyThresholdsDetected
+                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
+                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                          }`}
                                       >
                                         Legacy thresholds{' '}
                                         {alerts().legacyThresholdsDetected
@@ -6140,21 +6172,19 @@ const Settings: Component<SettingsProps> = (props) => {
                                           : 'migrated'}
                                       </span>
                                       <span
-                                        class={`px-2 py-0.5 rounded text-xs ${
-                                          alerts().missingCooldown
-                                            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                            : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                        }`}
+                                        class={`px-2 py-0.5 rounded text-xs ${alerts().missingCooldown
+                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
+                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                          }`}
                                       >
                                         Cooldown{' '}
                                         {alerts().missingCooldown ? 'missing' : 'configured'}
                                       </span>
                                       <span
-                                        class={`px-2 py-0.5 rounded text-xs ${
-                                          alerts().missingGroupingWindow
-                                            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
-                                            : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
-                                        }`}
+                                        class={`px-2 py-0.5 rounded text-xs ${alerts().missingGroupingWindow
+                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/40 dark:text-yellow-100'
+                                          : 'bg-green-100 text-green-700 dark:bg-green-700/40 dark:text-green-100'
+                                          }`}
                                       >
                                         Grouping window{' '}
                                         {alerts().missingGroupingWindow ? 'disabled' : 'enabled'}
@@ -6210,9 +6240,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                           {node.name}
                                         </span>
                                         <span
-                                          class={`px-2 py-0.5 rounded text-white text-xs ${
-                                            node.connected ? 'bg-green-500' : 'bg-red-500'
-                                          }`}
+                                          class={`px-2 py-0.5 rounded text-white text-xs ${node.connected ? 'bg-green-500' : 'bg-red-500'
+                                            }`}
                                         >
                                           {node.connected ? 'Connected' : 'Failed'}
                                         </span>
@@ -6248,9 +6277,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                           {pbs.name}
                                         </span>
                                         <span
-                                          class={`px-2 py-0.5 rounded text-white text-xs ${
-                                            pbs.connected ? 'bg-green-500' : 'bg-red-500'
-                                          }`}
+                                          class={`px-2 py-0.5 rounded text-white text-xs ${pbs.connected ? 'bg-green-500' : 'bg-red-500'
+                                            }`}
                                         >
                                           {pbs.connected ? 'Connected' : 'Failed'}
                                         </span>
@@ -6494,13 +6522,13 @@ const Settings: Component<SettingsProps> = (props) => {
                                     : undefined;
                                 const clusterEndpoints = Array.isArray(node.clusterEndpoints)
                                   ? (node.clusterEndpoints as Array<Record<string, unknown>>).map(
-                                      (ep, epIndex: number) => ({
-                                        ...ep,
-                                        NodeName: `node-${epIndex + 1}`,
-                                        Host: `node-${epIndex + 1}`,
-                                        IP: sanitizeIP(typeof ep.IP === 'string' ? ep.IP : ''),
-                                      }),
-                                    )
+                                    (ep, epIndex: number) => ({
+                                      ...ep,
+                                      NodeName: `node-${epIndex + 1}`,
+                                      Host: `node-${epIndex + 1}`,
+                                      IP: sanitizeIP(typeof ep.IP === 'string' ? ep.IP : ''),
+                                    }),
+                                  )
                                   : node.clusterEndpoints;
 
                                 const sanitizedId = `${nodeType}-${index}`;
@@ -6868,9 +6896,9 @@ const Settings: Component<SettingsProps> = (props) => {
                                     host:
                                       typeof node.host === 'string'
                                         ? (node.host as string).replace(
-                                            /https?:\/\/[^:\/]+/,
-                                            'https://REDACTED',
-                                          )
+                                          /https?:\/\/[^:\/]+/,
+                                          'https://REDACTED',
+                                        )
                                         : node.host,
                                     error:
                                       sanitizeText(
@@ -6897,9 +6925,9 @@ const Settings: Component<SettingsProps> = (props) => {
                                     host:
                                       typeof pbsNode.host === 'string'
                                         ? (pbsNode.host as string).replace(
-                                            /https?:\/\/[^:\/]+/,
-                                            'https://REDACTED',
-                                          )
+                                          /https?:\/\/[^:\/]+/,
+                                          'https://REDACTED',
+                                        )
                                         : pbsNode.host,
                                     error:
                                       sanitizeText(
@@ -7003,9 +7031,9 @@ const Settings: Component<SettingsProps> = (props) => {
                                   node: sanitizeHostname(alertNode),
                                   details: details
                                     ? details.replace(
-                                        /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g,
-                                        'xxx.xxx.xxx.xxx',
-                                      )
+                                      /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g,
+                                      'xxx.xxx.xxx.xxx',
+                                    )
                                     : details,
                                 };
                               });
@@ -7118,12 +7146,12 @@ const Settings: Component<SettingsProps> = (props) => {
                                   total: s.total,
                                   zfsPool: s.zfsPool
                                     ? {
-                                        state: s.zfsPool.state,
-                                        readErrors: s.zfsPool.readErrors,
-                                        writeErrors: s.zfsPool.writeErrors,
-                                        checksumErrors: s.zfsPool.checksumErrors,
-                                        deviceCount: s.zfsPool.devices?.length || 0,
-                                      }
+                                      state: s.zfsPool.state,
+                                      readErrors: s.zfsPool.readErrors,
+                                      writeErrors: s.zfsPool.writeErrors,
+                                      checksumErrors: s.zfsPool.checksumErrors,
+                                      deviceCount: s.zfsPool.devices?.length || 0,
+                                    }
                                     : undefined,
                                   hasBackups:
                                     (pveBackupsState()?.storageBackups ?? []).filter(
@@ -7460,13 +7488,13 @@ const Settings: Component<SettingsProps> = (props) => {
                   nodes().map((n) =>
                     n.id === editingNode()!.id
                       ? {
-                          ...n,
-                          ...nodeData,
-                          // Update hasPassword/hasToken based on whether credentials were provided
-                          hasPassword: nodeData.password ? true : n.hasPassword,
-                          hasToken: nodeData.tokenValue ? true : n.hasToken,
-                          status: 'pending',
-                        }
+                        ...n,
+                        ...nodeData,
+                        // Update hasPassword/hasToken based on whether credentials were provided
+                        hasPassword: nodeData.password ? true : n.hasPassword,
+                        hasToken: nodeData.tokenValue ? true : n.hasToken,
+                        status: 'pending',
+                      }
                       : n,
                   ),
                 );
@@ -7532,12 +7560,12 @@ const Settings: Component<SettingsProps> = (props) => {
                   nodes().map((n) =>
                     n.id === editingNode()!.id
                       ? {
-                          ...n,
-                          ...nodeData,
-                          hasPassword: nodeData.password ? true : n.hasPassword,
-                          hasToken: nodeData.tokenValue ? true : n.hasToken,
-                          status: 'pending',
-                        }
+                        ...n,
+                        ...nodeData,
+                        hasPassword: nodeData.password ? true : n.hasPassword,
+                        hasToken: nodeData.tokenValue ? true : n.hasToken,
+                        status: 'pending',
+                      }
                       : n,
                   ),
                 );
@@ -7599,12 +7627,12 @@ const Settings: Component<SettingsProps> = (props) => {
                   nodes().map((n) =>
                     n.id === editingNode()!.id
                       ? {
-                          ...n,
-                          ...nodeData,
-                          hasPassword: nodeData.password ? true : n.hasPassword,
-                          hasToken: nodeData.tokenValue ? true : n.hasToken,
-                          status: 'pending',
-                        }
+                        ...n,
+                        ...nodeData,
+                        hasPassword: nodeData.password ? true : n.hasPassword,
+                        hasToken: nodeData.tokenValue ? true : n.hasToken,
+                        status: 'pending',
+                      }
                       : n,
                   ),
                 );

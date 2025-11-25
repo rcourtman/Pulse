@@ -2852,8 +2852,22 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 	backupEnabled := h.config.EnableBackupPolling
 	settings.BackupPollingEnabled = &backupEnabled
 
+	// Create response structure that includes environment overrides
+	response := struct {
+		config.SystemSettings
+		EnvOverrides map[string]bool `json:"envOverrides,omitempty"`
+	}{
+		SystemSettings: settings,
+		EnvOverrides:   make(map[string]bool),
+	}
+
+	// Check for environment variable overrides
+	if os.Getenv("PULSE_AUTH_HIDE_LOCAL_LOGIN") != "" {
+		response.EnvOverrides["hideLocalLogin"] = true
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(settings)
+	json.NewEncoder(w).Encode(response)
 }
 
 // HandleVerifyTemperatureSSH tests SSH connectivity to nodes for temperature monitoring

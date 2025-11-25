@@ -82,6 +82,7 @@ Environment variables take precedence over `system.json`.
 | `LOG_LEVEL` | Log verbosity | `info` |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
 | `ALLOWED_ORIGINS` | CORS allowed domains | `""` (Same origin) |
+| `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form (useful for SSO) | `false` |
 
 ---
 
