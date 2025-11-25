@@ -810,8 +810,11 @@ fetch_checksum_header() {
     fi
 
     local value
-    value=$(printf '%s\n' "$checksum_line" | awk -F':' '{sub(/^[[:space:]]*/,"",$2); print $2}')
+    value=$(printf '%s\n' "$checksum_line" | awk -F':' '{sub(/^[[:space:]]*/,"",$2); sub(/[[:space:]]*$/,"",$2); print $2}')
     value=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')
+    # Extra trim to be safe
+    value=$(trim "$value")
+
     if [[ -z "$value" ]]; then
         return 1
     fi
@@ -856,9 +859,16 @@ verify_agent_checksum() {
         return 0
     fi
 
-    if [[ "$FETCHED_CHECKSUM" != "$CALCULATED_CHECKSUM" ]]; then
+    local clean_fetched
+    clean_fetched=$(echo "$FETCHED_CHECKSUM" | tr -d '[:space:]')
+    local clean_calculated
+    clean_calculated=$(echo "$CALCULATED_CHECKSUM" | tr -d '[:space:]')
+
+    if [[ "$clean_fetched" != "$clean_calculated" ]]; then
         rm -f "$AGENT_PATH"
-        log_error "Checksum mismatch. Expected $FETCHED_CHECKSUM but downloaded $CALCULATED_CHECKSUM"
+        log_error "Checksum mismatch."
+        log_error "  Expected: '$clean_fetched' (from header)"
+        log_error "  Actual:   '$clean_calculated' (calculated)"
         return 1
     fi
 

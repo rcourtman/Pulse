@@ -514,6 +514,56 @@ download_agent() {
     exit 1
   fi
 
+  # Checksum verification
+  local checksum_url="${download_url}.sha256"
+  local expected_checksum=""
+  
+  # Try to fetch checksum
+  if command -v curl >/dev/null 2>&1; then
+      local curl_args=(-fsSL "$checksum_url")
+      if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+          curl_args=(-k "${curl_args[@]}")
+      fi
+      expected_checksum=$(curl "${curl_args[@]}" 2>/dev/null || true)
+  elif command -v wget >/dev/null 2>&1; then
+      local wget_args=(-qO- "$checksum_url")
+      if [[ "$PRIMARY_INSECURE" == "true" ]]; then
+          wget_args=(--no-check-certificate "${wget_args[@]}")
+      fi
+      expected_checksum=$(wget "${wget_args[@]}" 2>/dev/null || true)
+  fi
+
+  if [[ -n "$expected_checksum" ]]; then
+      log_info "Verifying checksum..."
+      local actual_checksum=""
+      if command -v sha256sum >/dev/null 2>&1; then
+          actual_checksum=$(sha256sum "$tmp" | awk '{print $1}')
+      elif command -v shasum >/dev/null 2>&1; then
+          actual_checksum=$(shasum -a 256 "$tmp" | awk '{print $1}')
+      fi
+
+      if [[ -n "$actual_checksum" ]]; then
+          # Normalize checksums
+          local clean_expected
+          clean_expected=$(echo "$expected_checksum" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+          local clean_actual
+          clean_actual=$(echo "$actual_checksum" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+
+          if [[ "$clean_expected" != "$clean_actual" ]]; then
+              rm -f "$tmp"
+              log_error "Checksum mismatch."
+              log_error "  Expected: '$clean_expected'"
+              log_error "  Actual:   '$clean_actual'"
+              exit 1
+          fi
+          log_success "Checksum verified"
+      else
+          log_warn "Unable to calculate local checksum (sha256sum/shasum not found). Skipping verification."
+      fi
+  else
+      log_info "No checksum file found at $checksum_url. Skipping verification."
+  fi
+
   mv "$tmp" "$AGENT_PATH"
   chmod 0755 "$AGENT_PATH"
   log_success "Agent installed at $AGENT_PATH"
