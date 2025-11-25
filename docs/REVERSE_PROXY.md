@@ -1,356 +1,54 @@
-# Reverse Proxy Configuration
+# 🔄 Reverse Proxy Setup
 
-Pulse uses WebSockets for real-time updates. Your reverse proxy **MUST** support WebSocket connections or Pulse will not work correctly.
+Pulse uses WebSockets for real-time updates. Your proxy **MUST** support WebSockets.
 
-## Important Requirements
+## ⚡ Quick Configs
 
-1. **WebSocket Support Required** - Enable WebSocket proxying
-2. **Proxy Headers** - Forward original host and IP headers
-3. **Timeouts** - Increase timeouts for long-lived connections (7 days recommended)
-4. **Buffer Sizes** - Increase for large state updates (64KB recommended)
-5. **Rate Limit Headers (v4.24.0+)** - Pass through `X-RateLimit-*` and `Retry-After` headers
-6. **Error Pass-through** - Don't intercept 429 responses (rate limits)
-
-## Authentication with Reverse Proxy
-
-Pulse always enforces its own authentication. If you want to delegate sign-in to your reverse proxy (Authentik, Authelia, etc.), configure Pulse's **Proxy Authentication** integration under *Settings → Security*. That lets Pulse trust the authenticated user provided by the proxy while keeping per-user roles, API tokens, and audit logging intact.
-
-> **Note:** The legacy `DISABLE_AUTH` environment variable has been removed. If it still exists in your deployment, Pulse will log a warning at startup and ignore it. Remove the variable and restart Pulse to silence the warning.
-
-## Nginx
-
+### Nginx
 ```nginx
-server {
-    listen 80;
-    server_name pulse.example.com;
+location / {
+    proxy_pass http://localhost:7655;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
     
-    # Redirect to HTTPS
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name pulse.example.com;
-
-    # SSL configuration
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    # Proxy settings
-    location / {
-        proxy_pass http://localhost:7655;
-        proxy_http_version 1.1;
-
-        # Required for WebSocket
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        # Proxy headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Timeouts for WebSocket and adaptive polling (v4.24.0+)
-        proxy_connect_timeout 7d;
-        proxy_send_timeout 7d;
-        proxy_read_timeout 7d;
-
-        # Disable buffering for real-time updates
-        proxy_buffering off;
-
-        # IMPORTANT (v4.24.0+): Don't intercept error responses
-        # This ensures 429 rate limit responses reach the client
-        proxy_intercept_errors off;
-
-        # Increase buffer sizes for large messages
-        proxy_buffer_size 64k;
-        proxy_buffers 8 64k;
-        proxy_busy_buffers_size 128k;
-    }
-    
-    # API endpoints (optional, same config as above)
-    location /api/ {
-        proxy_pass http://localhost:7655/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_connect_timeout 7d;
-        proxy_send_timeout 7d;
-        proxy_read_timeout 7d;
-        proxy_buffering off;
-    }
+    # Critical for WebSockets
+    proxy_read_timeout 86400; # 24h
 }
 ```
 
-## Caddy v2
-
-Caddy automatically handles WebSocket upgrades when reverse proxying.
-
+### Caddy
 ```caddy
 pulse.example.com {
     reverse_proxy localhost:7655
 }
 ```
 
-For more control:
-
-```caddy
-pulse.example.com {
-    reverse_proxy localhost:7655 {
-        # Headers automatically handled by Caddy
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
-        
-        # Increase timeouts for WebSocket
-        transport http {
-            dial_timeout 30s
-            response_header_timeout 30s
-            read_timeout 0
-        }
-    }
-}
+### Traefik (Docker Compose)
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.pulse.rule=Host(`pulse.example.com`)"
+  - "traefik.http.services.pulse.loadbalancer.server.port=7655"
 ```
 
-## Apache
-
+### Apache
 ```apache
-<VirtualHost *:443>
-    ServerName pulse.example.com
-    
-    SSLEngine on
-    SSLCertificateFile /path/to/cert.pem
-    SSLCertificateKeyFile /path/to/key.pem
-    
-    # Enable necessary modules:
-    # a2enmod proxy proxy_http proxy_wstunnel headers
-    
-    # WebSocket proxy
-    RewriteEngine On
-    RewriteCond %{HTTP:Upgrade} websocket [NC]
-    RewriteCond %{HTTP:Connection} upgrade [NC]
-    RewriteRule ^/?(.*) "ws://localhost:7655/$1" [P,L]
-    
-    # Regular HTTP proxy
-    ProxyPass / http://localhost:7655/
-    ProxyPassReverse / http://localhost:7655/
-    
-    # Preserve host headers
-    ProxyPreserveHost On
-    
-    # Forward real IP
-    RequestHeader set X-Real-IP "%{REMOTE_ADDR}s"
-    RequestHeader set X-Forwarded-For "%{REMOTE_ADDR}s"
-    RequestHeader set X-Forwarded-Proto "https"
-    
-    # Disable buffering
-    ProxyIOBufferSize 65536
-</VirtualHost>
+RewriteEngine On
+RewriteCond %{HTTP:Upgrade} websocket [NC]
+RewriteCond %{HTTP:Connection} upgrade [NC]
+RewriteRule ^/?(.*) "ws://localhost:7655/$1" [P,L]
+
+ProxyPass / http://localhost:7655/
+ProxyPassReverse / http://localhost:7655/
 ```
 
-## Traefik
+---
 
-```yaml
-# docker-compose.yml
-services:
-  pulse:
-    image: rcourtman/pulse:latest
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.pulse.rule=Host(`pulse.example.com`)"
-      - "traefik.http.routers.pulse.tls=true"
-      - "traefik.http.services.pulse.loadbalancer.server.port=7655"
-      # WebSocket support is automatic in Traefik 2.x+
-```
+## ⚠️ Common Issues
 
-Or using Traefik file configuration:
-
-```yaml
-# traefik-dynamic.yml
-http:
-  routers:
-    pulse:
-      rule: "Host(`pulse.example.com`)"
-      service: pulse
-      tls: {}
-      
-  services:
-    pulse:
-      loadBalancer:
-        servers:
-          - url: "http://localhost:7655"
-```
-
-## HAProxy
-
-```haproxy
-frontend https
-    bind *:443 ssl crt /path/to/cert.pem
-    
-    # ACL for Pulse
-    acl host_pulse hdr(host) -i pulse.example.com
-    
-    # WebSocket detection
-    acl is_websocket hdr(Upgrade) -i websocket
-    
-    # Use backend
-    use_backend pulse if host_pulse
-
-backend pulse
-    # Health check
-    option httpchk GET /api/health
-    
-    # WebSocket support
-    option http-server-close
-    option forwardfor
-    
-    # Timeouts for WebSocket
-    timeout client 3600s
-    timeout server 3600s
-    timeout tunnel 3600s
-    
-    # Backend server
-    server pulse1 localhost:7655 check
-```
-
-## Cloudflare Tunnel
-
-If using Cloudflare Tunnel (cloudflared):
-
-```yaml
-# config.yml
-tunnel: YOUR_TUNNEL_ID
-credentials-file: /path/to/credentials.json
-
-ingress:
-  - hostname: pulse.example.com
-    service: http://localhost:7655
-    originRequest:
-      # Enable WebSocket
-      noTLSVerify: false
-      connectTimeout: 30s
-      # No additional config needed - WebSockets work by default
-  - service: http_status:404
-```
-
-## Testing WebSocket Connection
-
-After configuring your reverse proxy, test that WebSockets work:
-
-```bash
-# Test basic connectivity
-curl https://pulse.example.com/api/health
-
-# Test WebSocket upgrade (should return 101 Switching Protocols)
-curl -i -N \
-  -H "Connection: Upgrade" \
-  -H "Upgrade: websocket" \
-  -H "Sec-WebSocket-Version: 13" \
-  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
-  https://pulse.example.com/api/ws
-```
-
-### v4.24.0+ Verification
-
-**Test scheduler health API** (adaptive polling):
-```bash
-curl -s https://pulse.example.com/api/monitoring/scheduler/health | jq
-```
-
-**Expected response:**
-- `enabled: true`
-- Queue depth reasonable
-- No stuck circuit breakers
-- WebSocket connection remains open
-
-**Verify rate limit headers** (v4.24.0+):
-```bash
-curl -I https://pulse.example.com/api/version
-```
-
-**Look for headers:**
-```
-HTTP/1.1 200 OK
-X-RateLimit-Limit: 500
-X-RateLimit-Remaining: 499
-X-RateLimit-Reset: 1698765432
-```
-
-**Test rate limiting:**
-```bash
-# Trigger rate limit (requires many requests)
-for i in {1..600}; do curl -s https://pulse.example.com/api/health > /dev/null; done
-
-# Should eventually see:
-curl -I https://pulse.example.com/api/health
-# HTTP/1.1 429 Too Many Requests
-# X-RateLimit-Limit: 500
-# X-RateLimit-Remaining: 0
-# Retry-After: 60
-```
-
-**Important:** If you don't see rate limit headers or 429 responses are converted to 502/504, verify `proxy_intercept_errors off` (Nginx) or equivalent is set.
-
-In browser console (F12):
-```javascript
-// Test WebSocket connection
-const ws = new WebSocket('wss://pulse.example.com/api/ws');
-ws.onopen = () => console.log('WebSocket connected!');
-ws.onmessage = (e) => console.log('Received:', e.data);
-ws.onerror = (e) => console.error('WebSocket error:', e);
-```
-
-## Common Issues
-
-### "Connection Lost" or no real-time updates
-- WebSocket upgrade not configured correctly
-- Check proxy passes `Upgrade` and `Connection` headers
-- Verify timeouts are increased for long connections
-
-### CORS errors
-- Pulse handles CORS internally
-- Don't add additional CORS headers in proxy
-- If needed, set `ALLOWED_ORIGINS` in Pulse configuration
-
-### 502 Bad Gateway
-- Pulse not running on expected port (default 7655)
-- Check with: `curl http://localhost:7655/api/health`
-- Verify Pulse service: `systemctl status pulse` (use `pulse-backend` if you're on a legacy unit)
-
-### WebSocket closes immediately
-- Timeout too short in proxy configuration
-- Increase `proxy_read_timeout` (Nginx) or equivalent
-- Set to at least 3600s (1 hour) or more
-
-## Security Recommendations
-
-1. **Always use HTTPS** for production deployments
-2. **Set proper headers** to prevent clickjacking:
-   ```nginx
-   add_header X-Frame-Options "SAMEORIGIN";
-   add_header X-Content-Type-Options "nosniff";
-   ```
-3. **Rate limiting** for API endpoints:
-   ```nginx
-   limit_req_zone $binary_remote_addr zone=pulse:10m rate=30r/s;
-   limit_req zone=pulse burst=50 nodelay;
-   ```
-4. **Hide proxy version**:
-   ```nginx
-   proxy_hide_header X-Powered-By;
-   server_tokens off;
-   ```
-
-## Support
-
-If WebSockets still don't work after following this guide:
-1. Check browser console for errors (F12)
-2. Verify Pulse logs: `journalctl -u pulse -f`
-3. Test without proxy first: `http://your-server:7655`
-4. Report issues: https://github.com/rcourtman/Pulse/issues
+- **"Connection Lost"**: WebSocket upgrade failed. Check `Upgrade` and `Connection` headers.
+- **502 Bad Gateway**: Pulse is not running on port 7655.
+- **CORS Errors**: Do not add CORS headers in the proxy; Pulse handles them. Set `ALLOWED_ORIGINS` env var if needed.
