@@ -24,8 +24,7 @@ import {
 } from '@/utils/apiClient';
 import { NodeModal } from './NodeModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { DockerAgents } from './DockerAgents';
-import { HostAgents } from './HostAgents';
+import { UnifiedAgents } from './UnifiedAgents';
 import APITokenManager from './APITokenManager';
 import { OIDCPanel } from './OIDCPanel';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
@@ -1231,8 +1230,7 @@ const Settings: Component<SettingsProps> = (props) => {
         label: 'Platforms',
         items: [
           { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
-          { id: 'docker', label: 'Docker', icon: Boxes },
-          { id: 'hosts', label: 'Hosts', icon: Monitor, iconProps: { strokeWidth: 2 } },
+          { id: 'agents', label: 'Agents', icon: Monitor, iconProps: { strokeWidth: 2 } },
         ],
       },
       {
@@ -3535,14 +3533,9 @@ const Settings: Component<SettingsProps> = (props) => {
                   </div>
                 </div>
               </Show>
-              {/* Docker Platform Tab */}
-              <Show when={activeTab() === 'docker'}>
-                <DockerAgents />
-              </Show>
-
-              {/* Servers Platform Tab */}
-              <Show when={activeTab() === 'hosts'}>
-                <HostAgents />
+              {/* Unified Agents Tab */}
+              <Show when={activeTab() === 'agents'}>
+                <UnifiedAgents />
               </Show>
 
               {/* System General Tab */}
