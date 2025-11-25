@@ -1,5 +1,5 @@
 # Generated file. Do not edit.
-# Bundled on: 2025-11-25T08:34:41Z
+# Bundled on: 2025-11-25T09:29:44Z
 # Manifest: scripts/bundle.manifest
 
 # === Begin: scripts/lib/common.sh ===
@@ -1767,7 +1767,7 @@ fetch_checksum_header() {
     fi
 
     local checksum_line
-    checksum_line=$(printf '%s\n' "$header" | awk 'BEGIN{IGNORECASE=1} /^ *X-Checksum-Sha256:/{print $0; exit}')
+    checksum_line=$(printf '%s\n' "$header" | grep -i "^ *X-Checksum-Sha256:" | head -n 1)
     if [[ -z "$checksum_line" ]]; then
         return 1
     fi
