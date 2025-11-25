@@ -1,4 +1,4 @@
-import { Show, createMemo } from 'solid-js';
+import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
 import { getMetricHistory } from '@/stores/metricsHistory';
@@ -11,9 +11,44 @@ interface MetricBarProps {
   resourceId?: string; // Required for sparkline mode to fetch history
 }
 
+// Estimate text width based on character count (rough approximation for 10px font)
+// Average char width ~6px at 10px font size
+const estimateTextWidth = (text: string): number => {
+  return text.length * 5.5 + 8; // chars * avg width + padding
+};
+
 export function MetricBar(props: MetricBarProps) {
   const { viewMode } = useMetricsViewMode();
   const width = createMemo(() => Math.min(props.value, 100));
+
+  // Track container width
+  const [containerWidth, setContainerWidth] = createSignal(100);
+  let containerRef: HTMLDivElement | undefined;
+
+  // Set up ResizeObserver to track container width changes
+  onMount(() => {
+    if (!containerRef) return;
+
+    setContainerWidth(containerRef.offsetWidth);
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(containerRef);
+
+    onCleanup(() => observer.disconnect());
+  });
+
+  // Determine if sublabel fits based on estimated text width
+  const showSublabel = createMemo(() => {
+    if (!props.sublabel) return false;
+    const fullText = `${props.label} (${props.sublabel})`;
+    const estimatedWidth = estimateTextWidth(fullText);
+    return containerWidth() >= estimatedWidth;
+  });
 
   // Get color based on percentage and metric type (matching original)
   const getColor = createMemo(() => {
@@ -67,18 +102,16 @@ export function MetricBar(props: MetricBarProps) {
       when={viewMode() === 'sparklines' && props.resourceId}
       fallback={
         // Original progress bar mode
-        <div class="metric-text w-full h-4 flex items-center">
+        <div ref={containerRef} class="metric-text w-full h-4 flex items-center">
           <div class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded">
             <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
             <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
               <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
                 <span>{props.label}</span>
-                <Show when={props.sublabel}>
-                  {(sublabel) => (
-                    <span class="metric-sublabel font-normal">
-                      ({sublabel()})
-                    </span>
-                  )}
+                <Show when={showSublabel()}>
+                  <span class="metric-sublabel font-normal">
+                    ({props.sublabel})
+                  </span>
                 </Show>
               </span>
             </span>
