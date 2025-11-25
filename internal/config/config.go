@@ -654,6 +654,8 @@ func Load() (*Config, error) {
 			} else {
 				cfg.SSHPort = 22 // Default SSH port
 			}
+			// Load HideLocalLogin
+			cfg.HideLocalLogin = systemSettings.HideLocalLogin
 			// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Str("updateChannel", cfg.UpdateChannel).
