@@ -3739,9 +3739,9 @@ echo ""
 PULSE_IP_PATTERN=$(echo "%s" | sed 's/\./\-/g')
 
 # Check for old Pulse tokens from the same Pulse server and offer to clean them up
-echo "Checking for existing Pulse monitoring tokens from this Pulse server..."
 OLD_TOKENS=$(pveum user token list pulse-monitor@pam 2>/dev/null | grep -E "│ pulse-${PULSE_IP_PATTERN}-[0-9]+" | awk -F'│' '{print $2}' | sed 's/^ *//;s/ *$//' || true)
 if [ ! -z "$OLD_TOKENS" ]; then
+    echo "Checking for existing Pulse monitoring tokens from this Pulse server..."
     TOKEN_COUNT=$(echo "$OLD_TOKENS" | wc -l)
     echo ""
     echo "⚠️  Found $TOKEN_COUNT old Pulse monitoring token(s) from this Pulse server (${PULSE_IP_PATTERN}):"
@@ -3969,7 +3969,6 @@ if command -v pveversion >/dev/null 2>&1; then
     PVE_VERSION=$(pveversion --verbose 2>/dev/null | grep "pve-manager" | awk -F'/' '{print $2}' | cut -d'.' -f1)
 fi
 
-echo "Setting up additional permissions..."
 EXTRA_PRIVS=()
 
 if [ "$HAS_SYS_AUDIT" = true ]; then
