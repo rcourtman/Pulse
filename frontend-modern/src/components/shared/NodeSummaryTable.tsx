@@ -139,6 +139,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     header: string;
     key: CountSortKey;
     icon: Component<{ class?: string }>;
+    minWidth?: string;
+    maxWidth?: string;
   }
 
   const [sortKey, setSortKey] = createSignal<SortKey>('default');
@@ -148,16 +150,16 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     switch (props.currentTab) {
       case 'dashboard':
         return [
-          { header: 'VMs', key: 'vmCount', icon: VMIcon },
-          { header: 'CTs', key: 'containerCount', icon: ContainerIcon },
+          { header: 'VMs', key: 'vmCount', icon: VMIcon, minWidth: '40px', maxWidth: '50px' },
+          { header: 'CTs', key: 'containerCount', icon: ContainerIcon, minWidth: '40px', maxWidth: '50px' },
         ];
       case 'storage':
         return [
-          { header: 'Storage', key: 'storageCount', icon: DiskIcon },
-          { header: 'Disks', key: 'diskCount', icon: DiskIcon },
+          { header: 'Storage', key: 'storageCount', icon: DiskIcon, minWidth: '50px', maxWidth: '70px' },
+          { header: 'Disks', key: 'diskCount', icon: DiskIcon, minWidth: '45px', maxWidth: '60px' },
         ];
       case 'backups':
-        return [{ header: 'Backups', key: 'backupCount', icon: BackupIcon }];
+        return [{ header: 'Backups', key: 'backupCount', icon: BackupIcon, minWidth: '50px', maxWidth: '70px' }];
       default:
         return [];
     }
@@ -186,8 +188,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
         label: cc.header,
         priority: 'essential' as ColumnPriority,
         icon: cc.icon,
-        minWidth: '40px',
-        maxWidth: '50px',
+        minWidth: cc.minWidth || '40px',
+        maxWidth: cc.maxWidth || '50px',
         align: 'center',
       });
     });
