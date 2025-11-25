@@ -21,6 +21,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.45.0
 	golang.org/x/oauth2 v0.31.0
+	golang.org/x/sync v0.13.0
 	golang.org/x/sys v0.38.0
 	golang.org/x/term v0.37.0
 	golang.org/x/time v0.13.0
@@ -73,7 +74,6 @@ require (
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/sync v0.13.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
