@@ -546,6 +546,24 @@ if [ "$UNINSTALL" = true ]; then
         echo "✓ Unraid startup script removed"
     fi
 
+    # Remove Synology Upstart config
+    if [ -f "/etc/init/pulse-docker-agent.conf" ]; then
+        initctl stop pulse-docker-agent 2>/dev/null || true
+        rm -f "/etc/init/pulse-docker-agent.conf"
+        echo "✓ Synology Upstart config removed"
+    fi
+
+    # Stop and remove launchd service (macOS)
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        LAUNCHD_PLIST="/Library/LaunchDaemons/com.pulse.docker-agent.plist"
+        if [[ -f "$LAUNCHD_PLIST" ]]; then
+            echo "Stopping launchd service..."
+            launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || true
+            rm -f "$LAUNCHD_PLIST"
+            echo "✓ Launchd service removed"
+        fi
+    fi
+
     # Remove log file
     if [ -f "$LOG_PATH" ]; then
         rm -f "$LOG_PATH"
@@ -774,6 +792,15 @@ if download_agent_binary "$DOWNLOAD_URL" "$DOWNLOAD_URL_BASE"; then
 else
     log_warn 'Failed to download agent binary'
     log_warn "Ensure the Pulse server is reachable at $PRIMARY_URL"
+    
+    if common::is_interactive; then
+        echo ""
+        if [[ -t 0 ]]; then
+            read -p "Press Enter to exit..."
+        elif [[ -e /dev/tty ]]; then
+            read -p "Press Enter to exit..." < /dev/tty
+        fi
+    fi
     exit 1
 fi
 
@@ -939,6 +966,119 @@ EOF
         log_info 'Agent started via Unraid go.d hook'
         log_info 'Log file             : /var/log/pulse-docker-agent.log'
         log_info 'Host visible in Pulse: ~30 seconds'
+        exit 0
+    fi
+
+    # Check if this is Synology DSM (has /usr/syno/etc/rc.sysv)
+    if [ -d /usr/syno/etc/rc.sysv ]; then
+        log_info 'Detected Synology DSM environment'
+        
+        UPSTART_CONF="/etc/init/pulse-docker-agent.conf"
+        
+        cat > "$UPSTART_CONF" <<EOF
+description "Pulse Docker Agent"
+author "Pulse"
+
+start on syno.network.ready
+stop on runlevel [06]
+
+respawn
+respawn limit 5 10
+
+env PULSE_URL="$PRIMARY_URL"
+env PULSE_TOKEN="$PRIMARY_TOKEN"
+env PULSE_TARGETS="$JOINED_TARGETS"
+env PULSE_INSECURE_SKIP_VERIFY="$PRIMARY_INSECURE"
+
+exec $AGENT_PATH --url "$PRIMARY_URL" --interval "$INTERVAL"$NO_AUTO_UPDATE_FLAG
+EOF
+        
+        log_success "Created Upstart config: $UPSTART_CONF"
+        
+        log_info 'Starting service'
+        initctl stop pulse-docker-agent 2>/dev/null || true
+        initctl start pulse-docker-agent
+        
+        log_header 'Installation complete'
+        log_info 'Agent service enabled and started via Upstart'
+        log_info 'Check status          : initctl status pulse-docker-agent'
+        log_info 'Follow logs           : tail -f /var/log/upstart/pulse-docker-agent.log'
+        log_info 'Host visible in Pulse : ~30 seconds'
+        exit 0
+    fi
+
+    # Check if this is macOS (Darwin)
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        log_info 'Detected macOS environment'
+        
+        LAUNCHD_PLIST="/Library/LaunchDaemons/com.pulse.docker-agent.plist"
+        
+        # Construct environment variables dict
+        ENV_DICT=""
+        if [[ -n "$PRIMARY_URL" ]]; then
+            ENV_DICT="$ENV_DICT
+            <key>PULSE_URL</key>
+            <string>$PRIMARY_URL</string>"
+        fi
+        if [[ -n "$PRIMARY_TOKEN" ]]; then
+            ENV_DICT="$ENV_DICT
+            <key>PULSE_TOKEN</key>
+            <string>$PRIMARY_TOKEN</string>"
+        fi
+        if [[ -n "$JOINED_TARGETS" ]]; then
+            ENV_DICT="$ENV_DICT
+            <key>PULSE_TARGETS</key>
+            <string>$JOINED_TARGETS</string>"
+        fi
+        if [[ -n "$PRIMARY_INSECURE" ]]; then
+            ENV_DICT="$ENV_DICT
+            <key>PULSE_INSECURE_SKIP_VERIFY</key>
+            <string>$PRIMARY_INSECURE</string>"
+        fi
+
+        cat > "$LAUNCHD_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pulse.docker-agent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$AGENT_PATH</string>
+        <string>--url</string>
+        <string>$PRIMARY_URL</string>
+        <string>--interval</string>
+        <string>$INTERVAL</string>
+        <string>--no-auto-update</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>$ENV_DICT
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/pulse-docker-agent.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/pulse-docker-agent.log</string>
+</dict>
+</plist>
+EOF
+        
+        chmod 644 "$LAUNCHD_PLIST"
+        log_success "Created launchd plist: $LAUNCHD_PLIST"
+        
+        log_info 'Starting service'
+        launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || true
+        launchctl load -w "$LAUNCHD_PLIST"
+        
+        log_header 'Installation complete'
+        log_info 'Agent service enabled and started via launchd'
+        log_info 'Check status          : sudo launchctl list com.pulse.docker-agent'
+        log_info 'Follow logs           : tail -f /var/log/pulse-docker-agent.log'
+        log_info 'Host visible in Pulse : ~30 seconds'
         exit 0
     fi
 
