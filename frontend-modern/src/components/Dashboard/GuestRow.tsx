@@ -1,10 +1,11 @@
-import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
+import { GuestDrawer } from './GuestDrawer';
+import { createMemo, createSignal, createEffect, Show } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { formatBytes, formatPercent, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { TagBadges } from './TagBadges';
-import { DiskList } from './DiskList';
+
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
@@ -381,7 +382,7 @@ export function GuestRow(props: GuestRowProps) {
     return '#9ca3af';
   });
 
-  const drawerDisabled = createMemo(() => !isRunning());
+
 
   // Get row styling - include alert styles if present
   const rowClass = createMemo(() => {
@@ -391,7 +392,7 @@ export function GuestRow(props: GuestRowProps) {
       ? props.alertStyles?.severity === 'critical'
         ? 'bg-red-50 dark:bg-red-950/30'
         : 'bg-yellow-50 dark:bg-yellow-950/20'
-      : '';
+      : 'bg-white dark:bg-gray-800';
     const defaultHover = hasUnacknowledgedAlert()
       ? ''
       : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
@@ -403,13 +404,7 @@ export function GuestRow(props: GuestRowProps) {
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${expanded}`;
   });
 
-  // Get first cell styling
-  const firstCellClass = createMemo(() => {
-    const base =
-      'py-0.5 pr-2 whitespace-nowrap relative w-auto';
-    const indent = props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT;
-    return `${base} ${indent}`;
-  });
+
 
   // Get row styles including box-shadow for alert border
   const rowStyle = createMemo(() => {
@@ -423,10 +418,15 @@ export function GuestRow(props: GuestRowProps) {
 
   return (
     <>
-      <tr class={rowClass()} style={rowStyle()} onClick={toggleDrawer} aria-expanded={drawerOpen()}>
-        {/* Name - Sticky column */}
-        <td class={firstCellClass()}>
-          <div class="flex items-center gap-2">
+      <div
+        class={`${rowClass()} flex md:grid md:grid-cols-[minmax(150px,1fr)_60px_60px_80px_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)] xl:grid-cols-[minmax(200px,1fr)_80px_80px_100px_minmax(150px,1.5fr)_minmax(150px,1.5fr)_minmax(150px,1.5fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)] items-center`}
+        style={rowStyle()}
+        onClick={toggleDrawer}
+        aria-expanded={drawerOpen()}
+      >
+        {/* Name Section - Sticky on mobile */}
+        <div class={`p-2 md:py-0 md:pl-4 md:pr-2 flex items-center sticky left-0 z-10 bg-inherit w-[160px] sm:w-[200px] md:w-full flex-shrink-0 border-r md:border-r-0 border-gray-100 dark:border-gray-700 ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}>
+          <div class="flex items-center gap-2 min-w-0 w-full">
             <div class="flex items-center gap-1.5 flex-1 min-w-0">
               <StatusDot
                 variant={guestStatus().variant}
@@ -435,13 +435,12 @@ export function GuestRow(props: GuestRowProps) {
                 size="xs"
               />
               <div class="flex-1 min-w-0">
-                {/* Name - show input when editing, otherwise show name with optional link */}
                 <Show
                   when={isEditingUrl()}
                   fallback={
                     <div class="flex items-center gap-1.5 min-w-0">
                       <span
-                        class="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-text select-none overflow-hidden text-ellipsis"
+                        class="text-xs font-medium text-gray-900 dark:text-gray-100 cursor-text select-none overflow-hidden text-ellipsis whitespace-nowrap"
                         style="cursor: text;"
                         title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
                         onClick={startEditingUrl}
@@ -528,9 +527,8 @@ export function GuestRow(props: GuestRowProps) {
               </div>
             </div>
 
-            {/* Tag badges - hide when editing URL to save space */}
             <Show when={!isEditingUrl()}>
-              <div class="flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
+              <div class="hidden md:flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
                 <TagBadges
                   tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
                   maxVisible={3}
@@ -549,276 +547,147 @@ export function GuestRow(props: GuestRowProps) {
               </span>
             </Show>
           </div>
-        </td>
+        </div>
 
-        {/* Type */}
-        <td class="hidden lg:table-cell py-0.5 px-2 whitespace-nowrap w-[5%]">
-          <div class="flex h-[24px] items-center">
-            <span
-              class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${props.guest.type === 'qemu'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                }`}
-            >
-              {isVM(props.guest) ? 'VM' : 'LXC'}
-            </span>
-          </div>
-        </td>
-
-        {/* VMID */}
-        <td class="hidden lg:table-cell py-0.5 px-1.5 whitespace-nowrap w-[5%] text-sm text-gray-600 dark:text-gray-400 align-middle">
-          {props.guest.vmid}
-        </td>
-
-        {/* Uptime */}
-        <td
-          class={`hidden sm:table-cell py-0.5 px-1.5 w-[8%] text-sm whitespace-nowrap align-middle ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
-            }`}
-        >
-          <Show when={isRunning()} fallback="-">
-            {formatUptime(props.guest.uptime)}
-          </Show>
-        </td>
-
-        {/* CPU */}
-        <td class="py-0.5 px-2 w-[10%]">
-          <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
-            <MetricBar
-              value={cpuPercent()}
-              label={formatPercent(cpuPercent())}
-              sublabel={
-                props.guest.cpus
-                  ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
-                  : undefined
-              }
-              type="cpu"
-              resourceId={metricsKey()}
-            />
-          </Show>
-        </td>
-
-        {/* Memory */}
-        <td class="py-0.5 px-2 w-[10%]">
-          <div title={memoryTooltip() ?? undefined}>
-            <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
-              <MetricBar
-                value={memPercent()}
-                label={formatPercent(memPercent())}
-                sublabel={memoryUsageLabel()}
-                type="memory"
-                resourceId={metricsKey()}
-              />
-            </Show>
-          </div>
-        </td>
-
-        {/* Disk – surface usage even if guest is currently stopped so users can see last reported values */}
-        <td class="hidden sm:table-cell py-0.5 px-2 w-[10%]">
-          <Show
-            when={hasDiskUsage()}
-            fallback={
-              <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
-                -
-              </span>
-            }
-          >
-            <MetricBar
-              value={diskPercent()}
-              label={formatPercent(diskPercent())}
-              sublabel={
-                props.guest.disk
-                  ? `${formatBytes(props.guest.disk.used, 0)}/${formatBytes(props.guest.disk.total, 0)}`
-                  : undefined
-              }
-              type="disk"
-              resourceId={metricsKey()}
-            />
-          </Show>
-        </td>
-
-        {/* Disk I/O */}
-        <td class="hidden lg:table-cell py-0.5 px-2 w-[6%]">
-          <div class="flex h-[24px] items-center">
-            <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
-          </div>
-        </td>
-        <td class="hidden lg:table-cell py-0.5 px-2 w-[6%]">
-          <div class="flex h-[24px] items-center">
-            <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
-          </div>
-        </td>
-
-        {/* Network I/O */}
-        <td class="hidden lg:table-cell py-0.5 px-2 w-[6%]">
-          <div class="flex h-[24px] items-center">
-            <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
-          </div>
-        </td>
-        <td class="hidden lg:table-cell py-0.5 px-2 w-[6%]">
-          <div class="flex h-[24px] items-center">
-            <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
-          </div>
-        </td>
-      </tr>
-      <Show when={drawerOpen() && canShowDrawer()}>
-        <tr
-          class={`text-[11px] ${isRunning() && props.parentNodeOnline !== false
-            ? 'bg-gray-50/60 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300'
-            : 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
-            }`}
-          aria-hidden={!isRunning() || props.parentNodeOnline === false}
-        >
-          <td class="px-4 py-2" colSpan={11}>
-            <div
-              class={`flex flex-wrap gap-3 justify-start ${drawerDisabled() ? 'opacity-50 saturate-75 pointer-events-none' : ''
-                }`}
-            >
-              <Show
-                when={hasDrawerContent()}
-                fallback={
-                  <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                    <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">
-                      Guest details unavailable
-                    </div>
-                    <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
-                      <Show
-                        when={isVM(props.guest)}
-                        fallback={
-                          <p>
-                            Start this container and ensure the Pulse user has sufficient Proxmox
-                            permissions to collect guest metrics.
-                          </p>
-                        }
-                      >
-                        <p>{getDiskStatusTooltip()}</p>
-                        <p>
-                          Install and run the qemu-guest-agent inside this VM so Pulse can surface
-                          OS, network, and filesystem details.
-                        </p>
-                      </Show>
-                    </div>
-                  </div>
-                }
+        {/* Metrics Section - Scrollable on mobile */}
+        <div class="flex-1 overflow-x-auto md:contents no-scrollbar">
+          <div class="flex md:contents min-w-full md:min-w-0 divide-x md:divide-none divide-gray-100 dark:divide-gray-800">
+            {/* Type */}
+            <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[30px] md:w-full flex justify-center md:justify-start items-center">
+              <span
+                class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${props.guest.type === 'qemu'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                  }`}
               >
-                <>
-                  <Show when={hasOsInfo() || hasAgentInfo() || ipAddresses().length > 0}>
-                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                      <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Guest Overview</div>
-                      <div class="mt-1 space-y-1">
-                        <Show when={hasOsInfo()}>
-                          <div class="flex flex-wrap items-center gap-1 text-gray-600 dark:text-gray-300">
-                            <Show when={osName().length > 0}>
-                              <span class="font-medium" title={osName()}>{osName()}</span>
-                            </Show>
-                            <Show when={osName().length > 0 && osVersion().length > 0}>
-                              <span class="text-gray-400 dark:text-gray-500">•</span>
-                            </Show>
-                            <Show when={osVersion().length > 0}>
-                              <span title={osVersion()}>{osVersion()}</span>
-                            </Show>
-                          </div>
-                        </Show>
-                        <Show when={hasAgentInfo()}>
-                          <div class="flex flex-wrap items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
-                            <span class="uppercase tracking-wide text-[10px] text-gray-400 dark:text-gray-500">
-                              Agent
-                            </span>
-                            <span title={`QEMU guest agent ${agentVersion()}`}>
-                              QEMU guest agent {agentVersion()}
-                            </span>
-                          </div>
-                        </Show>
-                        <Show when={ipAddresses().length > 0}>
-                          <div class="flex flex-wrap gap-1">
-                            <For each={ipAddresses()}>
-                              {(ip) => (
-                                <span
-                                  class="max-w-full truncate rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
-                                  title={ip}
-                                >
-                                  {ip}
-                                </span>
-                              )}
-                            </For>
-                          </div>
-                        </Show>
-                      </div>
-                    </div>
-                  </Show>
+                {isVM(props.guest) ? 'VM' : 'LXC'}
+              </span>
+            </div>
 
-                  <Show when={memoryExtraLines() && memoryExtraLines()!.length > 0}>
-                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                      <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Memory</div>
-                      <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
-                        <For each={memoryExtraLines()!}>{(line) => <div>{line}</div>}</For>
-                      </div>
-                    </div>
-                  </Show>
+            {/* VMID */}
+            <div class="flex-1 px-0.5 py-1 md:px-1.5 md:py-0 w-auto min-w-[30px] md:w-full flex justify-center md:justify-start items-center text-xs text-gray-600 dark:text-gray-400">
+              {props.guest.vmid}
+            </div>
 
-                  <Show when={hasFilesystemDetails() && props.guest.disks && props.guest.disks.length > 0}>
-                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                      <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Filesystems</div>
-                      <div class="mt-1 text-gray-600 dark:text-gray-300">
-                        <DiskList
-                          disks={props.guest.disks || []}
-                          diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
-                        />
-                      </div>
-                    </div>
-                  </Show>
+            {/* Uptime */}
+            <div class="flex-1 px-0.5 py-1 md:px-1.5 md:py-0 w-auto min-w-[40px] md:w-full flex justify-center md:justify-start items-center">
+              <div class={`text-xs whitespace-nowrap ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                <Show when={isRunning()} fallback="-">
+                  <span class="md:hidden">{formatUptime(props.guest.uptime, true)}</span>
+                  <span class="hidden md:inline">{formatUptime(props.guest.uptime)}</span>
+                </Show>
+              </div>
+            </div>
 
-                  <Show when={hasNetworkInterfaces()}>
-                    <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                      <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Network Interfaces</div>
-                      <div class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Row charts show current rate; totals below are cumulative since boot.</div>
-                      <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
-                        <For each={networkInterfaces()}>
-                          {(iface) => {
-                            const addresses = iface.addresses ?? [];
-                            const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
-                            return (
-                              <div class="space-y-1 rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700">
-                                <div class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
-                                  <span class="truncate" title={iface.name}>{iface.name || 'interface'}</span>
-                                  <Show when={iface.mac}>
-                                    <span class="text-[10px] text-gray-400 dark:text-gray-500" title={iface.mac}>
-                                      {iface.mac}
-                                    </span>
-                                  </Show>
-                                </div>
-                                <Show when={addresses.length > 0}>
-                                  <div class="flex flex-wrap gap-1">
-                                    <For each={addresses}>
-                                      {(ip) => (
-                                        <span
-                                          class="max-w-full truncate rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
-                                          title={ip}
-                                        >
-                                          {ip}
-                                        </span>
-                                      )}
-                                    </For>
-                                  </div>
-                                </Show>
-                                <Show when={hasTraffic}>
-                                  <div class="flex items-center gap-3 text-[10px] text-gray-500 dark:text-gray-400">
-                                    <span>Total RX {formatBytes(iface.rxBytes ?? 0)}</span>
-                                    <span>Total TX {formatBytes(iface.txBytes ?? 0)}</span>
-                                  </div>
-                                </Show>
-                              </div>
-                            );
-                          }}
-                        </For>
-                      </div>
-                    </div>
-                  </Show>
-                </>
+            {/* CPU */}
+            <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
+              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                <div class={`md:hidden text-xs ${cpuPercent() >= 90 ? 'text-red-600 dark:text-red-400 font-bold' : cpuPercent() >= 80 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                  {formatPercent(cpuPercent())}
+                </div>
+                <div class="hidden md:block w-full">
+                  <MetricBar
+                    value={cpuPercent()}
+                    label={formatPercent(cpuPercent())}
+                    sublabel={
+                      props.guest.cpus
+                        ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
+                        : undefined
+                    }
+                    type="cpu"
+                    resourceId={metricsKey()}
+                  />
+                </div>
               </Show>
             </div>
-          </td>
-        </tr>
+
+            {/* Memory */}
+            <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
+              <div title={memoryTooltip() ?? undefined} class="w-full text-center xl:text-left">
+                <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+                  <div class={`md:hidden text-xs ${memPercent() >= 85 ? 'text-red-600 dark:text-red-400 font-bold' : memPercent() >= 75 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                    {formatPercent(memPercent())}
+                  </div>
+                  <div class="hidden md:block w-full">
+                    <MetricBar
+                      value={memPercent()}
+                      label={formatPercent(memPercent())}
+                      sublabel={memoryUsageLabel()}
+                      type="memory"
+                      resourceId={metricsKey()}
+                    />
+                  </div>
+                </Show>
+              </div>
+            </div>
+
+            {/* Disk */}
+            <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
+              <Show
+                when={hasDiskUsage()}
+                fallback={
+                  <span class="text-xs text-gray-400 cursor-help" title={getDiskStatusTooltip()}>
+                    -
+                  </span>
+                }
+              >
+                <div class={`md:hidden text-xs ${diskPercent() >= 90 ? 'text-red-600 dark:text-red-400 font-bold' : diskPercent() >= 80 ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                  {formatPercent(diskPercent())}
+                </div>
+                <div class="hidden md:block w-full">
+                  <MetricBar
+                    value={diskPercent()}
+                    label={formatPercent(diskPercent())}
+                    sublabel={
+                      props.guest.disk
+                        ? `${formatBytes(props.guest.disk.used, 0)}/${formatBytes(props.guest.disk.total, 0)}`
+                        : undefined
+                    }
+                    type="disk"
+                    resourceId={metricsKey()}
+                  />
+                </div>
+              </Show>
+            </div>
+
+            {/* Disk I/O */}
+            <div class="hidden xl:flex px-2 py-1 xl:px-2 xl:py-0 w-auto min-w-[60px] xl:w-full justify-start items-center">
+              <div class="flex h-[24px] items-center w-full justify-start">
+                <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
+              </div>
+            </div>
+            <div class="hidden xl:flex px-2 py-1 xl:px-2 xl:py-0 w-auto min-w-[60px] xl:w-full justify-start items-center">
+              <div class="flex h-[24px] items-center w-full justify-start">
+                <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
+              </div>
+            </div>
+
+            {/* Network I/O */}
+            <div class="hidden xl:flex px-2 py-1 xl:px-2 xl:py-0 w-auto min-w-[60px] xl:w-full justify-start items-center">
+              <div class="flex h-[24px] items-center w-full justify-start">
+                <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
+              </div>
+            </div>
+            <div class="hidden xl:flex px-2 py-1 xl:px-2 xl:py-0 w-auto min-w-[60px] xl:w-full justify-start items-center">
+              <div class="flex h-[24px] items-center w-full justify-start">
+                <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Show when={drawerOpen() && canShowDrawer()}>
+        <div class="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+          <div class="p-4">
+            <GuestDrawer
+              guest={props.guest}
+              metricsKey={metricsKey()}
+              onClose={() => setCurrentlyExpandedGuestId(null)}
+            />
+          </div>
+        </div>
       </Show>
     </>
   );
-}
+};

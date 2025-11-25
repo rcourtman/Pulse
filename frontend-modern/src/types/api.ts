@@ -166,6 +166,7 @@ export interface DockerHost {
   hidden?: boolean;
   pendingUninstall?: boolean;
   command?: DockerHostCommand;
+  isLegacy?: boolean;
 }
 
 export interface DockerHostCommand {
@@ -343,6 +344,7 @@ export interface Host {
   revokedTokenId?: string;
   tokenRevokedAt?: number;
   tags?: string[];
+  isLegacy?: boolean;
 }
 
 export interface HostNetworkInterface {
@@ -914,60 +916,60 @@ export type WSMessage =
   | { type: 'alertResolved'; data: { alertId: string } }
   | { type: 'settingsUpdate'; data: { theme?: string } }
   | {
-      type: 'update:progress';
-      data: {
-        phase: string;
-        progress: number;
-        message: string;
-      };
-    }
+    type: 'update:progress';
+    data: {
+      phase: string;
+      progress: number;
+      message: string;
+    };
+  }
   | {
-      type: 'node_auto_registered';
-      data: {
-        type: string;
-        host: string;
-        name: string;
-        tokenId: string;
-        hasToken: boolean;
-        verifySSL?: boolean;
-        status?: string;
-      };
-    }
+    type: 'node_auto_registered';
+    data: {
+      type: string;
+      host: string;
+      name: string;
+      tokenId: string;
+      hasToken: boolean;
+      verifySSL?: boolean;
+      status?: string;
+    };
+  }
   | { type: 'node_deleted'; data: { nodeType: string } }
   | { type: 'nodes_changed'; data?: unknown }
   | {
-      type: 'discovery_update';
-      data: {
-        servers: Array<{
-          ip: string;
-          port: number;
-          type: string;
-          version: string;
-          hostname?: string;
-          release?: string;
-        }>;
-        errors?: string[];
-        timestamp?: number;
-        immediate?: boolean;
-        scanning?: boolean;
-        cached?: boolean;
-      };
-    }
-  | {
-      type: 'discovery_started';
-      data?: {
-        subnet?: string;
-        timestamp?: number;
-        scanning?: boolean;
-      };
-    }
-  | {
-      type: 'discovery_complete';
-      data?: {
-        timestamp?: number;
-        scanning?: boolean;
-      };
+    type: 'discovery_update';
+    data: {
+      servers: Array<{
+        ip: string;
+        port: number;
+        type: string;
+        version: string;
+        hostname?: string;
+        release?: string;
+      }>;
+      errors?: string[];
+      timestamp?: number;
+      immediate?: boolean;
+      scanning?: boolean;
+      cached?: boolean;
     };
+  }
+  | {
+    type: 'discovery_started';
+    data?: {
+      subnet?: string;
+      timestamp?: number;
+      scanning?: boolean;
+    };
+  }
+  | {
+    type: 'discovery_complete';
+    data?: {
+      timestamp?: number;
+      scanning?: boolean;
+    };
+  };
 
 // Utility types
 export type Status = 'running' | 'stopped' | 'paused' | 'unknown';

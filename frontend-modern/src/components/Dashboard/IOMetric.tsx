@@ -38,9 +38,9 @@ export function IOMetric(props: IOMetricProps) {
   return (
     <Show
       when={!props.disabled}
-      fallback={<div class="min-h-[24px] flex items-center text-sm text-gray-400">-</div>}
+      fallback={<div class="min-h-[14px] flex items-center text-xs text-gray-400">-</div>}
     >
-      <div class={`min-h-[24px] text-sm font-mono ${colorClass()} flex items-center`}>
+      <div class={`min-h-[14px] text-xs font-mono ${colorClass()} flex items-center`}>
         {formatSpeed(currentValue(), 0)}
       </div>
     </Show>

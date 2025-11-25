@@ -25,7 +25,7 @@ export function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
-export function formatUptime(seconds: number): string {
+export function formatUptime(seconds: number, condensed = false): string {
   if (!seconds || seconds < 0) return '0s';
 
   const days = Math.floor(seconds / 86400);
@@ -33,9 +33,9 @@ export function formatUptime(seconds: number): string {
   const minutes = Math.floor((seconds % 3600) / 60);
 
   if (days > 0) {
-    return `${days}d ${hours}h`;
+    return condensed ? `${days}d` : `${days}d ${hours}h`;
   } else if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+    return condensed ? `${hours}h` : `${hours}h ${minutes}m`;
   } else {
     return `${minutes}m`;
   }
