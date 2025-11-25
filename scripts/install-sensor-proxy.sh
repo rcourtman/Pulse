@@ -1253,8 +1253,6 @@ if ! id -u pulse-sensor-proxy >/dev/null 2>&1; then
     print_info "Creating pulse-sensor-proxy service account..."
     useradd --system --user-group --no-create-home --shell /usr/sbin/nologin pulse-sensor-proxy
     print_info "Service account created"
-else
-    print_info "Service account pulse-sensor-proxy already exists"
 fi
 
 # Ensure group exists (in case user was created without it)

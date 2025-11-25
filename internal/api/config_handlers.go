@@ -4189,7 +4189,7 @@ if [ "$TEMP_MONITORING_AVAILABLE" = true ] && [ "$PULSE_IS_CONTAINERIZED" = true
             chmod +x "$PROXY_INSTALLER"
 
             # Run installer with Pulse server as fallback
-            INSTALL_OUTPUT=$("$PROXY_INSTALLER" --ctid "$PULSE_CTID" --pulse-server "$PULSE_URL" 2>&1)
+            INSTALL_OUTPUT=$("$PROXY_INSTALLER" --ctid "$PULSE_CTID" --pulse-server "$PULSE_URL" --quiet 2>&1)
             INSTALL_STATUS=$?
 
             if [ -n "$INSTALL_OUTPUT" ]; then
@@ -4322,11 +4322,11 @@ if [ "$SKIP_TEMPERATURE_PROMPT" = true ]; then
 
 			if [ -n "$DETECTED_CTID" ]; then
 				# Was deployed for containerized Pulse - use --ctid mode
-				INSTALLER_ARGS="--ctid $DETECTED_CTID --pulse-server $PULSE_URL"
+				INSTALLER_ARGS="--ctid $DETECTED_CTID --pulse-server $PULSE_URL --quiet"
 			else
 				# Fallback to host-mode installation (works for standalone nodes and cluster nodes with external Pulse)
 				# We use --standalone flag to indicate host-level installation without container integration
-				INSTALLER_ARGS="--standalone --http-mode --pulse-server $PULSE_URL"
+				INSTALLER_ARGS="--standalone --http-mode --pulse-server $PULSE_URL --quiet"
 			fi
 
             if [ -n "$INSTALLER_ARGS" ]; then
@@ -4557,7 +4557,7 @@ elif [ "$TEMP_MONITORING_AVAILABLE" = true ]; then
             PROXY_INSTALLER=$(mktemp)
             if curl -fsSL "$PROXY_INSTALLER_URL" -o "$PROXY_INSTALLER" 2>/dev/null; then
                 chmod +x "$PROXY_INSTALLER"
-                if "$PROXY_INSTALLER" --standalone --http-mode --pulse-server "$PULSE_URL"; then
+                if "$PROXY_INSTALLER" --standalone --http-mode --pulse-server "$PULSE_URL" --quiet; then
                     echo "    ✓ pulse-sensor-proxy installed and registered with Pulse"
                     STANDALONE_PROXY_DEPLOYED=true
                     TEMPERATURE_ENABLED=true
