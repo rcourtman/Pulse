@@ -37,14 +37,14 @@ const commandsByPlatform: Record<
   linux: {
     title: 'Install on Linux',
     description:
-      'The installer downloads the agent binary and configures it as a systemd service.',
+      'The unified installer downloads the agent binary and configures it as a systemd service.',
     snippets: [
       {
         label: 'Install with systemd',
-        command: `curl -fsSL ${pulseUrl()}/install-host-agent.sh | bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
+        command: `curl -fsSL ${pulseUrl()}/install.sh | bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
         note: (
           <span>
-            Automatically installs to <code>/usr/local/bin/pulse-host-agent</code> and creates <code>/etc/systemd/system/pulse-host-agent.service</code>.
+            Automatically installs to <code>/usr/local/bin/pulse-agent</code> and creates <code>/etc/systemd/system/pulse-agent.service</code>.
           </span>
         ),
       },
@@ -53,14 +53,14 @@ const commandsByPlatform: Record<
   macos: {
     title: 'Install on macOS',
     description:
-      'The installer downloads the universal binary and sets up a launchd service for background monitoring.',
+      'The unified installer downloads the universal binary and sets up a launchd service for background monitoring.',
     snippets: [
       {
         label: 'Install with launchd',
-        command: `curl -fsSL ${pulseUrl()}/install-host-agent.sh | bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
+        command: `curl -fsSL ${pulseUrl()}/install.sh | bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
         note: (
           <span>
-            Creates <code>~/Library/LaunchAgents/com.pulse.host-agent.plist</code> and starts the agent automatically.
+            Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the agent automatically.
           </span>
         ),
       },
@@ -69,20 +69,20 @@ const commandsByPlatform: Record<
   windows: {
     title: 'Install on Windows',
     description:
-      'Run the PowerShell script to install and configure the host agent as a Windows service with automatic startup.',
+      'Run the PowerShell script to install and configure the unified agent as a Windows service with automatic startup.',
     snippets: [
       {
         label: 'Install as Windows Service (PowerShell)',
-        command: `irm ${pulseUrl()}/install-host-agent.ps1 | iex`,
+        command: `irm ${pulseUrl()}/install.ps1 | iex`,
         note: (
           <span>
-            Run in PowerShell as Administrator. The script will prompt for the Pulse URL and API token, download the agent binary, and install it as a Windows service with automatic startup. The agent runs natively and can access all Windows performance counters.
+            Run in PowerShell as Administrator. The script will prompt for the Pulse URL and API token, download the agent binary, and install it as a Windows service with automatic startup.
           </span>
         ),
       },
       {
         label: 'Install with parameters (PowerShell)',
-        command: `$env:PULSE_URL="${pulseUrl()}"; $env:PULSE_TOKEN="${TOKEN_PLACEHOLDER}"; irm ${pulseUrl()}/install-host-agent.ps1 | iex`,
+        command: `$env:PULSE_URL="${pulseUrl()}"; $env:PULSE_TOKEN="${TOKEN_PLACEHOLDER}"; irm ${pulseUrl()}/install.ps1 | iex`,
         note: (
           <span>
             Non-interactive installation. Set environment variables before running to skip prompts.
@@ -436,20 +436,20 @@ export const HostAgents: Component = () => {
   });
 
 
-    const requiresToken = () => {
-      const status = securityStatus();
-      if (status) {
-        return status.requiresAuth || status.apiTokenConfigured;
-      }
-      return true;
-    };
+  const requiresToken = () => {
+    const status = securityStatus();
+    if (status) {
+      return status.requiresAuth || status.apiTokenConfigured;
+    }
+    return true;
+  };
 
-    onCleanup(() => {
-      if (highlightTimer) {
-        clearTimeout(highlightTimer);
-        highlightTimer = null;
-      }
-    });
+  onCleanup(() => {
+    if (highlightTimer) {
+      clearTimeout(highlightTimer);
+      highlightTimer = null;
+    }
+  });
 
   const hasToken = () => Boolean(currentToken());
   const commandsUnlocked = () => (requiresToken() ? hasToken() : hasToken() || confirmedNoToken());
@@ -538,26 +538,26 @@ User=root
 WantedBy=multi-user.target`;
 
   function getManualUninstallCommand(): string {
-    return `sudo systemctl stop pulse-host-agent && \\
-sudo systemctl disable pulse-host-agent && \\
-sudo rm -f /etc/systemd/system/pulse-host-agent.service && \\
-sudo rm -f /usr/local/bin/pulse-host-agent && \\
+    return `sudo systemctl stop pulse-agent && \\
+sudo systemctl disable pulse-agent && \\
+sudo rm -f /etc/systemd/system/pulse-agent.service && \\
+sudo rm -f /usr/local/bin/pulse-agent && \\
 sudo systemctl daemon-reload`;
   }
 
   function getHostUninstallCommand(host: Host | null): string {
     const platform = host?.platform?.toLowerCase();
     if (platform === 'macos' || platform === 'darwin' || platform === 'mac') {
-      return `launchctl unload ~/Library/LaunchAgents/com.pulse.host-agent.plist >/dev/null 2>&1 || true && \\
-rm -f ~/Library/LaunchAgents/com.pulse.host-agent.plist && \\
-sudo rm -f /usr/local/bin/pulse-host-agent && \\
-rm -f ~/Library/Logs/pulse-host-agent.log`;
+      return `launchctl unload /Library/LaunchDaemons/com.pulse.agent.plist >/dev/null 2>&1 || true && \\
+rm -f /Library/LaunchDaemons/com.pulse.agent.plist && \\
+sudo rm -f /usr/local/bin/pulse-agent && \\
+rm -f /var/log/pulse-agent.log`;
     }
     if (platform === 'windows' || platform === 'win32' || platform === 'windows_nt') {
-      return `Stop-Service -Name PulseHostAgent -ErrorAction SilentlyContinue; \\
-sc.exe delete PulseHostAgent; \\
-Remove-Item 'C:\\\\Program Files\\\\Pulse\\\\pulse-host-agent.exe' -Force -ErrorAction SilentlyContinue; \\
-Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAction SilentlyContinue`;
+      return `Stop-Service -Name PulseAgent -ErrorAction SilentlyContinue; \\
+sc.exe delete PulseAgent; \\
+Remove-Item 'C:\\\\Program Files\\\\Pulse\\\\pulse-agent.exe' -Force -ErrorAction SilentlyContinue; \\
+Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-agent.log' -Force -ErrorAction SilentlyContinue`;
     }
     return getManualUninstallCommand();
   }
@@ -619,241 +619,240 @@ Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAct
             </div>
           </Show>
 
-            <Show when={!requiresToken()}>
-              <div class="space-y-3">
-                <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-                  Tokens are optional on this Pulse instance. Confirm to generate commands without embedding a token.
-                </div>
-                <button
-                  type="button"
-                  onClick={acknowledgeNoToken}
-                  disabled={confirmedNoToken()}
-                  class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                    confirmedNoToken()
-                      ? 'bg-green-600 text-white cursor-default'
-                      : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+          <Show when={!requiresToken()}>
+            <div class="space-y-3">
+              <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                Tokens are optional on this Pulse instance. Confirm to generate commands without embedding a token.
+              </div>
+              <button
+                type="button"
+                onClick={acknowledgeNoToken}
+                disabled={confirmedNoToken()}
+                class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${confirmedNoToken()
+                  ? 'bg-green-600 text-white cursor-default'
+                  : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
                   }`}
-                >
-                  {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}
-                </button>
-              </div>
-            </Show>
+              >
+                {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}
+              </button>
+            </div>
+          </Show>
 
-            <Show when={commandsUnlocked()}>
-              <div class="space-y-3">
-                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  Copy the command for the platform you are deploying.
-                </p>
-                <div class="space-y-4">
-                  <For each={commandSections()}>
-                    {(section) => (
-                      <div class="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                        <div class="space-y-1">
-                          <h5 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{section.title}</h5>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">{section.description}</p>
-                        </div>
-                        <div class="space-y-3">
-                          <For each={section.snippets}>
-                            {(snippet) => {
-                              const copyCommand = () =>
-                                snippet.command.replace(TOKEN_PLACEHOLDER, resolvedToken());
-
-                              return (
-                                <div class="space-y-2">
-                                  <div class="flex items-center justify-between gap-3">
-                                    <h6 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                      {snippet.label}
-                                    </h6>
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        const success = await copyToClipboard(copyCommand());
-                                        if (typeof window !== 'undefined' && window.showToast) {
-                                          window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
-                                        }
-                                      }}
-                                      class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
-                                    >
-                                      Copy command
-                                    </button>
-                                  </div>
-                                  <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
-                                    <code>{copyCommand()}</code>
-                                  </pre>
-                                  <Show when={snippet.note}>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">{snippet.note}</p>
-                                  </Show>
-                                </div>
-                              );
-                            }}
-                          </For>
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                </div>
-                <div class="space-y-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
-                  <div class="flex items-center justify-between gap-3">
-                    <h5 class="text-sm font-semibold">Check installation status</h5>
-                    <button
-                      type="button"
-                      onClick={handleLookup}
-                      disabled={lookupLoading()}
-                      class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {lookupLoading() ? 'Checking…' : 'Check status'}
-                    </button>
-                  </div>
-                  <p class="text-xs text-blue-800 dark:text-blue-200">
-                    Enter the hostname (or host ID) from the machine you just installed. Pulse returns the latest status instantly.
-                  </p>
-                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                    <input
-                      type="text"
-                      value={lookupValue()}
-                      onInput={(event) => {
-                        setLookupValue(event.currentTarget.value);
-                        setLookupError(null);
-                        setLookupResult(null);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          void handleLookup();
-                        }
-                      }}
-                      placeholder="Hostname or host ID"
-                      class="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800/60"
-                    />
-                  </div>
-                  <Show when={lookupError()}>
-                    <p class="text-xs font-medium text-red-600 dark:text-red-300">{lookupError()}</p>
-                  </Show>
-                  <Show when={lookupResult()}>
-                    {(result) => {
-                      const host = () => result().host;
-                      const statusBadgeClasses = () =>
-                        host().connected
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200';
-                      return (
-                        <div class="space-y-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100">
-                          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                            <div class="text-sm font-semibold">
-                              {host().displayName || host().hostname}
-                            </div>
-                            <div class="flex items-center gap-2">
-                              <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClasses()}`}>
-                                {host().connected ? 'Connected' : 'Not reporting yet'}
-                              </span>
-                              <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/60 dark:text-blue-200">
-                                {host().status || 'unknown'}
-                              </span>
-                            </div>
-                          </div>
-                          <div>
-                            Last seen {formatRelativeTime(host().lastSeen)} ({formatAbsoluteTime(host().lastSeen)})
-                          </div>
-                          <Show when={host().agentVersion}>
-                            <div class="text-xs text-blue-700 dark:text-blue-200">
-                              Agent version {host().agentVersion}
-                            </div>
-                          </Show>
-                        </div>
-                      );
-                    }}
-                  </Show>
-                </div>
-                <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
-                  <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
-                    Advanced options (manual install & uninstall)
-                  </summary>
-                  <div class="mt-3 space-y-4">
-                    <div class="space-y-3 rounded-lg border border-gray-200 bg-white p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
-                      <p class="font-medium text-gray-900 dark:text-gray-100">Manual Linux install</p>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Build the agent from source and manage the service yourself instead of using the helper script.
-                      </p>
-                      <p class="font-medium text-gray-900 dark:text-gray-100">1. Build the binary</p>
-                      <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
-                        <code>
-                          cd /opt/pulse
-                          <br />
-                          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o pulse-host-agent ./cmd/pulse-host-agent
-                        </code>
-                      </div>
-                      <p class="font-medium text-gray-900 dark:text-gray-100">2. Copy to host</p>
-                      <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
-                        <code>
-                          scp pulse-host-agent user@host:/usr/local/bin/
-                          <br />
-                          ssh user@host sudo chmod +x /usr/local/bin/pulse-host-agent
-                        </code>
-                      </div>
-                      <p class="font-medium text-gray-900 dark:text-gray-100">3. Systemd service template</p>
-                      <div class="relative">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const success = await copyToClipboard(getSystemdServiceUnit());
-                            if (typeof window !== 'undefined' && window.showToast) {
-                              window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
-                            }
-                          }}
-                          class="absolute right-2 top-2 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-600"
-                        >
-                          Copy
-                        </button>
-                        <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950 overflow-x-auto">
-                          <pre>{getSystemdServiceUnit()}</pre>
-                        </div>
-                      </div>
-                      <p class="font-medium text-gray-900 dark:text-gray-100">4. Enable & start</p>
-                      <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
-                        <code>
-                          sudo systemctl daemon-reload
-                          <br />
-                          sudo systemctl enable --now pulse-host-agent
-                        </code>
-                      </div>
-                    </div>
-                    <div>
-                      <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Manual uninstall</p>
-                      <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <code class="flex-1 break-all rounded bg-gray-900 px-3 py-2 font-mono text-xs text-gray-100 dark:bg-gray-950">
-                          {getManualUninstallCommand()}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const success = await copyToClipboard(getManualUninstallCommand());
-                            if (typeof window !== 'undefined' && window.showToast) {
-                              window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
-                            }
-                          }}
-                          class="self-start rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        Stops the agent, removes the systemd unit, and deletes the binary.
-                      </p>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            </Show>
-
-            <Show when={requiresToken() && !hasToken()}>
+          <Show when={commandsUnlocked()}>
+            <div class="space-y-3">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Installation commands</h4>
               <p class="text-xs text-gray-500 dark:text-gray-400">
-                Generate a new token to unlock the install commands.
+                Copy the command for the platform you are deploying.
               </p>
-            </Show>
-            <Show when={!requiresToken() && !confirmedNoToken() && !hasToken()}>
-              <p class="text-xs text-gray-500 dark:text-gray-400">Confirm the no-token setup to continue.</p>
-            </Show>
+              <div class="space-y-4">
+                <For each={commandSections()}>
+                  {(section) => (
+                    <div class="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                      <div class="space-y-1">
+                        <h5 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{section.title}</h5>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">{section.description}</p>
+                      </div>
+                      <div class="space-y-3">
+                        <For each={section.snippets}>
+                          {(snippet) => {
+                            const copyCommand = () =>
+                              snippet.command.replace(TOKEN_PLACEHOLDER, resolvedToken());
+
+                            return (
+                              <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-3">
+                                  <h6 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    {snippet.label}
+                                  </h6>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const success = await copyToClipboard(copyCommand());
+                                      if (typeof window !== 'undefined' && window.showToast) {
+                                        window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                                      }
+                                    }}
+                                    class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                                  >
+                                    Copy command
+                                  </button>
+                                </div>
+                                <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
+                                  <code>{copyCommand()}</code>
+                                </pre>
+                                <Show when={snippet.note}>
+                                  <p class="text-xs text-gray-500 dark:text-gray-400">{snippet.note}</p>
+                                </Show>
+                              </div>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+              <div class="space-y-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+                <div class="flex items-center justify-between gap-3">
+                  <h5 class="text-sm font-semibold">Check installation status</h5>
+                  <button
+                    type="button"
+                    onClick={handleLookup}
+                    disabled={lookupLoading()}
+                    class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {lookupLoading() ? 'Checking…' : 'Check status'}
+                  </button>
+                </div>
+                <p class="text-xs text-blue-800 dark:text-blue-200">
+                  Enter the hostname (or host ID) from the machine you just installed. Pulse returns the latest status instantly.
+                </p>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <input
+                    type="text"
+                    value={lookupValue()}
+                    onInput={(event) => {
+                      setLookupValue(event.currentTarget.value);
+                      setLookupError(null);
+                      setLookupResult(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleLookup();
+                      }
+                    }}
+                    placeholder="Hostname or host ID"
+                    class="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800/60"
+                  />
+                </div>
+                <Show when={lookupError()}>
+                  <p class="text-xs font-medium text-red-600 dark:text-red-300">{lookupError()}</p>
+                </Show>
+                <Show when={lookupResult()}>
+                  {(result) => {
+                    const host = () => result().host;
+                    const statusBadgeClasses = () =>
+                      host().connected
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200';
+                    return (
+                      <div class="space-y-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100">
+                        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <div class="text-sm font-semibold">
+                            {host().displayName || host().hostname}
+                          </div>
+                          <div class="flex items-center gap-2">
+                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClasses()}`}>
+                              {host().connected ? 'Connected' : 'Not reporting yet'}
+                            </span>
+                            <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/60 dark:text-blue-200">
+                              {host().status || 'unknown'}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          Last seen {formatRelativeTime(host().lastSeen)} ({formatAbsoluteTime(host().lastSeen)})
+                        </div>
+                        <Show when={host().agentVersion}>
+                          <div class="text-xs text-blue-700 dark:text-blue-200">
+                            Agent version {host().agentVersion}
+                          </div>
+                        </Show>
+                      </div>
+                    );
+                  }}
+                </Show>
+              </div>
+              <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+                <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Advanced options (manual install & uninstall)
+                </summary>
+                <div class="mt-3 space-y-4">
+                  <div class="space-y-3 rounded-lg border border-gray-200 bg-white p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
+                    <p class="font-medium text-gray-900 dark:text-gray-100">Manual Linux install</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      Build the agent from source and manage the service yourself instead of using the helper script.
+                    </p>
+                    <p class="font-medium text-gray-900 dark:text-gray-100">1. Build the binary</p>
+                    <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                      <code>
+                        cd /opt/pulse
+                        <br />
+                        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o pulse-agent ./cmd/pulse-agent
+                      </code>
+                    </div>
+                    <p class="font-medium text-gray-900 dark:text-gray-100">2. Copy to host</p>
+                    <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                      <code>
+                        scp pulse-agent user@host:/usr/local/bin/
+                        <br />
+                        ssh user@host sudo chmod +x /usr/local/bin/pulse-agent
+                      </code>
+                    </div>
+                    <p class="font-medium text-gray-900 dark:text-gray-100">3. Systemd service template</p>
+                    <div class="relative">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const success = await copyToClipboard(getSystemdServiceUnit());
+                          if (typeof window !== 'undefined' && window.showToast) {
+                            window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
+                          }
+                        }}
+                        class="absolute right-2 top-2 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-600"
+                      >
+                        Copy
+                      </button>
+                      <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950 overflow-x-auto">
+                        <pre>{getSystemdServiceUnit()}</pre>
+                      </div>
+                    </div>
+                    <p class="font-medium text-gray-900 dark:text-gray-100">4. Enable & start</p>
+                    <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                      <code>
+                        sudo systemctl daemon-reload
+                        <br />
+                        sudo systemctl enable --now pulse-host-agent
+                      </code>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Manual uninstall</p>
+                    <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <code class="flex-1 break-all rounded bg-gray-900 px-3 py-2 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                        {getManualUninstallCommand()}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const success = await copyToClipboard(getManualUninstallCommand());
+                          if (typeof window !== 'undefined' && window.showToast) {
+                            window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
+                          }
+                        }}
+                        class="self-start rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      Stops the agent, removes the systemd unit, and deletes the binary.
+                    </p>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </Show>
+
+          <Show when={requiresToken() && !hasToken()}>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Generate a new token to unlock the install commands.
+            </p>
+          </Show>
+          <Show when={!requiresToken() && !confirmedNoToken() && !hasToken()}>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Confirm the no-token setup to continue.</p>
+          </Show>
         </div>
       </Card>
 
@@ -1010,11 +1009,10 @@ Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAct
                           <td class="py-3 px-4">
                             <div class="flex items-center gap-2">
                               <span
-                                class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                  isOnline
-                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                }`}
+                                class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${isOnline
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                  }`}
                               >
                                 {host.status || 'unknown'}
                               </span>
@@ -1098,10 +1096,10 @@ Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAct
                       );
                     }}
                   </For>
-              </tbody>
-            </table>
-          </div>
-        </Show>
+                </tbody>
+              </table>
+            </div>
+          </Show>
         </div>
       </Card>
 
@@ -1191,11 +1189,10 @@ Remove-Item '$env:ProgramData\\\\Pulse\\\\pulse-host-agent.log' -Force -ErrorAct
                 <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
                   <span class="font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-gray-400">Host status</span>
                   <span
-                    class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${
-                      hostRemovalIsOnline()
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
-                        : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
-                    }`}
+                    class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${hostRemovalIsOnline()
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                      : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+                      }`}
                   >
                     {hostRemovalStatusLabel()}
                   </span>

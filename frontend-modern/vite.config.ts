@@ -12,9 +12,9 @@ const backendProtocol = process.env.PULSE_DEV_API_PROTOCOL ?? 'http';
 const backendHost = process.env.PULSE_DEV_API_HOST ?? '127.0.0.1';
 const backendPort = Number(
   process.env.PULSE_DEV_API_PORT ??
-    process.env.FRONTEND_PORT ??
-    process.env.PORT ??
-    7655,
+  process.env.FRONTEND_PORT ??
+  process.env.PORT ??
+  7655,
 );
 
 const backendUrl =
@@ -69,6 +69,14 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/install-host-agent.ps1': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/install.sh': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/install.ps1': {
         target: backendUrl,
         changeOrigin: true,
       },

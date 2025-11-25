@@ -113,115 +113,115 @@ export const DockerAgents: Component = () => {
   };
 
   const modalHostIsOnline = () => modalHostStatus().toLowerCase() === 'online';
-const modalHostHidden = () => Boolean(hostToRemove()?.hidden);
-const modalCommand = createMemo(() => hostToRemove()?.command ?? null);
-const modalCommandStatus = createMemo(() => modalCommand()?.status ?? null);
-const modalCommandInProgress = createMemo(() => {
-  const status = modalCommandStatus();
-  return status === 'queued' || status === 'dispatched' || status === 'acknowledged';
-});
-const modalCommandFailed = createMemo(() => modalCommandStatus() === 'failed');
-const modalCommandCompleted = createMemo(() => modalCommandStatus() === 'completed');
-const modalCommandProgress = createMemo(() => {
-  const cmd = modalCommand();
-  if (!cmd) return [];
-
-  const statusOrder: Record<string, number> = {
-    queued: 0,
-    dispatched: 1,
-    acknowledged: 2,
-    completed: 3,
-    failed: 4,
-    expired: 5,
-  };
-  const currentIndex = statusOrder[cmd.status] ?? 0;
-  const steps = [
-    { key: 'queued', label: 'Stop command queued' },
-    { key: 'dispatched', label: 'Instruction delivered to the agent' },
-    { key: 'acknowledged', label: 'Agent acknowledged the stop request' },
-    { key: 'completed', label: 'Agent disabled the service and removed autostart' },
-  ];
-
-  return steps.map((step) => {
-    const stepIndex = statusOrder[step.key] ?? 0;
-    return {
-      label: step.label,
-      done: currentIndex > stepIndex,
-      active: currentIndex === stepIndex,
-    };
+  const modalHostHidden = () => Boolean(hostToRemove()?.hidden);
+  const modalCommand = createMemo(() => hostToRemove()?.command ?? null);
+  const modalCommandStatus = createMemo(() => modalCommand()?.status ?? null);
+  const modalCommandInProgress = createMemo(() => {
+    const status = modalCommandStatus();
+    return status === 'queued' || status === 'dispatched' || status === 'acknowledged';
   });
-});
+  const modalCommandFailed = createMemo(() => modalCommandStatus() === 'failed');
+  const modalCommandCompleted = createMemo(() => modalCommandStatus() === 'completed');
+  const modalCommandProgress = createMemo(() => {
+    const cmd = modalCommand();
+    if (!cmd) return [];
 
-const modalCommandTimedOut = createMemo(() => {
-  return modalCommandInProgress() && elapsedSeconds() > 120; // 2 minutes
-});
+    const statusOrder: Record<string, number> = {
+      queued: 0,
+      dispatched: 1,
+      acknowledged: 2,
+      completed: 3,
+      failed: 4,
+      expired: 5,
+    };
+    const currentIndex = statusOrder[cmd.status] ?? 0;
+    const steps = [
+      { key: 'queued', label: 'Stop command queued' },
+      { key: 'dispatched', label: 'Instruction delivered to the agent' },
+      { key: 'acknowledged', label: 'Agent acknowledged the stop request' },
+      { key: 'completed', label: 'Agent disabled the service and removed autostart' },
+    ];
 
-const modalLastHeartbeat = createMemo(() => {
-  const host = hostToRemove();
-  return host?.lastSeen ? formatRelativeTime(host.lastSeen) : null;
-});
-
-const modalHostPendingUninstall = createMemo(() => Boolean(hostToRemove()?.pendingUninstall));
-const modalHasCommand = createMemo(() => Boolean(modalCommand()));
-const [hasShownCommandCompletion, setHasShownCommandCompletion] = createSignal(false);
-
-const formatElapsedTime = (seconds: number) => {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}m ${secs}s`;
-};
-
-type RemovalStatusTone = 'info' | 'success' | 'danger';
-
-const removalBadgeClassMap: Record<RemovalStatusTone, string> = {
-  info: 'inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
-  success:
-    'inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
-  danger:
-    'inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/40 dark:text-red-200',
-};
-
-const removalTextClassMap: Record<RemovalStatusTone, string> = {
-  info: 'text-blue-700 dark:text-blue-300',
-  success: 'text-emerald-700 dark:text-emerald-300',
-  danger: 'text-red-600 dark:text-red-300',
-};
-
-const getRemovalStatusInfo = (host: DockerHost): { label: string; tone: RemovalStatusTone } | null => {
-  const status = host.command?.status ?? null;
-
-  switch (status) {
-    case 'failed':
+    return steps.map((step) => {
+      const stepIndex = statusOrder[step.key] ?? 0;
       return {
-        label: host.command?.failureReason || 'Pulse could not stop the agent automatically.',
-        tone: 'danger',
+        label: step.label,
+        done: currentIndex > stepIndex,
+        active: currentIndex === stepIndex,
       };
-    case 'expired':
-      return {
-        label: 'Stop command expired before the agent responded.',
-        tone: 'danger',
-      };
-    case 'completed':
-      return {
-        label: 'Agent stopped. Pulse will hide this host after the next missed heartbeat.',
-        tone: 'success',
-      };
-    case 'acknowledged':
-      return { label: 'Agent acknowledged the stop command—waiting for shutdown.', tone: 'info' };
-    case 'dispatched':
-      return { label: 'Instruction delivered to the agent.', tone: 'info' };
-    case 'queued':
-      return { label: 'Stop command queued; waiting to reach the agent.', tone: 'info' };
-    default:
-      if (host.pendingUninstall) {
-        return { label: 'Marked for uninstall; waiting for agent confirmation.', tone: 'info' };
-      }
-      return null;
-  }
-};
+    });
+  });
+
+  const modalCommandTimedOut = createMemo(() => {
+    return modalCommandInProgress() && elapsedSeconds() > 120; // 2 minutes
+  });
+
+  const modalLastHeartbeat = createMemo(() => {
+    const host = hostToRemove();
+    return host?.lastSeen ? formatRelativeTime(host.lastSeen) : null;
+  });
+
+  const modalHostPendingUninstall = createMemo(() => Boolean(hostToRemove()?.pendingUninstall));
+  const modalHasCommand = createMemo(() => Boolean(modalCommand()));
+  const [hasShownCommandCompletion, setHasShownCommandCompletion] = createSignal(false);
+
+  const formatElapsedTime = (seconds: number) => {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    }
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  };
+
+  type RemovalStatusTone = 'info' | 'success' | 'danger';
+
+  const removalBadgeClassMap: Record<RemovalStatusTone, string> = {
+    info: 'inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
+    success:
+      'inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
+    danger:
+      'inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/40 dark:text-red-200',
+  };
+
+  const removalTextClassMap: Record<RemovalStatusTone, string> = {
+    info: 'text-blue-700 dark:text-blue-300',
+    success: 'text-emerald-700 dark:text-emerald-300',
+    danger: 'text-red-600 dark:text-red-300',
+  };
+
+  const getRemovalStatusInfo = (host: DockerHost): { label: string; tone: RemovalStatusTone } | null => {
+    const status = host.command?.status ?? null;
+
+    switch (status) {
+      case 'failed':
+        return {
+          label: host.command?.failureReason || 'Pulse could not stop the agent automatically.',
+          tone: 'danger',
+        };
+      case 'expired':
+        return {
+          label: 'Stop command expired before the agent responded.',
+          tone: 'danger',
+        };
+      case 'completed':
+        return {
+          label: 'Agent stopped. Pulse will hide this host after the next missed heartbeat.',
+          tone: 'success',
+        };
+      case 'acknowledged':
+        return { label: 'Agent acknowledged the stop command—waiting for shutdown.', tone: 'info' };
+      case 'dispatched':
+        return { label: 'Instruction delivered to the agent.', tone: 'info' };
+      case 'queued':
+        return { label: 'Stop command queued; waiting to reach the agent.', tone: 'info' };
+      default:
+        if (host.pendingUninstall) {
+          return { label: 'Marked for uninstall; waiting for agent confirmation.', tone: 'info' };
+        }
+        return null;
+    }
+  };
 
   createEffect(() => {
     if (!showRemoveModal()) return;
@@ -346,24 +346,24 @@ const getRemovalStatusInfo = (host: DockerHost): { label: string; tone: RemovalS
     const url = pulseUrl();
     const tokenValue = requiresToken() ? TOKEN_PLACEHOLDER : 'disabled';
     const tokenSegment = `--token '${tokenValue}'`;
-    return `curl -fSL '${url}/install-docker-agent.sh' -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --url '${url}' ${tokenSegment} && rm -f /tmp/pulse-install-docker-agent.sh`;
+    return `curl -fsSL '${url}/install.sh' | bash -s -- --url '${url}' ${tokenSegment} --enable-docker`;
   };
 
   const getUninstallCommand = () => {
     const url = pulseUrl();
-    return `curl -fSL '${url}/install-docker-agent.sh' -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --uninstall && rm -f /tmp/pulse-install-docker-agent.sh`;
+    return `curl -fsSL '${url}/install.sh' | bash -s -- --uninstall`;
   };
 
   const getSystemdService = () => {
     const token = requiresToken() ? TOKEN_PLACEHOLDER : 'disabled';
     return `[Unit]
-Description=Pulse Docker Agent
+Description=Pulse Unified Agent
 After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/pulse-docker-agent --url ${pulseUrl()} --token ${token} --interval 30s
+ExecStart=/usr/local/bin/pulse-agent --url ${pulseUrl()} --token ${token} --interval 30s --enable-docker
 Restart=always
 RestartSec=5s
 User=root
@@ -610,176 +610,176 @@ WantedBy=multi-user.target`;
         </Card>
       </Show>
 
-        <Card padding="lg" class="space-y-5">
-          <div class="space-y-2">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Enroll a container runtime</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">
-              Run the command below on any host running Docker or Podman. The installer will automatically detect your container runtime.
-            </p>
-          </div>
+      <Card padding="lg" class="space-y-5">
+        <div class="space-y-2">
+          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Enroll a container runtime</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            Run the command below on any host running Docker or Podman. The installer will automatically detect your container runtime.
+          </p>
+        </div>
 
-          <div class="space-y-5">
-            <Show when={requiresToken()}>
-              <div class="space-y-3">
-                <div class="space-y-1">
-                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate API token</p>
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Create a fresh token scoped to <code>{DOCKER_REPORT_SCOPE}</code>
-                  </p>
-                </div>
-
-                <div class="flex gap-2">
-                  <input
-                    type="text"
-                    value={tokenName()}
-                    onInput={(e) => setTokenName(e.currentTarget.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !isGeneratingToken()) {
-                        handleGenerateToken();
-                      }
-                    }}
-                    placeholder="Token name (optional)"
-                    class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleGenerateToken}
-                    disabled={isGeneratingToken()}
-                    class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isGeneratingToken() ? 'Generating…' : currentToken() ? 'Generate another' : 'Generate token'}
-                  </button>
-                </div>
-
-                <Show when={latestRecord()}>
-                  <div class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>
-                      Token <strong>{latestRecord()?.name}</strong> created and inserted into the command below.
-                    </span>
-                  </div>
-                </Show>
-              </div>
-            </Show>
-
-            <Show when={showInstallCommand()}>
-              <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                  <label class="text-sm font-semibold text-gray-900 dark:text-gray-100">Install command</label>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const command = getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER);
-                      const success = await copyToClipboard(command);
-                      if (typeof window !== 'undefined' && window.showToast) {
-                        window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
-                      }
-                    }}
-                    class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    Copy command
-                  </button>
-                </div>
-                <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
-                  <code>{getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER)}</code>
-                </pre>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  The installer downloads the agent, detects your container runtime, configures a systemd service, and starts reporting automatically.
+        <div class="space-y-5">
+          <Show when={requiresToken()}>
+            <div class="space-y-3">
+              <div class="space-y-1">
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Generate API token</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                  Create a fresh token scoped to <code>{DOCKER_REPORT_SCOPE}</code>
                 </p>
               </div>
-            </Show>
 
-            <Show when={requiresToken() && !currentToken()}>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  value={tokenName()}
+                  onInput={(e) => setTokenName(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isGeneratingToken()) {
+                      handleGenerateToken();
+                    }
+                  }}
+                  placeholder="Token name (optional)"
+                  class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
+                />
+                <button
+                  type="button"
+                  onClick={handleGenerateToken}
+                  disabled={isGeneratingToken()}
+                  class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isGeneratingToken() ? 'Generating…' : currentToken() ? 'Generate another' : 'Generate token'}
+                </button>
+              </div>
+
+              <Show when={latestRecord()}>
+                <div class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>
+                    Token <strong>{latestRecord()?.name}</strong> created and inserted into the command below.
+                  </span>
+                </div>
+              </Show>
+            </div>
+          </Show>
+
+          <Show when={showInstallCommand()}>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="text-sm font-semibold text-gray-900 dark:text-gray-100">Install command</label>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const command = getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER);
+                    const success = await copyToClipboard(command);
+                    if (typeof window !== 'undefined' && window.showToast) {
+                      window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                    }
+                  }}
+                  class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Copy command
+                </button>
+              </div>
+              <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 text-xs text-gray-100">
+                <code>{getInstallCommandTemplate().replace(TOKEN_PLACEHOLDER, currentToken() || TOKEN_PLACEHOLDER)}</code>
+              </pre>
               <p class="text-xs text-gray-500 dark:text-gray-400">
-                Generate a token to see the install command.
+                The unified installer downloads the agent, detects your container runtime, configures a systemd service, and starts reporting automatically.
               </p>
-            </Show>
-          </div>
+            </div>
+          </Show>
 
-          <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
-            <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
-              Advanced options (uninstall & manual install)
-            </summary>
-            <div class="mt-3 space-y-4">
-              <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Uninstall</p>
-                <div class="mt-2 flex items-center gap-2">
-                  <code class="flex-1 break-all rounded bg-gray-900 px-3 py-2 font-mono text-xs text-red-400 dark:bg-gray-950">
-                    {getUninstallCommand()}
+          <Show when={requiresToken() && !currentToken()}>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Generate a token to see the install command.
+            </p>
+          </Show>
+        </div>
+
+        <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+          <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
+            Advanced options (uninstall & manual install)
+          </summary>
+          <div class="mt-3 space-y-4">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Uninstall</p>
+              <div class="mt-2 flex items-center gap-2">
+                <code class="flex-1 break-all rounded bg-gray-900 px-3 py-2 font-mono text-xs text-red-400 dark:bg-gray-950">
+                  {getUninstallCommand()}
+                </code>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const success = await copyToClipboard(getUninstallCommand());
+                    if (typeof window !== 'undefined' && window.showToast) {
+                      window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
+                    }
+                  }}
+                  class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                >
+                  Copy
+                </button>
+              </div>
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Stops the agent, removes the binary, the systemd unit, and related files.
+              </p>
+            </div>
+
+            <div>
+              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Manual installation</p>
+              <div class="mt-2 space-y-3 rounded-lg border border-gray-200 bg-white p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
+                <p class="font-medium text-gray-900 dark:text-gray-100">1. Build the binary</p>
+                <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                  <code>
+                    cd /opt/pulse
+                    <br />
+                    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o pulse-agent ./cmd/pulse-agent
                   </code>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Building with <code class="font-mono text-[11px]">CGO_ENABLED=0</code> keeps the binary fully static so it runs on hosts with older glibc (e.g. Debian 11).
+                </p>
+                <p class="font-medium text-gray-900 dark:text-gray-100">2. Copy to host</p>
+                <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                  <code>
+                    scp pulse-agent user@docker-host:/usr/local/bin/
+                    <br />
+                    ssh user@docker-host chmod +x /usr/local/bin/pulse-agent
+                  </code>
+                </div>
+                <p class="font-medium text-gray-900 dark:text-gray-100">3. Systemd template</p>
+                <div class="relative">
                   <button
                     type="button"
                     onClick={async () => {
-                      const success = await copyToClipboard(getUninstallCommand());
+                      const success = await copyToClipboard(getSystemdService());
                       if (typeof window !== 'undefined' && window.showToast) {
                         window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
                       }
                     }}
-                    class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                    class="absolute right-2 top-2 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-600"
                   >
                     Copy
                   </button>
+                  <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                    <pre>{getSystemdService()}</pre>
+                  </div>
                 </div>
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Stops the agent, removes the binary, the systemd unit, and related files.
-                </p>
-              </div>
-
-              <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Manual installation</p>
-                <div class="mt-2 space-y-3 rounded-lg border border-gray-200 bg-white p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
-                  <p class="font-medium text-gray-900 dark:text-gray-100">1. Build the binary</p>
-                  <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
-                    <code>
-                      cd /opt/pulse
-                      <br />
-                      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o pulse-docker-agent ./cmd/pulse-docker-agent
-                    </code>
-                  </div>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Building with <code class="font-mono text-[11px]">CGO_ENABLED=0</code> keeps the binary fully static so it runs on hosts with older glibc (e.g. Debian 11).
-                  </p>
-                  <p class="font-medium text-gray-900 dark:text-gray-100">2. Copy to host</p>
-                  <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
-                    <code>
-                      scp pulse-docker-agent user@docker-host:/usr/local/bin/
-                      <br />
-                      ssh user@docker-host chmod +x /usr/local/bin/pulse-docker-agent
-                    </code>
-                  </div>
-                  <p class="font-medium text-gray-900 dark:text-gray-100">3. Systemd template</p>
-                  <div class="relative">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const success = await copyToClipboard(getSystemdService());
-                        if (typeof window !== 'undefined' && window.showToast) {
-                          window.showToast(success ? 'success' : 'error', success ? 'Copied to clipboard' : 'Failed to copy to clipboard');
-                        }
-                      }}
-                      class="absolute right-2 top-2 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-600"
-                    >
-                      Copy
-                    </button>
-                    <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
-                      <pre>{getSystemdService()}</pre>
-                    </div>
-                  </div>
-                  <p class="font-medium text-gray-900 dark:text-gray-100">4. Enable & start</p>
-                  <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
-                    <code>
-                      systemctl daemon-reload
-                      <br />
-                      systemctl enable --now pulse-docker-agent
-                    </code>
-                  </div>
+                <p class="font-medium text-gray-900 dark:text-gray-100">4. Enable & start</p>
+                <div class="rounded bg-gray-900 p-3 font-mono text-xs text-gray-100 dark:bg-gray-950">
+                  <code>
+                    systemctl daemon-reload
+                    <br />
+                    systemctl enable --now pulse-agent
+                  </code>
                 </div>
               </div>
             </div>
-          </details>
-        </Card>
+          </div>
+        </details>
+      </Card>
 
       {/* Remove Container Host Modal */}
       <Show when={showRemoveModal()}>
@@ -832,11 +832,10 @@ WantedBy=multi-user.target`;
                         modalCommandStatus() === 'completed' ||
                         (modalHostPendingUninstall() && !modalHasCommand())
                       }
-                      class={`inline-flex items-center justify-center rounded px-4 py-2 text-sm font-medium text-white transition-colors ${
-                        modalCommandStatus() === 'completed'
-                          ? 'bg-emerald-600 dark:bg-emerald-500'
-                          : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
-                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                      class={`inline-flex items-center justify-center rounded px-4 py-2 text-sm font-medium text-white transition-colors ${modalCommandStatus() === 'completed'
+                        ? 'bg-emerald-600 dark:bg-emerald-500'
+                        : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       {(() => {
                         if (removeActionLoading() === 'queue') return 'Sending…';
@@ -895,13 +894,12 @@ WantedBy=multi-user.target`;
                                     class={`${step.done || step.active ? 'text-blue-700 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'} flex items-center gap-2 text-xs`}
                                   >
                                     <span
-                                      class={`relative h-2 w-2 flex-shrink-0 rounded-full ${
-                                        step.done
-                                          ? 'bg-blue-500'
-                                          : step.active
-                                            ? 'bg-blue-400 animate-pulse'
-                                            : 'bg-gray-300 dark:bg-gray-600'
-                                      } ${modalCommandCompleted() && step.done ? 'after:absolute after:-inset-1 after:rounded-full after:border after:border-emerald-400/40 after:animate-pulse' : ''}`}
+                                      class={`relative h-2 w-2 flex-shrink-0 rounded-full ${step.done
+                                        ? 'bg-blue-500'
+                                        : step.active
+                                          ? 'bg-blue-400 animate-pulse'
+                                          : 'bg-gray-300 dark:bg-gray-600'
+                                        } ${modalCommandCompleted() && step.done ? 'after:absolute after:-inset-1 after:rounded-full after:border after:border-emerald-400/40 after:animate-pulse' : ''}`}
                                     />
                                     {step.label}
                                   </li>
@@ -966,12 +964,12 @@ WantedBy=multi-user.target`;
                           Agent confirmed the stop. Pulse has already cleaned up everything it controls:
                         </p>
                         <ul class="mt-2 space-y-1 leading-snug">
-                          <li>• Terminated the running <code class="font-mono text-[11px]">pulse-docker-agent</code> process</li>
+                          <li>• Terminated the running <code class="font-mono text-[11px]">pulse-agent</code> process</li>
                           <li>• Disabled future auto-start (stops the systemd unit or removes the Unraid autostart script if one exists)</li>
                           <li>• Cleared the host from the dashboard so new reports won’t appear unexpectedly</li>
                         </ul>
                         <p class="mt-2">
-                          The binary remains at <code class="font-mono text-[11px]">/usr/local/bin/pulse-docker-agent</code> for quick reinstalls. Use the uninstall command below if you prefer to remove it too.
+                          The binary remains at <code class="font-mono text-[11px]">/usr/local/bin/pulse-agent</code> for quick reinstalls. Use the uninstall command below if you prefer to remove it too.
                         </p>
                       </div>
                     </Show>
@@ -996,13 +994,12 @@ WantedBy=multi-user.target`;
                                   class={`${step.done || step.active ? 'text-blue-700 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'} flex items-center gap-2`}
                                 >
                                   <span
-                                    class={`relative h-2 w-2 rounded-full ${
-                                      step.done
-                                        ? 'bg-blue-500'
-                                        : step.active
-                                          ? 'bg-blue-400 animate-pulse'
-                                          : 'bg-gray-300 dark:bg-gray-600'
-                                    } ${modalCommandCompleted() && step.done ? 'after:absolute after:-inset-1 after:rounded-full after:border after:border-emerald-400/40 after:animate-pulse' : ''}`}
+                                    class={`relative h-2 w-2 rounded-full ${step.done
+                                      ? 'bg-blue-500'
+                                      : step.active
+                                        ? 'bg-blue-400 animate-pulse'
+                                        : 'bg-gray-300 dark:bg-gray-600'
+                                      } ${modalCommandCompleted() && step.done ? 'after:absolute after:-inset-1 after:rounded-full after:border after:border-emerald-400/40 after:animate-pulse' : ''}`}
                                   />
                                   {step.label}
                                 </li>
@@ -1011,7 +1008,7 @@ WantedBy=multi-user.target`;
                           </ul>
                           <p class="leading-snug">
                             Pulse responds to the agent's <code class="font-mono text-[11px]">/api/agents/docker/report</code> call with a stop command. The agent disables its service, removes
-                            <code class="font-mono text-[11px]">/boot/config/go.d/pulse-docker-agent.sh</code>, and posts back to
+                            <code class="font-mono text-[11px]">/boot/config/go.d/pulse-agent.sh</code>, and posts back to
                             <code class="font-mono text-[11px]">/api/agents/docker/commands/&lt;id&gt;/ack</code> so Pulse knows it can remove the row.
                           </p>
                         </div>
@@ -1113,7 +1110,7 @@ WantedBy=multi-user.target`;
                         <p class="text-[11px] font-medium text-gray-600 dark:text-gray-300">Command copied to clipboard.</p>
                       </Show>
                       <p class="text-[11px] text-gray-500 dark:text-gray-400">
-                        This command stops the agent, removes the systemd service (or Unraid autostart hook), deletes <code class="font-mono text-[11px]">/var/log/pulse-docker-agent.log</code>, and uninstalls the binary. Pulse will notice the host is gone after the next heartbeat (≈2 minutes) and clean up the row automatically.
+                        This command stops the agent, removes the systemd service (or Unraid autostart hook), deletes <code class="font-mono text-[11px]">/var/log/pulse-agent.log</code>, and uninstalls the binary. Pulse will notice the host is gone after the next heartbeat (≈2 minutes) and clean up the row automatically.
                       </p>
                     </div>
                     <div class="flex flex-col gap-2 rounded border border-gray-200 p-3 dark:border-gray-700">
@@ -1443,11 +1440,10 @@ WantedBy=multi-user.target`;
                           <td class="py-3 px-4 align-top">
                             <div class="flex flex-wrap items-center gap-2">
                               <span
-                                class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                  isOnline
-                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                }`}
+                                class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${isOnline
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                  }`}
                               >
                                 {host.status || 'unknown'}
                               </span>
@@ -1486,7 +1482,7 @@ WantedBy=multi-user.target`;
                                 );
                               }}
                             </Show>
-                         </td>
+                          </td>
                           <td class="py-3 px-4 align-top">
                             <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {describeRuntime(host)}

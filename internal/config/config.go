@@ -77,6 +77,7 @@ type Config struct {
 	FrontendPort int    `envconfig:"FRONTEND_PORT" default:"7655"`
 	ConfigPath   string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
 	DataPath     string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
+	AppRoot      string `json:"-"`                                // Root directory of the application (where binary lives)
 	PublicURL    string `envconfig:"PULSE_PUBLIC_URL" default:""` // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
 
 	// Proxmox VE connections
@@ -530,6 +531,7 @@ func Load() (*Config, error) {
 		FrontendPort:                    7655,
 		ConfigPath:                      dataDir,
 		DataPath:                        dataDir,
+		AppRoot:                         detectAppRoot(),
 		ConcurrentPolling:               true,
 		ConnectionTimeout:               60 * time.Second,
 		MetricsRetentionDays:            7,
