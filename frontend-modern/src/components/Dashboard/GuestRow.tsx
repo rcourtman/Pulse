@@ -149,6 +149,13 @@ export function GuestRow(props: GuestRowProps) {
   });
 
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
+
+  // I/O metrics - must use memos for reactivity with WebSocket updates
+  const diskRead = createMemo(() => props.guest.diskRead || 0);
+  const diskWrite = createMemo(() => props.guest.diskWrite || 0);
+  const networkIn = createMemo(() => props.guest.networkIn || 0);
+  const networkOut = createMemo(() => props.guest.networkOut || 0);
+
   const memPercent = createMemo(() => {
     if (!props.guest.memory) return 0;
     return props.guest.memory.usage || 0;
@@ -657,7 +664,7 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class={getIOColorClass(props.guest.diskRead)}>{formatSpeed(props.guest.diskRead)}</span>
+              <span class={getIOColorClass(diskRead())}>{formatSpeed(diskRead())}</span>
             </Show>
           </div>
         );
@@ -666,7 +673,7 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class={getIOColorClass(props.guest.diskWrite)}>{formatSpeed(props.guest.diskWrite)}</span>
+              <span class={getIOColorClass(diskWrite())}>{formatSpeed(diskWrite())}</span>
             </Show>
           </div>
         );
@@ -675,7 +682,7 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class={getIOColorClass(props.guest.networkIn)}>{formatSpeed(props.guest.networkIn)}</span>
+              <span class={getIOColorClass(networkIn())}>{formatSpeed(networkIn())}</span>
             </Show>
           </div>
         );
@@ -684,7 +691,7 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class={getIOColorClass(props.guest.networkOut)}>{formatSpeed(props.guest.networkOut)}</span>
+              <span class={getIOColorClass(networkOut())}>{formatSpeed(networkOut())}</span>
             </Show>
           </div>
         );
