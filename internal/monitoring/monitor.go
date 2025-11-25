@@ -1877,7 +1877,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Services:          services,
 		Tasks:             tasks,
 		Swarm:             swarmInfo,
-		IsLegacy:          isLegacyDockerAgent(report.Agent.Version),
+		IsLegacy:          isLegacyDockerAgent(report.Agent.Type),
 	}
 
 	if tokenRecord != nil {
@@ -2160,7 +2160,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		LastSeen:        timestamp,
 		AgentVersion:    strings.TrimSpace(report.Agent.Version),
 		Tags:            append([]string(nil), report.Tags...),
-		IsLegacy:        isLegacyHostAgent(report.Agent.Version),
+		IsLegacy:        isLegacyHostAgent(report.Agent.Type),
 	}
 
 	if len(host.LoadAverage) == 0 {
@@ -9562,20 +9562,14 @@ func (m *Monitor) checkMockAlerts() {
 	// mock state without needing to grab the alert manager lock again.
 	mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
 }
-func isLegacyHostAgent(version string) bool {
-	// New unified agent is 1.0.0+
-	// Legacy agents are 0.x.x or empty
-	if version == "" {
-		return true
-	}
-	return strings.HasPrefix(version, "0.")
+func isLegacyHostAgent(agentType string) bool {
+	// Unified agent reports type="unified"
+	// Legacy standalone agents have empty type
+	return agentType != "unified"
 }
 
-func isLegacyDockerAgent(version string) bool {
-	// New unified agent is 1.0.0+
-	// Legacy agents are 0.x.x or empty
-	if version == "" {
-		return true
-	}
-	return strings.HasPrefix(version, "0.")
+func isLegacyDockerAgent(agentType string) bool {
+	// Unified agent reports type="unified"
+	// Legacy standalone agents have empty type
+	return agentType != "unified"
 }

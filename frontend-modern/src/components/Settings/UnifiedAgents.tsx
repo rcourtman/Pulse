@@ -299,6 +299,14 @@ export const UnifiedAgents: Component = () => {
         return Array.from(unified.values()).sort((a, b) => a.hostname.localeCompare(b.hostname));
     });
 
+    const legacyAgents = createMemo(() => allHosts().filter(h => h.isLegacy));
+    const hasLegacyAgents = createMemo(() => legacyAgents().length > 0);
+
+    const getUpgradeCommand = (hostname: string) => {
+        const token = resolvedToken();
+        return `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${token}`;
+    };
+
     const handleRemoveAgent = async (id: string, type: 'host' | 'docker') => {
         if (!confirm('Are you sure you want to remove this agent? This will stop monitoring but will not uninstall the agent from the remote machine.')) return;
 
@@ -588,6 +596,44 @@ export const UnifiedAgents: Component = () => {
                         Overview of all agents currently reporting to Pulse.
                     </p>
                 </div>
+
+                <Show when={hasLegacyAgents()}>
+                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20">
+                        <div class="flex items-start gap-3">
+                            <svg class="h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                            </svg>
+                            <div class="flex-1 space-y-2">
+                                <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+                                    {legacyAgents().length} legacy agent{legacyAgents().length > 1 ? 's' : ''} detected
+                                </p>
+                                <p class="text-sm text-amber-700 dark:text-amber-300">
+                                    Legacy agents (pulse-host-agent, pulse-docker-agent) are deprecated. Upgrade to the unified agent for auto-updates and combined host + Docker monitoring.
+                                </p>
+                                <p class="text-xs text-amber-600 dark:text-amber-400">
+                                    Run this command on each legacy host to upgrade:
+                                </p>
+                                <div class="flex items-center gap-2">
+                                    <code class="flex-1 break-all rounded bg-amber-100 px-3 py-2 font-mono text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                                        {getUpgradeCommand('')}
+                                    </code>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const success = await copyToClipboard(getUpgradeCommand(''));
+                                            if (typeof window !== 'undefined' && window.showToast) {
+                                                window.showToast(success ? 'success' : 'error', success ? 'Copied!' : 'Failed to copy');
+                                            }
+                                        }}
+                                        class="rounded-lg bg-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-300 dark:bg-amber-800 dark:text-amber-100 dark:hover:bg-amber-700"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </Show>
 
                 <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">

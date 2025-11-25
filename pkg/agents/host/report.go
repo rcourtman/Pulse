@@ -20,6 +20,7 @@ type Report struct {
 type AgentInfo struct {
 	ID              string `json:"id"`
 	Version         string `json:"version,omitempty"`
+	Type            string `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
 	IntervalSeconds int    `json:"intervalSeconds,omitempty"`
 	Hostname        string `json:"hostname,omitempty"`
 }
