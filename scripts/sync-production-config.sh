@@ -47,13 +47,14 @@ else
         openssl rand -base64 32 > "$DEV_DIR/.encryption.key"
         chmod 600 "$DEV_DIR/.encryption.key"
         echo "✓ Generated dev encryption key at $DEV_DIR/.encryption.key"
+
+        # Remove encrypted artifacts that rely on the missing/old key
+        find "$DEV_DIR" -maxdepth 1 -type f -name 'nodes.enc*' -exec rm -f {} \;
+        rm -f "$DEV_DIR/email.enc" "$DEV_DIR/webhooks.enc"
+        echo "✓ Cleared encrypted artifacts (new key generated)"
     else
         echo "✓ Reusing existing dev encryption key"
     fi
-    # Remove encrypted artifacts that rely on the missing production key
-    find "$DEV_DIR" -maxdepth 1 -type f -name 'nodes.enc*' -exec rm -f {} \;
-    rm -f "$DEV_DIR/email.enc" "$DEV_DIR/webhooks.enc"
-    echo "✓ Cleared encrypted production artifacts from dev config"
 fi
 
 # Copy nodes configuration - WITH VALIDATION
