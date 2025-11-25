@@ -166,6 +166,12 @@ if [[ "$OS" == "darwin" ]]; then
         rm -f /Library/LaunchDaemons/com.pulse.host-agent.plist
         rm -f /usr/local/bin/pulse-host-agent
     fi
+    if launchctl list | grep -q "com.pulse.docker-agent"; then
+        log_warn "Removing legacy com.pulse.docker-agent..."
+        launchctl unload /Library/LaunchDaemons/com.pulse.docker-agent.plist 2>/dev/null || true
+        rm -f /Library/LaunchDaemons/com.pulse.docker-agent.plist
+        rm -f /usr/local/bin/pulse-docker-agent
+    fi
 fi
 
 # --- Service Installation ---

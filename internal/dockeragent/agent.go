@@ -48,6 +48,7 @@ type Config struct {
 	HostnameOverride   string
 	AgentID            string
 	AgentType          string // "unified" when running as part of pulse-agent, empty for standalone
+	AgentVersion       string // Version to report; if empty, uses dockeragent.Version
 	InsecureSkipVerify bool
 	DisableAutoUpdate  bool
 	Targets            []TargetConfig
@@ -88,6 +89,7 @@ type Agent struct {
 	daemonHost          string
 	runtime             RuntimeKind
 	runtimeVer          string
+	agentVersion        string
 	supportsSwarm       bool
 	httpClients         map[bool]*http.Client
 	logger              zerolog.Logger
@@ -226,12 +228,19 @@ func New(cfg Config) (*Agent, error) {
 		}
 	}
 
+	// Use configured version or fall back to package version
+	agentVersion := cfg.AgentVersion
+	if agentVersion == "" {
+		agentVersion = Version
+	}
+
 	agent := &Agent{
 		cfg:              cfg,
 		docker:           dockerClient,
 		daemonHost:       dockerClient.DaemonHost(),
 		runtime:          runtimeKind,
 		runtimeVer:       info.ServerVersion,
+		agentVersion:     agentVersion,
 		supportsSwarm:    runtimeKind == RuntimeDocker,
 		httpClients:      httpClients,
 		logger:           *logger,
@@ -656,7 +665,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	report := agentsdocker.Report{
 		Agent: agentsdocker.AgentInfo{
 			ID:              agentID,
-			Version:         Version,
+			Version:         a.agentVersion,
 			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.cfg.Interval / time.Second),
 		},

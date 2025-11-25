@@ -28,6 +28,7 @@ type Config struct {
 	HostnameOverride   string
 	AgentID            string
 	AgentType          string // "unified" when running as part of pulse-agent, empty for standalone
+	AgentVersion       string // Version to report; if empty, uses hostagent.Version
 	Tags               []string
 	InsecureSkipVerify bool
 	RunOnce            bool
@@ -51,6 +52,7 @@ type Agent struct {
 	architecture    string
 	machineID       string
 	agentID         string
+	agentVersion    string
 	interval        time.Duration
 	trimmedPulseURL string
 }
@@ -156,6 +158,12 @@ func New(cfg Config) (*Agent, error) {
 	}
 	cfg.Tags = trimmedTags
 
+	// Use configured version or fall back to package version
+	agentVersion := cfg.AgentVersion
+	if agentVersion == "" {
+		agentVersion = Version
+	}
+
 	return &Agent{
 		cfg:             cfg,
 		logger:          logger,
@@ -170,6 +178,7 @@ func New(cfg Config) (*Agent, error) {
 		architecture:    arch,
 		machineID:       machineID,
 		agentID:         agentID,
+		agentVersion:    agentVersion,
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
 	}, nil
@@ -241,7 +250,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
-			Version:         Version,
+			Version:         a.agentVersion,
 			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.interval / time.Second),
 			Hostname:        a.hostname,

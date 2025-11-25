@@ -82,6 +82,7 @@ func main() {
 			HostnameOverride:   cfg.HostnameOverride,
 			AgentID:            cfg.AgentID, // Shared ID? Or separate? Usually separate for now.
 			AgentType:          "unified",
+			AgentVersion:       Version, // Pass unified agent version
 			Tags:               cfg.Tags,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			LogLevel:           cfg.LogLevel,
@@ -111,6 +112,7 @@ func main() {
 			HostnameOverride:   cfg.HostnameOverride,
 			AgentID:            cfg.AgentID,
 			AgentType:          "unified",
+			AgentVersion:       Version, // Pass unified agent version
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			DisableAutoUpdate:  true, // Unified agent handles updates
 			LogLevel:           cfg.LogLevel,
