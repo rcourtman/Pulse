@@ -2,10 +2,12 @@ package monitoring
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1616,4 +1618,627 @@ func (m *Monitor) fetchNodeStorageFallback(ctx context.Context, instanceCfg *con
 	}
 
 	return directClient.GetStorage(ctx, nodeName)
+}
+
+// pollPVENode polls a single PVE node and returns the result
+func (m *Monitor) pollPVENode(
+	ctx context.Context,
+	instanceName string,
+	instanceCfg *config.PVEInstance,
+	client PVEClientInterface,
+	node proxmox.Node,
+	connectionHealthStr string,
+	prevNodeMemory map[string]models.Memory,
+	prevInstanceNodes []models.Node,
+) (models.Node, string, error) {
+	nodeStart := time.Now()
+	displayName := getNodeDisplayName(instanceCfg, node.Node)
+	connectionHost := instanceCfg.Host
+	guestURL := instanceCfg.GuestURL
+	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
+		hasFingerprint := instanceCfg.Fingerprint != ""
+		for _, ep := range instanceCfg.ClusterEndpoints {
+			if strings.EqualFold(ep.NodeName, node.Node) {
+				if effective := clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint); effective != "" {
+					connectionHost = effective
+				}
+				if ep.GuestURL != "" {
+					guestURL = ep.GuestURL
+				}
+				break
+			}
+		}
+	}
+
+	// Apply grace period for node status to prevent flapping
+	nodeID := instanceName + "-" + node.Node
+	effectiveStatus := node.Status
+	now := time.Now()
+
+	m.mu.Lock()
+	if strings.ToLower(node.Status) == "online" {
+		// Node is online - update last-online timestamp
+		m.nodeLastOnline[nodeID] = now
+	} else {
+		// Node is reported as offline - check grace period
+		lastOnline, exists := m.nodeLastOnline[nodeID]
+		if exists && now.Sub(lastOnline) < nodeOfflineGracePeriod {
+			// Still within grace period - preserve online status
+			effectiveStatus = "online"
+			log.Debug().
+				Str("instance", instanceName).
+				Str("node", node.Node).
+				Dur("timeSinceOnline", now.Sub(lastOnline)).
+				Dur("gracePeriod", nodeOfflineGracePeriod).
+				Msg("Node offline but within grace period - preserving online status")
+		} else {
+			// Grace period expired or never seen online - mark as offline
+			if exists {
+				log.Info().
+					Str("instance", instanceName).
+					Str("node", node.Node).
+					Dur("timeSinceOnline", now.Sub(lastOnline)).
+					Msg("Node offline and grace period expired - marking as offline")
+			}
+		}
+	}
+	m.mu.Unlock()
+
+	modelNode := models.Node{
+		ID:          nodeID,
+		Name:        node.Node,
+		DisplayName: displayName,
+		Instance:    instanceName,
+		Host:        connectionHost,
+		GuestURL:    guestURL,
+		Status:      effectiveStatus,
+		Type:        "node",
+		CPU:         safeFloat(node.CPU), // Already in percentage
+		Memory: models.Memory{
+			Total: int64(node.MaxMem),
+			Used:  int64(node.Mem),
+			Free:  int64(node.MaxMem - node.Mem),
+			Usage: safePercentage(float64(node.Mem), float64(node.MaxMem)),
+		},
+		Disk: models.Disk{
+			Total: int64(node.MaxDisk),
+			Used:  int64(node.Disk),
+			Free:  int64(node.MaxDisk - node.Disk),
+			Usage: safePercentage(float64(node.Disk), float64(node.MaxDisk)),
+		},
+		Uptime:                       int64(node.Uptime),
+		LoadAverage:                  []float64{},
+		LastSeen:                     time.Now(),
+		ConnectionHealth:             connectionHealthStr, // Use the determined health status
+		IsClusterMember:              instanceCfg.IsCluster,
+		ClusterName:                  instanceCfg.ClusterName,
+		TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
+	}
+
+	nodeSnapshotRaw := NodeMemoryRaw{
+		Total:               node.MaxMem,
+		Used:                node.Mem,
+		Free:                node.MaxMem - node.Mem,
+		FallbackTotal:       node.MaxMem,
+		FallbackUsed:        node.Mem,
+		FallbackFree:        node.MaxMem - node.Mem,
+		FallbackCalculated:  true,
+		ProxmoxMemorySource: "nodes-endpoint",
+	}
+	nodeMemorySource := "nodes-endpoint"
+	var nodeFallbackReason string
+
+	// Debug logging for disk metrics - note that these values can fluctuate
+	// due to thin provisioning and dynamic allocation
+	if node.Disk > 0 && node.MaxDisk > 0 {
+		log.Debug().
+			Str("node", node.Node).
+			Uint64("disk", node.Disk).
+			Uint64("maxDisk", node.MaxDisk).
+			Float64("diskUsage", safePercentage(float64(node.Disk), float64(node.MaxDisk))).
+			Msg("Node disk metrics from /nodes endpoint")
+	}
+
+	// Track whether we successfully replaced memory metrics with detailed status data
+	memoryUpdated := false
+
+	// Get detailed node info if available (skip for offline nodes)
+	if effectiveStatus == "online" {
+		nodeInfo, nodeErr := client.GetNodeStatus(ctx, node.Node)
+		if nodeErr != nil {
+			nodeFallbackReason = "node-status-unavailable"
+			// If we can't get node status, log but continue with data from /nodes endpoint
+			if node.Disk > 0 && node.MaxDisk > 0 {
+				log.Warn().
+					Str("instance", instanceName).
+					Str("node", node.Node).
+					Err(nodeErr).
+					Uint64("usingDisk", node.Disk).
+					Uint64("usingMaxDisk", node.MaxDisk).
+					Msg("Could not get node status - using fallback metrics (memory will include cache/buffers)")
+			} else {
+				log.Warn().
+					Str("instance", instanceName).
+					Str("node", node.Node).
+					Err(nodeErr).
+					Uint64("disk", node.Disk).
+					Uint64("maxDisk", node.MaxDisk).
+					Msg("Could not get node status - no fallback metrics available (memory will include cache/buffers)")
+			}
+		} else if nodeInfo != nil {
+			if nodeInfo.Memory != nil {
+				nodeSnapshotRaw.Total = nodeInfo.Memory.Total
+				nodeSnapshotRaw.Used = nodeInfo.Memory.Used
+				nodeSnapshotRaw.Free = nodeInfo.Memory.Free
+				nodeSnapshotRaw.Available = nodeInfo.Memory.Available
+				nodeSnapshotRaw.Avail = nodeInfo.Memory.Avail
+				nodeSnapshotRaw.Buffers = nodeInfo.Memory.Buffers
+				nodeSnapshotRaw.Cached = nodeInfo.Memory.Cached
+				nodeSnapshotRaw.Shared = nodeInfo.Memory.Shared
+				nodeSnapshotRaw.EffectiveAvailable = nodeInfo.Memory.EffectiveAvailable()
+				nodeSnapshotRaw.ProxmoxMemorySource = "node-status"
+				nodeSnapshotRaw.FallbackCalculated = false
+			}
+
+			// Convert LoadAvg from interface{} to float64
+			loadAvg := make([]float64, 0, len(nodeInfo.LoadAvg))
+			for _, val := range nodeInfo.LoadAvg {
+				switch v := val.(type) {
+				case float64:
+					loadAvg = append(loadAvg, v)
+				case string:
+					if f, err := strconv.ParseFloat(v, 64); err == nil {
+						loadAvg = append(loadAvg, f)
+					}
+				}
+			}
+			modelNode.LoadAverage = loadAvg
+			modelNode.KernelVersion = nodeInfo.KernelVersion
+			modelNode.PVEVersion = nodeInfo.PVEVersion
+
+			// Prefer rootfs data for more accurate disk metrics, but ensure we have valid fallback
+			if nodeInfo.RootFS != nil && nodeInfo.RootFS.Total > 0 {
+				modelNode.Disk = models.Disk{
+					Total: int64(nodeInfo.RootFS.Total),
+					Used:  int64(nodeInfo.RootFS.Used),
+					Free:  int64(nodeInfo.RootFS.Free),
+					Usage: safePercentage(float64(nodeInfo.RootFS.Used), float64(nodeInfo.RootFS.Total)),
+				}
+				log.Debug().
+					Str("node", node.Node).
+					Uint64("rootfsUsed", nodeInfo.RootFS.Used).
+					Uint64("rootfsTotal", nodeInfo.RootFS.Total).
+					Float64("rootfsUsage", modelNode.Disk.Usage).
+					Msg("Using rootfs for disk metrics")
+			} else if node.Disk > 0 && node.MaxDisk > 0 {
+				// RootFS unavailable but we have valid disk data from /nodes endpoint
+				// Keep the values we already set from the nodes list
+				log.Debug().
+					Str("node", node.Node).
+					Bool("rootfsNil", nodeInfo.RootFS == nil).
+					Uint64("fallbackDisk", node.Disk).
+					Uint64("fallbackMaxDisk", node.MaxDisk).
+					Msg("RootFS data unavailable - using /nodes endpoint disk metrics")
+			} else {
+				// Neither rootfs nor valid node disk data available
+				log.Warn().
+					Str("node", node.Node).
+					Bool("rootfsNil", nodeInfo.RootFS == nil).
+					Uint64("nodeDisk", node.Disk).
+					Uint64("nodeMaxDisk", node.MaxDisk).
+					Msg("No valid disk metrics available for node")
+			}
+
+			// Update memory metrics to use Available field for more accurate usage
+			if nodeInfo.Memory != nil && nodeInfo.Memory.Total > 0 {
+				var actualUsed uint64
+				effectiveAvailable := nodeInfo.Memory.EffectiveAvailable()
+				componentAvailable := nodeInfo.Memory.Free
+				if nodeInfo.Memory.Buffers > 0 {
+					if math.MaxUint64-componentAvailable < nodeInfo.Memory.Buffers {
+						componentAvailable = math.MaxUint64
+					} else {
+						componentAvailable += nodeInfo.Memory.Buffers
+					}
+				}
+				if nodeInfo.Memory.Cached > 0 {
+					if math.MaxUint64-componentAvailable < nodeInfo.Memory.Cached {
+						componentAvailable = math.MaxUint64
+					} else {
+						componentAvailable += nodeInfo.Memory.Cached
+					}
+				}
+				if nodeInfo.Memory.Total > 0 && componentAvailable > nodeInfo.Memory.Total {
+					componentAvailable = nodeInfo.Memory.Total
+				}
+
+				availableFromUsed := uint64(0)
+				if nodeInfo.Memory.Total > 0 && nodeInfo.Memory.Used > 0 && nodeInfo.Memory.Total >= nodeInfo.Memory.Used {
+					availableFromUsed = nodeInfo.Memory.Total - nodeInfo.Memory.Used
+				}
+				nodeSnapshotRaw.TotalMinusUsed = availableFromUsed
+
+				missingCacheMetrics := nodeInfo.Memory.Available == 0 &&
+					nodeInfo.Memory.Avail == 0 &&
+					nodeInfo.Memory.Buffers == 0 &&
+					nodeInfo.Memory.Cached == 0
+
+				var rrdMetrics rrdMemCacheEntry
+				haveRRDMetrics := false
+				usedRRDAvailableFallback := false
+				rrdMemUsedFallback := false
+
+				if effectiveAvailable == 0 && missingCacheMetrics {
+					if metrics, err := m.getNodeRRDMetrics(ctx, client, node.Node); err == nil {
+						haveRRDMetrics = true
+						rrdMetrics = metrics
+						if metrics.available > 0 {
+							effectiveAvailable = metrics.available
+							usedRRDAvailableFallback = true
+						}
+						if metrics.used > 0 {
+							rrdMemUsedFallback = true
+						}
+					} else if err != nil {
+						log.Debug().
+							Err(err).
+							Str("instance", instanceName).
+							Str("node", node.Node).
+							Msg("RRD memavailable fallback unavailable")
+					}
+				}
+
+				const totalMinusUsedGapTolerance uint64 = 16 * 1024 * 1024
+				gapGreaterThanComponents := false
+				if availableFromUsed > componentAvailable {
+					gap := availableFromUsed - componentAvailable
+					if componentAvailable == 0 || gap >= totalMinusUsedGapTolerance {
+						gapGreaterThanComponents = true
+					}
+				}
+
+				derivedFromTotalMinusUsed := !usedRRDAvailableFallback &&
+					missingCacheMetrics &&
+					availableFromUsed > 0 &&
+					gapGreaterThanComponents &&
+					effectiveAvailable == availableFromUsed
+
+				switch {
+				case effectiveAvailable > 0 && effectiveAvailable <= nodeInfo.Memory.Total:
+					// Prefer available/avail fields or derived buffers+cache values when present.
+					actualUsed = nodeInfo.Memory.Total - effectiveAvailable
+					if actualUsed > nodeInfo.Memory.Total {
+						actualUsed = nodeInfo.Memory.Total
+					}
+
+					logCtx := log.Debug().
+						Str("node", node.Node).
+						Uint64("total", nodeInfo.Memory.Total).
+						Uint64("effectiveAvailable", effectiveAvailable).
+						Uint64("actualUsed", actualUsed).
+						Float64("usage", safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total)))
+					if usedRRDAvailableFallback {
+						if haveRRDMetrics && rrdMetrics.available > 0 {
+							logCtx = logCtx.Uint64("rrdAvailable", rrdMetrics.available)
+						}
+						logCtx.Msg("Node memory: using RRD memavailable fallback (excludes reclaimable cache)")
+						nodeMemorySource = "rrd-memavailable"
+						nodeFallbackReason = "rrd-memavailable"
+						nodeSnapshotRaw.FallbackCalculated = true
+						nodeSnapshotRaw.ProxmoxMemorySource = "rrd-memavailable"
+					} else if nodeInfo.Memory.Available > 0 {
+						logCtx.Msg("Node memory: using available field (excludes reclaimable cache)")
+						nodeMemorySource = "available-field"
+					} else if nodeInfo.Memory.Avail > 0 {
+						logCtx.Msg("Node memory: using avail field (excludes reclaimable cache)")
+						nodeMemorySource = "avail-field"
+					} else if derivedFromTotalMinusUsed {
+						logCtx.
+							Uint64("availableFromUsed", availableFromUsed).
+							Uint64("reportedFree", nodeInfo.Memory.Free).
+							Msg("Node memory: derived available from total-used gap (cache fields missing)")
+						nodeMemorySource = "derived-total-minus-used"
+						if nodeFallbackReason == "" {
+							nodeFallbackReason = "node-status-total-minus-used"
+						}
+						nodeSnapshotRaw.FallbackCalculated = true
+						nodeSnapshotRaw.ProxmoxMemorySource = "node-status-total-minus-used"
+					} else {
+						logCtx.
+							Uint64("free", nodeInfo.Memory.Free).
+							Uint64("buffers", nodeInfo.Memory.Buffers).
+							Uint64("cached", nodeInfo.Memory.Cached).
+							Msg("Node memory: derived available from free+buffers+cached (excludes reclaimable cache)")
+						nodeMemorySource = "derived-free-buffers-cached"
+					}
+				default:
+					switch {
+					case rrdMemUsedFallback && haveRRDMetrics && rrdMetrics.used > 0:
+						actualUsed = rrdMetrics.used
+						if actualUsed > nodeInfo.Memory.Total {
+							actualUsed = nodeInfo.Memory.Total
+						}
+						log.Debug().
+							Str("node", node.Node).
+							Uint64("total", nodeInfo.Memory.Total).
+							Uint64("rrdUsed", rrdMetrics.used).
+							Msg("Node memory: using RRD memused fallback (excludes reclaimable cache)")
+						nodeMemorySource = "rrd-memused"
+						if nodeFallbackReason == "" {
+							nodeFallbackReason = "rrd-memused"
+						}
+						nodeSnapshotRaw.FallbackCalculated = true
+						nodeSnapshotRaw.ProxmoxMemorySource = "rrd-memused"
+					default:
+						// Fallback to traditional used memory if no cache-aware data is exposed
+						actualUsed = nodeInfo.Memory.Used
+						if actualUsed > nodeInfo.Memory.Total {
+							actualUsed = nodeInfo.Memory.Total
+						}
+						log.Debug().
+							Str("node", node.Node).
+							Uint64("total", nodeInfo.Memory.Total).
+							Uint64("used", actualUsed).
+							Msg("Node memory: no cache-aware metrics - using traditional calculation (includes cache)")
+						nodeMemorySource = "node-status-used"
+					}
+				}
+
+				nodeSnapshotRaw.EffectiveAvailable = effectiveAvailable
+				if haveRRDMetrics {
+					nodeSnapshotRaw.RRDAvailable = rrdMetrics.available
+					nodeSnapshotRaw.RRDUsed = rrdMetrics.used
+					nodeSnapshotRaw.RRDTotal = rrdMetrics.total
+				}
+
+				free := int64(nodeInfo.Memory.Total - actualUsed)
+				if free < 0 {
+					free = 0
+				}
+
+				modelNode.Memory = models.Memory{
+					Total: int64(nodeInfo.Memory.Total),
+					Used:  int64(actualUsed),
+					Free:  free,
+					Usage: safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total)),
+				}
+				memoryUpdated = true
+			}
+
+			if nodeInfo.CPUInfo != nil {
+				// Use MaxCPU from node data for logical CPU count (includes hyperthreading)
+				// If MaxCPU is not available or 0, fall back to physical cores
+				logicalCores := node.MaxCPU
+				if logicalCores == 0 {
+					logicalCores = nodeInfo.CPUInfo.Cores
+				}
+
+				mhzStr := nodeInfo.CPUInfo.GetMHzString()
+				log.Debug().
+					Str("node", node.Node).
+					Str("model", nodeInfo.CPUInfo.Model).
+					Int("cores", nodeInfo.CPUInfo.Cores).
+					Int("logicalCores", logicalCores).
+					Int("sockets", nodeInfo.CPUInfo.Sockets).
+					Str("mhz", mhzStr).
+					Msg("Node CPU info from Proxmox")
+				modelNode.CPUInfo = models.CPUInfo{
+					Model:   nodeInfo.CPUInfo.Model,
+					Cores:   logicalCores, // Use logical cores for display
+					Sockets: nodeInfo.CPUInfo.Sockets,
+					MHz:     mhzStr,
+				}
+			}
+		}
+	}
+
+	// If we couldn't update memory metrics using detailed status, preserve previous accurate values if available
+	if !memoryUpdated && effectiveStatus == "online" {
+		if prevMem, exists := prevNodeMemory[modelNode.ID]; exists && prevMem.Total > 0 {
+			total := int64(node.MaxMem)
+			if total == 0 {
+				total = prevMem.Total
+			}
+			used := prevMem.Used
+			if total > 0 && used > total {
+				used = total
+			}
+			free := total - used
+			if free < 0 {
+				free = 0
+			}
+
+			preserved := prevMem
+			preserved.Total = total
+			preserved.Used = used
+			preserved.Free = free
+			preserved.Usage = safePercentage(float64(used), float64(total))
+
+			modelNode.Memory = preserved
+			log.Debug().
+				Str("instance", instanceName).
+				Str("node", node.Node).
+				Msg("Preserving previous memory metrics - node status unavailable this cycle")
+
+			if nodeFallbackReason == "" {
+				nodeFallbackReason = "preserved-previous-snapshot"
+			}
+			nodeMemorySource = "previous-snapshot"
+			if nodeSnapshotRaw.ProxmoxMemorySource == "node-status" && nodeSnapshotRaw.Total == 0 {
+				nodeSnapshotRaw.ProxmoxMemorySource = "previous-snapshot"
+			}
+		}
+	}
+
+	m.recordNodeSnapshot(instanceName, node.Node, NodeMemorySnapshot{
+		RetrievedAt:    time.Now(),
+		MemorySource:   nodeMemorySource,
+		FallbackReason: nodeFallbackReason,
+		Memory:         modelNode.Memory,
+		Raw:            nodeSnapshotRaw,
+	})
+
+	// Collect temperature data via SSH (non-blocking, best effort)
+	// Only attempt for online nodes when temperature monitoring is enabled
+	// Check per-node setting first, fall back to global setting
+	tempMonitoringEnabled := m.config.TemperatureMonitoringEnabled
+	if instanceCfg.TemperatureMonitoringEnabled != nil {
+		tempMonitoringEnabled = *instanceCfg.TemperatureMonitoringEnabled
+	}
+	if effectiveStatus == "online" && m.tempCollector != nil && tempMonitoringEnabled {
+		tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
+
+		// Determine SSH hostname to use (most robust approach):
+		// Prefer the resolved host for this node, with cluster overrides when available.
+		sshHost := modelNode.Host
+		foundNodeEndpoint := false
+		shouldCollect := true
+
+		if modelNode.IsClusterMember && instanceCfg.IsCluster {
+			// Try to find specific endpoint configuration for this node
+			if len(instanceCfg.ClusterEndpoints) > 0 {
+				hasFingerprint := instanceCfg.Fingerprint != ""
+				for _, ep := range instanceCfg.ClusterEndpoints {
+					if strings.EqualFold(ep.NodeName, node.Node) {
+						if effective := clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint); effective != "" {
+							sshHost = effective
+							foundNodeEndpoint = true
+						}
+						break
+					}
+				}
+			}
+
+			// If no specific endpoint found, fall back to node name
+			if !foundNodeEndpoint {
+				sshHost = node.Node
+				log.Debug().
+					Str("node", node.Node).
+					Str("instance", instanceCfg.Name).
+					Msg("Node endpoint not found in cluster metadata - falling back to node name for temperature collection")
+			}
+		}
+
+		if shouldCollect {
+			if strings.TrimSpace(sshHost) == "" {
+				sshHost = node.Node
+			}
+
+			// Use HTTP proxy if configured for this instance, otherwise fall back to socket/SSH
+			temp, err := m.tempCollector.CollectTemperatureWithProxy(tempCtx, sshHost, node.Node, instanceCfg.TemperatureProxyURL, instanceCfg.TemperatureProxyToken)
+			tempCancel()
+
+			if err == nil && temp != nil && temp.Available {
+				// Get the current CPU temperature (prefer package, fall back to max)
+				currentTemp := temp.CPUPackage
+				if currentTemp == 0 && temp.CPUMax > 0 {
+					currentTemp = temp.CPUMax
+				}
+
+				// Find previous temperature data for this node to preserve min/max
+				var prevTemp *models.Temperature
+				for _, prevNode := range prevInstanceNodes {
+					if prevNode.ID == modelNode.ID && prevNode.Temperature != nil {
+						prevTemp = prevNode.Temperature
+						break
+					}
+				}
+
+				// Initialize or update min/max tracking
+				if prevTemp != nil && prevTemp.CPUMin > 0 {
+					// Preserve existing min/max and update if necessary
+					temp.CPUMin = prevTemp.CPUMin
+					temp.CPUMaxRecord = prevTemp.CPUMaxRecord
+					temp.MinRecorded = prevTemp.MinRecorded
+					temp.MaxRecorded = prevTemp.MaxRecorded
+
+					// Update min if current is lower
+					if currentTemp > 0 && currentTemp < temp.CPUMin {
+						temp.CPUMin = currentTemp
+						temp.MinRecorded = time.Now()
+					}
+
+					// Update max if current is higher
+					if currentTemp > temp.CPUMaxRecord {
+						temp.CPUMaxRecord = currentTemp
+						temp.MaxRecorded = time.Now()
+					}
+				} else if currentTemp > 0 {
+					// First reading - initialize min/max to current value
+					temp.CPUMin = currentTemp
+					temp.CPUMaxRecord = currentTemp
+					temp.MinRecorded = time.Now()
+					temp.MaxRecorded = time.Now()
+				}
+
+				modelNode.Temperature = temp
+				log.Debug().
+					Str("node", node.Node).
+					Str("sshHost", sshHost).
+					Float64("cpuPackage", temp.CPUPackage).
+					Float64("cpuMax", temp.CPUMax).
+					Float64("cpuMin", temp.CPUMin).
+					Float64("cpuMaxRecord", temp.CPUMaxRecord).
+					Int("nvmeCount", len(temp.NVMe)).
+					Msg("Collected temperature data")
+			} else if err != nil {
+				log.Debug().
+					Str("node", node.Node).
+					Str("sshHost", sshHost).
+					Bool("isCluster", modelNode.IsClusterMember).
+					Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
+					Msg("Temperature collection failed - check SSH access")
+			} else if temp != nil {
+				log.Debug().
+					Str("node", node.Node).
+					Str("sshHost", sshHost).
+					Bool("available", temp.Available).
+					Msg("Temperature data unavailable after collection")
+			}
+		}
+	}
+
+	if m.pollMetrics != nil {
+		nodeNameLabel := strings.TrimSpace(node.Node)
+		if nodeNameLabel == "" {
+			nodeNameLabel = strings.TrimSpace(modelNode.DisplayName)
+		}
+		if nodeNameLabel == "" {
+			nodeNameLabel = "unknown-node"
+		}
+
+		success := true
+		nodeErrReason := ""
+		health := strings.ToLower(strings.TrimSpace(modelNode.ConnectionHealth))
+		if health != "" && health != "healthy" {
+			success = false
+			nodeErrReason = fmt.Sprintf("connection health %s", health)
+		}
+
+		status := strings.ToLower(strings.TrimSpace(modelNode.Status))
+		if success && status != "" && status != "online" {
+			success = false
+			nodeErrReason = fmt.Sprintf("status %s", status)
+		}
+
+		var nodeErr error
+		if !success {
+			if nodeErrReason == "" {
+				nodeErrReason = "unknown node error"
+			}
+			nodeErr = stderrors.New(nodeErrReason)
+		}
+
+		m.pollMetrics.RecordNodeResult(NodePollResult{
+			InstanceName: instanceName,
+			InstanceType: "pve",
+			NodeName:     nodeNameLabel,
+			Success:      success,
+			Error:        nodeErr,
+			StartTime:    nodeStart,
+			EndTime:      time.Now(),
+		})
+	}
+
+	return modelNode, effectiveStatus, nil
 }
