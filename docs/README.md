@@ -20,7 +20,6 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 - **[Docker Guide](DOCKER.md)** – Advanced Docker & Compose configurations.
 - **[Kubernetes](KUBERNETES.md)** – Helm charts, ingress, and HA setups.
 - **[Reverse Proxy](REVERSE_PROXY.md)** – Nginx, Caddy, Traefik, and Cloudflare Tunnel recipes.
-- **[Port Configuration](PORT_CONFIGURATION.md)** – Changing default ports.
 - **[Troubleshooting](TROUBLESHOOTING.md)** – Deep dive into common issues and logs.
 
 ## 🔐 Security
