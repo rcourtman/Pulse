@@ -15,6 +15,18 @@ import { ResponsiveMetricCell, useGridTemplate } from '@/components/shared/respo
 
 type Guest = VM | Container;
 
+/**
+ * Get color class for I/O values based on throughput (bytes/sec)
+ * Higher throughput = more prominent color to draw attention
+ */
+function getIOColorClass(bytesPerSec: number): string {
+  const mbps = bytesPerSec / (1024 * 1024);
+  if (mbps < 1) return 'text-gray-400 dark:text-gray-500';
+  if (mbps < 10) return 'text-gray-600 dark:text-gray-300';
+  if (mbps < 50) return 'text-gray-700 dark:text-gray-200 font-medium';
+  return 'text-gray-900 dark:text-white font-semibold';
+}
+
 // Global state for currently expanded drawer (only one drawer open at a time)
 const [currentlyExpandedGuestId, setCurrentlyExpandedGuestId] = createSignal<string | null>(null);
 // Global editing state - use a signal so all components react
@@ -645,7 +657,7 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class="text-gray-600 dark:text-gray-400">{formatSpeed(props.guest.diskRead)}</span>
+              <span class={getIOColorClass(props.guest.diskRead)}>{formatSpeed(props.guest.diskRead)}</span>
             </Show>
           </div>
         );
@@ -654,7 +666,7 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class="text-gray-600 dark:text-gray-400">{formatSpeed(props.guest.diskWrite)}</span>
+              <span class={getIOColorClass(props.guest.diskWrite)}>{formatSpeed(props.guest.diskWrite)}</span>
             </Show>
           </div>
         );
@@ -663,7 +675,7 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class="text-gray-600 dark:text-gray-400">{formatSpeed(props.guest.networkIn)}</span>
+              <span class={getIOColorClass(props.guest.networkIn)}>{formatSpeed(props.guest.networkIn)}</span>
             </Show>
           </div>
         );
@@ -672,7 +684,7 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class="text-gray-600 dark:text-gray-400">{formatSpeed(props.guest.networkOut)}</span>
+              <span class={getIOColorClass(props.guest.networkOut)}>{formatSpeed(props.guest.networkOut)}</span>
             </Show>
           </div>
         );
