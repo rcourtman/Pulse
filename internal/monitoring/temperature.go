@@ -177,10 +177,11 @@ func (tc *TemperatureCollector) CollectTemperatureWithProxy(ctx context.Context,
 		}
 
 		if isContainer && !devModeAllowSSH {
+			// Warn but allow if key is present (legacy behavior restoration)
+			// We don't return here, allowing the code to fall through to the SSH key check
 			log.Warn().
 				Str("node", nodeName).
-				Msg("Temperature collection disabled: containerized Pulse requires pulse-sensor-proxy. Mount /run/pulse-sensor-proxy or set PULSE_DEV_ALLOW_CONTAINER_SSH=true for development only")
-			return &models.Temperature{Available: false}, nil
+				Msg("Temperature collection using direct SSH from container. This is insecure. Recommend using pulse-sensor-proxy.")
 		}
 
 		if strings.TrimSpace(tc.sshKeyPath) == "" {
