@@ -3784,7 +3784,7 @@ fi
 
 # Create monitoring user
 echo "Creating monitoring user..."
-pveum user add pulse-monitor@pam --comment "Pulse monitoring service" 2>/dev/null || echo "User already exists"
+pveum user add pulse-monitor@pam --comment "Pulse monitoring service" 2>/dev/null || true
 
 SETUP_AUTH_TOKEN="%s"
 AUTO_REG_SUCCESS=false
