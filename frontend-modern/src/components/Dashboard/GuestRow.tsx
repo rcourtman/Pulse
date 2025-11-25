@@ -406,7 +406,7 @@ export function GuestRow(props: GuestRowProps) {
   // Get first cell styling
   const firstCellClass = createMemo(() => {
     const base =
-      'py-0.5 pr-2 whitespace-nowrap relative w-[140px] sm:w-[160px] lg:w-[180px] xl:w-[240px] 2xl:w-[380px]';
+      'py-0.5 pr-2 whitespace-nowrap relative w-auto';
     const indent = props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT;
     return `${base} ${indent}`;
   });
@@ -424,258 +424,254 @@ export function GuestRow(props: GuestRowProps) {
   return (
     <>
       <tr class={rowClass()} style={rowStyle()} onClick={toggleDrawer} aria-expanded={drawerOpen()}>
-      {/* Name - Sticky column */}
-      <td class={firstCellClass()}>
-        <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1.5 flex-1 min-w-0">
-            <StatusDot
-              variant={guestStatus().variant}
-              title={guestStatus().label}
-              ariaLabel={guestStatus().label}
-              size="xs"
-            />
-            <div class="flex-1 min-w-0">
-              {/* Name - show input when editing, otherwise show name with optional link */}
-              <Show
-                when={isEditingUrl()}
-                fallback={
-                  <div class="flex items-center gap-1.5 min-w-0">
-                    <span
-                      class="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-text select-none overflow-hidden text-ellipsis"
-                      style="cursor: text;"
-                      title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                      onClick={startEditingUrl}
-                      data-guest-name-editable
-                    >
-                      {props.guest.name}
-                    </span>
-                    <Show when={customUrl()}>
-                      <a
-                        href={customUrl()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                        title="Open in new tab"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <svg
-                          class="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                          />
-                        </svg>
-                      </a>
-                    </Show>
-                  </div>
-                }
-              >
-                <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-                  <input
-                    ref={urlInputRef}
-                    type="text"
-                    value={editingUrlValue()}
-                    data-guest-id={guestId()}
-                    onInput={(e) => {
-                      editingValues.set(guestId(), e.currentTarget.value);
-                      setEditingValuesVersion(v => v + 1);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveUrl();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        cancelEditingUrl();
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    placeholder="https://192.168.1.100:8006"
-                    class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    data-url-editor-button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      saveUrl();
-                    }}
-                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    title="Save (or press Enter)"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    data-url-editor-button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteUrl();
-                    }}
-                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                    title="Delete URL"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </Show>
-            </div>
-          </div>
-
-          {/* Tag badges - hide when editing URL to save space */}
-          <Show when={!isEditingUrl()}>
-            <div class="flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
-              <TagBadges
-                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-                maxVisible={3}
-                onTagClick={props.onTagClick}
-                activeSearch={props.activeSearch}
+        {/* Name - Sticky column */}
+        <td class={firstCellClass()}>
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 flex-1 min-w-0">
+              <StatusDot
+                variant={guestStatus().variant}
+                title={guestStatus().label}
+                ariaLabel={guestStatus().label}
+                size="xs"
               />
+              <div class="flex-1 min-w-0">
+                {/* Name - show input when editing, otherwise show name with optional link */}
+                <Show
+                  when={isEditingUrl()}
+                  fallback={
+                    <div class="flex items-center gap-1.5 min-w-0">
+                      <span
+                        class="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-text select-none overflow-hidden text-ellipsis"
+                        style="cursor: text;"
+                        title={`${props.guest.name}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                        onClick={startEditingUrl}
+                        data-guest-name-editable
+                      >
+                        {props.guest.name}
+                      </span>
+                      <Show when={customUrl()}>
+                        <a
+                          href={customUrl()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                          title="Open in new tab"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <svg
+                            class="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                            />
+                          </svg>
+                        </a>
+                      </Show>
+                    </div>
+                  }
+                >
+                  <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                    <input
+                      ref={urlInputRef}
+                      type="text"
+                      value={editingUrlValue()}
+                      data-guest-id={guestId()}
+                      onInput={(e) => {
+                        editingValues.set(guestId(), e.currentTarget.value);
+                        setEditingValuesVersion(v => v + 1);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          saveUrl();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          cancelEditingUrl();
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="https://192.168.1.100:8006"
+                      class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      data-url-editor-button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        saveUrl();
+                      }}
+                      class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      title="Save (or press Enter)"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      type="button"
+                      data-url-editor-button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteUrl();
+                      }}
+                      class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                      title="Delete URL"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </Show>
+              </div>
             </div>
-          </Show>
 
-          <Show when={lockLabel()}>
+            {/* Tag badges - hide when editing URL to save space */}
+            <Show when={!isEditingUrl()}>
+              <div class="flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
+                <TagBadges
+                  tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+                  maxVisible={3}
+                  onTagClick={props.onTagClick}
+                  activeSearch={props.activeSearch}
+                />
+              </div>
+            </Show>
+
+            <Show when={lockLabel()}>
+              <span
+                class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
+                title={`Guest is locked (${lockLabel()})`}
+              >
+                Lock: {lockLabel()}
+              </span>
+            </Show>
+          </div>
+        </td>
+
+        {/* Type */}
+        <td class="hidden lg:table-cell py-0.5 px-2 whitespace-nowrap w-[5%]">
+          <div class="flex h-[24px] items-center">
             <span
-              class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-              title={`Guest is locked (${lockLabel()})`}
-            >
-              Lock: {lockLabel()}
-            </span>
-          </Show>
-        </div>
-      </td>
-
-      {/* Type */}
-      <td class="py-0.5 px-2 whitespace-nowrap w-[52px] sm:w-[58px] lg:w-[64px] xl:w-[70px] 2xl:w-[87px]">
-        <div class="flex h-[24px] items-center">
-          <span
-            class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-              props.guest.type === 'qemu'
+              class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${props.guest.type === 'qemu'
                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
                 : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                }`}
+            >
+              {isVM(props.guest) ? 'VM' : 'LXC'}
+            </span>
+          </div>
+        </td>
+
+        {/* VMID */}
+        <td class="hidden lg:table-cell py-0.5 px-1.5 whitespace-nowrap w-[5%] text-sm text-gray-600 dark:text-gray-400 align-middle">
+          {props.guest.vmid}
+        </td>
+
+        {/* Uptime */}
+        <td
+          class={`hidden sm:table-cell py-0.5 px-1.5 w-[8%] text-sm whitespace-nowrap align-middle ${props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
             }`}
-          >
-            {isVM(props.guest) ? 'VM' : 'LXC'}
-          </span>
-        </div>
-      </td>
+        >
+          <Show when={isRunning()} fallback="-">
+            {formatUptime(props.guest.uptime)}
+          </Show>
+        </td>
 
-      {/* VMID */}
-      <td class="py-0.5 px-1.5 whitespace-nowrap w-[50px] sm:w-[56px] lg:w-[62px] xl:w-[70px] 2xl:w-[92px] text-sm text-gray-600 dark:text-gray-400 align-middle">
-        {props.guest.vmid}
-      </td>
-
-      {/* Uptime */}
-      <td
-        class={`py-0.5 px-1.5 w-[56px] sm:w-[64px] lg:w-[72px] xl:w-[84px] 2xl:w-[125px] text-sm whitespace-nowrap align-middle ${
-          props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
-        }`}
-      >
-        <Show when={isRunning()} fallback="-">
-          {formatUptime(props.guest.uptime)}
-        </Show>
-      </td>
-
-      {/* CPU */}
-      <td class="py-0.5 px-2 w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px]">
-        <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
-          <MetricBar
-            value={cpuPercent()}
-            label={formatPercent(cpuPercent())}
-            sublabel={
-              props.guest.cpus
-                ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
-                : undefined
-            }
-            type="cpu"
-            resourceId={metricsKey()}
-          />
-        </Show>
-      </td>
-
-      {/* Memory */}
-      <td class="py-0.5 px-2 w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px]">
-        <div title={memoryTooltip() ?? undefined}>
+        {/* CPU */}
+        <td class="py-0.5 px-2 w-[10%]">
           <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
             <MetricBar
-              value={memPercent()}
-              label={formatPercent(memPercent())}
-              sublabel={memoryUsageLabel()}
-              type="memory"
+              value={cpuPercent()}
+              label={formatPercent(cpuPercent())}
+              sublabel={
+                props.guest.cpus
+                  ? `${props.guest.cpus} ${props.guest.cpus === 1 ? 'core' : 'cores'}`
+                  : undefined
+              }
+              type="cpu"
               resourceId={metricsKey()}
             />
           </Show>
-        </div>
-      </td>
+        </td>
 
-      {/* Disk – surface usage even if guest is currently stopped so users can see last reported values */}
-      <td class="py-0.5 px-2 w-[80px] sm:w-[90px] lg:w-[110px] xl:w-[160px] 2xl:w-[204px]">
-        <Show
-          when={hasDiskUsage()}
-          fallback={
-            <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
-              -
-            </span>
-          }
-        >
-          <MetricBar
-            value={diskPercent()}
-            label={formatPercent(diskPercent())}
-            sublabel={
-              props.guest.disk
-                ? `${formatBytes(props.guest.disk.used, 0)}/${formatBytes(props.guest.disk.total, 0)}`
-                : undefined
+        {/* Memory */}
+        <td class="py-0.5 px-2 w-[10%]">
+          <div title={memoryTooltip() ?? undefined}>
+            <Show when={isRunning()} fallback={<span class="text-sm text-gray-400">-</span>}>
+              <MetricBar
+                value={memPercent()}
+                label={formatPercent(memPercent())}
+                sublabel={memoryUsageLabel()}
+                type="memory"
+                resourceId={metricsKey()}
+              />
+            </Show>
+          </div>
+        </td>
+
+        {/* Disk – surface usage even if guest is currently stopped so users can see last reported values */}
+        <td class="hidden sm:table-cell py-0.5 px-2 w-[10%]">
+          <Show
+            when={hasDiskUsage()}
+            fallback={
+              <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
+                -
+              </span>
             }
-            type="disk"
-            resourceId={metricsKey()}
-          />
-        </Show>
-      </td>
+          >
+            <MetricBar
+              value={diskPercent()}
+              label={formatPercent(diskPercent())}
+              sublabel={
+                props.guest.disk
+                  ? `${formatBytes(props.guest.disk.used, 0)}/${formatBytes(props.guest.disk.total, 0)}`
+                  : undefined
+              }
+              type="disk"
+              resourceId={metricsKey()}
+            />
+          </Show>
+        </td>
 
-      {/* Disk I/O */}
-      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px]">
-        <div class="flex h-[24px] items-center">
-          <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
-        </div>
-      </td>
-      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px]">
-        <div class="flex h-[24px] items-center">
-          <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
-        </div>
-      </td>
+        {/* Disk I/O */}
+        <td class="hidden lg:table-cell py-0.5 px-2 w-[6%]">
+          <div class="flex h-[24px] items-center">
+            <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
+          </div>
+        </td>
+        <td class="hidden lg:table-cell py-0.5 px-2 w-[6%]">
+          <div class="flex h-[24px] items-center">
+            <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
+          </div>
+        </td>
 
-      {/* Network I/O */}
-      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px]">
-        <div class="flex h-[24px] items-center">
-          <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
-        </div>
-      </td>
-      <td class="py-0.5 px-2 w-[56px] sm:w-[62px] lg:w-[70px] xl:w-[78px] 2xl:w-[106px]">
-        <div class="flex h-[24px] items-center">
-          <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
-        </div>
-      </td>
+        {/* Network I/O */}
+        <td class="hidden lg:table-cell py-0.5 px-2 w-[6%]">
+          <div class="flex h-[24px] items-center">
+            <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
+          </div>
+        </td>
+        <td class="hidden lg:table-cell py-0.5 px-2 w-[6%]">
+          <div class="flex h-[24px] items-center">
+            <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
+          </div>
+        </td>
       </tr>
       <Show when={drawerOpen() && canShowDrawer()}>
         <tr
-          class={`text-[11px] ${
-            isRunning() && props.parentNodeOnline !== false
-              ? 'bg-gray-50/60 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300'
-              : 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
-          }`}
+          class={`text-[11px] ${isRunning() && props.parentNodeOnline !== false
+            ? 'bg-gray-50/60 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300'
+            : 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
+            }`}
           aria-hidden={!isRunning() || props.parentNodeOnline === false}
         >
           <td class="px-4 py-2" colSpan={11}>
             <div
-              class={`flex flex-wrap gap-3 justify-start ${
-                drawerDisabled() ? 'opacity-50 saturate-75 pointer-events-none' : ''
-              }`}
+              class={`flex flex-wrap gap-3 justify-start ${drawerDisabled() ? 'opacity-50 saturate-75 pointer-events-none' : ''
+                }`}
             >
               <Show
                 when={hasDrawerContent()}

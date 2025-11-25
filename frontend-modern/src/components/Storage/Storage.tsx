@@ -566,8 +566,8 @@ const Storage: Component = () => {
             onClick={() => setTabView('pools')}
             type="button"
             class={`inline-flex items-center px-2 sm:px-3 py-1 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${tabView() === 'pools'
-                ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
-                : 'hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
+              ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
+              : 'hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
               }`}
           >
             Storage Pools
@@ -576,8 +576,8 @@ const Storage: Component = () => {
             onClick={() => setTabView('disks')}
             type="button"
             class={`inline-flex items-center px-2 sm:px-3 py-1 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${tabView() === 'disks'
-                ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
-                : 'hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
+              ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
+              : 'hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
               }`}
           >
             Physical Disks
@@ -750,30 +750,30 @@ const Storage: Component = () => {
                 <table class="w-full">
                   <thead>
                     <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto">
                         Storage
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">
+                      <th class="hidden md:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Type
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">
+                      <th class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]">
                         Content
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">
+                      <th class="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Status
                       </th>
                       <Show when={viewMode() === 'node'}>
-                        <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">
+                        <th class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                           Shared
                         </th>
                       </Show>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[200px]">
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[25%] min-w-[150px]">
                         Usage
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">
+                      <th class="hidden sm:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Free
                       </th>
-                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                         Total
                       </th>
                       <th class="px-2 py-1.5 w-8"></th>
@@ -1061,8 +1061,8 @@ const Storage: Component = () => {
                                           <Show when={zfsPool && zfsPool.state !== 'ONLINE'}>
                                             <span
                                               class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${zfsPool?.state === 'DEGRADED'
-                                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                                                  : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                                : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                                                 }`}
                                             >
                                               {zfsPool?.state}
@@ -1109,12 +1109,12 @@ const Storage: Component = () => {
                                           </Show>
                                         </div>
                                       </td>
-                                      <td class="p-0.5 px-1.5 hidden md:table-cell">
+                                      <td class="hidden md:table-cell p-0.5 px-1.5">
                                         <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                                           {storage.type}
                                         </span>
                                       </td>
-                                      <td class="p-0.5 px-1.5 hidden lg:table-cell">
+                                      <td class="hidden lg:table-cell p-0.5 px-1.5">
                                         <span
                                           class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap truncate max-w-[220px]"
                                           title={storage.content || '-'}
@@ -1122,18 +1122,18 @@ const Storage: Component = () => {
                                           {storage.content || '-'}
                                         </span>
                                       </td>
-                                      <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
+                                      <td class="hidden sm:table-cell p-0.5 px-1.5 text-xs whitespace-nowrap">
                                         <span
                                           class={`${storage.status === 'available'
-                                              ? 'text-green-600 dark:text-green-400'
-                                              : 'text-red-600 dark:text-red-400'
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400'
                                             }`}
                                         >
                                           {storage.status || 'unknown'}
                                         </span>
                                       </td>
                                       <Show when={viewMode() === 'node'}>
-                                        <td class="p-0.5 px-1.5 hidden lg:table-cell">
+                                        <td class="hidden lg:table-cell p-0.5 px-1.5">
                                           <span class="text-xs text-gray-600 dark:text-gray-400">
                                             {storage.shared ? '✓' : '-'}
                                           </span>
@@ -1141,7 +1141,7 @@ const Storage: Component = () => {
                                       </Show>
 
                                       <td class="p-0.5 px-1.5">
-                                        <div class="relative min-w-[200px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+                                        <div class="relative min-w-[150px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
                                           <div
                                             class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
                                             style={{ width: `${usagePercent}%` }}
@@ -1155,7 +1155,7 @@ const Storage: Component = () => {
                                           </span>
                                         </div>
                                       </td>
-                                      <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
+                                      <td class="hidden sm:table-cell p-0.5 px-1.5 text-xs whitespace-nowrap">
                                         {formatBytes(storage.free || 0, 0)}
                                       </td>
                                       <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
@@ -1166,8 +1166,8 @@ const Storage: Component = () => {
                                     <Show when={isCephStorage() && isExpanded()}>
                                       <tr
                                         class={`text-[11px] border-t border-gray-200 dark:border-gray-700 ${drawerDisabled()
-                                            ? 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
-                                            : 'bg-gray-50/60 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300'
+                                          ? 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
+                                          : 'bg-gray-50/60 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300'
                                           }`}
                                       >
                                         <td colSpan={9} class="px-4 py-3">
@@ -1233,10 +1233,10 @@ const Storage: Component = () => {
                                               </span>
                                               <span
                                                 class={`px-1.5 py-0.5 rounded text-xs font-medium ${storage.zfsPool!.state === 'ONLINE'
-                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                                    : storage.zfsPool!.state === 'DEGRADED'
-                                                      ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                                                      : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                  : storage.zfsPool!.state === 'DEGRADED'
+                                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                                    : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                                                   }`}
                                               >
                                                 {storage.zfsPool!.state}
