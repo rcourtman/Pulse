@@ -17,14 +17,14 @@ type Guest = VM | Container;
 
 /**
  * Get color class for I/O values based on throughput (bytes/sec)
- * Higher throughput = more prominent color to draw attention
+ * Uses color intensity to indicate activity level (green/yellow/red)
  */
 function getIOColorClass(bytesPerSec: number): string {
   const mbps = bytesPerSec / (1024 * 1024);
-  if (mbps < 1) return 'text-gray-400 dark:text-gray-500';
-  if (mbps < 10) return 'text-gray-600 dark:text-gray-300';
-  if (mbps < 50) return 'text-gray-700 dark:text-gray-200 font-medium';
-  return 'text-gray-900 dark:text-white font-semibold';
+  if (mbps < 1) return 'text-gray-300 dark:text-gray-400';
+  if (mbps < 10) return 'text-green-600 dark:text-green-400';
+  if (mbps < 50) return 'text-yellow-600 dark:text-yellow-400';
+  return 'text-red-600 dark:text-red-400';
 }
 
 // Global state for currently expanded drawer (only one drawer open at a time)
@@ -59,19 +59,19 @@ interface ColumnDef {
   flex?: number;
 }
 
-const GUEST_COLUMNS: ColumnDef[] = [
+export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'name', label: 'Name', priority: 'essential', minWidth: '100px', flex: 1.5 },
-  { id: 'type', label: 'Type', priority: 'essential', minWidth: '24px', maxWidth: '32px' },
-  { id: 'vmid', label: 'VMID', priority: 'essential', minWidth: '28px', maxWidth: '36px' },
-  { id: 'uptime', label: 'Uptime', priority: 'essential', minWidth: '28px', maxWidth: '50px' },
+  { id: 'type', label: 'Type', priority: 'essential', minWidth: '24px', maxWidth: '50px' },
+  { id: 'vmid', label: 'VMID', priority: 'essential', minWidth: '28px', maxWidth: '55px' },
+  { id: 'uptime', label: 'Uptime', priority: 'essential', minWidth: '28px', maxWidth: '65px' },
   { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '50px', flex: 1 },
   { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '50px', flex: 1 },
   { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '50px', flex: 1 },
-  // I/O columns - fixed width, no flex
-  { id: 'diskRead', label: 'D Read', priority: 'essential', minWidth: '44px', maxWidth: '54px' },
-  { id: 'diskWrite', label: 'D Write', priority: 'essential', minWidth: '44px', maxWidth: '54px' },
-  { id: 'netIn', label: 'Net In', priority: 'essential', minWidth: '44px', maxWidth: '54px' },
-  { id: 'netOut', label: 'Net Out', priority: 'essential', minWidth: '44px', maxWidth: '54px' },
+  // I/O columns - fixed width matching v4.32.5 (grows at breakpoints to fit full header text)
+  { id: 'diskRead', label: 'Disk Read', priority: 'essential', minWidth: '56px', maxWidth: '90px' },
+  { id: 'diskWrite', label: 'Disk Write', priority: 'essential', minWidth: '56px', maxWidth: '90px' },
+  { id: 'netIn', label: 'Net In', priority: 'essential', minWidth: '56px', maxWidth: '70px' },
+  { id: 'netOut', label: 'Net Out', priority: 'essential', minWidth: '56px', maxWidth: '70px' },
 ];
 
 interface GuestRowProps {
@@ -662,36 +662,36 @@ export function GuestRow(props: GuestRowProps) {
 
       case 'diskRead':
         return (
-          <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class={getIOColorClass(diskRead())}>{formatSpeed(diskRead())}</span>
+          <div class="py-1 flex justify-center items-center min-h-[24px]">
+            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <span class={`text-xs ${getIOColorClass(diskRead())}`}>{formatSpeed(diskRead())}</span>
             </Show>
           </div>
         );
 
       case 'diskWrite':
         return (
-          <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class={getIOColorClass(diskWrite())}>{formatSpeed(diskWrite())}</span>
+          <div class="py-1 flex justify-center items-center min-h-[24px]">
+            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <span class={`text-xs ${getIOColorClass(diskWrite())}`}>{formatSpeed(diskWrite())}</span>
             </Show>
           </div>
         );
 
       case 'netIn':
         return (
-          <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class={getIOColorClass(networkIn())}>{formatSpeed(networkIn())}</span>
+          <div class="py-1 flex justify-center items-center min-h-[24px]">
+            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <span class={`text-xs ${getIOColorClass(networkIn())}`}>{formatSpeed(networkIn())}</span>
             </Show>
           </div>
         );
 
       case 'netOut':
         return (
-          <div class="py-1 flex justify-center items-center text-[9px] font-mono whitespace-nowrap">
-            <Show when={isRunning()} fallback={<span class="text-gray-400">-</span>}>
-              <span class={getIOColorClass(networkOut())}>{formatSpeed(networkOut())}</span>
+          <div class="py-1 flex justify-center items-center min-h-[24px]">
+            <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <span class={`text-xs ${getIOColorClass(networkOut())}`}>{formatSpeed(networkOut())}</span>
             </Show>
           </div>
         );
