@@ -24,7 +24,7 @@ export function IOMetric(props: IOMetricProps) {
     }
   });
 
-  // Color based on speed (MB/s) - matching current dashboard
+  // Color based on speed (MB/s) - uses color intensity to indicate activity level
   const colorClass = createMemo(() => {
     if (props.disabled) return 'text-gray-400 dark:text-gray-500';
 
@@ -38,9 +38,9 @@ export function IOMetric(props: IOMetricProps) {
   return (
     <Show
       when={!props.disabled}
-      fallback={<div class="min-h-[14px] flex items-center text-xs text-gray-400">-</div>}
+      fallback={<div class="min-h-[24px] flex items-center text-xs text-gray-400">-</div>}
     >
-      <div class={`min-h-[14px] text-xs font-mono ${colorClass()} flex items-center`}>
+      <div class={`min-h-[24px] text-xs ${colorClass()} flex items-center`}>
         {formatSpeed(currentValue(), 0)}
       </div>
     </Show>

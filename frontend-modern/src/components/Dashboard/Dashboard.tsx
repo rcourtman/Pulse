@@ -1,7 +1,8 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
-import { GuestRow } from './GuestRow';
+import { GuestRow, GUEST_COLUMNS } from './GuestRow';
+import { useGridTemplate } from '@/components/shared/responsive';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -257,6 +258,9 @@ export function Dashboard(props: DashboardProps) {
   // Sorting state - default to VMID ascending (matches Proxmox order)
   const [sortKey, setSortKey] = createSignal<keyof (VM | Container) | null>('vmid');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+
+  // Use the same grid template as GuestRow for header alignment
+  const { gridTemplate: headerGridTemplate } = useGridTemplate({ columns: GUEST_COLUMNS });
 
 
   // Load all guest metadata on mount (single API call for all guests)
@@ -928,85 +932,111 @@ export function Dashboard(props: DashboardProps) {
           <Card padding="none" class="mb-4 bg-white dark:bg-gray-800">
             <div class="overflow-x-auto">
             {/* Desktop Header */}
-            <div class="grid grid-cols-[minmax(100px,1.5fr)_minmax(24px,32px)_minmax(28px,36px)_minmax(28px,50px)_minmax(50px,1fr)_minmax(50px,1fr)_minmax(50px,1fr)_minmax(44px,54px)_minmax(44px,54px)_minmax(44px,54px)_minmax(44px,54px)] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[520px] md:min-w-0">
+            <div
+              class="grid border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[520px] md:min-w-0"
+              style={{ 'grid-template-columns': headerGridTemplate() }}
+            >
               {/* Name Header */}
               <div
-                class="pl-4 pr-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center"
+                class="pl-4 pr-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center whitespace-nowrap"
                 onClick={() => handleSort('name')}
               >
-                Name
-                {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </div>
 
               {/* Type */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('type')}
+                title="Type"
               >
-                Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                <span class="hidden xl:inline">Type</span>
+                <span class="xl:hidden">T</span>
+                {sortKey() === 'type' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
               </div>
               {/* VMID */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('vmid')}
+                title="VMID"
               >
-                ID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                <span class="hidden xl:inline">VMID</span>
+                <span class="xl:hidden">ID</span>
+                {sortKey() === 'vmid' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
               </div>
               {/* Uptime */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('uptime')}
+                title="Uptime"
               >
-                Up {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                <span class="hidden xl:inline">Uptime</span>
+                <span class="xl:hidden">Up</span>
+                {sortKey() === 'uptime' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
               </div>
               {/* CPU */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('cpu')}
               >
                 CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </div>
               {/* Memory */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('memory')}
+                title="Memory"
               >
-                Mem {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                <span class="hidden xl:inline">Memory</span>
+                <span class="xl:hidden">Mem</span>
+                {sortKey() === 'memory' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
               </div>
               {/* Disk */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('disk')}
               >
                 Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </div>
               {/* Disk Read */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('diskRead')}
+                title="Disk Read"
               >
-                D Rd {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                <span class="hidden xl:inline">Disk Read</span>
+                <span class="xl:hidden">D Rd</span>
+                {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
               </div>
               {/* Disk Write */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('diskWrite')}
+                title="Disk Write"
               >
-                D Wr {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                <span class="hidden xl:inline">Disk Write</span>
+                <span class="xl:hidden">D Wr</span>
+                {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
               </div>
               {/* Net In */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('networkIn')}
+                title="Net In"
               >
-                N In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                <span class="hidden xl:inline">Net In</span>
+                <span class="xl:hidden">N In</span>
+                {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
               </div>
               {/* Net Out */}
               <div
-                class="px-0.5 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-[10px]"
+                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
                 onClick={() => handleSort('networkOut')}
+                title="Net Out"
               >
-                N Out {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                <span class="hidden xl:inline">Net Out</span>
+                <span class="xl:hidden">N Out</span>
+                {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
               </div>
             </div>
 
