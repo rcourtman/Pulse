@@ -2620,6 +2620,40 @@ copy_host_agent_binaries_from_dir() {
     return 0
 }
 
+copy_unified_agent_binaries_from_dir() {
+    local source_dir="$1"
+
+    if [[ -z "$source_dir" ]] || [[ ! -d "$source_dir/bin" ]]; then
+        return 1
+    fi
+
+    local copied=0
+    shopt -s nullglob
+    for agent_file in "$source_dir"/bin/pulse-agent-*; do
+        [[ -e "$agent_file" ]] || continue
+
+        local base
+        base=$(basename "$agent_file")
+        # Skip the wrapper script (pulse-agent without arch suffix)
+        if [[ "$base" == "pulse-agent" ]]; then
+            continue
+        fi
+
+        cp -a "$agent_file" "$INSTALL_DIR/bin/$base"
+        if [[ ! -L "$INSTALL_DIR/bin/$base" ]]; then
+            chmod +x "$INSTALL_DIR/bin/$base"
+        fi
+        chown -h pulse:pulse "$INSTALL_DIR/bin/$base" || true
+        copied=1
+    done
+    shopt -u nullglob
+
+    if [[ $copied -eq 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
 install_additional_agent_binaries() {
     local version="$1"
     local source_dir="${2:-}"
@@ -2630,9 +2664,11 @@ install_additional_agent_binaries() {
 
     local docker_targets=("linux-amd64" "linux-arm64" "linux-armv7")
     local host_targets=("linux-amd64" "linux-arm64" "linux-armv7" "linux-armv6" "linux-386" "darwin-amd64" "darwin-arm64" "windows-amd64" "windows-arm64" "windows-386")
+    local unified_targets=("linux-amd64" "linux-arm64" "linux-armv7" "linux-armv6" "linux-386" "darwin-amd64" "darwin-arm64" "windows-amd64" "windows-arm64" "windows-386")
 
-    # Prefer locally available host agents from the extracted archive to avoid network reliance
+    # Prefer locally available agents from the extracted archive to avoid network reliance
     copy_host_agent_binaries_from_dir "$source_dir" || true
+    copy_unified_agent_binaries_from_dir "$source_dir" || true
 
     local docker_missing_targets=()
     for target in "${docker_targets[@]}"; do
@@ -2654,7 +2690,20 @@ install_additional_agent_binaries() {
         fi
     done
 
-    if [[ ${#docker_missing_targets[@]} -eq 0 ]] && [[ ${#host_missing_targets[@]} -eq 0 ]]; then
+    local unified_missing_targets=()
+    for target in "${unified_targets[@]}"; do
+        if [[ "$target" == windows-* ]]; then
+            if [[ ! -e "$INSTALL_DIR/bin/pulse-agent-$target" && ! -e "$INSTALL_DIR/bin/pulse-agent-$target.exe" ]]; then
+                unified_missing_targets+=("$target")
+            fi
+        else
+            if [[ ! -e "$INSTALL_DIR/bin/pulse-agent-$target" ]]; then
+                unified_missing_targets+=("$target")
+            fi
+        fi
+    done
+
+    if [[ ${#docker_missing_targets[@]} -eq 0 ]] && [[ ${#host_missing_targets[@]} -eq 0 ]] && [[ ${#unified_missing_targets[@]} -eq 0 ]]; then
         return
     fi
 
@@ -2710,13 +2759,22 @@ install_additional_agent_binaries() {
         host_installed=1
     fi
 
+    # Install unified agent binaries (preserve symlinks for Windows targets)
+    local unified_installed=0
+    if copy_unified_agent_binaries_from_dir "$temp_dir"; then
+        unified_installed=1
+    fi
+
     if [[ $docker_installed -eq 1 ]]; then
         print_success "Additional Docker agent binaries installed"
     fi
     if [[ $host_installed -eq 1 ]]; then
         print_success "Additional host agent binaries installed"
     fi
-    if [[ $docker_installed -eq 0 ]] && [[ $host_installed -eq 0 ]]; then
+    if [[ $unified_installed -eq 1 ]]; then
+        print_success "Unified agent binaries installed"
+    fi
+    if [[ $docker_installed -eq 0 ]] && [[ $host_installed -eq 0 ]] && [[ $unified_installed -eq 0 ]]; then
         print_warn "No agent binaries found in universal bundle"
     fi
 
@@ -2743,6 +2801,7 @@ deploy_agent_scripts() {
         "install-sensor-proxy.sh"
         "install-docker.sh"
         "install.sh"
+        "install.ps1"
     )
 
     local deployed=0
