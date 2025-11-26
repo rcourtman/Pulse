@@ -18,26 +18,127 @@ $AgentName = "PulseAgent"
 $BinaryName = "pulse-agent.exe"
 $InstallDir = "C:\Program Files\Pulse"
 $LogFile = "$env:ProgramData\Pulse\pulse-agent.log"
+$DownloadTimeoutSec = 300
+
+# --- Cleanup Function ---
+$script:TempFiles = @()
+function Cleanup {
+    foreach ($f in $script:TempFiles) {
+        if (Test-Path $f) {
+            Remove-Item $f -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# Register cleanup on exit
+$null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action { Cleanup }
+
+function Show-Error {
+    param([string]$Message)
+    Write-Host $Message -ForegroundColor Red
+
+    # Try to show a popup if running in a GUI environment
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+        [System.Windows.Forms.MessageBox]::Show($Message, "Pulse Installation Failed", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+    } catch {
+        # Ignore if GUI not available
+    }
+}
+
+function Test-ValidUrl {
+    param([string]$TestUrl)
+    if ([string]::IsNullOrWhiteSpace($TestUrl)) { return $false }
+    # Must start with http:// or https://
+    if ($TestUrl -notmatch '^https?://') { return $false }
+    # Basic URL structure validation
+    try {
+        $uri = [System.Uri]::new($TestUrl)
+        return ($uri.Scheme -eq 'http' -or $uri.Scheme -eq 'https') -and (-not [string]::IsNullOrWhiteSpace($uri.Host))
+    } catch {
+        return $false
+    }
+}
+
+function Test-ValidToken {
+    param([string]$TestToken)
+    if ([string]::IsNullOrWhiteSpace($TestToken)) { return $false }
+    # Token should be hex string (32-128 chars typical)
+    if ($TestToken.Length -lt 16 -or $TestToken.Length -gt 256) { return $false }
+    # Allow alphanumeric and common token characters
+    return $TestToken -match '^[a-zA-Z0-9_\-]+$'
+}
+
+function Test-ValidInterval {
+    param([string]$TestInterval)
+    if ([string]::IsNullOrWhiteSpace($TestInterval)) { return $false }
+    # Must match pattern like 30s, 1m, 5m, etc.
+    return $TestInterval -match '^\d+[smh]$'
+}
+
+function Test-PEBinary {
+    param([string]$FilePath)
+    if (-not (Test-Path $FilePath)) { return $false }
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+        if ($bytes.Length -lt 2) { return $false }
+        # PE files start with 'MZ' (0x4D 0x5A)
+        return ($bytes[0] -eq 0x4D) -and ($bytes[1] -eq 0x5A)
+    } catch {
+        return $false
+    }
+}
+
+function Get-FileChecksum {
+    param([string]$FilePath)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($FilePath)
+        try {
+            $hash = $hasher.ComputeHash($stream)
+            return [BitConverter]::ToString($hash).Replace("-", "").ToLower()
+        } finally {
+            $stream.Close()
+        }
+    } finally {
+        $hasher.Dispose()
+    }
+}
 
 # --- Uninstall Logic ---
 if ($Uninstall) {
     Write-Host "Uninstalling $AgentName..." -ForegroundColor Cyan
-    
+
     if (Get-Service $AgentName -ErrorAction SilentlyContinue) {
         Stop-Service $AgentName -Force -ErrorAction SilentlyContinue
         sc.exe delete $AgentName | Out-Null
     }
-    
+
     Remove-Item "$InstallDir\$BinaryName" -Force -ErrorAction SilentlyContinue
     Write-Host "Uninstallation complete." -ForegroundColor Green
     Exit 0
 }
 
-# --- Validation ---
-if ([string]::IsNullOrWhiteSpace($Url) -or [string]::IsNullOrWhiteSpace($Token)) {
-    Write-Error "Missing required parameters: Url and Token. Set PULSE_URL/PULSE_TOKEN env vars or pass arguments."
+# --- Input Validation ---
+Write-Host "Validating parameters..." -ForegroundColor Cyan
+
+if (-not (Test-ValidUrl $Url)) {
+    Show-Error "Invalid or missing URL. Must be a valid http:// or https:// URL.`nProvided: $Url"
     Exit 1
 }
+
+if (-not (Test-ValidToken $Token)) {
+    Show-Error "Invalid or missing Token. Must be 16-256 alphanumeric characters.`nSet PULSE_URL and PULSE_TOKEN environment variables or pass as arguments."
+    Exit 1
+}
+
+if (-not (Test-ValidInterval $Interval)) {
+    Show-Error "Invalid Interval format. Must be like '30s', '1m', '5m'.`nProvided: $Interval"
+    Exit 1
+}
+
+# Normalize URL (remove trailing slash)
+$Url = $Url.TrimEnd('/')
 
 # --- Download ---
 # Determine architecture
@@ -50,24 +151,73 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 }
 
+# Download to temp file first
+$TempPath = [System.IO.Path]::GetTempFileName() + ".exe"
+$script:TempFiles += $TempPath
 $DestPath = "$InstallDir\$BinaryName"
+
 try {
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $DestPath -UseBasicParsing
-} catch {
-    Write-Host "Failed to download agent: $_" -ForegroundColor Red
-    
-    # Try to show a popup if running in a GUI environment
-    try {
-        Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show("Failed to download agent.`n`n$_", "Pulse Installation Failed", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-    } catch {
-        # Ignore if GUI not available
+    # Configure TLS 1.2 minimum
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+
+    # Download with timeout
+    $webClient = New-Object System.Net.WebClient
+    $webClient.Headers.Add("User-Agent", "PulseInstaller/1.0")
+
+    # Set up async download with timeout
+    $downloadTask = $webClient.DownloadFileTaskAsync($DownloadUrl, $TempPath)
+    if (-not $downloadTask.Wait($DownloadTimeoutSec * 1000)) {
+        $webClient.CancelAsync()
+        throw "Download timed out after $DownloadTimeoutSec seconds"
     }
-    
+    if ($downloadTask.IsFaulted) {
+        throw $downloadTask.Exception.InnerException
+    }
+
+    # Get checksum from server response headers if available
+    $serverChecksum = $webClient.ResponseHeaders["X-Checksum-Sha256"]
+
+} catch {
+    Cleanup
+    Show-Error "Failed to download agent: $_"
     Write-Host ""
     Write-Host "Press Enter to exit..." -ForegroundColor Yellow
     Read-Host
     Exit 1
+} finally {
+    if ($webClient) { $webClient.Dispose() }
+}
+
+# --- Binary Verification ---
+Write-Host "Verifying downloaded binary..." -ForegroundColor Cyan
+
+# Check file size (should be reasonable - between 1MB and 100MB)
+$fileInfo = Get-Item $TempPath
+$fileSizeMB = $fileInfo.Length / 1MB
+if ($fileSizeMB -lt 1 -or $fileSizeMB -gt 100) {
+    Cleanup
+    Show-Error "Downloaded file has unexpected size: $([math]::Round($fileSizeMB, 2)) MB. Expected 1-100 MB."
+    Exit 1
+}
+
+# Verify PE signature (MZ header)
+if (-not (Test-PEBinary $TempPath)) {
+    Cleanup
+    Show-Error "Downloaded file is not a valid Windows executable."
+    Exit 1
+}
+
+# Verify checksum if server provided one
+if (-not [string]::IsNullOrWhiteSpace($serverChecksum)) {
+    $localChecksum = Get-FileChecksum $TempPath
+    if ($localChecksum -ne $serverChecksum.ToLower()) {
+        Cleanup
+        Show-Error "Checksum verification failed!`nExpected: $serverChecksum`nGot: $localChecksum"
+        Exit 1
+    }
+    Write-Host "Checksum verified: $localChecksum" -ForegroundColor Green
+} else {
+    Write-Host "Warning: Server did not provide checksum header" -ForegroundColor Yellow
 }
 
 # --- Legacy Cleanup ---
@@ -90,29 +240,69 @@ if (Get-Service "PulseDockerAgent" -ErrorAction SilentlyContinue) {
     Start-Sleep -Seconds 2
 }
 
-# --- Service Installation ---
-Write-Host "Configuring Windows Service..." -ForegroundColor Cyan
+# --- Install Binary ---
+Write-Host "Installing binary..." -ForegroundColor Cyan
 
+# Stop existing service if running
 if (Get-Service $AgentName -ErrorAction SilentlyContinue) {
     Stop-Service $AgentName -Force -ErrorAction SilentlyContinue
     sc.exe delete $AgentName | Out-Null
     Start-Sleep -Seconds 2
 }
 
-# Build command line args
-$Args = "--url `"$Url`" --token `"$Token`" --interval `"$Interval`""
-if ($EnableHost) { $Args += " --enable-host" }
-if ($EnableDocker) { $Args += " --enable-docker" }
-if ($Insecure) { $Args += " --insecure" }
-$BinPath = "`"$DestPath`" $Args"
+# Move temp file to final location
+try {
+    # Create backup of existing binary if present
+    if (Test-Path $DestPath) {
+        $BackupPath = "$DestPath.backup"
+        Move-Item $DestPath $BackupPath -Force -ErrorAction SilentlyContinue
+    }
+
+    Move-Item $TempPath $DestPath -Force
+} catch {
+    # Restore backup on failure
+    if (Test-Path "$DestPath.backup") {
+        Move-Item "$DestPath.backup" $DestPath -Force -ErrorAction SilentlyContinue
+    }
+    Cleanup
+    Show-Error "Failed to install binary: $_"
+    Exit 1
+}
+
+# Remove backup on success
+Remove-Item "$DestPath.backup" -Force -ErrorAction SilentlyContinue
+
+# --- Service Installation ---
+Write-Host "Configuring Windows Service..." -ForegroundColor Cyan
+
+# Build command line args (properly escaped)
+$ServiceArgs = @(
+    "--url", "`"$Url`"",
+    "--token", "`"$Token`"",
+    "--interval", "`"$Interval`""
+)
+if ($EnableHost) { $ServiceArgs += "--enable-host" }
+if ($EnableDocker) { $ServiceArgs += "--enable-docker" }
+if ($Insecure) { $ServiceArgs += "--insecure" }
+
+$BinPath = "`"$DestPath`" $($ServiceArgs -join ' ')"
 
 # Create Service
 sc.exe create $AgentName binPath= $BinPath start= auto displayname= "Pulse Unified Agent" | Out-Null
 sc.exe description $AgentName "Pulse Unified Agent for Host and Docker monitoring" | Out-Null
 sc.exe failure $AgentName reset= 86400 actions= restart/5000/restart/5000/restart/5000 | Out-Null
 
+# Ensure log directory exists
+$LogDir = Split-Path $LogFile -Parent
+if (-not (Test-Path $LogDir)) {
+    New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+}
+
 Start-Service $AgentName
 
+Write-Host ""
 Write-Host "Installation complete." -ForegroundColor Green
 Write-Host "Service: $AgentName"
+Write-Host "Binary:  $DestPath"
 Write-Host "Logs:    $LogFile"
+Write-Host ""
