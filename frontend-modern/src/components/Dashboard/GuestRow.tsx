@@ -1,7 +1,7 @@
 import { GuestDrawer } from './GuestDrawer';
 import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
 import type { VM, Container } from '@/types/api';
-import { formatBytes, formatUptime, formatSpeed } from '@/utils/format';
+import { formatBytes, formatUptime, formatSpeed, getBackupInfo, type BackupStatus } from '@/utils/format';
 import { TagBadges } from './TagBadges';
 
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -48,6 +48,57 @@ const buildGuestId = (guest: Guest) => {
 const isVM = (guest: Guest): guest is VM => {
   return guest.type === 'qemu';
 };
+
+// Backup status indicator colors and icons
+const BACKUP_STATUS_CONFIG: Record<BackupStatus, { color: string; bgColor: string; icon: 'check' | 'warning' | 'x' }> = {
+  fresh: { color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900/40', icon: 'check' },
+  stale: { color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-100 dark:bg-yellow-900/40', icon: 'warning' },
+  critical: { color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900/40', icon: 'x' },
+  never: { color: 'text-gray-400 dark:text-gray-500', bgColor: 'bg-gray-100 dark:bg-gray-800', icon: 'x' },
+};
+
+function BackupIndicator(props: { lastBackup: string | number | null | undefined; isTemplate: boolean }) {
+  // Don't show for templates
+  if (props.isTemplate) return null;
+
+  const backupInfo = createMemo(() => getBackupInfo(props.lastBackup));
+  const config = createMemo(() => BACKUP_STATUS_CONFIG[backupInfo().status]);
+
+  // Only show when there's a problem (stale, critical, or never)
+  const shouldShow = createMemo(() => {
+    const status = backupInfo().status;
+    return status === 'stale' || status === 'critical' || status === 'never';
+  });
+
+  const tooltipText = createMemo(() => {
+    const info = backupInfo();
+    if (info.status === 'never') {
+      return 'No backup found';
+    }
+    return `Last backup: ${info.ageFormatted}`;
+  });
+
+  return (
+    <Show when={shouldShow()}>
+      <span
+        class={`flex-shrink-0 ${config().color}`}
+        title={tooltipText()}
+      >
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+          {/* Shield shape */}
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          {/* Inner icon based on status */}
+          <Show when={config().icon === 'warning'}>
+            <path d="M12 8v4M12 16h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </Show>
+          <Show when={config().icon === 'x'}>
+            <path d="M10 10l4 4M14 10l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </Show>
+        </svg>
+      </span>
+    </Show>
+  );
+}
 
 // Column configuration using the priority system
 interface ColumnDef {
@@ -483,6 +534,7 @@ export function GuestRow(props: GuestRowProps) {
                             </svg>
                           </a>
                         </Show>
+                        <BackupIndicator lastBackup={props.guest.lastBackup} isTemplate={props.guest.template} />
                       </div>
                     }
                   >
