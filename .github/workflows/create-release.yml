@@ -439,9 +439,10 @@ jobs:
 
           gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
             -X PATCH \
-            -F draft=false
+            -F draft=false \
+            -F make_latest=true
 
-          echo "✓ Release published: ${TAG}"
+          echo "✓ Release published as latest: ${TAG}"
 
       - name: Output release information
         run: |
