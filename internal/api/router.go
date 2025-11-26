@@ -3428,20 +3428,21 @@ func (r *Router) handleDownloadHostAgentInstallScript(w http.ResponseWriter, req
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 
-	scriptPath := "/opt/pulse/scripts/install-host-agent.sh"
+	// Serve the unified install.sh script (backwards compatible with install-host-agent.sh URL)
+	scriptPath := "/opt/pulse/scripts/install.sh"
 	content, err := os.ReadFile(scriptPath)
 	if err != nil {
 		// Fallback to project root (dev environment)
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "install-host-agent.sh")
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "install.sh")
 		content, err = os.ReadFile(scriptPath)
 		if err != nil {
-			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read host agent installer script")
+			log.Error().Err(err).Str("path", scriptPath).Msg("Failed to read unified agent installer script")
 			http.Error(w, "Failed to read installer script", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	http.ServeContent(w, req, "install-host-agent.sh", time.Now(), bytes.NewReader(content))
+	http.ServeContent(w, req, "install.sh", time.Now(), bytes.NewReader(content))
 }
 
 // handleDownloadHostAgentInstallScriptPS serves the PowerShell installation script for Windows

@@ -130,7 +130,7 @@ if [ "$SKIP_DOCKER" = false ]; then
 
     # Validate all required scripts exist and are executable
     info "Checking installer/uninstaller scripts in /opt/pulse/scripts/..."
-    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/scripts; required="install-docker-agent.sh install-container-agent.sh install-host-agent.sh install-host-agent.ps1 uninstall-host-agent.sh uninstall-host-agent.ps1 install-sensor-proxy.sh install-docker.sh install.sh"; for f in $required; do [ -f "$f" ] || { echo "missing script $f" >&2; exit 1; }; case "$f" in *.sh|*.ps1) [ -x "$f" ] || { echo "$f not executable" >&2; exit 1; };; esac; done; echo "All scripts present and executable"' || { error "Script validation failed"; exit 1; }
+    docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'set -euo pipefail; cd /opt/pulse/scripts; required="install-docker-agent.sh install-container-agent.sh install-host-agent.ps1 uninstall-host-agent.sh uninstall-host-agent.ps1 install-sensor-proxy.sh install-docker.sh install.sh"; for f in $required; do [ -f "$f" ] || { echo "missing script $f" >&2; exit 1; }; case "$f" in *.sh|*.ps1) [ -x "$f" ] || { echo "$f not executable" >&2; exit 1; };; esac; done; echo "All scripts present and executable"' || { error "Script validation failed"; exit 1; }
     success "All installer/uninstaller scripts present and executable"
 
     # Validate all required binaries exist and are non-empty
@@ -446,7 +446,7 @@ for arch in "${tar_arches[@]}"; do
     check_tar_entries_nonempty "$tarball" "${unified_agent_entries[@]}"
 
     # Check scripts
-    tar -tzf "$tarball" ./scripts/install-docker-agent.sh ./scripts/install-container-agent.sh ./scripts/install-host-agent.sh ./scripts/install-host-agent.ps1 ./scripts/uninstall-host-agent.sh ./scripts/uninstall-host-agent.ps1 ./scripts/install-sensor-proxy.sh ./scripts/install-docker.sh ./scripts/install.sh >/dev/null 2>&1 || { error "$(basename $tarball) missing scripts"; exit 1; }
+    tar -tzf "$tarball" ./scripts/install-docker-agent.sh ./scripts/install-container-agent.sh ./scripts/install-host-agent.ps1 ./scripts/uninstall-host-agent.sh ./scripts/uninstall-host-agent.ps1 ./scripts/install-sensor-proxy.sh ./scripts/install-docker.sh ./scripts/install.sh >/dev/null 2>&1 || { error "$(basename $tarball) missing scripts"; exit 1; }
 
     # Check VERSION file
     tar -tzf "$tarball" ./VERSION >/dev/null 2>&1 || { error "$(basename $tarball) missing VERSION file"; exit 1; }

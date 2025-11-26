@@ -2737,12 +2737,12 @@ deploy_agent_scripts() {
     local scripts=(
         "install-docker-agent.sh"
         "install-container-agent.sh"
-        "install-host-agent.sh"
         "install-host-agent.ps1"
         "uninstall-host-agent.sh"
         "uninstall-host-agent.ps1"
         "install-sensor-proxy.sh"
         "install-docker.sh"
+        "install.sh"
     )
 
     local deployed=0
