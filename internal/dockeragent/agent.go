@@ -1272,14 +1272,18 @@ func (a *Agent) httpClientFor(target TargetConfig) *http.Client {
 }
 
 func newHTTPClient(insecure bool) *http.Client {
-	transport := &http.Transport{}
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
 	if insecure {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+		tlsConfig.InsecureSkipVerify = true //nolint:gosec
 	}
 
 	return &http.Client{
-		Timeout:   15 * time.Second,
-		Transport: transport,
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
 	}
 }
 
@@ -1631,6 +1635,32 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	a.logger.Info().Msg("Agent updated successfully, restarting...")
 }
 
+// isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
+func isUnraid() bool {
+	_, err := os.Stat("/etc/unraid-version")
+	return err == nil
+}
+
+// verifyELFMagic checks that the file is a valid ELF binary
+func verifyELFMagic(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	magic := make([]byte, 4)
+	if _, err := io.ReadFull(f, magic); err != nil {
+		return fmt.Errorf("failed to read magic bytes: %w", err)
+	}
+
+	// ELF magic: 0x7f 'E' 'L' 'F'
+	if magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F' {
+		return nil
+	}
+	return errors.New("not a valid ELF binary")
+}
+
 func determineSelfUpdateArch() string {
 	switch runtime.GOARCH {
 	case "amd64":
@@ -1746,27 +1776,40 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath) // Clean up if something goes wrong
 
-	// Write downloaded binary to temp file
+	// Write downloaded binary to temp file with size limit (100 MB max)
+	const maxBinarySize = 100 * 1024 * 1024
 	hasher := sha256.New()
-	if _, err := io.Copy(tmpFile, io.TeeReader(resp.Body, hasher)); err != nil {
+	limitedReader := io.LimitReader(resp.Body, maxBinarySize+1)
+	written, err := io.Copy(tmpFile, io.TeeReader(limitedReader, hasher))
+	if err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("failed to write downloaded binary: %w", err)
+	}
+	if written > maxBinarySize {
+		tmpFile.Close()
+		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySize)
 	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
-	downloadChecksum := hex.EncodeToString(hasher.Sum(nil))
-	if checksumHeader != "" {
-		expected := strings.ToLower(strings.TrimSpace(checksumHeader))
-		actual := strings.ToLower(downloadChecksum)
-		if expected != actual {
-			return fmt.Errorf("checksum verification failed: expected %s, got %s", expected, actual)
-		}
-		a.logger.Debug().Str("checksum", downloadChecksum).Msg("Self-update: checksum verified")
-	} else {
-		a.logger.Warn().Msg("Self-update: checksum header missing; skipping verification")
+	// Verify it's a valid ELF binary (basic sanity check for Linux)
+	if err := verifyELFMagic(tmpPath); err != nil {
+		return fmt.Errorf("downloaded file is not a valid executable: %w", err)
 	}
+
+	// Verify checksum (mandatory for security)
+	downloadChecksum := hex.EncodeToString(hasher.Sum(nil))
+	if checksumHeader == "" {
+		return fmt.Errorf("server did not provide checksum header (X-Checksum-Sha256); refusing update for security")
+	}
+
+	expected := strings.ToLower(strings.TrimSpace(checksumHeader))
+	actual := strings.ToLower(downloadChecksum)
+	if expected != actual {
+		return fmt.Errorf("checksum verification failed: expected %s, got %s", expected, actual)
+	}
+	a.logger.Debug().Str("checksum", downloadChecksum).Msg("Self-update: checksum verified")
 
 	// Make temp file executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
@@ -1788,6 +1831,25 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 
 	// Remove backup on success
 	os.Remove(backupPath)
+
+	// On Unraid, also update the persistent copy on the flash drive
+	if isUnraid() {
+		persistPath := "/boot/config/plugins/pulse-docker-agent/pulse-docker-agent"
+		if _, err := os.Stat(persistPath); err == nil {
+			a.logger.Debug().Str("path", persistPath).Msg("Updating Unraid persistent binary")
+			if newBinary, err := os.ReadFile(execPath); err == nil {
+				tmpPersist := persistPath + ".tmp"
+				if err := os.WriteFile(tmpPersist, newBinary, 0644); err != nil {
+					a.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
+				} else if err := os.Rename(tmpPersist, persistPath); err != nil {
+					a.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
+					os.Remove(tmpPersist)
+				} else {
+					a.logger.Info().Str("path", persistPath).Msg("Updated Unraid persistent binary")
+				}
+			}
+		}
+	}
 
 	// Restart agent with same arguments
 	args := os.Args

@@ -23,6 +23,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	// maxBinarySize is the maximum allowed size for downloaded binaries (100 MB)
+	maxBinarySize = 100 * 1024 * 1024
+
+	// downloadTimeout is the maximum time allowed for downloading a binary
+	downloadTimeout = 5 * time.Minute
+)
+
 // Config holds the configuration for the updater.
 type Config struct {
 	// PulseURL is the base URL of the Pulse server (e.g., "https://pulse.example.com:7655")
@@ -70,7 +78,8 @@ func New(cfg Config) *Updater {
 
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: cfg.InsecureSkipVerify, //nolint:gosec
 		},
 	}
 
@@ -78,7 +87,7 @@ func New(cfg Config) *Updater {
 		cfg: cfg,
 		client: &http.Client{
 			Transport: transport,
-			Timeout:   30 * time.Second,
+			Timeout:   downloadTimeout,
 		},
 		logger: logger,
 	}
@@ -199,6 +208,64 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 	return versionResp.Version, nil
 }
 
+// isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
+func isUnraid() bool {
+	_, err := os.Stat("/etc/unraid-version")
+	return err == nil
+}
+
+// verifyBinaryMagic checks that the file is a valid executable for the current platform
+func verifyBinaryMagic(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	magic := make([]byte, 4)
+	if _, err := io.ReadFull(f, magic); err != nil {
+		return fmt.Errorf("failed to read magic bytes: %w", err)
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		// ELF magic: 0x7f 'E' 'L' 'F'
+		if magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F' {
+			return nil
+		}
+		return errors.New("not a valid ELF binary")
+
+	case "darwin":
+		// Mach-O magic bytes (little-endian):
+		// - 0xfeedface (32-bit)
+		// - 0xfeedfacf (64-bit)
+		// - 0xcafebabe (universal/fat binary)
+		// Note: bytes are reversed due to little-endian
+		if (magic[0] == 0xcf && magic[1] == 0xfa && magic[2] == 0xed && magic[3] == 0xfe) || // 64-bit
+			(magic[0] == 0xce && magic[1] == 0xfa && magic[2] == 0xed && magic[3] == 0xfe) || // 32-bit
+			(magic[0] == 0xca && magic[1] == 0xfe && magic[2] == 0xba && magic[3] == 0xbe) { // universal
+			return nil
+		}
+		return errors.New("not a valid Mach-O binary")
+
+	case "windows":
+		// PE magic: 'M' 'Z'
+		if magic[0] == 'M' && magic[1] == 'Z' {
+			return nil
+		}
+		return errors.New("not a valid PE binary")
+
+	default:
+		// Unknown platform, skip verification
+		return nil
+	}
+}
+
+// unraidPersistentPath returns the path where the binary should be persisted on Unraid
+func unraidPersistentPath(agentName string) string {
+	return fmt.Sprintf("/boot/config/plugins/%s/%s", agentName, agentName)
+}
+
 // performUpdate downloads and installs the new agent binary.
 func (u *Updater) performUpdate(ctx context.Context) error {
 	execPath, err := os.Executable()
@@ -268,28 +335,39 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath) // Clean up on failure
 
-	// Write downloaded binary with checksum calculation
+	// Write downloaded binary with checksum calculation and size limit
 	hasher := sha256.New()
-	if _, err := io.Copy(tmpFile, io.TeeReader(resp.Body, hasher)); err != nil {
+	limitedReader := io.LimitReader(resp.Body, maxBinarySize+1) // +1 to detect overflow
+	written, err := io.Copy(tmpFile, io.TeeReader(limitedReader, hasher))
+	if err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("failed to write binary: %w", err)
+	}
+	if written > maxBinarySize {
+		tmpFile.Close()
+		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySize)
 	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
-	// Verify checksum
-	downloadChecksum := hex.EncodeToString(hasher.Sum(nil))
-	if checksumHeader != "" {
-		expected := strings.ToLower(strings.TrimSpace(checksumHeader))
-		actual := strings.ToLower(downloadChecksum)
-		if expected != actual {
-			return fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actual)
-		}
-		u.logger.Debug().Str("checksum", downloadChecksum).Msg("Checksum verified")
-	} else {
-		u.logger.Warn().Msg("No checksum header; skipping verification")
+	// Verify it's a valid executable (basic sanity check)
+	if err := verifyBinaryMagic(tmpPath); err != nil {
+		return fmt.Errorf("downloaded file is not a valid executable: %w", err)
 	}
+
+	// Verify checksum (mandatory for security)
+	downloadChecksum := hex.EncodeToString(hasher.Sum(nil))
+	if checksumHeader == "" {
+		return fmt.Errorf("server did not provide checksum header (X-Checksum-Sha256); refusing update for security")
+	}
+
+	expected := strings.ToLower(strings.TrimSpace(checksumHeader))
+	actual := strings.ToLower(downloadChecksum)
+	if expected != actual {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actual)
+	}
+	u.logger.Debug().Str("checksum", downloadChecksum).Msg("Checksum verified")
 
 	// Make executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
@@ -310,6 +388,33 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 
 	// Remove backup on success
 	os.Remove(backupPath)
+
+	// On Unraid, also update the persistent copy on the flash drive
+	// This ensures the update survives reboots
+	if isUnraid() {
+		persistPath := unraidPersistentPath(u.cfg.AgentName)
+		if _, err := os.Stat(persistPath); err == nil {
+			// Persistent path exists, update it
+			u.logger.Debug().Str("path", persistPath).Msg("Updating Unraid persistent binary")
+
+			// Read the newly installed binary
+			newBinary, err := os.ReadFile(execPath)
+			if err != nil {
+				u.logger.Warn().Err(err).Msg("Failed to read new binary for Unraid persistence")
+			} else {
+				// Write to persistent storage (atomic via temp file)
+				tmpPersist := persistPath + ".tmp"
+				if err := os.WriteFile(tmpPersist, newBinary, 0644); err != nil {
+					u.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
+				} else if err := os.Rename(tmpPersist, persistPath); err != nil {
+					u.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
+					os.Remove(tmpPersist)
+				} else {
+					u.logger.Info().Str("path", persistPath).Msg("Updated Unraid persistent binary")
+				}
+			}
+		}
+	}
 
 	// Restart with same arguments
 	args := os.Args
