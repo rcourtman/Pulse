@@ -63,12 +63,14 @@ jobs:
           echo "✓ VERSION file matches requested version ($REQUESTED_VERSION)"
 
   preflight_tests:
-    needs: version_guard
+    needs:
+      - extract_version
+      - version_guard
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
       contents: read
-      packages: read
+      packages: write
     env:
       FRONTEND_DIST: frontend-modern/dist
     steps:
@@ -134,15 +136,51 @@ jobs:
       - name: Build Pulse for integration tests
         run: make build
 
-      - name: Log in to GHCR for build cache
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::GITHUB_TOKEN not available for GHCR login"
-            exit 1
-          fi
-          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push staging Docker images
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/pulse:staging-${{ needs.extract_version.outputs.tag }}
+
+      - name: Build and push staging Docker agent image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: agent_runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache,mode=max
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:staging-${{ needs.extract_version.outputs.tag }}
 
       - name: Build Docker images for integration tests
         run: |

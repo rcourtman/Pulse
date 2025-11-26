@@ -11,7 +11,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: write
@@ -26,17 +26,6 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Publishing Docker images for ${TAG}"
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -50,60 +39,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Pulse server image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: runtime
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
-          tags: |
-            rcourtman/pulse:${{ steps.version.outputs.tag }}
-            rcourtman/pulse:${{ steps.version.outputs.version }}
-            rcourtman/pulse:latest
-            ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/pulse:latest
-          labels: |
-            org.opencontainers.image.title=Pulse
-            org.opencontainers.image.description=Proxmox monitoring system
-            org.opencontainers.image.version=${{ steps.version.outputs.tag }}
-            org.opencontainers.image.created=${{ github.event.release.published_at }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.licenses=MIT
+      - name: Copy staging images to final tags
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          STAGING_TAG="staging-${TAG}"
 
-      - name: Build and push Docker agent image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: agent_runtime
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:buildcache,mode=max
-          tags: |
-            rcourtman/pulse-docker-agent:${{ steps.version.outputs.tag }}
-            rcourtman/pulse-docker-agent:${{ steps.version.outputs.version }}
-            rcourtman/pulse-docker-agent:latest
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.version.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest
-          labels: |
-            org.opencontainers.image.title=Pulse Docker Agent
-            org.opencontainers.image.description=Docker container monitoring agent for Pulse
-            org.opencontainers.image.version=${{ steps.version.outputs.tag }}
-            org.opencontainers.image.created=${{ github.event.release.published_at }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.licenses=MIT
+          echo "Copying pulse staging image to final tags..."
+          # Pull the staging multi-arch manifest
+          docker buildx imagetools create \
+            --tag rcourtman/pulse:${TAG} \
+            --tag rcourtman/pulse:${VERSION} \
+            --tag rcourtman/pulse:latest \
+            --tag ghcr.io/${{ github.repository_owner }}/pulse:${TAG} \
+            --tag ghcr.io/${{ github.repository_owner }}/pulse:${VERSION} \
+            --tag ghcr.io/${{ github.repository_owner }}/pulse:latest \
+            ghcr.io/${{ github.repository_owner }}/pulse:${STAGING_TAG}
+
+          echo "Copying pulse-docker-agent staging image to final tags..."
+          docker buildx imagetools create \
+            --tag rcourtman/pulse-docker-agent:${TAG} \
+            --tag rcourtman/pulse-docker-agent:${VERSION} \
+            --tag rcourtman/pulse-docker-agent:latest \
+            --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${TAG} \
+            --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${VERSION} \
+            --tag ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:latest \
+            ghcr.io/${{ github.repository_owner }}/pulse-docker-agent:${STAGING_TAG}
 
       - name: Output image information
         run: |
