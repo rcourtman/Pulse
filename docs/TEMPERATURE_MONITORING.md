@@ -22,7 +22,7 @@ If running Pulse in Docker, you must install the proxy on the host and share the
 
 1.  **Install Proxy on Host**:
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
       sudo bash -s -- --standalone --pulse-server http://<pulse-ip>:7655
     ```
 
@@ -41,7 +41,7 @@ For nodes *other* than the one running Pulse, install the proxy in HTTP mode.
 
 1.  **Run Installer on Remote Node**:
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
       sudo bash -s -- --standalone --http-mode --pulse-server http://<pulse-ip>:7655
     ```
 2.  **Verify**: Pulse will automatically detect the proxy and start collecting data.
@@ -79,7 +79,7 @@ journalctl -u pulse-sensor-proxy -f
 
   provisioner "remote-exec" {
     inline = [
-      "curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh -o /tmp/install-sensor-proxy.sh",
+      "curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh -o /tmp/install-sensor-proxy.sh",
       "chmod +x /tmp/install-sensor-proxy.sh",
       "/tmp/install-sensor-proxy.sh --standalone --pulse-server ${var.pulse_server_url} --quiet",
       "systemctl is-active pulse-sensor-proxy || exit 1"
@@ -129,7 +129,7 @@ Allowed nodes live in `/etc/pulse-sensor-proxy/allowed_nodes.yaml`; change them 
 
 **5. Install systemd service:**
 ```bash
-# Download from: https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh
+# Download from: https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh
 # Extract the systemd unit from the installer (ExecStartPre/ExecStart use /opt/pulse/sensor-proxy/bin)
 systemctl daemon-reload
 systemctl enable --now pulse-sensor-proxy
@@ -440,7 +440,7 @@ cp id_ed25519.pub id_ed25519.pub.backup
 ssh-keygen -t ed25519 -f id_ed25519 -N "" -C "pulse-sensor-proxy-rotated"
 
 # 3. Re-run setup to push keys to cluster
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
   bash -s -- --ctid <your-container-id>
 
 # 4. Verify temperature data still works in Pulse UI
@@ -639,7 +639,7 @@ test -S /run/pulse-sensor-proxy/pulse-sensor-proxy.sock && echo "Socket OK" || e
 **New Cluster Node Not Showing Temperatures:**
 1. Ensure lm-sensors installed: `ssh root@new-node "sensors -j"`
 2. Proxy auto-discovers on next poll (may take up to 1 minute)
-3. Re-run the setup script to configure SSH keys on the new node: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid <CTID>`
+3. Re-run the setup script to configure SSH keys on the new node: `curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid <CTID>`
 
 **Permission Denied Errors:**
 1. Verify socket permissions: `ls -l /run/pulse-sensor-proxy/pulse-sensor-proxy.sock`

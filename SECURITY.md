@@ -40,7 +40,7 @@ environment where `PULSE_DOCKER=true`/`/.dockerenv` is detected.
 
 1. **Install the sensor proxy on the Proxmox host that runs Pulse**
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+   curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
      bash -s -- --ctid <pulse-lxc-id> --pulse-server https://pulse.example.com:7655
    ```
    - For Docker or standalone hosts where Pulse cannot mount the socket (or when collecting temps from *other* nodes), run the installer with `--standalone --http-mode` so each host exposes its own HTTPS endpoint on port 8443.

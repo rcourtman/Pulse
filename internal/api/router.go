@@ -4044,7 +4044,7 @@ func (r *Router) handleTemperatureProxyInstallCommand(w http.ResponseWriter, req
 
 	node := strings.TrimSpace(req.URL.Query().Get("node"))
 	command := fmt.Sprintf(
-		"curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | sudo bash -s -- --standalone --http-mode --pulse-server %s",
+		"curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | sudo bash -s -- --standalone --http-mode --pulse-server %s",
 		baseURL,
 	)
 
@@ -4090,7 +4090,7 @@ func (r *Router) handleHostProxyStatus(w http.ResponseWriter, req *http.Request)
 		ctid = summary.CTID
 	}
 
-	resp["reinstallCommand"] = fmt.Sprintf("curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | sudo bash -s -- --ctid %s --pulse-server %s", ctid, baseURL)
+	resp["reinstallCommand"] = fmt.Sprintf("curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | sudo bash -s -- --ctid %s --pulse-server %s", ctid, baseURL)
 	resp["installerURL"] = fmt.Sprintf("%s/api/install/install-sensor-proxy.sh", baseURL)
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {

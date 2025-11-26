@@ -8,7 +8,7 @@ Pulse offers flexible installation options ranging from a simple one-liner for P
 The easiest way to run Pulse on Proxmox. This script creates a lightweight LXC container, configures networking, and starts the service.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
 ### Docker
@@ -32,10 +32,10 @@ The installer supports advanced flags for automation or custom setups.
 
 ```bash
 # Install specific version
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.24.0
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --version v4.24.0
 
 # Install from source (dev branch)
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --source develop
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --source develop
 ```
 
 ### 2. Kubernetes (Helm)
@@ -55,7 +55,7 @@ For bare-metal Linux servers (Debian/Ubuntu).
 
 ```bash
 # The installer detects non-Proxmox systems and installs as a systemd service
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
 ---

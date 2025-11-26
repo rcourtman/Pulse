@@ -5,7 +5,7 @@
 ### What's the easiest way to install?
 Run this one-liner on your Proxmox host:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
 ### How do I add a node?

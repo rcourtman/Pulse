@@ -567,7 +567,7 @@ prompt_proxy_installation() {
         echo ""
         print_info "Skipping proxy installation"
         print_info "Temperature monitoring from container will be unavailable"
-        print_info "To enable later, run: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid <CTID>"
+        print_info "To enable later, run: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid <CTID>"
         return 1
     fi
 }
@@ -1497,12 +1497,12 @@ create_lxc_container() {
         # We're being piped, download the script
         # Use timeout to prevent hanging
         if command -v timeout >/dev/null 2>&1; then
-            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh > "$script_source" 2>/dev/null; then
+            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 https://github.com/rcourtman/Pulse/releases/latest/download/install.sh > "$script_source" 2>/dev/null; then
                 print_error "Failed to download install script"
                 cleanup_on_error
             fi
         else
-            if ! curl -fsSL --connect-timeout 5 --max-time 15 https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh > "$script_source" 2>/dev/null; then
+            if ! curl -fsSL --connect-timeout 5 --max-time 15 https://github.com/rcourtman/Pulse/releases/latest/download/install.sh > "$script_source" 2>/dev/null; then
                 print_error "Failed to download install script"
                 cleanup_on_error
             fi
@@ -1670,21 +1670,21 @@ fi'; then
         if [[ "$installer_ready" != true ]]; then
             if command -v timeout >/dev/null 2>&1; then
                 if timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 \
-                    "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
+                    "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" \
                     > "$proxy_script" 2>/dev/null; then
                     installer_ready=true
                 else
                     print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-                    print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+                    print_info "Run manually later: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
                 fi
             else
                 if curl -fsSL --connect-timeout 5 --max-time 15 \
-                    "https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh" \
+                    "https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh" \
                     > "$proxy_script" 2>/dev/null; then
                     installer_ready=true
                 else
                     print_warn "Failed to download proxy installer - temperature monitoring unavailable"
-                    print_info "Run manually later: curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+                    print_info "Run manually later: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
                 fi
             fi
         fi
@@ -1823,7 +1823,7 @@ fi'; then
                 echo
                 echo "To fix, you can either:"
                 echo "  1. Fix the issue and run the proxy installer manually:"
-                echo "     curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
+                echo "     curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | bash -s -- --ctid $CTID"
                 echo
                 echo "  2. Re-run the Pulse installer and skip temperature monitoring when prompted"
                 echo
@@ -1874,7 +1874,7 @@ refresh_container_proxy_installer() {
         return
     fi
 
-    local installer_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${SOURCE_BRANCH:-main}/scripts/install-sensor-proxy.sh"
+    local installer_url="https://github.com/${GITHUB_REPO}/releases/latest/download/install-sensor-proxy.sh"
     print_info "Refreshing sensor proxy installer inside container ${target_ctid}..."
     if ! pct exec "$target_ctid" -- bash -c "set -euo pipefail; mkdir -p /usr/local/share/pulse; tmp=\$(mktemp); curl -fsSL --connect-timeout 10 --max-time 45 '${installer_url}' -o \$tmp && install -m 0755 \$tmp /usr/local/share/pulse/install-sensor-proxy.sh && rm -f \$tmp"; then
         print_warn "Unable to refresh container installer; continuing with bundled version"
@@ -3083,9 +3083,9 @@ fi
 
 echo "Updating Pulse..."
 if [[ ${#extra_args[@]} -gt 0 ]]; then
-    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- "${extra_args[@]}"
+    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- "${extra_args[@]}"
 else
-    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 fi
 
 echo ""
@@ -3106,7 +3106,7 @@ EOF
 }
 
 download_auto_update_script() {
-    local url="https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/pulse-auto-update.sh"
+    local url="https://github.com/$GITHUB_REPO/releases/latest/download/pulse-auto-update.sh"
     local dest="/usr/local/bin/pulse-auto-update.sh"
     local attempts=0
     local max_attempts=3
@@ -3392,9 +3392,9 @@ print_completion() {
     echo "  journalctl -u $SERVICE_NAME -f    - View logs"
     echo
     echo -e "${YELLOW}Management:${NC}"
-    echo "  Update:     curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
-    echo "  Reset:      curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --reset"
-    echo "  Uninstall:  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --uninstall"
+    echo "  Update:     curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash"
+    echo "  Reset:      curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --reset"
+    echo "  Uninstall:  curl -sSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash -s -- --uninstall"
 
     local proxy_status="Not installed"
     local pending_file="/etc/pulse-sensor-proxy/pending-control-plane.env"
@@ -3423,7 +3423,7 @@ print_completion() {
         echo
         echo -e "${YELLOW}Temperature monitoring:${NC}"
         echo "  Run on the Proxmox host to enable secure temperature collection:"
-        echo "    curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \\"
+        echo "    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \\"
         echo "      bash -s -- --ctid ${proxy_ctid} --pulse-server ${PULSE_URL}"
         echo "  See docs/TEMPERATURE_MONITORING.md for details."
     fi

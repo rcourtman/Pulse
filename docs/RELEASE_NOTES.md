@@ -22,11 +22,11 @@ Temperature monitoring will not work for remote nodes until every Proxmox host i
 
 ```bash
 # 1. Remove any pre-v4.31.0 proxy install
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
   sudo bash -s -- --uninstall --purge
 
 # 2. Install the HTTP-enabled proxy and register it with Pulse
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
   sudo bash -s -- --standalone --http-mode --pulse-server https://your-pulse-host:7655
 ```
 

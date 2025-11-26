@@ -38,7 +38,8 @@ set_github_fallback_url() {
 
     local base=""
     if [[ "$ref" == "main" ]]; then
-        base="https://raw.githubusercontent.com/rcourtman/Pulse/${ref}/release/pulse-sensor-proxy-${PROXY_ARCH_LABEL}"
+        # Use latest release for main branch
+        base="https://github.com/rcourtman/Pulse/releases/latest/download/pulse-sensor-proxy-${PROXY_ARCH_LABEL}"
     else
         base="https://github.com/rcourtman/Pulse/releases/download/${ref}/pulse-sensor-proxy-${PROXY_ARCH_LABEL}"
     fi
@@ -323,13 +324,13 @@ download_installer_from_github() {
         fi
     fi
 
-    local raw_url="https://raw.githubusercontent.com/rcourtman/Pulse/${ref}/scripts/install-sensor-proxy.sh"
+    local release_url="https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh"
     attempted=true
-    if curl --fail --silent --location --connect-timeout 5 --max-time 30 "$raw_url" -o "$destination" 2>/dev/null; then
+    if curl --fail --silent --location --connect-timeout 5 --max-time 30 "$release_url" -o "$destination" 2>/dev/null; then
         chmod +x "$destination"
-        PROXY_INSTALLER_SOURCE_LABEL="github:${ref}"
-        set_github_fallback_url "$ref"
-        echo "  ✓ Downloaded proxy installer from ${raw_url}"
+        PROXY_INSTALLER_SOURCE_LABEL="github:latest"
+        set_github_fallback_url "main"
+        echo "  ✓ Downloaded proxy installer from ${release_url}"
         return 0
     fi
 

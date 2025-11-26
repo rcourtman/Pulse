@@ -9,7 +9,7 @@ capabilities, and produces append-only audit logs.
 
 | Scenario | Command |
 | --- | --- |
-| **Recommended (automated)** | `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh \| bash` |
+| **Recommended (automated)** | `curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh \| bash` |
 | **Manual build** | `go build ./cmd/pulse-sensor-proxy` and `sudo install -m 0755 pulse-sensor-proxy /usr/local/bin/` |
 | **Prebuilt artifact** | Copy the binary from `/opt/pulse/bin/pulse-sensor-proxy-*` inside the Pulse Docker image or download via `/download/pulse-sensor-proxy?platform=linux&arch=amd64`. |
 
@@ -191,7 +191,7 @@ If you suspect config corruption (service won't start, temperatures stopped):
 
 2. **If corruption is detected, reinstall the proxy:**
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-sensor-proxy.sh | \
+   curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-sensor-proxy.sh | \
      sudo bash -s -- --standalone --pulse-server http://your-pulse:7655
    ```
    The installer automatically migrates to file-based config and fixes corruption.

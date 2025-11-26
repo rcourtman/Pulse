@@ -28,7 +28,7 @@ type InstallShAdapter struct {
 func NewInstallShAdapter(history *UpdateHistory) *InstallShAdapter {
 	return &InstallShAdapter{
 		history:          history,
-		installScriptURL: "https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh",
+		installScriptURL: "https://github.com/rcourtman/Pulse/releases/latest/download/install.sh",
 		logDir:           "/var/log/pulse",
 	}
 }

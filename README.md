@@ -37,7 +37,7 @@ Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" wit
 Run this one-liner on your Proxmox host to create a lightweight LXC container:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
 ### Option 2: Docker

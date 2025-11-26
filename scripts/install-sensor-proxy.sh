@@ -892,9 +892,11 @@ cache_installer_for_self_heal() {
 
     local candidate_urls=()
     if [[ "$ref" != "main" ]]; then
+        # Try specific version from releases first
         candidate_urls+=("https://github.com/${repo}/releases/download/${ref}/install-sensor-proxy.sh")
     fi
-    candidate_urls+=("https://raw.githubusercontent.com/${repo}/${ref}/scripts/install-sensor-proxy.sh")
+    # Fall back to latest release
+    candidate_urls+=("https://github.com/${repo}/releases/latest/download/install-sensor-proxy.sh")
 
     local tmp_file
     tmp_file=$(mktemp)
