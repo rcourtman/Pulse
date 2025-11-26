@@ -342,6 +342,17 @@ jobs:
           echo "Release notes content:"
           cat "$NOTES_FILE"
 
+      - name: Create tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.extract_version.outputs.tag }}"
+          echo "Creating tag ${TAG}..."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin "${TAG}"
+
       - name: Create draft release
         id: create_release
         env:
@@ -352,12 +363,11 @@ jobs:
 
           echo "Creating draft release for ${TAG}..."
 
-          # GitHub API creates both the tag and release
-          # If tag exists, it creates "untagged" release - so DON'T create tag first
+          # Tag must exist first - draft releases can't create tags (GitHub API limitation)
+          # See: https://github.com/cli/cli/issues/11589
           RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
             -X POST \
             -F tag_name="${TAG}" \
-            -F target_commitish="${{ github.sha }}" \
             -F name="Pulse ${TAG}" \
             -F body="$(cat $NOTES_FILE)" \
             -F draft=true)
