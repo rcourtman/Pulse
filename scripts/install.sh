@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Pulse Unified Agent Installer
-# Supports: Linux (systemd), macOS (launchd), Synology (upstart)
+# Supports: Linux (systemd, OpenRC), macOS (launchd), Synology DSM (6.x/7+), Unraid
 #
 # Usage:
 #   curl -fsSL http://pulse/install.sh | bash -s -- --url http://pulse --token <token> [options]
@@ -13,6 +13,20 @@
 #   --uninstall         Remove the agent
 
 set -euo pipefail
+
+# Wrap entire script in a function to protect against partial download
+# See: https://www.kicksecure.com/wiki/Dev/curl_bash_pipe
+main() {
+
+# --- Cleanup trap ---
+TMP_FILES=()
+# shellcheck disable=SC2317  # Invoked by trap, not directly
+cleanup() {
+    for f in "${TMP_FILES[@]}"; do
+        rm -f "$f" 2>/dev/null || true
+    done
+}
+trap cleanup EXIT
 
 # --- Check Root ---
 if [[ $EUID -ne 0 ]]; then
@@ -39,14 +53,32 @@ INSECURE="false"
 log_info() { printf "[INFO] %s\n" "$1"; }
 log_warn() { printf "[WARN] %s\n" "$1"; }
 log_error() { printf "[ERROR] %s\n" "$1"; }
-fail() { 
+fail() {
     log_error "$1"
     if [[ -t 0 ]]; then
-        read -p "Press Enter to exit..."
+        read -r -p "Press Enter to exit..."
     elif [[ -e /dev/tty ]]; then
-        read -p "Press Enter to exit..." < /dev/tty
+        read -r -p "Press Enter to exit..." < /dev/tty
     fi
     exit 1
+}
+
+# Build exec args string for use in service files
+# Returns via EXEC_ARGS variable
+build_exec_args() {
+    EXEC_ARGS="--url ${PULSE_URL} --token ${PULSE_TOKEN} --interval ${INTERVAL}"
+    if [[ "$ENABLE_HOST" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-host"; fi
+    if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker"; fi
+    if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
+}
+
+# Build exec args as array for direct execution (proper quoting)
+# Returns via EXEC_ARGS_ARRAY variable
+build_exec_args_array() {
+    EXEC_ARGS_ARRAY=(--url "$PULSE_URL" --token "$PULSE_TOKEN" --interval "$INTERVAL")
+    if [[ "$ENABLE_HOST" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-host); fi
+    if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-docker); fi
+    if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
 }
 
 # --- Parse Arguments ---
@@ -68,7 +100,7 @@ done
 # --- Uninstall Logic ---
 if [[ "$UNINSTALL" == "true" ]]; then
     log_info "Uninstalling ${AGENT_NAME}..."
-    
+
     # Systemd
     if command -v systemctl >/dev/null 2>&1; then
         systemctl stop "${AGENT_NAME}" 2>/dev/null || true
@@ -84,10 +116,44 @@ if [[ "$UNINSTALL" == "true" ]]; then
         rm -f "$PLIST"
     fi
 
-    # Upstart (Synology)
-    if [[ -f "/etc/init/${AGENT_NAME}.conf" ]]; then
-        initctl stop "${AGENT_NAME}" 2>/dev/null || true
-        rm -f "/etc/init/${AGENT_NAME}.conf"
+    # Synology DSM (handles both DSM 7+ systemd and DSM 6.x upstart)
+    if [[ -d /usr/syno ]]; then
+        # DSM 7+ uses systemd
+        if [[ -f "/etc/systemd/system/${AGENT_NAME}.service" ]]; then
+            systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+            systemctl disable "${AGENT_NAME}" 2>/dev/null || true
+            rm -f "/etc/systemd/system/${AGENT_NAME}.service"
+            systemctl daemon-reload 2>/dev/null || true
+        fi
+        # DSM 6.x uses upstart
+        if [[ -f "/etc/init/${AGENT_NAME}.conf" ]]; then
+            initctl stop "${AGENT_NAME}" 2>/dev/null || true
+            rm -f "/etc/init/${AGENT_NAME}.conf"
+        fi
+    fi
+
+    # Unraid
+    if [[ -f /etc/unraid-version ]] || [[ -d /boot/config/plugins/pulse-agent ]]; then
+        log_info "Removing Unraid installation..."
+        # Stop running agent
+        pkill -f "pulse-agent" 2>/dev/null || true
+        # Remove from /boot/config/go
+        GO_SCRIPT="/boot/config/go"
+        if [[ -f "$GO_SCRIPT" ]]; then
+            sed -i '/# Pulse Agent/,/^$/d' "$GO_SCRIPT" 2>/dev/null || true
+            sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
+        fi
+        # Remove installation directory
+        rm -rf /boot/config/plugins/pulse-agent
+        # Remove symlink
+        rm -f "${INSTALL_DIR}/${BINARY_NAME}"
+    fi
+
+    # OpenRC (Alpine, Gentoo, Artix, etc.)
+    if command -v rc-service >/dev/null 2>&1; then
+        rc-service "${AGENT_NAME}" stop 2>/dev/null || true
+        rc-update del "${AGENT_NAME}" default 2>/dev/null || true
+        rm -f "/etc/init.d/${AGENT_NAME}"
     fi
 
     rm -f "${INSTALL_DIR}/${BINARY_NAME}"
@@ -98,6 +164,21 @@ fi
 # --- Validation ---
 if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
     fail "Missing required arguments: --url and --token"
+fi
+
+# Validate URL format (basic check)
+if [[ ! "$PULSE_URL" =~ ^https?:// ]]; then
+    fail "Invalid URL format. Must start with http:// or https://"
+fi
+
+# Validate token format (should be hex string, typically 64 chars)
+if [[ ! "$PULSE_TOKEN" =~ ^[a-fA-F0-9]+$ ]]; then
+    fail "Invalid token format. Token should be a hexadecimal string."
+fi
+
+# Validate interval format
+if [[ ! "$INTERVAL" =~ ^[0-9]+[smh]?$ ]]; then
+    fail "Invalid interval format. Use format like '30s', '5m', or '1h'."
 fi
 
 # --- Download ---
@@ -119,21 +200,43 @@ ARCH_PARAM="${OS}-${ARCH}"
 DOWNLOAD_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${ARCH_PARAM}"
 log_info "Downloading agent from ${DOWNLOAD_URL}..."
 
-# Create temp file
+# Create temp file and register for cleanup
 TMP_BIN=$(mktemp)
-chmod +x "$TMP_BIN"
+TMP_FILES+=("$TMP_BIN")
 
-CURL_ARGS="-fsSL"
-if [[ "$INSECURE" == "true" ]]; then CURL_ARGS="-k $CURL_ARGS"; fi
+# Build curl arguments as array for proper quoting
+CURL_ARGS=(-fsSL --connect-timeout 30 --max-time 300)
+if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
 
-if ! curl $CURL_ARGS -o "$TMP_BIN" "$DOWNLOAD_URL"; then
+if ! curl "${CURL_ARGS[@]}" -o "$TMP_BIN" "$DOWNLOAD_URL"; then
     fail "Download failed. Check URL and connectivity."
 fi
+
+# Verify downloaded binary
+if [[ ! -s "$TMP_BIN" ]]; then
+    fail "Downloaded file is empty."
+fi
+
+# Check if it's a valid executable (ELF for Linux, Mach-O for macOS)
+if [[ "$OS" == "linux" ]]; then
+    if ! head -c 4 "$TMP_BIN" | grep -q "ELF"; then
+        fail "Downloaded file is not a valid Linux executable."
+    fi
+elif [[ "$OS" == "darwin" ]]; then
+    # Mach-O magic: feedface (32-bit) or feedfacf (64-bit) or cafebabe (universal)
+    MAGIC=$(xxd -p -l 4 "$TMP_BIN" 2>/dev/null || head -c 4 "$TMP_BIN" | od -A n -t x1 | tr -d ' ')
+    if [[ ! "$MAGIC" =~ ^(cffaedfe|cefaedfe|cafebabe|feedface|feedfacf) ]]; then
+        fail "Downloaded file is not a valid macOS executable."
+    fi
+fi
+
+chmod +x "$TMP_BIN"
 
 # Install Binary
 log_info "Installing binary to ${INSTALL_DIR}/${BINARY_NAME}..."
 mkdir -p "$INSTALL_DIR"
 mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
+chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
 # --- Legacy Cleanup ---
 # Remove old agents if they exist to prevent conflicts
@@ -232,18 +335,45 @@ EOF
     exit 0
 fi
 
-# 2. Synology (Upstart)
-if [[ -d /usr/syno/etc/rc.sysv ]]; then
-    CONF="/etc/init/${AGENT_NAME}.conf"
-    log_info "Configuring Upstart service at $CONF..."
+# 2. Synology DSM
+# DSM 7+ uses systemd, DSM 6.x uses upstart
+if [[ -d /usr/syno ]] && [[ -f /etc/VERSION ]]; then
+    # Extract major version from /etc/VERSION
+    DSM_MAJOR=$(grep 'majorversion=' /etc/VERSION | cut -d'"' -f2)
+    log_info "Detected Synology DSM ${DSM_MAJOR}..."
 
     # Build command line args
-    EXEC_ARGS="--url \"${PULSE_URL}\" --token \"${PULSE_TOKEN}\" --interval \"${INTERVAL}\""
-    [[ "$ENABLE_HOST" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --enable-host"
-    [[ "$ENABLE_DOCKER" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --enable-docker"
-    [[ "$INSECURE" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --insecure"
+    build_exec_args
 
-    cat > "$CONF" <<EOF
+    if [[ "$DSM_MAJOR" -ge 7 ]]; then
+        # DSM 7+ uses systemd
+        UNIT="/etc/systemd/system/${AGENT_NAME}.service"
+        log_info "Configuring systemd service at $UNIT (DSM 7+)..."
+
+        cat > "$UNIT" <<EOF
+[Unit]
+Description=Pulse Unified Agent
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        systemctl daemon-reload
+        systemctl enable "${AGENT_NAME}"
+        systemctl restart "${AGENT_NAME}"
+    else
+        # DSM 6.x uses upstart
+        CONF="/etc/init/${AGENT_NAME}.conf"
+        log_info "Configuring Upstart service at $CONF (DSM 6.x)..."
+
+        cat > "$CONF" <<EOF
 description "Pulse Unified Agent"
 author "Pulse"
 
@@ -255,28 +385,171 @@ respawn limit 5 10
 
 exec ${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS} >> ${LOG_FILE} 2>&1
 EOF
-    initctl stop "${AGENT_NAME}" 2>/dev/null || true
-    initctl start "${AGENT_NAME}"
+        initctl stop "${AGENT_NAME}" 2>/dev/null || true
+        initctl start "${AGENT_NAME}"
+    fi
+
     log_info "Service started."
     exit 0
 fi
 
-# 3. Linux (Systemd)
+# 3. Unraid (no init system - use /boot/config/go script)
+# Detect Unraid by /etc/unraid-version (preferred) or /boot/config/go with unraid markers
+if [[ -f /etc/unraid-version ]]; then
+    log_info "Detected Unraid system..."
+
+    # Unraid's /boot is FAT32 (no execute permission), so we store the binary there
+    # for persistence but copy it to RAM disk (/usr/local/bin) for execution
+    UNRAID_STORAGE_DIR="/boot/config/plugins/pulse-agent"
+    UNRAID_STORED_BINARY="${UNRAID_STORAGE_DIR}/${BINARY_NAME}"
+    RUNTIME_BINARY="${INSTALL_DIR}/${BINARY_NAME}"
+    GO_SCRIPT="/boot/config/go"
+
+    mkdir -p "$UNRAID_STORAGE_DIR"
+
+    # Copy binary to persistent storage (for survival across reboots)
+    cp "${RUNTIME_BINARY}" "$UNRAID_STORED_BINARY"
+    # Keep binary in /usr/local/bin (RAM disk) with execute permission for runtime
+    chmod +x "${RUNTIME_BINARY}"
+
+    log_info "Installed binary to ${UNRAID_STORED_BINARY} (persistent) and ${RUNTIME_BINARY} (runtime)..."
+
+    # Build command line args (string for wrapper script, array for direct execution)
+    build_exec_args
+    build_exec_args_array
+
+    # Kill any existing pulse agents (legacy or current)
+    log_info "Stopping any existing pulse agents..."
+    # Use process name matching to avoid killing unrelated processes
+    pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
+    pkill -f "^/usr/local/bin/pulse-host-agent" 2>/dev/null || true
+    pkill -f "^/usr/local/bin/pulse-docker-agent" 2>/dev/null || true
+    sleep 2
+
+    # Clean up legacy binaries from RAM disk
+    rm -f /usr/local/bin/pulse-host-agent 2>/dev/null || true
+    rm -f /usr/local/bin/pulse-docker-agent 2>/dev/null || true
+
+    # Create a wrapper script that will be called from /boot/config/go
+    # This script copies from persistent storage to RAM disk on boot, then starts the agent
+    WRAPPER_SCRIPT="${UNRAID_STORAGE_DIR}/start-pulse-agent.sh"
+    cat > "$WRAPPER_SCRIPT" <<EOF
+#!/bin/bash
+# Pulse Agent startup script for Unraid
+# Auto-generated by Pulse installer
+
+# Kill any existing pulse-agent processes
+pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
+pkill -f "^/usr/local/bin/pulse-host-agent" 2>/dev/null || true
+pkill -f "^/usr/local/bin/pulse-docker-agent" 2>/dev/null || true
+sleep 2
+
+# Copy binary from persistent storage to RAM disk (needed after reboot)
+cp "${UNRAID_STORED_BINARY}" "${RUNTIME_BINARY}"
+chmod +x "${RUNTIME_BINARY}"
+
+# Start the agent in the background
+nohup ${RUNTIME_BINARY} ${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log 2>&1 &
+EOF
+
+    # Add to /boot/config/go if not already present
+    GO_MARKER="# Pulse Agent"
+    if [[ -f "$GO_SCRIPT" ]]; then
+        # Remove any existing Pulse agent entries
+        sed -i "/${GO_MARKER}/,/^$/d" "$GO_SCRIPT" 2>/dev/null || true
+        sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
+    else
+        # Create go script if it doesn't exist
+        echo "#!/bin/bash" > "$GO_SCRIPT"
+        chmod +x "$GO_SCRIPT"
+    fi
+
+    # Append startup entry (use bash explicitly since /boot is FAT32 and doesn't support execute bits)
+    cat >> "$GO_SCRIPT" <<EOF
+
+${GO_MARKER}
+bash ${WRAPPER_SCRIPT}
+
+EOF
+
+    log_info "Added startup entry to ${GO_SCRIPT}..."
+
+    # Start the agent now (use array for proper argument handling)
+    log_info "Starting agent..."
+    nohup "${RUNTIME_BINARY}" "${EXEC_ARGS_ARRAY[@]}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
+
+    log_info "Installation complete!"
+    log_info "The agent will start automatically on boot."
+    log_info "To check status: pgrep -a pulse-agent"
+    log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
+    exit 0
+fi
+
+# 4. OpenRC (Alpine, Gentoo, Artix, etc.)
+# Check for rc-service but make sure we're not on a systemd system that happens to have it
+if command -v rc-service >/dev/null 2>&1 && [[ -d /etc/init.d ]] && ! command -v systemctl >/dev/null 2>&1; then
+    INITSCRIPT="/etc/init.d/${AGENT_NAME}"
+    log_info "Configuring OpenRC service at $INITSCRIPT..."
+
+    # Build command line args
+    build_exec_args
+
+    # Create OpenRC init script following Alpine best practices
+    # Using command_background=yes with pidfile for proper daemon management
+    cat > "$INITSCRIPT" <<'INITEOF'
+#!/sbin/openrc-run
+# Pulse Unified Agent OpenRC init script
+
+name="pulse-agent"
+description="Pulse Unified Agent"
+
+command="INSTALL_DIR_PLACEHOLDER/BINARY_NAME_PLACEHOLDER"
+command_args="EXEC_ARGS_PLACEHOLDER"
+command_background="yes"
+command_user="root"
+
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/pulse-agent.log"
+error_log="/var/log/pulse-agent.log"
+
+# Ensure log file exists
+start_pre() {
+    touch "$output_log"
+}
+
+depend() {
+    need net
+    use docker
+}
+INITEOF
+
+    # Replace placeholders with actual values
+    sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
+    sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
+    sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
+
+    chmod +x "$INITSCRIPT"
+    rc-service "${AGENT_NAME}" stop 2>/dev/null || true
+    rc-update add "${AGENT_NAME}" default 2>/dev/null || true
+    rc-service "${AGENT_NAME}" start
+    log_info "Service started."
+    exit 0
+fi
+
+# 5. Linux (Systemd)
 if command -v systemctl >/dev/null 2>&1; then
     UNIT="/etc/systemd/system/${AGENT_NAME}.service"
     log_info "Configuring Systemd service at $UNIT..."
 
     # Build command line args
-    EXEC_ARGS="--url ${PULSE_URL} --token ${PULSE_TOKEN} --interval ${INTERVAL}"
-    [[ "$ENABLE_HOST" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --enable-host"
-    [[ "$ENABLE_DOCKER" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --enable-docker"
-    [[ "$INSECURE" == "true" ]] && EXEC_ARGS="$EXEC_ARGS --insecure"
+    build_exec_args
 
     cat > "$UNIT" <<EOF
 [Unit]
 Description=Pulse Unified Agent
 After=network-online.target docker.service
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -295,4 +568,9 @@ EOF
     exit 0
 fi
 
-fail "Could not detect a supported service manager (systemd, launchd, upstart)."
+fail "Could not detect a supported service manager (systemd, OpenRC, launchd, or Unraid)."
+
+}
+
+# Call main function with all arguments
+main "$@"

@@ -36,14 +36,14 @@ const commandsByPlatform: Record<
     linux: {
         title: 'Install on Linux',
         description:
-            'The unified installer downloads the agent binary and configures it as a systemd service.',
+            'The unified installer downloads the agent binary and configures the appropriate service for your system.',
         snippets: [
             {
-                label: 'Install with systemd',
+                label: 'Install',
                 command: `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${TOKEN_PLACEHOLDER} --interval 30s`,
                 note: (
                     <span>
-                        Automatically installs to <code>/usr/local/bin/pulse-agent</code> and creates <code>/etc/systemd/system/pulse-agent.service</code>.
+                        Automatically detects your init system (systemd, OpenRC, Unraid, Synology) and configures the appropriate service. Works on Debian, Ubuntu, Fedora, Alpine, Gentoo, Unraid, Synology, and more.
                     </span>
                 ),
             },
