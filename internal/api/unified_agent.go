@@ -19,13 +19,20 @@ func (r *Router) handleDownloadUnifiedInstallScript(w http.ResponseWriter, req *
 		return
 	}
 
-	scriptPath := filepath.Join(r.config.AppRoot, "scripts", "install.sh")
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
-	// Check if file exists
+	scriptPath := "/opt/pulse/scripts/install.sh"
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		log.Error().Str("path", scriptPath).Msg("Unified install script not found")
-		http.Error(w, "Install script not found", http.StatusNotFound)
-		return
+		// Fallback to project root (dev environment)
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "install.sh")
+		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+			log.Error().Str("path", scriptPath).Msg("Unified install script not found")
+			http.Error(w, "Install script not found", http.StatusNotFound)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/x-shellscript")
@@ -40,13 +47,20 @@ func (r *Router) handleDownloadUnifiedInstallScriptPS(w http.ResponseWriter, req
 		return
 	}
 
-	scriptPath := filepath.Join(r.config.AppRoot, "scripts", "install.ps1")
+	// Prevent caching - always serve the latest version
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
-	// Check if file exists
+	scriptPath := "/opt/pulse/scripts/install.ps1"
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		log.Error().Str("path", scriptPath).Msg("Unified PowerShell install script not found")
-		http.Error(w, "Install script not found", http.StatusNotFound)
-		return
+		// Fallback to project root (dev environment)
+		scriptPath = filepath.Join(r.projectRoot, "scripts", "install.ps1")
+		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+			log.Error().Str("path", scriptPath).Msg("Unified PowerShell install script not found")
+			http.Error(w, "Install script not found", http.StatusNotFound)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
