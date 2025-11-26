@@ -1,7 +1,6 @@
-import { Component, For, Show, createMemo, createSignal, createEffect } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, createEffect, Accessor } from 'solid-js';
 import type { DockerHost, DockerContainer, DockerService, DockerTask } from '@/types/api';
 import { Card } from '@/components/shared/Card';
-import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { formatBytes, formatPercent, formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
@@ -22,6 +21,8 @@ import {
   getDockerServiceStatusIndicator,
 } from '@/utils/status';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { ResponsiveMetricCell, useGridTemplate } from '@/components/shared/responsive';
+import type { ColumnConfig } from '@/types/responsive';
 
 const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
   switch (type) {
@@ -107,6 +108,30 @@ const SORT_DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
   tasks: 'desc',
   updated: 'desc',
 };
+
+// Column configuration using the priority system (matching Proxmox overview pattern)
+// Extends ColumnConfig for type compatibility with useGridTemplate
+interface DockerColumnDef extends ColumnConfig {
+  shortLabel?: string; // Short label for narrow viewports
+}
+
+// Column definitions with responsive priorities:
+// - essential: Always visible (xs and up)
+// - primary: Visible on small screens and up (sm: 640px+)
+// - secondary: Visible on medium screens and up (md: 768px+)
+// - supplementary: Visible on large screens and up (lg: 1024px+)
+// - detailed: Visible on extra large screens and up (xl: 1280px+)
+export const DOCKER_COLUMNS: DockerColumnDef[] = [
+  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: '150px', flex: 2, sortKey: 'resource' },
+  { id: 'type', label: 'Type', priority: 'primary', minWidth: '60px', maxWidth: '80px', sortKey: 'type' },
+  { id: 'image', label: 'Image / Stack', shortLabel: 'Image', priority: 'supplementary', minWidth: '100px', flex: 1, sortKey: 'image' },
+  { id: 'status', label: 'Status', priority: 'essential', minWidth: '80px', maxWidth: '120px', sortKey: 'status' },
+  { id: 'cpu', label: 'CPU', priority: 'secondary', minWidth: '80px', flex: 1, sortKey: 'cpu' },
+  { id: 'memory', label: 'Memory', shortLabel: 'Mem', priority: 'secondary', minWidth: '90px', flex: 1, sortKey: 'memory' },
+  { id: 'disk', label: 'Disk', priority: 'detailed', minWidth: '90px', flex: 1, sortKey: 'disk' },
+  { id: 'tasks', label: 'Tasks / Restarts', shortLabel: 'Tasks', priority: 'supplementary', minWidth: '70px', maxWidth: '100px', sortKey: 'tasks' },
+  { id: 'updated', label: 'Updated / Uptime', shortLabel: 'Updated', priority: 'primary', minWidth: '60px', maxWidth: '90px', sortKey: 'updated' },
+];
 
 // Global state for currently expanded drawer (only one drawer open at a time)
 const [currentlyExpandedRowId, setCurrentlyExpandedRowId] = createSignal<string | null>(null);
@@ -703,38 +728,42 @@ const buildRowId = (host: DockerHost, row: DockerRow) => {
 const GROUPED_RESOURCE_INDENT = 'pl-5 sm:pl-6 lg:pl-8';
 const UNGROUPED_RESOURCE_INDENT = 'pl-4 sm:pl-5 lg:pl-6';
 
-const DockerHostGroupHeader: Component<{ host: DockerHost; colspan: number }> = (props) => {
+const DockerHostGroupHeader: Component<{
+  host: DockerHost;
+  gridTemplate: Accessor<string>;
+  visibleColumns: Accessor<ColumnConfig[]>;
+}> = (props) => {
   const displayName = getHostDisplayName(props.host);
   const hostStatus = () => getDockerHostStatusIndicator(props.host);
   const isOnline = () => hostStatus().variant === 'success';
   return (
-    <tr class="bg-gray-50 dark:bg-gray-900/40">
-      <td colSpan={props.colspan} class="py-0.5 pr-2 pl-4">
-        <div
-          class={`flex flex-nowrap items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700 dark:text-slate-100 ${isOnline() ? '' : 'opacity-60'}`}
+    <div class="bg-gray-50 dark:bg-gray-900/40 py-0.5 pr-2 pl-4">
+      <div
+        class={`flex flex-nowrap items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700 dark:text-slate-100 ${isOnline() ? '' : 'opacity-60'}`}
+        title={hostStatus().label}
+      >
+        <StatusDot
+          variant={hostStatus().variant}
           title={hostStatus().label}
-        >
-          <StatusDot
-            variant={hostStatus().variant}
-            title={hostStatus().label}
-            ariaLabel={hostStatus().label}
-            size="xs"
-          />
-          <span>{displayName}</span>
-          <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
-            <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-              ({props.host.hostname})
-            </span>
-          </Show>
-        </div>
-      </td>
-    </tr>
+          ariaLabel={hostStatus().label}
+          size="xs"
+        />
+        <span>{displayName}</span>
+        <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
+          <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+            ({props.host.hostname})
+          </span>
+        </Show>
+      </div>
+    </div>
   );
 };
 
 const DockerContainerRow: Component<{
   row: Extract<DockerRow, { kind: 'container' }>;
-  columns: number;
+  visibleColumns: Accessor<ColumnConfig[]>;
+  gridTemplate: Accessor<string>;
+  isMobile: Accessor<boolean>;
   customUrl?: string;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
   showHostContext?: boolean;
@@ -1046,223 +1075,195 @@ const DockerContainerRow: Component<{
     return identifier ? `${primary} \u2014 ${identifier}` : primary;
   };
 
+  // Render cell content based on column type
+  const renderCell = (column: ColumnConfig) => {
+    switch (column.id) {
+      case 'resource':
+        return (
+          <div class={`${resourceIndent()} pr-2 py-0.5`}>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <StatusDot
+                variant={containerStatusIndicator().variant}
+                title={statusLabel()}
+                ariaLabel={containerStatusIndicator().label}
+                size="xs"
+              />
+              <div class="flex-1 min-w-0">
+                <Show
+                  when={isEditingUrl()}
+                  fallback={
+                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span
+                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
+                        style="cursor: text;"
+                        title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                        onClick={startEditingUrl}
+                        data-resource-name-editable
+                      >
+                        {container.name || container.id}
+                      </span>
+                      <Show when={podName()}>
+                        {(name) => (
+                          <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                            Pod: {name()}
+                            <Show when={isPodInfra()}>
+                              <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200">
+                                infra
+                              </span>
+                            </Show>
+                          </span>
+                        )}
+                      </Show>
+                      <Show when={customUrl()}>
+                        <a
+                          href={customUrl()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                          title="Open in new tab"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </Show>
+                      <Show when={props.showHostContext}>
+                        <span
+                          class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                          title={`Host: ${hostDisplayName()}`}
+                        >
+                          <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
+                          <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
+                        </span>
+                      </Show>
+                    </div>
+                  }
+                >
+                  <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                    <input
+                      ref={urlInputRef}
+                      type="text"
+                      value={editingUrlValue()}
+                      data-resource-id={resourceId()}
+                      onInput={(e) => { dockerEditingValues.set(resourceId(), e.currentTarget.value); setDockerEditingValuesVersion(v => v + 1); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveUrl(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditingUrl(); } }}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="https://example.com:8080"
+                      class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button type="button" data-url-editor-button onClick={(e) => { e.stopPropagation(); saveUrl(); }} class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" title="Save (or press Enter)">✓</button>
+                    <button type="button" data-url-editor-button onClick={(e) => { e.stopPropagation(); deleteUrl(); }} class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors" title="Delete URL">✕</button>
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </div>
+        );
+      case 'type':
+        return (
+          <div class="px-2 py-0.5 flex items-center">
+            <span class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${runtimeInfo.badgeClass}`} title={runtimeVersion() ? `${runtimeInfo.label} ${runtimeVersion()}` : runtimeInfo.raw || runtimeInfo.label}>
+              {runtimeInfo.label}
+            </span>
+          </div>
+        );
+      case 'image':
+        return (
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate">
+            <span title={container.image}>{container.image || '—'}</span>
+          </div>
+        );
+      case 'status':
+        return (
+          <div class="px-2 py-0.5 text-xs">
+            <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${statusBadgeClass()}`}>{statusLabel()}</span>
+          </div>
+        );
+      case 'cpu':
+        return (
+          <div class="px-2 py-0.5 flex items-center">
+            <ResponsiveMetricCell
+              value={cpuPercent()}
+              type="cpu"
+              resourceId={metricsKey}
+              isRunning={isRunning() && (container.cpuPercent ?? 0) > 0}
+              showMobile={props.isMobile()}
+              class="w-full"
+            />
+          </div>
+        );
+      case 'memory':
+        return (
+          <div class="px-2 py-0.5 flex items-center">
+            <ResponsiveMetricCell
+              value={memPercent()}
+              type="memory"
+              resourceId={metricsKey}
+              sublabel={memUsageLabel()}
+              isRunning={isRunning() && (container.memoryUsageBytes ?? 0) > 0}
+              showMobile={props.isMobile()}
+              class="w-full"
+            />
+          </div>
+        );
+      case 'disk':
+        return (
+          <div class="px-2 py-0.5 flex items-center">
+            <Show when={hasDiskStats()} fallback={<span class="text-xs text-gray-400">—</span>}>
+              <Show when={diskPercent() !== null} fallback={<span class="text-xs text-gray-700 dark:text-gray-300">{diskUsageLabel()}</span>}>
+                <ResponsiveMetricCell
+                  value={diskPercent() ?? 0}
+                  type="disk"
+                  resourceId={metricsKey}
+                  sublabel={diskSublabel() ?? diskUsageLabel()}
+                  isRunning={true}
+                  showMobile={props.isMobile()}
+                  class="w-full"
+                />
+              </Show>
+            </Show>
+          </div>
+        );
+      case 'tasks':
+        return (
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+            <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
+              {restarts()}
+              <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
+            </Show>
+          </div>
+        );
+      case 'updated':
+        return (
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+            <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
+              <Show when={props.isMobile()} fallback={uptime()}>
+                {formatUptime(container.uptimeSeconds || 0, true)}
+              </Show>
+            </Show>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
-      <tr
-        class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''
-          } ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
+      <div
+        class={`grid items-center transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
+        style={{ 'grid-template-columns': props.gridTemplate() }}
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class={`${resourceIndent()} pr-2 py-0.5`}>
-          <div class="flex items-center gap-1.5 min-w-0">
-            <StatusDot
-              variant={containerStatusIndicator().variant}
-              title={statusLabel()}
-              ariaLabel={containerStatusIndicator().label}
-              size="xs"
-            />
-            <div class="flex-1 min-w-0">
-              {/* Name - show input when editing, otherwise show name with optional link */}
-              <Show
-                when={isEditingUrl()}
-                fallback={
-                  <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span
-                      class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
-                      style="cursor: text;"
-                      title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                      onClick={startEditingUrl}
-                      data-resource-name-editable
-                    >
-                      {container.name || container.id}
-                    </span>
-                    <Show when={podName()}>
-                      {(name) => (
-                        <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                          Pod: {name()}
-                          <Show when={isPodInfra()}>
-                            <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200">
-                              infra
-                            </span>
-                          </Show>
-                        </span>
-                      )}
-                    </Show>
-                    <Show when={customUrl()}>
-                      <a
-                        href={customUrl()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                        title="Open in new tab"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <svg
-                          class="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                          />
-                        </svg>
-                      </a>
-                    </Show>
-                    <Show when={props.showHostContext}>
-                      <span
-                        class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-                        title={`Host: ${hostDisplayName()}`}
-                      >
-                        <StatusDot
-                          variant={hostStatus().variant}
-                          title={hostStatus().label}
-                          ariaLabel={hostStatus().label}
-                          size="xs"
-                        />
-                        <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
-                      </span>
-                    </Show>
-                  </div>
-                }
-              >
-                <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-                  <input
-                    ref={urlInputRef}
-                    type="text"
-                    value={editingUrlValue()}
-                    data-resource-id={resourceId()}
-                    onInput={(e) => {
-                      dockerEditingValues.set(resourceId(), e.currentTarget.value);
-                      setDockerEditingValuesVersion(v => v + 1);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveUrl();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        cancelEditingUrl();
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    placeholder="https://example.com:8080"
-                    class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    data-url-editor-button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      saveUrl();
-                    }}
-                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    title="Save (or press Enter)"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    data-url-editor-button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteUrl();
-                    }}
-                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                    title="Delete URL"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </Show>
-            </div>
-          </div>
-        </td>
-        <td class="hidden sm:table-cell px-2 py-0.5">
-          <span
-            class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${runtimeInfo.badgeClass}`}
-            title={
-              runtimeVersion()
-                ? `${runtimeInfo.label} ${runtimeVersion()}`
-                : runtimeInfo.raw || runtimeInfo.label
-            }
-          >
-            {runtimeInfo.label}
-          </span>
-        </td>
-        <td class="hidden lg:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
-          <span title={container.image}>
-            {container.image || '—'}
-          </span>
-        </td>
-        <td class="px-2 py-0.5 text-xs">
-          <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${statusBadgeClass()}`}>
-            {statusLabel()}
-          </span>
-        </td>
-        <td class="hidden md:table-cell px-2 py-0.5">
-          <Show
-            when={isRunning() && container.cpuPercent && container.cpuPercent > 0}
-            fallback={<span class="text-xs text-gray-400">—</span>}
-          >
-            <MetricBar
-              value={cpuPercent()}
-              label={formatPercent(cpuPercent())}
-              type="cpu"
-              resourceId={metricsKey}
-            />
-          </Show>
-        </td>
-        <td class="hidden md:table-cell px-2 py-0.5">
-          <Show
-            when={isRunning() && container.memoryUsageBytes && container.memoryUsageBytes > 0}
-            fallback={<span class="text-xs text-gray-400">—</span>}
-          >
-            <MetricBar
-              value={memPercent()}
-              label={formatPercent(memPercent())}
-              type="memory"
-              sublabel={memUsageLabel()}
-              resourceId={metricsKey}
-            />
-          </Show>
-        </td>
-        <td class="hidden xl:table-cell px-2 py-0.5">
-          <Show when={hasDiskStats()} fallback={<span class="text-xs text-gray-400">—</span>}>
-            <Show
-              when={diskPercent() !== null}
-              fallback={<span class="text-xs text-gray-700 dark:text-gray-300">{diskUsageLabel()}</span>}
-            >
-              <MetricBar
-                value={diskPercent() ?? 0}
-                label={formatPercent(diskPercent() ?? 0)}
-                type="disk"
-                sublabel={diskSublabel() ?? diskUsageLabel()}
-                resourceId={metricsKey}
-              />
-            </Show>
-          </Show>
-        </td>
-        <td class="hidden lg:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
-          <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
-            {restarts()}
-            <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
-          </Show>
-        </td>
-        <td class="hidden sm:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
-          <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
-            {uptime()}
-          </Show>
-        </td>
-      </tr>
+        <For each={props.visibleColumns()}>
+          {(column) => renderCell(column)}
+        </For>
+      </div>
 
       <Show when={expanded() && hasDrawerContent()}>
-        <tr class="bg-gray-50 dark:bg-gray-900/50">
-          <td colSpan={props.columns} class="px-4 py-3">
+        <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3">
             <div class="flex flex-wrap justify-start gap-3">
               <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
@@ -1596,8 +1597,7 @@ const DockerContainerRow: Component<{
                 </div>
               </Show>
             </div>
-          </td>
-        </tr>
+        </div>
       </Show>
     </>
   );
@@ -1605,7 +1605,9 @@ const DockerContainerRow: Component<{
 
 const DockerServiceRow: Component<{
   row: Extract<DockerRow, { kind: 'service' }>;
-  columns: number;
+  visibleColumns: Accessor<ColumnConfig[]>;
+  gridTemplate: Accessor<string>;
+  isMobile: Accessor<boolean>;
   customUrl?: string;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
   showHostContext?: boolean;
@@ -1814,176 +1816,151 @@ const DockerServiceRow: Component<{
     return identifier ? `${primary} \u2014 ${identifier}` : primary;
   };
 
+  // Render cell content based on column type
+  const renderCell = (column: ColumnConfig) => {
+    switch (column.id) {
+      case 'resource':
+        return (
+          <div class={`${resourceIndent()} pr-2 py-0.5`}>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <StatusDot
+                variant={serviceStatusIndicator().variant}
+                title={badge.label}
+                ariaLabel={serviceStatusIndicator().label}
+                size="xs"
+              />
+              <div class="flex-1 min-w-0">
+                <Show
+                  when={isEditingUrl()}
+                  fallback={
+                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span
+                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
+                        style="cursor: text;"
+                        title={`${serviceTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
+                        onClick={startEditingUrl}
+                        data-resource-name-editable
+                      >
+                        {service.name || service.id || 'Service'}
+                      </span>
+                      <Show when={customUrl()}>
+                        <a
+                          href={customUrl()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
+                          title="Open in new tab"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </Show>
+                      <Show when={service.stack && !isEditingUrl()}>
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
+                          Stack: {service.stack}
+                        </span>
+                      </Show>
+                      <Show when={props.showHostContext}>
+                        <span
+                          class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                          title={`Host: ${hostDisplayName()}`}
+                        >
+                          <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
+                          <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
+                        </span>
+                      </Show>
+                    </div>
+                  }
+                >
+                  <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
+                    <input
+                      ref={urlInputRef}
+                      type="text"
+                      value={editingUrlValue()}
+                      data-resource-id={resourceId()}
+                      onInput={(e) => { dockerEditingValues.set(resourceId(), e.currentTarget.value); setDockerEditingValuesVersion(v => v + 1); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveUrl(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditingUrl(); } }}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="https://example.com:8080"
+                      class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button type="button" data-url-editor-button onClick={(e) => { e.stopPropagation(); saveUrl(); }} class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" title="Save (or press Enter)">✓</button>
+                    <button type="button" data-url-editor-button onClick={(e) => { e.stopPropagation(); deleteUrl(); }} class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors" title="Delete URL">✕</button>
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </div>
+        );
+      case 'type':
+        return (
+          <div class="px-2 py-0.5 flex items-center">
+            <span class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass('service')}`}>
+              Service
+            </span>
+          </div>
+        );
+      case 'image':
+        return (
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate">
+            <span title={service.image}>{service.image || '—'}</span>
+          </div>
+        );
+      case 'status':
+        return (
+          <div class="px-2 py-0.5 text-xs">
+            <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${badge.class}`}>{badge.label}</span>
+          </div>
+        );
+      case 'cpu':
+        return <div class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</div>;
+      case 'memory':
+        return <div class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</div>;
+      case 'disk':
+        return <div class="px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</div>;
+      case 'tasks':
+        return (
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            <span class="font-semibold text-gray-900 dark:text-gray-100">
+              {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
+            </span>
+            <span class="ml-1 text-gray-500 dark:text-gray-400">tasks</span>
+          </div>
+        );
+      case 'updated':
+        return (
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            <Show when={updatedAt} fallback="—">
+              {(timestamp) => (
+                <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
+                  {formatRelativeTime(timestamp())}
+                </span>
+              )}
+            </Show>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
-      <tr
-        class={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''
-          } ${expanded()
-            ? 'bg-gray-50 dark:bg-gray-800/40'
-            : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
-          } ${!isHealthy() ? 'opacity-60' : ''}`}
+      <div
+        class={`grid items-center transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
+        style={{ 'grid-template-columns': props.gridTemplate() }}
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <td class={`${resourceIndent()} pr-2 py-0.5`}>
-          <div class="flex items-center gap-1.5 min-w-0">
-            <StatusDot
-              variant={serviceStatusIndicator().variant}
-              title={badge.label}
-              ariaLabel={serviceStatusIndicator().label}
-              size="xs"
-            />
-            <div class="flex-1 min-w-0">
-              {/* Name - show input when editing, otherwise show name with optional link */}
-              <Show
-                when={isEditingUrl()}
-                fallback={
-                  <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span
-                      class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
-                      style="cursor: text;"
-                      title={`${serviceTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
-                      onClick={startEditingUrl}
-                      data-resource-name-editable
-                    >
-                      {service.name || service.id || 'Service'}
-                    </span>
-                    <Show when={customUrl()}>
-                      <a
-                        href={customUrl()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class={`flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors ${shouldAnimateIcon() ? 'animate-fadeIn' : ''}`}
-                        title="Open in new tab"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <svg
-                          class="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                          />
-                        </svg>
-                      </a>
-                    </Show>
-                    <Show when={service.stack && !isEditingUrl()}>
-                      <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate" title={`Stack: ${service.stack}`}>
-                        Stack: {service.stack}
-                      </span>
-                    </Show>
-                    <Show when={props.showHostContext}>
-                      <span
-                        class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-                        title={`Host: ${hostDisplayName()}`}
-                      >
-                        <StatusDot
-                          variant={hostStatus().variant}
-                          title={hostStatus().label}
-                          ariaLabel={hostStatus().label}
-                          size="xs"
-                        />
-                        <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
-                      </span>
-                    </Show>
-                  </div>
-                }
-              >
-                <div class="flex-1 flex items-center gap-1 min-w-0" data-url-editor>
-                  <input
-                    ref={urlInputRef}
-                    type="text"
-                    value={editingUrlValue()}
-                    data-resource-id={resourceId()}
-                    onInput={(e) => {
-                      dockerEditingValues.set(resourceId(), e.currentTarget.value);
-                      setDockerEditingValuesVersion(v => v + 1);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveUrl();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        cancelEditingUrl();
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    placeholder="https://example.com:8080"
-                    class="flex-1 min-w-0 px-2 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    data-url-editor-button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      saveUrl();
-                    }}
-                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    title="Save (or press Enter)"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    data-url-editor-button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteUrl();
-                    }}
-                    class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                    title="Delete URL"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </Show>
-            </div>
-          </div>
-        </td>
-        <td class="hidden sm:table-cell px-2 py-0.5">
-          <span class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass('service')}`}>
-            Service
-          </span>
-        </td>
-        <td class="hidden lg:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
-          <span title={service.image}>
-            {service.image || '—'}
-          </span>
-        </td>
-        <td class="px-2 py-0.5 text-xs">
-          <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${badge.class}`}>
-            {badge.label}
-          </span>
-        </td>
-        <td class="hidden md:table-cell px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
-        <td class="hidden md:table-cell px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
-        <td class="hidden xl:table-cell px-2 py-0.5 text-xs text-gray-400 dark:text-gray-500">—</td>
-        <td class="hidden lg:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-          <span class="font-semibold text-gray-900 dark:text-gray-100">
-            {(service.runningTasks ?? 0)}/{service.desiredTasks ?? 0}
-          </span>
-          <span class="ml-1 text-gray-500 dark:text-gray-400">tasks</span>
-        </td>
-        <td class="hidden sm:table-cell px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-          <Show when={updatedAt} fallback="—">
-            {(timestamp) => (
-              <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
-                {formatRelativeTime(timestamp())}
-              </span>
-            )}
-          </Show>
-        </td>
-      </tr>
+        <For each={props.visibleColumns()}>
+          {(column) => renderCell(column)}
+        </For>
+      </div>
 
       <Show when={expanded() && hasTasks()}>
-        <tr class="bg-gray-50 dark:bg-gray-900/60">
-          <td colSpan={props.columns} class="px-4 py-3">
+        <div class="bg-gray-50 dark:bg-gray-900/60 px-4 py-3">
             <div class="flex flex-wrap justify-start gap-3">
               <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
@@ -2103,14 +2080,16 @@ const DockerServiceRow: Component<{
                 </div>
               </div>
             </div>
-          </td>
-        </tr>
+        </div>
       </Show>
     </>
   );
 };
 
 const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
+  // Use the responsive grid template hook for dynamic column visibility
+  const { gridTemplate, visibleColumns, isMobile } = useGridTemplate({ columns: DOCKER_COLUMNS });
+
   const tokens = createMemo(() => parseSearchTerm(props.searchTerm));
   const [sortKey, setSortKey] = usePersistentSignal<SortKey>('dockerUnifiedSortKey', 'host', {
     deserialize: (value) => (SORT_KEYS.includes(value as SortKey) ? (value as SortKey) : 'host'),
@@ -2387,7 +2366,9 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
     return row.kind === 'container' ? (
       <DockerContainerRow
         row={row}
-        columns={9}
+        visibleColumns={visibleColumns}
+        gridTemplate={gridTemplate}
+        isMobile={isMobile}
         customUrl={metadata?.customUrl}
         onCustomUrlUpdate={props.onCustomUrlUpdate}
         showHostContext={!grouped}
@@ -2396,7 +2377,9 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
     ) : (
       <DockerServiceRow
         row={row}
-        columns={9}
+        visibleColumns={visibleColumns}
+        gridTemplate={gridTemplate}
+        isMobile={isMobile}
         customUrl={metadata?.customUrl}
         onCustomUrlUpdate={props.onCustomUrlUpdate}
         showHostContext={!grouped}
@@ -2425,174 +2408,82 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         }
       >
         <Card padding="none" class="overflow-hidden">
-          <ScrollableTable>
-            <table class="w-full table-fixed border-collapse whitespace-nowrap">
-              <thead>
-                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                  <th
-                    class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-auto cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('resource')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('resource')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by resource ${sortKey() === 'resource' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('resource')}
-                  >
-                    <div class="flex flex-wrap items-center gap-2">
-                      <span>Resource</span>
-                      {renderSortIndicator('resource')}
-                      <Show when={sortKey() === 'host'}>
-                        <span class="text-[10px] font-medium text-gray-500 dark:text-gray-400">Grouped by host</span>
+          <div class="overflow-x-auto">
+            {/* Header Row */}
+            <div
+              class="grid border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[400px] md:min-w-0"
+              style={{ 'grid-template-columns': gridTemplate() }}
+            >
+              <For each={visibleColumns()}>
+                {(column) => {
+                  const col = column as DockerColumnDef;
+                  const colSortKey = col.sortKey as SortKey | undefined;
+                  const isResource = col.id === 'resource';
+                  return (
+                    <div
+                      class={`${isResource ? 'pl-4 pr-2' : 'px-2'} py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center whitespace-nowrap`}
+                      onClick={() => colSortKey && handleSort(colSortKey)}
+                      onKeyDown={(e) => e.key === 'Enter' && colSortKey && handleSort(colSortKey)}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Sort by ${col.label} ${colSortKey && sortKey() === colSortKey ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                      aria-sort={colSortKey ? ariaSort(colSortKey) : 'none'}
+                    >
+                      <Show when={isResource}>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span>{col.label}</span>
+                          {colSortKey && renderSortIndicator(colSortKey)}
+                          <Show when={sortKey() === 'host'}>
+                            <span class="text-[10px] font-medium text-gray-500 dark:text-gray-400">Grouped by host</span>
+                          </Show>
+                          <Show when={sortKey() !== 'host'}>
+                            <button
+                              type="button"
+                              class="ml-auto rounded bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700 transition hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                resetHostGrouping();
+                              }}
+                            >
+                              Group by host
+                            </button>
+                          </Show>
+                        </div>
                       </Show>
-                      <Show when={sortKey() !== 'host'}>
-                        <button
-                          type="button"
-                          class="ml-auto rounded bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700 transition hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            resetHostGrouping();
-                          }}
-                        >
-                          Group by host
-                        </button>
+                      <Show when={!isResource}>
+                        <div class="flex items-center gap-1">
+                          <span class="hidden xl:inline">{col.label}</span>
+                          <span class="xl:hidden">{col.shortLabel || col.label}</span>
+                          {colSortKey && renderSortIndicator(colSortKey)}
+                        </div>
                       </Show>
                     </div>
-                  </th>
-                  <th
-                    class="hidden sm:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('type')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('type')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by type ${sortKey() === 'type' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('type')}
-                  >
-                    <div class="flex items-center gap-1">
-                      <span>Type</span>
-                      {renderSortIndicator('type')}
-                    </div>
-                  </th>
-                  <th
-                    class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('image')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('image')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by image or stack ${sortKey() === 'image' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('image')}
-                  >
-                    <div class="flex items-center gap-1">
-                      <span>Image / Stack</span>
-                      {renderSortIndicator('image')}
-                    </div>
-                  </th>
-                  <th
-                    class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('status')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('status')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by status ${sortKey() === 'status' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('status')}
-                  >
-                    <div class="flex items-center gap-1">
-                      <span>Status</span>
-                      {renderSortIndicator('status')}
-                    </div>
-                  </th>
-                  <th
-                    class="hidden md:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('cpu')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('cpu')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by CPU ${sortKey() === 'cpu' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('cpu')}
-                  >
-                    <div class="flex items-center gap-1">
-                      <span>CPU</span>
-                      {renderSortIndicator('cpu')}
-                    </div>
-                  </th>
-                  <th
-                    class="hidden md:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('memory')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('memory')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by memory ${sortKey() === 'memory' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('memory')}
-                  >
-                    <div class="flex items-center gap-1">
-                      <span>Memory</span>
-                      {renderSortIndicator('memory')}
-                    </div>
-                  </th>
-                  <th
-                    class="hidden xl:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[16%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('disk')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('disk')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by disk ${sortKey() === 'disk' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('disk')}
-                  >
-                    <div class="flex items-center gap-1">
-                      <span>Disk</span>
-                      {renderSortIndicator('disk')}
-                    </div>
-                  </th>
-                  <th
-                    class="hidden lg:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('tasks')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('tasks')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by tasks or restarts ${sortKey() === 'tasks' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('tasks')}
-                  >
-                    <div class="flex items-center gap-1">
-                      <span>Tasks / Restarts</span>
-                      {renderSortIndicator('tasks')}
-                    </div>
-                  </th>
-                  <th
-                    class="hidden sm:table-cell px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%] cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                    onClick={() => handleSort('updated')}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSort('updated')}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Sort by updated or uptime ${sortKey() === 'updated' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                    aria-sort={ariaSort('updated')}
-                  >
-                    <div class="flex items-center gap-1">
-                      <span>Updated / Uptime</span>
-                      {renderSortIndicator('updated')}
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <Show
-                  when={isGroupedView()}
-                  fallback={
-                    <For each={sortedRows()}>
-                      {(row) => renderRow(row, false)}
-                    </For>
-                  }
-                >
-                  <For each={orderedGroups()}>
-                    {(group) => (
-                      <>
-                        <DockerHostGroupHeader host={group.host} colspan={9} />
-                        <For each={group.rows}>{(row) => renderRow(row, true)}</For>
-                      </>
-                    )}
+                  );
+                }}
+              </For>
+            </div>
+
+            {/* Rows */}
+            <div class="divide-y divide-gray-200 dark:divide-gray-700 min-w-[400px] md:min-w-0">
+              <Show
+                when={isGroupedView()}
+                fallback={
+                  <For each={sortedRows()}>
+                    {(row) => renderRow(row, false)}
                   </For>
-                </Show>
-              </tbody>
-            </table>
-          </ScrollableTable>
+                }
+              >
+                <For each={orderedGroups()}>
+                  {(group) => (
+                    <>
+                      <DockerHostGroupHeader host={group.host} gridTemplate={gridTemplate} visibleColumns={visibleColumns} />
+                      <For each={group.rows}>{(row) => renderRow(row, true)}</For>
+                    </>
+                  )}
+                </For>
+              </Show>
+            </div>
+          </div>
         </Card>
 
         <div class="flex items-center gap-2 rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
