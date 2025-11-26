@@ -1469,6 +1469,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path == "/api/setup-script-url" {
 			skipCSRF = true
 		}
+		// Skip CSRF for bootstrap token validation (used during initial setup before session exists)
+		if req.URL.Path == "/api/security/validate-bootstrap-token" {
+			skipCSRF = true
+		}
 		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !CheckCSRF(w, req) {
 			http.Error(w, "CSRF token validation failed", http.StatusForbidden)
 			LogAuditEvent("csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Invalid CSRF token")

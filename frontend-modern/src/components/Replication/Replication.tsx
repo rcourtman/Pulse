@@ -123,7 +123,7 @@ const Replication: Component = () => {
                       return (
                         <tr class="hover:bg-gray-50/80 dark:hover:bg-gray-900/40 transition-colors">
                           <td class="px-4 py-3">
-                            <div class="font-medium text-gray-900 dark:text-gray-100">
+                            <div class="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px]">
                               {job.guestName || `VM ${job.guestId ?? ''}`}
                             </div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">

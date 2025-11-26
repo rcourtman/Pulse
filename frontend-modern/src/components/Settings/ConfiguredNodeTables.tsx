@@ -319,7 +319,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                           <p class="font-medium text-gray-900 dark:text-gray-100 truncate">
                             {node.name}
                           </p>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 break-all">
+                          <p class="text-xs text-gray-600 dark:text-gray-400 truncate">
                             {node.host}
                           </p>
                         </div>
@@ -339,16 +339,16 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                   const pulseStatus = endpoint.PulseReachable === null || endpoint.PulseReachable === undefined
                                     ? 'unknown'
                                     : endpoint.PulseReachable
-                                    ? 'reachable'
-                                    : 'unreachable';
+                                      ? 'reachable'
+                                      : 'unreachable';
 
                                   const statusColor = endpoint.Online && pulseStatus === 'reachable'
                                     ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300'
                                     : pulseStatus === 'unreachable'
-                                    ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
-                                    : endpoint.Online
-                                    ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-                                    : 'border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400';
+                                      ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+                                      : endpoint.Online
+                                        ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+                                        : 'border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400';
 
                                   return (
                                     <div class={`rounded border px-3 py-2 text-[0.7rem] ${statusColor}`}>
@@ -576,7 +576,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                           <p class="font-medium text-gray-900 dark:text-gray-100 truncate">
                             {node.name}
                           </p>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 break-all">
+                          <p class="text-xs text-gray-600 dark:text-gray-400 truncate">
                             {node.host}
                           </p>
                         </div>
@@ -759,7 +759,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                           <p class="font-medium text-gray-900 dark:text-gray-100 truncate">
                             {node.name}
                           </p>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 break-all">
+                          <p class="text-xs text-gray-600 dark:text-gray-400 truncate">
                             {node.host}
                           </p>
                         </div>

@@ -122,15 +122,15 @@ interface DockerColumnDef extends ColumnConfig {
 // - supplementary: Visible on large screens and up (lg: 1024px+)
 // - detailed: Visible on extra large screens and up (xl: 1280px+)
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
-  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: '150px', flex: 2, sortKey: 'resource' },
-  { id: 'type', label: 'Type', priority: 'primary', minWidth: '60px', maxWidth: '80px', sortKey: 'type' },
-  { id: 'image', label: 'Image / Stack', shortLabel: 'Image', priority: 'supplementary', minWidth: '100px', flex: 1, sortKey: 'image' },
-  { id: 'status', label: 'Status', priority: 'essential', minWidth: '80px', maxWidth: '120px', sortKey: 'status' },
-  { id: 'cpu', label: 'CPU', priority: 'secondary', minWidth: '80px', flex: 1, sortKey: 'cpu' },
-  { id: 'memory', label: 'Memory', shortLabel: 'Mem', priority: 'secondary', minWidth: '90px', flex: 1, sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', priority: 'detailed', minWidth: '90px', flex: 1, sortKey: 'disk' },
-  { id: 'tasks', label: 'Tasks / Restarts', shortLabel: 'Tasks', priority: 'supplementary', minWidth: '70px', maxWidth: '100px', sortKey: 'tasks' },
-  { id: 'updated', label: 'Updated / Uptime', shortLabel: 'Updated', priority: 'primary', minWidth: '60px', maxWidth: '90px', sortKey: 'updated' },
+  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: '100px', flex: 1.5, sortKey: 'resource' },
+  { id: 'type', label: 'Type', priority: 'essential', minWidth: '24px', maxWidth: '50px', sortKey: 'type' },
+  { id: 'image', label: 'Image / Stack', shortLabel: 'Image', priority: 'essential', minWidth: '80px', flex: 1, sortKey: 'image' },
+  { id: 'status', label: 'Status', priority: 'essential', minWidth: '60px', maxWidth: '100px', sortKey: 'status' },
+  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '50px', flex: 1, sortKey: 'cpu' },
+  { id: 'memory', label: 'Memory', shortLabel: 'Mem', priority: 'essential', minWidth: '50px', flex: 1, sortKey: 'memory' },
+  { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '50px', flex: 1, sortKey: 'disk' },
+  { id: 'tasks', label: 'Tasks / Restarts', shortLabel: 'Tasks', priority: 'essential', minWidth: '40px', maxWidth: '70px', sortKey: 'tasks' },
+  { id: 'updated', label: 'Updated / Uptime', shortLabel: 'Updated', priority: 'essential', minWidth: '50px', maxWidth: '80px', sortKey: 'updated' },
 ];
 
 // Global state for currently expanded drawer (only one drawer open at a time)
@@ -1080,7 +1080,7 @@ const DockerContainerRow: Component<{
     switch (column.id) {
       case 'resource':
         return (
-          <div class={`${resourceIndent()} pr-2 py-0.5`}>
+          <div class={`${resourceIndent()} pr-2 py-0.5 overflow-hidden`}>
             <div class="flex items-center gap-1.5 min-w-0">
               <StatusDot
                 variant={containerStatusIndicator().variant}
@@ -1088,13 +1088,13 @@ const DockerContainerRow: Component<{
                 ariaLabel={containerStatusIndicator().label}
                 size="xs"
               />
-              <div class="flex-1 min-w-0">
+              <div class="flex-1 min-w-0 truncate">
                 <Show
                   when={isEditingUrl()}
                   fallback={
                     <div class="flex items-center gap-1.5 flex-1 min-w-0">
                       <span
-                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none"
+                        class="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-text select-none truncate"
                         style="cursor: text;"
                         title={`${containerTitle()}${customUrl() ? ' - Click to edit URL' : ' - Click to add URL'}`}
                         onClick={startEditingUrl}
@@ -1104,10 +1104,10 @@ const DockerContainerRow: Component<{
                       </span>
                       <Show when={podName()}>
                         {(name) => (
-                          <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                          <span class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 flex-shrink-0">
                             Pod: {name()}
                             <Show when={isPodInfra()}>
-                              <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200">
+                              <span class="rounded bg-purple-200 px-1 py-0.5 text-[9px] uppercase text-purple-800 dark:bg-purple-800/50 dark:text-purple-200 ml-1">
                                 infra
                               </span>
                             </Show>
@@ -1130,11 +1130,11 @@ const DockerContainerRow: Component<{
                       </Show>
                       <Show when={props.showHostContext}>
                         <span
-                          class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                          class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0 max-w-[120px]"
                           title={`Host: ${hostDisplayName()}`}
                         >
                           <StatusDot variant={hostStatus().variant} title={hostStatus().label} ariaLabel={hostStatus().label} size="xs" />
-                          <span class="max-w-[160px] truncate">{hostDisplayName()}</span>
+                          <span class="truncate">{hostDisplayName()}</span>
                         </span>
                       </Show>
                     </div>
@@ -1162,7 +1162,7 @@ const DockerContainerRow: Component<{
         );
       case 'type':
         return (
-          <div class="px-2 py-0.5 flex items-center">
+          <div class="px-2 py-0.5 flex items-center overflow-hidden">
             <span class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${runtimeInfo.badgeClass}`} title={runtimeVersion() ? `${runtimeInfo.label} ${runtimeVersion()}` : runtimeInfo.raw || runtimeInfo.label}>
               {runtimeInfo.label}
             </span>
@@ -1170,19 +1170,19 @@ const DockerContainerRow: Component<{
         );
       case 'image':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate">
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate overflow-hidden">
             <span title={container.image}>{container.image || '—'}</span>
           </div>
         );
       case 'status':
         return (
-          <div class="px-2 py-0.5 text-xs">
-            <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${statusBadgeClass()}`}>{statusLabel()}</span>
+          <div class="px-2 py-0.5 text-xs overflow-hidden">
+            <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap block truncate ${statusBadgeClass()}`}>{statusLabel()}</span>
           </div>
         );
       case 'cpu':
         return (
-          <div class="px-2 py-0.5 flex items-center">
+          <div class="px-2 py-0.5 flex items-center overflow-hidden">
             <ResponsiveMetricCell
               value={cpuPercent()}
               type="cpu"
@@ -1195,7 +1195,7 @@ const DockerContainerRow: Component<{
         );
       case 'memory':
         return (
-          <div class="px-2 py-0.5 flex items-center">
+          <div class="px-2 py-0.5 flex items-center overflow-hidden">
             <ResponsiveMetricCell
               value={memPercent()}
               type="memory"
@@ -1209,7 +1209,7 @@ const DockerContainerRow: Component<{
         );
       case 'disk':
         return (
-          <div class="px-2 py-0.5 flex items-center">
+          <div class="px-2 py-0.5 flex items-center overflow-hidden">
             <Show when={hasDiskStats()} fallback={<span class="text-xs text-gray-400">—</span>}>
               <Show when={diskPercent() !== null} fallback={<span class="text-xs text-gray-700 dark:text-gray-300">{diskUsageLabel()}</span>}>
                 <ResponsiveMetricCell
@@ -1227,7 +1227,7 @@ const DockerContainerRow: Component<{
         );
       case 'tasks':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 overflow-hidden whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
               {restarts()}
               <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
@@ -1236,7 +1236,7 @@ const DockerContainerRow: Component<{
         );
       case 'updated':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 overflow-hidden whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
               <Show when={props.isMobile()} fallback={uptime()}>
                 {formatUptime(container.uptimeSeconds || 0, true)}
@@ -1264,339 +1264,339 @@ const DockerContainerRow: Component<{
 
       <Show when={expanded() && hasDrawerContent()}>
         <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3">
-            <div class="flex flex-wrap justify-start gap-3">
-              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                  Summary
-                </div>
-                <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium text-gray-700 dark:text-gray-200">Runtime</span>
-                    <span
-                      class={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${runtimeInfo.badgeClass}`}
-                      title={runtimeInfo.raw || runtimeInfo.label}
-                    >
-                      {runtimeInfo.label}
-                      <Show when={runtimeVersion()}>
-                        {(version) => (
-                          <span class="text-[10px] text-gray-500 dark:text-gray-400">{version()}</span>
-                        )}
-                      </Show>
-                    </span>
-                  </div>
-                  <div class="flex items-start justify-between gap-2">
-                    <span class="font-medium text-gray-700 dark:text-gray-200">Image</span>
-                    <span class="flex-1 truncate text-right text-gray-600 dark:text-gray-300" title={container.image}>
-                      {container.image || '—'}
-                    </span>
-                  </div>
-                  <Show when={podName()}>
-                    {(name) => (
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="font-medium text-gray-700 dark:text-gray-200">Pod</span>
-                        <span class="text-right text-gray-600 dark:text-gray-300">
-                          {name()}
-                          <Show when={isPodInfra()}>
-                            <span class="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                              infra
-                            </span>
-                          </Show>
-                        </span>
-                      </div>
-                    )}
-                  </Show>
-                  <Show when={podmanMetadata()?.composeProject}>
-                    {(project) => (
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="font-medium text-gray-700 dark:text-gray-200">Compose Project</span>
-                        <span class="text-right text-gray-600 dark:text-gray-300">{project()}</span>
-                      </div>
-                    )}
-                  </Show>
-                  <Show when={podmanMetadata()?.composeService}>
-                    {(service) => (
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="font-medium text-gray-700 dark:text-gray-200">Compose Service</span>
-                        <span class="text-right text-gray-600 dark:text-gray-300">{service()}</span>
-                      </div>
-                    )}
-                  </Show>
-                  <Show when={podmanMetadata()?.autoUpdatePolicy}>
-                    {(policy) => (
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="font-medium text-gray-700 dark:text-gray-200">Auto Update</span>
-                        <span class="text-right text-gray-600 dark:text-gray-300">
-                          {policy()}
-                          <Show when={podmanMetadata()?.autoUpdateRestart}>
-                            {(restart) => (
-                              <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400">restart: {restart()}</span>
-                            )}
-                          </Show>
-                        </span>
-                      </div>
-                    )}
-                  </Show>
-                  <Show when={podmanMetadata()?.userNamespace}>
-                    {(userns) => (
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="font-medium text-gray-700 dark:text-gray-200">User Namespace</span>
-                        <span class="text-right text-gray-600 dark:text-gray-300">{userns()}</span>
-                      </div>
-                    )}
-                  </Show>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
-                    <span class="text-right text-gray-600 dark:text-gray-300">{statusLabel()}</span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium text-gray-700 dark:text-gray-200">Restarts</span>
-                    <span class="text-right text-gray-600 dark:text-gray-300">{restarts()}</span>
-                  </div>
-                  <Show when={createdRelative()}>
-                    {(created) => (
-                      <div class="flex flex-col gap-0.5">
-                        <span class="font-medium text-gray-700 dark:text-gray-200">Created</span>
-                        <div class="text-right text-gray-600 dark:text-gray-300">
-                          {created()}
-                          <Show when={createdAbsolute()}>
-                            {(abs) => (
-                              <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
-                            )}
-                          </Show>
-                        </div>
-                      </div>
-                    )}
-                  </Show>
-                  <Show when={startedRelative()}>
-                    {(started) => (
-                      <div class="flex flex-col gap-0.5">
-                        <span class="font-medium text-gray-700 dark:text-gray-200">Started</span>
-                        <div class="text-right text-gray-600 dark:text-gray-300">
-                          {started()}
-                          <Show when={startedAbsolute()}>
-                            {(abs) => (
-                              <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
-                            )}
-                          </Show>
-                        </div>
-                      </div>
-                    )}
-                  </Show>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium text-gray-700 dark:text-gray-200">Uptime</span>
-                    <span class="text-right text-gray-600 dark:text-gray-300">{uptime()}</span>
-                  </div>
-                </div>
-                <Show when={runtimeInfo.id === 'podman'}>
-                  <div class="mt-3 rounded border border-dashed border-purple-200 px-2 py-1 text-[10px] text-purple-700 dark:border-purple-700/60 dark:text-purple-200">
-                    Podman hosts report container metrics, but Swarm services and tasks are unavailable. Runtime annotations and compose metadata appear below when present.
-                  </div>
-                </Show>
+          <div class="flex flex-wrap justify-start gap-3">
+            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                Summary
               </div>
-              <Show when={container.ports && container.ports.length > 0}>
-                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                    Ports
-                  </div>
-                  <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
-                    {container.ports!.map((port) => {
-                      const label = port.publicPort
-                        ? `${port.publicPort}:${port.privatePort}/${port.protocol}`
-                        : `${port.privatePort}/${port.protocol}`;
-                      return (
-                        <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                          {label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              </Show>
-
-              <Show when={container.networks && container.networks.length > 0}>
-                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                    Networks
-                  </div>
-                  <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                    {container.networks!.map((network) => (
-                      <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
-                        <div class="font-medium text-gray-700 dark:text-gray-200">{network.name}</div>
-                        <div class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-                          <Show when={network.ipv4}>
-                            <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                              {network.ipv4}
-                            </span>
-                          </Show>
-                          <Show when={network.ipv6}>
-                            <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                              {network.ipv6}
-                            </span>
-                          </Show>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Show>
-
-              <Show when={hasPodmanMetadata()}>
-                <div class="min-w-[220px] flex-1 rounded border border-purple-200 bg-white/70 p-2 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
-                    Podman Metadata
-                  </div>
-                  <div class="mt-1 space-y-2 text-[11px] text-gray-600 dark:text-gray-300">
-                    <For each={podmanMetadataSections()}>
-                      {(section) => (
-                        <div class="space-y-1 border-b border-purple-100 pb-1 last:border-b-0 last:pb-0 dark:border-purple-800/30">
-                          <div class="text-[10px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
-                            {section.title}
-                          </div>
-                          <div class="space-y-1">
-                            <For each={section.items}>
-                              {(item) => (
-                                <div class="flex items-start justify-between gap-2">
-                                  <span class="font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
-                                  <span
-                                    class="max-w-[220px] break-all text-right text-gray-600 dark:text-gray-300"
-                                    title={item.value || '—'}
-                                  >
-                                    {item.value || '—'}
-                                  </span>
-                                </div>
-                              )}
-                            </For>
-                          </div>
-                        </div>
+              <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-medium text-gray-700 dark:text-gray-200">Runtime</span>
+                  <span
+                    class={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${runtimeInfo.badgeClass}`}
+                    title={runtimeInfo.raw || runtimeInfo.label}
+                  >
+                    {runtimeInfo.label}
+                    <Show when={runtimeVersion()}>
+                      {(version) => (
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400">{version()}</span>
                       )}
-                    </For>
-                  </div>
+                    </Show>
+                  </span>
                 </div>
-              </Show>
-
-              <Show when={hasBlockIo()}>
-                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                    Block I/O
-                  </div>
-                  <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                    <div class="flex items-center justify-between">
-                      <span>Read</span>
-                      <div class="text-right">
-                        <div class="font-semibold text-gray-900 dark:text-gray-100">
-                          {formatBytes(blockIoReadBytes())}
-                        </div>
-                        <Show when={blockIoReadRateLabel()}>
-                          <div class="text-[10px] text-gray-500 dark:text-gray-400">
-                            {blockIoReadRateLabel()}
-                          </div>
+                <div class="flex items-start justify-between gap-2">
+                  <span class="font-medium text-gray-700 dark:text-gray-200">Image</span>
+                  <span class="flex-1 truncate text-right text-gray-600 dark:text-gray-300" title={container.image}>
+                    {container.image || '—'}
+                  </span>
+                </div>
+                <Show when={podName()}>
+                  {(name) => (
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Pod</span>
+                      <span class="text-right text-gray-600 dark:text-gray-300">
+                        {name()}
+                        <Show when={isPodInfra()}>
+                          <span class="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                            infra
+                          </span>
+                        </Show>
+                      </span>
+                    </div>
+                  )}
+                </Show>
+                <Show when={podmanMetadata()?.composeProject}>
+                  {(project) => (
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Compose Project</span>
+                      <span class="text-right text-gray-600 dark:text-gray-300">{project()}</span>
+                    </div>
+                  )}
+                </Show>
+                <Show when={podmanMetadata()?.composeService}>
+                  {(service) => (
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Compose Service</span>
+                      <span class="text-right text-gray-600 dark:text-gray-300">{service()}</span>
+                    </div>
+                  )}
+                </Show>
+                <Show when={podmanMetadata()?.autoUpdatePolicy}>
+                  {(policy) => (
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Auto Update</span>
+                      <span class="text-right text-gray-600 dark:text-gray-300">
+                        {policy()}
+                        <Show when={podmanMetadata()?.autoUpdateRestart}>
+                          {(restart) => (
+                            <span class="ml-2 text-[10px] text-gray-500 dark:text-gray-400">restart: {restart()}</span>
+                          )}
+                        </Show>
+                      </span>
+                    </div>
+                  )}
+                </Show>
+                <Show when={podmanMetadata()?.userNamespace}>
+                  {(userns) => (
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">User Namespace</span>
+                      <span class="text-right text-gray-600 dark:text-gray-300">{userns()}</span>
+                    </div>
+                  )}
+                </Show>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-medium text-gray-700 dark:text-gray-200">State</span>
+                  <span class="text-right text-gray-600 dark:text-gray-300">{statusLabel()}</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-medium text-gray-700 dark:text-gray-200">Restarts</span>
+                  <span class="text-right text-gray-600 dark:text-gray-300">{restarts()}</span>
+                </div>
+                <Show when={createdRelative()}>
+                  {(created) => (
+                    <div class="flex flex-col gap-0.5">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Created</span>
+                      <div class="text-right text-gray-600 dark:text-gray-300">
+                        {created()}
+                        <Show when={createdAbsolute()}>
+                          {(abs) => (
+                            <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
+                          )}
                         </Show>
                       </div>
                     </div>
-                    <div class="flex items-center justify-between">
-                      <span>Write</span>
-                      <div class="text-right">
-                        <div class="font-semibold text-gray-900 dark:text-gray-100">
-                          {formatBytes(blockIoWriteBytes())}
-                        </div>
-                        <Show when={blockIoWriteRateLabel()}>
-                          <div class="text-[10px] text-gray-500 dark:text-gray-400">
-                            {blockIoWriteRateLabel()}
-                          </div>
+                  )}
+                </Show>
+                <Show when={startedRelative()}>
+                  {(started) => (
+                    <div class="flex flex-col gap-0.5">
+                      <span class="font-medium text-gray-700 dark:text-gray-200">Started</span>
+                      <div class="text-right text-gray-600 dark:text-gray-300">
+                        {started()}
+                        <Show when={startedAbsolute()}>
+                          {(abs) => (
+                            <div class="text-[10px] text-gray-500 dark:text-gray-400">{abs()}</div>
+                          )}
                         </Show>
                       </div>
                     </div>
-                  </div>
+                  )}
+                </Show>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-medium text-gray-700 dark:text-gray-200">Uptime</span>
+                  <span class="text-right text-gray-600 dark:text-gray-300">{uptime()}</span>
                 </div>
-              </Show>
-
-              <Show when={hasMounts()}>
-                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                    Mounts
-                  </div>
-                  <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                    <For each={mounts()}>
-                      {(mount) => {
-                        const destination = mount.destination || mount.source || mount.name || 'mount';
-                        const rw = mount.rw === false ? 'read-only' : 'read-write';
-                        return (
-                          <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="truncate font-medium text-gray-700 dark:text-gray-200" title={destination}>
-                                {destination}
-                              </span>
-                              <Show when={mount.type}>
-                                <span class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                  {mount.type}
-                                </span>
-                              </Show>
-                            </div>
-                            <Show when={mount.source}>
-                              <div class="mt-1 truncate text-[11px] text-gray-600 dark:text-gray-300" title={mount.source}>
-                                {mount.source}
-                              </div>
-                            </Show>
-                            <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-                              <span
-                                class={`rounded px-1.5 py-0.5 ${mount.rw === false
-                                  ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
-                                  : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                  }`}
-                              >
-                                {rw}
-                              </span>
-                              <Show when={mount.mode}>
-                                <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
-                                  mode: {mount.mode}
-                                </span>
-                              </Show>
-                              <Show when={mount.driver}>
-                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                  {mount.driver}
-                                </span>
-                              </Show>
-                              <Show when={mount.name}>
-                                <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
-                                  {mount.name}
-                                </span>
-                              </Show>
-                              <Show when={mount.propagation}>
-                                <span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
-                                  {mount.propagation}
-                                </span>
-                              </Show>
-                            </div>
-                          </div>
-                        );
-                      }}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-
-              <Show when={container.labels && Object.keys(container.labels).length > 0}>
-                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                    Labels
-                  </div>
-                  <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
-                    {Object.entries(container.labels!).map(([key, value]) => {
-                      const fullLabel = value ? `${key}: ${value}` : key;
-                      return (
-                        <span
-                          class="max-w-full truncate rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200"
-                          title={fullLabel}
-                        >
-                          {key}
-                          <Show when={value}>: {value}</Show>
-                        </span>
-                      );
-                    })}
-                  </div>
+              </div>
+              <Show when={runtimeInfo.id === 'podman'}>
+                <div class="mt-3 rounded border border-dashed border-purple-200 px-2 py-1 text-[10px] text-purple-700 dark:border-purple-700/60 dark:text-purple-200">
+                  Podman hosts report container metrics, but Swarm services and tasks are unavailable. Runtime annotations and compose metadata appear below when present.
                 </div>
               </Show>
             </div>
+            <Show when={container.ports && container.ports.length > 0}>
+              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                  Ports
+                </div>
+                <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
+                  {container.ports!.map((port) => {
+                    const label = port.publicPort
+                      ? `${port.publicPort}:${port.privatePort}/${port.protocol}`
+                      : `${port.privatePort}/${port.protocol}`;
+                    return (
+                      <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                        {label}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </Show>
+
+            <Show when={container.networks && container.networks.length > 0}>
+              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                  Networks
+                </div>
+                <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                  {container.networks!.map((network) => (
+                    <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
+                      <div class="font-medium text-gray-700 dark:text-gray-200">{network.name}</div>
+                      <div class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                        <Show when={network.ipv4}>
+                          <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                            {network.ipv4}
+                          </span>
+                        </Show>
+                        <Show when={network.ipv6}>
+                          <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                            {network.ipv6}
+                          </span>
+                        </Show>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Show>
+
+            <Show when={hasPodmanMetadata()}>
+              <div class="min-w-[220px] flex-1 rounded border border-purple-200 bg-white/70 p-2 shadow-sm dark:border-purple-700/60 dark:bg-purple-950/20">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-purple-700 dark:text-purple-200">
+                  Podman Metadata
+                </div>
+                <div class="mt-1 space-y-2 text-[11px] text-gray-600 dark:text-gray-300">
+                  <For each={podmanMetadataSections()}>
+                    {(section) => (
+                      <div class="space-y-1 border-b border-purple-100 pb-1 last:border-b-0 last:pb-0 dark:border-purple-800/30">
+                        <div class="text-[10px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
+                          {section.title}
+                        </div>
+                        <div class="space-y-1">
+                          <For each={section.items}>
+                            {(item) => (
+                              <div class="flex items-start justify-between gap-2">
+                                <span class="font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
+                                <span
+                                  class="max-w-[220px] break-all text-right text-gray-600 dark:text-gray-300"
+                                  title={item.value || '—'}
+                                >
+                                  {item.value || '—'}
+                                </span>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Show>
+
+            <Show when={hasBlockIo()}>
+              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                  Block I/O
+                </div>
+                <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                  <div class="flex items-center justify-between">
+                    <span>Read</span>
+                    <div class="text-right">
+                      <div class="font-semibold text-gray-900 dark:text-gray-100">
+                        {formatBytes(blockIoReadBytes())}
+                      </div>
+                      <Show when={blockIoReadRateLabel()}>
+                        <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                          {blockIoReadRateLabel()}
+                        </div>
+                      </Show>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span>Write</span>
+                    <div class="text-right">
+                      <div class="font-semibold text-gray-900 dark:text-gray-100">
+                        {formatBytes(blockIoWriteBytes())}
+                      </div>
+                      <Show when={blockIoWriteRateLabel()}>
+                        <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                          {blockIoWriteRateLabel()}
+                        </div>
+                      </Show>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Show>
+
+            <Show when={hasMounts()}>
+              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                  Mounts
+                </div>
+                <div class="mt-1 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                  <For each={mounts()}>
+                    {(mount) => {
+                      const destination = mount.destination || mount.source || mount.name || 'mount';
+                      const rw = mount.rw === false ? 'read-only' : 'read-write';
+                      return (
+                        <div class="rounded border border-dashed border-gray-200 p-2 last:mb-0 dark:border-gray-700/70">
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="truncate font-medium text-gray-700 dark:text-gray-200" title={destination}>
+                              {destination}
+                            </span>
+                            <Show when={mount.type}>
+                              <span class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                {mount.type}
+                              </span>
+                            </Show>
+                          </div>
+                          <Show when={mount.source}>
+                            <div class="mt-1 truncate text-[11px] text-gray-600 dark:text-gray-300" title={mount.source}>
+                              {mount.source}
+                            </div>
+                          </Show>
+                          <div class="mt-1 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                            <span
+                              class={`rounded px-1.5 py-0.5 ${mount.rw === false
+                                ? 'bg-gray-200 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200'
+                                : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                }`}
+                            >
+                              {rw}
+                            </span>
+                            <Show when={mount.mode}>
+                              <span class="rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
+                                mode: {mount.mode}
+                              </span>
+                            </Show>
+                            <Show when={mount.driver}>
+                              <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                {mount.driver}
+                              </span>
+                            </Show>
+                            <Show when={mount.name}>
+                              <span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                                {mount.name}
+                              </span>
+                            </Show>
+                            <Show when={mount.propagation}>
+                              <span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300">
+                                {mount.propagation}
+                              </span>
+                            </Show>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </div>
+            </Show>
+
+            <Show when={container.labels && Object.keys(container.labels).length > 0}>
+              <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                  Labels
+                </div>
+                <div class="mt-1 flex flex-wrap gap-1 text-[11px] text-gray-600 dark:text-gray-300">
+                  {Object.entries(container.labels!).map(([key, value]) => {
+                    const fullLabel = value ? `${key}: ${value}` : key;
+                    return (
+                      <span
+                        class="max-w-full truncate rounded bg-gray-200 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200"
+                        title={fullLabel}
+                      >
+                        {key}
+                        <Show when={value}>: {value}</Show>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </Show>
+          </div>
         </div>
       </Show>
     </>
@@ -1961,125 +1961,125 @@ const DockerServiceRow: Component<{
 
       <Show when={expanded() && hasTasks()}>
         <div class="bg-gray-50 dark:bg-gray-900/60 px-4 py-3">
-            <div class="flex flex-wrap justify-start gap-3">
-              <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                  <span>Tasks</span>
-                  <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
-                    {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
-                  </span>
-                </div>
-                <div class="mt-2 overflow-x-auto">
-                  <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
-                    <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
-                      <tr>
-                        <th class="py-1 pr-2 text-left font-medium">Task</th>
-                        <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
-                        <th class="py-1 px-2 text-left font-medium">Node</th>
-                        <th class="py-1 px-2 text-left font-medium">State</th>
-                        <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
-                        <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
-                        <th class="py-1 px-2 text-left font-medium">Updated</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
-                      <For each={tasks}>
-                        {(task) => {
-                          const container = findContainerForTask(host.containers || [], task);
-                          const cpu = container?.cpuPercent ?? 0;
-                          const mem = container?.memoryPercent ?? 0;
-                          const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
-                          const taskLabel = () => {
-                            if (task.containerName) return task.containerName;
-                            if (task.containerId) return task.containerId.slice(0, 12);
-                            if (task.slot !== undefined) return `slot-${task.slot}`;
-                            return task.id ?? 'Task';
-                          };
-                          const taskTitle = () => {
-                            const label = taskLabel();
-                            if (task.containerId && task.containerId !== label) {
-                              return `${label} \u2014 ${task.containerId}`;
-                            }
-                            if (task.id && task.id !== label) {
-                              return `${label} \u2014 ${task.id}`;
-                            }
-                            return label;
-                          };
-                          const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
-                          const taskMetricsKey = container?.id ? buildMetricKey('dockerContainer', container.id) : undefined;
-                          const stateClass = () => {
-                            if (state === 'running') {
-                              return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-                            }
-                            if (state === 'failed' || state === 'error') {
-                              return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-                            }
-                            return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
-                          };
-                          return (
-                            <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
-                              <td class="py-1 pr-2">
-                                <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
-                                  <span class="truncate font-medium" title={taskTitle()}>
-                                    {taskLabel()}
+          <div class="flex flex-wrap justify-start gap-3">
+            <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+              <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                <span>Tasks</span>
+                <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
+                  {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
+                </span>
+              </div>
+              <div class="mt-2 overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
+                  <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
+                    <tr>
+                      <th class="py-1 pr-2 text-left font-medium">Task</th>
+                      <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
+                      <th class="py-1 px-2 text-left font-medium">Node</th>
+                      <th class="py-1 px-2 text-left font-medium">State</th>
+                      <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
+                      <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
+                      <th class="py-1 px-2 text-left font-medium">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 dark:divide-gray-800/50">
+                    <For each={tasks}>
+                      {(task) => {
+                        const container = findContainerForTask(host.containers || [], task);
+                        const cpu = container?.cpuPercent ?? 0;
+                        const mem = container?.memoryPercent ?? 0;
+                        const updated = ensureMs(task.updatedAt ?? task.createdAt ?? task.startedAt);
+                        const taskLabel = () => {
+                          if (task.containerName) return task.containerName;
+                          if (task.containerId) return task.containerId.slice(0, 12);
+                          if (task.slot !== undefined) return `slot-${task.slot}`;
+                          return task.id ?? 'Task';
+                        };
+                        const taskTitle = () => {
+                          const label = taskLabel();
+                          if (task.containerId && task.containerId !== label) {
+                            return `${label} \u2014 ${task.containerId}`;
+                          }
+                          if (task.id && task.id !== label) {
+                            return `${label} \u2014 ${task.id}`;
+                          }
+                          return label;
+                        };
+                        const state = toLower(task.currentState ?? task.desiredState ?? 'unknown');
+                        const taskMetricsKey = container?.id ? buildMetricKey('dockerContainer', container.id) : undefined;
+                        const stateClass = () => {
+                          if (state === 'running') {
+                            return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+                          }
+                          if (state === 'failed' || state === 'error') {
+                            return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+                          }
+                          return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+                        };
+                        return (
+                          <tr class="hover:bg-gray-100 dark:hover:bg-gray-800/40">
+                            <td class="py-1 pr-2">
+                              <div class="flex items-center gap-1 text-sm text-gray-900 dark:text-gray-100">
+                                <span class="truncate font-medium" title={taskTitle()}>
+                                  {taskLabel()}
+                                </span>
+                              </div>
+                            </td>
+                            <td class="py-1 px-2">
+                              <span
+                                class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
+                                  'task',
+                                )}`}
+                              >
+                                Task
+                              </span>
+                            </td>
+                            <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
+                              {task.nodeName || task.nodeId || '—'}
+                            </td>
+                            <td class="py-1 px-2">
+                              <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
+                                {task.currentState || task.desiredState || 'Unknown'}
+                              </span>
+                            </td>
+                            <td class="py-1 px-2 w-[120px]">
+                              <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
+                                <MetricBar
+                                  value={Math.min(100, cpu)}
+                                  label={formatPercent(cpu)}
+                                  type="cpu"
+                                  resourceId={taskMetricsKey}
+                                />
+                              </Show>
+                            </td>
+                            <td class="py-1 px-2 w-[140px]">
+                              <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
+                                <MetricBar
+                                  value={Math.min(100, mem)}
+                                  label={formatPercent(mem)}
+                                  type="memory"
+                                  resourceId={taskMetricsKey}
+                                />
+                              </Show>
+                            </td>
+                            <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                              <Show when={updated} fallback="—">
+                                {(timestamp) => (
+                                  <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
+                                    {formatRelativeTime(timestamp())}
                                   </span>
-                                </div>
-                              </td>
-                              <td class="py-1 px-2">
-                                <span
-                                  class={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${typeBadgeClass(
-                                    'task',
-                                  )}`}
-                                >
-                                  Task
-                                </span>
-                              </td>
-                              <td class="py-1 px-2 text-gray-600 dark:text-gray-400">
-                                {task.nodeName || task.nodeId || '—'}
-                              </td>
-                              <td class="py-1 px-2">
-                                <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${stateClass()}`}>
-                                  {task.currentState || task.desiredState || 'Unknown'}
-                                </span>
-                              </td>
-                              <td class="py-1 px-2 w-[120px]">
-                                <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
-                                  <MetricBar
-                                    value={Math.min(100, cpu)}
-                                    label={formatPercent(cpu)}
-                                    type="cpu"
-                                    resourceId={taskMetricsKey}
-                                  />
-                                </Show>
-                              </td>
-                              <td class="py-1 px-2 w-[140px]">
-                                <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
-                                  <MetricBar
-                                    value={Math.min(100, mem)}
-                                    label={formatPercent(mem)}
-                                    type="memory"
-                                    resourceId={taskMetricsKey}
-                                  />
-                                </Show>
-                              </td>
-                              <td class="py-1 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                                <Show when={updated} fallback="—">
-                                  {(timestamp) => (
-                                    <span title={new Date(timestamp()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}>
-                                      {formatRelativeTime(timestamp())}
-                                    </span>
-                                  )}
-                                </Show>
-                              </td>
-                            </tr>
-                          );
-                        }}
-                      </For>
-                    </tbody>
-                  </table>
-                </div>
+                                )}
+                              </Show>
+                            </td>
+                          </tr>
+                        );
+                      }}
+                    </For>
+                  </tbody>
+                </table>
               </div>
             </div>
+          </div>
         </div>
       </Show>
     </>
@@ -2411,7 +2411,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
           <div class="overflow-x-auto">
             {/* Header Row */}
             <div
-              class="grid border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[400px] md:min-w-0"
+              class="grid border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[520px] md:min-w-0"
               style={{ 'grid-template-columns': gridTemplate() }}
             >
               <For each={visibleColumns()}>
@@ -2464,7 +2464,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
             </div>
 
             {/* Rows */}
-            <div class="divide-y divide-gray-200 dark:divide-gray-700 min-w-[400px] md:min-w-0">
+            <div class="divide-y divide-gray-200 dark:divide-gray-700 min-w-[520px] md:min-w-0">
               <Show
                 when={isGroupedView()}
                 fallback={

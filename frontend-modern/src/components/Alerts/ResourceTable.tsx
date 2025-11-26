@@ -397,13 +397,12 @@ export function ResourceTable(props: ResourceTableProps) {
         title={isDisabledMetric ? 'Disabled (no alerts for this metric)' : ''}
       >
         <span
-          class={`text-sm ${
-            isDisabledMetric
+          class={`text-sm ${isDisabledMetric
               ? 'text-gray-400 dark:text-gray-500 italic'
               : metricProps.isOverridden
                 ? 'text-gray-900 dark:text-gray-100 font-bold'
                 : 'text-gray-900 dark:text-gray-100'
-          }`}
+            }`}
         >
           {displayText}
         </span>
@@ -523,7 +522,7 @@ export function ResourceTable(props: ResourceTableProps) {
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             {/* Global Defaults Row */}
-              <Show
+            <Show
               when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
             >
               <tr
@@ -591,11 +590,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                 props.setHasUnsavedChanges(true);
                               }
                             }}
-                            class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                              isOff()
+                            class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isOff()
                                 ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 italic placeholder:text-gray-400 dark:placeholder:text-gray-500 placeholder:opacity-60 pointer-events-none'
                                 : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                            }`}
+                              }`}
                             title={
                               isOff()
                                 ? 'Click to enable this metric'
@@ -908,26 +906,26 @@ export function ResourceTable(props: ResourceTableProps) {
                                 </Show>
                               </td>
                               <td class="p-1 px-2">
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-2 min-w-0">
                                   <Show
                                     when={resource.type === 'node'}
                                     fallback={
                                       <span
-                                        class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                        class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                       >
                                         {resource.name}
                                       </span>
                                     }
                                   >
                                     <div
-                                      class="flex flex-wrap items-center gap-3"
+                                      class="flex items-center gap-3 min-w-0"
                                       title={resource.status || undefined}
                                     >
                                       <Show
                                         when={resource.host}
                                         fallback={
                                           <span
-                                            class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                            class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                           >
                                             {resource.type === 'node'
                                               ? resource.name
@@ -941,11 +939,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             onClick={(e) => e.stopPropagation()}
-                                            class={`text-sm font-medium transition-colors duration-150 ${
-                                              resource.disabled
+                                            class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${resource.disabled
                                                 ? 'text-gray-500 dark:text-gray-500'
                                                 : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
-                                            }`}
+                                              }`}
                                             title={`Open ${resource.displayName || resource.name} web interface`}
                                           >
                                             {resource.type === 'node'
@@ -1052,9 +1049,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                                 const sliderMax =
                                                   metric === 'temperature'
                                                     ? Math.max(
-                                                        sliderMin,
-                                                        bounds.max > 0 ? bounds.max : 120,
-                                                      )
+                                                      sliderMin,
+                                                      bounds.max > 0 ? bounds.max : 120,
+                                                    )
                                                     : bounds.max;
                                                 const defaultSliderValue = () => {
                                                   if (metric === 'disk') return 90;
@@ -1118,7 +1115,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   if (
                                                     isEditing() &&
                                                     activeMetricInput()?.resourceId ===
-                                                      resource.id &&
+                                                    resource.id &&
                                                     activeMetricInput()?.metric === metric
                                                   ) {
                                                     queueMicrotask(() => {
@@ -1150,11 +1147,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   }
                                                   setActiveMetricInput(null);
                                                 }}
-                                                class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                                                  isDisabled()
+                                                class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
                                                     ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
                                                     : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
-                                                }`}
+                                                  }`}
                                               />
                                             </div>
                                           </div>
@@ -1423,9 +1419,9 @@ export function ResourceTable(props: ResourceTableProps) {
                             <Show
                               when={resource.type === 'node'}
                               fallback={
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-2 min-w-0">
                                   <span
-                                    class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                    class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                   >
                                     {resource.name}
                                   </span>
@@ -1438,14 +1434,14 @@ export function ResourceTable(props: ResourceTableProps) {
                               }
                             >
                               <div
-                                class="flex flex-wrap items-center gap-3"
+                                class="flex items-center gap-3 min-w-0"
                                 title={resource.status || undefined}
                               >
                                 <Show
                                   when={resource.host}
                                   fallback={
                                     <span
-                                      class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                      class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                     >
                                       {resource.type === 'node'
                                         ? resource.name
@@ -1459,11 +1455,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       onClick={(e) => e.stopPropagation()}
-                                      class={`text-sm font-medium transition-colors duration-150 ${
-                                        resource.disabled
+                                      class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${resource.disabled
                                           ? 'text-gray-500 dark:text-gray-500'
                                           : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
-                                      }`}
+                                        }`}
                                       title={`Open ${resource.displayName || resource.name} web interface`}
                                     >
                                       {resource.type === 'node'
@@ -1518,12 +1513,12 @@ export function ResourceTable(props: ResourceTableProps) {
                                   return;
                                 }
                                 setActiveMetricInput({ resourceId: resource.id, metric });
-        props.onEdit(
-          resource.id,
-          resource.thresholds ? { ...resource.thresholds } : {},
-          resource.defaults ? { ...resource.defaults } : {},
-          typeof resource.note === 'string' ? resource.note : undefined,
-        );
+                                props.onEdit(
+                                  resource.id,
+                                  resource.thresholds ? { ...resource.thresholds } : {},
+                                  resource.defaults ? { ...resource.defaults } : {},
+                                  typeof resource.note === 'string' ? resource.note : undefined,
+                                );
                               };
 
                               return (
@@ -1559,9 +1554,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                           min="-1"
                                           max={
                                             metric.includes('disk') ||
-                                            metric.includes('memory') ||
-                                            metric.includes('cpu') ||
-                                            metric === 'usage'
+                                              metric.includes('memory') ||
+                                              metric.includes('cpu') ||
+                                              metric === 'usage'
                                               ? 100
                                               : 10000
                                           }
@@ -1604,11 +1599,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                             }
                                             setActiveMetricInput(null);
                                           }}
-                                          class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                                            isDisabled()
+                                          class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
                                               ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
                                               : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
-                                          }`}
+                                            }`}
                                         />
                                       </div>
                                     </Show>
@@ -1695,7 +1689,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   <div class="flex items-center gap-1">
                                     <button
                                       type="button"
-                                onClick={() =>
+                                      onClick={() =>
                                         props.onEdit(
                                           resource.id,
                                           resource.thresholds ? { ...resource.thresholds } : {},
