@@ -2087,12 +2087,12 @@ func (m *Monitor) pollPVENode(
 	}
 	if effectiveStatus == "online" && m.tempCollector != nil && tempMonitoringEnabled {
 		tempCtx, tempCancel := context.WithTimeout(ctx, 30*time.Second) // Increased to accommodate SSH operations via proxy
+		defer tempCancel()
 
 		// Determine SSH hostname to use (most robust approach):
 		// Prefer the resolved host for this node, with cluster overrides when available.
 		sshHost := modelNode.Host
 		foundNodeEndpoint := false
-		shouldCollect := true
 
 		if modelNode.IsClusterMember && instanceCfg.IsCluster {
 			// Try to find specific endpoint configuration for this node
@@ -2119,82 +2119,79 @@ func (m *Monitor) pollPVENode(
 			}
 		}
 
-		if shouldCollect {
-			if strings.TrimSpace(sshHost) == "" {
-				sshHost = node.Node
+		if strings.TrimSpace(sshHost) == "" {
+			sshHost = node.Node
+		}
+
+		// Use HTTP proxy if configured for this instance, otherwise fall back to socket/SSH
+		temp, err := m.tempCollector.CollectTemperatureWithProxy(tempCtx, sshHost, node.Node, instanceCfg.TemperatureProxyURL, instanceCfg.TemperatureProxyToken)
+
+		if err == nil && temp != nil && temp.Available {
+			// Get the current CPU temperature (prefer package, fall back to max)
+			currentTemp := temp.CPUPackage
+			if currentTemp == 0 && temp.CPUMax > 0 {
+				currentTemp = temp.CPUMax
 			}
 
-			// Use HTTP proxy if configured for this instance, otherwise fall back to socket/SSH
-			temp, err := m.tempCollector.CollectTemperatureWithProxy(tempCtx, sshHost, node.Node, instanceCfg.TemperatureProxyURL, instanceCfg.TemperatureProxyToken)
-			tempCancel()
-
-			if err == nil && temp != nil && temp.Available {
-				// Get the current CPU temperature (prefer package, fall back to max)
-				currentTemp := temp.CPUPackage
-				if currentTemp == 0 && temp.CPUMax > 0 {
-					currentTemp = temp.CPUMax
+			// Find previous temperature data for this node to preserve min/max
+			var prevTemp *models.Temperature
+			for _, prevNode := range prevInstanceNodes {
+				if prevNode.ID == modelNode.ID && prevNode.Temperature != nil {
+					prevTemp = prevNode.Temperature
+					break
 				}
+			}
 
-				// Find previous temperature data for this node to preserve min/max
-				var prevTemp *models.Temperature
-				for _, prevNode := range prevInstanceNodes {
-					if prevNode.ID == modelNode.ID && prevNode.Temperature != nil {
-						prevTemp = prevNode.Temperature
-						break
-					}
-				}
+			// Initialize or update min/max tracking
+			if prevTemp != nil && prevTemp.CPUMin > 0 {
+				// Preserve existing min/max and update if necessary
+				temp.CPUMin = prevTemp.CPUMin
+				temp.CPUMaxRecord = prevTemp.CPUMaxRecord
+				temp.MinRecorded = prevTemp.MinRecorded
+				temp.MaxRecorded = prevTemp.MaxRecorded
 
-				// Initialize or update min/max tracking
-				if prevTemp != nil && prevTemp.CPUMin > 0 {
-					// Preserve existing min/max and update if necessary
-					temp.CPUMin = prevTemp.CPUMin
-					temp.CPUMaxRecord = prevTemp.CPUMaxRecord
-					temp.MinRecorded = prevTemp.MinRecorded
-					temp.MaxRecorded = prevTemp.MaxRecorded
-
-					// Update min if current is lower
-					if currentTemp > 0 && currentTemp < temp.CPUMin {
-						temp.CPUMin = currentTemp
-						temp.MinRecorded = time.Now()
-					}
-
-					// Update max if current is higher
-					if currentTemp > temp.CPUMaxRecord {
-						temp.CPUMaxRecord = currentTemp
-						temp.MaxRecorded = time.Now()
-					}
-				} else if currentTemp > 0 {
-					// First reading - initialize min/max to current value
+				// Update min if current is lower
+				if currentTemp > 0 && currentTemp < temp.CPUMin {
 					temp.CPUMin = currentTemp
-					temp.CPUMaxRecord = currentTemp
 					temp.MinRecorded = time.Now()
+				}
+
+				// Update max if current is higher
+				if currentTemp > temp.CPUMaxRecord {
+					temp.CPUMaxRecord = currentTemp
 					temp.MaxRecorded = time.Now()
 				}
-
-				modelNode.Temperature = temp
-				log.Debug().
-					Str("node", node.Node).
-					Str("sshHost", sshHost).
-					Float64("cpuPackage", temp.CPUPackage).
-					Float64("cpuMax", temp.CPUMax).
-					Float64("cpuMin", temp.CPUMin).
-					Float64("cpuMaxRecord", temp.CPUMaxRecord).
-					Int("nvmeCount", len(temp.NVMe)).
-					Msg("Collected temperature data")
-			} else if err != nil {
-				log.Debug().
-					Str("node", node.Node).
-					Str("sshHost", sshHost).
-					Bool("isCluster", modelNode.IsClusterMember).
-					Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
-					Msg("Temperature collection failed - check SSH access")
-			} else if temp != nil {
-				log.Debug().
-					Str("node", node.Node).
-					Str("sshHost", sshHost).
-					Bool("available", temp.Available).
-					Msg("Temperature data unavailable after collection")
+			} else if currentTemp > 0 {
+				// First reading - initialize min/max to current value
+				temp.CPUMin = currentTemp
+				temp.CPUMaxRecord = currentTemp
+				temp.MinRecorded = time.Now()
+				temp.MaxRecorded = time.Now()
 			}
+
+			modelNode.Temperature = temp
+			log.Debug().
+				Str("node", node.Node).
+				Str("sshHost", sshHost).
+				Float64("cpuPackage", temp.CPUPackage).
+				Float64("cpuMax", temp.CPUMax).
+				Float64("cpuMin", temp.CPUMin).
+				Float64("cpuMaxRecord", temp.CPUMaxRecord).
+				Int("nvmeCount", len(temp.NVMe)).
+				Msg("Collected temperature data")
+		} else if err != nil {
+			log.Debug().
+				Str("node", node.Node).
+				Str("sshHost", sshHost).
+				Bool("isCluster", modelNode.IsClusterMember).
+				Int("endpointCount", len(instanceCfg.ClusterEndpoints)).
+				Msg("Temperature collection failed - check SSH access")
+		} else if temp != nil {
+			log.Debug().
+				Str("node", node.Node).
+				Str("sshHost", sshHost).
+				Bool("available", temp.Available).
+				Msg("Temperature data unavailable after collection")
 		}
 	}
 
