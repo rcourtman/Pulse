@@ -1,0 +1,445 @@
+apiVersion: v1
+entries:
+  pulse:
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.32.7
+    created: "2025-11-26T10:54:52.567734276Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: a992f2794379553331cc0a630b2e4b8e880cd861b54a01fd1151c1b8c105b7da
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.32.7/pulse-4.32.7.tgz
+    version: 4.32.7
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.32.4
+    created: "2025-11-26T10:54:52.566911572Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: 8f1ec1b7300ac3a3073d8b523d4f98098ad1e94e1f21b3ccd36b3e1b790ae282
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.32.4/pulse-4.32.4.tgz
+    version: 4.32.4
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.32.3
+    created: "2025-11-26T10:54:52.565875775Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: b712770b7f8e34740c2950a478c202f024ceebcb01d349b8d25c95ee3a2144b8
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.32.3/pulse-4.32.3.tgz
+    version: 4.32.3
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.32.2
+    created: "2025-11-26T10:54:52.564933946Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: b6295a19fd7f02d3d8163e037b521628eebf17bf07a98aeaa2090b7b821038af
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.32.2/pulse-4.32.2.tgz
+    version: 4.32.2
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.32.1
+    created: "2025-11-26T10:54:52.564060307Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: d792880d3434e30c1937bf66b3be475cac1b93e180e7d80ee3891cda58f78fd5
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.32.1/pulse-4.32.1.tgz
+    version: 4.32.1
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.32.0
+    created: "2025-11-26T10:54:52.562426939Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: 822ac27c1c752a6b2d4bb7c89acea98e7c5db1672d904d9f58d373f37a8fd3b0
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.32.0/pulse-4.32.0.tgz
+    version: 4.32.0
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.31.0
+    created: "2025-11-26T10:54:52.558147115Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: 061aba108511418d43f7ec006b5e35c7d68d051cf4cd13bf0484d1e692dfb05a
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.31.0/pulse-4.31.0.tgz
+    version: 4.31.0
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.30.0
+    created: "2025-11-26T10:54:52.556481219Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: 36a698aa9aad2df652ad32b266fc7885af66ffe215a30df5111fea0bffc19e05
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.30.0/pulse-4.30.0.tgz
+    version: 4.30.0
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.29.5
+    created: "2025-11-26T10:54:52.555203078Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: 9e9b5ccab840835c3d1f7b4703fb0ce54ca7d60370704cf62102e0b188938fa1
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.29.5/pulse-4.29.5.tgz
+    version: 4.29.5
+  - annotations:
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 4.28.0
+    created: "2025-11-26T10:54:52.554333829Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker monitoring
+      agent.
+    digest: 03a32a56f68b0e6516f97915a41bbea0773aa57617330149060953023cdbfd7e
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.28.0/pulse-4.28.0.tgz
+    version: 4.28.0
+generated: "2025-11-26T10:54:52.553408163Z"
