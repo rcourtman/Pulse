@@ -422,7 +422,7 @@ const MailGateway: Component = () => {
 
                                 return (
                                   <tr>
-                                    <td class="px-2 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100">{node.name}</td>
+                                    <td class="px-2 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">{node.name}</td>
                                     <td class="px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 capitalize">{node.role || '—'}</td>
                                     <td class="px-2 py-1.5">
                                       <div class="flex items-center gap-1.5">

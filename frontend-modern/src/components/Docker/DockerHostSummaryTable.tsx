@@ -210,7 +210,6 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 const selected = props.selectedHostId() === summary.host.id;
                 const online = isHostOnline(summary.host);
                 const uptimeLabel = summary.uptimeSeconds ? formatUptime(summary.uptimeSeconds) : '—';
-                const agentLabel = summary.host.agentVersion ? summary.host.agentVersion : '—';
 
                 const rowStyle = () => {
                   const styles: Record<string, string> = {};
@@ -256,72 +255,34 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                     onClick={() => props.onSelect(summary.host.id)}
                   >
                     <td class="pr-2 py-1 pl-3 align-middle">
-                      <div class="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:whitespace-nowrap sm:min-w-0">
+                      <div class="flex items-center gap-1.5 min-w-0">
                         <StatusDot
                           variant={hostStatus().variant}
                           title={hostStatus().label}
                           ariaLabel={hostStatus().label}
                           size="xs"
                         />
-                        <span class="font-medium text-[11px] text-gray-900 dark:text-gray-100 sm:truncate sm:max-w-[200px]">
+                        <span class="font-medium text-[11px] text-gray-900 dark:text-gray-100 truncate" title={getDisplayName(summary.host)}>
                           {getDisplayName(summary.host)}
                         </span>
                         <Show when={getDisplayName(summary.host) !== summary.host.hostname}>
-                          <span class="hidden sm:inline text-[9px] text-gray-500 dark:text-gray-400 sm:whitespace-nowrap">
+                          <span class="hidden sm:inline text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             ({summary.host.hostname})
                           </span>
                         </Show>
-                        <span
-                          class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${runtimeInfo.badgeClass}`}
-                          title={runtimeInfo.raw || runtimeInfo.label}
-                        >
-                          {runtimeInfo.label}
-                        </span>
-                        <Show when={runtimeVersion}>
-                          <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            v{runtimeVersion}
-                          </span>
-                        </Show>
-                      </div>
-                      <div class="mt-2 grid grid-cols-1 gap-1 text-[10px] text-gray-500 dark:text-gray-400 sm:hidden">
-                        <div class="flex items-center gap-1">
-                          <span class="font-semibold text-gray-600 dark:text-gray-300">Uptime:</span>
-                          <span>{uptimeLabel}</span>
-                        </div>
-                        <div class="flex items-start gap-1">
-                          <span class="font-semibold text-gray-600 dark:text-gray-300">Last:</span>
-                          <span class="flex-1">
-                            <span>{summary.lastSeenRelative}</span>
-                            <Show when={summary.lastSeenAbsolute}>
-                              <span class="block text-[9px] text-gray-400 dark:text-gray-500">
-                                {summary.lastSeenAbsolute}
-                              </span>
-                            </Show>
-                          </span>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-1">
-                          <span class="font-semibold text-gray-600 dark:text-gray-300">Agent:</span>
+                        <div class="hidden xl:flex items-center gap-1.5 ml-1">
                           <span
-                            class={
-                              agentOutdated
-                                ? 'rounded px-1 py-0.5 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 font-medium'
-                                : 'rounded px-1 py-0.5 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-medium'
-                            }
+                            class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${runtimeInfo.badgeClass}`}
+                            title={runtimeInfo.raw || runtimeInfo.label}
                           >
-                            {agentLabel}
+                            {runtimeInfo.label}
                           </span>
-                          <Show when={agentOutdated}>
-                            <span class="text-[9px] font-medium text-yellow-600 dark:text-yellow-500">
-                              Update recommended
+                          <Show when={runtimeVersion}>
+                            <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              v{runtimeVersion}
                             </span>
                           </Show>
                         </div>
-                        <Show when={summary.host.intervalSeconds}>
-                          <div class="flex items-center gap-1">
-                            <span class="font-semibold text-gray-600 dark:text-gray-300">Interval:</span>
-                            <span>{summary.host.intervalSeconds}s</span>
-                          </div>
-                        </Show>
                       </div>
                     </td>
                     <td class="px-0.5 md:px-2 py-1 align-middle">
