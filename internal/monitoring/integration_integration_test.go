@@ -163,11 +163,11 @@ func TestAdaptiveSchedulerIntegration(t *testing.T) {
 		t.Fatalf("expected transient instance to recover with successes, got 0")
 	}
 
-    dlqKeys := map[string]struct{}{}
-    for _, task := range report.Health.DeadLetter.Tasks {
-        dlqKeys[instanceKey(task.Type, task.Instance)] = struct{}{}
-    }
-    if len(report.Health.Breakers) > len(dlqKeys) {
+	dlqKeys := map[string]struct{}{}
+	for _, task := range report.Health.DeadLetter.Tasks {
+		dlqKeys[instanceKey(task.Type, task.Instance)] = struct{}{}
+	}
+	if len(report.Health.Breakers) > len(dlqKeys) {
 		t.Fatalf("unexpected number of circuit breaker entries: got %d want <= %d", len(report.Health.Breakers), len(dlqKeys))
 	}
 	for _, breaker := range report.Health.Breakers {
@@ -218,12 +218,12 @@ func TestAdaptiveSchedulerSoak(t *testing.T) {
 		t.Skip("skipping soak test (enable with -soak or HARNESS_SOAK_MINUTES)")
 	}
 
-    minutes := 15
-    if minutesEnv != "" {
-        if parsed, err := strconv.Atoi(minutesEnv); err == nil && parsed > 0 {
-            minutes = parsed
-        }
-    }
+	minutes := 15
+	if minutesEnv != "" {
+		if parsed, err := strconv.Atoi(minutesEnv); err == nil && parsed > 0 {
+			minutes = parsed
+		}
+	}
 
 	duration := time.Duration(minutes) * time.Minute
 	warmup := 2 * time.Minute

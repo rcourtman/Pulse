@@ -23,8 +23,8 @@ type circuitBreaker struct {
 	maxDelay       time.Duration
 	openThreshold  int
 	halfOpenWindow time.Duration
-	stateSince      time.Time
-	lastTransition  time.Time
+	stateSince     time.Time
+	lastTransition time.Time
 }
 
 func newCircuitBreaker(openThreshold int, retryInterval, maxDelay, halfOpenWindow time.Duration) *circuitBreaker {
@@ -40,16 +40,16 @@ func newCircuitBreaker(openThreshold int, retryInterval, maxDelay, halfOpenWindo
 	if halfOpenWindow <= 0 {
 		halfOpenWindow = 30 * time.Second
 	}
-    now := time.Now()
-    return &circuitBreaker{
-        state:          breakerClosed,
-        retryInterval:  retryInterval,
-        maxDelay:       maxDelay,
-        openThreshold:  openThreshold,
-        halfOpenWindow: halfOpenWindow,
-        stateSince:     now,
-        lastTransition: now,
-    }
+	now := time.Now()
+	return &circuitBreaker{
+		state:          breakerClosed,
+		retryInterval:  retryInterval,
+		maxDelay:       maxDelay,
+		openThreshold:  openThreshold,
+		halfOpenWindow: halfOpenWindow,
+		stateSince:     now,
+		lastTransition: now,
+	}
 }
 
 func (b *circuitBreaker) allow(now time.Time) bool {

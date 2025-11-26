@@ -4,25 +4,25 @@ import "time"
 
 // StateSnapshot represents a snapshot of the state without mutex
 type StateSnapshot struct {
-	Nodes              []Node              `json:"nodes"`
-	VMs                []VM                `json:"vms"`
-	Containers         []Container         `json:"containers"`
-	DockerHosts        []DockerHost        `json:"dockerHosts"`
-	RemovedDockerHosts []RemovedDockerHost `json:"removedDockerHosts"`
-	Hosts              []Host              `json:"hosts"`
-	Storage            []Storage           `json:"storage"`
-	CephClusters       []CephCluster       `json:"cephClusters"`
-	PhysicalDisks      []PhysicalDisk      `json:"physicalDisks"`
-	PBSInstances       []PBSInstance       `json:"pbs"`
-	PMGInstances       []PMGInstance       `json:"pmg"`
-	PBSBackups         []PBSBackup         `json:"pbsBackups"`
-	PMGBackups         []PMGBackup         `json:"pmgBackups"`
-	Backups            Backups             `json:"backups"`
-	ReplicationJobs    []ReplicationJob    `json:"replicationJobs"`
-	Metrics            []Metric            `json:"metrics"`
-	PVEBackups         PVEBackups          `json:"pveBackups"`
-	Performance        Performance         `json:"performance"`
-	ConnectionHealth   map[string]bool     `json:"connectionHealth"`
+	Nodes                        []Node              `json:"nodes"`
+	VMs                          []VM                `json:"vms"`
+	Containers                   []Container         `json:"containers"`
+	DockerHosts                  []DockerHost        `json:"dockerHosts"`
+	RemovedDockerHosts           []RemovedDockerHost `json:"removedDockerHosts"`
+	Hosts                        []Host              `json:"hosts"`
+	Storage                      []Storage           `json:"storage"`
+	CephClusters                 []CephCluster       `json:"cephClusters"`
+	PhysicalDisks                []PhysicalDisk      `json:"physicalDisks"`
+	PBSInstances                 []PBSInstance       `json:"pbs"`
+	PMGInstances                 []PMGInstance       `json:"pmg"`
+	PBSBackups                   []PBSBackup         `json:"pbsBackups"`
+	PMGBackups                   []PMGBackup         `json:"pmgBackups"`
+	Backups                      Backups             `json:"backups"`
+	ReplicationJobs              []ReplicationJob    `json:"replicationJobs"`
+	Metrics                      []Metric            `json:"metrics"`
+	PVEBackups                   PVEBackups          `json:"pveBackups"`
+	Performance                  Performance         `json:"performance"`
+	ConnectionHealth             map[string]bool     `json:"connectionHealth"`
 	Stats                        Stats               `json:"stats"`
 	ActiveAlerts                 []Alert             `json:"activeAlerts"`
 	RecentlyResolved             []ResolvedAlert     `json:"recentlyResolved"`
@@ -63,11 +63,11 @@ func (s *State) GetSnapshot() StateSnapshot {
 			PBS: pbsBackups,
 			PMG: pmgBackups,
 		},
-		ReplicationJobs:  append([]ReplicationJob{}, s.ReplicationJobs...),
-		Metrics:          append([]Metric{}, s.Metrics...),
-		PVEBackups:       pveBackups,
-		Performance:      s.Performance,
-		ConnectionHealth: make(map[string]bool),
+		ReplicationJobs:              append([]ReplicationJob{}, s.ReplicationJobs...),
+		Metrics:                      append([]Metric{}, s.Metrics...),
+		PVEBackups:                   pveBackups,
+		Performance:                  s.Performance,
+		ConnectionHealth:             make(map[string]bool),
 		Stats:                        s.Stats,
 		ActiveAlerts:                 append([]Alert{}, s.ActiveAlerts...),
 		RecentlyResolved:             append([]ResolvedAlert{}, s.RecentlyResolved...),
@@ -136,25 +136,25 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 	}
 
 	return StateFrontend{
-		Nodes:              nodes,
-		VMs:                vms,
-		Containers:         containers,
-		DockerHosts:        dockerHosts,
-		RemovedDockerHosts: removedDockerHosts,
-		Hosts:              hosts,
-		Storage:            storage,
-		CephClusters:       cephClusters,
-		PhysicalDisks:      s.PhysicalDisks,
-		PBS:                s.PBSInstances,
-		PMG:                s.PMGInstances,
-		PBSBackups:         s.PBSBackups,
-		PMGBackups:         s.PMGBackups,
-		Backups:            s.Backups,
-		ReplicationJobs:    replicationJobs,
-		ActiveAlerts:       s.ActiveAlerts,
-		Metrics:            make(map[string]any),
-		PVEBackups:         s.PVEBackups,
-		Performance:        make(map[string]any),
+		Nodes:                        nodes,
+		VMs:                          vms,
+		Containers:                   containers,
+		DockerHosts:                  dockerHosts,
+		RemovedDockerHosts:           removedDockerHosts,
+		Hosts:                        hosts,
+		Storage:                      storage,
+		CephClusters:                 cephClusters,
+		PhysicalDisks:                s.PhysicalDisks,
+		PBS:                          s.PBSInstances,
+		PMG:                          s.PMGInstances,
+		PBSBackups:                   s.PBSBackups,
+		PMGBackups:                   s.PMGBackups,
+		Backups:                      s.Backups,
+		ReplicationJobs:              replicationJobs,
+		ActiveAlerts:                 s.ActiveAlerts,
+		Metrics:                      make(map[string]any),
+		PVEBackups:                   s.PVEBackups,
+		Performance:                  make(map[string]any),
 		ConnectionHealth:             s.ConnectionHealth,
 		Stats:                        make(map[string]any),
 		LastUpdate:                   s.LastUpdate.Unix() * 1000, // JavaScript timestamp

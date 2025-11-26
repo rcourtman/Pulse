@@ -10,12 +10,12 @@ import (
 // This test shows how to configure different alert delays for different metrics
 func TestPerMetricDelayConfiguration(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         AlertConfig
-		resourceType   string
-		metricType     string
-		expectedDelay  int
-		description    string
+		name          string
+		config        AlertConfig
+		resourceType  string
+		metricType    string
+		expectedDelay int
+		description   string
 	}{
 		{
 			name: "CPU alert with longer delay than memory",
@@ -117,7 +117,7 @@ func TestPerMetricDelayConfiguration(t *testing.T) {
 				},
 				MetricTimeThresholds: map[string]map[string]int{
 					"docker": {
-						"restartcount": 10, // Quick notification for container restarts
+						"restartcount": 10,  // Quick notification for container restarts
 						"cpu":          120, // Longer for CPU
 					},
 				},

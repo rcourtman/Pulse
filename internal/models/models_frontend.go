@@ -5,31 +5,31 @@ package models
 
 // NodeFrontend represents a Node with frontend-friendly field names
 type NodeFrontend struct {
-	ID               string       `json:"id"`
-	Node             string       `json:"node"` // Maps to Name
-	Name             string       `json:"name"`
-	DisplayName      string       `json:"displayName"`
-	Instance         string       `json:"instance"`
-	Host             string       `json:"host,omitempty"`
-	Status           string       `json:"status"`
-	Type             string       `json:"type"`
-	CPU              float64      `json:"cpu"`
-	Memory           *Memory      `json:"memory,omitempty"` // Full memory object with usage percentage
-	Mem              int64        `json:"mem"`              // Maps to Memory.Used (kept for backward compat)
-	MaxMem           int64        `json:"maxmem"`           // Maps to Memory.Total (kept for backward compat)
-	Disk             *Disk        `json:"disk,omitempty"`   // Full disk object with usage percentage
-	MaxDisk          int64        `json:"maxdisk"`          // Maps to Disk.Total (kept for backward compat)
-	Uptime           int64        `json:"uptime"`
-	LoadAverage      []float64    `json:"loadAverage"`
-	KernelVersion    string       `json:"kernelVersion"`
-	PVEVersion       string       `json:"pveVersion"`
-	CPUInfo          CPUInfo      `json:"cpuInfo"`
-	Temperature      *Temperature `json:"temperature,omitempty"` // CPU/NVMe temperatures
-	LastSeen         int64        `json:"lastSeen"`              // Unix timestamp
-	ConnectionHealth             string `json:"connectionHealth"`
-	IsClusterMember              bool   `json:"isClusterMember,omitempty"`
-	ClusterName                  string `json:"clusterName,omitempty"`
-	TemperatureMonitoringEnabled *bool  `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
+	ID                           string       `json:"id"`
+	Node                         string       `json:"node"` // Maps to Name
+	Name                         string       `json:"name"`
+	DisplayName                  string       `json:"displayName"`
+	Instance                     string       `json:"instance"`
+	Host                         string       `json:"host,omitempty"`
+	Status                       string       `json:"status"`
+	Type                         string       `json:"type"`
+	CPU                          float64      `json:"cpu"`
+	Memory                       *Memory      `json:"memory,omitempty"` // Full memory object with usage percentage
+	Mem                          int64        `json:"mem"`              // Maps to Memory.Used (kept for backward compat)
+	MaxMem                       int64        `json:"maxmem"`           // Maps to Memory.Total (kept for backward compat)
+	Disk                         *Disk        `json:"disk,omitempty"`   // Full disk object with usage percentage
+	MaxDisk                      int64        `json:"maxdisk"`          // Maps to Disk.Total (kept for backward compat)
+	Uptime                       int64        `json:"uptime"`
+	LoadAverage                  []float64    `json:"loadAverage"`
+	KernelVersion                string       `json:"kernelVersion"`
+	PVEVersion                   string       `json:"pveVersion"`
+	CPUInfo                      CPUInfo      `json:"cpuInfo"`
+	Temperature                  *Temperature `json:"temperature,omitempty"` // CPU/NVMe temperatures
+	LastSeen                     int64        `json:"lastSeen"`              // Unix timestamp
+	ConnectionHealth             string       `json:"connectionHealth"`
+	IsClusterMember              bool         `json:"isClusterMember,omitempty"`
+	ClusterName                  string       `json:"clusterName,omitempty"`
+	TemperatureMonitoringEnabled *bool        `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
 }
 
 // VMFrontend represents a VM with frontend-friendly field names
@@ -421,27 +421,27 @@ type ReplicationJobFrontend struct {
 
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	Nodes              []NodeFrontend              `json:"nodes"`
-	VMs                []VMFrontend                `json:"vms"`
-	Containers         []ContainerFrontend         `json:"containers"`
-	DockerHosts        []DockerHostFrontend        `json:"dockerHosts"`
-	RemovedDockerHosts []RemovedDockerHostFrontend `json:"removedDockerHosts"`
-	Hosts              []HostFrontend              `json:"hosts"`
-	Storage            []StorageFrontend           `json:"storage"`
-	CephClusters       []CephClusterFrontend       `json:"cephClusters"`
-	PhysicalDisks      []PhysicalDisk              `json:"physicalDisks"`
-	PBS                []PBSInstance               `json:"pbs"` // Keep as is
-	PMG                []PMGInstance               `json:"pmg"`
-	PBSBackups         []PBSBackup                 `json:"pbsBackups"`
-	PMGBackups         []PMGBackup                 `json:"pmgBackups"`
-	Backups            Backups                     `json:"backups"`
-	ReplicationJobs    []ReplicationJobFrontend    `json:"replicationJobs"`
-	ActiveAlerts       []Alert                     `json:"activeAlerts"`     // Active alerts
-	Metrics            map[string]any              `json:"metrics"`          // Empty object for now
-	PVEBackups         PVEBackups                  `json:"pveBackups"`       // Keep as is
-	Performance        map[string]any              `json:"performance"`      // Empty object for now
-	ConnectionHealth             map[string]bool `json:"connectionHealth"`             // Keep as is
-	Stats                        map[string]any  `json:"stats"`                        // Empty object for now
-	LastUpdate                   int64           `json:"lastUpdate"`                   // Unix timestamp
-	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
+	Nodes                        []NodeFrontend              `json:"nodes"`
+	VMs                          []VMFrontend                `json:"vms"`
+	Containers                   []ContainerFrontend         `json:"containers"`
+	DockerHosts                  []DockerHostFrontend        `json:"dockerHosts"`
+	RemovedDockerHosts           []RemovedDockerHostFrontend `json:"removedDockerHosts"`
+	Hosts                        []HostFrontend              `json:"hosts"`
+	Storage                      []StorageFrontend           `json:"storage"`
+	CephClusters                 []CephClusterFrontend       `json:"cephClusters"`
+	PhysicalDisks                []PhysicalDisk              `json:"physicalDisks"`
+	PBS                          []PBSInstance               `json:"pbs"` // Keep as is
+	PMG                          []PMGInstance               `json:"pmg"`
+	PBSBackups                   []PBSBackup                 `json:"pbsBackups"`
+	PMGBackups                   []PMGBackup                 `json:"pmgBackups"`
+	Backups                      Backups                     `json:"backups"`
+	ReplicationJobs              []ReplicationJobFrontend    `json:"replicationJobs"`
+	ActiveAlerts                 []Alert                     `json:"activeAlerts"`                 // Active alerts
+	Metrics                      map[string]any              `json:"metrics"`                      // Empty object for now
+	PVEBackups                   PVEBackups                  `json:"pveBackups"`                   // Keep as is
+	Performance                  map[string]any              `json:"performance"`                  // Empty object for now
+	ConnectionHealth             map[string]bool             `json:"connectionHealth"`             // Keep as is
+	Stats                        map[string]any              `json:"stats"`                        // Empty object for now
+	LastUpdate                   int64                       `json:"lastUpdate"`                   // Unix timestamp
+	TemperatureMonitoringEnabled bool                        `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
 }

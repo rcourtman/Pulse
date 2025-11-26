@@ -89,24 +89,24 @@ type Sensors struct {
 
 // RAIDArray represents an mdadm RAID array.
 type RAIDArray struct {
-	Device         string       `json:"device"`           // e.g., /dev/md0
-	Name           string       `json:"name,omitempty"`   // Array name if set
-	Level          string       `json:"level"`            // RAID level: raid0, raid1, raid5, raid6, raid10
-	State          string       `json:"state"`            // clean, active, degraded, recovering, resyncing, etc.
-	TotalDevices   int          `json:"totalDevices"`     // Total number of devices in array
-	ActiveDevices  int          `json:"activeDevices"`    // Number of active devices
-	WorkingDevices int          `json:"workingDevices"`   // Number of working devices
-	FailedDevices  int          `json:"failedDevices"`    // Number of failed devices
-	SpareDevices   int          `json:"spareDevices"`     // Number of spare devices
-	UUID           string       `json:"uuid,omitempty"`   // Array UUID
-	Devices        []RAIDDevice `json:"devices"`          // Individual devices in array
-	RebuildPercent float64      `json:"rebuildPercent"`   // Rebuild/resync progress (0-100)
+	Device         string       `json:"device"`                 // e.g., /dev/md0
+	Name           string       `json:"name,omitempty"`         // Array name if set
+	Level          string       `json:"level"`                  // RAID level: raid0, raid1, raid5, raid6, raid10
+	State          string       `json:"state"`                  // clean, active, degraded, recovering, resyncing, etc.
+	TotalDevices   int          `json:"totalDevices"`           // Total number of devices in array
+	ActiveDevices  int          `json:"activeDevices"`          // Number of active devices
+	WorkingDevices int          `json:"workingDevices"`         // Number of working devices
+	FailedDevices  int          `json:"failedDevices"`          // Number of failed devices
+	SpareDevices   int          `json:"spareDevices"`           // Number of spare devices
+	UUID           string       `json:"uuid,omitempty"`         // Array UUID
+	Devices        []RAIDDevice `json:"devices"`                // Individual devices in array
+	RebuildPercent float64      `json:"rebuildPercent"`         // Rebuild/resync progress (0-100)
 	RebuildSpeed   string       `json:"rebuildSpeed,omitempty"` // Rebuild speed (e.g., "50000K/sec")
 }
 
 // RAIDDevice represents a single device in a RAID array.
 type RAIDDevice struct {
-	Device string `json:"device"`        // e.g., /dev/sda1
-	State  string `json:"state"`         // active, spare, faulty, removed
-	Slot   int    `json:"slot"`          // Position in array (-1 if not applicable)
+	Device string `json:"device"` // e.g., /dev/sda1
+	State  string `json:"state"`  // active, spare, faulty, removed
+	Slot   int    `json:"slot"`   // Position in array (-1 if not applicable)
 }

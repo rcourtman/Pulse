@@ -7,10 +7,10 @@ import (
 
 // UpdateRequest represents a request to update
 type UpdateRequest struct {
-	Version  string
-	Channel  string
-	Force    bool
-	DryRun   bool
+	Version string
+	Channel string
+	Force   bool
+	DryRun  bool
 }
 
 // UpdatePlan contains information about how an update will be performed
@@ -26,11 +26,11 @@ type UpdatePlan struct {
 
 // UpdateProgress represents progress updates during an update
 type UpdateProgress struct {
-	Stage      string  `json:"stage"`
-	Progress   int     `json:"progress"`   // 0-100
-	Message    string  `json:"message"`
-	IsComplete bool    `json:"isComplete"`
-	Error      string  `json:"error,omitempty"`
+	Stage      string `json:"stage"`
+	Progress   int    `json:"progress"` // 0-100
+	Message    string `json:"message"`
+	IsComplete bool   `json:"isComplete"`
+	Error      string `json:"error,omitempty"`
 }
 
 // ProgressCallback is called during update execution

@@ -77,7 +77,7 @@ func TestBackoffConfig_NextDelay(t *testing.T) {
 				Max:        5 * time.Minute,
 			},
 			attempt: 0,
-			rng:     0.5, // neutral jitter
+			rng:     0.5,              // neutral jitter
 			wantMin: 8 * time.Second,  // 10s * (1 - 0.2)
 			wantMax: 12 * time.Second, // 10s * (1 + 0.2)
 		},

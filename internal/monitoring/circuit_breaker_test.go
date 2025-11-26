@@ -272,7 +272,7 @@ func TestCircuitBreaker_RetryIntervalBackoff(t *testing.T) {
 
 	// All subsequent failures should keep it at maxDelay
 	for i := 0; i < 5; i++ {
-		cb.allow(now.Add(time.Duration(42+i*2)*time.Minute))
+		cb.allow(now.Add(time.Duration(42+i*2) * time.Minute))
 		cb.recordFailure(now.Add(time.Duration(42+i*2) * time.Minute))
 	}
 

@@ -22,12 +22,12 @@ func TestHandleLookupByIDSuccess(t *testing.T) {
 	lastSeen := time.Now().UTC()
 
 	handler := newHostAgentHandlerForTests(t, models.Host{
-		ID:         hostID,
-		Hostname:   "host.local",
-		DisplayName:"Host Local",
-		Status:     "online",
-		TokenID:    tokenID,
-		LastSeen:   lastSeen,
+		ID:          hostID,
+		Hostname:    "host.local",
+		DisplayName: "Host Local",
+		Status:      "online",
+		TokenID:     tokenID,
+		LastSeen:    lastSeen,
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agents/host/lookup?id="+hostID, nil)
@@ -42,7 +42,7 @@ func TestHandleLookupByIDSuccess(t *testing.T) {
 
 	var resp struct {
 		Success bool `json:"success"`
-		Host struct {
+		Host    struct {
 			ID        string    `json:"id"`
 			Hostname  string    `json:"hostname"`
 			Status    string    `json:"status"`

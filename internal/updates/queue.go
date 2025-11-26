@@ -12,12 +12,12 @@ import (
 type JobState string
 
 const (
-	JobStateIdle       JobState = "idle"
-	JobStateQueued     JobState = "queued"
-	JobStateRunning    JobState = "running"
-	JobStateCompleted  JobState = "completed"
-	JobStateFailed     JobState = "failed"
-	JobStateCancelled  JobState = "cancelled"
+	JobStateIdle      JobState = "idle"
+	JobStateQueued    JobState = "queued"
+	JobStateRunning   JobState = "running"
+	JobStateCompleted JobState = "completed"
+	JobStateFailed    JobState = "failed"
+	JobStateCancelled JobState = "cancelled"
 )
 
 // UpdateJob represents a single update job
@@ -34,10 +34,10 @@ type UpdateJob struct {
 
 // UpdateQueue manages the update job queue ensuring only one update runs at a time
 type UpdateQueue struct {
-	mu          sync.RWMutex
-	currentJob  *UpdateJob
-	jobHistory  []*UpdateJob
-	maxHistory  int
+	mu         sync.RWMutex
+	currentJob *UpdateJob
+	jobHistory []*UpdateJob
+	maxHistory int
 }
 
 // NewUpdateQueue creates a new update queue

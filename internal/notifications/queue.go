@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog/log"
 )
 
@@ -54,9 +54,9 @@ type NotificationQueue struct {
 	wg              sync.WaitGroup
 	processorTicker *time.Ticker
 	cleanupTicker   *time.Ticker
-	notifyChan      chan struct{}                    // Signal when new notifications are added
-	processor       func(*QueuedNotification) error  // Notification processor function
-	workerSem       chan struct{}                    // Semaphore for limiting concurrent workers
+	notifyChan      chan struct{}                   // Signal when new notifications are added
+	processor       func(*QueuedNotification) error // Notification processor function
+	workerSem       chan struct{}                   // Semaphore for limiting concurrent workers
 }
 
 // NewNotificationQueue creates a new persistent notification queue

@@ -66,9 +66,9 @@ func TestReport_JSONMarshal(t *testing.T) {
 			IntervalSeconds: 30,
 		},
 		Host: HostInfo{
-			Hostname:       "docker-host",
-			DockerVersion:  "24.0.0",
-			TotalCPU:       8,
+			Hostname:         "docker-host",
+			DockerVersion:    "24.0.0",
+			TotalCPU:         8,
 			TotalMemoryBytes: 16000000000,
 		},
 		Containers: []Container{
