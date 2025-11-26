@@ -390,15 +390,21 @@ if [ "${SKIP_HELM_PACKAGE:-0}" != "1" ]; then
     fi
 fi
 
-# Copy install.sh to release directory (required for GitHub releases)
-echo "Copying install.sh to release directory..."
+# Copy install scripts to release directory (required for GitHub releases)
+# These are uploaded as standalone assets so users can:
+#   curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+# instead of pulling from main branch (which may have newer, incompatible changes)
+echo "Copying install scripts to release directory..."
 cp install.sh "$RELEASE_DIR/"
+cp scripts/install-sensor-proxy.sh "$RELEASE_DIR/"
+cp scripts/install-docker.sh "$RELEASE_DIR/"
+cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 
 # Generate checksums (include tarballs, zip files, helm chart, and install.sh)
 cd "$RELEASE_DIR"
 shopt -s nullglob extglob
-# Match all tarballs, zip files, and install.sh
-checksum_files=( *.tar.gz *.zip install.sh )
+# Match all tarballs, zip files, and install scripts
+checksum_files=( *.tar.gz *.zip install.sh install-sensor-proxy.sh install-docker.sh pulse-auto-update.sh )
 if compgen -G "pulse-*.tgz" > /dev/null; then
     checksum_files+=( pulse-*.tgz )
 fi

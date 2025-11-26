@@ -178,7 +178,7 @@ perform_update() {
         fi
     fi
 
-    if curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh" | \
+    if curl -sSL "https://github.com/$GITHUB_REPO/releases/latest/download/install.sh" | \
        bash -s -- "${installer_args[@]}" 2>&1 | \
        while IFS= read -r line; do
            log info "installer: $line"

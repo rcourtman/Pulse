@@ -474,8 +474,13 @@ jobs:
             gh release upload "${TAG}" release/*.tgz
           fi
 
-          # Upload install.sh
+          # Upload install scripts as standalone assets
+          # Users can now use: curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+          # This ensures scripts are version-locked to the release, not pulled from main branch
           gh release upload "${TAG}" release/install.sh
+          gh release upload "${TAG}" release/install-sensor-proxy.sh
+          gh release upload "${TAG}" release/install-docker.sh
+          gh release upload "${TAG}" release/pulse-auto-update.sh
 
       - name: Output release information
         run: |
