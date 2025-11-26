@@ -132,13 +132,6 @@ scripts/TEST_*.md
 mock.env.local
 mock.env.backup
 
-# Legacy mock mode files (no longer used)
-internal/monitoring/mock_integration.go
-internal/monitoring/mock_stub.go
-scripts/mock-dev.sh
-scripts/toggle-mock-pure.sh
-MOCK_MODE_GUIDE.md
-
 # Claude Code Safety Hooks (local only)
 .claudecode-settings.json
 .claudecode-hooks/
@@ -161,10 +154,7 @@ AGENT_METRICS_*.md
 tmp_*.py
 tmp_*.sh
 
-# Experimental/abandoned features (not part of main project)
+# Local agent directories
 scripts/agent/
 docs/internal/
-claude.md
-/pulse-sensor-proxy
-CLAUDE.md
 .agent/
