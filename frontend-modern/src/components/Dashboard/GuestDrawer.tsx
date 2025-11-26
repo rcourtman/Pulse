@@ -2,7 +2,6 @@ import { Component, Show, For } from 'solid-js';
 import { VM, Container } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 import { DiskList } from './DiskList';
-import { IOMetric } from './IOMetric';
 
 type Guest = VM | Container;
 
@@ -19,17 +18,17 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
     const hasOsInfo = () => {
         if (!isVM(props.guest)) return false;
-        return (props.guest.osInfo?.name?.length ?? 0) > 0 || (props.guest.osInfo?.version?.length ?? 0) > 0;
+        return (props.guest.osName?.length ?? 0) > 0 || (props.guest.osVersion?.length ?? 0) > 0;
     };
 
     const osName = () => {
         if (!isVM(props.guest)) return '';
-        return props.guest.osInfo?.name || '';
+        return props.guest.osName || '';
     };
 
     const osVersion = () => {
         if (!isVM(props.guest)) return '';
-        return props.guest.osInfo?.version || '';
+        return props.guest.osVersion || '';
     };
 
     const hasAgentInfo = () => {

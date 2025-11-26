@@ -2123,19 +2123,7 @@ const UnifiedBackups: Component = () => {
                         <>
                           <tr class="bg-gray-50 dark:bg-gray-900/40">
                             <td
-                              colspan={(() => {
-                                let cols = 4; // Base: VMID, Type, Name, Time
-                                if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') {
-                                  // Owner - hidden on 2xl
-                                  // We can't easily adjust colspan based on media query in JS without a hook.
-                                  // For now, let's just set a high colspan or use a simpler approach.
-                                  // A safer bet for responsive tables with colspans is to just set it to a large number like 100
-                                  // provided the table layout handles it, or try to be accurate.
-                                  // Given the complexity of responsive hiding, colspan=100 is often the easiest hack for full-width rows.
-                                  return 20;
-                                }
-                                return 20;
-                              })()}
+                              colspan={20 /* Full-width row across all responsive columns */}
                               class="py-1 pr-2 pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                             >
                               <div class="flex items-center justify-between gap-3">

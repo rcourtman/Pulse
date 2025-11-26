@@ -87,6 +87,8 @@ interface LabeledToggleProps extends BaseToggleProps {
   label?: JSX.Element;
   description?: JSX.Element;
   containerClass?: string;
+  locked?: boolean;
+  lockedMessage?: string;
 }
 
 export function Toggle(props: LabeledToggleProps) {
