@@ -83,6 +83,14 @@ export function formatRelativeTime(timestamp: number): string {
   const now = Date.now();
   const diffMs = now - timestamp;
 
+  return formatTimeDiff(diffMs);
+}
+
+/**
+ * Formats a time difference in milliseconds to a human-readable string.
+ * Internal helper used by formatRelativeTime and formatBackupAge.
+ */
+function formatTimeDiff(diffMs: number): string {
   // Handle invalid or future timestamps
   if (isNaN(diffMs) || !isFinite(diffMs)) return '';
   if (diffMs < 0) return '0s ago'; // Future timestamp, treat as current
@@ -107,4 +115,55 @@ export function formatRelativeTime(timestamp: number): string {
   } else {
     return diffYears === 1 ? '1 year ago' : `${diffYears} years ago`;
   }
+}
+
+export type BackupStatus = 'fresh' | 'stale' | 'critical' | 'never';
+
+export interface BackupInfo {
+  status: BackupStatus;
+  ageMs: number | null;
+  ageFormatted: string;
+}
+
+const BACKUP_FRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+const BACKUP_STALE_THRESHOLD_MS = 72 * 60 * 60 * 1000; // 72 hours (3 days)
+
+/**
+ * Analyzes backup freshness for a guest.
+ * @param lastBackup - ISO timestamp string or Unix timestamp (ms)
+ * @returns BackupInfo with status and formatted age
+ */
+export function getBackupInfo(lastBackup: string | number | null | undefined): BackupInfo {
+  if (!lastBackup) {
+    return { status: 'never', ageMs: null, ageFormatted: 'Never' };
+  }
+
+  let timestamp: number;
+  if (typeof lastBackup === 'string') {
+    timestamp = new Date(lastBackup).getTime();
+  } else {
+    timestamp = lastBackup;
+  }
+
+  if (isNaN(timestamp) || timestamp <= 0) {
+    return { status: 'never', ageMs: null, ageFormatted: 'Never' };
+  }
+
+  const now = Date.now();
+  const ageMs = now - timestamp;
+
+  let status: BackupStatus;
+  if (ageMs <= BACKUP_FRESH_THRESHOLD_MS) {
+    status = 'fresh';
+  } else if (ageMs <= BACKUP_STALE_THRESHOLD_MS) {
+    status = 'stale';
+  } else {
+    status = 'critical';
+  }
+
+  return {
+    status,
+    ageMs,
+    ageFormatted: formatTimeDiff(ageMs),
+  };
 }
