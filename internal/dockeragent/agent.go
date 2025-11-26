@@ -87,6 +87,7 @@ type Agent struct {
 	cfg                 Config
 	docker              *client.Client
 	daemonHost          string
+	daemonID            string // Cached at init; Podman can return unstable IDs across calls
 	runtime             RuntimeKind
 	runtimeVer          string
 	agentVersion        string
@@ -238,6 +239,7 @@ func New(cfg Config) (*Agent, error) {
 		cfg:              cfg,
 		docker:           dockerClient,
 		daemonHost:       dockerClient.DaemonHost(),
+		daemonID:         info.ID, // Cache at init for stable agent ID
 		runtime:          runtimeKind,
 		runtimeVer:       info.ServerVersion,
 		agentVersion:     agentVersion,
@@ -622,7 +624,10 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 
 	agentID := a.cfg.AgentID
 	if agentID == "" {
-		agentID = info.ID
+		// Use cached daemon ID from init rather than info.ID from current call.
+		// Podman can return different/empty IDs across calls, causing token
+		// binding conflicts on the server.
+		agentID = a.daemonID
 	}
 	if agentID == "" {
 		agentID = a.machineID
