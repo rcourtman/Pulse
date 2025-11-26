@@ -246,8 +246,6 @@ func TestMemoryStatusUnmarshalFlexibleValues(t *testing.T) {
 	}
 }
 
-
-
 // TestMemoryStatusEffectiveAvailable_RegressionIssue435 tests the specific scenarios
 // reported in GitHub issue #435 where memory calculations incorrectly included cache/buffers
 func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {

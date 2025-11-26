@@ -25,11 +25,11 @@ type CSRFToken struct {
 type CSRFTokenStore struct {
 	tokens     map[string]*CSRFToken
 	mu         sync.RWMutex
-	saveMu     sync.Mutex  // Serializes disk writes to prevent save corruption
+	saveMu     sync.Mutex // Serializes disk writes to prevent save corruption
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
-	stopOnce   sync.Once   // Ensures Stop() can only close channel once
+	stopOnce   sync.Once // Ensures Stop() can only close channel once
 }
 
 func csrfSessionKey(sessionID string) string {

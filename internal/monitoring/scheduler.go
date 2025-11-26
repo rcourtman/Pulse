@@ -52,14 +52,14 @@ type IntervalRequest struct {
 
 // InstanceDescriptor describes a monitored endpoint for scheduling purposes.
 type InstanceDescriptor struct {
-	Name         string
-	Type         InstanceType
-	LastSuccess  time.Time
-	LastFailure  time.Time
+	Name          string
+	Type          InstanceType
+	LastSuccess   time.Time
+	LastFailure   time.Time
 	LastScheduled time.Time
-	LastInterval time.Duration
-	ErrorCount   int
-	Metadata     map[string]any
+	LastInterval  time.Duration
+	ErrorCount    int
+	Metadata      map[string]any
 }
 
 // ScheduledTask represents a single polling opportunity planned by the scheduler.
@@ -90,13 +90,13 @@ func DefaultSchedulerConfig() SchedulerConfig {
 
 // AdaptiveScheduler orchestrates poll execution plans using pluggable scoring strategies.
 type AdaptiveScheduler struct {
-	cfg        SchedulerConfig
-	staleness  StalenessSource
-	interval   IntervalSelector
-	enqueuer   TaskEnqueuer
+	cfg       SchedulerConfig
+	staleness StalenessSource
+	interval  IntervalSelector
+	enqueuer  TaskEnqueuer
 
-	mu        sync.RWMutex
-	lastPlan  map[string]ScheduledTask
+	mu       sync.RWMutex
+	lastPlan map[string]ScheduledTask
 }
 
 // NewAdaptiveScheduler constructs a scheduler with safe defaults.
@@ -110,15 +110,15 @@ func NewAdaptiveScheduler(cfg SchedulerConfig, staleness StalenessSource, interv
 	if cfg.MaxInterval <= 0 || cfg.MaxInterval < cfg.MinInterval {
 		cfg.MaxInterval = DefaultSchedulerConfig().MaxInterval
 	}
-    if staleness == nil {
-        staleness = noopStalenessSource{}
-    }
-    if interval == nil {
-        interval = newAdaptiveIntervalSelector(cfg)
-    }
-    if enqueuer == nil {
-        enqueuer = noopTaskEnqueuer{}
-    }
+	if staleness == nil {
+		staleness = noopStalenessSource{}
+	}
+	if interval == nil {
+		interval = newAdaptiveIntervalSelector(cfg)
+	}
+	if enqueuer == nil {
+		enqueuer = noopTaskEnqueuer{}
+	}
 
 	return &AdaptiveScheduler{
 		cfg:       cfg,

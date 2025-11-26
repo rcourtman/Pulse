@@ -377,19 +377,19 @@ func TestExtractTempInput(t *testing.T) {
 			expected: 45.0,
 		},
 		{
-			name:     "no input field",
-			input:    map[string]interface{}{"temp1_max": 100.0},
-			isNaN:    true,
+			name:  "no input field",
+			input: map[string]interface{}{"temp1_max": 100.0},
+			isNaN: true,
 		},
 		{
-			name:     "empty map",
-			input:    map[string]interface{}{},
-			isNaN:    true,
+			name:  "empty map",
+			input: map[string]interface{}{},
+			isNaN: true,
 		},
 		{
-			name:     "wrong suffix",
-			input:    map[string]interface{}{"temp1_max": 45.0},
-			isNaN:    true,
+			name:  "wrong suffix",
+			input: map[string]interface{}{"temp1_max": 45.0},
+			isNaN: true,
 		},
 	}
 

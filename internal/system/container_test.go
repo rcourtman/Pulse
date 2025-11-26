@@ -17,7 +17,7 @@ func TestIsHexString(t *testing.T) {
 		{"xyz", false},
 		{"123g", false},
 		{"hello-world", false},
-		{"12 34", false}, // space
+		{"12 34", false},  // space
 		{"12\n34", false}, // newline
 	}
 

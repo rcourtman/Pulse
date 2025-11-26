@@ -28,13 +28,13 @@ const (
 
 // Config controls logger initialization.
 type Config struct {
-	Format    string // "json", "console", or "auto"
-	Level     string // "debug", "info", "warn", "error"
-	Component string // optional component name
-	FilePath  string // optional log file path
-	MaxSizeMB int    // rotate after this size (MB)
-	MaxAgeDays int   // keep rotated logs for this many days
-	Compress  bool   // gzip rotated logs
+	Format     string // "json", "console", or "auto"
+	Level      string // "debug", "info", "warn", "error"
+	Component  string // optional component name
+	FilePath   string // optional log file path
+	MaxSizeMB  int    // rotate after this size (MB)
+	MaxAgeDays int    // keep rotated logs for this many days
+	Compress   bool   // gzip rotated logs
 }
 
 // Option customizes logger construction.
@@ -271,16 +271,16 @@ func collectOptions(opts ...Option) options {
 }
 
 func parseLevel(level string) zerolog.Level {
- switch strings.ToLower(strings.TrimSpace(level)) {
- case "debug":
-  return zerolog.DebugLevel
- case "warn":
-  return zerolog.WarnLevel
- case "error":
-  return zerolog.ErrorLevel
- default:
-  return zerolog.InfoLevel
- }
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "debug":
+		return zerolog.DebugLevel
+	case "warn":
+		return zerolog.WarnLevel
+	case "error":
+		return zerolog.ErrorLevel
+	default:
+		return zerolog.InfoLevel
+	}
 }
 
 func isValidLevel(level string) bool {
@@ -310,10 +310,10 @@ func selectWriter(format string) io.Writer {
 }
 
 func newConsoleWriter(out io.Writer) io.Writer {
- return zerolog.ConsoleWriter{
-  Out:        out,
-  TimeFormat: defaultTimeFmt,
- }
+	return zerolog.ConsoleWriter{
+		Out:        out,
+		TimeFormat: defaultTimeFmt,
+	}
 }
 
 func isTerminal(file *os.File) bool {

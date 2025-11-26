@@ -70,12 +70,12 @@ func TestGetTimeThresholdMetricOverrides(t *testing.T) {
 		metricType   string
 		expected     int
 	}{
-		{"vm-resource", "VM", "cpu", 5},             // guest metric override
-		{"vm-resource", "VM", "memory", 30},         // falls back to guest type delay
-		{"node-1", "Node", "temperature", 120},      // node metric override
-		{"node-1", "Node", "cpu", 60},               // node type delay
-		{"storage-1", "storage", "usage", 90},       // storage type delay
-		{"unknown", "unknown", "cpu", 20},           // global default metric override
+		{"vm-resource", "VM", "cpu", 5},        // guest metric override
+		{"vm-resource", "VM", "memory", 30},    // falls back to guest type delay
+		{"node-1", "Node", "temperature", 120}, // node metric override
+		{"node-1", "Node", "cpu", 60},          // node type delay
+		{"storage-1", "storage", "usage", 90},  // storage type delay
+		{"unknown", "unknown", "cpu", 20},      // global default metric override
 		{"unknown", "unknown", "disk", 20},
 	}
 

@@ -83,13 +83,13 @@ type SubnetPhase struct {
 
 // EnvironmentProfile captures detection results and scanning plan.
 type EnvironmentProfile struct {
-	Type         Environment         // Detected environment.
-	Phases       []SubnetPhase       // Subnet scanning phases.
-	ExtraTargets []net.IP            // IPs to always probe.
-	Policy       ScanPolicy          // Applied scan policy.
-	Confidence   float64             // Overall confidence (0.0 - 1.0).
-	Warnings     []string            // Non-fatal detection warnings.
-	Metadata     map[string]string   // Misc metadata (container type, gateway, etc.).
+	Type         Environment       // Detected environment.
+	Phases       []SubnetPhase     // Subnet scanning phases.
+	ExtraTargets []net.IP          // IPs to always probe.
+	Policy       ScanPolicy        // Applied scan policy.
+	Confidence   float64           // Overall confidence (0.0 - 1.0).
+	Warnings     []string          // Non-fatal detection warnings.
+	Metadata     map[string]string // Misc metadata (container type, gateway, etc.).
 }
 
 // DetectEnvironment performs environment detection and returns a profile.

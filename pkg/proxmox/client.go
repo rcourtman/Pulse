@@ -1839,23 +1839,23 @@ func (a *VMAgentField) UnmarshalJSON(data []byte) error {
 
 // VMStatus represents detailed VM status returned by Proxmox.
 type VMStatus struct {
-	Status     string        `json:"status"`
-	CPU        float64       `json:"cpu"`
-	CPUs       int           `json:"cpus"`
-	Mem        uint64        `json:"mem"`
-	MaxMem     uint64        `json:"maxmem"`
-	Balloon    uint64        `json:"balloon"`
-	BalloonMin uint64        `json:"balloon_min"`
-	FreeMem    uint64        `json:"freemem"`
-	MemInfo    *VMMemInfo    `json:"meminfo,omitempty"`
-	Disk       uint64        `json:"disk"`
-	MaxDisk    uint64        `json:"maxdisk"`
-	DiskRead   uint64        `json:"diskread"`
-	DiskWrite  uint64        `json:"diskwrite"`
-	NetIn      uint64        `json:"netin"`
-	NetOut     uint64        `json:"netout"`
-	Uptime     uint64        `json:"uptime"`
-	Agent      VMAgentField  `json:"agent"`
+	Status     string       `json:"status"`
+	CPU        float64      `json:"cpu"`
+	CPUs       int          `json:"cpus"`
+	Mem        uint64       `json:"mem"`
+	MaxMem     uint64       `json:"maxmem"`
+	Balloon    uint64       `json:"balloon"`
+	BalloonMin uint64       `json:"balloon_min"`
+	FreeMem    uint64       `json:"freemem"`
+	MemInfo    *VMMemInfo   `json:"meminfo,omitempty"`
+	Disk       uint64       `json:"disk"`
+	MaxDisk    uint64       `json:"maxdisk"`
+	DiskRead   uint64       `json:"diskread"`
+	DiskWrite  uint64       `json:"diskwrite"`
+	NetIn      uint64       `json:"netin"`
+	NetOut     uint64       `json:"netout"`
+	Uptime     uint64       `json:"uptime"`
+	Agent      VMAgentField `json:"agent"`
 }
 
 // GetZFSPoolStatus gets the status of ZFS pools on a node

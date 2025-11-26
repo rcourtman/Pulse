@@ -222,14 +222,14 @@ func TestContextHelpersWithRequestID(t *testing.T) {
 		t.Fatalf("expected stored request id %s, got %s", generated, got)
 	}
 
-    var buf bytes.Buffer
-    logger := New("api", WithWriter(&buf))
-    ctx = WithLogger(ctx, logger)
+	var buf bytes.Buffer
+	logger := New("api", WithWriter(&buf))
+	ctx = WithLogger(ctx, logger)
 
-    info := FromContext(ctx)
-    info.Info().Msg("ctx-log")
+	info := FromContext(ctx)
+	info.Info().Msg("ctx-log")
 
-    event := readJSONLine(t, &buf)
+	event := readJSONLine(t, &buf)
 	if event["request_id"] != generated {
 		t.Fatalf("expected request_id %s, got %v", generated, event["request_id"])
 	}
@@ -299,16 +299,16 @@ func TestFromContextWithoutRequestID(t *testing.T) {
 		Level:  "info",
 	})
 
-    var buf bytes.Buffer
-    mu.Lock()
-    baseLogger = zerolog.New(&buf).With().Timestamp().Logger()
-    baseWriter = &buf
-    baseComponent = ""
-    log.Logger = baseLogger
-    mu.Unlock()
+	var buf bytes.Buffer
+	mu.Lock()
+	baseLogger = zerolog.New(&buf).With().Timestamp().Logger()
+	baseWriter = &buf
+	baseComponent = ""
+	log.Logger = baseLogger
+	mu.Unlock()
 
-    base := FromContext(context.Background())
-    base.Info().Msg("no-request")
+	base := FromContext(context.Background())
+	base.Info().Msg("no-request")
 
 	event := readJSONLine(t, &buf)
 	if _, ok := event["request_id"]; ok {
