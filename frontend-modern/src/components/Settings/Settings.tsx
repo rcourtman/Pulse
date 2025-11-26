@@ -58,7 +58,6 @@ import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
-import Boxes from 'lucide-solid/icons/boxes';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
@@ -320,6 +319,7 @@ type SettingsTab =
   | 'proxmox'
   | 'docker'
   | 'hosts'
+  | 'agents'
   | 'system-general'
   | 'system-network'
   | 'system-updates'
@@ -347,6 +347,10 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   hosts: {
     title: 'Hosts',
     description: 'Monitor Linux, macOS, and Windows machines—servers, desktops, and laptops.',
+  },
+  agents: {
+    title: 'Agents',
+    description: 'Install and manage the unified Pulse agent for host and Docker monitoring.',
   },
   'system-general': {
     title: 'General Settings',
@@ -5151,7 +5155,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             label="Hide local login form"
                             description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."
                             checked={hideLocalLogin()}
-                            onChange={(e: ToggleChangeEvent) => handleHideLocalLoginChange(e.target.checked)}
+                            onChange={(e: ToggleChangeEvent) => handleHideLocalLoginChange(e.currentTarget.checked)}
                             disabled={hideLocalLoginLocked() || savingHideLocalLogin()}
                             locked={hideLocalLoginLocked()}
                             lockedMessage="This setting is managed by the PULSE_AUTH_HIDE_LOCAL_LOGIN environment variable"

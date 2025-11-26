@@ -506,7 +506,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
           style={{ 'grid-template-columns': gridTemplate() }}
         >
           <For each={visibleColumns()}>
-            {(column, index) => (
+            {(column) => (
               <HeaderCell column={column} />
             )}
           </For>

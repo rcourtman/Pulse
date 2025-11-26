@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, For, onMount, createEffect, createMemo, onCleanup } from 'solid-js';
+import { Component, createSignal, Show, For, onMount, createEffect, createMemo } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
@@ -302,7 +302,7 @@ export const UnifiedAgents: Component = () => {
     const legacyAgents = createMemo(() => allHosts().filter(h => h.isLegacy));
     const hasLegacyAgents = createMemo(() => legacyAgents().length > 0);
 
-    const getUpgradeCommand = (hostname: string) => {
+    const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
         return `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${token}`;
     };
