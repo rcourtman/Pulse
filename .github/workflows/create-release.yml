@@ -365,6 +365,7 @@ jobs:
 
           # Tag must exist first - draft releases can't create tags (GitHub API limitation)
           # See: https://github.com/cli/cli/issues/11589
+          # Create as draft first so we can upload assets before publishing
           RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
             -X POST \
             -F tag_name="${TAG}" \
@@ -385,7 +386,7 @@ jobs:
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
 
-          echo "✓ Release created: ${TAG} (ID: ${RELEASE_ID})"
+          echo "✓ Draft release created: ${TAG} (ID: ${RELEASE_ID})"
       - name: Upload checksums.txt
         env:
           GH_TOKEN: ${{ github.token }}
@@ -427,21 +428,31 @@ jobs:
           gh release upload "${TAG}" release/install-docker.sh
           gh release upload "${TAG}" release/pulse-auto-update.sh
 
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.extract_version.outputs.tag }}"
+          RELEASE_ID="${{ steps.create_release.outputs.release_id }}"
+
+          echo "Publishing release ${TAG}..."
+
+          gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+            -X PATCH \
+            -F draft=false
+
+          echo "✓ Release published: ${TAG}"
+
       - name: Output release information
         run: |
-          echo "✅ Release draft created successfully!"
+          echo "✅ Release published successfully!"
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📦 Release: ${{ needs.extract_version.outputs.tag }}"
           echo "🔗 URL: ${{ steps.create_release.outputs.release_url }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "⚠️  IMPORTANT: This release is in DRAFT status"
-          echo ""
-          echo "Next steps:"
-          echo "1. Review the release notes at the URL above"
-          echo "2. Publish the release when ready"
-          echo "3. Docker images will be built automatically after publish"
+          echo "Docker images, Helm chart, and demo server will be updated automatically."
           echo ""
 
   validate_release_assets:
@@ -454,7 +465,7 @@ jobs:
       tag: ${{ needs.extract_version.outputs.tag }}
       version: ${{ needs.extract_version.outputs.version }}
       release_id: ${{ needs.create_release.outputs.release_id }}
-      draft: true
+      draft: false
       target_commitish: ${{ needs.create_release.outputs.target_commitish }}
 
 
