@@ -263,7 +263,6 @@ RUN chmod +x /docker-entrypoint.sh
 RUN mkdir -p /opt/pulse/scripts
 COPY scripts/install-docker-agent.sh /opt/pulse/scripts/install-docker-agent.sh
 COPY scripts/install-container-agent.sh /opt/pulse/scripts/install-container-agent.sh
-COPY scripts/install-host-agent.sh /opt/pulse/scripts/install-host-agent.sh
 COPY scripts/install-host-agent.ps1 /opt/pulse/scripts/install-host-agent.ps1
 COPY scripts/uninstall-host-agent.sh /opt/pulse/scripts/uninstall-host-agent.sh
 COPY scripts/uninstall-host-agent.ps1 /opt/pulse/scripts/uninstall-host-agent.ps1

@@ -163,7 +163,6 @@ for build_name in "${build_order[@]}"; do
     # Copy scripts and VERSION metadata
     cp "scripts/install-docker-agent.sh" "$staging_dir/scripts/install-docker-agent.sh"
     cp "scripts/install-container-agent.sh" "$staging_dir/scripts/install-container-agent.sh"
-    cp "scripts/install-host-agent.sh" "$staging_dir/scripts/install-host-agent.sh"
     cp "scripts/install-host-agent.ps1" "$staging_dir/scripts/install-host-agent.ps1"
     cp "scripts/uninstall-host-agent.sh" "$staging_dir/scripts/uninstall-host-agent.sh"
     cp "scripts/uninstall-host-agent.ps1" "$staging_dir/scripts/uninstall-host-agent.ps1"
@@ -202,7 +201,6 @@ done
 
 cp "scripts/install-docker-agent.sh" "$universal_dir/scripts/install-docker-agent.sh"
 cp "scripts/install-container-agent.sh" "$universal_dir/scripts/install-container-agent.sh"
-cp "scripts/install-host-agent.sh" "$universal_dir/scripts/install-host-agent.sh"
 cp "scripts/install-host-agent.ps1" "$universal_dir/scripts/install-host-agent.ps1"
 cp "scripts/uninstall-host-agent.sh" "$universal_dir/scripts/uninstall-host-agent.sh"
 cp "scripts/uninstall-host-agent.ps1" "$universal_dir/scripts/uninstall-host-agent.ps1"
