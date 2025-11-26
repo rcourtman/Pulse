@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -327,8 +328,17 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	// Verify checksum if provided
 	checksumHeader := strings.TrimSpace(resp.Header.Get("X-Checksum-Sha256"))
 
-	// Create temporary file
-	tmpFile, err := os.CreateTemp("", u.cfg.AgentName+"-*.tmp")
+	// Resolve symlinks to get the real path for atomic rename
+	realExecPath, err := filepath.EvalSymlinks(execPath)
+	if err != nil {
+		// Fall back to original path if symlink resolution fails
+		realExecPath = execPath
+	}
+
+	// Create temporary file in the same directory as the target binary
+	// to ensure atomic rename works (os.Rename fails across filesystems)
+	targetDir := filepath.Dir(realExecPath)
+	tmpFile, err := os.CreateTemp(targetDir, u.cfg.AgentName+"-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -374,15 +384,15 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 		return fmt.Errorf("failed to chmod: %w", err)
 	}
 
-	// Atomic replacement with backup
-	backupPath := execPath + ".backup"
-	if err := os.Rename(execPath, backupPath); err != nil {
+	// Atomic replacement with backup (use realExecPath for rename operations)
+	backupPath := realExecPath + ".backup"
+	if err := os.Rename(realExecPath, backupPath); err != nil {
 		return fmt.Errorf("failed to backup current binary: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, execPath); err != nil {
+	if err := os.Rename(tmpPath, realExecPath); err != nil {
 		// Restore backup on failure
-		os.Rename(backupPath, execPath)
+		os.Rename(backupPath, realExecPath)
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 

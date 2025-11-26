@@ -340,3 +340,53 @@ func TestConstants(t *testing.T) {
 		t.Error("downloadTimeout should be positive")
 	}
 }
+
+func TestSymlinkResolution(t *testing.T) {
+	// Test that filepath.EvalSymlinks works as expected for our use case
+	tmpDir := t.TempDir()
+
+	// Create a real file
+	realFile := filepath.Join(tmpDir, "real", "binary")
+	if err := os.MkdirAll(filepath.Dir(realFile), 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(realFile, []byte("test"), 0755); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	// Create a symlink to it
+	linkFile := filepath.Join(tmpDir, "link", "binary")
+	if err := os.MkdirAll(filepath.Dir(linkFile), 0755); err != nil {
+		t.Fatalf("failed to create link dir: %v", err)
+	}
+	if err := os.Symlink(realFile, linkFile); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	// EvalSymlinks should resolve to the real path
+	resolved, err := filepath.EvalSymlinks(linkFile)
+	if err != nil {
+		t.Fatalf("EvalSymlinks failed: %v", err)
+	}
+
+	if resolved != realFile {
+		t.Errorf("EvalSymlinks(%q) = %q, want %q", linkFile, resolved, realFile)
+	}
+
+	// Verify temp file in same dir as resolved path allows rename
+	targetDir := filepath.Dir(resolved)
+	tmpFile, err := os.CreateTemp(targetDir, "test-*.tmp")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath)
+
+	// Rename should work since both files are on the same filesystem
+	newPath := filepath.Join(targetDir, "renamed")
+	if err := os.Rename(tmpPath, newPath); err != nil {
+		t.Errorf("Rename failed (same filesystem): %v", err)
+	}
+	os.Remove(newPath)
+}
