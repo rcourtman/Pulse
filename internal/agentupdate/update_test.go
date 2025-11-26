@@ -230,3 +230,113 @@ func TestIsUnraid(t *testing.T) {
 	result := isUnraid()
 	t.Logf("isUnraid() = %v (depends on test environment)", result)
 }
+
+func TestConfig_Defaults(t *testing.T) {
+	cfg := Config{}
+
+	// Verify zero values
+	if cfg.PulseURL != "" {
+		t.Error("PulseURL should be empty by default")
+	}
+	if cfg.APIToken != "" {
+		t.Error("APIToken should be empty by default")
+	}
+	if cfg.AgentName != "" {
+		t.Error("AgentName should be empty by default")
+	}
+	if cfg.CurrentVersion != "" {
+		t.Error("CurrentVersion should be empty by default")
+	}
+	if cfg.CheckInterval != 0 {
+		t.Error("CheckInterval should be 0 by default")
+	}
+	if cfg.InsecureSkipVerify {
+		t.Error("InsecureSkipVerify should be false by default")
+	}
+	if cfg.Logger != nil {
+		t.Error("Logger should be nil by default")
+	}
+	if cfg.Disabled {
+		t.Error("Disabled should be false by default")
+	}
+}
+
+func TestNewUpdater_InsecureSkipVerify(t *testing.T) {
+	cfg := Config{
+		PulseURL:           "https://pulse.example.com",
+		APIToken:           "test-token",
+		AgentName:          "pulse-agent",
+		CurrentVersion:     "1.0.0",
+		InsecureSkipVerify: true,
+	}
+
+	updater := New(cfg)
+
+	if updater == nil {
+		t.Fatal("New() returned nil")
+	}
+
+	if !updater.cfg.InsecureSkipVerify {
+		t.Error("InsecureSkipVerify should be true")
+	}
+}
+
+func TestNewUpdater_Disabled(t *testing.T) {
+	cfg := Config{
+		PulseURL:       "https://pulse.example.com",
+		APIToken:       "test-token",
+		AgentName:      "pulse-agent",
+		CurrentVersion: "1.0.0",
+		Disabled:       true,
+	}
+
+	updater := New(cfg)
+
+	if updater == nil {
+		t.Fatal("New() returned nil")
+	}
+
+	if !updater.cfg.Disabled {
+		t.Error("Disabled should be true")
+	}
+}
+
+func TestDetermineArch_KnownPlatforms(t *testing.T) {
+	arch := determineArch()
+
+	// On known platforms, should return os-arch format
+	switch runtime.GOOS {
+	case "linux", "darwin", "windows":
+		if arch == "" {
+			t.Error("determineArch() should return non-empty string on known platforms")
+		}
+		// Should contain hyphen separating OS and arch
+		if len(arch) < 3 || arch[0] == '-' || arch[len(arch)-1] == '-' {
+			t.Errorf("determineArch() = %q, invalid format", arch)
+		}
+	}
+}
+
+func TestVerifyBinaryMagic_DirectoryFails(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Trying to verify a directory should fail
+	err := verifyBinaryMagic(tmpDir)
+	if err == nil {
+		t.Error("verifyBinaryMagic() should fail for directories")
+	}
+}
+
+func TestConstants(t *testing.T) {
+	// Verify constants are sensible
+	if maxBinarySize <= 0 {
+		t.Error("maxBinarySize should be positive")
+	}
+	if maxBinarySize < 1024*1024 {
+		t.Error("maxBinarySize should be at least 1MB")
+	}
+
+	if downloadTimeout <= 0 {
+		t.Error("downloadTimeout should be positive")
+	}
+}
