@@ -90,46 +90,6 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 	return tokenStr, nil
 }
 
-// ValidateRecoveryToken checks if a recovery token is valid
-func (r *RecoveryTokenStore) ValidateRecoveryToken(tokenStr string, ip string) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	token, exists := r.tokens[tokenStr]
-	if !exists {
-		log.Warn().Str("ip", ip).Msg("Invalid recovery token attempted")
-		return false
-	}
-
-	// Check if expired
-	if time.Now().After(token.ExpiresAt) {
-		log.Warn().Str("token", tokenStr[:8]+"...").Msg("Expired recovery token attempted")
-		return false
-	}
-
-	// Check if already used
-	if token.Used {
-		log.Warn().
-			Str("token", tokenStr[:8]+"...").
-			Time("used_at", token.UsedAt).
-			Msg("Already used recovery token attempted")
-		return false
-	}
-
-	// Mark as used
-	token.Used = true
-	token.UsedAt = time.Now()
-	token.IP = ip
-	r.saveUnsafe()
-
-	log.Info().
-		Str("token", tokenStr[:8]+"...").
-		Str("ip", ip).
-		Msg("Recovery token successfully used")
-
-	return true
-}
-
 // ValidateRecoveryTokenConstantTime validates token with constant-time comparison
 func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken string, ip string) bool {
 	// Use constant-time comparison to prevent timing attacks
@@ -195,11 +155,6 @@ func (r *RecoveryTokenStore) cleanupRoutine() {
 	}
 }
 
-// Stop stops the cleanup routine
-func (r *RecoveryTokenStore) Stop() {
-	close(r.stopCleanup)
-}
-
 // cleanup removes expired and used tokens
 func (r *RecoveryTokenStore) cleanup() {
 	r.mu.Lock()
@@ -220,13 +175,6 @@ func (r *RecoveryTokenStore) cleanup() {
 		r.saveUnsafe()
 		log.Info().Int("count", cleaned).Msg("Cleaned up recovery tokens")
 	}
-}
-
-// save persists tokens to disk
-func (r *RecoveryTokenStore) save() {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	r.saveUnsafe()
 }
 
 // saveUnsafe saves without locking (caller must hold lock)
@@ -290,19 +238,4 @@ func (r *RecoveryTokenStore) load() {
 	}
 
 	log.Info().Int("loaded", loaded).Int("total", len(tokens)).Msg("Recovery tokens loaded from disk")
-}
-
-// GetActiveTokenCount returns the number of active (unused, unexpired) tokens
-func (r *RecoveryTokenStore) GetActiveTokenCount() int {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	count := 0
-	now := time.Now()
-	for _, token := range r.tokens {
-		if !token.Used && now.Before(token.ExpiresAt) {
-			count++
-		}
-	}
-	return count
 }

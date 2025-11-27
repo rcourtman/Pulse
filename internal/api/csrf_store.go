@@ -99,15 +99,6 @@ func (c *CSRFTokenStore) backgroundWorker() {
 	}
 }
 
-// Stop gracefully stops the CSRF store
-func (c *CSRFTokenStore) Stop() {
-	c.stopOnce.Do(func() {
-		c.saveTicker.Stop()
-		close(c.stopChan) // Close instead of send to signal all readers
-		c.save()
-	})
-}
-
 // GenerateCSRFToken creates a new CSRF token for a session
 func (c *CSRFTokenStore) GenerateCSRFToken(sessionID string) string {
 	tokenBytes := make([]byte, 32)
@@ -148,18 +139,6 @@ func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
 	}
 
 	return subtle.ConstantTimeCompare([]byte(csrfToken.Hash), []byte(csrfTokenHash(token))) == 1
-}
-
-// ExtendCSRFToken extends the expiration of a CSRF token
-func (c *CSRFTokenStore) ExtendCSRFToken(sessionID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	key := csrfSessionKey(sessionID)
-	if csrfToken, exists := c.tokens[key]; exists {
-		csrfToken.Expires = time.Now().Add(4 * time.Hour)
-		c.saveUnsafe()
-	}
 }
 
 // DeleteCSRFToken removes a CSRF token
