@@ -393,9 +393,11 @@ const LoginForm: Component<{
             Welcome to Pulse
           </h2>
 
-          <p class="mt-3 text-center text-sm text-gray-600 dark:text-gray-400 animate-fade-in delay-200">
-            Enter your credentials to continue
-          </p>
+          <Show when={showLocalLogin}>
+            <p class="mt-3 text-center text-sm text-gray-600 dark:text-gray-400 animate-fade-in delay-200">
+              Enter your credentials to continue
+            </p>
+          </Show>
         </div>
         <form
           class="mt-8 space-y-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-8 shadow-xl animate-slide-up"
