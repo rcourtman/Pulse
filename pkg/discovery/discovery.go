@@ -458,26 +458,6 @@ func (s *Scanner) populateServerHostname(ctx context.Context, server *Discovered
 	}
 }
 
-// scanWorker scans IPs from the channel
-// NOTE: This function is kept for backward compatibility but is not actively used.
-// New code should use scanWorkerWithProgress which includes progress tracking.
-func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, phase string, ipChan <-chan string, resultChan chan<- discoveredResult, errorChan chan<- phaseError) {
-	defer wg.Done()
-
-	for ip := range ipChan {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			for _, port := range proxmoxProbePorts {
-				if server := s.discoverAtPort(ctx, ip, port); server != nil {
-					resultChan <- discoveredResult{Phase: phase, Server: server}
-				}
-			}
-		}
-	}
-}
-
 // scanWorkerWithProgress scans IPs and reports progress
 func (s *Scanner) scanWorkerWithProgress(ctx context.Context, wg *sync.WaitGroup, phase string, ipChan <-chan string, resultChan chan<- discoveredResult, progressChan chan<- int) {
 	defer wg.Done()
@@ -499,81 +479,7 @@ func (s *Scanner) scanWorkerWithProgress(ctx context.Context, wg *sync.WaitGroup
 	}
 }
 
-// runPhase runs a scanning phase without progress tracking
-// NOTE: This function is kept for backward compatibility but is not actively used.
-// New code should use runPhaseWithProgress which includes progress tracking.
-func (s *Scanner) runPhase(ctx context.Context, phase string, ips []string, callback ServerCallback, result *DiscoveryResult) error {
-	if len(ips) == 0 {
-		return nil
-	}
-
-	workerCount := s.policy.MaxConcurrent
-	if workerCount <= 0 {
-		workerCount = 1
-	}
-
-	ipChan := make(chan string, len(ips))
-	resultChan := make(chan discoveredResult, len(ips))
-	errorChan := make(chan phaseError, len(ips))
-
-	var wg sync.WaitGroup
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go s.scanWorker(ctx, &wg, phase, ipChan, resultChan, errorChan)
-	}
-
-	for _, ip := range ips {
-		ipChan <- ip
-	}
-	close(ipChan)
-
-	go func() {
-		wg.Wait()
-		close(resultChan)
-		close(errorChan)
-	}()
-
-	for resultChan != nil || errorChan != nil {
-		select {
-		case res, ok := <-resultChan:
-			if !ok {
-				resultChan = nil
-				continue
-			}
-			if res.Server == nil {
-				continue
-			}
-
-			result.Servers = append(result.Servers, *res.Server)
-
-			log.Info().
-				Str("phase", res.Phase).
-				Str("ip", res.Server.IP).
-				Str("type", res.Server.Type).
-				Str("hostname", res.Server.Hostname).
-				Msg("Discovered server")
-
-			if callback != nil {
-				callback(*res.Server, res.Phase)
-			}
-		case perr, ok := <-errorChan:
-			if !ok {
-				errorChan = nil
-				continue
-			}
-			if perr.Message == "" {
-				continue
-			}
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %s", perr.Phase, perr.Message))
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
-	return nil
-}
-
-// runPhaseWithProgress wraps runPhase with progress tracking and reporting
+// runPhaseWithProgress runs a scanning phase with progress tracking and reporting
 func (s *Scanner) runPhaseWithProgress(ctx context.Context, phase string, phaseNumber, totalPhases int, ips []string, serverCallback ServerCallback, progressCallback ProgressCallback, totalProcessed *int, totalTargets int, result *DiscoveryResult) error {
 	if len(ips) == 0 {
 		return nil

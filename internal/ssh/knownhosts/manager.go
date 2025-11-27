@@ -231,25 +231,6 @@ func (m *manager) ensureKnownHostsFile() error {
 	return f.Close()
 }
 
-func hostKeyExists(path, host string) (bool, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		if hostLineMatches(host, scanner.Text()) {
-			return true, nil
-		}
-	}
-	return false, scanner.Err()
-}
-
 func appendHostKey(path string, entries [][]byte) error {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {

@@ -275,17 +275,6 @@ func (noopStalenessSource) StalenessScore(instanceType InstanceType, instanceNam
 	return 0, false
 }
 
-type fixedIntervalSelector struct {
-	interval time.Duration
-}
-
-func (f *fixedIntervalSelector) SelectInterval(req IntervalRequest) time.Duration {
-	if f.interval > 0 {
-		return f.interval
-	}
-	return req.BaseInterval
-}
-
 type adaptiveIntervalSelector struct {
 	mu             sync.Mutex
 	state          map[string]time.Duration

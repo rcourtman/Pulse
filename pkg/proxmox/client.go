@@ -440,11 +440,6 @@ func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
 	return c.request(ctx, "GET", path, nil)
 }
 
-// post performs a POST request
-func (c *Client) post(ctx context.Context, path string, data url.Values) (*http.Response, error) {
-	return c.request(ctx, "POST", path, data)
-}
-
 // Node represents a Proxmox VE node
 type Node struct {
 	Node    string  `json:"node"`
@@ -1067,93 +1062,6 @@ func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 	}
 
 	return allTasks, nil
-}
-
-type taskStatusResponse struct {
-	Status     string `json:"status"`
-	ExitStatus string `json:"exitstatus"`
-	Type       string `json:"type"`
-	UPID       string `json:"upid"`
-	ID         string `json:"id"`
-}
-
-type taskLogEntry struct {
-	LineNumber int    `json:"n"`
-	Text       string `json:"t"`
-}
-
-func (c *Client) getTaskStatus(ctx context.Context, node, upid string) (*taskStatusResponse, error) {
-	encodedUPID := url.PathEscape(upid)
-	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks/%s/status", node, encodedUPID))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get task status (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var result struct {
-		Data taskStatusResponse `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return &result.Data, nil
-}
-
-func (c *Client) waitForTaskCompletion(ctx context.Context, node, upid string) (*taskStatusResponse, error) {
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		status, err := c.getTaskStatus(ctx, node, upid)
-		if err != nil {
-			return nil, err
-		}
-
-		if status != nil && strings.ToLower(status.Status) != "running" && strings.ToLower(status.Status) != "active" {
-			return status, nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-ticker.C:
-		}
-	}
-}
-
-func (c *Client) getTaskLog(ctx context.Context, node, upid string) ([]string, error) {
-	encodedUPID := url.PathEscape(upid)
-	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks/%s/log?start=0", node, encodedUPID))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get task log (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var result struct {
-		Data []taskLogEntry `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	lines := make([]string, 0, len(result.Data))
-	for _, entry := range result.Data {
-		lines = append(lines, entry.Text)
-	}
-	return lines, nil
 }
 
 // GetContainerInterfaces returns the network interfaces (with IPs) for a container.
