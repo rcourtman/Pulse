@@ -21,7 +21,7 @@ func (r *Router) handleOIDCConfig(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Router) handleGetOIDCConfig(w http.ResponseWriter, req *http.Request) {
+func (r *Router) handleGetOIDCConfig(w http.ResponseWriter, _ *http.Request) {
 	cfg := r.ensureOIDCConfig()
 
 	response := makeOIDCResponse(cfg, r.config.PublicURL)

@@ -5997,7 +5997,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 }
 
 // handleSecureAutoRegister handles the new secure registration flow where Pulse generates the token
-func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http.Request, req *AutoRegisterRequest, clientIP string) {
+func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http.Request, req *AutoRegisterRequest, clientIP string) {
 	log.Info().
 		Str("type", req.Type).
 		Str("host", req.Host).

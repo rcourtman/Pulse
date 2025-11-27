@@ -624,7 +624,6 @@ func safePercentage(used, total float64) float64 {
 	return result
 }
 
-
 // safeFloat ensures a float value is not NaN or Inf
 func safeFloat(val float64) float64 {
 	if math.IsNaN(val) || math.IsInf(val, 0) {
@@ -4572,7 +4571,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 }
 
 // poll fetches data from all configured instances
-func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
+func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	defer recoverFromPanic("poll")
 
 	// Limit concurrent polls to 2 to prevent resource exhaustion
@@ -4788,7 +4787,7 @@ func derivePollTimeout(cfg *config.Config) time.Duration {
 	return timeout
 }
 
-func (m *Monitor) taskExecutionTimeout(instanceType InstanceType) time.Duration {
+func (m *Monitor) taskExecutionTimeout(_ InstanceType) time.Duration {
 	if m == nil {
 		return defaultTaskTimeout
 	}

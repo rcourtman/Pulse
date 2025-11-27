@@ -1451,7 +1451,7 @@ func normalizeVersionLabel(raw string) string {
 }
 
 // checkVMDiskMonitoring performs diagnostic checks for VM disk monitoring
-func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Client, nodeName string) *VMDiskCheckResult {
+func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Client, _ string) *VMDiskCheckResult {
 	result := &VMDiskCheckResult{
 		Recommendations: []string{},
 		Permissions:     []string{},
@@ -1716,7 +1716,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 }
 
 // checkPhysicalDisks performs diagnostic checks for physical disk detection
-func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client, instanceName string) *PhysicalDiskCheck {
+func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client, _ string) *PhysicalDiskCheck {
 	result := &PhysicalDiskCheck{
 		Recommendations: []string{},
 		NodeResults:     []NodeDiskResult{},

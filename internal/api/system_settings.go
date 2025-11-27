@@ -119,7 +119,7 @@ func discoveryConfigMap(raw map[string]interface{}) (map[string]interface{}, boo
 }
 
 // validateSystemSettings validates settings before applying them
-func validateSystemSettings(settings *config.SystemSettings, rawRequest map[string]interface{}) error {
+func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]interface{}) error {
 	if val, ok := rawRequest["pvePollingInterval"]; ok {
 		if interval, ok := val.(float64); ok {
 			if interval <= 0 {
