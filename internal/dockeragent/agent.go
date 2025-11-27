@@ -1020,7 +1020,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 	return nil
 }
 
-func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, payload []byte, containerCount int) error {
+func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, payload []byte, _ int) error {
 	url := fmt.Sprintf("%s/api/agents/docker/report", target.URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {

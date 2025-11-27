@@ -3591,7 +3591,7 @@ func (r *Router) tryServeHostAgentBinary(w http.ResponseWriter, req *http.Reques
 			checkedPaths = append(checkedPaths, path)
 			if info, err := os.Stat(path); err == nil && !info.IsDir() {
 				if strings.HasSuffix(req.URL.Path, ".sha256") {
-					r.serveChecksum(w, req, path)
+					r.serveChecksum(w, path)
 					return checkedPaths, true
 				}
 				http.ServeFile(w, req, path)
@@ -3663,7 +3663,7 @@ func sortedHostAgentKeys(missing map[string]agentbinaries.HostAgentBinary) []str
 }
 
 // serveChecksum computes and serves the SHA256 checksum of a file
-func (r *Router) serveChecksum(w http.ResponseWriter, req *http.Request, filepath string) {
+func (r *Router) serveChecksum(w http.ResponseWriter, filepath string) {
 	file, err := os.Open(filepath)
 	if err != nil {
 		http.Error(w, "Failed to open file", http.StatusInternalServerError)

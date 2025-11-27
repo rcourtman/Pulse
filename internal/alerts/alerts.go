@@ -6839,7 +6839,7 @@ func calculateTrimmedBaseline(samples []float64) (baseline float64, trustworthy 
 }
 
 // checkPMGAnomalies detects spam/virus rate anomalies using trimmed baseline
-func (m *Manager) checkPMGAnomalies(pmg models.PMGInstance, defaults PMGThresholdConfig) {
+func (m *Manager) checkPMGAnomalies(pmg models.PMGInstance, _ PMGThresholdConfig) {
 	// Need mail count data
 	if len(pmg.MailCount) == 0 {
 		return
