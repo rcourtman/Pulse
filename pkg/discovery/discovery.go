@@ -355,11 +355,6 @@ type discoveredResult struct {
 	Server *DiscoveredServer
 }
 
-type phaseError struct {
-	Phase   string
-	Message string
-}
-
 func (s *Scanner) discoverAtPort(ctx context.Context, ip string, port int) *DiscoveredServer {
 	probe := s.probeProxmoxService(ctx, ip, port)
 	if probe == nil || !probe.Positive {
