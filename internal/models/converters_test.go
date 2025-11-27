@@ -78,7 +78,7 @@ func TestCopyStringFloatMap(t *testing.T) {
 			}
 
 			// Verify it's a copy, not the same reference
-			if tc.input != nil && len(tc.input) > 0 {
+			if len(tc.input) > 0 {
 				for k := range result {
 					result[k] = 999.0
 					break

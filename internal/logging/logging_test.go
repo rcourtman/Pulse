@@ -271,7 +271,7 @@ func TestWithLoggerNilContext(t *testing.T) {
 
 	Init(Config{})
 
-	ctx := WithLogger(nil, New("svc", WithWriter(io.Discard)))
+	ctx := WithLogger(context.Background(), New("svc", WithWriter(io.Discard)))
 	if ctx == nil {
 		t.Fatal("expected non-nil context")
 	}

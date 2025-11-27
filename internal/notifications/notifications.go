@@ -2305,7 +2305,7 @@ func formatWebhookDuration(d time.Duration) string {
 // extractTelegramChatID extracts and validates the chat_id from a Telegram webhook URL
 func extractTelegramChatID(webhookURL string) (string, error) {
 	if !strings.Contains(webhookURL, "chat_id=") {
-		return "", fmt.Errorf("Telegram webhook URL missing chat_id parameter")
+		return "", fmt.Errorf("telegram webhook URL missing chat_id parameter")
 	}
 
 	u, err := url.Parse(webhookURL)
