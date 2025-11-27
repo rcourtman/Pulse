@@ -106,12 +106,3 @@ export const getAlertStyles = (
   };
 };
 
-// Get alert messages for a specific resource
-export const getResourceAlerts = (
-  resourceId: string,
-  activeAlerts: Record<string, Alert>,
-  alertsEnabled: boolean | undefined = isAlertsActivationEnabled(),
-): Alert[] => {
-  if (!alertsEnabled) return [];
-  return Object.values(activeAlerts).filter((alert) => alert.resourceId === resourceId);
-};

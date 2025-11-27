@@ -15,15 +15,6 @@ export function formatSpeed(bytesPerSecond: number, decimals = 0): string {
   return `${formatBytes(bytesPerSecond, decimals)}/s`;
 }
 
-export function formatSpeedCompact(bytesPerSecond: number): string {
-  if (!bytesPerSecond || bytesPerSecond < 0) return '0';
-  const k = 1024;
-  const mbps = bytesPerSecond / (k * k);
-  if (mbps < 1) return '<1';
-  if (mbps < 10) return mbps.toFixed(1);
-  return Math.round(mbps).toString();
-}
-
 export function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return '0%';
   const abs = Math.abs(value);

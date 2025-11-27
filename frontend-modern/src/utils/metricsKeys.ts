@@ -18,20 +18,6 @@ export function buildMetricKey(kind: MetricResourceKind, id: string): string {
 }
 
 /**
- * Parse a metric key back into its components
- * Returns null if the key format is invalid
- */
-export function parseMetricKey(key: string): { kind: MetricResourceKind; id: string } | null {
-  const colonIndex = key.indexOf(':');
-  if (colonIndex === -1) return null;
-
-  const kind = key.slice(0, colonIndex) as MetricResourceKind;
-  const id = key.slice(colonIndex + 1);
-
-  return { kind, id };
-}
-
-/**
  * Extract the prefix from a metric resource kind
  * Used for bulk operations on a specific resource type
  */
