@@ -265,8 +265,17 @@ func (cw *ConfigWatcher) pollForChanges() {
 			// Check .env
 			if stat, err := os.Stat(cw.envPath); err == nil {
 				if stat.ModTime().After(cw.lastModTime) {
-					log.Info().Msg("Detected .env file change via polling")
 					cw.lastModTime = stat.ModTime()
+					// Check if content actually changed to prevent restart loops on touch
+					newHash, err := cw.calculateFileHash(cw.envPath)
+					if err == nil {
+						if newHash == cw.lastEnvHash {
+							log.Debug().Msg("Detected .env file touch but content unchanged (polling), skipping reload")
+							continue
+						}
+						cw.lastEnvHash = newHash
+					}
+					log.Info().Msg("Detected .env file change via polling")
 					cw.reloadConfig()
 				}
 			}

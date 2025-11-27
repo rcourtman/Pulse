@@ -39,6 +39,7 @@ import { SettingsSectionNav } from './SettingsSectionNav';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
@@ -596,7 +597,7 @@ const Settings: Component<SettingsProps> = (props) => {
   );
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = usePersistentSignal('settings-sidebar-collapsed', false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
