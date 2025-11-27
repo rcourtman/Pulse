@@ -226,7 +226,7 @@ func generateVirtualDisks() ([]models.Disk, models.Disk) {
 }
 
 func GenerateMockData(config MockConfig) models.StateSnapshot {
-	rand.Seed(time.Now().UnixNano())
+	// rand is automatically seeded in Go 1.20+
 
 	data := models.StateSnapshot{
 		Nodes:            generateNodes(config),
@@ -273,8 +273,7 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		}
 
 		// Calculate VM count based on node role
-		vmCount := config.VMsPerNode
-		lxcCount := config.LXCsPerNode
+		var vmCount, lxcCount int
 
 		switch nodeRole {
 		case "vm-heavy":

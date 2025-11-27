@@ -59,6 +59,4 @@ func TestMetricsHistoryConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
+// rand is automatically seeded in Go 1.20+

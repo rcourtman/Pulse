@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -86,7 +86,7 @@ var configExportCmd = &cobra.Command{
 
 		// Write to file or stdout
 		if exportFile != "" {
-			if err := ioutil.WriteFile(exportFile, []byte(exportedData), 0600); err != nil {
+			if err := os.WriteFile(exportFile, []byte(exportedData), 0600); err != nil {
 				return fmt.Errorf("failed to write export file: %w", err)
 			}
 			fmt.Printf("Configuration exported to %s\n", exportFile)
@@ -117,7 +117,7 @@ var configImportCmd = &cobra.Command{
 		}
 
 		// Read import file
-		data, err := ioutil.ReadFile(importFile)
+		data, err := os.ReadFile(importFile)
 		if err != nil {
 			return fmt.Errorf("failed to read import file: %w", err)
 		}
@@ -245,7 +245,7 @@ var configAutoImportCmd = &cobra.Command{
 				return fmt.Errorf("failed to fetch configuration from URL: %s", resp.Status)
 			}
 
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return fmt.Errorf("failed to read configuration response: %w", err)
 			}

@@ -412,12 +412,9 @@ func (v *nodeValidator) Validate(ctx context.Context, node string) error {
 	return nil
 }
 
-func (v *nodeValidator) validateAsLocalhost(ctx context.Context, node string) error {
+func (v *nodeValidator) validateAsLocalhost(_ context.Context, node string) error {
 	// When cluster validation is unavailable, only allow access to localhost
 	// This maintains security while allowing self-monitoring
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	// Try to discover local host addresses
 	localAddrs, err := discoverLocalHostAddresses()

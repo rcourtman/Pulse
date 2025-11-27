@@ -253,12 +253,10 @@ func runServer() {
 				configWatcher.ReloadConfig()
 			}
 
-			if reloadFunc != nil {
-				if err := reloadFunc(); err != nil {
-					log.Error().Err(err).Msg("Failed to reload monitor after SIGHUP")
-				} else {
-					log.Info().Msg("Runtime configuration reloaded")
-				}
+			if err := reloadFunc(); err != nil {
+				log.Error().Err(err).Msg("Failed to reload monitor after SIGHUP")
+			} else {
+				log.Info().Msg("Runtime configuration reloaded")
 			}
 
 		case <-sigChan:

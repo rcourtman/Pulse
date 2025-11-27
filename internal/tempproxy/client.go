@@ -278,8 +278,9 @@ func (c *Client) callWithContext(ctx context.Context, method string, params map[
 			return resp, proxyErr
 		}
 
-		lastErr = proxyErr
-		if lastErr == nil {
+		if proxyErr != nil {
+			lastErr = proxyErr
+		} else {
 			lastErr = err
 		}
 
