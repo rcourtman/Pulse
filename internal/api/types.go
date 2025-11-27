@@ -36,19 +36,6 @@ type VersionResponse struct {
 	ContainerId     string `json:"containerId,omitempty"`
 }
 
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message,omitempty"`
-	Code    int    `json:"code,omitempty"`
-}
-
-// SuccessResponse represents a generic success response
-type SuccessResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-}
-
 // StateResponse represents the full state response
 type StateResponse struct {
 	Nodes            []models.Node               `json:"nodes"`
@@ -111,38 +98,6 @@ type StorageMetrics struct {
 type MetricPoint struct {
 	Timestamp int64   `json:"timestamp"`
 	Value     float64 `json:"value"`
-}
-
-// ChartData represents data for a single chart
-type ChartData struct {
-	Labels   []string  `json:"labels"`
-	Datasets []Dataset `json:"datasets"`
-}
-
-// Dataset represents a chart dataset
-type Dataset struct {
-	Label           string    `json:"label"`
-	Data            []float64 `json:"data"`
-	BackgroundColor string    `json:"backgroundColor,omitempty"`
-	BorderColor     string    `json:"borderColor,omitempty"`
-}
-
-// ConfigImportResponse represents import response
-type ConfigImportResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
-
-// ConfigExportResponse represents export response
-type ConfigExportResponse struct {
-	Status string `json:"status"`
-	Data   string `json:"data"`
-}
-
-// InstallScriptResponse represents install script response
-type InstallScriptResponse struct {
-	URL     string `json:"url"`
-	Command string `json:"command"`
 }
 
 // AgentVersionResponse represents Docker agent version information
