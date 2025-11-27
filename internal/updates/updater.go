@@ -79,8 +79,3 @@ func (r *UpdaterRegistry) Get(deploymentType string) (Updater, error) {
 	}
 	return updater, nil
 }
-
-// GetAll returns all registered updaters
-func (r *UpdaterRegistry) GetAll() map[string]Updater {
-	return r.updaters
-}

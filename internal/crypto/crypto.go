@@ -19,11 +19,6 @@ type CryptoManager struct {
 	key []byte
 }
 
-// NewCryptoManager creates a new crypto manager using the default data directory.
-func NewCryptoManager() (*CryptoManager, error) {
-	return NewCryptoManagerAt(utils.GetDataDir())
-}
-
 // NewCryptoManagerAt creates a new crypto manager with an explicit data directory override.
 func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
 	key, err := getOrCreateKeyAt(dataDir)

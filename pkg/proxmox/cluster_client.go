@@ -379,11 +379,6 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 	return client, nil
 }
 
-// markUnhealthy marks an endpoint as unhealthy
-func (cc *ClusterClient) markUnhealthy(endpoint string) {
-	cc.markUnhealthyWithError(endpoint, "")
-}
-
 // markUnhealthyWithError marks an endpoint as unhealthy and captures the error
 func (cc *ClusterClient) markUnhealthyWithError(endpoint string, errMsg string) {
 	cc.mu.Lock()

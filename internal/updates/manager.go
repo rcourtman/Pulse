@@ -578,15 +578,6 @@ func (m *Manager) GetCachedUpdateInfo() *UpdateInfo {
 	return m.checkCache[channel]
 }
 
-// getLatestRelease fetches the latest release from GitHub using saved config
-func (m *Manager) getLatestRelease(ctx context.Context, currentVer *Version) (*ReleaseInfo, error) {
-	channel := m.config.UpdateChannel
-	if channel == "" {
-		channel = "stable"
-	}
-	return m.getLatestReleaseForChannel(ctx, channel, currentVer)
-}
-
 // getLatestReleaseForChannel fetches the latest release from GitHub for a specific channel
 func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string, currentVer *Version) (*ReleaseInfo, error) {
 	if channel == "" {
