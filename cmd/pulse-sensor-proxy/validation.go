@@ -591,21 +591,6 @@ func (v *nodeValidator) getClusterMembers(ctx context.Context) (map[string]struc
 	return result, nil
 }
 
-func (v *nodeValidator) ipAllowed(ip net.IP) bool {
-	if ip == nil {
-		return false
-	}
-	if _, ok := v.allowHosts[ip.String()]; ok {
-		return true
-	}
-	for _, network := range v.allowCIDRs {
-		if network.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
 func ipAllowed(ip net.IP, hosts map[string]struct{}, cidrs []*net.IPNet) bool {
 	if ip == nil {
 		return false
