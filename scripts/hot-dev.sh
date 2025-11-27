@@ -203,10 +203,7 @@ if [[ -f "${ROOT_DIR}/mock.env" ]]; then
 fi
 
 if [[ -f /etc/pulse/.env ]] && [[ -r /etc/pulse/.env ]]; then
-    set +u
-    # shellcheck disable=SC1091
-    source /etc/pulse/.env 2>/dev/null || true
-    set -u
+    load_env_file "/etc/pulse/.env"
     echo "Auth configuration loaded from /etc/pulse/.env"
 fi
 
