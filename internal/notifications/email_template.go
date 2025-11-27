@@ -4,9 +4,28 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
+
+// titleCase capitalizes the first letter of each word (simple ASCII-safe version)
+func titleCase(s string) string {
+	var result strings.Builder
+	capitalizeNext := true
+	for _, r := range s {
+		if unicode.IsSpace(r) {
+			capitalizeNext = true
+			result.WriteRune(r)
+		} else if capitalizeNext {
+			result.WriteRune(unicode.ToUpper(r))
+			capitalizeNext = false
+		} else {
+			result.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return result.String()
+}
 
 // EmailTemplate generates a professional HTML email template for alerts
 func EmailTemplate(alertList []*alerts.Alert, isSingle bool) (subject, htmlBody, textBody string) {
@@ -36,11 +55,11 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 	case "io":
 		alertType = "I/O"
 	default:
-		alertType = strings.Title(alertType)
+		alertType = titleCase(alertType)
 	}
 
 	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
-		strings.Title(string(alert.Level)), alertType, alert.ResourceName)
+		titleCase(string(alert.Level)), alertType, alert.ResourceName)
 
 	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
 <html>
