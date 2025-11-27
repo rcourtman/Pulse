@@ -227,7 +227,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 };
 
                 const rowClass = () => {
-                  const baseHover = 'cursor-pointer transition-all duration-200 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm animate-enter';
+                  const baseHover = 'cursor-pointer transition-all duration-200 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm';
 
                   if (selected) {
                     return 'cursor-pointer transition-all duration-200 relative bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:shadow-sm z-10';

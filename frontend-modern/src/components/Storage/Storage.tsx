@@ -1043,7 +1043,7 @@ const Storage: Component = () => {
                                 return (
                                   <>
                                     <tr
-                                      class={`${rowClass()} transition-colors animate-enter`}
+                                      class={`${rowClass()} transition-colors`}
                                       style={rowStyle()}
                                       onClick={toggleDrawer}
                                       aria-expanded={canExpand() && isExpanded() ? 'true' : 'false'}

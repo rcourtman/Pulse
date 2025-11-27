@@ -656,7 +656,7 @@ export const UnifiedAgents: Component = () => {
                                 </tr>
                             }>
                                 {(agent) => (
-                                    <tr class="animate-enter">
+                                    <tr>
                                         <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                                             {agent.displayName || agent.hostname}
                                             <Show when={agent.displayName && agent.displayName !== agent.hostname}>

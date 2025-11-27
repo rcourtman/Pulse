@@ -869,7 +869,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                           return (
                             <tr
-                              class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors animate-enter ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                              class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                             >
                               {/* Alert toggle column */}
                               <td class="p-1 px-2 text-center align-middle">
@@ -1380,7 +1380,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                       return (
                         <tr
-                          class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors animate-enter ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                          class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                         >
                           {/* Alert toggle column */}
                           <td class="p-1 px-2 text-center align-middle">

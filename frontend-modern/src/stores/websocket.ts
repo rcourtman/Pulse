@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import { createStore, produce, reconcile } from 'solid-js/store';
 import type {
   State,
   WSMessage,
@@ -336,7 +336,7 @@ export function createWebSocketStore(url: string) {
               logger.debug('[WebSocket] Updating nodes', {
                 count: message.data.nodes?.length || 0,
               });
-              setState('nodes', message.data.nodes);
+              setState('nodes', reconcile(message.data.nodes, { key: 'id' }));
 
               // Lifecycle cleanup: remove metrics for nodes that disappeared
               const currentIds = new Set(message.data.nodes?.map((n: any) => n.id).filter(Boolean) || []);
@@ -369,7 +369,7 @@ export function createWebSocketStore(url: string) {
                   tags: transformedTags,
                 };
               });
-              setState('vms', transformedVMs);
+              setState('vms', reconcile(transformedVMs, { key: 'id' }));
 
               // Lifecycle cleanup: remove metrics for VMs that disappeared
               const vmIds = new Set(transformedVMs.map((vm: VM) => vm.id).filter(Boolean));
@@ -402,7 +402,7 @@ export function createWebSocketStore(url: string) {
                   tags: transformedTags,
                 };
               });
-              setState('containers', transformedContainers);
+              setState('containers', reconcile(transformedContainers, { key: 'id' }));
 
               // Lifecycle cleanup: remove metrics for containers that disappeared
               const containerIds = new Set(transformedContainers.map((c: Container) => c.id).filter(Boolean));
@@ -425,7 +425,7 @@ export function createWebSocketStore(url: string) {
                       count: incomingHosts.length,
                     });
                     const merged = mergeDockerHostRevocations(incomingHosts);
-                    setState('dockerHosts', merged);
+                    setState('dockerHosts', reconcile(merged, { key: 'id' }));
 
                     // Lifecycle cleanup for Docker hosts and containers
                     const hostIds = new Set(merged.map((h: DockerHost) => h.id).filter(Boolean));
@@ -449,7 +449,7 @@ export function createWebSocketStore(url: string) {
                     count: incomingHosts.length,
                   });
                   const merged = mergeDockerHostRevocations(incomingHosts);
-                  setState('dockerHosts', merged);
+                  setState('dockerHosts', reconcile(merged, { key: 'id' }));
 
                   // Lifecycle cleanup: prune metrics for removed hosts/containers
                   const hostIds = new Set(merged.map((h: DockerHost) => h.id).filter(Boolean));
@@ -472,18 +472,18 @@ export function createWebSocketStore(url: string) {
             }
             if (message.data.hosts !== undefined && message.data.hosts !== null) {
               if (Array.isArray(message.data.hosts)) {
-                setState('hosts', mergeHostRevocations(message.data.hosts));
+                setState('hosts', reconcile(mergeHostRevocations(message.data.hosts), { key: 'id' }));
               } else {
-                setState('hosts', message.data.hosts);
+                setState('hosts', reconcile(message.data.hosts, { key: 'id' }));
               }
             }
-            if (message.data.storage !== undefined) setState('storage', message.data.storage);
+            if (message.data.storage !== undefined) setState('storage', reconcile(message.data.storage, { key: 'id' }));
             if (message.data.cephClusters !== undefined)
-              setState('cephClusters', message.data.cephClusters);
-            if (message.data.pbs !== undefined) setState('pbs', message.data.pbs);
-            if (message.data.pmg !== undefined) setState('pmg', message.data.pmg);
+              setState('cephClusters', reconcile(message.data.cephClusters, { key: 'id' }));
+            if (message.data.pbs !== undefined) setState('pbs', reconcile(message.data.pbs, { key: 'id' }));
+            if (message.data.pmg !== undefined) setState('pmg', reconcile(message.data.pmg, { key: 'id' }));
             if (message.data.replicationJobs !== undefined)
-              setState('replicationJobs', message.data.replicationJobs);
+              setState('replicationJobs', reconcile(message.data.replicationJobs, { key: 'id' }));
             if (message.data.backups !== undefined) {
               setState('backups', message.data.backups);
               if (message.data.backups.pve !== undefined)
@@ -506,7 +506,7 @@ export function createWebSocketStore(url: string) {
               setState('connectionHealth', message.data.connectionHealth);
             if (message.data.stats !== undefined) setState('stats', message.data.stats);
             if (message.data.physicalDisks !== undefined)
-              setState('physicalDisks', message.data.physicalDisks);
+              setState('physicalDisks', reconcile(message.data.physicalDisks, { key: 'id' }));
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {
               const newAlerts: Record<string, Alert> = {};

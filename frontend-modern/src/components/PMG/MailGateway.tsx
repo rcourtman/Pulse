@@ -133,14 +133,14 @@ const MailGateway: Component = () => {
                         </div>
                         <table class="w-full text-xs">
                           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs font-semibold text-gray-900 dark:text-gray-100">{formatNum(total)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">{formatDec(total / 24)}/hr</div>
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Total processed</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(inbound)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -149,7 +149,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Inbound</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(outbound)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -158,7 +158,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Outbound</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs font-medium text-orange-600 dark:text-orange-400">{formatNum(spam)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -167,7 +167,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Spam caught</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs font-medium text-red-600 dark:text-red-400">{formatNum(virus)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -189,7 +189,7 @@ const MailGateway: Component = () => {
                         </div>
                         <table class="w-full text-xs">
                           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatDec(bytesIn / 1024 / 1024)} MB</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -198,7 +198,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Inbound bytes</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatDec(bytesOut / 1024 / 1024)} MB</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -223,7 +223,7 @@ const MailGateway: Component = () => {
                         </div>
                         <table class="w-full text-xs">
                           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs font-medium text-orange-600 dark:text-orange-400">{formatNum(qSpam)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -232,7 +232,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Spam quarantined</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs font-medium text-red-600 dark:text-red-400">{formatNum(qVirus)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -241,7 +241,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Virus quarantined</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs font-medium text-yellow-600 dark:text-yellow-400">{formatNum(qAttachment)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -250,7 +250,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Attachments blocked</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(qBlacklist)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -259,7 +259,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Blacklisted</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs font-semibold text-gray-900 dark:text-gray-100">{formatNum(qTotal)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -315,7 +315,7 @@ const MailGateway: Component = () => {
                         </div>
                         <table class="w-full text-xs">
                           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(bouncesIn)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -324,7 +324,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Bounces inbound</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(bouncesOut)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -333,7 +333,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Bounces outbound</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(rbl)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -342,7 +342,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">RBL rejects</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(pregreet)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -351,7 +351,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Pregreet rejects</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(greylist)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -360,7 +360,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Greylisted</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">{formatNum(junk)}</div>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400">
@@ -369,7 +369,7 @@ const MailGateway: Component = () => {
                               </td>
                               <td class="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">Junk mail</td>
                             </tr>
-                            <tr class="animate-enter">
+                            <tr>
                               <td class="px-2 py-1.5">
                                 <div class="text-xs text-gray-900 dark:text-gray-100">
                                   {pmg.mailStats?.averageProcessTimeMs ? formatDec(pmg.mailStats.averageProcessTimeMs / 1000, 2) : '—'} s
@@ -421,7 +421,7 @@ const MailGateway: Component = () => {
                                 const oldestClass = oldestAge > 1800 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300';
 
                                 return (
-                                  <tr class="animate-enter">
+                                  <tr class="">
                                     <td class="px-2 py-1.5 text-xs font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">{node.name}</td>
                                     <td class="px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 capitalize">{node.role || '—'}</td>
                                     <td class="px-2 py-1.5">
