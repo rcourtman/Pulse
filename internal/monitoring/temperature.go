@@ -61,11 +61,6 @@ type ProxyHostDiagnostics struct {
 	LastError     string
 }
 
-// NewTemperatureCollector creates a new temperature collector with default SSH port (22)
-func NewTemperatureCollector(sshUser, sshKeyPath string) *TemperatureCollector {
-	return NewTemperatureCollectorWithPort(sshUser, sshKeyPath, 22)
-}
-
 // NewTemperatureCollectorWithPort creates a new temperature collector with custom SSH port
 func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *TemperatureCollector {
 	if sshPort <= 0 {
