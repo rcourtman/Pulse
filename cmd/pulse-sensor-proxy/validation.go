@@ -23,9 +23,6 @@ var (
 
 	// ipv4Regex validates IPv4 addresses
 	ipv4Regex = regexp.MustCompile(`^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$`)
-
-	// ipv6Regex validates IPv6 addresses (simplified)
-	ipv6Regex = regexp.MustCompile(`^[0-9a-fA-F:]+$`)
 )
 
 var (

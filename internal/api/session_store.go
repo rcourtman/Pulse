@@ -19,7 +19,6 @@ type SessionStore struct {
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
-	stopOnce   sync.Once // Ensures Stop() can only close channel once
 }
 
 func sessionHash(token string) string {

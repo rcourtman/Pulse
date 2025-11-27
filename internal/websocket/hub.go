@@ -277,7 +277,6 @@ type Hub struct {
 	getState       func() interface{} // Function to get current state
 	allowedOrigins []string           // Allowed origins for CORS
 	// Broadcast coalescing fields
-	lastBroadcast   time.Time
 	coalesceWindow  time.Duration
 	coalescePending *Message
 	coalesceTimer   *time.Timer

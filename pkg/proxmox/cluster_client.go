@@ -22,7 +22,6 @@ type ClusterClient struct {
 	nodeHealth      map[string]bool      // Track node health
 	lastHealthCheck map[string]time.Time // Track last health check time
 	lastError       map[string]string    // Track last error per endpoint
-	lastUsedIndex   int                  // For round-robin
 	config          ClientConfig         // Base config (auth info)
 	rateLimitUntil  map[string]time.Time // Cooldown window for rate-limited endpoints
 }

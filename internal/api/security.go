@@ -123,9 +123,6 @@ func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string
 var (
 	// Auth endpoints: 10 attempts per minute
 	authLimiter = NewRateLimiter(10, 1*time.Minute)
-
-	// General API: 500 requests per minute (increased for metadata endpoints)
-	apiLimiter = NewRateLimiter(500, 1*time.Minute)
 )
 
 // GetClientIP extracts the client IP from the request
