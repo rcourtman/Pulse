@@ -107,7 +107,7 @@ export const UnifiedAgents: Component = () => {
     const [lookupResult, setLookupResult] = createSignal<HostLookupResponse | null>(null);
     const [lookupError, setLookupError] = createSignal<string | null>(null);
     const [lookupLoading, setLookupLoading] = createSignal(false);
-    const [enableDocker, setEnableDocker] = createSignal(true); // Default to true for unified experience
+    const [enableDocker, setEnableDocker] = createSignal(false); // Default to false - user must opt-in for Docker monitoring
 
     createEffect(() => {
         if (requiresToken()) {
