@@ -171,16 +171,16 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 	if val, ok := rawRequest["backupPollingInterval"]; ok {
 		if interval, ok := val.(float64); ok {
 			if interval < 0 {
-				return fmt.Errorf("Backup polling interval cannot be negative")
+				return fmt.Errorf("backup polling interval cannot be negative")
 			}
 			if interval > 0 && interval < 10 {
-				return fmt.Errorf("Backup polling interval must be at least 10 seconds")
+				return fmt.Errorf("backup polling interval must be at least 10 seconds")
 			}
 			if interval > 604800 {
-				return fmt.Errorf("Backup polling interval cannot exceed 604800 seconds (7 days)")
+				return fmt.Errorf("backup polling interval cannot exceed 604800 seconds (7 days)")
 			}
 		} else {
-			return fmt.Errorf("Backup polling interval must be a number")
+			return fmt.Errorf("backup polling interval must be a number")
 		}
 	}
 

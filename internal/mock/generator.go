@@ -2970,7 +2970,7 @@ func generatePMGInstances() []models.PMGInstance {
 		edgeQueue := &models.PMGQueueStatus{
 			Active:    rand.Intn(2),
 			Deferred:  rand.Intn(5),
-			Hold:      rand.Intn(1),
+			Hold:      rand.Intn(2), // rand.Intn(1) always returns 0
 			Incoming:  rand.Intn(3),
 			Total:     0,
 			OldestAge: int64(rand.Intn(600)),
