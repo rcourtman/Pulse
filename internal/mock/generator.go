@@ -1963,24 +1963,24 @@ func generateGuestName(prefix string) string {
 }
 
 // generateLastBackupTime generates a realistic last backup timestamp.
-// Distribution: 60% within 24h (fresh), 20% within 72h (stale), 10% older (critical), 10% never backed up
+// Distribution: 70% within 24h (fresh), 15% within 72h (stale), 10% older (critical), 5% never backed up
 func generateLastBackupTime() time.Time {
 	r := rand.Float64()
 	now := time.Now()
 
-	if r < 0.10 {
-		// 10% never backed up - return zero time
+	if r < 0.05 {
+		// 5% never backed up - return zero time
 		return time.Time{}
-	} else if r < 0.20 {
+	} else if r < 0.15 {
 		// 10% critical - backup 4-30 days ago
 		hoursAgo := 96 + rand.Intn(624) // 4-30 days in hours
 		return now.Add(-time.Duration(hoursAgo) * time.Hour)
-	} else if r < 0.40 {
-		// 20% stale - backup 24-72 hours ago
+	} else if r < 0.30 {
+		// 15% stale - backup 24-72 hours ago
 		hoursAgo := 24 + rand.Intn(48)
 		return now.Add(-time.Duration(hoursAgo) * time.Hour)
 	} else {
-		// 60% fresh - backup within last 24 hours
+		// 70% fresh - backup within last 24 hours
 		hoursAgo := rand.Intn(24)
 		return now.Add(-time.Duration(hoursAgo) * time.Hour)
 	}
