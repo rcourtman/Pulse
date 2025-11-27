@@ -8,6 +8,6 @@ import (
 )
 
 // runAsWindowsService is a no-op on non-Windows platforms
-func runAsWindowsService(cfg hostagent.Config, logger zerolog.Logger) error {
+func runAsWindowsService(_ hostagent.Config, _ zerolog.Logger) error {
 	return nil
 }
