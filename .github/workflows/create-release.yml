@@ -444,6 +444,18 @@ jobs:
 
           echo "✓ Release published as latest: ${TAG}"
 
+      - name: Trigger demo server update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.extract_version.outputs.tag }}"
+          echo "Triggering demo server update for ${TAG}..."
+
+          # Publishing via API doesn't fire the release webhook, so we dispatch manually
+          gh workflow run update-demo-server.yml -f tag="${TAG}"
+
+          echo "✓ Demo server update workflow dispatched"
+
       - name: Output release information
         run: |
           echo "✅ Release published successfully!"
