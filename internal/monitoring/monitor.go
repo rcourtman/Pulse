@@ -624,13 +624,6 @@ func safePercentage(used, total float64) float64 {
 	return result
 }
 
-// maxInt64 returns the maximum of two int64 values
-func maxInt64(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 // safeFloat ensures a float value is not NaN or Inf
 func safeFloat(val float64) float64 {
@@ -6769,10 +6762,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				OSVersion:         osVersion,
 				AgentVersion:      agentVersion,
 				NetworkInterfaces: networkInterfaces,
-				NetworkIn:         maxInt64(0, int64(netInRate)),
-				NetworkOut:        maxInt64(0, int64(netOutRate)),
-				DiskRead:          maxInt64(0, int64(diskReadRate)),
-				DiskWrite:         maxInt64(0, int64(diskWriteRate)),
+				NetworkIn:         max(0, int64(netInRate)),
+				NetworkOut:        max(0, int64(netOutRate)),
+				DiskRead:          max(0, int64(diskReadRate)),
+				DiskWrite:         max(0, int64(diskWriteRate)),
 				Uptime:            int64(res.Uptime),
 				Template:          res.Template == 1,
 				LastSeen:          sampleTime,
@@ -6934,10 +6927,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					Free:  int64(res.MaxDisk - res.Disk),
 					Usage: safePercentage(float64(res.Disk), float64(res.MaxDisk)),
 				},
-				NetworkIn:  maxInt64(0, int64(netInRate)),
-				NetworkOut: maxInt64(0, int64(netOutRate)),
-				DiskRead:   maxInt64(0, int64(diskReadRate)),
-				DiskWrite:  maxInt64(0, int64(diskWriteRate)),
+				NetworkIn:  max(0, int64(netInRate)),
+				NetworkOut: max(0, int64(netOutRate)),
+				DiskRead:   max(0, int64(diskReadRate)),
+				DiskWrite:  max(0, int64(diskWriteRate)),
 				Uptime:     int64(res.Uptime),
 				Template:   res.Template == 1,
 				LastSeen:   time.Now(),
