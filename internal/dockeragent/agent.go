@@ -22,7 +22,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	systemtypes "github.com/docker/docker/api/types/system"
@@ -766,7 +765,7 @@ func (a *Agent) pruneStaleCPUSamples(active map[string]struct{}) {
 	}
 }
 
-func (a *Agent) collectContainer(ctx context.Context, summary types.Container) (agentsdocker.Container, error) {
+func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Summary) (agentsdocker.Container, error) {
 	const perContainerTimeout = 15 * time.Second
 
 	containerCtx, cancel := context.WithTimeout(ctx, perContainerTimeout)

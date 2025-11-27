@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	swarmtypes "github.com/docker/docker/api/types/swarm"
 	systemtypes "github.com/docker/docker/api/types/system"
@@ -159,7 +158,7 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 }
 
 func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtypes.Info, scope string, containers map[string]agentsdocker.Container, includeServices, includeTasks bool) ([]agentsdocker.Service, []agentsdocker.Task, error) {
-	serviceList, err := a.docker.ServiceList(ctx, types.ServiceListOptions{Status: true})
+	serviceList, err := a.docker.ServiceList(ctx, swarmtypes.ServiceListOptions{Status: true})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -184,7 +183,7 @@ func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtype
 			taskFilters.Add("node", info.Swarm.NodeID)
 		}
 
-		taskList, err := a.docker.TaskList(ctx, types.TaskListOptions{Filters: taskFilters})
+		taskList, err := a.docker.TaskList(ctx, swarmtypes.TaskListOptions{Filters: taskFilters})
 		if err != nil {
 			return services, nil, err
 		}
