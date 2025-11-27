@@ -131,19 +131,6 @@ func CreateProxmoxConfigFromFields(host, user, password, tokenName, tokenValue, 
 	}
 }
 
-// CreatePBSConfigFromFields creates a pbs.ClientConfig from individual fields
-func CreatePBSConfigFromFields(host, user, password, tokenName, tokenValue, fingerprint string, verifySSL bool) pbs.ClientConfig {
-	return pbs.ClientConfig{
-		Host:        normalizeHostPort(host, defaultPBSPort),
-		User:        user,
-		Password:    password,
-		TokenName:   tokenName,
-		TokenValue:  tokenValue,
-		VerifySSL:   verifySSL,
-		Fingerprint: fingerprint,
-	}
-}
-
 // CreatePMGConfigFromFields creates a pmg.ClientConfig from individual fields
 func CreatePMGConfigFromFields(host, user, password, tokenName, tokenValue, fingerprint string, verifySSL bool) pmg.ClientConfig {
 	return pmg.ClientConfig{

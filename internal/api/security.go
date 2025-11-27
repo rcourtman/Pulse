@@ -360,24 +360,6 @@ func ClearFailedLogins(identifier string) {
 	delete(failedLogins, identifier)
 }
 
-// IsLockedOut checks if an account is locked out
-func IsLockedOut(identifier string) bool {
-	failedMu.RLock()
-	defer failedMu.RUnlock()
-
-	failed, exists := failedLogins[identifier]
-	if !exists {
-		return false
-	}
-
-	if time.Now().After(failed.LockedUntil) {
-		// Lockout expired
-		return false
-	}
-
-	return failed.Count >= maxFailedAttempts
-}
-
 // GetLockoutInfo returns lockout information for an identifier
 func GetLockoutInfo(identifier string) (attempts int, lockedUntil time.Time, isLocked bool) {
 	failedMu.RLock()
@@ -407,11 +389,6 @@ func ResetLockout(identifier string) {
 	log.Info().
 		Str("identifier", identifier).
 		Msg("Lockout manually reset")
-}
-
-// Security Headers Middleware
-func SecurityHeaders(next http.Handler) http.Handler {
-	return SecurityHeadersWithConfig(next, false, "")
 }
 
 // SecurityHeadersWithConfig applies security headers with embedding configuration
