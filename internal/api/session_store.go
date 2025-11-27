@@ -77,15 +77,6 @@ func (s *SessionStore) backgroundWorker() {
 	}
 }
 
-// Stop gracefully stops the session store
-func (s *SessionStore) Stop() {
-	s.stopOnce.Do(func() {
-		s.saveTicker.Stop()
-		close(s.stopChan) // Use close instead of send to signal all readers
-		s.save()
-	})
-}
-
 // CreateSession creates a new session
 func (s *SessionStore) CreateSession(token string, duration time.Duration, userAgent, ip string) {
 	s.mu.Lock()
@@ -142,17 +133,6 @@ func (s *SessionStore) ValidateAndExtendSession(token string) bool {
 	return true
 }
 
-// ExtendSession extends the expiration of a session
-func (s *SessionStore) ExtendSession(token string, duration time.Duration) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if session, exists := s.sessions[sessionHash(token)]; exists {
-		session.ExpiresAt = time.Now().Add(duration)
-		s.saveUnsafe()
-	}
-}
-
 // DeleteSession removes a session
 func (s *SessionStore) DeleteSession(token string) {
 	s.mu.Lock()
@@ -160,19 +140,6 @@ func (s *SessionStore) DeleteSession(token string) {
 
 	delete(s.sessions, sessionHash(token))
 	s.saveUnsafe()
-}
-
-// GetSession returns session data if it exists and is valid
-func (s *SessionStore) GetSession(token string) *SessionData {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	session, exists := s.sessions[sessionHash(token)]
-	if !exists || time.Now().After(session.ExpiresAt) {
-		return nil
-	}
-
-	return session
 }
 
 // cleanup removes expired sessions
