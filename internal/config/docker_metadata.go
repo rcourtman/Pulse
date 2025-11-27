@@ -151,20 +151,18 @@ func (s *DockerMetadataStore) ReplaceAll(metadata map[string]*DockerMetadata) er
 
 	s.metadata = make(map[string]*DockerMetadata)
 
-	if metadata != nil {
-		for resourceID, meta := range metadata {
-			if meta == nil {
-				continue
-			}
-
-			clone := *meta
-			clone.ID = resourceID
-			// Ensure slice copy is not nil to allow JSON marshalling of empty tags
-			if clone.Tags == nil {
-				clone.Tags = []string{}
-			}
-			s.metadata[resourceID] = &clone
+	for resourceID, meta := range metadata {
+		if meta == nil {
+			continue
 		}
+
+		clone := *meta
+		clone.ID = resourceID
+		// Ensure slice copy is not nil to allow JSON marshalling of empty tags
+		if clone.Tags == nil {
+			clone.Tags = []string{}
+		}
+		s.metadata[resourceID] = &clone
 	}
 
 	return s.save()

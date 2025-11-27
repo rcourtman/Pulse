@@ -8375,10 +8375,9 @@ func (m *Manager) LoadActiveAlerts() error {
 			// We can detect this if we have Node field and it appears in the ResourceID
 			if alert.Node != "" && len(parts) >= 2 {
 				var newResourceID string
-				var vmidStr string
 
 				// Try to extract VMID (should be last part)
-				vmidStr = parts[len(parts)-1]
+				vmidStr := parts[len(parts)-1]
 				if _, err := strconv.Atoi(vmidStr); err == nil {
 					// VMID is valid, now check if we need to migrate
 					if len(parts) == 3 && alert.Instance != "" && alert.Instance != alert.Node {

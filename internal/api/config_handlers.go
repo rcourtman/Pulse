@@ -1576,13 +1576,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 	// Auto-generate name if not provided for test
 	if req.Name == "" {
 		// Extract hostname from URL
-		host := req.Host
-		if strings.HasPrefix(host, "http://") {
-			host = strings.TrimPrefix(host, "http://")
-		}
-		if strings.HasPrefix(host, "https://") {
-			host = strings.TrimPrefix(host, "https://")
-		}
+		host := strings.TrimPrefix(strings.TrimPrefix(req.Host, "http://"), "https://")
 		// Remove port
 		if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
 			host = host[:colonIndex]
@@ -2550,7 +2544,7 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 				latency := time.Since(startTime).Milliseconds()
 				testResult = map[string]interface{}{
 					"status":  "success",
-					"message": fmt.Sprintf("Connected to PBS instance"),
+					"message": "Connected to PBS instance",
 					"latency": latency,
 				}
 			}

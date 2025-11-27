@@ -409,7 +409,7 @@ func (pm *PollMetrics) SetBreakerState(instanceType, instance, state string, fai
 
 	retrySeconds := 0.0
 	if !retryAt.IsZero() {
-		retrySeconds = retryAt.Sub(time.Now()).Seconds()
+		retrySeconds = time.Until(retryAt).Seconds()
 		if retrySeconds < 0 {
 			retrySeconds = 0
 		}
