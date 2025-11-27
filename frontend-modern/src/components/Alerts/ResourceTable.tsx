@@ -398,10 +398,10 @@ export function ResourceTable(props: ResourceTableProps) {
       >
         <span
           class={`text-sm ${isDisabledMetric
-              ? 'text-gray-400 dark:text-gray-500 italic'
-              : metricProps.isOverridden
-                ? 'text-gray-900 dark:text-gray-100 font-bold'
-                : 'text-gray-900 dark:text-gray-100'
+            ? 'text-gray-400 dark:text-gray-500 italic'
+            : metricProps.isOverridden
+              ? 'text-gray-900 dark:text-gray-100 font-bold'
+              : 'text-gray-900 dark:text-gray-100'
             }`}
         >
           {displayText}
@@ -483,6 +483,7 @@ export function ResourceTable(props: ResourceTableProps) {
       padding="none"
       class="overflow-hidden border border-gray-200 dark:border-gray-700"
       border={false}
+      tone="glass"
     >
       <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <SectionHeader title={props.title} size="sm" />
@@ -591,8 +592,8 @@ export function ResourceTable(props: ResourceTableProps) {
                               }
                             }}
                             class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isOff()
-                                ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 italic placeholder:text-gray-400 dark:placeholder:text-gray-500 placeholder:opacity-60 pointer-events-none'
-                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                              ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 italic placeholder:text-gray-400 dark:placeholder:text-gray-500 placeholder:opacity-60 pointer-events-none'
+                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                               }`}
                             title={
                               isOff()
@@ -868,7 +869,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                           return (
                             <tr
-                              class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                              class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors animate-enter ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                             >
                               {/* Alert toggle column */}
                               <td class="p-1 px-2 text-center align-middle">
@@ -940,8 +941,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                             rel="noopener noreferrer"
                                             onClick={(e) => e.stopPropagation()}
                                             class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${resource.disabled
-                                                ? 'text-gray-500 dark:text-gray-500'
-                                                : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
+                                              ? 'text-gray-500 dark:text-gray-500'
+                                              : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
                                               }`}
                                             title={`Open ${resource.displayName || resource.name} web interface`}
                                           >
@@ -1148,8 +1149,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   setActiveMetricInput(null);
                                                 }}
                                                 class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
-                                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
-                                                    : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+                                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
+                                                  : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
                                                   }`}
                                               />
                                             </div>
@@ -1379,7 +1380,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                       return (
                         <tr
-                          class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                          class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors animate-enter ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                         >
                           {/* Alert toggle column */}
                           <td class="p-1 px-2 text-center align-middle">
@@ -1456,8 +1457,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                       rel="noopener noreferrer"
                                       onClick={(e) => e.stopPropagation()}
                                       class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${resource.disabled
-                                          ? 'text-gray-500 dark:text-gray-500'
-                                          : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
+                                        ? 'text-gray-500 dark:text-gray-500'
+                                        : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
                                         }`}
                                       title={`Open ${resource.displayName || resource.name} web interface`}
                                     >
@@ -1600,8 +1601,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                             setActiveMetricInput(null);
                                           }}
                                           class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
-                                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
-                                              : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+                                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
+                                            : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
                                             }`}
                                         />
                                       </div>

@@ -635,7 +635,7 @@ export const UnifiedAgents: Component = () => {
                     </div>
                 </Show>
 
-                <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                <Card padding="none" tone="glass" class="overflow-hidden rounded-lg">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-800">
                             <tr>
@@ -656,7 +656,7 @@ export const UnifiedAgents: Component = () => {
                                 </tr>
                             }>
                                 {(agent) => (
-                                    <tr>
+                                    <tr class="animate-enter">
                                         <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                                             {agent.displayName || agent.hostname}
                                             <Show when={agent.displayName && agent.displayName !== agent.hostname}>
@@ -709,7 +709,7 @@ export const UnifiedAgents: Component = () => {
                             </For>
                         </tbody>
                     </table>
-                </div>
+                </Card>
             </Card>
         </div >
     );

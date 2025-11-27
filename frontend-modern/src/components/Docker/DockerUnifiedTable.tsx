@@ -1252,7 +1252,7 @@ const DockerContainerRow: Component<{
   return (
     <>
       <div
-        class={`grid items-center transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
+        class={`grid items-center transition-all duration-200 animate-enter ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
         style={{ 'grid-template-columns': props.gridTemplate() }}
         onClick={toggle}
         aria-expanded={expanded()}
@@ -1949,7 +1949,7 @@ const DockerServiceRow: Component<{
   return (
     <>
       <div
-        class={`grid items-center transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
+        class={`grid items-center transition-all duration-200 animate-enter ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
         style={{ 'grid-template-columns': props.gridTemplate() }}
         onClick={toggle}
         aria-expanded={expanded()}
@@ -2407,7 +2407,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
           </Card>
         }
       >
-        <Card padding="none" class="overflow-hidden">
+        <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto">
             {/* Header Row */}
             <div

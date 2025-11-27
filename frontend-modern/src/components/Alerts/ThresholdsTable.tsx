@@ -1,6 +1,7 @@
 import { createSignal, createMemo, Show, For, onMount, onCleanup, createEffect } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import Toggle from '@/components/shared/Toggle';
+import { Card } from '@/components/shared/Card';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
@@ -198,37 +199,37 @@ interface ThresholdsTableProps {
   setDockerDefaults: (
     value:
       | {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }
       | ((prev: {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }) => {
-          cpu: number;
-          memory: number;
-          disk: number;
-          restartCount: number;
-          restartWindow: number;
-          memoryWarnPct: number;
-          memoryCriticalPct: number;
-          serviceWarnGapPercent: number;
-          serviceCriticalGapPercent: number;
-        }),
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }) => {
+        cpu: number;
+        memory: number;
+        disk: number;
+        restartCount: number;
+        restartWindow: number;
+        memoryWarnPct: number;
+        memoryCriticalPct: number;
+        serviceWarnGapPercent: number;
+        serviceCriticalGapPercent: number;
+      }),
   ) => void;
   dockerIgnoredPrefixes: () => string[];
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
@@ -309,9 +310,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
   const [searchTerm, setSearchTerm] = createSignal('');
   const [editingId, setEditingId] = createSignal<string | null>(null);
-const [editingThresholds, setEditingThresholds] = createSignal<
-  Record<string, number | undefined>
->({});
+  const [editingThresholds, setEditingThresholds] = createSignal<
+    Record<string, number | undefined>
+  >({});
   const [editingNote, setEditingNote] = createSignal('');
   const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'hosts' | 'docker'>('proxmox');
   let searchInputRef: HTMLInputElement | undefined;
@@ -640,7 +641,7 @@ const [editingThresholds, setEditingThresholds] = createSignal<
     if (search) {
       return nodes.filter((n) => n.name.toLowerCase().includes(search));
     }
-  return nodes;
+    return nodes;
   }, []);
 
   const hostAgentsWithOverrides = createMemo<Resource[]>((prev = []) => {
@@ -1103,13 +1104,13 @@ const [editingThresholds, setEditingThresholds] = createSignal<
     const differs =
       current.enabled !== factory.enabled ||
       (current.warningDays ?? DEFAULT_SNAPSHOT_WARNING) !==
-        (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
+      (factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING) ||
       (current.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) !==
-        (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
+      (factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL) ||
       (current.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) !==
-        (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
+      (factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE) ||
       (current.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE) !==
-        (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
+      (factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE);
     return differs ? 1 : 0;
   });
 
@@ -1118,9 +1119,9 @@ const [editingThresholds, setEditingThresholds] = createSignal<
     const backupFactory = backupFactoryConfig();
     return backupCurrent.enabled !== backupFactory.enabled ||
       (backupCurrent.warningDays ?? DEFAULT_BACKUP_WARNING) !==
-        (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
+      (backupFactory.warningDays ?? DEFAULT_BACKUP_WARNING) ||
       (backupCurrent.criticalDays ?? DEFAULT_BACKUP_CRITICAL) !==
-        (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL)
+      (backupFactory.criticalDays ?? DEFAULT_BACKUP_CRITICAL)
       ? 1
       : 0;
   });
@@ -1179,11 +1180,11 @@ const [editingThresholds, setEditingThresholds] = createSignal<
 
     const filteredGuests = search
       ? guests.filter(
-          (g) =>
-            g.name.toLowerCase().includes(search) ||
-            g.vmid?.toString().includes(search) ||
-            g.node?.toLowerCase().includes(search),
-        )
+        (g) =>
+          g.name.toLowerCase().includes(search) ||
+          g.vmid?.toString().includes(search) ||
+          g.node?.toLowerCase().includes(search),
+      )
       : guests;
 
     // Group by node
@@ -1631,9 +1632,9 @@ const [editingThresholds, setEditingThresholds] = createSignal<
 
     const hasStateOnlyOverride = Boolean(
       resource.disabled ||
-        resource.disableConnectivity ||
-        resource.poweredOffSeverity !== undefined ||
-        noteForOverride !== undefined,
+      resource.disableConnectivity ||
+      resource.poweredOffSeverity !== undefined ||
+      noteForOverride !== undefined,
     );
 
     // If no threshold overrides or state flags remain, remove the override entirely
@@ -1739,11 +1740,11 @@ const [editingThresholds, setEditingThresholds] = createSignal<
     setEditingNote('');
   };
 
-const cancelEdit = () => {
-  setEditingId(null);
-  setEditingThresholds({});
-  setEditingNote('');
-};
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingThresholds({});
+    setEditingNote('');
+  };
 
   const updateMetricDelay = (
     typeKey: 'guest' | 'node' | 'storage' | 'pbs',
@@ -2217,44 +2218,40 @@ const cancelEdit = () => {
           <button
             type="button"
             onClick={() => handleTabClick('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
-              activeTab() === 'proxmox'
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${activeTab() === 'proxmox'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
+              }`}
           >
             Proxmox / PBS
           </button>
           <button
             type="button"
             onClick={() => handleTabClick('pmg')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
-              activeTab() === 'pmg'
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${activeTab() === 'pmg'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
+              }`}
           >
             Mail Gateway
           </button>
           <button
             type="button"
             onClick={() => handleTabClick('hosts')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
-              activeTab() === 'hosts'
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${activeTab() === 'hosts'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
+              }`}
           >
             Host Agents
           </button>
           <button
             type="button"
             onClick={() => handleTabClick('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${
-              activeTab() === 'docker'
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer ${activeTab() === 'docker'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
+              }`}
           >
             Containers
           </button>
@@ -2360,9 +2357,9 @@ const cancelEdit = () => {
                 factoryDefaults={
                   props.factoryNodeDefaults
                     ? {
-                        cpu: props.factoryNodeDefaults.cpu,
-                        memory: props.factoryNodeDefaults.memory,
-                      }
+                      cpu: props.factoryNodeDefaults.cpu,
+                      memory: props.factoryNodeDefaults.memory,
+                    }
                     : undefined
                 }
                 onResetDefaults={props.resetNodeDefaults}
@@ -2745,7 +2742,7 @@ const cancelEdit = () => {
         </Show>
 
         <Show when={activeTab() === 'docker'}>
-          <div class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <Card padding="md" tone="glass" class="mb-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -2763,26 +2760,26 @@ const cancelEdit = () => {
                   onClick={handleResetDockerIgnored}
                 >
                   Reset
-        </button>
-      </Show>
-    </div>
-    <textarea
-      value={dockerIgnoredInput()}
-      onInput={(event) => handleDockerIgnoredChange(event.currentTarget.value)}
-      onKeyDown={(event) => {
-        // Ensure Enter key works in textarea for creating new lines
-        if (event.key === 'Enter') {
-          // Don't prevent default - allow the newline to be inserted
-          event.stopPropagation();
-        }
-      }}
-      placeholder="runner-"
-      rows={4}
-      class="mt-4 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
-    />
-  </div>
+                </button>
+              </Show>
+            </div>
+            <textarea
+              value={dockerIgnoredInput()}
+              onInput={(event) => handleDockerIgnoredChange(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                // Ensure Enter key works in textarea for creating new lines
+                if (event.key === 'Enter') {
+                  // Don't prevent default - allow the newline to be inserted
+                  event.stopPropagation();
+                }
+              }}
+              placeholder="runner-"
+              rows={4}
+              class="mt-4 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+            />
+          </Card>
 
-          <div class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <Card padding="md" tone="glass" class="mb-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Swarm service alerts</h3>
@@ -2865,7 +2862,7 @@ const cancelEdit = () => {
                 {serviceGapValidationMessage()}
               </p>
             )}
-          </div>
+          </Card>
 
           <Show when={hasSection('dockerHosts')}>
             <div ref={registerSection('dockerHosts')} class="scroll-mt-24">

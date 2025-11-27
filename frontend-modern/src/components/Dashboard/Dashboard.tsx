@@ -929,165 +929,165 @@ export function Dashboard(props: DashboardProps) {
       {/* Table View */}
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
-          <Card padding="none" class="mb-4 bg-white dark:bg-gray-800">
+          <Card padding="none" tone="glass" class="mb-4">
             <div class="overflow-x-auto">
-            {/* Desktop Header */}
-            <div
-              class="grid border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[520px] md:min-w-0"
-              style={{ 'grid-template-columns': headerGridTemplate() }}
-            >
-              {/* Name Header */}
+              {/* Desktop Header */}
               <div
-                class="pl-4 pr-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center whitespace-nowrap"
-                onClick={() => handleSort('name')}
+                class="grid border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[520px] md:min-w-0"
+                style={{ 'grid-template-columns': headerGridTemplate() }}
               >
-                Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                {/* Name Header */}
+                <div
+                  class="pl-4 pr-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center whitespace-nowrap"
+                  onClick={() => handleSort('name')}
+                >
+                  Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </div>
+
+                {/* Type */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('type')}
+                  title="Type"
+                >
+                  <span class="hidden xl:inline">Type</span>
+                  <span class="xl:hidden">T</span>
+                  {sortKey() === 'type' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
+                {/* VMID */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('vmid')}
+                  title="VMID"
+                >
+                  <span class="hidden xl:inline">VMID</span>
+                  <span class="xl:hidden">ID</span>
+                  {sortKey() === 'vmid' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
+                {/* Uptime */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('uptime')}
+                  title="Uptime"
+                >
+                  <span class="hidden xl:inline">Uptime</span>
+                  <span class="xl:hidden">Up</span>
+                  {sortKey() === 'uptime' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
+                {/* CPU */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('cpu')}
+                >
+                  CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </div>
+                {/* Memory */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('memory')}
+                  title="Memory"
+                >
+                  <span class="hidden xl:inline">Memory</span>
+                  <span class="xl:hidden">Mem</span>
+                  {sortKey() === 'memory' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
+                {/* Disk */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('disk')}
+                >
+                  Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </div>
+                {/* Disk Read */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('diskRead')}
+                  title="Disk Read"
+                >
+                  <span class="hidden xl:inline">Disk Read</span>
+                  <span class="xl:hidden">D Rd</span>
+                  {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
+                {/* Disk Write */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('diskWrite')}
+                  title="Disk Write"
+                >
+                  <span class="hidden xl:inline">Disk Write</span>
+                  <span class="xl:hidden">D Wr</span>
+                  {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
+                {/* Net In */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('networkIn')}
+                  title="Net In"
+                >
+                  <span class="hidden xl:inline">Net In</span>
+                  <span class="xl:hidden">N In</span>
+                  {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
+                {/* Net Out */}
+                <div
+                  class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
+                  onClick={() => handleSort('networkOut')}
+                  title="Net Out"
+                >
+                  <span class="hidden xl:inline">Net Out</span>
+                  <span class="xl:hidden">N Out</span>
+                  {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                </div>
               </div>
 
-              {/* Type */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('type')}
-                title="Type"
-              >
-                <span class="hidden xl:inline">Type</span>
-                <span class="xl:hidden">T</span>
-                {sortKey() === 'type' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+              {/* Guest List */}
+              <div class="divide-y divide-gray-200 dark:divide-gray-700 min-w-[520px] md:min-w-0">
+                <For
+                  each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
+                    const nodeA = nodeByInstance()[instanceIdA];
+                    const nodeB = nodeByInstance()[instanceIdB];
+                    const labelA = nodeA ? getNodeDisplayName(nodeA) : instanceIdA;
+                    const labelB = nodeB ? getNodeDisplayName(nodeB) : instanceIdB;
+                    return labelA.localeCompare(labelB) || instanceIdA.localeCompare(instanceIdB);
+                  })}
+                  fallback={<></>}
+                >
+                  {([instanceId, guests]) => {
+                    const node = nodeByInstance()[instanceId];
+                    return (
+                      <>
+                        <Show when={node && groupingMode() === 'grouped'}>
+                          <NodeGroupHeader node={node!} />
+                        </Show>
+                        <For each={guests} fallback={<></>}>
+                          {(guest) => {
+                            const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
+                            const metadata =
+                              guestMetadata()[guestId] ||
+                              guestMetadata()[`${guest.node}-${guest.vmid}`];
+                            const parentNode = node ?? resolveParentNode(guest);
+                            const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
+                            return (
+                              <ComponentErrorBoundary name="GuestRow">
+                                <GuestRow
+                                  guest={guest}
+                                  alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
+                                  customUrl={metadata?.customUrl}
+                                  onTagClick={handleTagClick}
+                                  activeSearch={search()}
+                                  parentNodeOnline={parentNodeOnline}
+                                  onCustomUrlUpdate={handleCustomUrlUpdate}
+                                  isGroupedView={groupingMode() === 'grouped'}
+                                />
+                              </ComponentErrorBoundary>
+                            );
+                          }}
+                        </For>
+                      </>
+                    );
+                  }}
+                </For>
               </div>
-              {/* VMID */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('vmid')}
-                title="VMID"
-              >
-                <span class="hidden xl:inline">VMID</span>
-                <span class="xl:hidden">ID</span>
-                {sortKey() === 'vmid' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-              </div>
-              {/* Uptime */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('uptime')}
-                title="Uptime"
-              >
-                <span class="hidden xl:inline">Uptime</span>
-                <span class="xl:hidden">Up</span>
-                {sortKey() === 'uptime' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-              </div>
-              {/* CPU */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('cpu')}
-              >
-                CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
-              </div>
-              {/* Memory */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('memory')}
-                title="Memory"
-              >
-                <span class="hidden xl:inline">Memory</span>
-                <span class="xl:hidden">Mem</span>
-                {sortKey() === 'memory' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-              </div>
-              {/* Disk */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('disk')}
-              >
-                Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
-              </div>
-              {/* Disk Read */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('diskRead')}
-                title="Disk Read"
-              >
-                <span class="hidden xl:inline">Disk Read</span>
-                <span class="xl:hidden">D Rd</span>
-                {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-              </div>
-              {/* Disk Write */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('diskWrite')}
-                title="Disk Write"
-              >
-                <span class="hidden xl:inline">Disk Write</span>
-                <span class="xl:hidden">D Wr</span>
-                {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-              </div>
-              {/* Net In */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('networkIn')}
-                title="Net In"
-              >
-                <span class="hidden xl:inline">Net In</span>
-                <span class="xl:hidden">N In</span>
-                {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-              </div>
-              {/* Net Out */}
-              <div
-                class="px-1 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center whitespace-nowrap"
-                onClick={() => handleSort('networkOut')}
-                title="Net Out"
-              >
-                <span class="hidden xl:inline">Net Out</span>
-                <span class="xl:hidden">N Out</span>
-                {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-              </div>
-            </div>
-
-            {/* Guest List */}
-            <div class="divide-y divide-gray-200 dark:divide-gray-700 min-w-[520px] md:min-w-0">
-              <For
-                each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
-                  const nodeA = nodeByInstance()[instanceIdA];
-                  const nodeB = nodeByInstance()[instanceIdB];
-                  const labelA = nodeA ? getNodeDisplayName(nodeA) : instanceIdA;
-                  const labelB = nodeB ? getNodeDisplayName(nodeB) : instanceIdB;
-                  return labelA.localeCompare(labelB) || instanceIdA.localeCompare(instanceIdB);
-                })}
-                fallback={<></>}
-              >
-                {([instanceId, guests]) => {
-                  const node = nodeByInstance()[instanceId];
-                  return (
-                    <>
-                      <Show when={node && groupingMode() === 'grouped'}>
-                        <NodeGroupHeader node={node!} />
-                      </Show>
-                      <For each={guests} fallback={<></>}>
-                        {(guest) => {
-                          const guestId = guest.id || `${guest.instance}-${guest.vmid}`;
-                          const metadata =
-                            guestMetadata()[guestId] ||
-                            guestMetadata()[`${guest.node}-${guest.vmid}`];
-                          const parentNode = node ?? resolveParentNode(guest);
-                          const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
-                          return (
-                            <ComponentErrorBoundary name="GuestRow">
-                              <GuestRow
-                                guest={guest}
-                                alertStyles={getAlertStyles(guestId, activeAlerts, alertsEnabled())}
-                                customUrl={metadata?.customUrl}
-                                onTagClick={handleTagClick}
-                                activeSearch={search()}
-                                parentNodeOnline={parentNodeOnline}
-                                onCustomUrlUpdate={handleCustomUrlUpdate}
-                                isGroupedView={groupingMode() === 'grouped'}
-                              />
-                            </ComponentErrorBoundary>
-                          );
-                        }}
-                      </For>
-                    </>
-                  );
-                }}
-              </For>
-            </div>
             </div>
           </Card>
         </ComponentErrorBoundary>

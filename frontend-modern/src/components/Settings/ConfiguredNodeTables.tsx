@@ -1,5 +1,6 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import type { NodeConfig } from '@/types/nodes';
+import { Card } from '@/components/shared/Card';
 
 type NodeConfigWithStatus = NodeConfig & {
   hasPassword?: boolean;
@@ -271,7 +272,7 @@ const resolvePveStatusMeta = (
 
 export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
   return (
-    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+    <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
       <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
         <thead class="bg-gray-50 dark:bg-gray-800/70">
           <tr>
@@ -310,7 +311,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                 ),
               );
               return (
-                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors animate-enter">
                   <td class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
@@ -492,7 +493,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
           </For>
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 };
 
@@ -541,7 +542,7 @@ const resolvePbsStatusMeta = (
 
 export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
   return (
-    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+    <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
       <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
         <thead class="bg-gray-50 dark:bg-gray-800/70">
           <tr>
@@ -567,7 +568,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
             {(node) => {
               const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
               return (
-                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors animate-enter">
                   <td class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
@@ -675,7 +676,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
           </For>
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 };
 
@@ -724,7 +725,7 @@ const resolvePmgStatusMeta = (
 
 export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
   return (
-    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+    <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
       <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
         <thead class="bg-gray-50 dark:bg-gray-800/70">
           <tr>
@@ -750,7 +751,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
             {(node) => {
               const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
               return (
-                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors animate-enter">
                   <td class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
@@ -847,6 +848,6 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
           </For>
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 };

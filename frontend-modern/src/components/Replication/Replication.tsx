@@ -101,7 +101,7 @@ const Replication: Component = () => {
             </Card>
           }
         >
-          <Card padding="none">
+          <Card padding="none" tone="glass">
             <div class="overflow-x-auto">
               <table class="min-w-[1000px] w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900/40">
@@ -121,7 +121,7 @@ const Replication: Component = () => {
                     {(job) => {
                       const badge = getStatusBadge(job);
                       return (
-                        <tr class="hover:bg-gray-50/80 dark:hover:bg-gray-900/40 transition-colors">
+                        <tr class="hover:bg-gray-50/80 dark:hover:bg-gray-900/40 transition-colors animate-enter">
                           <td class="px-4 py-3">
                             <div class="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px]">
                               {job.guestName || `VM ${job.guestId ?? ''}`}

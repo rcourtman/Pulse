@@ -1,6 +1,6 @@
 import { JSX, splitProps, mergeProps } from 'solid-js';
 
-type Tone = 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger';
+type Tone = 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger' | 'glass';
 type Padding = 'none' | 'sm' | 'md' | 'lg';
 
 type CardProps = {
@@ -17,6 +17,7 @@ const toneClassMap: Record<Tone, string> = {
   success: 'bg-green-50/70 dark:bg-green-900/20',
   warning: 'bg-amber-50/80 dark:bg-amber-900/20',
   danger: 'bg-red-50/80 dark:bg-red-900/20',
+  glass: 'glass',
 };
 
 const paddingClassMap: Record<Padding, string> = {
