@@ -101,15 +101,15 @@ export function MetricBar(props: MetricBarProps) {
     <Show
       when={viewMode() === 'sparklines' && props.resourceId}
       fallback={
-        // Original progress bar mode
-        <div ref={containerRef} class="metric-text w-full h-4 flex items-center">
-          <div class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded">
+        // Original progress bar mode - capped width for better appearance on wide screens
+        <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
+          <div class="relative w-full max-w-[140px] h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded">
             <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
-            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
+            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none">
               <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
                 <span>{props.label}</span>
                 <Show when={showSublabel()}>
-                  <span class="metric-sublabel font-normal">
+                  <span class="metric-sublabel font-normal text-gray-500 dark:text-gray-300">
                     ({props.sublabel})
                   </span>
                 </Show>

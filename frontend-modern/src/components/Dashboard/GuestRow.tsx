@@ -111,14 +111,15 @@ interface ColumnDef {
 }
 
 export const GUEST_COLUMNS: ColumnDef[] = [
-  { id: 'name', label: 'Name', priority: 'essential', minWidth: '100px', flex: 1.5 },
+  { id: 'name', label: 'Name', priority: 'essential', minWidth: '100px', maxWidth: '300px' },
   { id: 'type', label: 'Type', priority: 'essential', minWidth: '24px', maxWidth: '50px' },
   { id: 'vmid', label: 'VMID', priority: 'essential', minWidth: '28px', maxWidth: '55px' },
   { id: 'uptime', label: 'Uptime', priority: 'essential', minWidth: '28px', maxWidth: '65px' },
-  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '50px', flex: 1 },
-  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '50px', flex: 1 },
-  { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '50px', flex: 1 },
-  // I/O columns - fixed width matching v4.32.5 (grows at breakpoints to fit full header text)
+  // Metric columns - fixed width to match progress bar max-width (140px + padding)
+  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '50px', maxWidth: '156px' },
+  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '50px', maxWidth: '156px' },
+  { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '50px', maxWidth: '156px' },
+  // I/O columns - fixed width
   { id: 'diskRead', label: 'Disk Read', priority: 'essential', minWidth: '56px', maxWidth: '90px' },
   { id: 'diskWrite', label: 'Disk Write', priority: 'essential', minWidth: '56px', maxWidth: '90px' },
   { id: 'netIn', label: 'Net In', priority: 'essential', minWidth: '56px', maxWidth: '70px' },

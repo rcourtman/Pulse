@@ -76,11 +76,12 @@ interface ColumnDef {
 }
 
 const BASE_COLUMNS: ColumnDef[] = [
-  { id: 'name', label: 'Node', priority: 'essential', minWidth: '70px', flex: 1.5, align: 'left' },
-  { id: 'uptime', label: 'Uptime', priority: 'essential', icon: ClockIcon, minWidth: '35px', maxWidth: '70px', align: 'center' },
-  { id: 'cpu', label: 'CPU', priority: 'essential', icon: CpuIcon, minWidth: '40px', flex: 1.2, align: 'center' },
-  { id: 'memory', label: 'Memory', priority: 'essential', icon: MemoryIcon, minWidth: '40px', flex: 1.2, align: 'center' },
-  { id: 'disk', label: 'Disk', priority: 'essential', icon: DiskIcon, minWidth: '40px', flex: 1.2, align: 'center' },
+  { id: 'name', label: 'Node', priority: 'essential', minWidth: '100px', maxWidth: '300px', align: 'left' },
+  { id: 'uptime', label: 'Uptime', priority: 'essential', icon: ClockIcon, minWidth: '35px', flex: 1, align: 'center' },
+  // Metric columns - fixed width to match progress bar max-width (140px + padding)
+  { id: 'cpu', label: 'CPU', priority: 'essential', icon: CpuIcon, minWidth: '40px', maxWidth: '156px', align: 'center' },
+  { id: 'memory', label: 'Memory', priority: 'essential', icon: MemoryIcon, minWidth: '40px', maxWidth: '156px', align: 'center' },
+  { id: 'disk', label: 'Disk', priority: 'essential', icon: DiskIcon, minWidth: '40px', maxWidth: '156px', align: 'center' },
 ];
 
 const TEMP_COLUMN: ColumnDef = {
@@ -89,7 +90,7 @@ const TEMP_COLUMN: ColumnDef = {
   priority: 'essential',
   icon: TempIcon,
   minWidth: '35px',
-  maxWidth: '55px',
+  flex: 1,
   align: 'center'
 };
 
@@ -150,16 +151,16 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     switch (props.currentTab) {
       case 'dashboard':
         return [
-          { header: 'VMs', key: 'vmCount', icon: VMIcon, minWidth: '40px', maxWidth: '50px' },
-          { header: 'CTs', key: 'containerCount', icon: ContainerIcon, minWidth: '40px', maxWidth: '50px' },
+          { header: 'VMs', key: 'vmCount', icon: VMIcon, minWidth: '40px' },
+          { header: 'CTs', key: 'containerCount', icon: ContainerIcon, minWidth: '40px' },
         ];
       case 'storage':
         return [
-          { header: 'Storage', key: 'storageCount', icon: DiskIcon, minWidth: '50px', maxWidth: '70px' },
-          { header: 'Disks', key: 'diskCount', icon: DiskIcon, minWidth: '45px', maxWidth: '60px' },
+          { header: 'Storage', key: 'storageCount', icon: DiskIcon, minWidth: '50px' },
+          { header: 'Disks', key: 'diskCount', icon: DiskIcon, minWidth: '45px' },
         ];
       case 'backups':
-        return [{ header: 'Backups', key: 'backupCount', icon: BackupIcon, minWidth: '50px', maxWidth: '70px' }];
+        return [{ header: 'Backups', key: 'backupCount', icon: BackupIcon, minWidth: '50px' }];
       default:
         return [];
     }
@@ -181,7 +182,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
       cols.push(TEMP_COLUMN);
     }
 
-    // Add count columns based on tab
+    // Add count columns based on tab - these share extra space evenly with other flex columns
     countColumns().forEach((cc) => {
       cols.push({
         id: cc.key,
@@ -189,7 +190,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
         priority: 'essential' as ColumnPriority,
         icon: cc.icon,
         minWidth: cc.minWidth || '40px',
-        maxWidth: cc.maxWidth || '50px',
+        flex: 1,
         align: 'center',
       });
     });

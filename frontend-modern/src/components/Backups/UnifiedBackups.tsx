@@ -1869,7 +1869,6 @@ const UnifiedBackups: Component = () => {
             <style>{`
           .overflow-x-auto::-webkit-scrollbar { display: none; }
           .backup-table {
-            table-layout: fixed;
             width: 100%;
           }
           .backup-table th,
@@ -2039,54 +2038,54 @@ const UnifiedBackups: Component = () => {
                   <thead>
                     <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[8%] min-w-[60px]"
+                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('vmid')}
                       >
-                        {hasHostBackups() ? 'VMID/Host' : 'VMID'}{' '}
+                        {hasHostBackups() ? 'ID' : 'VMID'}{' '}
                         {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[8%] min-w-[60px]"
+                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('type')}
                       >
                         Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-auto"
+                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('name')}
                       >
                         Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
-                        class="hidden xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[8%]"
+                        class="hidden xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('node')}
                       >
                         Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
                         <th
-                          class="hidden 2xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[8%]"
+                          class="hidden 2xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('owner')}
                         >
                           Owner {sortKey() === 'owner' && (sortDirection() === 'asc' ? '▲' : '▼')}
                         </th>
                       </Show>
                       <th
-                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[14%] min-w-[120px]"
+                        class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('backupTime')}
                       >
                         Time {sortKey() === 'backupTime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <Show when={backupTypeFilter() !== 'snapshot'}>
                         <th
-                          class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[8%]"
+                          class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('size')}
                         >
                           Size {sortKey() === 'size' && (sortDirection() === 'asc' ? '▲' : '▼')}
                         </th>
                       </Show>
                       <th
-                        class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[8%]"
+                        class="hidden lg:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         onClick={() => handleSort('backupType')}
                       >
                         Backup{' '}
@@ -2094,7 +2093,7 @@ const UnifiedBackups: Component = () => {
                       </th>
                       <Show when={backupTypeFilter() !== 'snapshot'}>
                         <th
-                          class="hidden xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[12%]"
+                          class="hidden xl:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('storage')}
                         >
                           Location{' '}
@@ -2103,15 +2102,15 @@ const UnifiedBackups: Component = () => {
                       </Show>
                       <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
                         <th
-                          class="hidden lg:table-cell px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 w-[6%]"
+                          class="hidden lg:table-cell px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                           onClick={() => handleSort('verified')}
                         >
-                          Verified{' '}
-                          {sortKey() === 'verified' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                          <span title="Verified">✓</span>
+                          {sortKey() === 'verified' && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
                         </th>
                       </Show>
                       <th
-                        class="hidden md:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[15%]"
+                        class="hidden md:table-cell px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider"
                       >
                         Details
                       </th>

@@ -122,15 +122,16 @@ interface DockerColumnDef extends ColumnConfig {
 // - supplementary: Visible on large screens and up (lg: 1024px+)
 // - detailed: Visible on extra large screens and up (xl: 1280px+)
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
-  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: '100px', flex: 1.5, sortKey: 'resource' },
-  { id: 'type', label: 'Type', priority: 'essential', minWidth: '24px', maxWidth: '50px', sortKey: 'type' },
-  { id: 'image', label: 'Image / Stack', shortLabel: 'Image', priority: 'essential', minWidth: '80px', flex: 1, sortKey: 'image' },
-  { id: 'status', label: 'Status', priority: 'essential', minWidth: '60px', maxWidth: '100px', sortKey: 'status' },
-  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '50px', flex: 1, sortKey: 'cpu' },
-  { id: 'memory', label: 'Memory', shortLabel: 'Mem', priority: 'essential', minWidth: '50px', flex: 1, sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', priority: 'essential', minWidth: '50px', flex: 1, sortKey: 'disk' },
-  { id: 'tasks', label: 'Tasks / Restarts', shortLabel: 'Tasks', priority: 'essential', minWidth: '40px', maxWidth: '70px', sortKey: 'tasks' },
-  { id: 'updated', label: 'Updated / Uptime', shortLabel: 'Updated', priority: 'essential', minWidth: '50px', maxWidth: '80px', sortKey: 'updated' },
+  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: '100px', flex: 1, sortKey: 'resource' },
+  { id: 'type', label: 'Type', priority: 'essential', minWidth: '50px', maxWidth: '80px', sortKey: 'type' },
+  { id: 'image', label: 'Image / Stack', shortLabel: 'Image', priority: 'essential', minWidth: '80px', maxWidth: '250px', sortKey: 'image' },
+  { id: 'status', label: 'Status', priority: 'essential', minWidth: '80px', maxWidth: '130px', sortKey: 'status' },
+  // Metric columns - fixed width to match progress bar max-width (140px + padding)
+  // Note: Disk column removed - Docker API rarely provides this data
+  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '50px', maxWidth: '156px', sortKey: 'cpu' },
+  { id: 'memory', label: 'Memory', shortLabel: 'Mem', priority: 'essential', minWidth: '50px', maxWidth: '156px', sortKey: 'memory' },
+  { id: 'tasks', label: 'Tasks', shortLabel: 'Tasks', priority: 'essential', minWidth: '60px', maxWidth: '80px', sortKey: 'tasks' },
+  { id: 'updated', label: 'Uptime', shortLabel: 'Uptime', priority: 'essential', minWidth: '70px', maxWidth: '90px', sortKey: 'updated' },
 ];
 
 // Global state for currently expanded drawer (only one drawer open at a time)
@@ -2451,9 +2452,9 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                         </div>
                       </Show>
                       <Show when={!isResource}>
-                        <div class="flex items-center gap-1">
-                          <span class="hidden xl:inline">{col.label}</span>
-                          <span class="xl:hidden">{col.shortLabel || col.label}</span>
+                        <div class="flex items-center gap-1 overflow-hidden">
+                          <span class="hidden xl:inline truncate">{col.label}</span>
+                          <span class="xl:hidden truncate">{col.shortLabel || col.label}</span>
                           {colSortKey && renderSortIndicator(colSortKey)}
                         </div>
                       </Show>
