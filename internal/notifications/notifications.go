@@ -2241,7 +2241,7 @@ func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr
 	if err := json.Unmarshal(buf.Bytes(), &jsonCheck); err != nil {
 		log.Error().
 			Err(err).
-			Str("payload", string(buf.Bytes())).
+			Str("payload", buf.String()).
 			Msg("Generated webhook payload is invalid JSON")
 		return nil, fmt.Errorf("template produced invalid JSON: %w", err)
 	}

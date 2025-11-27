@@ -285,7 +285,7 @@ func (s *Scanner) DiscoverServersWithCallbacks(ctx context.Context, subnet strin
 			} else if errors.Is(err, context.DeadlineExceeded) {
 				errType = "timeout"
 				// Provide user-friendly timeout message
-				errMsg = fmt.Sprintf("Scan timed out after 2 minutes - this is normal for large networks. Servers found in earlier phases are still available.")
+				errMsg = "Scan timed out after 2 minutes - this is normal for large networks. Servers found in earlier phases are still available."
 			}
 			result.AddError("extra_targets", errType, errMsg, "", 0)
 			if errors.Is(err, context.Canceled) {
@@ -333,7 +333,7 @@ func (s *Scanner) DiscoverServersWithCallbacks(ctx context.Context, subnet strin
 			} else if errors.Is(err, context.DeadlineExceeded) {
 				errType = "timeout"
 				// Provide user-friendly timeout message
-				errMsg = fmt.Sprintf("Scan timed out after 2 minutes - this is normal for large networks. Servers found in earlier phases are still available.")
+				errMsg = "Scan timed out after 2 minutes - this is normal for large networks. Servers found in earlier phases are still available."
 			}
 			result.AddError(phase.Name, errType, errMsg, "", 0)
 			if errors.Is(err, context.Canceled) {
@@ -781,9 +781,7 @@ func clonePhase(phase envdetect.SubnetPhase) envdetect.SubnetPhase {
 	cloned := phase
 	if phase.Subnets != nil {
 		cloned.Subnets = make([]net.IPNet, len(phase.Subnets))
-		for i, subnet := range phase.Subnets {
-			cloned.Subnets[i] = subnet
-		}
+		copy(cloned.Subnets, phase.Subnets)
 	}
 	return cloned
 }
