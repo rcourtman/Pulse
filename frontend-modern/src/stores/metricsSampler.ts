@@ -17,7 +17,6 @@ import { logger } from '@/utils/logger';
 
 const SAMPLE_INTERVAL_MS = 30 * 1000; // 30 seconds
 
-let samplerInterval: number | null = null;
 let isRunning = false;
 
 /**
@@ -139,7 +138,7 @@ export function startMetricsSampler(): void {
   isRunning = true;
 
   // Create interval that checks view mode before sampling
-  samplerInterval = window.setInterval(() => {
+  window.setInterval(() => {
     const viewMode = getMetricsViewMode();
 
     if (viewMode === 'sparklines') {
