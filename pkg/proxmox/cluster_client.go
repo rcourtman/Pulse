@@ -363,6 +363,9 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			Int("nodes", len(testNodes)).
 			Msg("Cluster endpoint passed connectivity test")
 
+		// Clear any stale error from previous failures now that connectivity succeeded
+		delete(cc.lastError, selectedEndpoint)
+
 		// Create the actual client with full timeout
 		newClient, err := NewClient(cfg)
 		if err != nil {
@@ -395,6 +398,13 @@ func (cc *ClusterClient) markUnhealthyWithError(endpoint string, errMsg string) 
 		cc.lastError[endpoint] = errMsg
 	}
 	cc.lastHealthCheck[endpoint] = time.Now()
+}
+
+// clearEndpointError removes any cached error for an endpoint after successful operations
+func (cc *ClusterClient) clearEndpointError(endpoint string) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	delete(cc.lastError, endpoint)
 }
 
 // recoverUnhealthyNodes attempts to recover unhealthy nodes
@@ -570,6 +580,8 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Execute the function
 		err = fn(client)
 		if err == nil {
+			// Clear any stale error for this endpoint on success
+			cc.clearEndpointError(clientEndpoint)
 			return nil
 		}
 		lastErr = err
