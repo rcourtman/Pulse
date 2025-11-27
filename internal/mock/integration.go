@@ -43,11 +43,6 @@ func SetEnabled(enable bool) {
 	setEnabled(enable, false)
 }
 
-// ToggleMockMode enables or disables mock mode at runtime (backwards-compatible helper).
-func ToggleMockMode(enable bool) {
-	SetEnabled(enable)
-}
-
 func setEnabled(enable bool, fromInit bool) {
 	current := enabled.Load()
 	if current == enable {

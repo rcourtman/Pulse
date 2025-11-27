@@ -192,25 +192,3 @@ type EmailProviderConfig struct {
 	SkipTLSVerify bool   `json:"skipTLSVerify"` // Skip TLS cert verification
 	AuthRequired  bool   `json:"authRequired"`  // Require authentication
 }
-
-// GetProviderDefaults returns default configuration for a provider
-func GetProviderDefaults(providerName string) *EmailProviderConfig {
-	providers := GetEmailProviders()
-	for _, provider := range providers {
-		if provider.Name == providerName {
-			return &EmailProviderConfig{
-				EmailConfig: EmailConfig{
-					SMTPHost: provider.SMTPHost,
-					SMTPPort: provider.SMTPPort,
-					TLS:      provider.TLS,
-				},
-				Provider:   providerName,
-				StartTLS:   provider.StartTLS,
-				MaxRetries: 3,
-				RetryDelay: 5,
-				RateLimit:  60, // Default 60 emails/minute
-			}
-		}
-	}
-	return nil
-}

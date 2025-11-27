@@ -1517,12 +1517,6 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 	}
 }
 
-// sendEmailWithContent sends email with given content (plain text)
-func (n *NotificationManager) sendEmailWithContent(subject, body string, config EmailConfig) {
-	// For backward compatibility, send as plain text
-	n.sendHTMLEmail(subject, "", body, config)
-}
-
 // sendGroupedWebhook sends a grouped webhook notification
 func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertList []*alerts.Alert) error {
 	var jsonData []byte
@@ -2224,11 +2218,6 @@ func templateFuncMap() template.FuncMap {
 	}
 }
 
-// generatePayloadFromTemplate renders the payload using Go templates
-func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, data WebhookPayloadData) ([]byte, error) {
-	return n.generatePayloadFromTemplateWithService(templateStr, data, "")
-}
-
 // generatePayloadFromTemplateWithService renders the payload using Go templates with service-specific handling
 func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr string, data WebhookPayloadData, service string) ([]byte, error) {
 	tmpl, err := template.New("webhook").Funcs(templateFuncMap()).Parse(templateStr)
@@ -2474,32 +2463,6 @@ func isNumericIP(host string) bool {
 	return len(host) > 0 && (strings.Contains(host, ".") || strings.Contains(host, ":"))
 }
 
-// isPrivateRange172 checks if an IP is in the 172.16.0.0/12 range
-func isPrivateRange172(host string) bool {
-	parts := strings.Split(host, ".")
-	if len(parts) < 2 {
-		return false
-	}
-	if parts[0] != "172" {
-		return false
-	}
-
-	// Check if second octet is between 16 and 31
-	if len(parts[1]) == 0 {
-		return false
-	}
-
-	second := 0
-	for _, char := range parts[1] {
-		if char < '0' || char > '9' {
-			return false
-		}
-		second = second*10 + int(char-'0')
-	}
-
-	return second >= 16 && second <= 31
-}
-
 // UpdateAllowedPrivateCIDRs parses and updates the list of allowed private CIDR ranges for webhooks
 func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) error {
 	n.allowedPrivateMu.Lock()
@@ -2598,44 +2561,6 @@ func (n *NotificationManager) GetWebhookHistory() []WebhookDelivery {
 	history := make([]WebhookDelivery, len(n.webhookHistory))
 	copy(history, n.webhookHistory)
 	return history
-}
-
-// groupAlerts groups alerts based on configuration
-func (n *NotificationManager) groupAlerts(alertList []*alerts.Alert) map[string][]*alerts.Alert {
-	groups := make(map[string][]*alerts.Alert)
-
-	if !n.groupByNode && !n.groupByGuest {
-		// No grouping - all alerts in one group
-		groups["all"] = alertList
-		return groups
-	}
-
-	for _, alert := range alertList {
-		var key string
-
-		if n.groupByNode && n.groupByGuest {
-			// Group by both node and guest type
-			guestType := "unknown"
-			if metadata, ok := alert.Metadata["resourceType"].(string); ok {
-				guestType = metadata
-			}
-			key = fmt.Sprintf("%s-%s", alert.Node, guestType)
-		} else if n.groupByNode {
-			// Group by node only
-			key = alert.Node
-		} else if n.groupByGuest {
-			// Group by guest type only
-			if metadata, ok := alert.Metadata["resourceType"].(string); ok {
-				key = metadata
-			} else {
-				key = "unknown"
-			}
-		}
-
-		groups[key] = append(groups[key], alert)
-	}
-
-	return groups
 }
 
 func buildNotificationTestAlert() *alerts.Alert {
