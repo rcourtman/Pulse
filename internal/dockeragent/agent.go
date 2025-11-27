@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1640,6 +1641,12 @@ func isUnraid() bool {
 	return err == nil
 }
 
+// resolveSymlink resolves symlinks to get the real path of a file.
+// This is needed for self-update because os.Rename() fails across filesystems.
+func resolveSymlink(path string) (string, error) {
+	return filepath.EvalSymlinks(path)
+}
+
 // verifyELFMagic checks that the file is a valid ELF binary
 func verifyELFMagic(path string) error {
 	f, err := os.Open(path)
@@ -1699,6 +1706,19 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	execPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Resolve symlinks to get the real path for atomic rename
+	// os.Rename() fails across filesystems, so we need the actual target path
+	realExecPath, err := resolveSymlink(execPath)
+	if err != nil {
+		a.logger.Debug().Err(err).Str("path", execPath).Msg("Failed to resolve symlinks, using original path")
+		realExecPath = execPath
+	} else if realExecPath != execPath {
+		a.logger.Debug().
+			Str("symlink", execPath).
+			Str("target", realExecPath).
+			Msg("Resolved symlink for self-update")
 	}
 
 	downloadBase := strings.TrimRight(target.URL, "/") + "/download/pulse-docker-agent"
@@ -1767,10 +1787,12 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 
 	checksumHeader := strings.TrimSpace(resp.Header.Get("X-Checksum-Sha256"))
 
-	// Create temporary file
-	tmpFile, err := os.CreateTemp("", "pulse-docker-agent-*.tmp")
+	// Create temporary file in the same directory as the target binary
+	// to ensure atomic rename works (os.Rename fails across filesystems)
+	targetDir := filepath.Dir(realExecPath)
+	tmpFile, err := os.CreateTemp(targetDir, "pulse-docker-agent-*.tmp")
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return fmt.Errorf("failed to create temp file in %s: %w", targetDir, err)
 	}
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath) // Clean up if something goes wrong
@@ -1815,16 +1837,16 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 		return fmt.Errorf("failed to make temp file executable: %w", err)
 	}
 
-	// Create backup of current binary
-	backupPath := execPath + ".backup"
-	if err := os.Rename(execPath, backupPath); err != nil {
+	// Create backup of current binary (use realExecPath for atomic operations)
+	backupPath := realExecPath + ".backup"
+	if err := os.Rename(realExecPath, backupPath); err != nil {
 		return fmt.Errorf("failed to backup current binary: %w", err)
 	}
 
 	// Move new binary to current location
-	if err := os.Rename(tmpPath, execPath); err != nil {
+	if err := os.Rename(tmpPath, realExecPath); err != nil {
 		// Restore backup on failure
-		os.Rename(backupPath, execPath)
+		os.Rename(backupPath, realExecPath)
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 

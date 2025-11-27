@@ -1229,6 +1229,93 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 		}
 	}
 
+	// Deploy agent installation scripts from tarball
+	scriptsDir := filepath.Join(extractDir, "scripts")
+	if _, err := os.Stat(scriptsDir); err == nil {
+		destScriptsDir := "/opt/pulse/scripts"
+		if err := os.MkdirAll(destScriptsDir, 0755); err != nil {
+			log.Warn().Err(err).Msg("Failed to create scripts directory")
+		} else {
+			// List of agent scripts to deploy
+			agentScripts := []string{
+				"install-docker-agent.sh",
+				"install-container-agent.sh",
+				"install-host-agent.ps1",
+				"uninstall-host-agent.sh",
+				"uninstall-host-agent.ps1",
+				"install-sensor-proxy.sh",
+				"install-docker.sh",
+				"install.sh",
+				"install.ps1",
+			}
+
+			deployed := 0
+			for _, script := range agentScripts {
+				srcPath := filepath.Join(scriptsDir, script)
+				if _, err := os.Stat(srcPath); err == nil {
+					destPath := filepath.Join(destScriptsDir, script)
+					cmd = exec.Command("cp", srcPath, destPath)
+					if err := cmd.Run(); err != nil {
+						log.Warn().Err(err).Str("script", script).Msg("Failed to copy agent script")
+						continue
+					}
+					if err := os.Chmod(destPath, 0755); err != nil {
+						log.Warn().Err(err).Str("script", script).Msg("Failed to set script permissions")
+					}
+					deployed++
+				}
+			}
+			if deployed > 0 {
+				log.Info().Int("count", deployed).Msg("Deployed agent installation scripts")
+			}
+		}
+	}
+
+	// Deploy agent binaries from tarball (for serving to remote hosts)
+	binDir := filepath.Join(extractDir, "bin")
+	if _, err := os.Stat(binDir); err == nil {
+		destBinDir := "/opt/pulse/bin"
+		if err := os.MkdirAll(destBinDir, 0755); err != nil {
+			log.Warn().Err(err).Msg("Failed to create bin directory")
+		} else {
+			// Copy agent binaries (pulse-agent-*, pulse-docker-agent-*, pulse-host-agent-*)
+			entries, err := os.ReadDir(binDir)
+			if err == nil {
+				agentBinariesDeployed := 0
+				for _, entry := range entries {
+					name := entry.Name()
+					// Skip the main pulse binary (already handled above) and directories
+					if entry.IsDir() || name == "pulse" {
+						continue
+					}
+					// Copy agent binaries
+					if strings.HasPrefix(name, "pulse-agent-") ||
+						strings.HasPrefix(name, "pulse-docker-agent") ||
+						strings.HasPrefix(name, "pulse-host-agent") ||
+						name == "pulse-sensor-proxy" {
+						srcPath := filepath.Join(binDir, name)
+						destPath := filepath.Join(destBinDir, name)
+						cmd = exec.Command("cp", "-a", srcPath, destPath)
+						if err := cmd.Run(); err != nil {
+							log.Warn().Err(err).Str("binary", name).Msg("Failed to copy agent binary")
+							continue
+						}
+						// Set executable permission (skip for symlinks)
+						if info, err := os.Lstat(destPath); err == nil && info.Mode()&os.ModeSymlink == 0 {
+							if err := os.Chmod(destPath, 0755); err != nil {
+								log.Warn().Err(err).Str("binary", name).Msg("Failed to set binary permissions")
+							}
+						}
+						agentBinariesDeployed++
+					}
+				}
+				if agentBinariesDeployed > 0 {
+					log.Info().Int("count", agentBinariesDeployed).Msg("Deployed agent binaries")
+				}
+			}
+		}
+	}
+
 	// Set ownership if /opt/pulse exists
 	if _, err := os.Stat("/opt/pulse"); err == nil {
 		cmd = exec.Command("chown", "-R", "pulse:pulse", "/opt/pulse")
