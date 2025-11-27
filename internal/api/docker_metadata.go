@@ -22,11 +22,6 @@ func NewDockerMetadataHandler(dataPath string) *DockerMetadataHandler {
 	}
 }
 
-// Reload reloads the Docker metadata from disk
-func (h *DockerMetadataHandler) Reload() error {
-	return h.store.Load()
-}
-
 // HandleGetMetadata retrieves metadata for a specific Docker resource or all resources
 func (h *DockerMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
