@@ -29,7 +29,6 @@ type CSRFTokenStore struct {
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
-	stopOnce   sync.Once // Ensures Stop() can only close channel once
 }
 
 func csrfSessionKey(sessionID string) string {

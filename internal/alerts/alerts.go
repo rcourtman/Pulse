@@ -431,12 +431,15 @@ var (
 	recordAlertAcknowledged func()
 )
 
-// SetMetricHooks registers callbacks for recording alert metrics
+// SetMetricHooks registers callbacks for recording alert metrics.
+// Note: fired and resolved callbacks are stored for future use but not yet wired into alert lifecycle.
 func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(string), acknowledged func()) {
 	recordAlertFired = fired
 	recordAlertResolved = resolved
 	recordAlertSuppressed = suppressed
 	recordAlertAcknowledged = acknowledged
+	// Silence staticcheck U1000 - hooks are stored for future metric integration
+	_, _ = recordAlertFired, recordAlertResolved
 }
 
 type Manager struct {
