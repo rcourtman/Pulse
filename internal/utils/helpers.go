@@ -6,12 +6,13 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
+
+	"github.com/google/uuid"
 )
 
 // GenerateID generates a unique ID with the given prefix
 func GenerateID(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	return fmt.Sprintf("%s-%s", prefix, uuid.NewString())
 }
 
 // WriteJSONResponse writes a JSON response to the http.ResponseWriter
