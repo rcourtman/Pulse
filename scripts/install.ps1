@@ -20,6 +20,14 @@ $InstallDir = "C:\Program Files\Pulse"
 $LogFile = "$env:ProgramData\Pulse\pulse-agent.log"
 $DownloadTimeoutSec = 300
 
+# --- Administrator Check ---
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "ERROR: This script must be run as Administrator" -ForegroundColor Red
+    Write-Host "Right-click PowerShell and select 'Run as Administrator'" -ForegroundColor Yellow
+    Exit 1
+}
+
 # --- Cleanup Function ---
 $script:TempFiles = @()
 function Cleanup {
@@ -287,10 +295,23 @@ if ($Insecure) { $ServiceArgs += "--insecure" }
 
 $BinPath = "`"$DestPath`" $($ServiceArgs -join ' ')"
 
-# Create Service
-sc.exe create $AgentName binPath= $BinPath start= auto displayname= "Pulse Unified Agent" | Out-Null
-sc.exe description $AgentName "Pulse Unified Agent for Host and Docker monitoring" | Out-Null
-sc.exe failure $AgentName reset= 86400 actions= restart/5000/restart/5000/restart/5000 | Out-Null
+# Create Service with error handling
+$scOutput = sc.exe create $AgentName binPath= $BinPath start= auto displayname= "Pulse Unified Agent" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Show-Error "Failed to create service '$AgentName'.`nsc.exe output: $scOutput"
+    Exit 1
+}
+Write-Host "Service created successfully" -ForegroundColor Green
+
+$scOutput = sc.exe description $AgentName "Pulse Unified Agent for Host and Docker monitoring" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Warning: Failed to set service description: $scOutput" -ForegroundColor Yellow
+}
+
+$scOutput = sc.exe failure $AgentName reset= 86400 actions= restart/5000/restart/5000/restart/5000 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Warning: Failed to configure service recovery: $scOutput" -ForegroundColor Yellow
+}
 
 # Ensure log directory exists
 $LogDir = Split-Path $LogFile -Parent
@@ -298,7 +319,14 @@ if (-not (Test-Path $LogDir)) {
     New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 }
 
-Start-Service $AgentName
+# Start the service
+try {
+    Start-Service $AgentName -ErrorAction Stop
+    Write-Host "Service started successfully" -ForegroundColor Green
+} catch {
+    Show-Error "Failed to start service '$AgentName': $_"
+    Exit 1
+}
 
 Write-Host ""
 Write-Host "Installation complete." -ForegroundColor Green
