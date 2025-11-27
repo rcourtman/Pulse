@@ -649,7 +649,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		}
 
 		// Check if it's an auth error - don't retry on auth errors
-		if IsAuthError(err) {
+		if isAuthError(err) {
 			return err
 		}
 
@@ -1230,7 +1230,8 @@ func (cc *ClusterClient) GetDisks(ctx context.Context, node string) ([]Disk, err
 	return result, err
 }
 
-func IsAuthError(err error) bool {
+// isAuthError checks if an error is an authentication error
+func isAuthError(err error) bool {
 	if err == nil {
 		return false
 	}
