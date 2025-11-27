@@ -207,17 +207,6 @@ func TestSafeFloat(t *testing.T) {
 	}
 }
 
-func TestMaxInt64(t *testing.T) {
-	t.Parallel()
-
-	if got := maxInt64(5, 10); got != 10 {
-		t.Fatalf("expected 10, got %d", got)
-	}
-	if got := maxInt64(-1, -5); got != -1 {
-		t.Fatalf("expected -1, got %d", got)
-	}
-}
-
 func TestConvertPoolInfoToModel(t *testing.T) {
 	t.Parallel()
 

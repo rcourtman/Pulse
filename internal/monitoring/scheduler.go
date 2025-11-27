@@ -285,7 +285,7 @@ type adaptiveIntervalSelector struct {
 	errorPenalty   float64
 }
 
-func newAdaptiveIntervalSelector(cfg SchedulerConfig) *adaptiveIntervalSelector {
+func newAdaptiveIntervalSelector(_ SchedulerConfig) *adaptiveIntervalSelector {
 	return &adaptiveIntervalSelector{
 		state:          make(map[string]time.Duration),
 		rng:            rand.New(rand.NewSource(time.Now().UnixNano())),
