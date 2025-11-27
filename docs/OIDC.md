@@ -13,7 +13,7 @@ Enable Single Sign-On (SSO) with providers like Authentik, Keycloak, Okta, and A
     *   **Client ID & Secret**: From your IdP.
 4.  **Save**: The login page will now show a "Continue with Single Sign-On" button.
 
-> **Tip**: To hide the username/password form and only show the SSO button, set `PULSE_AUTH_HIDE_LOCAL_LOGIN=true` in your environment. You can still access the local login by appending `?show_local=true` to the login URL.
+> **Tip**: To hide the username/password form and only show the SSO button, set `PULSE_AUTH_HIDE_LOCAL_LOGIN=true` in your environment. You can still access the local login by appending `?show_local=true` to the URL (e.g., `https://your-pulse-instance/?show_local=true`).
 
 ## ⚙️ Configuration
 
