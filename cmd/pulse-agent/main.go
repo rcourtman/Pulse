@@ -42,7 +42,17 @@ func main() {
 	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
 	cfg.Logger = &logger
 
-	// 3. Setup Context & Signal Handling
+	// 3. Check if running as Windows service
+	ranAsService, err := runAsWindowsService(cfg, logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Windows service failed")
+	}
+	if ranAsService {
+		// Service handled everything, exit normally
+		return
+	}
+
+	// 4. Setup Context & Signal Handling (for non-service mode)
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
@@ -56,7 +66,7 @@ func main() {
 		Bool("auto_update", !cfg.DisableAutoUpdate).
 		Msg("Starting Pulse Unified Agent")
 
-	// 4. Start Auto-Updater
+	// 5. Start Auto-Updater
 	updater := agentupdate.New(agentupdate.Config{
 		PulseURL:           cfg.PulseURL,
 		APIToken:           cfg.APIToken,
@@ -73,7 +83,7 @@ func main() {
 		return nil
 	})
 
-	// 5. Start Host Agent (if enabled)
+	// 6. Start Host Agent (if enabled)
 	if cfg.EnableHost {
 		hostCfg := hostagent.Config{
 			PulseURL:           cfg.PulseURL,
@@ -103,7 +113,7 @@ func main() {
 		})
 	}
 
-	// 6. Start Docker Agent (if enabled)
+	// 7. Start Docker Agent (if enabled)
 	if cfg.EnableDocker {
 		dockerCfg := dockeragent.Config{
 			PulseURL:           cfg.PulseURL,
@@ -138,7 +148,7 @@ func main() {
 		})
 	}
 
-	// 6. Wait for all agents to exit
+	// 8. Wait for all agents to exit
 	if err := g.Wait(); err != nil && err != context.Canceled {
 		logger.Error().Err(err).Msg("Agent terminated with error")
 		os.Exit(1)
