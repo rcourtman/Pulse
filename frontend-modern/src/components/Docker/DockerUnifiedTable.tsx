@@ -1253,7 +1253,7 @@ const DockerContainerRow: Component<{
   return (
     <>
       <div
-        class={`grid items-center transition-all duration-200 animate-enter ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
+        class={`grid items-center transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
         style={{ 'grid-template-columns': props.gridTemplate() }}
         onClick={toggle}
         aria-expanded={expanded()}
@@ -1950,7 +1950,7 @@ const DockerServiceRow: Component<{
   return (
     <>
       <div
-        class={`grid items-center transition-all duration-200 animate-enter ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
+        class={`grid items-center transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
         style={{ 'grid-template-columns': props.gridTemplate() }}
         onClick={toggle}
         aria-expanded={expanded()}
@@ -2087,9 +2087,21 @@ const DockerServiceRow: Component<{
   );
 };
 
+const areTasksEqual = (a: DockerTask[], b: DockerTask[]) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
 const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
   // Use the responsive grid template hook for dynamic column visibility
   const { gridTemplate, visibleColumns, isMobile } = useGridTemplate({ columns: DOCKER_COLUMNS });
+
+  // Caches for stable object references to prevent re-animations
+  const rowCache = new Map<string, DockerRow>();
+  const tasksCache = new Map<string, DockerTask[]>();
 
   const tokens = createMemo(() => parseSearchTerm(props.searchTerm));
   const [sortKey, setSortKey] = usePersistentSignal<SortKey>('dockerUnifiedSortKey', 'host', {
@@ -2146,6 +2158,8 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
     const filter = props.statsFilter ?? null;
     const searchTokens = tokens();
     const selectedHostId = props.selectedHostId ? props.selectedHostId() : null;
+    const usedCacheKeys = new Set<string>();
+    const usedTaskCacheKeys = new Set<string>();
 
     sortedHosts().forEach((host) => {
       if (!hostMatchesFilter(filter, host)) {
@@ -2177,12 +2191,22 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         const matchesSearch = searchTokens.every((token) => containerMatchesToken(token, host, container));
         if (!matchesSearch) return;
 
-        containerRows.push({
-          kind: 'container',
-          id: container.id || `${host.id}-container-${container.name}`,
-          host,
-          container,
-        });
+        const rowId = container.id || `${host.id}-container-${container.name}`;
+        const cacheKey = `c:${host.id}:${rowId}`;
+        usedCacheKeys.add(cacheKey);
+
+        let row = rowCache.get(cacheKey);
+        if (!row || row.kind !== 'container' || row.host !== host || row.container !== container) {
+          row = {
+            kind: 'container',
+            id: rowId,
+            host,
+            container,
+          };
+          rowCache.set(cacheKey, row);
+        }
+
+        containerRows.push(row as Extract<DockerRow, { kind: 'container' }>);
       });
 
       services.forEach((service) => {
@@ -2190,7 +2214,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         const matchesSearch = searchTokens.every((token) => serviceMatchesToken(token, host, service));
         if (!matchesSearch) return;
 
-        const associatedTasks = tasks.filter((task) => {
+        let associatedTasks = tasks.filter((task) => {
           if (service.id && task.serviceId) {
             return task.serviceId === service.id;
           }
@@ -2200,18 +2224,39 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
           return false;
         });
 
+        // Use stable array reference for tasks if content matches
+        const taskCacheKey = `s:${host.id}:${service.id || service.name}`;
+        usedTaskCacheKeys.add(taskCacheKey);
+        const cachedTasks = tasksCache.get(taskCacheKey);
+        if (cachedTasks && areTasksEqual(cachedTasks, associatedTasks)) {
+          associatedTasks = cachedTasks;
+        } else {
+          tasksCache.set(taskCacheKey, associatedTasks);
+        }
+
         associatedTasks.forEach((task) => {
           if (task.containerId) serviceOwnedContainers.add(task.containerId.toLowerCase());
           if (task.containerName) serviceOwnedContainers.add(task.containerName.toLowerCase());
         });
 
-        serviceRows.push({
-          kind: 'service',
-          id: service.id || `${host.id}-service-${service.name}`,
-          host,
-          service,
-          tasks: associatedTasks,
-        });
+        const rowId = service.id || `${host.id}-service-${service.name}`;
+        const cacheKey = `s:${host.id}:${rowId}`;
+        usedCacheKeys.add(cacheKey);
+
+        let row = rowCache.get(cacheKey);
+        // Check if row needs update (host/service changed, or tasks array changed)
+        if (!row || row.kind !== 'service' || row.host !== host || row.service !== service || row.tasks !== associatedTasks) {
+          row = {
+            kind: 'service',
+            id: rowId,
+            host,
+            service,
+            tasks: associatedTasks,
+          };
+          rowCache.set(cacheKey, row);
+        }
+
+        serviceRows.push(row as Extract<DockerRow, { kind: 'service' }>);
       });
 
       if (serviceRows.length > 0) {
@@ -2259,6 +2304,18 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
         groups.push({ host, rows: hostRows });
       }
     });
+
+    // Prune caches
+    for (const key of rowCache.keys()) {
+      if (!usedCacheKeys.has(key)) {
+        rowCache.delete(key);
+      }
+    }
+    for (const key of tasksCache.keys()) {
+      if (!usedTaskCacheKeys.has(key)) {
+        tasksCache.delete(key);
+      }
+    }
 
     return groups;
   });

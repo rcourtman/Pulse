@@ -385,8 +385,12 @@ describe('UnifiedAgents platform commands', () => {
       expect(screen.getByText('Enable Docker monitoring')).toBeInTheDocument();
     });
 
-    // Docker monitoring is enabled by default
+    // Docker monitoring is disabled by default
     const checkbox = screen.getByRole('checkbox');
+    expect(checkbox).not.toBeChecked();
+
+    // Enable it
+    fireEvent.click(checkbox);
     expect(checkbox).toBeChecked();
 
     // Find a copy button and check that the command includes the docker flag

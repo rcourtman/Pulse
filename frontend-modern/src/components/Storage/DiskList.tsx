@@ -191,7 +191,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
                     return (
                       <>
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors animate-enter">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                           <td class="px-2 py-1.5 text-xs">
                             <span class="font-medium text-gray-900 dark:text-gray-100">
                               {disk.node}

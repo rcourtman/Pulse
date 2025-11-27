@@ -2137,7 +2137,7 @@ const UnifiedBackups: Component = () => {
                           </tr>
                           <For each={group.items}>
                             {(item) => (
-                              <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 animate-enter">
+                              <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                                 <td class="p-0.5 pl-5 pr-1.5 text-sm align-middle">{item.vmid}</td>
                                 <td class="p-0.5 px-1.5 align-middle">
                                   <span

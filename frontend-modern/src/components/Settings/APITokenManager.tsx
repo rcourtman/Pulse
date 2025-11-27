@@ -422,30 +422,30 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             </div>
             <div
               class={`rounded-lg border p-4 text-sm shadow-sm ${hasWildcardTokens()
-                  ? 'border-amber-300/80 bg-amber-50/80 text-amber-900 dark:border-amber-700/70 dark:bg-amber-900/20 dark:text-amber-100'
-                  : 'border-gray-200/70 bg-white/70 text-gray-700 dark:border-gray-700/70 dark:bg-gray-900/40 dark:text-gray-300'
+                ? 'border-amber-300/80 bg-amber-50/80 text-amber-900 dark:border-amber-700/70 dark:bg-amber-900/20 dark:text-amber-100'
+                : 'border-gray-200/70 bg-white/70 text-gray-700 dark:border-gray-700/70 dark:bg-gray-900/40 dark:text-gray-300'
                 }`}
             >
               <div
                 class={`text-[0.7rem] font-semibold uppercase tracking-wide ${hasWildcardTokens()
-                    ? 'text-amber-700 dark:text-amber-300'
-                    : 'text-gray-500 dark:text-gray-400'
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-gray-500 dark:text-gray-400'
                   }`}
               >
                 Full access tokens
               </div>
               <div
                 class={`mt-1 text-2xl font-semibold ${hasWildcardTokens()
-                    ? 'text-amber-800 dark:text-amber-100'
-                    : 'text-gray-900 dark:text-gray-100'
+                  ? 'text-amber-800 dark:text-amber-100'
+                  : 'text-gray-900 dark:text-gray-100'
                   }`}
               >
                 {wildcardCount()}
               </div>
               <p
                 class={`mt-1 text-xs ${hasWildcardTokens()
-                    ? 'text-amber-700 dark:text-amber-200'
-                    : 'text-gray-500 dark:text-gray-400'
+                  ? 'text-amber-700 dark:text-amber-200'
+                  : 'text-gray-500 dark:text-gray-400'
                   }`}
               >
                 {hasWildcardTokens()
@@ -582,9 +582,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
                     return (
                       <tr
-                        class={`transition-colors animate-enter ${rowIsWildcard
-                            ? 'bg-amber-50/50 dark:bg-amber-900/10'
-                            : 'bg-white dark:bg-gray-900/10'
+                        class={`transition-colors ${rowIsWildcard
+                          ? 'bg-amber-50/50 dark:bg-amber-900/10'
+                          : 'bg-white dark:bg-gray-900/10'
                           } hover:bg-blue-50/40 dark:hover:bg-gray-800/50`}
                       >
                         <td class="whitespace-nowrap px-5 py-3 font-medium text-gray-900 dark:text-gray-100">
@@ -601,8 +601,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                                 return (
                                   <span
                                     class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isWildcard
-                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
-                                        : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+                                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
                                       }`}
                                     title={scope.value}
                                   >
@@ -717,8 +717,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 <button
                   type="button"
                   class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition ${isFullAccessSelected()
-                      ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+                    ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
                     }`}
                   onClick={clearScopes}
                   title="Legacy wildcard – all permissions"
@@ -731,8 +731,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     <button
                       type="button"
                       class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition ${presetMatchesSelection(preset.scopes)
-                          ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+                        ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
                         }`}
                       onClick={() => applyScopePreset(preset.scopes)}
                       title={preset.description}
@@ -763,8 +763,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                               <button
                                 type="button"
                                 class={`rounded-full border px-3 py-1 text-xs font-semibold transition ${isActive()
-                                    ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
-                                    : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+                                  ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+                                  : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
                                   }`}
                                 onClick={() => {
                                   setSelectedScopes((prev) => {

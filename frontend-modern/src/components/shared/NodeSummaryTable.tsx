@@ -120,6 +120,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return globalEnabled;
   };
 
+  type TableItem = Node | PBSInstance;
+
+  const isPVE = (item: TableItem): item is Node => {
+    return (item as Node).pveVersion !== undefined;
+  };
+
   type CountSortKey = 'vmCount' | 'containerCount' | 'storageCount' | 'diskCount' | 'backupCount';
   type SortKey =
     | 'default'
@@ -130,11 +136,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     | 'disk'
     | 'temperature'
     | CountSortKey;
-
-  interface SortableItem {
-    type: 'pve' | 'pbs';
-    data: Node | PBSInstance;
-  }
 
   interface CountColumn {
     header: string;
@@ -240,9 +241,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return counts;
   });
 
-  const getCpuTemperatureValue = (item: SortableItem) => {
-    if (item.type !== 'pve') return null;
-    const node = item.data as Node;
+  const getCpuTemperatureValue = (item: TableItem) => {
+    if (!isPVE(item)) return null;
+    const node = item;
     const value = getCpuTemperature(node.temperature);
     return value !== null ? Math.round(value) : null;
   };
@@ -270,12 +271,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     }
   };
 
-  const isItemOnline = (item: SortableItem) => {
-    if (item.type === 'pve') {
-      const node = item.data as Node;
+  const isItemOnline = (item: TableItem) => {
+    if (isPVE(item)) {
+      const node = item;
       return node.status === 'online' && (node.uptime || 0) > 0;
     }
-    const pbs = item.data as PBSInstance;
+    const pbs = item;
     return pbs.status === 'healthy' || pbs.status === 'online';
   };
 
@@ -290,63 +291,63 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     );
   };
 
-  const getCpuPercent = (item: SortableItem) => {
-    if (item.type === 'pve') {
-      const node = item.data as Node;
+  const getCpuPercent = (item: TableItem) => {
+    if (isPVE(item)) {
+      const node = item;
       return Math.round((node.cpu || 0) * 100);
     }
-    const pbs = item.data as PBSInstance;
+    const pbs = item;
     return Math.round(pbs.cpu || 0);
   };
 
-  const getMemoryPercent = (item: SortableItem) => {
-    if (item.type === 'pve') {
-      const node = item.data as Node;
+  const getMemoryPercent = (item: TableItem) => {
+    if (isPVE(item)) {
+      const node = item;
       return Math.round(node.memory?.usage || 0);
     }
-    const pbs = item.data as PBSInstance;
+    const pbs = item;
     if (!pbs.memoryTotal) return 0;
     return Math.round((pbs.memoryUsed / pbs.memoryTotal) * 100);
   };
 
-  const getDiskPercent = (item: SortableItem) => {
-    if (item.type === 'pve') {
-      const node = item.data as Node;
+  const getDiskPercent = (item: TableItem) => {
+    if (isPVE(item)) {
+      const node = item;
       if (!node.disk || node.disk.total === 0) return 0;
       return Math.round((node.disk.used / node.disk.total) * 100);
     }
-    const pbs = item.data as PBSInstance;
+    const pbs = item;
     const totals = getPbsTotals(pbs);
     if (totals.total === 0) return 0;
     return Math.round((totals.used / totals.total) * 100);
   };
 
-  const getDiskSublabel = (item: SortableItem) => {
-    if (item.type === 'pve') {
-      const node = item.data as Node;
+  const getDiskSublabel = (item: TableItem) => {
+    if (isPVE(item)) {
+      const node = item;
       if (!node.disk) return undefined;
       return `${formatBytes(node.disk.used, 0)}/${formatBytes(node.disk.total, 0)}`;
     }
-    const pbs = item.data as PBSInstance;
+    const pbs = item;
     if (!pbs.datastores || pbs.datastores.length === 0) return undefined;
     const totals = getPbsTotals(pbs);
     return `${formatBytes(totals.used, 0)}/${formatBytes(totals.total, 0)}`;
   };
 
-  const getTemperatureValue = (item: SortableItem) => {
+  const getTemperatureValue = (item: TableItem) => {
     return getCpuTemperatureValue(item);
   };
 
-  const getCountValue = (item: SortableItem, key: CountSortKey): number | null => {
-    if (item.type === 'pbs') {
-      const pbs = item.data as PBSInstance;
+  const getCountValue = (item: TableItem, key: CountSortKey): number | null => {
+    if (!isPVE(item)) {
+      const pbs = item;
       if (key === 'backupCount') {
         return props.backupCounts?.[pbs.name] ?? 0;
       }
       return null;
     }
 
-    const node = item.data as Node;
+    const node = item;
     const keyId = nodeKey(node.instance, node.name);
 
     switch (key) {
@@ -365,16 +366,16 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     }
   };
 
-  const getSortValue = (item: SortableItem, key: SortKey): number | string | null => {
+  const getSortValue = (item: TableItem, key: SortKey): number | string | null => {
     switch (key) {
       case 'name':
-        return item.type === 'pve'
-          ? getNodeDisplayName(item.data as Node)
-          : (item.data as PBSInstance).name;
+        return isPVE(item)
+          ? getNodeDisplayName(item)
+          : item.name;
       case 'uptime':
-        return item.type === 'pve'
-          ? (item.data as Node).uptime ?? 0
-          : (item.data as PBSInstance).uptime ?? 0;
+        return isPVE(item)
+          ? item.uptime ?? 0
+          : item.uptime ?? 0;
       case 'cpu':
         return getCpuPercent(item);
       case 'memory':
@@ -394,19 +395,21 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     }
   };
 
-  const defaultComparison = (a: SortableItem, b: SortableItem) => {
-    if (a.type !== b.type) return a.type === 'pve' ? -1 : 1;
+  const defaultComparison = (a: TableItem, b: TableItem) => {
+    const aIsPVE = isPVE(a);
+    const bIsPVE = isPVE(b);
+    if (aIsPVE !== bIsPVE) return aIsPVE ? -1 : 1;
 
     const aOnline = isItemOnline(a);
     const bOnline = isItemOnline(b);
     if (aOnline !== bOnline) return aOnline ? -1 : 1;
 
-    const aName = a.type === 'pve'
-      ? getNodeDisplayName(a.data as Node)
-      : (a.data as PBSInstance).name;
-    const bName = b.type === 'pve'
-      ? getNodeDisplayName(b.data as Node)
-      : (b.data as PBSInstance).name;
+    const aName = aIsPVE
+      ? getNodeDisplayName(a)
+      : a.name;
+    const bName = bIsPVE
+      ? getNodeDisplayName(b)
+      : b.name;
 
     return aName.localeCompare(bName);
   };
@@ -434,10 +437,10 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   };
 
   const sortedItems = createMemo(() => {
-    const items: SortableItem[] = [];
+    const items: TableItem[] = [];
 
-    props.nodes?.forEach((node) => items.push({ type: 'pve', data: node }));
-    props.pbsInstances?.forEach((pbs) => items.push({ type: 'pbs', data: pbs }));
+    if (props.nodes) items.push(...props.nodes);
+    if (props.pbsInstances) items.push(...props.pbsInstances);
 
     const key = sortKey();
     const direction = sortDirection();
@@ -516,30 +519,30 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
         <div class="divide-y divide-gray-200 dark:divide-gray-700">
           <For each={sortedItems()}>
             {(item) => {
-              const isPVE = item.type === 'pve';
-              const isPBS = item.type === 'pbs';
-              const node = isPVE ? (item.data as Node) : null;
-              const pbs = isPBS ? (item.data as PBSInstance) : null;
+              const isPVEItem = isPVE(item);
+              const isPBSItem = !isPVEItem;
+              const node = isPVEItem ? (item as Node) : null;
+              const pbs = isPBSItem ? (item as PBSInstance) : null;
 
               const online = isItemOnline(item);
               const statusIndicator = createMemo(() =>
-                isPVE ? getNodeStatusIndicator(node as Node) : getPBSStatusIndicator(pbs as PBSInstance),
+                isPVEItem ? getNodeStatusIndicator(node as Node) : getPBSStatusIndicator(pbs as PBSInstance),
               );
               const cpuPercentValue = getCpuPercent(item);
               const memoryPercentValue = getMemoryPercent(item);
               const diskPercentValue = getDiskPercent(item);
               const diskSublabel = getDiskSublabel(item);
               const cpuTemperatureValue = getCpuTemperatureValue(item);
-              const uptimeValue = isPVE ? node?.uptime ?? 0 : isPBS ? pbs?.uptime ?? 0 : 0;
+              const uptimeValue = isPVEItem ? node?.uptime ?? 0 : isPBSItem ? pbs?.uptime ?? 0 : 0;
               const displayName = () => {
-                if (isPVE) return getNodeDisplayName(node as Node);
+                if (isPVEItem) return getNodeDisplayName(node as Node);
                 return (pbs as PBSInstance).name;
               };
-              const showActualName = () => isPVE && hasAlternateDisplayName(node as Node);
+              const showActualName = () => isPVEItem && hasAlternateDisplayName(node as Node);
 
-              const nodeId = isPVE ? node!.id : pbs!.name;
+              const nodeId = isPVEItem ? node!.id : pbs!.name;
               const isSelected = () => props.selectedNode === nodeId;
-              const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;
+              const resourceId = isPVEItem ? node!.id || node!.name : pbs!.id || pbs!.name;
               const metricsKey = buildMetricKey('node', resourceId);
               const alertStyles = createMemo(() =>
                 getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
@@ -570,7 +573,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               });
 
               const rowClass = createMemo(() => {
-                const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group animate-enter';
+                const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
 
                 if (isSelected()) {
                   return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group`;
@@ -621,7 +624,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           />
                           <a
                             href={
-                              isPVE
+                              isPVEItem
                                 ? node!.guestURL || node!.host || `https://${node!.name}:8006`
                                 : pbs!.host || `https://${pbs!.name}:8007`
                             }
@@ -638,17 +641,17 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             </span>
                           </Show>
                           <div class="hidden xl:flex items-center gap-1.5 ml-1">
-                            <Show when={isPVE}>
+                            <Show when={isPVEItem}>
                               <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
                                 PVE
                               </span>
                             </Show>
-                            <Show when={isPVE && node!.pveVersion}>
+                            <Show when={isPVEItem && node!.pveVersion}>
                               <span class="text-[9px] text-gray-500 dark:text-gray-400">
                                 v{node!.pveVersion.split('/')[1] || node!.pveVersion}
                               </span>
                             </Show>
-                            <Show when={isPVE && node!.isClusterMember !== undefined}>
+                            <Show when={isPVEItem && node!.isClusterMember !== undefined}>
                               <span
                                 class={`text-[9px] px-1 py-0 rounded text-[8px] font-medium whitespace-nowrap ${node!.isClusterMember
                                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
@@ -658,12 +661,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                 {node!.isClusterMember ? node!.clusterName : 'Standalone'}
                               </span>
                             </Show>
-                            <Show when={isPBS}>
+                            <Show when={isPBSItem}>
                               <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                                 PBS
                               </span>
                             </Show>
-                            <Show when={isPBS && pbs!.version}>
+                            <Show when={isPBSItem && pbs!.version}>
                               <span class="text-[9px] text-gray-500 dark:text-gray-400">
                                 v{pbs!.version}
                               </span>
@@ -677,7 +680,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     return (
                       <div class={`${baseCellClass} ${alignClass} whitespace-nowrap`}>
                         <span
-                          class={`text-xs ${isPVE && (node?.uptime ?? 0) < 3600
+                          class={`text-xs ${isPVEItem && (node?.uptime ?? 0) < 3600
                             ? 'text-orange-500'
                             : 'text-gray-600 dark:text-gray-400'
                             }`}
@@ -698,7 +701,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           value={cpuPercentValue}
                           type="cpu"
                           resourceId={metricsKey}
-                          sublabel={isPVE && node!.cpuInfo?.cores ? `${node!.cpuInfo.cores} cores` : undefined}
+                          sublabel={isPVEItem && node!.cpuInfo?.cores ? `${node!.cpuInfo.cores} cores` : undefined}
                           isRunning={online}
                           showMobile={isMobile()}
                           class="w-full"
@@ -714,9 +717,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           type="memory"
                           resourceId={metricsKey}
                           sublabel={
-                            isPVE && node!.memory
+                            isPVEItem && node!.memory
                               ? `${formatBytes(node!.memory.used, 0)}/${formatBytes(node!.memory.total, 0)}`
-                              : isPBS && pbs!.memoryTotal
+                              : isPBSItem && pbs!.memoryTotal
                                 ? `${formatBytes(pbs!.memoryUsed, 0)}/${formatBytes(pbs!.memoryTotal, 0)}`
                                 : undefined
                           }
@@ -748,7 +751,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         <Show
                           when={
                             online &&
-                            isPVE &&
+                            isPVEItem &&
                             cpuTemperatureValue !== null &&
                             (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
                             isTemperatureMonitoringEnabled(node!)
@@ -841,7 +844,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 <div
                   class={`${rowClass()} grid items-center`}
                   style={{ ...rowStyle(), 'grid-template-columns': gridTemplate() }}
-                  onClick={() => props.onNodeClick(nodeId, item.type)}
+                  onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
                 >
                   <For each={visibleColumns()}>
                     {(column) => renderCell(column)}

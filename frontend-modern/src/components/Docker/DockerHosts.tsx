@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { useNavigate } from '@solidjs/router';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
@@ -73,8 +74,13 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
     return value;
   };
 
+  // Cache for stable summary objects to prevent re-animations
+  const summaryCache = new Map<string, [DockerHostSummary, any]>();
+
   const hostSummaries = createMemo<DockerHostSummary[]>(() => {
-    return sortedHosts().map((host) => {
+    const usedKeys = new Set<string>();
+
+    const result = sortedHosts().map((host) => {
       const totalContainers = host.containers?.length ?? 0;
       const runningContainers =
         host.containers?.filter((container) => container.state?.toLowerCase() === 'running').length ?? 0;
@@ -113,7 +119,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
       const lastSeenRelative = host.lastSeen ? formatRelativeTime(host.lastSeen) : '—';
       const lastSeenAbsolute = host.lastSeen ? new Date(host.lastSeen).toLocaleString() : '';
 
-      return {
+      const newSummary: DockerHostSummary = {
         host,
         cpuPercent,
         memoryPercent,
@@ -127,7 +133,29 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
         lastSeenRelative,
         lastSeenAbsolute,
       };
+
+      const key = host.id;
+      usedKeys.add(key);
+
+      let entry = summaryCache.get(key);
+      if (!entry) {
+        entry = createStore(newSummary);
+        summaryCache.set(key, entry);
+      } else {
+        const [_, setState] = entry;
+        setState(newSummary);
+      }
+      return entry[0];
     });
+
+    // Prune cache
+    for (const key of summaryCache.keys()) {
+      if (!usedKeys.has(key)) {
+        summaryCache.delete(key);
+      }
+    }
+
+    return result;
   });
 
   let searchInputRef: HTMLInputElement | undefined;
@@ -168,7 +196,7 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
         }
       })
       .catch((err) => {
-      logger.debug('Failed to load docker metadata', err);
+        logger.debug('Failed to load docker metadata', err);
       });
   });
   onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
