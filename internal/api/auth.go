@@ -186,14 +186,6 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	return true, username, isAdmin
 }
 
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // CheckAuth checks both basic auth and API token
 func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool {
 	config.Mu.RLock()

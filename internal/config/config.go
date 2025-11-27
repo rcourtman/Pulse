@@ -1336,46 +1336,6 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// SaveConfig saves the configuration back to encrypted files
-func SaveConfig(cfg *Config) error {
-	if globalPersistence == nil {
-		return fmt.Errorf("config persistence not initialized")
-	}
-
-	// Save nodes configuration
-	if err := globalPersistence.SaveNodesConfig(cfg.PVEInstances, cfg.PBSInstances, cfg.PMGInstances); err != nil {
-		return fmt.Errorf("failed to save nodes config: %w", err)
-	}
-
-	// Save system configuration
-	adaptiveEnabled := cfg.AdaptivePollingEnabled
-	systemSettings := SystemSettings{
-		PVEPollingInterval:          int(cfg.PVEPollingInterval / time.Second),
-		UpdateChannel:               cfg.UpdateChannel,
-		AutoUpdateEnabled:           cfg.AutoUpdateEnabled,
-		AutoUpdateCheckInterval:     int(cfg.AutoUpdateCheckInterval.Hours()),
-		AutoUpdateTime:              cfg.AutoUpdateTime,
-		AllowedOrigins:              cfg.AllowedOrigins,
-		ConnectionTimeout:           int(cfg.ConnectionTimeout.Seconds()),
-		LogLevel:                    cfg.LogLevel,
-		DiscoveryEnabled:            cfg.DiscoveryEnabled,
-		DiscoverySubnet:             cfg.DiscoverySubnet,
-		DiscoveryConfig:             CloneDiscoveryConfig(cfg.Discovery),
-		AdaptivePollingEnabled:      &adaptiveEnabled,
-		AdaptivePollingBaseInterval: int(cfg.AdaptivePollingBaseInterval / time.Second),
-		AdaptivePollingMinInterval:  int(cfg.AdaptivePollingMinInterval / time.Second),
-		AdaptivePollingMaxInterval:  int(cfg.AdaptivePollingMaxInterval / time.Second),
-		DNSCacheTimeout:             int(cfg.DNSCacheTimeout / time.Second),
-		SSHPort:                     cfg.SSHPort,
-		// APIToken removed - now handled via .env only
-	}
-	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {
-		return fmt.Errorf("failed to save system config: %w", err)
-	}
-
-	return nil
-}
-
 // SaveOIDCConfig persists OIDC settings using the shared config persistence layer.
 func SaveOIDCConfig(settings *OIDCConfig) error {
 	if globalPersistence == nil {

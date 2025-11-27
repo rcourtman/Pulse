@@ -93,44 +93,6 @@ func ErrorHandler(next http.Handler) http.Handler {
 	})
 }
 
-// TimeoutHandler wraps handlers with a timeout
-func TimeoutHandler(timeout time.Duration) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Skip timeout for WebSocket and SSE endpoints
-			if r.Header.Get("Upgrade") == "websocket" || r.Header.Get("Accept") == "text/event-stream" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			http.TimeoutHandler(next, timeout, "Request timeout").ServeHTTP(w, r)
-		})
-	}
-}
-
-// JSONHandler ensures proper JSON responses and error handling
-func JSONHandler(handler func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := handler(w, r); err != nil {
-			// Check if it's already an APIError
-			if apiErr, ok := err.(*APIError); ok {
-				writeErrorResponse(w, apiErr.StatusCode, apiErr.Code, apiErr.ErrorMessage, apiErr.Details)
-				return
-			}
-
-			// Generic error
-			log.Error().Err(err).
-				Str("path", r.URL.Path).
-				Str("method", r.Method).
-				Msg("Handler error")
-
-			writeErrorResponse(w, http.StatusInternalServerError, "internal_error",
-				"An error occurred processing the request", nil)
-		}
-	}
-}
 
 // writeErrorResponse writes a consistent error response
 func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message string, details map[string]string) {
@@ -195,23 +157,3 @@ func (rw *responseWriter) Flush() {
 	}
 }
 
-// NewAPIError creates a new API error
-func NewAPIError(statusCode int, code, message string) error {
-	return &APIError{
-		ErrorMessage: message,
-		Code:         code,
-		StatusCode:   statusCode,
-		Timestamp:    time.Now().Unix(),
-	}
-}
-
-// ValidationError creates a validation error with field details
-func ValidationError(fields map[string]string) error {
-	return &APIError{
-		ErrorMessage: "Validation failed",
-		Code:         "validation_error",
-		StatusCode:   http.StatusBadRequest,
-		Timestamp:    time.Now().Unix(),
-		Details:      fields,
-	}
-}

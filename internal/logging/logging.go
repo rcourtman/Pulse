@@ -255,11 +255,6 @@ func GetRequestID(ctx context.Context) string {
 	return ""
 }
 
-// NewRequestID creates a new UUID string.
-func NewRequestID() string {
-	return uuid.NewString()
-}
-
 func collectOptions(opts ...Option) options {
 	cfg := options{}
 	for _, opt := range opts {
