@@ -236,7 +236,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 			continue
 		}
 
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA && header.Typeflag != tar.TypeSymlink {
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeSymlink {
 			continue
 		}
 
@@ -252,7 +252,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 		destPath := filepath.Join(targetDir, base)
 
 		switch header.Typeflag {
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if err := writeHostAgentFile(destPath, tr, header.FileInfo().Mode()); err != nil {
 				return err
 			}

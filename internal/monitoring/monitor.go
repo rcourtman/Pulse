@@ -3700,6 +3700,10 @@ func checkContainerizedTempMonitoring() {
 
 // New creates a new Monitor instance
 func New(cfg *config.Config) (*Monitor, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
 	// Initialize temperature collector with sensors SSH key
 	// Will use root user for now - can be made configurable later
 	homeDir := os.Getenv("HOME")
@@ -3712,7 +3716,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	// Security warning if running in container with SSH temperature monitoring
 	checkContainerizedTempMonitoring()
 
-	if cfg != nil && cfg.TemperatureMonitoringEnabled {
+	if cfg.TemperatureMonitoringEnabled {
 		isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
 		if isContainer && tempCollector != nil && !tempCollector.SocketProxyAvailable() {
 			log.Warn().Msg("Temperature monitoring is enabled but the container does not have access to pulse-sensor-proxy. Install the proxy on the host or disable temperatures until it is available.")

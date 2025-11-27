@@ -1023,8 +1023,7 @@ func (p *Proxy) getTemperatureLocal(ctx context.Context) (string, error) {
 	if err != nil {
 		// Try without -j flag as fallback
 		cmd = exec.CommandContext(ctx, "sensors")
-		output, err = cmd.Output()
-		if err != nil {
+		if _, err = cmd.Output(); err != nil {
 			return "", fmt.Errorf("failed to run sensors: %w", err)
 		}
 		// Return empty JSON object for non-JSON output
