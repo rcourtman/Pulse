@@ -6007,7 +6007,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, _ *http
 	// Generate a unique token name based on Pulse's IP/hostname
 	hostname, _ := os.Hostname()
 	if hostname == "" {
-		hostname = strings.Replace(clientIP, ".", "-", -1)
+		hostname = strings.ReplaceAll(clientIP, ".", "-")
 	}
 	timestamp := time.Now().Unix()
 	tokenName := fmt.Sprintf("pulse-%s-%d", hostname, timestamp)
