@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +22,6 @@ type ctxKey string
 
 const (
 	requestIDKey ctxKey = "logging_request_id"
-	loggerKey    ctxKey = "logging_logger"
 )
 
 // Config controls logger initialization.
@@ -35,15 +33,6 @@ type Config struct {
 	MaxSizeMB  int    // rotate after this size (MB)
 	MaxAgeDays int    // keep rotated logs for this many days
 	Compress   bool   // gzip rotated logs
-}
-
-// Option customizes logger construction.
-type Option func(*options)
-
-type options struct {
-	writer     io.Writer
-	fields     map[string]interface{}
-	withCaller bool
 }
 
 var (
@@ -90,146 +79,9 @@ func Init(cfg Config) zerolog.Logger {
 	return baseLogger
 }
 
-// InitFromConfig initialises logging with environment overrides.
-func InitFromConfig(ctx context.Context, cfg Config) (zerolog.Logger, error) {
-	if cfg.Level == "" {
-		cfg.Level = "info"
-	}
-	if cfg.Format == "" {
-		cfg.Format = "auto"
-	}
-
-	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
-		cfg.Level = envLevel
-	}
-	if envFormat := os.Getenv("LOG_FORMAT"); envFormat != "" {
-		cfg.Format = envFormat
-	}
-	if envFile := os.Getenv("LOG_FILE"); envFile != "" {
-		cfg.FilePath = envFile
-	}
-	if envSize := os.Getenv("LOG_MAX_SIZE"); envSize != "" {
-		if size, err := strconv.Atoi(envSize); err == nil {
-			cfg.MaxSizeMB = size
-		}
-	}
-	if envAge := os.Getenv("LOG_MAX_AGE"); envAge != "" {
-		if age, err := strconv.Atoi(envAge); err == nil {
-			cfg.MaxAgeDays = age
-		}
-	}
-	if envCompress := os.Getenv("LOG_COMPRESS"); envCompress != "" {
-		switch strings.ToLower(strings.TrimSpace(envCompress)) {
-		case "0", "false", "no":
-			cfg.Compress = false
-		default:
-			cfg.Compress = true
-		}
-	}
-
-	if !isValidLevel(cfg.Level) {
-		return zerolog.Logger{}, fmt.Errorf("invalid log level %q: must be debug, info, warn, or error", cfg.Level)
-	}
-
-	format := strings.ToLower(strings.TrimSpace(cfg.Format))
-	if format != "" && format != "json" && format != "console" && format != "auto" {
-		return zerolog.Logger{}, fmt.Errorf("invalid log format %q: must be json, console, or auto", cfg.Format)
-	}
-
-	logger := Init(cfg)
-	return logger, nil
-}
-
 // IsLevelEnabled reports whether the provided level is enabled for logging.
 func IsLevelEnabled(level zerolog.Level) bool {
 	return level >= zerolog.GlobalLevel()
-}
-
-// New creates a logger tailored to a specific component.
-func New(component string, opts ...Option) zerolog.Logger {
-	cfg := collectOptions(opts...)
-
-	mu.RLock()
-	globalWriter := baseWriter
-	globalComponent := baseComponent
-	mu.RUnlock()
-
-	writer := cfg.writer
-	if writer == nil {
-		writer = globalWriter
-	}
-
-	component = strings.TrimSpace(component)
-	if component == "" {
-		component = globalComponent
-	}
-
-	logger := zerolog.New(writer)
-	contextBuilder := logger.With().Timestamp()
-
-	if component != "" {
-		contextBuilder = contextBuilder.Str("component", component)
-	}
-	if len(cfg.fields) > 0 {
-		contextBuilder = contextBuilder.Fields(cfg.fields)
-	}
-	if cfg.withCaller {
-		contextBuilder = contextBuilder.Caller()
-	}
-
-	return contextBuilder.Logger()
-}
-
-// WithCaller enables caller logging.
-func WithCaller() Option {
-	return func(o *options) {
-		o.withCaller = true
-	}
-}
-
-// WithWriter overrides the logger writer.
-func WithWriter(w io.Writer) Option {
-	return func(o *options) {
-		if w != nil {
-			o.writer = w
-		}
-	}
-}
-
-// WithFields adds static fields to the logger.
-func WithFields(fields map[string]interface{}) Option {
-	return func(o *options) {
-		if len(fields) == 0 {
-			return
-		}
-		if o.fields == nil {
-			o.fields = make(map[string]interface{}, len(fields))
-		}
-		for k, v := range fields {
-			o.fields[k] = v
-		}
-	}
-}
-
-// FromContext returns a logger enriched with context metadata.
-func FromContext(ctx context.Context) zerolog.Logger {
-	if ctx == nil {
-		return getBaseLogger()
-	}
-
-	if existing, ok := ctx.Value(loggerKey).(zerolog.Logger); ok {
-		return enrichWithRequestID(existing, ctx)
-	}
-
-	return enrichWithRequestID(getBaseLogger(), ctx)
-}
-
-// WithLogger stores a logger on the context.
-func WithLogger(ctx context.Context, logger zerolog.Logger) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return context.WithValue(ctx, loggerKey, logger)
 }
 
 // WithRequestID stores (or generates) a request ID on the context.
@@ -244,27 +96,6 @@ func WithRequestID(ctx context.Context, id string) (context.Context, string) {
 	return context.WithValue(ctx, requestIDKey, id), id
 }
 
-// GetRequestID retrieves the request ID from context.
-func GetRequestID(ctx context.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	if id, ok := ctx.Value(requestIDKey).(string); ok {
-		return id
-	}
-	return ""
-}
-
-func collectOptions(opts ...Option) options {
-	cfg := options{}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&cfg)
-		}
-	}
-	return cfg
-}
-
 func parseLevel(level string) zerolog.Level {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "debug":
@@ -275,15 +106,6 @@ func parseLevel(level string) zerolog.Level {
 		return zerolog.ErrorLevel
 	default:
 		return zerolog.InfoLevel
-	}
-}
-
-func isValidLevel(level string) bool {
-	switch strings.ToLower(strings.TrimSpace(level)) {
-	case "debug", "info", "warn", "error":
-		return true
-	default:
-		return false
 	}
 }
 
@@ -316,22 +138,6 @@ func isTerminal(file *os.File) bool {
 		return false
 	}
 	return term.IsTerminal(int(file.Fd()))
-}
-
-func getBaseLogger() zerolog.Logger {
-	mu.RLock()
-	defer mu.RUnlock()
-	return baseLogger
-}
-
-func enrichWithRequestID(logger zerolog.Logger, ctx context.Context) zerolog.Logger {
-	if ctx == nil {
-		return logger
-	}
-	if id := GetRequestID(ctx); id != "" {
-		return logger.With().Str("request_id", id).Logger()
-	}
-	return logger
 }
 
 type rollingFileWriter struct {

@@ -156,25 +156,3 @@ export function startMetricsSampler(): void {
   }
 }
 
-/**
- * Stop the metrics sampler
- */
-export function stopMetricsSampler(): void {
-  if (samplerInterval !== null) {
-    window.clearInterval(samplerInterval);
-    samplerInterval = null;
-  }
-
-  isRunning = false;
-  logger.info('[MetricsSampler] Stopped');
-}
-
-/**
- * Get sampler status
- */
-export function getSamplerStatus() {
-  return {
-    isRunning,
-    intervalMs: SAMPLE_INTERVAL_MS,
-  };
-}

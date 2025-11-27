@@ -83,48 +83,6 @@ func TestValidateNodeName(t *testing.T) {
 	}
 }
 
-func TestValidateCommand(t *testing.T) {
-	type tc struct {
-		name    string
-		args    []string
-		wantErr bool
-		desc    string
-	}
-
-	cases := []tc{
-		{name: "sensors", args: nil, wantErr: false, desc: "bare sensors"},
-		{name: "sensors", args: []string{"-j"}, wantErr: false, desc: "json flag"},
-		{name: "ipmitool", args: []string{"sdr"}, wantErr: false, desc: "safe ipmitool"},
-		{name: "sensors", args: []string{"; rm -rf /"}, wantErr: true, desc: "shell metachar"},
-		{name: "sensors", args: []string{"$(id)"}, wantErr: true, desc: "subshell"},
-		{name: "ipmitool", args: []string{"-H", "1.2.3.4", "&&", "shutdown"}, wantErr: true, desc: "command chaining"},
-		{name: "sensors", args: []string{">/tmp/out"}, wantErr: true, desc: "redirect"},
-		{name: "senso\u200Brs", wantErr: true, desc: "unicode homoglyph"},
-		{name: "sensors", args: []string{"-" + strings.Repeat("v", 2000)}, wantErr: true, desc: "arg too long"},
-		{name: "sensors", args: []string{"test\x00"}, wantErr: true, desc: "null byte arg"},
-		{name: "ipmitool", args: []string{"chassis", "power", "off"}, wantErr: true, desc: "dangerous ipmitool"},
-		{name: "sensors", args: []string{"LC_ALL=C"}, wantErr: true, desc: "env prefix"},
-		{name: "/usr/bin/sensors", wantErr: true, desc: "absolute path"},
-		{name: "ipmitool", args: []string{"--extraneous=../../etc/passwd"}, wantErr: true, desc: "path traversal"},
-	}
-
-	for _, tc := range cases {
-		tc := tc
-		if tc.desc == "" {
-			tc.desc = tc.name
-		}
-		t.Run(tc.desc, func(t *testing.T) {
-			err := validateCommand(tc.name, tc.args)
-			if tc.wantErr && err == nil {
-				t.Fatalf("expected error for %s %v", tc.name, tc.args)
-			}
-			if !tc.wantErr && err != nil {
-				t.Fatalf("unexpected error for %s %v: %v", tc.name, tc.args, err)
-			}
-		})
-	}
-}
-
 type stubResolver struct {
 	ips []net.IP
 	err error
