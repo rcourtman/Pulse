@@ -7582,8 +7582,8 @@ func cloneStringPtr(value *string) *string {
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	v := *value
+	return &v
 }
 
 func cloneThresholdConfig(cfg ThresholdConfig) ThresholdConfig {
@@ -7972,14 +7972,14 @@ func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool
 			}
 		}
 		return true
-	} else { // OR
-		for _, result := range results {
-			if result {
-				return true
-			}
-		}
-		return false
 	}
+	// OR
+	for _, result := range results {
+		if result {
+			return true
+		}
+	}
+	return false
 }
 
 // getGuestThresholds returns the appropriate thresholds for a guest

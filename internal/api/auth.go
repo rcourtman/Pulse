@@ -290,13 +290,12 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		// Use ValidateAndExtendSession for sliding expiration
 		if ValidateAndExtendSession(cookie.Value) {
 			return true
-		} else {
-			// Debug logging for failed session validation
-			log.Debug().
-				Str("session_token", cookie.Value[:8]+"...").
-				Str("path", r.URL.Path).
-				Msg("Session validation failed - token not found or expired")
 		}
+		// Debug logging for failed session validation
+		log.Debug().
+			Str("session_token", cookie.Value[:8]+"...").
+			Str("path", r.URL.Path).
+			Msg("Session validation failed - token not found or expired")
 	} else if err != nil {
 		// Debug logging when no session cookie found
 		log.Debug().
