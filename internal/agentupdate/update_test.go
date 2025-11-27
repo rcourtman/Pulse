@@ -369,8 +369,14 @@ func TestSymlinkResolution(t *testing.T) {
 		t.Fatalf("EvalSymlinks failed: %v", err)
 	}
 
-	if resolved != realFile {
-		t.Errorf("EvalSymlinks(%q) = %q, want %q", linkFile, resolved, realFile)
+	// Normalize realFile in case tmpDir itself contains symlinks (e.g. /var -> /private/var on macOS)
+	realFileResolved, err := filepath.EvalSymlinks(realFile)
+	if err != nil {
+		t.Fatalf("EvalSymlinks on realFile failed: %v", err)
+	}
+
+	if resolved != realFileResolved {
+		t.Errorf("EvalSymlinks(%q) = %q, want %q", linkFile, resolved, realFileResolved)
 	}
 
 	// Verify temp file in same dir as resolved path allows rename
