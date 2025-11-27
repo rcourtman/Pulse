@@ -6913,7 +6913,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				Status:   res.Status,
 				Type:     "lxc",
 				CPU:      safeFloat(res.CPU),
-				CPUs:     int(res.MaxCPU),
+				CPUs:     res.MaxCPU,
 				Memory: models.Memory{
 					Total: int64(memTotal),
 					Used:  int64(memUsed),
@@ -8132,7 +8132,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	}
 	for _, ct := range snapshot.Containers {
 		if ct.Instance == instanceName {
-			guestNodeMap[int(ct.VMID)] = ct.Node
+			guestNodeMap[ct.VMID] = ct.Node
 		}
 	}
 
@@ -8465,9 +8465,9 @@ func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.Gues
 			Instance: ct.Instance,
 			Node:     ct.Node,
 			Type:     ct.Type,
-			VMID:     int(ct.VMID),
+			VMID:     ct.VMID,
 		}
-		key := alerts.BuildGuestKey(ct.Instance, ct.Node, int(ct.VMID))
+		key := alerts.BuildGuestKey(ct.Instance, ct.Node, ct.VMID)
 		if _, exists := byKey[key]; !exists {
 			byKey[key] = info
 		}

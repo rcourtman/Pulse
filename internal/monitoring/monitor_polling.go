@@ -443,8 +443,8 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				// Calculate disk usage - start with allocated disk size
 				// NOTE: The Proxmox cluster/resources API always returns 0 for VM disk usage
 				// We must query the guest agent to get actual disk usage
-				diskUsed := uint64(vm.Disk)
-				diskTotal := uint64(vm.MaxDisk)
+				diskUsed := vm.Disk
+				diskTotal := vm.MaxDisk
 				diskFree := diskTotal - diskUsed
 				diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
 				diskStatusReason := ""
@@ -733,7 +733,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					Status:   vm.Status,
 					Type:     "qemu",
 					CPU:      cpuUsage,
-					CPUs:     int(vm.CPUs),
+					CPUs:     vm.CPUs,
 					Memory:   memory,
 					Disk: models.Disk{
 						Total: int64(diskTotal),

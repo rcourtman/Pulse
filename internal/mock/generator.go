@@ -1008,8 +1008,8 @@ func generateGuestNetworkInfo() ([]string, []models.GuestNetworkInterface) {
 			ipAddresses = append(ipAddresses, ip)
 		}
 
-		rxBytes := int64(rand.Int63n(8*1024*1024*1024) + rand.Int63n(256*1024*1024))
-		txBytes := int64(rand.Int63n(6*1024*1024*1024) + rand.Int63n(256*1024*1024))
+		rxBytes := rand.Int63n(8*1024*1024*1024) + rand.Int63n(256*1024*1024)
+		txBytes := rand.Int63n(6*1024*1024*1024) + rand.Int63n(256*1024*1024)
 
 		interfaces = append(interfaces, models.GuestNetworkInterface{
 			Name:      name,
@@ -2537,7 +2537,7 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 		numBackups := 1 + rand.Intn(3)
 		for i := 0; i < numBackups; i++ {
 			backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
-			backupSize := int64(vm.Disk.Total/10 + rand.Int63n(vm.Disk.Total/5)) // 10-30% of disk size
+			backupSize := vm.Disk.Total/10 + rand.Int63n(vm.Disk.Total/5) // 10-30% of disk size
 
 			backup := models.StorageBackup{
 				ID:        fmt.Sprintf("backup-%s-vm-%d-%d", vm.Node, vm.VMID, i),
@@ -2575,22 +2575,22 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 		numBackups := 1 + rand.Intn(2)
 		for i := 0; i < numBackups; i++ {
 			backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
-			backupSize := int64(ct.Disk.Total/20 + rand.Int63n(ct.Disk.Total/10)) // 5-15% of disk size
+			backupSize := ct.Disk.Total/20 + rand.Int63n(ct.Disk.Total/10) // 5-15% of disk size
 
 			backup := models.StorageBackup{
-				ID:        fmt.Sprintf("backup-%s-ct-%d-%d", ct.Node, int(ct.VMID), i),
+				ID:        fmt.Sprintf("backup-%s-ct-%d-%d", ct.Node, ct.VMID, i),
 				Storage:   "local",
 				Node:      ct.Node,
 				Instance:  ct.Instance,
 				Type:      "lxc",
-				VMID:      int(ct.VMID),
+				VMID:      ct.VMID,
 				Time:      backupTime,
 				CTime:     backupTime.Unix(),
 				Size:      backupSize,
 				Format:    "tar.zst",
 				Notes:     fmt.Sprintf("Backup of %s", ct.Name),
 				Protected: rand.Float64() > 0.9, // 10% protected
-				Volid:     fmt.Sprintf("local:backup/vzdump-lxc-%d-%s.tar.zst", int(ct.VMID), backupTime.Format("2006_01_02-15_04_05")),
+				Volid:     fmt.Sprintf("local:backup/vzdump-lxc-%d-%s.tar.zst", ct.VMID, backupTime.Format("2006_01_02-15_04_05")),
 				IsPBS:     false,
 				Verified:  rand.Float64() > 0.2, // 80% verified
 			}
@@ -2784,7 +2784,7 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 				BackupType: "vm",
 				VMID:       fmt.Sprintf("%d", vm.VMID),
 				BackupTime: backupTime,
-				Size:       int64(vm.Disk.Total/8 + rand.Int63n(vm.Disk.Total/4)),
+				Size:       vm.Disk.Total/8 + rand.Int63n(vm.Disk.Total/4),
 				Protected:  rand.Float64() > 0.85, // 15% protected
 				Verified:   rand.Float64() > 0.2,  // 80% verified
 				Comment:    fmt.Sprintf("Automated backup of %s", vm.Name),
@@ -2807,14 +2807,14 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 			backupTime := time.Now().Add(-time.Duration(rand.Intn(45*24)) * time.Hour)
 
 			backup := models.PBSBackup{
-				ID:         fmt.Sprintf("pbs-backup-ct-%d-%d", int(ct.VMID), i),
+				ID:         fmt.Sprintf("pbs-backup-ct-%d-%d", ct.VMID, i),
 				Instance:   pbsInstances[rand.Intn(len(pbsInstances))],
 				Datastore:  datastores[rand.Intn(len(datastores))],
 				Namespace:  "root",
 				BackupType: "ct",
-				VMID:       fmt.Sprintf("%d", int(ct.VMID)),
+				VMID:       fmt.Sprintf("%d", ct.VMID),
 				BackupTime: backupTime,
-				Size:       int64(ct.Disk.Total/15 + rand.Int63n(ct.Disk.Total/8)),
+				Size:       ct.Disk.Total/15 + rand.Int63n(ct.Disk.Total/8),
 				Protected:  rand.Float64() > 0.9,  // 10% protected
 				Verified:   rand.Float64() > 0.15, // 85% verified
 				Comment:    fmt.Sprintf("Daily backup of %s", ct.Name),
@@ -2839,9 +2839,9 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 			BackupType: "ct", // Host configs are stored as 'ct' type in PBS
 			VMID:       "0",  // VMID 0 indicates host config
 			BackupTime: backupTime,
-			Size:       int64(50*1024*1024 + rand.Int63n(100*1024*1024)), // 50-150MB for host configs
-			Protected:  rand.Float64() > 0.7,                             // 30% protected
-			Verified:   rand.Float64() > 0.1,                             // 90% verified
+			Size:       50*1024*1024 + rand.Int63n(100*1024*1024), // 50-150MB for host configs
+			Protected:  rand.Float64() > 0.7,                      // 30% protected
+			Verified:   rand.Float64() > 0.1,                      // 90% verified
 			Comment:    "PMG host configuration backup",
 			Owner:      "root@pam",
 		}
@@ -3076,12 +3076,12 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 			snapshotTime := time.Now().Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
 
 			snapshot := models.GuestSnapshot{
-				ID:          fmt.Sprintf("snapshot-%s-ct-%d-%d", ct.Node, int(ct.VMID), i),
+				ID:          fmt.Sprintf("snapshot-%s-ct-%d-%d", ct.Node, ct.VMID, i),
 				Name:        snapshotNames[rand.Intn(len(snapshotNames))],
 				Node:        ct.Node,
 				Instance:    ct.Instance,
 				Type:        "lxc",
-				VMID:        int(ct.VMID),
+				VMID:        ct.VMID,
 				Time:        snapshotTime,
 				Description: fmt.Sprintf("Container snapshot for %s", ct.Name),
 				VMState:     false,                        // Containers don't have VM state

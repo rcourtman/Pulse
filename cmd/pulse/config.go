@@ -177,7 +177,7 @@ func getPassphrase(prompt string, confirm bool) string {
 
 	// Interactive prompt
 	fmt.Print(prompt)
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+	bytePassword, err := term.ReadPassword(syscall.Stdin)
 	fmt.Println()
 	if err != nil {
 		return ""
@@ -188,7 +188,7 @@ func getPassphrase(prompt string, confirm bool) string {
 	// Confirm if requested
 	if confirm {
 		fmt.Print("Confirm passphrase: ")
-		bytePassword2, err := term.ReadPassword(int(syscall.Stdin))
+		bytePassword2, err := term.ReadPassword(syscall.Stdin)
 		fmt.Println()
 		if err != nil {
 			return ""
