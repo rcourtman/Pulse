@@ -805,10 +805,10 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 	containerSSHBlocked := isContainerSSHRestricted()
 
 	// Add PVE nodes
-	for i, pve := range h.config.PVEInstances {
+	for i := range h.config.PVEInstances {
 		// Refresh cluster metadata if we previously failed to detect endpoints
 		h.maybeRefreshClusterInfo(&h.config.PVEInstances[i])
-		pve = h.config.PVEInstances[i]
+		pve := h.config.PVEInstances[i]
 		node := NodeResponse{
 			ID:                           generateNodeID("pve", i),
 			Type:                         "pve",

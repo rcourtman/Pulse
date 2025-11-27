@@ -82,12 +82,6 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 	includeTasks := a.cfg.IncludeTasks
 
 	if info.Swarm.LocalNodeState != swarmtypes.LocalNodeStateActive {
-		if !includeServices {
-			includeServices = false
-		}
-		if !includeTasks {
-			includeTasks = false
-		}
 		return nil, nil, swarmInfo
 	}
 
