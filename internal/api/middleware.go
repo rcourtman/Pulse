@@ -93,7 +93,6 @@ func ErrorHandler(next http.Handler) http.Handler {
 	})
 }
 
-
 // writeErrorResponse writes a consistent error response
 func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -156,4 +155,3 @@ func (rw *responseWriter) Flush() {
 		flusher.Flush()
 	}
 }
-
