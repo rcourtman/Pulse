@@ -1864,7 +1864,7 @@ const UnifiedBackups: Component = () => {
         />
 
         {/* Table */}
-        <Card padding="none" class="mb-4 overflow-hidden">
+        <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
           <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
             <style>{`
           .overflow-x-auto::-webkit-scrollbar { display: none; }
@@ -2138,7 +2138,7 @@ const UnifiedBackups: Component = () => {
                           </tr>
                           <For each={group.items}>
                             {(item) => (
-                              <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                              <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 animate-enter">
                                 <td class="p-0.5 pl-5 pr-1.5 text-sm align-middle">{item.vmid}</td>
                                 <td class="p-0.5 px-1.5 align-middle">
                                   <span

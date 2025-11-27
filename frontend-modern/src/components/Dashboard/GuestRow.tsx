@@ -455,7 +455,7 @@ export function GuestRow(props: GuestRowProps) {
   });
 
   const rowClass = createMemo(() => {
-    const base = 'transition-all duration-200 relative';
+    const base = 'transition-all duration-200 relative animate-enter';
     const hover = 'hover:shadow-sm';
     const alertBg = hasUnacknowledgedAlert()
       ? props.alertStyles?.severity === 'critical'

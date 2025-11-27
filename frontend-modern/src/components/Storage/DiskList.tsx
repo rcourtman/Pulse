@@ -149,7 +149,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
       </Show>
 
       <Show when={filteredDisks().length > 0}>
-        <Card padding="none" class="overflow-hidden">
+        <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full">
               <thead>
@@ -191,7 +191,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
                     return (
                       <>
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors animate-enter">
                           <td class="px-2 py-1.5 text-xs">
                             <span class="font-medium text-gray-900 dark:text-gray-100">
                               {disk.node}

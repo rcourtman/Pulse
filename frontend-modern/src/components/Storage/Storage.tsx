@@ -742,7 +742,7 @@ const Storage: Component = () => {
         {/* Storage Table - shows for both PVE and PBS storage */}
         <Show when={connected() && initialDataReceived() && sortedStorage().length > 0}>
           <ComponentErrorBoundary name="Storage Table">
-            <Card padding="none" class="mb-4 overflow-hidden">
+            <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
               <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
                 <style>{`
                 .overflow-x-auto::-webkit-scrollbar { display: none; }
@@ -1043,7 +1043,7 @@ const Storage: Component = () => {
                                 return (
                                   <>
                                     <tr
-                                      class={`${rowClass()} transition-colors`}
+                                      class={`${rowClass()} transition-colors animate-enter`}
                                       style={rowStyle()}
                                       onClick={toggleDrawer}
                                       aria-expanded={canExpand() && isExpanded() ? 'true' : 'false'}

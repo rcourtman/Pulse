@@ -498,7 +498,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   };
 
   return (
-    <Card padding="none" class="mb-4 overflow-hidden">
+    <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
       <div>
         {/* Header */}
         <div
@@ -569,7 +569,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               });
 
               const rowClass = createMemo(() => {
-                const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
+                const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group animate-enter';
 
                 if (isSelected()) {
                   return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group`;

@@ -479,3 +479,50 @@ body,
 .delay-300 {
   animation-delay: 300ms;
 }
+
+/* Glassmorphism Utilities */
+.glass {
+  @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-white/20 dark:border-gray-700/30 shadow-sm;
+}
+
+.glass-panel {
+  @apply bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50;
+}
+
+.glass-hover {
+  @apply hover:bg-white/90 dark:hover:bg-gray-800/90 transition-colors duration-200;
+}
+
+/* Staggered Entry Animation */
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-enter {
+  animation: enter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Glow effects for status dots */
+.glow-success {
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.glow-warning {
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.glow-danger {
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.glow-info {
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}

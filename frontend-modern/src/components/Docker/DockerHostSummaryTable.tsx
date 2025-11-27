@@ -142,7 +142,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
   };
 
   return (
-    <Card padding="none" class="mb-4 overflow-hidden">
+    <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
       <ScrollableTable minWidth="300px" persistKey="docker-host-summary">
         <table class="w-full table-fixed border-collapse sm:whitespace-nowrap">
           <thead>
@@ -227,7 +227,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                 };
 
                 const rowClass = () => {
-                  const baseHover = 'cursor-pointer transition-all duration-200 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm';
+                  const baseHover = 'cursor-pointer transition-all duration-200 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm animate-enter';
 
                   if (selected) {
                     return 'cursor-pointer transition-all duration-200 relative bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:shadow-sm z-10';

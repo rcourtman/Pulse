@@ -170,7 +170,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                   </Card>
                 }
               >
-                <Card padding="none" class="overflow-hidden">
+                <Card padding="none" tone="glass" class="overflow-hidden">
                   <ScrollableTable>
                     <table class="w-full border-collapse">
                       <thead>
@@ -243,7 +243,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                             });
 
                             const rowClass = () => {
-                              const base = 'border-b border-gray-200 dark:border-gray-700 transition-all duration-200';
+                              const base = 'border-b border-gray-200 dark:border-gray-700 transition-all duration-200 animate-enter';
                               const hover = 'hover:bg-gray-50 dark:hover:bg-gray-800/50';
                               const clickable = hasDrawerContent() ? 'cursor-pointer' : '';
                               const expanded = drawerOpen() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
