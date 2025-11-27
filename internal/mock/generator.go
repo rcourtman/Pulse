@@ -12,6 +12,28 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+// titleCase capitalizes the first letter of each word (simple ASCII-safe version)
+func titleCase(s string) string {
+	var result strings.Builder
+	capitalizeNext := true
+	for _, r := range s {
+		if unicode.IsSpace(r) || r == '-' {
+			capitalizeNext = true
+			if r == '-' {
+				result.WriteRune(' ')
+			} else {
+				result.WriteRune(r)
+			}
+		} else if capitalizeNext {
+			result.WriteRune(unicode.ToUpper(r))
+			capitalizeNext = false
+		} else {
+			result.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return result.String()
+}
+
 type MockConfig struct {
 	NodeCount               int
 	VMsPerNode              int
@@ -2468,7 +2490,7 @@ func generateCephClusters(nodes []models.Node, storage []models.Storage) []model
 		cluster := models.CephCluster{
 			ID:             fmt.Sprintf("%s-ceph", instanceName),
 			Instance:       instanceName,
-			Name:           fmt.Sprintf("%s Ceph", strings.Title(strings.ReplaceAll(instanceName, "-", " "))),
+			Name:           fmt.Sprintf("%s Ceph", titleCase(instanceName)),
 			FSID:           fmt.Sprintf("00000000-0000-4000-8000-%012d", rand.Int63n(1_000_000_000_000)),
 			Health:         health,
 			HealthMessage:  healthMessage,
