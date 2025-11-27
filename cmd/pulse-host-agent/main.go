@@ -10,10 +10,23 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 )
+
+var (
+	// Version is the semantic version of the agent, set at build time via ldflags
+	Version = "dev"
+)
+
+// Config holds the configuration for the standalone host agent
+type Config struct {
+	HostConfig        hostagent.Config
+	DisableAutoUpdate bool
+}
 
 type multiValue []string
 
@@ -28,11 +41,12 @@ func (m *multiValue) Set(value string) error {
 
 func main() {
 	cfg := loadConfig()
+	hostCfg := cfg.HostConfig
 
-	zerolog.SetGlobalLevel(cfg.LogLevel)
+	zerolog.SetGlobalLevel(hostCfg.LogLevel)
 
-	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
-	cfg.Logger = &logger
+	logger := zerolog.New(os.Stdout).Level(hostCfg.LogLevel).With().Timestamp().Logger()
+	hostCfg.Logger = &logger
 
 	// Check if we should run as a Windows service
 	if err := runAsWindowsService(cfg, logger); err != nil {
@@ -41,28 +55,55 @@ func main() {
 
 	// If runAsWindowsService returns nil without error, we're not running as a service
 	// or we're on a non-Windows platform, so run normally
-	agent, err := hostagent.New(cfg)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to initialise host agent")
-	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	g, ctx := errgroup.WithContext(ctx)
+
 	logger.Info().
-		Str("pulse_url", cfg.PulseURL).
-		Str("agent_id", cfg.AgentID).
-		Dur("interval", cfg.Interval).
+		Str("version", Version).
+		Str("pulse_url", hostCfg.PulseURL).
+		Str("agent_id", hostCfg.AgentID).
+		Dur("interval", hostCfg.Interval).
+		Bool("auto_update", !cfg.DisableAutoUpdate).
 		Msg("Starting Pulse host agent")
 
-	if err := agent.Run(ctx); err != nil && err != context.Canceled {
+	// Start Auto-Updater
+	updater := agentupdate.New(agentupdate.Config{
+		PulseURL:           hostCfg.PulseURL,
+		APIToken:           hostCfg.APIToken,
+		AgentName:          "pulse-host-agent",
+		CurrentVersion:     Version,
+		CheckInterval:      1 * time.Hour,
+		InsecureSkipVerify: hostCfg.InsecureSkipVerify,
+		Logger:             &logger,
+		Disabled:           cfg.DisableAutoUpdate,
+	})
+
+	g.Go(func() error {
+		updater.RunLoop(ctx)
+		return nil
+	})
+
+	// Start the host agent
+	agent, err := hostagent.New(hostCfg)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to initialise host agent")
+	}
+
+	g.Go(func() error {
+		return agent.Run(ctx)
+	})
+
+	if err := g.Wait(); err != nil && err != context.Canceled {
 		logger.Fatal().Err(err).Msg("host agent terminated with error")
 	}
 
 	logger.Info().Msg("Host agent stopped")
 }
 
-func loadConfig() hostagent.Config {
+func loadConfig() Config {
 	envURL := utils.GetenvTrim("PULSE_URL")
 	envToken := utils.GetenvTrim("PULSE_TOKEN")
 	envInterval := utils.GetenvTrim("PULSE_INTERVAL")
@@ -72,6 +113,7 @@ func loadConfig() hostagent.Config {
 	envTags := utils.GetenvTrim("PULSE_TAGS")
 	envRunOnce := utils.GetenvTrim("PULSE_ONCE")
 	envLogLevel := utils.GetenvTrim("LOG_LEVEL")
+	envNoAutoUpdate := utils.GetenvTrim("PULSE_NO_AUTO_UPDATE")
 
 	defaultInterval := 30 * time.Second
 	if envInterval != "" {
@@ -87,6 +129,7 @@ func loadConfig() hostagent.Config {
 	agentIDFlag := flag.String("agent-id", envAgentID, "Override agent identifier")
 	insecureFlag := flag.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS certificate verification")
 	runOnceFlag := flag.Bool("once", utils.ParseBool(envRunOnce), "Collect and send a single report, then exit")
+	noAutoUpdateFlag := flag.Bool("no-auto-update", utils.ParseBool(envNoAutoUpdate), "Disable automatic updates")
 	showVersion := flag.Bool("version", false, "Print the agent version and exit")
 	logLevelFlag := flag.String("log-level", defaultLogLevel(envLogLevel), "Log level: debug, info, warn, error")
 
@@ -96,7 +139,7 @@ func loadConfig() hostagent.Config {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println(hostagent.Version)
+		fmt.Println(Version)
 		os.Exit(0)
 	}
 
@@ -124,16 +167,19 @@ func loadConfig() hostagent.Config {
 
 	tags := gatherTags(envTags, tagFlags)
 
-	return hostagent.Config{
-		PulseURL:           pulseURL,
-		APIToken:           token,
-		Interval:           interval,
-		HostnameOverride:   strings.TrimSpace(*hostnameFlag),
-		AgentID:            strings.TrimSpace(*agentIDFlag),
-		Tags:               tags,
-		InsecureSkipVerify: *insecureFlag,
-		RunOnce:            *runOnceFlag,
-		LogLevel:           logLevel,
+	return Config{
+		HostConfig: hostagent.Config{
+			PulseURL:           pulseURL,
+			APIToken:           token,
+			Interval:           interval,
+			HostnameOverride:   strings.TrimSpace(*hostnameFlag),
+			AgentID:            strings.TrimSpace(*agentIDFlag),
+			Tags:               tags,
+			InsecureSkipVerify: *insecureFlag,
+			RunOnce:            *runOnceFlag,
+			LogLevel:           logLevel,
+		},
+		DisableAutoUpdate: *noAutoUpdateFlag,
 	}
 }
 

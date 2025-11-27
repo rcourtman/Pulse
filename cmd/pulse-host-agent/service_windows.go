@@ -7,14 +7,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/eventlog"
 )
 
 type windowsService struct {
-	cfg      hostagent.Config
+	cfg      Config
 	logger   zerolog.Logger
 	eventLog *eventlog.Log
 }
@@ -29,35 +31,63 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 		ws.eventLog.Info(1, "Pulse Host Agent service starting")
 	}
 
-	agent, err := hostagent.New(ws.cfg)
-	if err != nil {
-		ws.logger.Error().Err(err).Msg("Failed to create host agent")
-		changes <- svc.Status{State: svc.Stopped}
-		return true, 1
-	}
+	hostCfg := ws.cfg.HostConfig
+	hostCfg.Logger = &ws.logger
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start the agent in a goroutine
-	errChan := make(chan error, 1)
-	go func() {
-		ws.logger.Info().
-			Str("pulse_url", ws.cfg.PulseURL).
-			Str("agent_id", ws.cfg.AgentID).
-			Dur("interval", ws.cfg.Interval).
-			Msg("Starting Pulse host agent as Windows service")
+	g, ctx := errgroup.WithContext(ctx)
 
-		if err := agent.Run(ctx); err != nil && err != context.Canceled {
-			errChan <- err
+	// Start Auto-Updater
+	updater := agentupdate.New(agentupdate.Config{
+		PulseURL:           hostCfg.PulseURL,
+		APIToken:           hostCfg.APIToken,
+		AgentName:          "pulse-host-agent",
+		CurrentVersion:     Version,
+		CheckInterval:      1 * time.Hour,
+		InsecureSkipVerify: hostCfg.InsecureSkipVerify,
+		Logger:             &ws.logger,
+		Disabled:           ws.cfg.DisableAutoUpdate,
+	})
+
+	g.Go(func() error {
+		updater.RunLoop(ctx)
+		return nil
+	})
+
+	// Start the host agent
+	agent, err := hostagent.New(hostCfg)
+	if err != nil {
+		ws.logger.Error().Err(err).Msg("Failed to create host agent")
+		if ws.eventLog != nil {
+			ws.eventLog.Error(1, fmt.Sprintf("Failed to create host agent: %v", err))
 		}
-		close(errChan)
+		changes <- svc.Status{State: svc.Stopped}
+		return true, 1
+	}
+
+	g.Go(func() error {
+		ws.logger.Info().
+			Str("version", Version).
+			Str("pulse_url", hostCfg.PulseURL).
+			Str("agent_id", hostCfg.AgentID).
+			Dur("interval", hostCfg.Interval).
+			Bool("auto_update", !ws.cfg.DisableAutoUpdate).
+			Msg("Starting Pulse host agent as Windows service")
+		return agent.Run(ctx)
+	})
+
+	// Channel to receive errgroup completion
+	doneChan := make(chan error, 1)
+	go func() {
+		doneChan <- g.Wait()
 	}()
 
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 	ws.logger.Info().Msg("Host agent service is running")
 	if ws.eventLog != nil {
-		ws.eventLog.Info(1, fmt.Sprintf("Pulse Host Agent started successfully (URL: %s, Interval: %s)", ws.cfg.PulseURL, ws.cfg.Interval))
+		ws.eventLog.Info(1, fmt.Sprintf("Pulse Host Agent started successfully (URL: %s, Interval: %s)", hostCfg.PulseURL, hostCfg.Interval))
 	}
 
 	// Service control loop
@@ -79,8 +109,8 @@ loop:
 			default:
 				ws.logger.Warn().Uint32("command", uint32(c.Cmd)).Msg("Unexpected service control command")
 			}
-		case err := <-errChan:
-			if err != nil {
+		case err := <-doneChan:
+			if err != nil && err != context.Canceled {
 				ws.logger.Error().Err(err).Msg("Agent error")
 				if ws.eventLog != nil {
 					ws.eventLog.Error(1, fmt.Sprintf("Pulse Host Agent error: %v", err))
@@ -97,7 +127,7 @@ loop:
 	defer shutdownTimeout.Stop()
 
 	select {
-	case <-errChan:
+	case <-doneChan:
 		ws.logger.Info().Msg("Agent stopped gracefully")
 		if ws.eventLog != nil {
 			ws.eventLog.Info(1, "Pulse Host Agent stopped gracefully")
@@ -113,7 +143,7 @@ loop:
 	return false, 0
 }
 
-func runAsWindowsService(cfg hostagent.Config, logger zerolog.Logger) error {
+func runAsWindowsService(cfg Config, logger zerolog.Logger) error {
 	// Check if we're running as a Windows service
 	isService, err := svc.IsWindowsService()
 	if err != nil {
