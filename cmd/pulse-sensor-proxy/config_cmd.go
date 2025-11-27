@@ -338,36 +338,6 @@ func updateConfigMap(path string, updateFn func(map[string]interface{}) error) e
 	})
 }
 
-// validateConfigFile parses and validates the main config file
-func validateConfigFile(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	// Check for duplicate allowed_nodes blocks (the issue we're fixing)
-	sanitized, cleanData := sanitizeDuplicateAllowedNodesBlocks("", data)
-	if sanitized {
-		return fmt.Errorf("config contains duplicate allowed_nodes blocks (would auto-fix on service start)")
-	}
-
-	// Parse YAML
-	cfg := &Config{}
-	if err := yaml.Unmarshal(cleanData, cfg); err != nil {
-		return fmt.Errorf("failed to parse config YAML: %w", err)
-	}
-
-	// Validate required fields
-	if cfg.ReadTimeout <= 0 {
-		return fmt.Errorf("read_timeout must be positive")
-	}
-	if cfg.WriteTimeout <= 0 {
-		return fmt.Errorf("write_timeout must be positive")
-	}
-
-	return nil
-}
-
 // validateAllowedNodesFile parses and validates the allowed_nodes.yaml file
 func validateAllowedNodesFile(path string) error {
 	data, err := os.ReadFile(path)

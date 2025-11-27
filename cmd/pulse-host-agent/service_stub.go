@@ -12,8 +12,3 @@ import (
 func runAsWindowsService(cfg hostagent.Config, logger zerolog.Logger) error {
 	return nil
 }
-
-// runServiceDebug is a no-op on non-Windows platforms
-func runServiceDebug(cfg hostagent.Config, logger zerolog.Logger) error {
-	return nil
-}

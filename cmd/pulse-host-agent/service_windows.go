@@ -11,7 +11,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rs/zerolog"
 	"golang.org/x/sys/windows/svc"
-	"golang.org/x/sys/windows/svc/debug"
 	"golang.org/x/sys/windows/svc/eventlog"
 )
 
@@ -157,12 +156,4 @@ func runAsWindowsService(cfg hostagent.Config, logger zerolog.Logger) error {
 	}
 
 	return nil
-}
-
-func runServiceDebug(cfg hostagent.Config, logger zerolog.Logger) error {
-	ws := &windowsService{
-		cfg:    cfg,
-		logger: logger,
-	}
-	return debug.Run("PulseHostAgent", ws)
 }

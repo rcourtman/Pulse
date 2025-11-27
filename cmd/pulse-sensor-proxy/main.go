@@ -966,15 +966,6 @@ func (p *Proxy) handleConnection(conn net.Conn) {
 	p.metrics.rpcLatency.WithLabelValues(req.Method).Observe(time.Since(startTime).Seconds())
 }
 
-// sendError sends an error response (legacy function)
-func (p *Proxy) sendError(conn net.Conn, message string) {
-	resp := RPCResponse{
-		Success: false,
-		Error:   message,
-	}
-	p.sendResponse(conn, resp, p.writeTimeout)
-}
-
 // sendErrorV2 sends an error response with correlation ID
 func (p *Proxy) sendErrorV2(conn net.Conn, message, correlationID string) {
 	resp := RPCResponse{
@@ -1013,27 +1004,6 @@ func (p *Proxy) sendResponse(conn net.Conn, resp RPCResponse, writeTimeout time.
 	}
 }
 
-// handleGetStatus returns proxy status
-func (p *Proxy) handleGetStatus(req RPCRequest) RPCResponse {
-	pubKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519.pub")
-	pubKey, err := os.ReadFile(pubKeyPath)
-	if err != nil {
-		return RPCResponse{
-			Success: false,
-			Error:   fmt.Sprintf("failed to read public key: %v", err),
-		}
-	}
-
-	return RPCResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"version":    Version,
-			"public_key": string(pubKey),
-			"ssh_dir":    p.sshKeyPath,
-		},
-	}
-}
-
 // ensureSSHKeypair generates SSH keypair if it doesn't exist
 func (p *Proxy) ensureSSHKeypair() error {
 	privKeyPath := filepath.Join(p.sshKeyPath, "id_ed25519")
@@ -1059,158 +1029,7 @@ func (p *Proxy) ensureSSHKeypair() error {
 	return nil
 }
 
-// handleEnsureClusterKeys discovers cluster nodes and pushes SSH keys
-func (p *Proxy) handleEnsureClusterKeys(req RPCRequest) RPCResponse {
-	// Check if we're on a Proxmox host
-	if !isProxmoxHost() {
-		return RPCResponse{
-			Success: false,
-			Error:   "not running on Proxmox host - cannot discover cluster",
-		}
-	}
-
-	// Discover cluster nodes
-	nodes, err := discoverClusterNodes()
-	if err != nil {
-		return RPCResponse{
-			Success: false,
-			Error:   fmt.Sprintf("failed to discover cluster: %v", err),
-		}
-	}
-
-	log.Info().Strs("nodes", nodes).Msg("Discovered cluster nodes")
-
-	// Push SSH key to each node
-	results := make(map[string]interface{})
-	successCount := 0
-	for _, node := range nodes {
-		log.Info().Str("node", node).Msg("Pushing SSH key to node")
-		if err := p.pushSSHKey(node); err != nil {
-			log.Error().Err(err).Str("node", node).Msg("Failed to push SSH key")
-			results[node] = map[string]interface{}{
-				"success": false,
-				"error":   err.Error(),
-			}
-		} else {
-			log.Info().Str("node", node).Msg("SSH key pushed successfully")
-			results[node] = map[string]interface{}{
-				"success": true,
-			}
-			successCount++
-		}
-	}
-
-	return RPCResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"nodes":         nodes,
-			"results":       results,
-			"success_count": successCount,
-			"total_count":   len(nodes),
-		},
-	}
-}
-
-// handleRegisterNodes returns discovered nodes
-func (p *Proxy) handleRegisterNodes(req RPCRequest) RPCResponse {
-	// Check if we're on a Proxmox host
-	if !isProxmoxHost() {
-		return RPCResponse{
-			Success: false,
-			Error:   "not running on Proxmox host",
-		}
-	}
-
-	// Discover cluster nodes
-	nodes, err := discoverClusterNodes()
-	if err != nil {
-		return RPCResponse{
-			Success: false,
-			Error:   fmt.Sprintf("failed to discover nodes: %v", err),
-		}
-	}
-
-	// Test SSH connectivity to each node
-	nodeStatus := make([]map[string]interface{}, 0, len(nodes))
-	for _, node := range nodes {
-		// Validate node name to prevent SSH command injection
-		node = strings.TrimSpace(node)
-		if err := validateNodeName(node); err != nil {
-			log.Warn().Str("node", node).Msg("Invalid node name format from cluster discovery")
-			continue
-		}
-
-		status := map[string]interface{}{
-			"name": node,
-		}
-
-		if err := p.testSSHConnection(node); err != nil {
-			status["ssh_ready"] = false
-			status["error"] = err.Error()
-		} else {
-			status["ssh_ready"] = true
-		}
-
-		nodeStatus = append(nodeStatus, status)
-	}
-
-	return RPCResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"nodes": nodeStatus,
-		},
-	}
-}
-
-// handleGetTemperature fetches temperature data from a node via SSH
-func (p *Proxy) handleGetTemperature(req RPCRequest) RPCResponse {
-	// Extract node parameter
-	nodeParam, ok := req.Params["node"]
-	if !ok {
-		return RPCResponse{
-			Success: false,
-			Error:   "missing 'node' parameter",
-		}
-	}
-
-	node, ok := nodeParam.(string)
-	if !ok {
-		return RPCResponse{
-			Success: false,
-			Error:   "'node' parameter must be a string",
-		}
-	}
-
-	// Validate node name to prevent SSH command injection
-	node = strings.TrimSpace(node)
-	if err := validateNodeName(node); err != nil {
-		return RPCResponse{
-			Success: false,
-			Error:   "invalid node name format",
-		}
-	}
-
-	// Fetch temperature data with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	tempData, err := p.getTemperatureViaSSH(ctx, node)
-	if err != nil {
-		return RPCResponse{
-			Success: false,
-			Error:   fmt.Sprintf("failed to get temperatures: %v", err),
-		}
-	}
-
-	return RPCResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"node":        node,
-			"temperature": tempData,
-		},
-	}
-}
-
-// New V2 handlers with context and structured logging
+// V2 handlers with context and structured logging
 
 // handleGetStatusV2 returns proxy status with context support
 func (p *Proxy) handleGetStatusV2(ctx context.Context, req *RPCRequest, logger zerolog.Logger) (interface{}, error) {

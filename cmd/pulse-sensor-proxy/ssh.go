@@ -327,11 +327,6 @@ func loadProxmoxHostKeys(host string) ([][]byte, error) {
 	return entries, nil
 }
 
-// getPublicKey reads the SSH public key from the default directory
-func (p *Proxy) getPublicKey() (string, error) {
-	return p.getPublicKeyFrom(p.sshKeyPath)
-}
-
 // getPublicKeyFrom reads the SSH public key from a specific directory
 func (p *Proxy) getPublicKeyFrom(keyDir string) (string, error) {
 	pubKeyPath := filepath.Join(keyDir, "id_ed25519.pub")
@@ -525,12 +520,6 @@ func (p *Proxy) pushSSHKeyFrom(nodeHost, keyDir string) error {
 	p.metrics.sshRequests.WithLabelValues(nodeLabel, "success").Inc()
 	p.metrics.sshLatency.WithLabelValues(nodeLabel).Observe(time.Since(startTime).Seconds())
 	return nil
-}
-
-// pushSSHKey adds the proxy's public key to a node's authorized_keys with IP restrictions
-// Automatically upgrades old keys without from= restrictions
-func (p *Proxy) pushSSHKey(nodeHost string) error {
-	return p.pushSSHKeyFrom(nodeHost, p.sshKeyPath)
 }
 
 // testSSHConnection verifies SSH connectivity to a node
