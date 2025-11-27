@@ -391,12 +391,7 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 	if len(c.Ports) > 0 {
 		ports := make([]DockerContainerPortFrontend, len(c.Ports))
 		for i, port := range c.Ports {
-			ports[i] = DockerContainerPortFrontend{
-				PrivatePort: port.PrivatePort,
-				PublicPort:  port.PublicPort,
-				Protocol:    port.Protocol,
-				IP:          port.IP,
-			}
+			ports[i] = DockerContainerPortFrontend(port)
 		}
 		container.Ports = ports
 	}
@@ -404,11 +399,7 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 	if len(c.Networks) > 0 {
 		networks := make([]DockerContainerNetworkFrontend, len(c.Networks))
 		for i, net := range c.Networks {
-			networks[i] = DockerContainerNetworkFrontend{
-				Name: net.Name,
-				IPv4: net.IPv4,
-				IPv6: net.IPv6,
-			}
+			networks[i] = DockerContainerNetworkFrontend(net)
 		}
 		container.Networks = networks
 	}
@@ -425,16 +416,7 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 	if len(c.Mounts) > 0 {
 		mounts := make([]DockerContainerMountFrontend, len(c.Mounts))
 		for i, mount := range c.Mounts {
-			mounts[i] = DockerContainerMountFrontend{
-				Type:        mount.Type,
-				Source:      mount.Source,
-				Destination: mount.Destination,
-				Mode:        mount.Mode,
-				RW:          mount.RW,
-				Propagation: mount.Propagation,
-				Name:        mount.Name,
-				Driver:      mount.Driver,
-			}
+			mounts[i] = DockerContainerMountFrontend(mount)
 		}
 		container.Mounts = mounts
 	}
@@ -504,13 +486,7 @@ func (s DockerService) ToFrontend() DockerServiceFrontend {
 
 // ToFrontend converts a DockerServicePort to DockerServicePortFrontend.
 func (p DockerServicePort) ToFrontend() DockerServicePortFrontend {
-	return DockerServicePortFrontend{
-		Name:          p.Name,
-		Protocol:      p.Protocol,
-		TargetPort:    p.TargetPort,
-		PublishedPort: p.PublishedPort,
-		PublishMode:   p.PublishMode,
-	}
+	return DockerServicePortFrontend(p)
 }
 
 // ToFrontend converts a DockerServiceUpdate to DockerServiceUpdateFrontend.
@@ -565,16 +541,7 @@ func (t DockerTask) ToFrontend() DockerTaskFrontend {
 
 // ToFrontend converts DockerSwarmInfo to DockerSwarmFrontend.
 func (s DockerSwarmInfo) ToFrontend() DockerSwarmFrontend {
-	return DockerSwarmFrontend{
-		NodeID:           s.NodeID,
-		NodeRole:         s.NodeRole,
-		LocalState:       s.LocalState,
-		ControlAvailable: s.ControlAvailable,
-		ClusterID:        s.ClusterID,
-		ClusterName:      s.ClusterName,
-		Scope:            s.Scope,
-		Error:            s.Error,
-	}
+	return DockerSwarmFrontend(s)
 }
 
 func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFrontend {
