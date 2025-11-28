@@ -10,6 +10,7 @@
 #   --enable-host       Enable host metrics (default: true)
 #   --enable-docker     Enable docker metrics (default: false)
 #   --interval <dur>    Reporting interval (default: 30s)
+#   --agent-id <id>     Custom agent identifier (default: auto-generated)
 #   --uninstall         Remove the agent
 
 set -euo pipefail
@@ -48,6 +49,7 @@ ENABLE_HOST="true"
 ENABLE_DOCKER="false"
 UNINSTALL="false"
 INSECURE="false"
+AGENT_ID=""
 
 # --- Helper Functions ---
 log_info() { printf "[INFO] %s\n" "$1"; }
@@ -70,6 +72,7 @@ build_exec_args() {
     if [[ "$ENABLE_HOST" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-host"; fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-docker"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
+    if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
 }
 
 # Build exec args as array for direct execution (proper quoting)
@@ -79,6 +82,7 @@ build_exec_args_array() {
     if [[ "$ENABLE_HOST" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-host); fi
     if [[ "$ENABLE_DOCKER" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-docker); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
+    if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS_ARRAY+=(--agent-id "$AGENT_ID"); fi
 }
 
 # --- Parse Arguments ---
@@ -93,6 +97,7 @@ while [[ $# -gt 0 ]]; do
         --disable-docker) ENABLE_DOCKER="false"; shift ;;
         --insecure) INSECURE="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
+        --agent-id) AGENT_ID="$2"; shift 2 ;;
         *) fail "Unknown argument: $1" ;;
     esac
 done
@@ -304,6 +309,11 @@ if [[ "$OS" == "darwin" ]]; then
     if [[ "$INSECURE" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--insecure</string>"
+    fi
+    if [[ -n "$AGENT_ID" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--agent-id</string>
+        <string>${AGENT_ID}</string>"
     fi
 
     cat > "$PLIST" <<EOF

@@ -10,7 +10,8 @@ param (
     [bool]$EnableHost = $true,
     [bool]$EnableDocker = $false,
     [bool]$Insecure = $false,
-    [bool]$Uninstall = $false
+    [bool]$Uninstall = $false,
+    [string]$AgentId = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -292,6 +293,7 @@ $ServiceArgs = @(
 if ($EnableHost) { $ServiceArgs += "--enable-host" }
 if ($EnableDocker) { $ServiceArgs += "--enable-docker" }
 if ($Insecure) { $ServiceArgs += "--insecure" }
+if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id", "`"$AgentId`"") }
 
 $BinPath = "`"$DestPath`" $($ServiceArgs -join ' ')"
 
