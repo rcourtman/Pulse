@@ -315,7 +315,7 @@ if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id
 $BinPath = "`"$DestPath`" $($ServiceArgs -join ' ')"
 
 # Create Service with error handling
-$scOutput = sc.exe create $AgentName binPath= $BinPath start= auto displayname= "Pulse Unified Agent" 2>&1
+$scOutput = sc.exe create $AgentName binPath= "$BinPath" start= auto displayname= "Pulse Unified Agent" 2>&1
 if ($LASTEXITCODE -ne 0) {
     Show-Error "Failed to create service '$AgentName'.`nsc.exe output: $scOutput"
     Exit 1
