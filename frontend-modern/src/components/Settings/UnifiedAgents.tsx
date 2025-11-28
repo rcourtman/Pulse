@@ -6,7 +6,7 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
-import type { HostLookupResponse, RemovedDockerHost } from '@/types/api';
+import type { HostLookupResponse } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
 import { HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
 import { copyToClipboard } from '@/utils/clipboard';

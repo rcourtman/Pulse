@@ -443,7 +443,7 @@ const LoginForm: Component<{
                   {oidcMessage()}
                 </div>
               </Show>
-              <Show when={showLocalLogin()}>
+              <Show when={showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
                   <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
                   <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
