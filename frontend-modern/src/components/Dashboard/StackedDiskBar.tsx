@@ -1,4 +1,5 @@
 import { Show, For, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import type { Disk } from '@/types/api';
 import { formatBytes, formatPercent } from '@/utils/format';
 
@@ -109,8 +110,8 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       const diskPercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
       // Use warning/critical colors for high usage, otherwise use the color palette
       const color = diskPercent >= 90 ? getUsageColor(90) :
-                    diskPercent >= 80 ? getUsageColor(80) :
-                    SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
+        diskPercent >= 80 ? getUsageColor(80) :
+          SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
       return {
         disk,
         widthPercent: Math.min(usedPercent, 100),
@@ -133,8 +134,8 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           total: formatBytes(disk.total, 0),
           percent: formatPercent(percent),
           color: percent >= 90 ? getUsageColor(90) :
-                 percent >= 80 ? getUsageColor(80) :
-                 SEGMENT_COLORS[idx % SEGMENT_COLORS.length],
+            percent >= 80 ? getUsageColor(80) :
+              SEGMENT_COLORS[idx % SEGMENT_COLORS.length],
         };
       });
     }
@@ -228,35 +229,37 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
 
       {/* Tooltip for multi-disk breakdown */}
       <Show when={showTooltip() && hasMultipleDisks()}>
-        <div
-          class="fixed z-50 pointer-events-none"
-          style={{
-            left: `${tooltipPos().x}px`,
-            top: `${tooltipPos().y - 8}px`,
-            transform: 'translate(-50%, -100%)',
-          }}
-        >
-          <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[140px]">
-            <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
-              Disk Breakdown
+        <Portal mount={document.body}>
+          <div
+            class="fixed z-[9999] pointer-events-none"
+            style={{
+              left: `${tooltipPos().x}px`,
+              top: `${tooltipPos().y - 8}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[140px] border border-gray-700">
+              <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                Disk Breakdown
+              </div>
+              <For each={tooltipContent()}>
+                {(item, idx) => (
+                  <div class="flex justify-between gap-3 py-0.5" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
+                    <span
+                      class="truncate max-w-[80px]"
+                      style={{ color: item.color }}
+                    >
+                      {item.label}
+                    </span>
+                    <span class="whitespace-nowrap text-gray-300">
+                      {item.percent} ({item.used}/{item.total})
+                    </span>
+                  </div>
+                )}
+              </For>
             </div>
-            <For each={tooltipContent()}>
-              {(item, idx) => (
-                <div class="flex justify-between gap-3 py-0.5" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
-                  <span
-                    class="truncate max-w-[80px]"
-                    style={{ color: item.color }}
-                  >
-                    {item.label}
-                  </span>
-                  <span class="whitespace-nowrap text-gray-300">
-                    {item.percent} ({item.used}/{item.total})
-                  </span>
-                </div>
-              )}
-            </For>
           </div>
-        </div>
+        </Portal>
       </Show>
     </div>
   );
