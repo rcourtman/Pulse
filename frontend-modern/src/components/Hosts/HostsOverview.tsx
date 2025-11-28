@@ -175,19 +175,22 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                     <table class="w-full border-collapse">
                       <thead>
                         <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                          <th class="pl-4 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[24%]">
+                          <th class="pl-4 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
                             Host
                           </th>
-                          <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%]">
+                          <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%]">
                             Platform
                           </th>
-                          <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
+                          <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%]">
                             CPU
                           </th>
-                          <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[22%]">
+                          <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%]">
                             Memory
                           </th>
-                          <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[14%]">
+                          <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[18%]">
+                            Disk
+                          </th>
+                          <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                             Uptime
                           </th>
                         </tr>
@@ -199,6 +202,20 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                             const memPercent = () => host.memory?.usage ?? 0;
                             const memUsed = () => formatBytes(host.memory?.used ?? 0, 0);
                             const memTotal = () => formatBytes(host.memory?.total ?? 0, 0);
+                            // Calculate aggregate disk usage from all disks
+                            const diskStats = createMemo(() => {
+                              if (!host.disks || host.disks.length === 0) return { percent: 0, used: 0, total: 0 };
+                              const totalUsed = host.disks.reduce((sum, d) => sum + (d.used ?? 0), 0);
+                              const totalSize = host.disks.reduce((sum, d) => sum + (d.total ?? 0), 0);
+                              return {
+                                percent: totalSize > 0 ? (totalUsed / totalSize) * 100 : 0,
+                                used: totalUsed,
+                                total: totalSize
+                              };
+                            });
+                            const diskPercent = () => diskStats().percent;
+                            const diskUsed = () => formatBytes(diskStats().used, 0);
+                            const diskTotal = () => formatBytes(diskStats().total, 0);
                             const hostStatus = createMemo(() => getHostStatusIndicator(host));
 
                             // Drawer state
@@ -314,6 +331,18 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                   </td>
                                   <td class="px-2 py-2">
                                     <Show
+                                      when={diskPercent() > 0}
+                                      fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}
+                                    >
+                                      <MetricBar
+                                        label={`${diskUsed()} / ${diskTotal()}`}
+                                        value={diskPercent()}
+                                        type="disk"
+                                      />
+                                    </Show>
+                                  </td>
+                                  <td class="px-2 py-2">
+                                    <Show
                                       when={host.uptimeSeconds}
                                       fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}
                                     >
@@ -327,7 +356,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
                                 {/* Drawer - Additional Info */}
                                 <Show when={drawerOpen() && hasDrawerContent()}>
                                   <tr class="bg-gray-50 dark:bg-gray-900/50">
-                                    <td class="px-4 py-3" colSpan={5}>
+                                    <td class="px-4 py-3" colSpan={6}>
                                       <div class="flex flex-wrap justify-start gap-3">
                                         {/* System Info */}
                                         <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">

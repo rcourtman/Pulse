@@ -376,7 +376,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                                 : 'Agent is up to date'
                                 }${summary.host.intervalSeconds ? `\nReporting interval: ${summary.host.intervalSeconds}s` : ''}`}
                             >
-                              v{version()}
+                              {version()}
                             </span>
                           )}
                         </Show>
