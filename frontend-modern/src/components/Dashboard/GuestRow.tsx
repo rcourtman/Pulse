@@ -1,8 +1,9 @@
 import { GuestDrawer } from './GuestDrawer';
 import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
 import type { VM, Container } from '@/types/api';
-import { formatBytes, formatUptime, formatSpeed, getBackupInfo, type BackupStatus } from '@/utils/format';
+import { formatBytes, formatUptime, formatSpeed, getBackupInfo, type BackupStatus, formatPercent } from '@/utils/format';
 import { TagBadges } from './TagBadges';
+import { StackedDiskBar } from './StackedDiskBar';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
@@ -696,19 +697,19 @@ export function GuestRow(props: GuestRowProps) {
                 </span>
               }
             >
-              <ResponsiveMetricCell
-                value={diskPercent()}
-                type="disk"
-                resourceId={metricsKey()}
-                sublabel={
-                  props.guest.disk
-                    ? `${formatBytes(props.guest.disk.used, 0)}/${formatBytes(props.guest.disk.total, 0)}`
-                    : undefined
-                }
-                isRunning={true}
-                showMobile={isMobile()}
-                class="w-full"
-              />
+              {/* Mobile: simple percentage text */}
+              <Show when={isMobile()}>
+                <div class="md:hidden text-xs text-center text-gray-600 dark:text-gray-400">
+                  {formatPercent(diskPercent())}
+                </div>
+              </Show>
+              {/* Desktop: stacked disk bar for multiple disks */}
+              <div class={isMobile() ? 'hidden md:block w-full' : 'w-full'}>
+                <StackedDiskBar
+                  disks={props.guest.disks}
+                  aggregateDisk={props.guest.disk}
+                />
+              </div>
             </Show>
           </div>
         );
