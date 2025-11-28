@@ -445,6 +445,7 @@ jobs:
           echo "✓ Release published as latest: ${TAG}"
 
       - name: Trigger demo server update
+        continue-on-error: true  # GITHUB_TOKEN can't dispatch workflows; non-fatal
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -452,6 +453,7 @@ jobs:
           echo "Triggering demo server update for ${TAG}..."
 
           # Publishing via API doesn't fire the release webhook, so we dispatch manually
+          # This may fail due to GITHUB_TOKEN limitations - demo update is non-critical
           gh workflow run update-demo-server.yml -f tag="${TAG}"
 
           echo "✓ Demo server update workflow dispatched"
