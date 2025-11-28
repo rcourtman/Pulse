@@ -1377,9 +1377,9 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	var systemDelta float64
 	if current.systemUsage >= prev.systemUsage {
 		systemDelta = float64(current.systemUsage - prev.systemUsage)
-	} else if current.systemUsage > 0 {
-		systemDelta = float64(current.systemUsage)
 	}
+	// If systemUsage went backward (counter reset), leave systemDelta as 0
+	// to fall through to time-based calculation below
 
 	if systemDelta > 0 {
 		cpuPercent := safeFloat((totalDelta / systemDelta) * float64(onlineCPUs) * 100.0)
