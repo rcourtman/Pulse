@@ -443,16 +443,18 @@ const LoginForm: Component<{
                   {oidcMessage()}
                 </div>
               </Show>
-              <div class="flex items-center gap-3 pt-2">
-                <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                  or
-                </span>
-                <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-              </div>
-              <p class="text-xs text-center text-gray-500 dark:text-gray-400">
-                Use your admin credentials to sign in below.
-              </p>
+              <Show when={showLocalLogin()}>
+                <div class="flex items-center gap-3 pt-2">
+                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                  <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                    or
+                  </span>
+                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                </div>
+                <p class="text-xs text-center text-gray-500 dark:text-gray-400">
+                  Use your admin credentials to sign in below.
+                </p>
+              </Show>
             </div>
           </Show>
           <Show when={showLocalLogin}>
