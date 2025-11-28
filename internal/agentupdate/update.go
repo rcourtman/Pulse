@@ -156,7 +156,10 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		return
 	}
 
-	if serverVersion == u.cfg.CurrentVersion {
+	// Normalize both versions by stripping "v" prefix for comparison.
+	// Server returns version without prefix (e.g., "4.33.1"), but agent's
+	// CurrentVersion may include it (e.g., "v4.33.1") depending on build.
+	if normalizeVersion(serverVersion) == normalizeVersion(u.cfg.CurrentVersion) {
 		u.logger.Debug().Str("version", u.cfg.CurrentVersion).Msg("Agent is up to date")
 		return
 	}
@@ -435,6 +438,11 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// normalizeVersion strips the "v" prefix from version strings for comparison.
+func normalizeVersion(version string) string {
+	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
 // determineArch returns the architecture string for download URLs (e.g., "linux-amd64", "darwin-arm64").
