@@ -6,7 +6,7 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
-import type { HostLookupResponse } from '@/types/api';
+import type { HostLookupResponse, RemovedDockerHost } from '@/types/api';
 import type { APITokenRecord } from '@/api/security';
 import { HOST_AGENT_SCOPE, DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -302,6 +302,12 @@ export const UnifiedAgents: Component = () => {
     const legacyAgents = createMemo(() => allHosts().filter(h => h.isLegacy));
     const hasLegacyAgents = createMemo(() => legacyAgents().length > 0);
 
+    const removedDockerHosts = createMemo(() => {
+        const removed = state.removedDockerHosts || [];
+        return removed.sort((a, b) => b.removedAt - a.removedAt);
+    });
+    const hasRemovedDockerHosts = createMemo(() => removedDockerHosts().length > 0);
+
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
         return `curl -fsSL ${pulseUrl()}/install.sh | sudo bash -s -- --url ${pulseUrl()} --token ${token}`;
@@ -320,6 +326,16 @@ export const UnifiedAgents: Component = () => {
         } catch (err) {
             logger.error('Failed to remove agent', err);
             notificationStore.error('Failed to remove agent');
+        }
+    };
+
+    const handleAllowReenroll = async (hostId: string, hostname?: string) => {
+        try {
+            await MonitoringAPI.allowDockerHostReenroll(hostId);
+            notificationStore.success(`Re-enrollment allowed for ${hostname || hostId}. Restart the agent to reconnect.`);
+        } catch (err) {
+            logger.error('Failed to allow re-enrollment', err);
+            notificationStore.error('Failed to allow re-enrollment');
         }
     };
 
@@ -711,6 +727,55 @@ export const UnifiedAgents: Component = () => {
                     </table>
                 </Card>
             </Card>
+
+            <Show when={hasRemovedDockerHosts()}>
+                <Card padding="lg" class="space-y-4">
+                    <div class="space-y-1">
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Removed Docker Hosts</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            Docker hosts that were removed and are blocked from re-enrolling. Allow re-enrollment to let them report again.
+                        </p>
+                    </div>
+
+                    <Card padding="none" tone="glass" class="overflow-hidden rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Hostname</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Host ID</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Removed</th>
+                                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                                <For each={removedDockerHosts()}>
+                                    {(host) => (
+                                        <tr>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                {host.displayName || host.hostname || 'Unknown'}
+                                            </td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400 font-mono text-xs">
+                                                {host.id.slice(0, 8)}...
+                                            </td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                {formatRelativeTime(host.removedAt)}
+                                            </td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
+                                                <button
+                                                    onClick={() => handleAllowReenroll(host.id, host.hostname)}
+                                                    class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                >
+                                                    Allow re-enroll
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </For>
+                            </tbody>
+                        </table>
+                    </Card>
+                </Card>
+            </Show>
         </div >
     );
 };
