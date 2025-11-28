@@ -9,6 +9,7 @@ interface MetricBarProps {
   sublabel?: string;
   type?: 'cpu' | 'memory' | 'disk' | 'generic';
   resourceId?: string; // Required for sparkline mode to fetch history
+  class?: string;
 }
 
 // Estimate text width based on character count (rough approximation for 10px font)
@@ -103,7 +104,7 @@ export function MetricBar(props: MetricBarProps) {
       fallback={
         // Original progress bar mode - capped width for better appearance on wide screens
         <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
-          <div class="relative w-full max-w-[140px] h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded">
+          <div class={`relative w-full max-w-[140px] h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded ${props.class || ''}`}>
             <div class={`absolute top-0 left-0 h-full ${progressColorClass()}`} style={{ width: `${width()}%` }} />
             <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none">
               <span class="flex items-center gap-1 whitespace-nowrap px-0.5">
