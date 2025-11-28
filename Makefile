@@ -92,8 +92,8 @@ build-agents:
 	echo "Building unified agent binaries..." && \
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent && \
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-linux-arm64 ./cmd/pulse-agent && \
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-macos-amd64 ./cmd/pulse-agent && \
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-macos-arm64 ./cmd/pulse-agent && \
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-darwin-amd64 ./cmd/pulse-agent && \
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-darwin-arm64 ./cmd/pulse-agent && \
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-windows-amd64.exe ./cmd/pulse-agent
 	@ln -sf pulse-host-agent-windows-amd64.exe bin/pulse-host-agent-windows-amd64
 	@echo "✓ All agent binaries built in bin/"
