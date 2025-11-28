@@ -590,6 +590,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["allowEmbedding"]; ok {
 		settings.AllowEmbedding = updates.AllowEmbedding
 	}
+	if _, ok := rawRequest["hideLocalLogin"]; ok {
+		settings.HideLocalLogin = updates.HideLocalLogin
+	}
 	if _, ok := rawRequest["backupPollingEnabled"]; ok {
 		settings.BackupPollingEnabled = updates.BackupPollingEnabled
 	}
