@@ -1203,7 +1203,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Check required commands
-REQUIRED_CMDS="curl openssl systemctl useradd groupadd install chmod chown mkdir"
+REQUIRED_CMDS="curl openssl systemctl useradd groupadd install chmod chown mkdir jq"
 if [[ "$HTTP_MODE" == true ]]; then
     REQUIRED_CMDS="$REQUIRED_CMDS hostname awk"
 fi
@@ -1228,6 +1228,7 @@ if [[ "$STANDALONE" == false ]]; then
 fi
 
 # Validate arguments based on mode
+CONTAINER_ON_THIS_NODE=true
 if [[ "$STANDALONE" == false ]]; then
     if [[ -z "$CTID" ]]; then
         print_error "Missing required argument: --ctid <container-id>"
@@ -1237,17 +1238,23 @@ if [[ "$STANDALONE" == false ]]; then
         exit 1
     fi
 
-    # Verify container exists
+    # Verify container exists on this node
     if ! pct status "$CTID" >/dev/null 2>&1; then
-        print_error "Container $CTID does not exist"
-        exit 1
+        # Container doesn't exist locally - might be on another cluster node
+        # Continue installation for host temperature monitoring, skip container-specific config
+        print_warn "Container $CTID does not exist on this node"
+        print_warn "Will install sensor-proxy for host temperature monitoring only"
+        print_warn "Container-specific socket mount configuration will be skipped"
+        CONTAINER_ON_THIS_NODE=false
     fi
 fi
 
 if [[ "$STANDALONE" == true ]]; then
     print_info "Installing pulse-sensor-proxy for standalone/Docker deployment"
-else
+elif [[ "$CONTAINER_ON_THIS_NODE" == true ]]; then
     print_info "Installing pulse-sensor-proxy for container $CTID"
+else
+    print_info "Installing pulse-sensor-proxy for host monitoring (container $CTID on another node)"
 fi
 
 # Create dedicated service account if it doesn't exist
@@ -3122,8 +3129,8 @@ fi
 
 cleanup_inline_allowed_nodes
 
-# Container-specific configuration (skip for standalone mode)
-if [[ "$STANDALONE" == false ]]; then
+# Container-specific configuration (skip for standalone mode or if container not on this node)
+if [[ "$STANDALONE" == false && "$CONTAINER_ON_THIS_NODE" == true ]]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Secure Container Communication Setup"
