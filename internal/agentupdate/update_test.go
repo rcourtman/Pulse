@@ -396,3 +396,12 @@ func TestSymlinkResolution(t *testing.T) {
 	}
 	os.Remove(newPath)
 }
+
+func TestNormalizeVersion(t *testing.T) {
+	if got := normalizeVersion("v4.33.1"); got != "4.33.1" {
+		t.Errorf("normalizeVersion(%q) = %q, want %q", "v4.33.1", got, "4.33.1")
+	}
+	if got := normalizeVersion("4.33.1"); got != "4.33.1" {
+		t.Errorf("normalizeVersion(%q) = %q, want %q", "4.33.1", got, "4.33.1")
+	}
+}
