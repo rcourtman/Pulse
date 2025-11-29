@@ -12,6 +12,8 @@ import { useWebSocket } from '@/App';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getHostStatusIndicator } from '@/utils/status';
 import { ResponsiveMetricCell, MetricText, useGridTemplate } from '@/components/shared/responsive';
+import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
+import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import type { ColumnConfig } from '@/types/responsive';
 import { STANDARD_COLUMNS } from '@/types/responsive';
 
@@ -25,6 +27,7 @@ const HOST_COLUMNS: ColumnConfig[] = [
   { id: 'platform', label: 'Platform', priority: 'primary', minWidth: '120px', flex: 1, sortable: true, sortKey: 'platform' },
   { ...STANDARD_COLUMNS.cpu, maxWidth: '156px', sortKey: 'cpu' },
   { ...STANDARD_COLUMNS.memory, maxWidth: '156px', sortKey: 'memory' },
+  { id: 'temperature', label: 'Temp', priority: 'secondary', minWidth: '80px', maxWidth: '100px' },
   { id: 'disk', label: 'Disk', minWidth: '140px', maxWidth: '156px', priority: 'secondary' },
   { ...STANDARD_COLUMNS.uptime, maxWidth: '100px', align: 'right', sortKey: 'uptime' },
 ];
@@ -153,8 +156,7 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
   const renderCell = (column: ColumnConfig, host: Host) => {
     const cpuPercent = () => host.cpuUsage ?? 0;
     const memPercent = () => host.memory?.usage ?? 0;
-    const memUsed = () => formatBytes(host.memory?.used ?? 0, 0);
-    const memTotal = () => formatBytes(host.memory?.total ?? 0, 0);
+
     const hostStatus = createMemo(() => getHostStatusIndicator(host));
 
     switch (column.id) {
@@ -215,15 +217,55 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
       case 'memory':
         return (
           <div class="px-2 py-1 overflow-hidden">
-            <ResponsiveMetricCell
-              value={memPercent()}
-              type="memory"
-              label={`${memUsed()} / ${memTotal()}`}
-              sublabel={formatPercent(memPercent())}
-              isRunning={true}
-              showMobile={isMobile()}
-              class="w-full"
-            />
+            <Show when={isMobile()}>
+              <div class="md:hidden">
+                <MetricText value={memPercent()} type="memory" />
+              </div>
+            </Show>
+            <div class="hidden md:block w-full">
+              <StackedMemoryBar
+                used={host.memory?.used || 0}
+                total={host.memory?.total || 0}
+                balloon={host.memory?.balloon || 0}
+                swapUsed={host.memory?.swapUsed || 0}
+                swapTotal={host.memory?.swapTotal || 0}
+              />
+            </div>
+          </div>
+        );
+      case 'temperature':
+        const tempValue = (() => {
+          if (!host.sensors?.temperatureCelsius) return null;
+          const temps = host.sensors.temperatureCelsius;
+
+          // Try to find a "package" or "composite" temperature first
+          const packageKey = Object.keys(temps).find(k =>
+            k.toLowerCase().includes('package') ||
+            k.toLowerCase().includes('composite') ||
+            k.toLowerCase().includes('tctl')
+          );
+
+          if (packageKey) return temps[packageKey];
+
+          // Fallback: average of all core temps
+          const coreKeys = Object.keys(temps).filter(k => k.toLowerCase().includes('core'));
+          if (coreKeys.length > 0) {
+            const sum = coreKeys.reduce((acc, k) => acc + temps[k], 0);
+            return sum / coreKeys.length;
+          }
+
+          // Fallback: just take the first available value if any
+          const values = Object.values(temps);
+          if (values.length > 0) return values[0];
+
+          return null;
+        })();
+
+        return (
+          <div class="px-2 py-1 overflow-hidden">
+            <Show when={tempValue !== null} fallback={<span class="text-xs text-gray-500 dark:text-gray-400">—</span>}>
+              <TemperatureGauge value={tempValue!} />
+            </Show>
           </div>
         );
       case 'disk':

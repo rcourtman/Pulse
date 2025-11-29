@@ -5,7 +5,8 @@ import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
-import type { ReplicationJob } from '@/types/api';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getReplicationJobStatusIndicator } from '@/utils/status';
 
 function formatDuration(durationSeconds?: number, durationHuman?: string): string {
   if (durationHuman && durationHuman.trim()) return durationHuman;
@@ -24,29 +25,7 @@ function formatDuration(durationSeconds?: number, durationHuman?: string): strin
   return `${hours}:${minutes}:${seconds}`;
 }
 
-function getStatusBadge(job: ReplicationJob) {
-  const status = (job.status || job.state || '').toLowerCase();
-  const lastStatus = (job.lastSyncStatus || '').toLowerCase();
 
-  if (status.includes('error') || lastStatus.includes('error')) {
-    return {
-      tone: 'danger' as const,
-      label: status || lastStatus || 'Error',
-    };
-  }
-
-  if (status.includes('sync')) {
-    return {
-      tone: 'warning' as const,
-      label: job.status || job.state || 'Syncing',
-    };
-  }
-
-  return {
-    tone: 'success' as const,
-    label: job.status || job.state || 'Idle',
-  };
-}
 
 function formatRate(limit?: number): string {
   if (!limit || limit <= 0) return '—';
@@ -119,7 +98,7 @@ const Replication: Component = () => {
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-800 text-sm text-gray-700 dark:text-gray-200">
                   <For each={replicationJobs()}>
                     {(job) => {
-                      const badge = getStatusBadge(job);
+                      const indicator = getReplicationJobStatusIndicator(job);
                       return (
                         <tr class="hover:bg-gray-50/80 dark:hover:bg-gray-900/40 transition-colors">
                           <td class="px-4 py-3">
@@ -173,16 +152,17 @@ const Replication: Component = () => {
                             </Show>
                           </td>
                           <td class="px-4 py-3">
-                            <span
-                              class="inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold capitalize"
-                              classList={{
-                                'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300': badge.tone === 'success',
-                                'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200': badge.tone === 'warning',
-                                'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300': badge.tone === 'danger',
-                              }}
-                            >
-                              {badge.label}
-                            </span>
+                            <div class="flex items-center gap-2">
+                              <StatusDot
+                                variant={indicator.variant}
+                                title={indicator.label}
+                                ariaLabel={indicator.label}
+                                size="sm"
+                              />
+                              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {indicator.label}
+                              </span>
+                            </div>
                             <Show when={job.error}>
                               <div class="mt-1 text-xs text-red-500 dark:text-red-400 line-clamp-2">
                                 {job.error}

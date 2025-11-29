@@ -22,6 +22,7 @@ import {
 } from '@/utils/status';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { ResponsiveMetricCell, useGridTemplate } from '@/components/shared/responsive';
+import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import type { ColumnConfig } from '@/types/responsive';
 
 const typeBadgeClass = (type: 'container' | 'service' | 'task' | 'unknown') => {
@@ -1195,17 +1196,34 @@ const DockerContainerRow: Component<{
           </div>
         );
       case 'memory':
+        const memoryTotal = () => container.memoryLimitBytes && container.memoryLimitBytes > 0
+          ? container.memoryLimitBytes
+          : host.totalMemoryBytes;
+
         return (
           <div class="px-2 py-0.5 flex items-center overflow-hidden">
-            <ResponsiveMetricCell
-              value={memPercent()}
-              type="memory"
-              resourceId={metricsKey}
-              sublabel={memUsageLabel()}
-              isRunning={isRunning() && (container.memoryUsageBytes ?? 0) > 0}
-              showMobile={props.isMobile()}
-              class="w-full"
-            />
+            <Show when={props.isMobile()}>
+              <div class="md:hidden w-full">
+                <ResponsiveMetricCell
+                  value={memPercent()}
+                  type="memory"
+                  sublabel={memUsageLabel()}
+                  resourceId={metricsKey}
+                  isRunning={isRunning() && (container.memoryUsageBytes ?? 0) > 0}
+                  showMobile={true}
+                  class="w-full"
+                />
+              </div>
+            </Show>
+            <div class="hidden md:block w-full">
+              <StackedMemoryBar
+                used={container.memoryUsageBytes || 0}
+                total={memoryTotal()}
+                balloon={0}
+                swapUsed={0}
+                swapTotal={0}
+              />
+            </div>
           </div>
         );
       case 'disk':

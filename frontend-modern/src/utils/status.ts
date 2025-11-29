@@ -7,6 +7,7 @@ import type {
   DockerHost,
   DockerContainer,
   DockerService,
+  ReplicationJob,
 } from '@/types/api';
 
 const ONLINE_STATUS = 'online';
@@ -243,4 +244,22 @@ export function getDockerServiceStatusIndicator(
   }
 
   return { variant: 'warning', label: `Degraded (${running}/${desired})` };
+}
+
+export function getReplicationJobStatusIndicator(
+  job: Partial<ReplicationJob> | undefined | null,
+): StatusIndicator {
+  if (!job) return defaultIndicator;
+  const status = normalize(job.status || job.state);
+  const lastStatus = normalize(job.lastSyncStatus);
+
+  if (status.includes('error') || lastStatus.includes('error')) {
+    return { variant: 'danger', label: formatStatusLabel(status || lastStatus, 'Error') };
+  }
+
+  if (status.includes('sync')) {
+    return { variant: 'warning', label: formatStatusLabel(status, 'Syncing') };
+  }
+
+  return { variant: 'success', label: formatStatusLabel(status, 'Idle') };
 }

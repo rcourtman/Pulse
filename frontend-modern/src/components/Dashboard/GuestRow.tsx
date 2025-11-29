@@ -4,6 +4,7 @@ import type { VM, Container } from '@/types/api';
 import { formatBytes, formatUptime, formatSpeed, getBackupInfo, type BackupStatus, formatPercent } from '@/utils/format';
 import { TagBadges } from './TagBadges';
 import { StackedDiskBar } from './StackedDiskBar';
+import { StackedMemoryBar } from './StackedMemoryBar';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
@@ -673,15 +674,28 @@ export function GuestRow(props: GuestRowProps) {
         return (
           <div class="flex-1 px-0.5 py-1 md:px-2 md:py-0 w-auto min-w-[35px] md:w-full flex justify-center items-center">
             <div title={memoryTooltip() ?? undefined} class="w-full text-center xl:text-left">
-              <ResponsiveMetricCell
-                value={memPercent()}
-                type="memory"
-                resourceId={metricsKey()}
-                sublabel={memoryUsageLabel()}
-                isRunning={isRunning()}
-                showMobile={isMobile()}
-                class="w-full"
-              />
+              <Show when={isMobile()}>
+                <div class="md:hidden">
+                  <ResponsiveMetricCell
+                    value={memPercent()}
+                    type="memory"
+                    resourceId={metricsKey()}
+                    sublabel={memoryUsageLabel()}
+                    isRunning={isRunning()}
+                    showMobile={true}
+                    class="w-full"
+                  />
+                </div>
+              </Show>
+              <div class="hidden md:block w-full">
+                <StackedMemoryBar
+                  used={props.guest.memory?.used || 0}
+                  total={props.guest.memory?.total || 0}
+                  balloon={props.guest.memory?.balloon || 0}
+                  swapUsed={props.guest.memory?.swapUsed || 0}
+                  swapTotal={props.guest.memory?.swapTotal || 0}
+                />
+              </div>
             </div>
           </div>
         );

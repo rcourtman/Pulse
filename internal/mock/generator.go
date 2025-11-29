@@ -874,9 +874,14 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 			memUsage = 0.80 + rand.Float64()*0.1 // 80-90%
 		}
 		usedMem := int64(float64(totalMem) * memUsage)
-		balloon := totalMem
-		if rand.Float64() < 0.7 {
-			balloon = int64(float64(totalMem) * (0.65 + rand.Float64()*0.25))
+		balloon := int64(0)
+		if rand.Float64() < 0.2 {
+			// Simulate ballooning active (10-30% of total memory)
+			balloon = int64(float64(totalMem) * (0.1 + rand.Float64()*0.2))
+			// Ensure balloon doesn't exceed used memory (which would result in 0 active)
+			if balloon > usedMem {
+				balloon = int64(float64(usedMem) * 0.8)
+			}
 		}
 
 		swapTotal := int64(0)
@@ -1877,10 +1882,8 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 			memUsage = 0.82 + rand.Float64()*0.08 // 82-90%
 		}
 		usedMem := int64(float64(totalMem) * memUsage)
-		balloon := totalMem
-		if rand.Float64() < 0.5 {
-			balloon = int64(float64(totalMem) * (0.7 + rand.Float64()*0.2))
-		}
+		balloon := int64(0)
+		// LXC containers typically don't use ballooning in the same way, keep it 0 for clear "Active" usage
 
 		swapTotal := int64(0)
 		swapUsed := int64(0)

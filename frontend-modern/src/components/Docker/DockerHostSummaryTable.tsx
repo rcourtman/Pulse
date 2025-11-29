@@ -1,9 +1,10 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { StackedContainerBar } from './StackedContainerBar';
 import type { DockerHost } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { renderDockerStatusBadge } from './DockerStatusBadge';
 import { resolveHostRuntime } from './runtimeDisplay';
-import { formatPercent, formatUptime } from '@/utils/format';
+import { formatUptime } from '@/utils/format';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -20,6 +21,8 @@ export interface DockerHostSummary {
   diskLabel?: string;
   runningPercent: number;
   runningCount: number;
+  stoppedCount: number;
+  errorCount: number;
   totalCount: number;
   uptimeSeconds: number;
   lastSeenRelative: string;
@@ -64,18 +67,7 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
     return lastSeen;
   };
 
-  const runningStatusClass = (summary: DockerHostSummary) => {
-    if (!summary.totalCount || summary.totalCount <= 0) {
-      return 'text-gray-400 dark:text-gray-500';
-    }
-    if (summary.runningPercent >= 99) {
-      return 'text-green-600 dark:text-green-400';
-    }
-    if (summary.runningPercent >= 70) {
-      return 'text-yellow-600 dark:text-yellow-400';
-    }
-    return 'text-red-600 dark:text-red-400';
-  };
+
 
   const sortedSummaries = createMemo(() => {
     const list = [...props.summaries()];
@@ -320,17 +312,17 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                       />
                     </td>
                     <td class="px-0.5 md:px-2 py-1 align-middle">
-                      <div class="flex justify-center items-center h-full whitespace-nowrap">
+                      <div class="flex justify-center items-center h-full whitespace-nowrap w-full px-2">
                         <Show
                           when={summary.totalCount > 0}
                           fallback={<span class="text-xs text-gray-400 dark:text-gray-500">—</span>}
                         >
-                          <span
-                            class={`text-xs font-medium whitespace-nowrap ${runningStatusClass(summary)}`}
-                            title={`${formatPercent(summary.runningPercent)} running`}
-                          >
-                            {summary.runningCount}/{summary.totalCount}
-                          </span>
+                          <StackedContainerBar
+                            running={summary.runningCount}
+                            stopped={summary.stoppedCount}
+                            error={summary.errorCount}
+                            total={summary.totalCount}
+                          />
                         </Show>
                       </div>
                     </td>
