@@ -294,8 +294,8 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 			if !ok {
 				return fmt.Errorf("discoveryConfig.max_concurrent must be a number")
 			}
-			if value <= 0 || value > 1000 {
-				return fmt.Errorf("discoveryConfig.max_concurrent must be between 1 and 1000")
+			if value <= 0 || value > 1000 || value != float64(int(value)) {
+				return fmt.Errorf("discoveryConfig.max_concurrent must be a whole number between 1 and 1000")
 			}
 		}
 

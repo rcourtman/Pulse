@@ -1068,16 +1068,20 @@ func TestValidateSystemSettings_BoundaryConditions(t *testing.T) {
 		{name: "connectionTimeout: 299.999", input: map[string]interface{}{"connectionTimeout": 299.999}, expectError: false},
 		{name: "connectionTimeout: 300.001", input: map[string]interface{}{"connectionTimeout": 300.001}, expectError: true},
 
-		// Max concurrent boundaries
-		// Note: The validation is `value <= 0 || value > 1000`, so 0.999 is actually valid
+		// Max concurrent boundaries - fractional values are rejected since it's a goroutine count
 		{
-			name:        "max_concurrent: 0.999",
+			name:        "max_concurrent: 0.999 fractional rejected",
 			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"max_concurrent": 0.999}},
-			expectError: false,
+			expectError: true,
 		},
 		{
-			name:        "max_concurrent: 1000.001",
+			name:        "max_concurrent: 1000.001 fractional rejected",
 			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"max_concurrent": 1000.001}},
+			expectError: true,
+		},
+		{
+			name:        "max_concurrent: 5.5 fractional rejected",
+			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"max_concurrent": 5.5}},
 			expectError: true,
 		},
 	}
