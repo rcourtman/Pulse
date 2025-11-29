@@ -2713,25 +2713,19 @@ if [[ -z "$HOST" ]]; then
     fi
 
     if [[ -n "$CLUSTER_NODES" ]]; then
-            for node_ip in $CLUSTER_NODES; do
-                log_info "Cleaning up SSH keys on node $node_ip"
+        for node_ip in $CLUSTER_NODES; do
+            log_info "Cleaning up SSH keys on node $node_ip"
 
-                # Remove both pulse-managed-key and pulse-proxy-key entries
-                ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
-                    "sed -i -e '/# pulse-managed-key\$/d' -e '/# pulse-proxy-key\$/d' /root/.ssh/authorized_keys" 2>&1 | \
-                    logger -t "$LOG_TAG" -p user.info || \
-                    log_warn "Failed to clean up SSH keys on $node_ip"
-            done
-            log_info "Cluster cleanup completed"
-        else
-            # Standalone node - clean up localhost
-            log_info "Standalone node detected - cleaning up localhost"
-            sed -i -e '/# pulse-managed-key$/d' -e '/# pulse-proxy-key$/d' /root/.ssh/authorized_keys 2>&1 | \
+            # Remove both pulse-managed-key and pulse-proxy-key entries
+            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+                "sed -i -e '/# pulse-managed-key\$/d' -e '/# pulse-proxy-key\$/d' /root/.ssh/authorized_keys" 2>&1 | \
                 logger -t "$LOG_TAG" -p user.info || \
-                log_warn "Failed to clean up SSH keys on localhost"
-        fi
+                log_warn "Failed to clean up SSH keys on $node_ip"
+        done
+        log_info "Cluster cleanup completed"
     else
-        log_warn "pvecm command not available - cleaning up localhost only"
+        # Standalone node - clean up localhost
+        log_info "Standalone node detected - cleaning up localhost"
         sed -i -e '/# pulse-managed-key$/d' -e '/# pulse-proxy-key$/d' /root/.ssh/authorized_keys 2>&1 | \
             logger -t "$LOG_TAG" -p user.info || \
             log_warn "Failed to clean up SSH keys on localhost"
