@@ -1,4 +1,4 @@
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, batch } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
 import type {
   State,
@@ -472,12 +472,10 @@ export function createWebSocketStore(url: string) {
             // Apply updates - batch together if both are present to prevent flapping
             if (shouldApplyDockerHosts && processedHosts !== null) {
               // Both dockerHosts and hosts in this message - batch them atomically
-              setState(
-                produce((s: State) => {
-                  s.dockerHosts = reconcile(processedDockerHosts!, { key: 'id' })(s.dockerHosts);
-                  s.hosts = reconcile(processedHosts!, { key: 'id' })(s.hosts);
-                })
-              );
+              batch(() => {
+                setState('dockerHosts', reconcile(processedDockerHosts!, { key: 'id' }));
+                setState('hosts', reconcile(processedHosts!, { key: 'id' }));
+              });
 
               // Lifecycle cleanup for Docker hosts and containers
               const hostIds = new Set(processedDockerHosts!.map((h: DockerHost) => h.id).filter(Boolean));
