@@ -9,6 +9,7 @@ import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { StorageFilter } from './StorageFilter';
 import { DiskList } from './DiskList';
 import { ZFSHealthMap } from './ZFSHealthMap';
+import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
@@ -485,12 +486,7 @@ const Storage: Component = () => {
     }
   });
 
-  const getProgressBarColor = (usage: number) => {
-    // Match MetricBar component styling exactly - disk type thresholds
-    if (usage >= 90) return 'bg-red-500/60 dark:bg-red-500/50';
-    if (usage >= 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
-    return 'bg-green-500/60 dark:bg-green-500/50';
-  };
+
 
   const resetFilters = () => {
     setSearchTerm('');
@@ -1148,19 +1144,12 @@ const Storage: Component = () => {
                                       </Show>
 
                                       <td class="p-0.5 px-1.5">
-                                        <div class="relative min-w-[150px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
-                                          <div
-                                            class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
-                                            style={{ width: `${usagePercent}%` }}
-                                          />
-                                          <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                                            <span class="whitespace-nowrap px-0.5">
-                                              {formatPercent(usagePercent)} (
-                                              {formatBytes(storage.used || 0, 0)}/
-                                              {formatBytes(storage.total || 0, 0)})
-                                            </span>
-                                          </span>
-                                        </div>
+                                        <EnhancedStorageBar
+                                          used={storage.used || 0}
+                                          total={storage.total || 0}
+                                          free={storage.free || 0}
+                                          zfsPool={storage.zfsPool}
+                                        />
                                       </td>
                                       <td class="hidden sm:table-cell p-0.5 px-1.5 text-xs whitespace-nowrap">
                                         {formatBytes(storage.free || 0, 0)}
