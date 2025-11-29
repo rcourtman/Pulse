@@ -408,35 +408,36 @@ export function createWebSocketStore(url: string) {
               const containerIds = new Set(transformedContainers.map((c: Container) => c.id).filter(Boolean));
               pruneMetricsByPrefix(getMetricKeyPrefix('container'), containerIds);
             }
-            if (message.data.dockerHosts !== undefined && message.data.dockerHosts !== null) {
-              // Only update if dockerHosts is present and not null
+            // Process dockerHosts and hosts together to prevent UI flapping.
+            // When a unified agent reports both host and docker data, the UI's
+            // allHosts memo depends on both state.hosts and state.dockerHosts.
+            // Updating them separately causes brief inconsistent states where
+            // the component sees only dockerHosts updated but not hosts yet,
+            // making the agent type badge flap between "Docker" and "Host & Docker".
+            // Fix: batch both updates into a single setState call. See #778.
+            const hasDockerHostsUpdate = message.data.dockerHosts !== undefined && message.data.dockerHosts !== null;
+            const hasHostsUpdate = message.data.hosts !== undefined && message.data.hosts !== null;
+
+            // Prepare dockerHosts data if present
+            let processedDockerHosts: DockerHost[] | null = null;
+            let shouldApplyDockerHosts = false;
+
+            if (hasDockerHostsUpdate) {
               if (Array.isArray(message.data.dockerHosts)) {
                 const incomingHosts = message.data.dockerHosts;
                 if (incomingHosts.length === 0) {
                   consecutiveEmptyDockerUpdates += 1;
 
-                  const shouldApplyEmptyState =
+                  shouldApplyDockerHosts =
                     !hasReceivedNonEmptyDockerHosts ||
                     consecutiveEmptyDockerUpdates >= 3 ||
                     message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
 
-                  if (shouldApplyEmptyState) {
+                  if (shouldApplyDockerHosts) {
                     logger.debug('[WebSocket] Updating dockerHosts', {
                       count: incomingHosts.length,
                     });
-                    const merged = mergeDockerHostRevocations(incomingHosts);
-                    setState('dockerHosts', reconcile(merged, { key: 'id' }));
-
-                    // Lifecycle cleanup for Docker hosts and containers
-                    const hostIds = new Set(merged.map((h: DockerHost) => h.id).filter(Boolean));
-                    const dockerContainerIds = new Set<string>();
-                    merged.forEach((h: DockerHost) => {
-                      h.containers?.forEach((c: any) => {
-                        if (c.id) dockerContainerIds.add(c.id);
-                      });
-                    });
-                    pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
-                    pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
+                    processedDockerHosts = mergeDockerHostRevocations(incomingHosts);
                   } else {
                     logger.debug('[WebSocket] Skipping transient empty dockerHosts payload', {
                       streak: consecutiveEmptyDockerUpdates,
@@ -445,22 +446,11 @@ export function createWebSocketStore(url: string) {
                 } else {
                   consecutiveEmptyDockerUpdates = 0;
                   hasReceivedNonEmptyDockerHosts = true;
+                  shouldApplyDockerHosts = true;
                   logger.debug('[WebSocket] Updating dockerHosts', {
                     count: incomingHosts.length,
                   });
-                  const merged = mergeDockerHostRevocations(incomingHosts);
-                  setState('dockerHosts', reconcile(merged, { key: 'id' }));
-
-                  // Lifecycle cleanup: prune metrics for removed hosts/containers
-                  const hostIds = new Set(merged.map((h: DockerHost) => h.id).filter(Boolean));
-                  const dockerContainerIds = new Set<string>();
-                  merged.forEach((h: DockerHost) => {
-                    h.containers?.forEach((c: any) => {
-                      if (c.id) dockerContainerIds.add(c.id);
-                    });
-                  });
-                  pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
-                  pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
+                  processedDockerHosts = mergeDockerHostRevocations(incomingHosts);
                 }
               } else {
                 logger.warn('[WebSocket] Received non-array dockerHosts payload', {
@@ -470,11 +460,53 @@ export function createWebSocketStore(url: string) {
             } else if (message.data.dockerHosts === null) {
               logger.debug('[WebSocket] Received null dockerHosts payload');
             }
-            if (message.data.hosts !== undefined && message.data.hosts !== null) {
-              if (Array.isArray(message.data.hosts)) {
-                setState('hosts', reconcile(mergeHostRevocations(message.data.hosts), { key: 'id' }));
-              } else {
-                setState('hosts', reconcile(message.data.hosts, { key: 'id' }));
+
+            // Prepare hosts data if present
+            let processedHosts: Host[] | null = null;
+            if (hasHostsUpdate) {
+              processedHosts = Array.isArray(message.data.hosts)
+                ? mergeHostRevocations(message.data.hosts)
+                : message.data.hosts;
+            }
+
+            // Apply updates - batch together if both are present to prevent flapping
+            if (shouldApplyDockerHosts && processedHosts !== null) {
+              // Both dockerHosts and hosts in this message - batch them atomically
+              setState(
+                produce((s: State) => {
+                  s.dockerHosts = reconcile(processedDockerHosts!, { key: 'id' })(s.dockerHosts);
+                  s.hosts = reconcile(processedHosts!, { key: 'id' })(s.hosts);
+                })
+              );
+
+              // Lifecycle cleanup for Docker hosts and containers
+              const hostIds = new Set(processedDockerHosts!.map((h: DockerHost) => h.id).filter(Boolean));
+              const dockerContainerIds = new Set<string>();
+              processedDockerHosts!.forEach((h: DockerHost) => {
+                h.containers?.forEach((c: any) => {
+                  if (c.id) dockerContainerIds.add(c.id);
+                });
+              });
+              pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
+              pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
+            } else {
+              // Update separately if only one is present
+              if (shouldApplyDockerHosts && processedDockerHosts !== null) {
+                setState('dockerHosts', reconcile(processedDockerHosts, { key: 'id' }));
+
+                // Lifecycle cleanup for Docker hosts and containers
+                const hostIds = new Set(processedDockerHosts.map((h: DockerHost) => h.id).filter(Boolean));
+                const dockerContainerIds = new Set<string>();
+                processedDockerHosts.forEach((h: DockerHost) => {
+                  h.containers?.forEach((c: any) => {
+                    if (c.id) dockerContainerIds.add(c.id);
+                  });
+                });
+                pruneMetricsByPrefix(getMetricKeyPrefix('dockerHost'), hostIds);
+                pruneMetricsByPrefix(getMetricKeyPrefix('dockerContainer'), dockerContainerIds);
+              }
+              if (processedHosts !== null) {
+                setState('hosts', reconcile(processedHosts, { key: 'id' }));
               }
             }
             if (message.data.storage !== undefined) setState('storage', reconcile(message.data.storage, { key: 'id' }));
