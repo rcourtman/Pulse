@@ -1618,7 +1618,7 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	// Compare versions - normalize by stripping "v" prefix for comparison.
 	// Server returns version without prefix (e.g., "4.33.1"), but agent's
 	// Version may include it (e.g., "v4.33.1") depending on build.
-	if normalizeVersion(versionResp.Version) == normalizeVersion(Version) {
+	if utils.NormalizeVersion(versionResp.Version) == utils.NormalizeVersion(Version) {
 		a.logger.Debug().Str("version", Version).Msg("Agent is up to date")
 		return
 	}
@@ -1883,9 +1883,4 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// normalizeVersion strips the "v" prefix from version strings for comparison.
-func normalizeVersion(version string) string {
-	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }

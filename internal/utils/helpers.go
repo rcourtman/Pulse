@@ -41,3 +41,10 @@ func ParseBool(value string) bool {
 func GetenvTrim(key string) string {
 	return strings.TrimSpace(os.Getenv(key))
 }
+
+// NormalizeVersion strips the "v" prefix from version strings for comparison.
+// This normalizes versions like "v4.33.1" to "4.33.1" so that version strings
+// from different sources (agent vs server) can be compared consistently.
+func NormalizeVersion(version string) string {
+	return strings.TrimPrefix(strings.TrimSpace(version), "v")
+}
