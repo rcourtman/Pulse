@@ -1290,6 +1290,81 @@ func (m *Monitor) GetDockerHosts() []models.DockerHost {
 	return m.state.GetDockerHosts()
 }
 
+// RebuildTokenBindings reconstructs agent-to-token binding maps from the current
+// state of Docker hosts and host agents. This should be called after API tokens
+// are reloaded from disk to ensure bindings remain consistent with the new token set.
+// It preserves bindings for tokens that still exist and removes orphaned entries.
+func (m *Monitor) RebuildTokenBindings() {
+	if m == nil || m.state == nil || m.config == nil {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Build a set of valid token IDs from the current config
+	validTokens := make(map[string]struct{})
+	for _, token := range m.config.APITokens {
+		if token.ID != "" {
+			validTokens[token.ID] = struct{}{}
+		}
+	}
+
+	// Rebuild Docker token bindings
+	newDockerBindings := make(map[string]string)
+	dockerHosts := m.state.GetDockerHosts()
+	for _, host := range dockerHosts {
+		tokenID := strings.TrimSpace(host.TokenID)
+		if tokenID == "" {
+			continue
+		}
+		// Only keep bindings for tokens that still exist in config
+		if _, valid := validTokens[tokenID]; !valid {
+			continue
+		}
+		// Use AgentID if available, otherwise fall back to host ID
+		agentID := strings.TrimSpace(host.AgentID)
+		if agentID == "" {
+			agentID = host.ID
+		}
+		if agentID != "" {
+			newDockerBindings[tokenID] = agentID
+		}
+	}
+
+	// Rebuild Host agent token bindings
+	newHostBindings := make(map[string]string)
+	hosts := m.state.GetHosts()
+	for _, host := range hosts {
+		tokenID := strings.TrimSpace(host.TokenID)
+		if tokenID == "" {
+			continue
+		}
+		// Only keep bindings for tokens that still exist in config
+		if _, valid := validTokens[tokenID]; !valid {
+			continue
+		}
+		// Use host ID as the binding identifier
+		if host.ID != "" {
+			newHostBindings[tokenID] = host.ID
+		}
+	}
+
+	// Log what changed
+	oldDockerCount := len(m.dockerTokenBindings)
+	oldHostCount := len(m.hostTokenBindings)
+	m.dockerTokenBindings = newDockerBindings
+	m.hostTokenBindings = newHostBindings
+
+	log.Info().
+		Int("dockerBindings", len(newDockerBindings)).
+		Int("hostBindings", len(newHostBindings)).
+		Int("previousDockerBindings", oldDockerCount).
+		Int("previousHostBindings", oldHostCount).
+		Int("validTokens", len(validTokens)).
+		Msg("Rebuilt agent token bindings after API token reload")
+}
+
 // QueueDockerHostStop queues a stop command for the specified docker host.
 func (m *Monitor) QueueDockerHostStop(hostID string) (models.DockerHostCommandStatus, error) {
 	return m.queueDockerStopCommand(hostID)
