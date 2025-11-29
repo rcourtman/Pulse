@@ -280,3 +280,41 @@ func TestWriteJSONResponse_LargePayload(t *testing.T) {
 		t.Errorf("Decoded length = %d, want 1000", len(decoded))
 	}
 }
+
+func TestNormalizeVersion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// With v prefix
+		{"v4.33.1", "4.33.1"},
+		{"v1.0.0", "1.0.0"},
+		{"v0.0.1-rc1", "0.0.1-rc1"},
+
+		// Without v prefix
+		{"4.33.1", "4.33.1"},
+		{"1.0.0", "1.0.0"},
+		{"0.0.1-rc1", "0.0.1-rc1"},
+
+		// With whitespace
+		{" v4.33.1", "4.33.1"},
+		{"v4.33.1 ", "4.33.1"},
+		{" v4.33.1 ", "4.33.1"},
+		{"\tv4.33.1\n", "4.33.1"},
+
+		// Edge cases
+		{"", ""},
+		{"v", ""},
+		{" ", ""},
+		{"vv4.33.1", "v4.33.1"}, // Only removes one v
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			result := NormalizeVersion(tc.input)
+			if result != tc.expected {
+				t.Errorf("NormalizeVersion(%q) = %q, want %q", tc.input, result, tc.expected)
+			}
+		})
+	}
+}
