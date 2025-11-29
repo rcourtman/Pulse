@@ -32,6 +32,7 @@ type ConfigWatcher struct {
 	apiTokensLastModTime time.Time
 	mu                   sync.RWMutex
 	onMockReload         func() // Callback to trigger backend restart
+	onAPITokenReload     func() // Callback when API tokens are reloaded from disk
 }
 
 // NewConfigWatcher creates a new config watcher
@@ -142,6 +143,14 @@ func (cw *ConfigWatcher) SetMockReloadCallback(callback func()) {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
 	cw.onMockReload = callback
+}
+
+// SetAPITokenReloadCallback sets the callback function to trigger when API tokens are reloaded.
+// This allows the Monitor to rebuild token-to-agent bindings after tokens change on disk.
+func (cw *ConfigWatcher) SetAPITokenReloadCallback(callback func()) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+	cw.onAPITokenReload = callback
 }
 
 // Start begins watching the config file
@@ -479,6 +488,10 @@ func (cw *ConfigWatcher) reloadConfig() {
 
 func (cw *ConfigWatcher) reloadAPITokens() {
 	cw.mu.Lock()
+	callback := cw.onAPITokenReload
+	cw.mu.Unlock()
+
+	cw.mu.Lock()
 	defer cw.mu.Unlock()
 
 	if globalPersistence == nil {
@@ -525,10 +538,10 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 
 	// Only update if we successfully loaded tokens
 	Mu.Lock()
-	defer Mu.Unlock()
 	cw.config.APITokens = tokens
 	cw.config.SortAPITokens()
 	cw.config.APITokenEnabled = len(tokens) > 0
+	Mu.Unlock()
 
 	if cw.apiTokensPath != "" {
 		if stat, err := os.Stat(cw.apiTokensPath); err == nil {
@@ -540,6 +553,22 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		Int("count", len(tokens)).
 		Int("previousCount", existingCount).
 		Msg("Reloaded API tokens from disk")
+
+	// Notify Monitor to rebuild token bindings from current state.
+	// This ensures agent bindings remain consistent after token list changes.
+	if callback != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Stack().
+						Msg("Recovered from panic in API token reload callback")
+				}
+			}()
+			callback()
+		}()
+	}
 }
 
 // reloadMockConfig handles mock.env file changes

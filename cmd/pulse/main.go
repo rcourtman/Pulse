@@ -201,6 +201,14 @@ func runServer() {
 			}
 		})
 
+		// Set callback to rebuild token bindings when API tokens are reloaded from disk.
+		// This fixes issue #773 where agent token bindings become orphaned after config reload.
+		configWatcher.SetAPITokenReloadCallback(func() {
+			if monitor := reloadableMonitor.GetMonitor(); monitor != nil {
+				monitor.RebuildTokenBindings()
+			}
+		})
+
 		if err := configWatcher.Start(); err != nil {
 			log.Warn().Err(err).Msg("Failed to start config watcher")
 		}
