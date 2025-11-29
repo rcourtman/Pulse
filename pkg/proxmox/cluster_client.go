@@ -401,10 +401,14 @@ func (cc *ClusterClient) markUnhealthyWithError(endpoint string, errMsg string) 
 }
 
 // clearEndpointError removes any cached error for an endpoint after successful operations
+// and marks the endpoint as healthy since the operation succeeded
 func (cc *ClusterClient) clearEndpointError(endpoint string) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	delete(cc.lastError, endpoint)
+	// Mark endpoint healthy since operation succeeded - this ensures degraded
+	// clusters recover once endpoints start responding again
+	cc.nodeHealth[endpoint] = true
 }
 
 // recoverUnhealthyNodes attempts to recover unhealthy nodes
