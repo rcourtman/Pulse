@@ -83,7 +83,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
                         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none pointer-events-none">
                             {formatPercent(props.usage)}
                             <Show when={props.cores}>
-                                <span class="ml-1 text-[9px] font-normal opacity-70">({props.cores}c)</span>
+                                <span class="font-normal text-gray-500 dark:text-gray-300 ml-1">({props.cores} cores)</span>
                             </Show>
                         </span>
                     </div>
