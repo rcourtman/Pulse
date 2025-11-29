@@ -417,3 +417,83 @@ func TestResetLockoutRequiresSettingsScope(t *testing.T) {
 		t.Fatalf("expected 403 forbidden for missing scope, got %d (%s)", rr.Code, rr.Body.String())
 	}
 }
+
+func TestValidateBcryptHash(t *testing.T) {
+	tests := []struct {
+		name    string
+		hash    string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid $2a$ hash",
+			hash:    "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+			wantErr: false,
+		},
+		{
+			name:    "valid $2b$ hash",
+			hash:    "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+			wantErr: false,
+		},
+		{
+			name:    "valid $2y$ hash",
+			hash:    "$2y$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+			wantErr: false,
+		},
+		{
+			name:    "truncated hash (59 chars)",
+			hash:    "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhW",
+			wantErr: true,
+			errMsg:  "expected 60 characters, got 59",
+		},
+		{
+			name:    "too long hash (61 chars)",
+			hash:    "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWyX",
+			wantErr: true,
+			errMsg:  "expected 60 characters, got 61",
+		},
+		{
+			name:    "empty hash",
+			hash:    "",
+			wantErr: true,
+			errMsg:  "expected 60 characters, got 0",
+		},
+		{
+			name:    "wrong prefix (md5 style, 60 chars)",
+			hash:    "$1$saltsalt$WabcdEFGhijKLMnopQRstuV0123456789012345123456789",
+			wantErr: true,
+			errMsg:  "must start with $2a$, $2b$, or $2y$",
+		},
+		{
+			name:    "wrong prefix ($2x$)",
+			hash:    "$2x$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+			wantErr: true,
+			errMsg:  "must start with $2a$, $2b$, or $2y$",
+		},
+		{
+			name:    "no prefix at all (60 chars)",
+			hash:    "N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy1234567",
+			wantErr: true,
+			errMsg:  "must start with $2a$, $2b$, or $2y$",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBcryptHash(tt.hash)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateBcryptHash() expected error, got nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateBcryptHash() error = %q, want substring %q", err.Error(), tt.errMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateBcryptHash() unexpected error = %v", err)
+				}
+			}
+		})
+	}
+}
