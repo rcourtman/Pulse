@@ -2012,8 +2012,8 @@ const DockerServiceRow: Component<{
                       <th class="py-1 px-2 text-left font-medium w-[80px]">Type</th>
                       <th class="py-1 px-2 text-left font-medium">Node</th>
                       <th class="py-1 px-2 text-left font-medium">State</th>
-                      <th class="py-1 px-2 text-left font-medium w-[120px]">CPU</th>
-                      <th class="py-1 px-2 text-left font-medium w-[140px]">Memory</th>
+                      <th class="py-1 px-2 text-center font-medium w-[120px]">CPU</th>
+                      <th class="py-1 px-2 text-center font-medium w-[140px]">Memory</th>
                       <th class="py-1 px-2 text-left font-medium">Updated</th>
                     </tr>
                   </thead>
@@ -2509,7 +2509,7 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
                       const isResource = col.id === 'resource';
                       return (
                         <th
-                          class={`${isResource ? 'pl-4 sm:pl-5 lg:pl-6 pr-2' : 'px-2'} py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 text-left font-medium whitespace-nowrap`}
+                          class={`${isResource ? 'pl-4 sm:pl-5 lg:pl-6 pr-2' : 'px-2'} py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 ${col.id === 'cpu' || col.id === 'memory' ? 'text-center' : 'text-left'} font-medium whitespace-nowrap`}
                           style={{ "min-width": col.id === 'cpu' || col.id === 'memory' ? '140px' : undefined }}
                           onClick={() => colSortKey && handleSort(colSortKey)}
                           onKeyDown={(e) => e.key === 'Enter' && colSortKey && handleSort(colSortKey)}
