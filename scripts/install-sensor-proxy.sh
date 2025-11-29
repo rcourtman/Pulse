@@ -803,9 +803,19 @@ cleanup_local_authorized_keys() {
 cleanup_cluster_authorized_keys_manual() {
     local nodes=()
     if command -v pvecm >/dev/null 2>&1; then
-        while IFS= read -r node_ip; do
-            [[ -n "$node_ip" ]] && nodes+=("$node_ip")
-        done < <(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+        # Prefer hostname resolution for multi-network clusters
+        while IFS= read -r nodename; do
+            [[ -z "$nodename" ]] && continue
+            local resolved_ip
+            resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
+            [[ -n "$resolved_ip" ]] && nodes+=("$resolved_ip")
+        done < <(pvecm nodes 2>/dev/null | awk '/^[[:space:]]+[0-9]/ && !/Qdevice/ {print $NF}' | sed 's/ (local)$//' || true)
+        # Fallback to pvecm status if hostname resolution didn't work
+        if [[ ${#nodes[@]} -eq 0 ]]; then
+            while IFS= read -r node_ip; do
+                [[ -n "$node_ip" ]] && nodes+=("$node_ip")
+            done < <(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+        fi
     fi
 
     if [[ ${#nodes[@]} -eq 0 ]]; then
@@ -2651,9 +2661,20 @@ mv "$CLEANUP_REQUEST" "$PROCESSING_FILE" 2>/dev/null || {
 if [[ -z "$HOST" ]]; then
     log_info "No specific host provided - cleaning up all cluster nodes"
 
-    # Discover cluster nodes
+    # Discover cluster nodes (prefer hostname resolution for multi-network clusters)
     if command -v pvecm >/dev/null 2>&1; then
-        CLUSTER_NODES=$(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+        CLUSTER_NODES=""
+        while IFS= read -r nodename; do
+            [[ -z "$nodename" ]] && continue
+            resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
+            if [[ -n "$resolved_ip" ]]; then
+                CLUSTER_NODES="${CLUSTER_NODES:+$CLUSTER_NODES }$resolved_ip"
+            fi
+        done < <(pvecm nodes 2>/dev/null | awk '/^[[:space:]]+[0-9]/ && !/Qdevice/ {print $NF}' | sed 's/ (local)$//' || true)
+        # Fallback to pvecm status if hostname resolution didn't work
+        if [[ -z "$CLUSTER_NODES" ]]; then
+            CLUSTER_NODES=$(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+        fi
 
         if [[ -n "$CLUSTER_NODES" ]]; then
             for node_ip in $CLUSTER_NODES; do
@@ -2961,8 +2982,28 @@ print_info "Proxy public key: ${PROXY_PUBLIC_KEY:0:50}..."
 
 # Discover cluster nodes
 if command -v pvecm >/dev/null 2>&1; then
-    # Extract node IPs from pvecm status
-    CLUSTER_NODES=$(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+    # Extract node hostnames from pvecm nodes and resolve to IPs via /etc/hosts
+    # This prefers management IPs over corosync ring IPs for multi-network clusters
+    CLUSTER_NODES=""
+    while IFS= read -r nodename; do
+        [[ -z "$nodename" ]] && continue
+        # Try to resolve hostname to IP via getent (uses /etc/hosts, then DNS)
+        resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
+        if [[ -n "$resolved_ip" ]]; then
+            CLUSTER_NODES="${CLUSTER_NODES:+$CLUSTER_NODES }$resolved_ip"
+        else
+            # Fallback: try extracting IP directly from pvecm status for this node
+            status_ip=$(pvecm status 2>/dev/null | grep -E "0x[0-9a-f]+.*$nodename" | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {print $i; exit}}')
+            if [[ -n "$status_ip" ]]; then
+                CLUSTER_NODES="${CLUSTER_NODES:+$CLUSTER_NODES }$status_ip"
+            fi
+        fi
+    done < <(pvecm nodes 2>/dev/null | awk '/^[[:space:]]+[0-9]/ && !/Qdevice/ {print $NF}' | sed 's/ (local)$//' || true)
+
+    # Fallback to original method if pvecm nodes didn't yield results
+    if [[ -z "$CLUSTER_NODES" ]]; then
+        CLUSTER_NODES=$(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+    fi
 
     if [[ -n "$CLUSTER_NODES" ]]; then
         print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"
