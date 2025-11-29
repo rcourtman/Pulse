@@ -109,8 +109,24 @@ func TestRedactSecretsFromURL(t *testing.T) {
 		},
 		{
 			name:     "combined telegram and query param secrets",
-			input:    "https://api.telegram.org/bot123:token/send?extra_token=abc",
-			expected: "https://api.telegram.org/botREDACTED/send?extra_token=REDACTED",
+			input:    "https://api.telegram.org/bot123:token/send?token=abc",
+			expected: "https://api.telegram.org/botREDACTED/send?token=REDACTED",
+		},
+		// Boundary checking - prefixed params should NOT be redacted
+		{
+			name:     "prefixed param name should not match",
+			input:    "https://example.com/api?extra_token=abc&myapikey=xyz",
+			expected: "https://example.com/api?extra_token=abc&myapikey=xyz",
+		},
+		{
+			name:     "prefixed param with real sensitive param",
+			input:    "https://example.com/api?extra_token=abc&token=secret",
+			expected: "https://example.com/api?extra_token=abc&token=REDACTED",
+		},
+		{
+			name:     "multiple prefixed params unchanged",
+			input:    "https://example.com/api?mytoken=a&yourkey=b&thesecret=c",
+			expected: "https://example.com/api?mytoken=a&yourkey=b&thesecret=c",
 		},
 	}
 

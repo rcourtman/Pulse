@@ -482,17 +482,39 @@ func redactSecretsFromURL(urlStr string) string {
 	}
 
 	// Redact query parameters with sensitive names
-	if idx := strings.Index(urlStr, "?"); idx != -1 {
+	if qIdx := strings.Index(urlStr, "?"); qIdx != -1 {
 		sensitiveParams := []string{"token", "apikey", "api_key", "key", "secret", "password"}
 		for _, param := range sensitiveParams {
 			pattern := param + "="
-			if paramIdx := strings.Index(urlStr, pattern); paramIdx != -1 {
+			// Search for the pattern after the query string starts
+			searchStart := qIdx
+			for {
+				paramIdx := strings.Index(urlStr[searchStart:], pattern)
+				if paramIdx == -1 {
+					break
+				}
+				paramIdx += searchStart // Convert to absolute index
+
+				// Check that we're at a parameter boundary (after ? or &)
+				if paramIdx > 0 {
+					prevChar := urlStr[paramIdx-1]
+					if prevChar != '?' && prevChar != '&' {
+						// Not at a boundary - this is part of another param name
+						// Move past this match and continue searching
+						searchStart = paramIdx + len(pattern)
+						continue
+					}
+				}
+
+				// Valid match - redact the value
 				start := paramIdx + len(pattern)
 				end := start
 				for end < len(urlStr) && urlStr[end] != '&' && urlStr[end] != '#' {
 					end++
 				}
 				urlStr = urlStr[:start] + "REDACTED" + urlStr[end:]
+				// After modification, continue from after the inserted REDACTED
+				searchStart = start + len("REDACTED")
 			}
 		}
 	}
