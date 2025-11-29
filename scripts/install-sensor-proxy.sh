@@ -785,6 +785,44 @@ REQUESTED_VERSION=""
 INSTALLER_CACHE_REASON=""
 DEFER_SOCKET_VERIFICATION=false
 
+# Get cluster node names via Proxmox API (pvesh) - returns one hostname per line
+# Falls back to pvecm CLI parsing if pvesh unavailable
+get_cluster_node_names() {
+    # Try pvesh API first (structured JSON, version-stable)
+    if command -v pvesh >/dev/null 2>&1; then
+        local json_output
+        if json_output=$(pvesh get /cluster/status --output-format json 2>/dev/null); then
+            # Parse JSON: extract "name" from entries where "type" is "node"
+            # Using python3 for reliable JSON parsing (always available on Proxmox)
+            if command -v python3 >/dev/null 2>&1; then
+                local names
+                names=$(echo "$json_output" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for item in data:
+        if item.get("type") == "node" and item.get("name"):
+            print(item["name"])
+except:
+    pass
+' 2>/dev/null)
+                if [[ -n "$names" ]]; then
+                    echo "$names"
+                    return 0
+                fi
+            fi
+        fi
+    fi
+
+    # Fallback: parse pvecm nodes CLI output (fragile, position-dependent)
+    if command -v pvecm >/dev/null 2>&1; then
+        pvecm nodes 2>/dev/null | awk '/^[[:space:]]+[0-9]/ && !/Qdevice/ {print $4}' || true
+        return 0
+    fi
+
+    return 1
+}
+
 cleanup_local_authorized_keys() {
     local auth_keys_file="/root/.ssh/authorized_keys"
     if [[ ! -f "$auth_keys_file" ]]; then
@@ -802,20 +840,18 @@ cleanup_local_authorized_keys() {
 
 cleanup_cluster_authorized_keys_manual() {
     local nodes=()
-    if command -v pvecm >/dev/null 2>&1; then
-        # Prefer hostname resolution for multi-network clusters
-        while IFS= read -r nodename; do
-            [[ -z "$nodename" ]] && continue
-            local resolved_ip
-            resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
-            [[ -n "$resolved_ip" ]] && nodes+=("$resolved_ip")
-        done < <(pvecm nodes 2>/dev/null | awk '/^[[:space:]]+[0-9]/ && !/Qdevice/ {print $4}' || true)
-        # Fallback to pvecm status if hostname resolution didn't work
-        if [[ ${#nodes[@]} -eq 0 ]]; then
-            while IFS= read -r node_ip; do
-                [[ -n "$node_ip" ]] && nodes+=("$node_ip")
-            done < <(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
-        fi
+    # Use get_cluster_node_names helper (prefers pvesh API, falls back to pvecm CLI)
+    while IFS= read -r nodename; do
+        [[ -z "$nodename" ]] && continue
+        local resolved_ip
+        resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
+        [[ -n "$resolved_ip" ]] && nodes+=("$resolved_ip")
+    done < <(get_cluster_node_names 2>/dev/null || true)
+    # Fallback to pvecm status if hostname resolution didn't work
+    if [[ ${#nodes[@]} -eq 0 ]] && command -v pvecm >/dev/null 2>&1; then
+        while IFS= read -r node_ip; do
+            [[ -n "$node_ip" ]] && nodes+=("$node_ip")
+        done < <(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
     fi
 
     if [[ ${#nodes[@]} -eq 0 ]]; then
@@ -2662,21 +2698,21 @@ if [[ -z "$HOST" ]]; then
     log_info "No specific host provided - cleaning up all cluster nodes"
 
     # Discover cluster nodes (prefer hostname resolution for multi-network clusters)
-    if command -v pvecm >/dev/null 2>&1; then
-        CLUSTER_NODES=""
-        while IFS= read -r nodename; do
-            [[ -z "$nodename" ]] && continue
-            resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
-            if [[ -n "$resolved_ip" ]]; then
-                CLUSTER_NODES="${CLUSTER_NODES:+$CLUSTER_NODES }$resolved_ip"
-            fi
-        done < <(pvecm nodes 2>/dev/null | awk '/^[[:space:]]+[0-9]/ && !/Qdevice/ {print $4}' || true)
-        # Fallback to pvecm status if hostname resolution didn't work
-        if [[ -z "$CLUSTER_NODES" ]]; then
-            CLUSTER_NODES=$(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+    # Use get_cluster_node_names helper (prefers pvesh API, falls back to pvecm CLI)
+    CLUSTER_NODES=""
+    while IFS= read -r nodename; do
+        [[ -z "$nodename" ]] && continue
+        resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
+        if [[ -n "$resolved_ip" ]]; then
+            CLUSTER_NODES="${CLUSTER_NODES:+$CLUSTER_NODES }$resolved_ip"
         fi
+    done < <(get_cluster_node_names 2>/dev/null || true)
+    # Fallback to pvecm status if hostname resolution didn't work
+    if [[ -z "$CLUSTER_NODES" ]] && command -v pvecm >/dev/null 2>&1; then
+        CLUSTER_NODES=$(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+    fi
 
-        if [[ -n "$CLUSTER_NODES" ]]; then
+    if [[ -n "$CLUSTER_NODES" ]]; then
             for node_ip in $CLUSTER_NODES; do
                 log_info "Cleaning up SSH keys on node $node_ip"
 
@@ -2980,176 +3016,146 @@ fi
 PROXY_PUBLIC_KEY=$(cat "$PROXY_KEY_FILE")
 print_info "Proxy public key: ${PROXY_PUBLIC_KEY:0:50}..."
 
-# Discover cluster nodes
-if command -v pvecm >/dev/null 2>&1; then
-    # Extract node hostnames from pvecm nodes and resolve to IPs via /etc/hosts
-    # This prefers management IPs over corosync ring IPs for multi-network clusters
-    CLUSTER_NODES=""
-    while IFS= read -r nodename; do
-        [[ -z "$nodename" ]] && continue
-        # Try to resolve hostname to IP via getent (uses /etc/hosts, then DNS)
-        resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
-        if [[ -n "$resolved_ip" ]]; then
-            CLUSTER_NODES="${CLUSTER_NODES:+$CLUSTER_NODES }$resolved_ip"
-        else
-            # Fallback: try extracting IP directly from pvecm status for this node
+# Discover cluster nodes using get_cluster_node_names helper (prefers pvesh API, falls back to pvecm CLI)
+# This prefers management IPs over corosync ring IPs for multi-network clusters
+CLUSTER_NODES=""
+while IFS= read -r nodename; do
+    [[ -z "$nodename" ]] && continue
+    # Try to resolve hostname to IP via getent (uses /etc/hosts, then DNS)
+    resolved_ip=$(getent hosts "$nodename" 2>/dev/null | awk '{print $1; exit}')
+    if [[ -n "$resolved_ip" ]]; then
+        CLUSTER_NODES="${CLUSTER_NODES:+$CLUSTER_NODES }$resolved_ip"
+    else
+        # Fallback: try extracting IP directly from pvecm status for this node
+        if command -v pvecm >/dev/null 2>&1; then
             status_ip=$(pvecm status 2>/dev/null | grep -E "0x[0-9a-f]+.*$nodename" | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {print $i; exit}}')
             if [[ -n "$status_ip" ]]; then
                 CLUSTER_NODES="${CLUSTER_NODES:+$CLUSTER_NODES }$status_ip"
             fi
         fi
-    done < <(pvecm nodes 2>/dev/null | awk '/^[[:space:]]+[0-9]/ && !/Qdevice/ {print $4}' || true)
-
-    # Fallback to original method if pvecm nodes didn't yield results
-    if [[ -z "$CLUSTER_NODES" ]]; then
-        CLUSTER_NODES=$(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
     fi
+done < <(get_cluster_node_names 2>/dev/null || true)
 
-    if [[ -n "$CLUSTER_NODES" ]]; then
-        print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"
+# Fallback to pvecm status if get_cluster_node_names didn't yield results
+if [[ -z "$CLUSTER_NODES" ]] && command -v pvecm >/dev/null 2>&1; then
+    CLUSTER_NODES=$(pvecm status 2>/dev/null | grep -vEi "qdevice" | awk '/0x[0-9a-f]+.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i}' || true)
+fi
 
-        # Configure SSH key with forced command restriction
-        FORCED_CMD='command="/opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
-        AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
+if [[ -n "$CLUSTER_NODES" ]]; then
+    print_info "Discovered cluster nodes: $(echo $CLUSTER_NODES | tr '\n' ' ')"
 
-        # Track SSH key push results
-        SSH_SUCCESS_COUNT=0
-        SSH_FAILURE_COUNT=0
-        declare -a SSH_FAILED_NODES=()
-        LOCAL_IPS=$(hostname -I 2>/dev/null || echo "")
-        LOCAL_HOSTNAMES="$(hostname 2>/dev/null || echo "") $(hostname -f 2>/dev/null || echo "")"
-        LOCAL_HANDLED=false
-
-        # Push key to each cluster node
-        for node_ip in $CLUSTER_NODES; do
-            print_info "Authorizing proxy key on node $node_ip..."
-
-            IS_LOCAL=false
-            # Check if node_ip matches any of the local IPs (exact match with word boundaries)
-            for local_ip in $LOCAL_IPS; do
-                if [[ "$node_ip" == "$local_ip" ]]; then
-                    IS_LOCAL=true
-                    break
-                fi
-            done
-            if [[ " $LOCAL_HOSTNAMES " == *" $node_ip "* ]]; then
-                IS_LOCAL=true
-            fi
-            if [[ "$node_ip" == "127.0.0.1" || "$node_ip" == "localhost" ]]; then
-                IS_LOCAL=true
-            fi
-
-            if [[ "$IS_LOCAL" = true ]]; then
-                configure_local_authorized_key "$AUTH_LINE"
-                LOCAL_HANDLED=true
-                ((SSH_SUCCESS_COUNT+=1))
-                continue
-            fi
-
-            # Remove any existing proxy keys first
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
-                "sed -i '/# pulse-managed-key\$/d' /root/.ssh/authorized_keys" 2>/dev/null || true
-
-            # Ensure wrapper compatibility on remote node (supports old installations)
-            # Create symlink if old wrapper exists but new path doesn't
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
-                "if [[ -f /usr/local/bin/pulse-sensor-wrapper.sh && ! -f /opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh ]]; then \
-                    mkdir -p /opt/pulse/sensor-proxy/bin && \
-                    ln -sf /usr/local/bin/pulse-sensor-wrapper.sh /opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh; \
-                fi" 2>/dev/null || true
-
-            # Add new key with forced command
-            SSH_ERROR=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
-                "echo '${AUTH_LINE}' >> /root/.ssh/authorized_keys" 2>&1)
-            if [[ $? -eq 0 ]]; then
-                print_success "SSH key configured on $node_ip"
-                ((SSH_SUCCESS_COUNT+=1))
-            else
-                print_warn "Failed to configure SSH key on $node_ip"
-                ((SSH_FAILURE_COUNT+=1))
-                SSH_FAILED_NODES+=("$node_ip")
-                # Log detailed error for debugging
-                if [[ -n "$SSH_ERROR" ]]; then
-                    print_info "  Error details: $(echo "$SSH_ERROR" | head -1)"
-                fi
-            fi
-        done
-
-        # Print summary
-        print_info ""
-        print_info "SSH key configuration summary:"
-        print_info "  ✓ Success: $SSH_SUCCESS_COUNT node(s)"
-        if [[ $SSH_FAILURE_COUNT -gt 0 ]]; then
-            print_warn "  ✗ Failed: $SSH_FAILURE_COUNT node(s) - ${SSH_FAILED_NODES[*]}"
-            print_info ""
-            print_info "To retry failed nodes, re-run this script or manually run:"
-            print_info "  ssh root@<node> 'echo \"${AUTH_LINE}\" >> /root/.ssh/authorized_keys'"
-        fi
-        if [[ "$LOCAL_HANDLED" = false ]]; then
-            configure_local_authorized_key "$AUTH_LINE"
-            ((SSH_SUCCESS_COUNT+=1))
-        fi
-
-        # Add discovered cluster nodes to config file for allowlist validation
-        print_info "Updating proxy configuration with discovered cluster nodes..."
-        # Collect only IPs (hostnames are not used for SSH temperature collection)
-        all_nodes=()
-        for node_ip in $CLUSTER_NODES; do
-            all_nodes+=("$node_ip")
-        done
-        if [[ ${#CONTROL_PLANE_ALLOWED_NODE_LIST[@]} -gt 0 ]]; then
-            all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
-        fi
-        # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
-        if ! update_allowed_nodes "Cluster nodes (auto-discovered during installation)" "${all_nodes[@]}"; then
-            print_error "Failed to update allowed_nodes list"
-            exit 1
-        fi
-    else
-        # No cluster found - configure standalone node
-        print_info "No cluster detected, configuring standalone node..."
-
-        # Configure SSH key with forced command restriction
-        FORCED_CMD='command="/opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
-        AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
-
-        print_info "Authorizing proxy key on localhost..."
-        configure_local_authorized_key "$AUTH_LINE"
-        print_info ""
-        print_info "Standalone node configuration complete"
-
-        # Add localhost to config file for allowlist validation
-        print_info "Updating proxy configuration for standalone mode..."
-        LOCAL_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || echo "127.0.0.1")
-        # Collect all local IPs and localhost variants into array
-        all_nodes=()
-        for local_ip in $LOCAL_IPS; do
-            all_nodes+=("$local_ip")
-        done
-        # Always include localhost variants
-        all_nodes+=("127.0.0.1" "localhost")
-        if [[ ${#CONTROL_PLANE_ALLOWED_NODE_LIST[@]} -gt 0 ]]; then
-            all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
-        fi
-        # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
-        if ! update_allowed_nodes "Standalone node configuration (auto-configured during installation)" "${all_nodes[@]}"; then
-            print_error "Failed to update allowed_nodes list"
-            exit 1
-        fi
-    fi
-else
-    # Proxmox host but pvecm not available (shouldn't happen, but handle it)
-    print_warn "pvecm command not available"
-    print_info "Configuring SSH key for localhost..."
-
-    # Configure localhost as fallback
+    # Configure SSH key with forced command restriction
     FORCED_CMD='command="/opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
     AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
 
+    # Track SSH key push results
+    SSH_SUCCESS_COUNT=0
+    SSH_FAILURE_COUNT=0
+    declare -a SSH_FAILED_NODES=()
+    LOCAL_IPS=$(hostname -I 2>/dev/null || echo "")
+    LOCAL_HOSTNAMES="$(hostname 2>/dev/null || echo "") $(hostname -f 2>/dev/null || echo "")"
+    LOCAL_HANDLED=false
+
+    # Push key to each cluster node
+    for node_ip in $CLUSTER_NODES; do
+        print_info "Authorizing proxy key on node $node_ip..."
+
+        IS_LOCAL=false
+        # Check if node_ip matches any of the local IPs (exact match with word boundaries)
+        for local_ip in $LOCAL_IPS; do
+            if [[ "$node_ip" == "$local_ip" ]]; then
+                IS_LOCAL=true
+                break
+            fi
+        done
+        if [[ " $LOCAL_HOSTNAMES " == *" $node_ip "* ]]; then
+            IS_LOCAL=true
+        fi
+        if [[ "$node_ip" == "127.0.0.1" || "$node_ip" == "localhost" ]]; then
+            IS_LOCAL=true
+        fi
+
+        if [[ "$IS_LOCAL" = true ]]; then
+            configure_local_authorized_key "$AUTH_LINE"
+            LOCAL_HANDLED=true
+            ((SSH_SUCCESS_COUNT+=1))
+            continue
+        fi
+
+        # Remove any existing proxy keys first
+        ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+            "sed -i '/# pulse-managed-key\$/d' /root/.ssh/authorized_keys" 2>/dev/null || true
+
+        # Ensure wrapper compatibility on remote node (supports old installations)
+        # Create symlink if old wrapper exists but new path doesn't
+        ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+            "if [[ -f /usr/local/bin/pulse-sensor-wrapper.sh && ! -f /opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh ]]; then \
+                mkdir -p /opt/pulse/sensor-proxy/bin && \
+                ln -sf /usr/local/bin/pulse-sensor-wrapper.sh /opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh; \
+            fi" 2>/dev/null || true
+
+        # Add new key with forced command
+        SSH_ERROR=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$node_ip" \
+            "echo '${AUTH_LINE}' >> /root/.ssh/authorized_keys" 2>&1)
+        if [[ $? -eq 0 ]]; then
+            print_success "SSH key configured on $node_ip"
+            ((SSH_SUCCESS_COUNT+=1))
+        else
+            print_warn "Failed to configure SSH key on $node_ip"
+            ((SSH_FAILURE_COUNT+=1))
+            SSH_FAILED_NODES+=("$node_ip")
+            # Log detailed error for debugging
+            if [[ -n "$SSH_ERROR" ]]; then
+                print_info "  Error details: $(echo "$SSH_ERROR" | head -1)"
+            fi
+        fi
+    done
+
+    # Print summary
+    print_info ""
+    print_info "SSH key configuration summary:"
+    print_info "  ✓ Success: $SSH_SUCCESS_COUNT node(s)"
+    if [[ $SSH_FAILURE_COUNT -gt 0 ]]; then
+        print_warn "  ✗ Failed: $SSH_FAILURE_COUNT node(s) - ${SSH_FAILED_NODES[*]}"
+        print_info ""
+        print_info "To retry failed nodes, re-run this script or manually run:"
+        print_info "  ssh root@<node> 'echo \"${AUTH_LINE}\" >> /root/.ssh/authorized_keys'"
+    fi
+    if [[ "$LOCAL_HANDLED" = false ]]; then
+        configure_local_authorized_key "$AUTH_LINE"
+        ((SSH_SUCCESS_COUNT+=1))
+    fi
+
+    # Add discovered cluster nodes to config file for allowlist validation
+    print_info "Updating proxy configuration with discovered cluster nodes..."
+    # Collect only IPs (hostnames are not used for SSH temperature collection)
+    all_nodes=()
+    for node_ip in $CLUSTER_NODES; do
+        all_nodes+=("$node_ip")
+    done
+    if [[ ${#CONTROL_PLANE_ALLOWED_NODE_LIST[@]} -gt 0 ]]; then
+        all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
+    fi
+    # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
+    if ! update_allowed_nodes "Cluster nodes (auto-discovered during installation)" "${all_nodes[@]}"; then
+        print_error "Failed to update allowed_nodes list"
+        exit 1
+    fi
+else
+    # No cluster found - configure standalone node
+    print_info "No cluster detected, configuring standalone node..."
+
+    # Configure SSH key with forced command restriction
+    FORCED_CMD='command="/opt/pulse/sensor-proxy/bin/pulse-sensor-wrapper.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty'
+    AUTH_LINE="${FORCED_CMD} ${PROXY_PUBLIC_KEY} # pulse-managed-key"
+
+    print_info "Authorizing proxy key on localhost..."
     configure_local_authorized_key "$AUTH_LINE"
+    print_info ""
+    print_info "Standalone node configuration complete"
 
     # Add localhost to config file for allowlist validation
-    print_info "Updating proxy configuration for localhost fallback..."
+    print_info "Updating proxy configuration for standalone mode..."
     LOCAL_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || echo "127.0.0.1")
     # Collect all local IPs and localhost variants into array
     all_nodes=()
@@ -3162,7 +3168,7 @@ else
         all_nodes+=("${CONTROL_PLANE_ALLOWED_NODE_LIST[@]}")
     fi
     # Use helper function to safely update allowed_nodes (prevents duplicates on re-run)
-    if ! update_allowed_nodes "Localhost fallback configuration (pvecm unavailable)" "${all_nodes[@]}"; then
+    if ! update_allowed_nodes "Standalone node configuration (auto-configured during installation)" "${all_nodes[@]}"; then
         print_error "Failed to update allowed_nodes list"
         exit 1
     fi
