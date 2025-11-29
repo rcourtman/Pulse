@@ -803,8 +803,6 @@ const Storage: Component = () => {
                             {/* Storage Rows */}
                             <For each={storages} fallback={<></>}>
                               {(storage) => {
-                                const usagePercent =
-                                  storage.total > 0 ? (storage.used / storage.total) * 100 : 0;
                                 const isDisabled = storage.status !== 'available';
                                 const pbsNamesDisplay = createMemo(() => {
                                   const names = storage.pbsNames?.filter(
