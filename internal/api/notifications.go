@@ -468,8 +468,16 @@ func redactSecretsFromURL(urlStr string) string {
 
 	// Redact Telegram bot tokens
 	if idx := strings.Index(urlStr, "/bot"); idx != -1 {
-		if endIdx := strings.Index(urlStr[idx:], "/"); endIdx != -1 {
-			urlStr = urlStr[:idx+4] + "REDACTED" + urlStr[idx+endIdx:]
+		// Search for next "/" after "/bot" (starting at idx+4)
+		if endIdx := strings.Index(urlStr[idx+4:], "/"); endIdx != -1 {
+			urlStr = urlStr[:idx+4] + "REDACTED" + urlStr[idx+4+endIdx:]
+		} else {
+			// No trailing slash - token extends to end of URL or query string
+			if qIdx := strings.Index(urlStr[idx+4:], "?"); qIdx != -1 {
+				urlStr = urlStr[:idx+4] + "REDACTED" + urlStr[idx+4+qIdx:]
+			} else {
+				urlStr = urlStr[:idx+4] + "REDACTED"
+			}
 		}
 	}
 
