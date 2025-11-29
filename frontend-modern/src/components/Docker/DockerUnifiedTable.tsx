@@ -1248,7 +1248,9 @@ const DockerContainerRow: Component<{
         return (
           <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 overflow-hidden whitespace-nowrap">
             <Show when={isRunning()} fallback={<span class="text-gray-400">—</span>}>
-              {restarts()}
+              <span class={restarts() > 5 ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                {restarts()}
+              </span>
               <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">restarts</span>
             </Show>
           </div>
