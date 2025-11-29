@@ -8,6 +8,7 @@ import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { StorageFilter } from './StorageFilter';
 import { DiskList } from './DiskList';
+import { ZFSHealthMap } from './ZFSHealthMap';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
@@ -1057,6 +1058,12 @@ const Storage: Component = () => {
                                           >
                                             {storage.name}
                                           </span>
+                                          {/* ZFS Health Map */}
+                                          <Show when={zfsPool && zfsPool.devices && zfsPool.devices.length > 0}>
+                                            <div class="mx-1.5">
+                                              <ZFSHealthMap pool={zfsPool!} />
+                                            </div>
+                                          </Show>
                                           {/* ZFS Health Badge */}
                                           <Show when={zfsPool && zfsPool.state !== 'ONLINE'}>
                                             <span

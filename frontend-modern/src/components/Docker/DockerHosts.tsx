@@ -84,6 +84,13 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
       const totalContainers = host.containers?.length ?? 0;
       const runningContainers =
         host.containers?.filter((container) => container.state?.toLowerCase() === 'running').length ?? 0;
+      const stoppedContainers =
+        host.containers?.filter((container) =>
+          ['exited', 'stopped', 'created'].includes(container.state?.toLowerCase() || '')
+        ).length ?? 0;
+      // Count anything that isn't running or stopped/created as an error/warning state (restarting, dead, paused, etc)
+      const errorContainers = totalContainers - runningContainers - stoppedContainers;
+
       const runningPercent = totalContainers > 0 ? clampPercent((runningContainers / totalContainers) * 100) : 0;
 
       const cpuPercent = clampPercent(host.cpuUsagePercent ?? 0);
@@ -128,6 +135,8 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
         diskLabel,
         runningPercent,
         runningCount: runningContainers,
+        stoppedCount: stoppedContainers,
+        errorCount: errorContainers,
         totalCount: totalContainers,
         uptimeSeconds,
         lastSeenRelative,

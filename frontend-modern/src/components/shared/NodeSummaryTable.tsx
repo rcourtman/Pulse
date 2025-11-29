@@ -11,7 +11,9 @@ import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator, getPBSStatusIndicator } from '@/utils/status';
 import { type ColumnPriority } from '@/hooks/useBreakpoint';
-import { ResponsiveMetricCell, useGridTemplate } from '@/components/shared/responsive';
+import { ResponsiveMetricCell, MetricText, useGridTemplate } from '@/components/shared/responsive';
+import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
+import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 
 // Icons for mobile headers
 const ClockIcon = (props: { class?: string }) => (
@@ -712,21 +714,32 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   case 'memory':
                     return (
                       <div class={`${baseCellClass} ${alignClass}`}>
-                        <ResponsiveMetricCell
-                          value={memoryPercentValue}
-                          type="memory"
-                          resourceId={metricsKey}
-                          sublabel={
-                            isPVEItem && node!.memory
-                              ? `${formatBytes(node!.memory.used, 0)}/${formatBytes(node!.memory.total, 0)}`
-                              : isPBSItem && pbs!.memoryTotal
-                                ? `${formatBytes(pbs!.memoryUsed, 0)}/${formatBytes(pbs!.memoryTotal, 0)}`
-                                : undefined
-                          }
-                          isRunning={online}
-                          showMobile={isMobile()}
-                          class="w-full"
-                        />
+                        <Show when={isMobile()}>
+                          <div class="md:hidden w-full">
+                            <MetricText value={memoryPercentValue} type="memory" />
+                          </div>
+                        </Show>
+                        <div class="hidden md:block w-full">
+                          <Show when={isPVEItem} fallback={
+                            <ResponsiveMetricCell
+                              value={memoryPercentValue}
+                              type="memory"
+                              resourceId={metricsKey}
+                              sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed, 0)}/${formatBytes(pbs!.memoryTotal, 0)}` : undefined}
+                              isRunning={online}
+                              showMobile={false}
+                              class="w-full"
+                            />
+                          }>
+                            <StackedMemoryBar
+                              used={node!.memory?.used || 0}
+                              total={node!.memory?.total || 0}
+                              balloon={node!.memory?.balloon || 0}
+                              swapUsed={node!.memory?.swapUsed || 0}
+                              swapTotal={node!.memory?.swapTotal || 0}
+                            />
+                          </Show>
+                        </div>
                       </div>
                     );
 
@@ -760,13 +773,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         >
                           {(() => {
                             const value = cpuTemperatureValue as number;
-                            const severityClass =
-                              value >= 80
-                                ? 'text-red-600 dark:text-red-400'
-                                : value >= 70
-                                  ? 'text-yellow-600 dark:text-yellow-400'
-                                  : 'text-green-600 dark:text-green-400';
-
                             const temp = node!.temperature;
                             const cpuMinValue =
                               typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
@@ -780,43 +786,23 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             const hasGPU = gpus.length > 0;
 
                             if (hasMinMax || hasGPU) {
-                              const min = Math.round(cpuMinValue!);
-                              const max = Math.round(cpuMaxValue!);
-
-                              const getTooltipColor = (temp: number) => {
-                                if (temp >= 80) return 'text-red-400';
-                                if (temp >= 70) return 'text-yellow-400';
-                                return 'text-green-400';
-                              };
+                              const min = typeof cpuMinValue === 'number' ? Math.round(cpuMinValue) : undefined;
+                              const max = typeof cpuMaxValue === 'number' ? Math.round(cpuMaxValue) : undefined;
 
                               return (
-                                <span class="relative inline-block group/temp">
-                                  <span class={`text-xs font-medium ${severityClass} cursor-help`}>
-                                    {value}°C
-                                  </span>
-                                  <span class="invisible group-hover/temp:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs whitespace-nowrap bg-gray-900 dark:bg-gray-700 text-white rounded shadow-lg z-50 pointer-events-none">
-                                    {hasMinMax && (
-                                      <div>
-                                        <span class="text-gray-300">CPU:</span> <span class={getTooltipColor(min)}>{min}</span>-<span class={getTooltipColor(max)}>{max}</span>°C
-                                      </div>
-                                    )}
-                                    {hasGPU && gpus.map((gpu) => {
-                                      const gpuTemp = gpu.edge ?? gpu.junction ?? gpu.mem ?? 0;
-                                      return (
-                                        <div>
-                                          <span class="text-gray-300">GPU:</span> <span class={getTooltipColor(gpuTemp)}>{Math.round(gpuTemp)}</span>°C
-                                          {gpu.edge && ` E:${Math.round(gpu.edge)}`}
-                                          {gpu.junction && ` J:${Math.round(gpu.junction)}`}
-                                          {gpu.mem && ` M:${Math.round(gpu.mem)}`}
-                                        </div>
-                                      );
-                                    })}
-                                  </span>
-                                </span>
+                                <div title={`Min: ${min ?? '-'}°C, Max: ${max ?? '-'}°C${hasGPU ? `\nGPU: ${gpus.map(g => `${g.edge ?? g.junction ?? g.mem}°C`).join(', ')}` : ''}`}>
+                                  <TemperatureGauge
+                                    value={value}
+                                    min={min}
+                                    max={max}
+                                  />
+                                </div>
                               );
                             }
 
-                            return <span class={`text-xs font-medium ${severityClass}`}>{value}°C</span>;
+                            return (
+                              <TemperatureGauge value={value} />
+                            );
                           })()}
                         </Show>
                       </div>
@@ -852,9 +838,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 </div>
               );
             }}
-          </For>
-        </div>
-      </div>
-    </Card>
+          </For >
+        </div >
+      </div >
+    </Card >
   );
 };
