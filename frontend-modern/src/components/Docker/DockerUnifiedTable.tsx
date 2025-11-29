@@ -1278,7 +1278,7 @@ const DockerContainerRow: Component<{
         <For each={DOCKER_COLUMNS}>
           {(column) => (
             <td
-              class="py-0.5 align-middle whitespace-nowrap"
+              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'cpu' || column.id === 'memory' ? 'text-center' : ''}`}
               style={{ "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined }}
             >
               {renderCell(column)}
@@ -1983,7 +1983,7 @@ const DockerServiceRow: Component<{
         <For each={DOCKER_COLUMNS}>
           {(column) => (
             <td
-              class="py-0.5 align-middle whitespace-nowrap"
+              class={`py-0.5 align-middle whitespace-nowrap ${column.id === 'cpu' || column.id === 'memory' ? 'text-center' : ''}`}
               style={{ "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined }}
             >
               {renderCell(column)}
@@ -2077,7 +2077,7 @@ const DockerServiceRow: Component<{
                                 {task.currentState || task.desiredState || 'Unknown'}
                               </span>
                             </td>
-                            <td class="py-1 px-2 w-[120px]">
+                            <td class="py-1 px-2 w-[120px] text-center">
                               <Show when={cpu > 0} fallback={<span class="text-gray-400">—</span>}>
                                 <MetricBar
                                   value={Math.min(100, cpu)}
@@ -2087,7 +2087,7 @@ const DockerServiceRow: Component<{
                                 />
                               </Show>
                             </td>
-                            <td class="py-1 px-2 w-[140px]">
+                            <td class="py-1 px-2 w-[140px] text-center">
                               <Show when={mem > 0} fallback={<span class="text-gray-400">—</span>}>
                                 <MetricBar
                                   value={Math.min(100, mem)}
