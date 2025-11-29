@@ -11,8 +11,9 @@ import { HostsFilter } from './HostsFilter';
 import { useWebSocket } from '@/App';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getHostStatusIndicator } from '@/utils/status';
-import { ResponsiveMetricCell, MetricText, useGridTemplate } from '@/components/shared/responsive';
+import { MetricText, useGridTemplate } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
+import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import type { ColumnConfig } from '@/types/responsive';
 import { STANDARD_COLUMNS } from '@/types/responsive';
@@ -204,14 +205,18 @@ export const HostsOverview: Component<HostsOverviewProps> = (props) => {
       case 'cpu':
         return (
           <div class="px-2 py-1 overflow-hidden">
-            <ResponsiveMetricCell
-              value={cpuPercent()}
-              type="cpu"
-              label={formatPercent(cpuPercent())}
-              isRunning={true}
-              showMobile={isMobile()}
-              class="w-full"
-            />
+            <Show when={isMobile()}>
+              <div class="md:hidden">
+                <MetricText value={cpuPercent()} type="cpu" />
+              </div>
+            </Show>
+            <div class="hidden md:block w-full">
+              <EnhancedCPUBar
+                usage={cpuPercent()}
+                loadAverage={host.loadAverage?.[0]}
+                cores={host.cpuCount}
+              />
+            </div>
           </div>
         );
       case 'memory':

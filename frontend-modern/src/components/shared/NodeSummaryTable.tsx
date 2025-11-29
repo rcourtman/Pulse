@@ -13,6 +13,7 @@ import { getNodeStatusIndicator, getPBSStatusIndicator } from '@/utils/status';
 import { type ColumnPriority } from '@/hooks/useBreakpoint';
 import { ResponsiveMetricCell, MetricText, useGridTemplate } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
+import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 
 // Icons for mobile headers
@@ -699,15 +700,31 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   case 'cpu':
                     return (
                       <div class={`${baseCellClass} ${alignClass}`}>
-                        <ResponsiveMetricCell
-                          value={cpuPercentValue}
-                          type="cpu"
-                          resourceId={metricsKey}
-                          sublabel={isPVEItem && node!.cpuInfo?.cores ? `${node!.cpuInfo.cores} cores` : undefined}
-                          isRunning={online}
-                          showMobile={isMobile()}
-                          class="w-full"
-                        />
+                        <Show when={isMobile()}>
+                          <div class="md:hidden w-full">
+                            <MetricText value={cpuPercentValue} type="cpu" />
+                          </div>
+                        </Show>
+                        <div class="hidden md:block w-full">
+                          <Show when={isPVEItem} fallback={
+                            <ResponsiveMetricCell
+                              value={cpuPercentValue}
+                              type="cpu"
+                              resourceId={metricsKey}
+                              isRunning={online}
+                              showMobile={false}
+                              class="w-full"
+                            />
+                          }>
+                            <EnhancedCPUBar
+                              usage={cpuPercentValue}
+                              loadAverage={node!.loadAverage?.[0]}
+                              cores={node!.cpuInfo?.cores}
+                              model={node!.cpuInfo?.model}
+                              resourceId={metricsKey}
+                            />
+                          </Show>
+                        </div>
                       </div>
                     );
 

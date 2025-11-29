@@ -10,7 +10,8 @@ import { buildMetricKey } from '@/utils/metricsKeys';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getDockerHostStatusIndicator } from '@/utils/status';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { ResponsiveMetricCell } from '@/components/shared/responsive';
+import { ResponsiveMetricCell, MetricText } from '@/components/shared/responsive';
+import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 
 export interface DockerHostSummary {
   host: DockerHost;
@@ -283,13 +284,19 @@ export const DockerHostSummaryTable: Component<DockerHostSummaryTableProps> = (p
                       </div>
                     </td>
                     <td class="px-0.5 md:px-2 py-1 align-middle">
-                      <ResponsiveMetricCell
-                        value={summary.cpuPercent}
-                        type="cpu"
-                        resourceId={metricsKey}
-                        isRunning={online}
-                        showMobile={isMobile()}
-                      />
+                      <Show when={isMobile()}>
+                        <div class="md:hidden">
+                          <MetricText value={summary.cpuPercent} type="cpu" />
+                        </div>
+                      </Show>
+                      <div class="hidden md:block w-full">
+                        <EnhancedCPUBar
+                          usage={summary.cpuPercent}
+                          loadAverage={summary.host.loadAverage?.[0]}
+                          cores={summary.host.cpus}
+                          resourceId={metricsKey}
+                        />
+                      </div>
                     </td>
                     <td class="px-0.5 md:px-2 py-1 align-middle">
                       <ResponsiveMetricCell
