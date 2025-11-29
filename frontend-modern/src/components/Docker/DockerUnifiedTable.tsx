@@ -21,7 +21,8 @@ import {
   getDockerServiceStatusIndicator,
 } from '@/utils/status';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
-import { ResponsiveMetricCell, useGridTemplate } from '@/components/shared/responsive';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import type { ColumnConfig } from '@/types/responsive';
 
@@ -123,16 +124,16 @@ interface DockerColumnDef extends ColumnConfig {
 // - supplementary: Visible on large screens and up (lg: 1024px+)
 // - detailed: Visible on extra large screens and up (xl: 1280px+)
 export const DOCKER_COLUMNS: DockerColumnDef[] = [
-  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: '100px', flex: 1, sortKey: 'resource' },
-  { id: 'type', label: 'Type', priority: 'essential', minWidth: '50px', maxWidth: '80px', sortKey: 'type' },
-  { id: 'image', label: 'Image / Stack', shortLabel: 'Image', priority: 'essential', minWidth: '80px', maxWidth: '250px', sortKey: 'image' },
-  { id: 'status', label: 'Status', priority: 'essential', minWidth: '80px', maxWidth: '130px', sortKey: 'status' },
-  // Metric columns - fixed width to match progress bar max-width (140px + padding)
+  { id: 'resource', label: 'Resource', priority: 'essential', minWidth: 'auto', flex: 1, sortKey: 'resource' },
+  { id: 'type', label: 'Type', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'type' },
+  { id: 'image', label: 'Image / Stack', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'image' },
+  { id: 'status', label: 'Status', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'status' },
+  // Metric columns - need fixed width to match progress bar max-width (140px + padding)
   // Note: Disk column removed - Docker API rarely provides this data
-  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '50px', maxWidth: '156px', sortKey: 'cpu' },
-  { id: 'memory', label: 'Memory', shortLabel: 'Mem', priority: 'essential', minWidth: '50px', maxWidth: '156px', sortKey: 'memory' },
-  { id: 'tasks', label: 'Tasks', shortLabel: 'Tasks', priority: 'essential', minWidth: '60px', maxWidth: '80px', sortKey: 'tasks' },
-  { id: 'updated', label: 'Uptime', shortLabel: 'Uptime', priority: 'essential', minWidth: '70px', maxWidth: '90px', sortKey: 'updated' },
+  { id: 'cpu', label: 'CPU', priority: 'essential', minWidth: '55px', maxWidth: '156px', sortKey: 'cpu' },
+  { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '75px', maxWidth: '156px', sortKey: 'memory' },
+  { id: 'tasks', label: 'Tasks', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'tasks' },
+  { id: 'updated', label: 'Uptime', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'updated' },
 ];
 
 // Global state for currently expanded drawer (only one drawer open at a time)
@@ -732,39 +733,38 @@ const UNGROUPED_RESOURCE_INDENT = 'pl-4 sm:pl-5 lg:pl-6';
 
 const DockerHostGroupHeader: Component<{
   host: DockerHost;
-  gridTemplate: Accessor<string>;
-  visibleColumns: Accessor<ColumnConfig[]>;
+  columnCount: number;
 }> = (props) => {
   const displayName = getHostDisplayName(props.host);
   const hostStatus = () => getDockerHostStatusIndicator(props.host);
   const isOnline = () => hostStatus().variant === 'success';
   return (
-    <div class="bg-gray-50 dark:bg-gray-900/40 py-0.5 pr-2 pl-4">
-      <div
-        class={`flex flex-nowrap items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700 dark:text-slate-100 ${isOnline() ? '' : 'opacity-60'}`}
-        title={hostStatus().label}
-      >
-        <StatusDot
-          variant={hostStatus().variant}
+    <tr class="bg-gray-50 dark:bg-gray-900/40">
+      <td colspan={props.columnCount} class="py-0.5 pr-2 pl-4">
+        <div
+          class={`flex flex-nowrap items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700 dark:text-slate-100 ${isOnline() ? '' : 'opacity-60'}`}
           title={hostStatus().label}
-          ariaLabel={hostStatus().label}
-          size="xs"
-        />
-        <span>{displayName}</span>
-        <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
-          <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-            ({props.host.hostname})
-          </span>
-        </Show>
-      </div>
-    </div>
+        >
+          <StatusDot
+            variant={hostStatus().variant}
+            title={hostStatus().label}
+            ariaLabel={hostStatus().label}
+            size="xs"
+          />
+          <span>{displayName}</span>
+          <Show when={props.host.displayName && props.host.displayName !== props.host.hostname}>
+            <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+              ({props.host.hostname})
+            </span>
+          </Show>
+        </div>
+      </td>
+    </tr>
   );
 };
 
 const DockerContainerRow: Component<{
   row: Extract<DockerRow, { kind: 'container' }>;
-  visibleColumns: Accessor<ColumnConfig[]>;
-  gridTemplate: Accessor<string>;
   isMobile: Accessor<boolean>;
   customUrl?: string;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
@@ -1172,14 +1172,14 @@ const DockerContainerRow: Component<{
         );
       case 'image':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate overflow-hidden">
-            <span title={container.image}>{container.image || '—'}</span>
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            {container.image || '—'}
           </div>
         );
       case 'status':
         return (
-          <div class="px-2 py-0.5 text-xs overflow-hidden">
-            <span class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap block truncate ${statusBadgeClass()}`}>{statusLabel()}</span>
+          <div class="px-2 py-0.5 text-xs whitespace-nowrap">
+            <span class={`rounded px-2 py-0.5 text-[10px] font-medium ${statusBadgeClass()}`}>{statusLabel()}</span>
           </div>
         );
       case 'cpu':
@@ -1270,24 +1270,32 @@ const DockerContainerRow: Component<{
 
   return (
     <>
-      <div
-        class={`grid items-center transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
-        style={{ 'grid-template-columns': props.gridTemplate() }}
+      <tr
+        class={`transition-all duration-200 ${hasDrawerContent() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isRunning() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <For each={props.visibleColumns()}>
-          {(column) => renderCell(column)}
+        <For each={DOCKER_COLUMNS}>
+          {(column) => (
+            <td
+              class="py-0.5 align-middle whitespace-nowrap"
+              style={{ "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined }}
+            >
+              {renderCell(column)}
+            </td>
+          )}
         </For>
-      </div>
+      </tr>
 
       <Show when={expanded() && hasDrawerContent()}>
-        <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3">
-          <div class="flex flex-wrap justify-start gap-3">
-            <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                Summary
-              </div>
+        <tr>
+          <td colspan={DOCKER_COLUMNS.length} class="p-0">
+            <div class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3">
+              <div class="flex flex-wrap justify-start gap-3">
+                <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                    Summary
+                  </div>
               <div class="mt-2 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
                 <div class="flex items-center justify-between gap-2">
                   <span class="font-medium text-gray-700 dark:text-gray-200">Runtime</span>
@@ -1614,9 +1622,11 @@ const DockerContainerRow: Component<{
                   })}
                 </div>
               </div>
-            </Show>
-          </div>
-        </div>
+                </Show>
+              </div>
+            </div>
+          </td>
+        </tr>
       </Show>
     </>
   );
@@ -1624,8 +1634,6 @@ const DockerContainerRow: Component<{
 
 const DockerServiceRow: Component<{
   row: Extract<DockerRow, { kind: 'service' }>;
-  visibleColumns: Accessor<ColumnConfig[]>;
-  gridTemplate: Accessor<string>;
   isMobile: Accessor<boolean>;
   customUrl?: string;
   onCustomUrlUpdate?: (resourceId: string, url: string) => void;
@@ -1923,8 +1931,8 @@ const DockerServiceRow: Component<{
         );
       case 'image':
         return (
-          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 truncate">
-            <span title={service.image}>{service.image || '—'}</span>
+          <div class="px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            {service.image || '—'}
           </div>
         );
       case 'status':
@@ -1967,29 +1975,37 @@ const DockerServiceRow: Component<{
 
   return (
     <>
-      <div
-        class={`grid items-center transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
-        style={{ 'grid-template-columns': props.gridTemplate() }}
+      <tr
+        class={`transition-all duration-200 ${hasTasks() ? 'cursor-pointer' : ''} ${expanded() ? 'bg-gray-50 dark:bg-gray-800/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'} ${!isHealthy() ? 'opacity-60' : ''}`}
         onClick={toggle}
         aria-expanded={expanded()}
       >
-        <For each={props.visibleColumns()}>
-          {(column) => renderCell(column)}
+        <For each={DOCKER_COLUMNS}>
+          {(column) => (
+            <td
+              class="py-0.5 align-middle whitespace-nowrap"
+              style={{ "min-width": column.id === 'cpu' || column.id === 'memory' ? '140px' : undefined }}
+            >
+              {renderCell(column)}
+            </td>
+          )}
         </For>
-      </div>
+      </tr>
 
       <Show when={expanded() && hasTasks()}>
-        <div class="bg-gray-50 dark:bg-gray-900/60 px-4 py-3">
-          <div class="flex flex-wrap justify-start gap-3">
-            <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-              <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
-                <span>Tasks</span>
-                <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
-                  {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
-                </span>
-              </div>
-              <div class="mt-2 overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
+        <tr>
+          <td colspan={DOCKER_COLUMNS.length} class="p-0">
+            <div class="bg-gray-50 dark:bg-gray-900/60 px-4 py-3">
+              <div class="flex flex-wrap justify-start gap-3">
+                <div class="min-w-[320px] flex-1 rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                  <div class="flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                    <span>Tasks</span>
+                    <span class="text-[10px] font-normal text-gray-500 dark:text-gray-400">
+                      {tasks.length} {tasks.length === 1 ? 'entry' : 'entries'}
+                    </span>
+                  </div>
+                  <div class="mt-2 overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-800/60 text-xs">
                   <thead class="bg-gray-100 dark:bg-gray-900/40 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-200">
                     <tr>
                       <th class="py-1 pr-2 text-left font-medium">Task</th>
@@ -2095,11 +2111,13 @@ const DockerServiceRow: Component<{
                       }}
                     </For>
                   </tbody>
-                </table>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </td>
+        </tr>
       </Show>
     </>
   );
@@ -2114,8 +2132,8 @@ const areTasksEqual = (a: DockerTask[], b: DockerTask[]) => {
 };
 
 const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
-  // Use the responsive grid template hook for dynamic column visibility
-  const { gridTemplate, visibleColumns, isMobile } = useGridTemplate({ columns: DOCKER_COLUMNS });
+  // Use the breakpoint hook for responsive behavior
+  const { isMobile } = useBreakpoint();
 
   // Caches for stable object references to prevent re-animations
   const rowCache = new Map<string, DockerRow>();
@@ -2442,8 +2460,6 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
     return row.kind === 'container' ? (
       <DockerContainerRow
         row={row}
-        visibleColumns={visibleColumns}
-        gridTemplate={gridTemplate}
         isMobile={isMobile}
         customUrl={metadata?.customUrl}
         onCustomUrlUpdate={props.onCustomUrlUpdate}
@@ -2453,8 +2469,6 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
     ) : (
       <DockerServiceRow
         row={row}
-        visibleColumns={visibleColumns}
-        gridTemplate={gridTemplate}
         isMobile={isMobile}
         customUrl={metadata?.customUrl}
         onCustomUrlUpdate={props.onCustomUrlUpdate}
@@ -2485,80 +2499,78 @@ const DockerUnifiedTable: Component<DockerUnifiedTableProps> = (props) => {
       >
         <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto">
-            {/* Header Row */}
-            <div
-              class="grid border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20 min-w-[520px] md:min-w-0"
-              style={{ 'grid-template-columns': gridTemplate() }}
-            >
-              <For each={visibleColumns()}>
-                {(column) => {
-                  const col = column as DockerColumnDef;
-                  const colSortKey = col.sortKey as SortKey | undefined;
-                  const isResource = col.id === 'resource';
-                  return (
-                    <div
-                      class={`${isResource ? 'pl-4 pr-2' : 'px-2'} py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center whitespace-nowrap`}
-                      onClick={() => colSortKey && handleSort(colSortKey)}
-                      onKeyDown={(e) => e.key === 'Enter' && colSortKey && handleSort(colSortKey)}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`Sort by ${col.label} ${colSortKey && sortKey() === colSortKey ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
-                      aria-sort={colSortKey ? ariaSort(colSortKey) : 'none'}
-                    >
-                      <Show when={isResource}>
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span>{col.label}</span>
-                          {colSortKey && renderSortIndicator(colSortKey)}
-                          <Show when={sortKey() === 'host'}>
-                            <span class="text-[10px] font-medium text-gray-500 dark:text-gray-400">Grouped by host</span>
+            <table class="w-full border-collapse whitespace-nowrap">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 text-[11px] sm:text-xs font-medium uppercase tracking-wider sticky top-0 z-20">
+                  <For each={DOCKER_COLUMNS}>
+                    {(column) => {
+                      const col = column as DockerColumnDef;
+                      const colSortKey = col.sortKey as SortKey | undefined;
+                      const isResource = col.id === 'resource';
+                      return (
+                        <th
+                          class={`${isResource ? 'pl-4 sm:pl-5 lg:pl-6 pr-2' : 'px-2'} py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 text-left font-medium whitespace-nowrap`}
+                          style={{ "min-width": col.id === 'cpu' || col.id === 'memory' ? '140px' : undefined }}
+                          onClick={() => colSortKey && handleSort(colSortKey)}
+                          onKeyDown={(e) => e.key === 'Enter' && colSortKey && handleSort(colSortKey)}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`Sort by ${col.label} ${colSortKey && sortKey() === colSortKey ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''}`}
+                          aria-sort={colSortKey ? ariaSort(colSortKey) : 'none'}
+                        >
+                          <Show when={isResource}>
+                            <div class="flex flex-wrap items-center gap-2">
+                              <span>{col.label}</span>
+                              {colSortKey && renderSortIndicator(colSortKey)}
+                              <Show when={sortKey() === 'host'}>
+                                <span class="text-[10px] font-medium text-gray-500 dark:text-gray-400">Grouped by host</span>
+                              </Show>
+                              <Show when={sortKey() !== 'host'}>
+                                <button
+                                  type="button"
+                                  class="ml-auto rounded bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700 transition hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    resetHostGrouping();
+                                  }}
+                                >
+                                  Group by host
+                                </button>
+                              </Show>
+                            </div>
                           </Show>
-                          <Show when={sortKey() !== 'host'}>
-                            <button
-                              type="button"
-                              class="ml-auto rounded bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700 transition hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                resetHostGrouping();
-                              }}
-                            >
-                              Group by host
-                            </button>
+                          <Show when={!isResource}>
+                            <div class="flex items-center gap-1">
+                              <span>{col.label}</span>
+                              {colSortKey && renderSortIndicator(colSortKey)}
+                            </div>
                           </Show>
-                        </div>
-                      </Show>
-                      <Show when={!isResource}>
-                        <div class="flex items-center gap-1 overflow-hidden">
-                          <span class="hidden xl:inline truncate">{col.label}</span>
-                          <span class="xl:hidden truncate">{col.shortLabel || col.label}</span>
-                          {colSortKey && renderSortIndicator(colSortKey)}
-                        </div>
-                      </Show>
-                    </div>
-                  );
-                }}
-              </For>
-            </div>
-
-            {/* Rows */}
-            <div class="divide-y divide-gray-200 dark:divide-gray-700 min-w-[520px] md:min-w-0">
-              <Show
-                when={isGroupedView()}
-                fallback={
-                  <For each={sortedRows()}>
-                    {(row) => renderRow(row, false)}
+                        </th>
+                      );
+                    }}
                   </For>
-                }
-              >
-                <For each={orderedGroups()}>
-                  {(group) => (
-                    <>
-                      <DockerHostGroupHeader host={group.host} gridTemplate={gridTemplate} visibleColumns={visibleColumns} />
-                      <For each={group.rows}>{(row) => renderRow(row, true)}</For>
-                    </>
-                  )}
-                </For>
-              </Show>
-            </div>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <Show
+                  when={isGroupedView()}
+                  fallback={
+                    <For each={sortedRows()}>
+                      {(row) => renderRow(row, false)}
+                    </For>
+                  }
+                >
+                  <For each={orderedGroups()}>
+                    {(group) => (
+                      <>
+                        <DockerHostGroupHeader host={group.host} columnCount={DOCKER_COLUMNS.length} />
+                        <For each={group.rows}>{(row) => renderRow(row, true)}</For>
+                      </>
+                    )}
+                  </For>
+                </Show>
+              </tbody>
+            </table>
           </div>
         </Card>
 

@@ -11,6 +11,9 @@ export interface GridTemplateOptions {
 
   /** Custom gap between columns (CSS value) */
   gap?: string;
+
+  /** If true, show all columns regardless of breakpoint (use horizontal scroll instead) */
+  disableColumnHiding?: boolean;
 }
 
 export interface GridTemplateResult {
@@ -37,6 +40,16 @@ function generateGridTemplate(columns: ColumnConfig[]): string {
   return columns.map(col => {
     const min = col.minWidth || '50px';
     const max = col.maxWidth || `${col.flex || 1}fr`;
+
+    // If both min and max are 'auto', use just 'auto' for content-based sizing
+    if (min === 'auto' && max === 'auto') {
+      return 'auto';
+    }
+
+    // If only max is 'auto', use minmax with auto
+    if (max === 'auto') {
+      return `minmax(${min}, auto)`;
+    }
 
     // If we have both min and max as fixed values, use the appropriate one
     if (col.maxWidth && !col.maxWidth.includes('fr')) {
@@ -100,7 +113,11 @@ export function useGridTemplate(options: GridTemplateOptions): GridTemplateResul
   };
 
   const visibleColumns = createMemo(() => {
-    return getVisibleColumns(getColumns(), breakpoint());
+    const cols = getColumns();
+    if (options.disableColumnHiding) {
+      return cols;
+    }
+    return getVisibleColumns(cols, breakpoint());
   });
 
   const gridTemplate = createMemo(() => {
