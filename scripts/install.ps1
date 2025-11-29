@@ -314,17 +314,17 @@ if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id
 
 $BinPath = "`"$DestPath`" $($ServiceArgs -join ' ')"
 
-# Create Service with error handling
-$scOutput = sc.exe create $AgentName binPath= "$BinPath" start= auto displayname= "Pulse Unified Agent" 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Show-Error "Failed to create service '$AgentName'.`nsc.exe output: $scOutput"
+# Create Service using New-Service (more reliable than sc.exe create)
+try {
+    New-Service -Name $AgentName `
+                -BinaryPathName $BinPath `
+                -DisplayName "Pulse Unified Agent" `
+                -Description "Pulse Unified Agent for Host and Docker monitoring" `
+                -StartupType Automatic | Out-Null
+    Write-Host "Service created successfully" -ForegroundColor Green
+} catch {
+    Show-Error "Failed to create service '$AgentName'.`nError: $_"
     Exit 1
-}
-Write-Host "Service created successfully" -ForegroundColor Green
-
-$scOutput = sc.exe description $AgentName "Pulse Unified Agent for Host and Docker monitoring" 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Warning: Failed to set service description: $scOutput" -ForegroundColor Yellow
 }
 
 $scOutput = sc.exe failure $AgentName reset= 86400 actions= restart/5000/restart/5000/restart/5000 2>&1
