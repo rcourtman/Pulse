@@ -18,23 +18,12 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
     const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
     let containerRef: HTMLDivElement | undefined;
 
-    // Calculate Load % relative to core count
-    const loadPercent = createMemo(() => {
-        if (props.loadAverage === undefined || !props.cores || props.cores === 0) return 0;
-        return (props.loadAverage / props.cores) * 100;
-    });
-
-    const isOverloaded = createMemo(() => loadPercent() > 100);
-
     // Bar color based on usage
     const barColor = createMemo(() => {
         if (props.usage >= 90) return 'bg-red-500/60 dark:bg-red-500/50';
         if (props.usage >= 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
         return 'bg-green-500/60 dark:bg-green-500/50';
     });
-
-    // Load marker position (capped at 100%)
-    const markerPosition = createMemo(() => Math.min(loadPercent(), 100));
 
     const handleMouseEnter = (e: MouseEvent) => {
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -69,15 +58,6 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
                             class={`absolute top-0 left-0 h-full transition-all duration-300 ${barColor()}`}
                             style={{ width: `${Math.min(props.usage, 100)}%` }}
                         />
-
-                        {/* Load Average Marker */}
-                        <Show when={props.loadAverage !== undefined && props.cores}>
-                            <div
-                                class={`absolute top-0 bottom-0 w-[2px] z-10 transition-all duration-300 ${isOverloaded() ? 'bg-purple-600 dark:bg-purple-400 shadow-[0_0_4px_rgba(147,51,234,0.8)]' : 'bg-gray-800 dark:bg-gray-200 opacity-60'
-                                    }`}
-                                style={{ left: `${markerPosition()}%` }}
-                            />
-                        </Show>
 
                         {/* Label */}
                         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none pointer-events-none">
@@ -117,17 +97,11 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
                                         </span>
                                     </div>
 
-                                    <Show when={props.loadAverage !== undefined && props.cores}>
+                                    <Show when={props.loadAverage !== undefined}>
                                         <div class="flex justify-between gap-3 py-0.5">
                                             <span class="text-gray-400">Load (1m)</span>
-                                            <span class={`font-medium ${isOverloaded() ? 'text-purple-400' : 'text-gray-200'}`}>
+                                            <span class="font-medium text-gray-200">
                                                 {props.loadAverage?.toFixed(2)}
-                                            </span>
-                                        </div>
-                                        <div class="flex justify-between gap-3 py-0.5">
-                                            <span class="text-gray-400">Capacity</span>
-                                            <span class={`font-medium ${isOverloaded() ? 'text-purple-400' : 'text-gray-200'}`}>
-                                                {loadPercent().toFixed(0)}% of {props.cores} cores
                                             </span>
                                         </div>
                                     </Show>
