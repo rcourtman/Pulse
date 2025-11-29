@@ -141,3 +141,65 @@ func TestShouldIgnoreReadOnlyFilesystem(t *testing.T) {
 		t.Fatalf("expected ext4 to be included")
 	}
 }
+
+func TestShouldSkipFilesystem(t *testing.T) {
+	tests := []struct {
+		name       string
+		fsType     string
+		mountpoint string
+		totalBytes uint64
+		usedBytes  uint64
+		expectSkip bool
+	}{
+		// Virtual filesystem types
+		{"tmpfs", "tmpfs", "/tmp", 1024, 512, true},
+		{"devtmpfs", "devtmpfs", "/dev", 1024, 100, true},
+		{"cgroup2", "cgroup2", "/sys/fs/cgroup", 0, 0, true},
+		{"sysfs", "sysfs", "/sys", 0, 0, true},
+		{"proc", "proc", "/proc", 0, 0, true},
+		{"virtual fs case insensitive", "TMPFS", "/tmp", 1024, 512, true},
+
+		// Network filesystem types
+		{"nfs mount", "nfs4", "/mnt/nas", 1000000, 500000, true},
+		{"cifs mount", "cifs", "/mnt/share", 1000000, 500000, true},
+		{"fuse.sshfs", "fuse.sshfs", "/mnt/remote", 1000000, 500000, true},
+		{"9p VM shared folder", "9p", "/mnt/host", 1000000, 500000, true},
+
+		// Special mountpoint prefixes
+		{"/dev prefix", "ext4", "/dev/shm", 1024, 100, true},
+		{"/proc prefix", "ext4", "/proc/sys", 1024, 100, true},
+		{"/sys prefix", "ext4", "/sys/kernel", 1024, 100, true},
+		{"/run prefix", "ext4", "/run/user/1000", 1024, 100, true},
+		{"/var/lib/docker", "ext4", "/var/lib/docker/overlay2", 1000000, 500000, true},
+		{"/snap prefix", "ext4", "/snap/core/12345", 1000000, 500000, true},
+		{"/boot/efi exact", "vfat", "/boot/efi", 512 * 1024 * 1024, 50 * 1024 * 1024, true},
+
+		// Windows paths
+		{"Windows System Reserved", "NTFS", "System Reserved", 500 * 1024 * 1024, 100 * 1024 * 1024, true},
+		{"Windows C drive - should NOT skip", "NTFS", "C:\\", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},
+		{"Windows D drive - should NOT skip", "NTFS", "D:\\", 1000 * 1024 * 1024 * 1024, 500 * 1024 * 1024 * 1024, false},
+
+		// Regular filesystems that should NOT be skipped
+		{"ext4 root", "ext4", "/", 100 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, false},
+		{"xfs data", "xfs", "/data", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},
+		{"btrfs home", "btrfs", "/home", 200 * 1024 * 1024 * 1024, 100 * 1024 * 1024 * 1024, false},
+		{"zfs pool", "zfs", "/tank", 10 * 1024 * 1024 * 1024 * 1024, 5 * 1024 * 1024 * 1024 * 1024, false},
+
+		// Edge cases
+		{"empty fsType", "", "/mnt/data", 1000000, 500000, false},
+		{"empty mountpoint", "ext4", "", 1000000, 500000, false},
+		{"whitespace fsType", "  tmpfs  ", "/tmp", 1024, 512, true},
+
+		// Read-only filesystems (should still work through new function)
+		{"squashfs via ShouldSkipFilesystem", "squashfs", "/snap/firefox/123", 100 * 1024 * 1024, 100 * 1024 * 1024, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			skip, reasons := ShouldSkipFilesystem(tc.fsType, tc.mountpoint, tc.totalBytes, tc.usedBytes)
+			if skip != tc.expectSkip {
+				t.Errorf("expected skip=%t, got skip=%t (reasons: %v)", tc.expectSkip, skip, reasons)
+			}
+		})
+	}
+}

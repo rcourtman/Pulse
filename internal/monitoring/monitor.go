@@ -35,6 +35,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -6585,62 +6586,25 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 							for _, fs := range fsInfo {
 								// Skip special filesystems and mounts
-								skipReasons := []string{}
-								reasonReadOnly := ""
-								shouldSkip := false
-
-								// Check filesystem type
-								fsTypeLower := strings.ToLower(fs.Type)
-								if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
-									skipReasons = append(skipReasons, fmt.Sprintf("read-only-%s", reason))
-									reasonReadOnly = reason
-									shouldSkip = true
-								}
-								if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
-									fs.Type == "cgroup" || fs.Type == "cgroup2" ||
-									fs.Type == "sysfs" || fs.Type == "proc" ||
-									fs.Type == "devpts" || fs.Type == "securityfs" ||
-									fs.Type == "debugfs" || fs.Type == "tracefs" ||
-									fs.Type == "fusectl" || fs.Type == "configfs" ||
-									fs.Type == "pstore" || fs.Type == "hugetlbfs" ||
-									fs.Type == "mqueue" || fs.Type == "bpf" ||
-									strings.Contains(fsTypeLower, "fuse") || // Skip FUSE mounts (often network/special)
-									strings.Contains(fsTypeLower, "9p") || // Skip 9p mounts (VM shared folders)
-									strings.Contains(fsTypeLower, "nfs") || // Skip NFS mounts
-									strings.Contains(fsTypeLower, "cifs") || // Skip CIFS/SMB mounts
-									strings.Contains(fsTypeLower, "smb") { // Skip SMB mounts
-									skipReasons = append(skipReasons, "special-fs-type")
-									shouldSkip = true
-								}
-
-								// Check mountpoint patterns
-								if strings.HasPrefix(fs.Mountpoint, "/dev") ||
-									strings.HasPrefix(fs.Mountpoint, "/proc") ||
-									strings.HasPrefix(fs.Mountpoint, "/sys") ||
-									strings.HasPrefix(fs.Mountpoint, "/run") ||
-									strings.HasPrefix(fs.Mountpoint, "/var/lib/docker") || // Skip Docker volumes
-									strings.HasPrefix(fs.Mountpoint, "/snap") || // Skip snap mounts
-									fs.Mountpoint == "/boot/efi" ||
-									fs.Mountpoint == "System Reserved" || // Windows System Reserved partition
-									strings.Contains(fs.Mountpoint, "System Reserved") { // Various Windows reserved formats
-									skipReasons = append(skipReasons, "special-mountpoint")
-									shouldSkip = true
-								}
-
+								shouldSkip, reasons := fsfilters.ShouldSkipFilesystem(fs.Type, fs.Mountpoint, fs.TotalBytes, fs.UsedBytes)
 								if shouldSkip {
-									if reasonReadOnly != "" {
-										log.Debug().
-											Str("instance", instanceName).
-											Str("vm", res.Name).
-											Int("vmid", res.VMID).
-											Str("mountpoint", fs.Mountpoint).
-											Str("type", fs.Type).
-											Float64("total_gb", float64(fs.TotalBytes)/1073741824).
-											Float64("used_gb", float64(fs.UsedBytes)/1073741824).
-											Msg("Skipping read-only filesystem from disk aggregation")
+									// Check if any reason is read-only for detailed logging
+									for _, r := range reasons {
+										if strings.HasPrefix(r, "read-only-") {
+											log.Debug().
+												Str("instance", instanceName).
+												Str("vm", res.Name).
+												Int("vmid", res.VMID).
+												Str("mountpoint", fs.Mountpoint).
+												Str("type", fs.Type).
+												Float64("total_gb", float64(fs.TotalBytes)/1073741824).
+												Float64("used_gb", float64(fs.UsedBytes)/1073741824).
+												Msg("Skipping read-only filesystem from disk aggregation")
+											break
+										}
 									}
 									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,%s)",
-										fs.Mountpoint, fs.Type, strings.Join(skipReasons, ",")))
+										fs.Mountpoint, fs.Type, strings.Join(reasons, ",")))
 									continue
 								}
 

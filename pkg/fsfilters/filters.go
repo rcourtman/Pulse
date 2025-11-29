@@ -54,3 +54,83 @@ func ShouldIgnoreReadOnlyFilesystem(fsType string, totalBytes, usedBytes uint64)
 	_, skip := ReadOnlyFilesystemReason(fsType, totalBytes, usedBytes)
 	return skip
 }
+
+// virtualFSTypes are filesystem types that represent virtual/pseudo filesystems
+// which should not be counted toward disk usage.
+var virtualFSTypes = map[string]bool{
+	"tmpfs":      true,
+	"devtmpfs":   true,
+	"cgroup":     true,
+	"cgroup2":    true,
+	"sysfs":      true,
+	"proc":       true,
+	"devpts":     true,
+	"securityfs": true,
+	"debugfs":    true,
+	"tracefs":    true,
+	"fusectl":    true,
+	"configfs":   true,
+	"pstore":     true,
+	"hugetlbfs":  true,
+	"mqueue":     true,
+	"bpf":        true,
+}
+
+// networkFSPatterns are substrings that indicate network/remote filesystems.
+var networkFSPatterns = []string{"fuse", "9p", "nfs", "cifs", "smb"}
+
+// specialMountPrefixes are mountpoint prefixes that indicate system mounts.
+var specialMountPrefixes = []string{
+	"/dev",
+	"/proc",
+	"/sys",
+	"/run",
+	"/var/lib/docker",
+	"/snap",
+}
+
+// ShouldSkipFilesystem determines if a filesystem should be excluded from disk
+// usage aggregation. It checks for read-only filesystems, virtual/pseudo filesystems,
+// network mounts, and special system mountpoints. Returns skip=true if the filesystem
+// should be excluded, along with a list of reason strings.
+func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint64) (skip bool, reasons []string) {
+	fsTypeLower := strings.ToLower(strings.TrimSpace(fsType))
+
+	// Check read-only filesystems (existing logic)
+	if reason, isReadOnly := ReadOnlyFilesystemReason(fsType, totalBytes, usedBytes); isReadOnly {
+		reasons = append(reasons, "read-only-"+reason)
+	}
+
+	// Check virtual filesystem types
+	if virtualFSTypes[fsTypeLower] {
+		reasons = append(reasons, "special-fs-type")
+	}
+
+	// Check network filesystem patterns
+	for _, pattern := range networkFSPatterns {
+		if strings.Contains(fsTypeLower, pattern) {
+			reasons = append(reasons, "special-fs-type")
+			break
+		}
+	}
+
+	// Check special mountpoint prefixes
+	for _, prefix := range specialMountPrefixes {
+		if strings.HasPrefix(mountpoint, prefix) {
+			reasons = append(reasons, "special-mountpoint")
+			break
+		}
+	}
+
+	// Check specific special mountpoints
+	if mountpoint == "/boot/efi" {
+		reasons = append(reasons, "special-mountpoint")
+	}
+
+	// Windows System Reserved partition
+	if mountpoint == "System Reserved" || strings.Contains(mountpoint, "System Reserved") {
+		reasons = append(reasons, "special-mountpoint")
+	}
+
+	return len(reasons) > 0, reasons
+}
